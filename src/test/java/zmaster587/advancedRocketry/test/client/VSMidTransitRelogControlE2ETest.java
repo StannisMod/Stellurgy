@@ -14,6 +14,7 @@ import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.EntryStatus;
@@ -453,6 +454,10 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         double last = from;
         bot().holdKey(key);
         try {
+            // A WINDOW with the key HELD across it: the iterations are part of the stimulus, and
+            // what is asked is whether the climb reached a threshold — a value, not an instant
+            // anything commits. What it cannot see: a climb that reached MIN_CLIMB and sagged back
+            // inside one 5-tick sample.
             for (int i = 0; i < budget && (last - from) < MIN_CLIMB; i++) {
                 bot().waitTicks(5);
                 last = clientPlayerY();
@@ -466,6 +471,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     /** Up to {@code attempts} bounded held-key climb windows with a settle between them; true as
      *  soon as one window sees the client-rendered altitude gain {@link #MIN_CLIMB}. */
     private boolean climbedWithinAttempts(int attempts) throws Exception {
+        // STAYS A LOOP: each iteration IS a stimulus — a fresh held-key climb window — and the
+        // thing being asked is whether one of them moved the client-rendered altitude by enough.
+        // A link would have to be a record of the climb, and the drive publishes none: what exists
+        // is the input reaching the flight computer, which is already awaited where the key is
+        // pressed. What this cannot see: which attempt did it, and whether an earlier one nearly
+        // did.
         for (int i = 0; i < attempts; i++) {
             double from = clientPlayerY();
             double to = climbWith(Keyboard.KEY_R, from);
@@ -523,17 +534,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = readIntOr(exec("artest vs ship-count " + dim), "count", -1);
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        return 0;
+        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
+        // branch of this helper never executed on the server tier, at one fork or at six, because
+        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
+        // and names whether the craft never REGISTERED or registered and did not LOAD.
+        return ShipReadiness.requireLoaded(this::exec, dim,
+                "this scenario's craft must be loaded before the transit is driven");
     }
 
     private static int readInt(String json, String key) {

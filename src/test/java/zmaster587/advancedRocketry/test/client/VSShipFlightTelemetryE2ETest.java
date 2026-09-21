@@ -843,6 +843,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         double yStart = shipInfo().y;
         double worstVelY = 0.0;
+        // A WINDOW whose measurement is the WORST vertical velocity while the hold is supposed to
+        // be holding: a craft that drifts and corrects reads zero at the end, so the extremum is
+        // the quantity and a last read would miss it. What it cannot see: an excursion inside one
+        // 3-tick sample.
         for (int i = 0; i < 40; i++) {
             bot().waitTicks(3);
             double velY = shipInfo().velY;
@@ -955,6 +959,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // the pass before it.
         long cursorMark = clientEvents().mark();
         bot().waitTicks(2);
+        // STAYS A LOOP, and its iterations are the stimulus: each pass asks for more roll through
+        // the real cursor, so deleting the loop does not stop the test watching — it stops the ship
+        // TURNING. The exit reads an attitude converging past a threshold, which is a value and not
+        // an event. What this cannot see: a pass whose cursor delta was swallowed, which is why the
+        // delta itself is checked below rather than assumed from having asked.
         for (int i = 0; i < 240; i++) {
             // Stop asking for roll BEFORE the ship is over: it is a rigid body turning at more than a
             // radian a second, and it coasts on into the brake. Aiming early lands it near inverted.

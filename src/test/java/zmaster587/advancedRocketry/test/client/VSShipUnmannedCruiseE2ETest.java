@@ -102,6 +102,9 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         // climbs, and a `managed:false` reply means "not loaded" rather than "somebody else's ship".
         double y0 = Double.NaN;
         String lastLookup = "(never asked)";
+        // STAYS A LOOP: is this craft loaded and carrying a pose RIGHT NOW is a state that
+        // FLICKERS, and no record answers it — a settle record says it happened once, which a
+        // later unload does not retract. What it cannot see: an unload between two reads.
         for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
             bot().waitTicks(5);
             lastLookup = shipInfoById(shipId);

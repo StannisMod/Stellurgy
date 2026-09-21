@@ -186,37 +186,12 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
 
     // ── waiting on a log, either side ─────────────────────────────────────────
 
-    /** One read of one side's event log — the server probe's, or the client bridge's. */
-    private interface LogReader {
-        String read() throws Exception;
-    }
-
-    /**
-     * Wait until {@code reader}'s reply carries a record matching {@code needle}, or the budget ends;
-     * the reply is returned either way so the CALLER asserts and owns the failure message.
-     *
-     * <p>{@link Events#await} covers the server log and is used wherever a bare type is enough. This
-     * exists for the two cases it cannot express: a wait on the CLIENT's own log (a different
-     * transport — {@code bot().eventsSince}, no probe command behind it), and a wait for a record of
-     * a type that is recorded for OTHER subjects too ({@code entity_joined_world} fires for anything
-     * that joins), where the type alone would be satisfied by the wrong record. Matching is
-     * case-insensitive so a needle can be written the way the payload reads.</p>
-     *
-     * <p>Local to this class on purpose: the shared base offers {@link Events} over the server probe
-     * only, and this class is not that base's owner.</p>
-     */
-    private String awaitRecord(LogReader reader, String needle, int tickBudget) throws Exception {
-        String reply = "";
-        String wanted = needle.toLowerCase(Locale.ROOT);
-        for (int waited = 0; waited <= tickBudget; waited += 5) {
-            reply = String.valueOf(reader.read());
-            if (reply.toLowerCase(Locale.ROOT).contains(wanted)) {
-                return reply;
-            }
-            bot().waitTicks(5);
-        }
-        return reply;
-    }
+    // The local `awaitRecord(LogReader, needle, budget)` that stood here is gone. It existed on the
+    // claim that "the shared base offers Events over the server probe only", which stopped being
+    // true: `clientEvents()` is on the base and carries the same verbs, so both of its callers now
+    // await on the CLIENT log directly. Its matching was also a case-folded substring of the whole
+    // reply, where the two questions being asked were about a FIELD — the screen's class and the
+    // entity's class — which is what they ask now.
 
     /**
      * How many {@code client_gui_opened} records name a screen whose class carries {@code name}.
@@ -450,14 +425,14 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         assertTrue("the container AR's gui handler served must be the ore-mapping one; served: "
                 + served, served.contains("OreMapping"));
 
-        String opened = awaitRecord(
-                () -> clientEvents().since(clientMark, "client_gui_opened"),
-                "oremapping", LINK_BUDGET_TICKS);
-        Events.assertInstrumentRan(opened, "client_gui_events",
-                "the client was asked to display the ore-mapping screen");
-        assertTrue("the client must be asked to display the OreMapping screen; server served "
-                + served + " and the client's screen requests since the click are: " + opened,
-                opened.toLowerCase(Locale.ROOT).contains("oremapping"));
+        // Asked of the `gui` FIELD rather than of a substring of the reply: the record carries the
+        // screen's class name there, and a case-folded search of the whole payload would also be
+        // satisfied by the word appearing in some other field of some other record.
+        String opened = clientEvents().awaitMatching(clientMark, "client_gui_opened",
+                reply -> Events.anyRecordFieldContains(reply, "gui", "OreMapping"),
+                "naming the OreMapping screen",
+                "the client must be asked to display the OreMapping screen; the server served "
+                        + served, LINK_BUDGET_TICKS);
         assertEquals("the ore-mapping screen must not be cancelled on the way to the player: "
                 + opened, 0, recordsWithBoth(opened, "oremapping", "\"cancelled\":true"));
 
@@ -548,9 +523,20 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
                         + " that joined the server world since it: " + spawnedOnServer,
                 1, Events.countRecords(spawnedOnServer, "cls", "EntityHoverCraft"));
 
-        String spawnedOnClient = awaitRecord(
-                () -> clientEvents().since(clientMark, "entity_joined_world"),
-                "entityhovercraft", LINK_BUDGET_TICKS);
+        // The wait is a LINK on the `cls` field, but its expiry is DELIBERATELY not the verdict:
+        // the lines below tell "production spawned nothing" from "it spawned and the client never
+        // saw it" by reading the held stack, and one of those is a client-sync bug while the other
+        // is not. So a wait that ended empty falls back to ONE read of the log — a read, not
+        // another poll — and the discrimination below still happens.
+        String spawnedOnClient;
+        try {
+            spawnedOnClient = clientEvents().awaitMatching(clientMark, "entity_joined_world",
+                    reply -> !Events.recordsWhere(reply, "cls", "EntityHoverCraft").isEmpty(),
+                    "naming an EntityHoverCraft",
+                    "the client must receive the spawned hovercraft", LINK_BUDGET_TICKS);
+        } catch (AssertionError neverSeen) {
+            spawnedOnClient = clientEvents().since(clientMark, "entity_joined_world");
+        }
         Events.assertInstrumentRan(spawnedOnClient, "client_entity_join_events",
                 "the client received the spawned hovercraft");
         int seen = Events.countRecords(spawnedOnClient, "cls", "EntityHoverCraft");

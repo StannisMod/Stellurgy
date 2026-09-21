@@ -79,6 +79,10 @@ public final class ClientPoll {
         }
         java.util.List<T> readings = new java.util.ArrayList<T>(samples);
         readings.add(probe.read());
+        // THIS LOOP IS THE PRIMITIVE, not a site that should have been converted into one: it is
+        // the window every caller reaches for instead of writing its own, and its iterations ARE
+        // the observation. There is nothing to link on by construction — a window measures how much
+        // the world moved between reads, which is a quantity no single record can carry.
         for (int i = 1; i < samples; i++) {
             step.waitTicks(ticksBetween);
             readings.add(probe.read());
@@ -140,6 +144,10 @@ public final class ClientPoll {
 
         T last = probe.read();
         int iterations = 0;
+        // THIS LOOP IS THE PRIMITIVE. It is what a site converts TO when the thing waited for is a
+        // value rather than a record — the shared, self-reporting form of the ad-hoc early-exit
+        // loops. What it cannot see, and every caller inherits: a predicate that held between two
+        // reads and stopped holding before the next.
         while (iterations < ceiling && !predicate.test(last)) {
             step.waitTicks(stepTicks);
             last = probe.read();

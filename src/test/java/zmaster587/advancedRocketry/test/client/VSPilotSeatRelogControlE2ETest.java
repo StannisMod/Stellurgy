@@ -278,6 +278,10 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         StringBuilder trace = new StringBuilder();
         bot().holdKey(key);
         try {
+            // A WINDOW with the key HELD across it: the iterations are part of the stimulus, and
+            // what is asked is whether the climb reached a threshold — a value, not an instant
+            // anything commits. What it cannot see: a climb that reached MIN_CLIMB and sagged back
+            // inside one 5-tick sample.
             for (int i = 0; i < budget && (last - from) < MIN_CLIMB; i++) {
                 bot().waitTicks(5);
                 last = clientPlayerY();

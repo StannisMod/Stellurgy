@@ -699,6 +699,10 @@ public abstract class AbstractSharedClientE2ETest {
         StringBuilder trail = new StringBuilder();
         boolean arrived = false;
         JsonObject last = null;
+        // A WINDOW that DECIDES NOTHING: it runs after a verdict has already been lost, and its
+        // only product is the trail a failure message prints. There is no link to take because
+        // there is no claim being made here. What it cannot see: where the body went between two
+        // samples — which is why the trail prints every point rather than the last.
         for (int sample = 0; sample < 6 && !arrived; sample++) {
             last = bot().reportState();
             trail.append(' ').append(describePlayerPoint(last));

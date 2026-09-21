@@ -130,6 +130,11 @@ final class MachineRecipeEndToEndKit {
      */
     static String tryCompleteWithRetry(TestClient c, int dim, int cx, int cy, int cz) throws Exception {
         String resp = null;
+        // STAYS A LOOP, and the reason is that its ITERATIONS are the stimulus: each one re-issues
+        // `try-complete`, which is production being ASKED to validate the multiblock. A link would
+        // have to be a record of the validation succeeding, and the thing that makes it succeed is
+        // the next ask — so waiting longer on one ask cannot produce what re-asking does. What this
+        // cannot see: which of the eight asks was the one that took.
         for (int attempt = 0; attempt < 8; attempt++) {
             resp = String.join("\n",
                     c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
@@ -146,6 +151,9 @@ final class MachineRecipeEndToEndKit {
         // Retry mitigation — see tryCompleteWithRetry above.
         StringBuilder attempts = new StringBuilder();
         String resp = null;
+        // Same shape as tryCompleteWithRetry: the ask IS the stimulus, so this is a loop on
+        // purpose. It differs in keeping every reply, because a red here wants to show which asks
+        // were refused and how — the count alone would not say whether the answer ever changed.
         for (int attempt = 0; attempt < 8; attempt++) {
             resp = String.join("\n",
                     c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));

@@ -22,6 +22,7 @@ import zmaster587.advancedRocketry.test.PlayerPosition;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
@@ -1141,6 +1142,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // told apart: `yard:null` is a ship with no chunk claim at all, a yard box with no seat in
         // it is a claim whose blocks have not arrived (or a craft that genuinely carries no pilot
         // seat), and the attempt count says whether the wait was ever real.
+        // STAYS A LOOP, and the link does not answer: `ledger_settled` names the ship and its CELL,
+        // not whether the hull's BLOCKS have landed in the subspace — which is what a seat scan
+        // needs and what a claim can precede. What this cannot see: a seat that was findable and
+        // stopped being so between two attempts.
         PilotSeat seat = null;
         PilotSeat firstRefusal = null;
         int attempts = 0;
@@ -1727,6 +1732,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         double last = from;
         bot().holdKey(key);
         try {
+            // A WINDOW with the key HELD across it: the iterations are part of the stimulus, and
+            // what is asked is whether the climb reached a threshold — a value, not an instant
+            // anything commits. The input reaching the flight computer IS a record and is awaited
+            // where the key goes down; this measures what the thrust then did. What it cannot see:
+            // a climb that reached MIN_CLIMB and sagged back inside one 5-tick sample.
             for (int i = 0; i < budget && (last - from) < MIN_CLIMB; i++) {
                 bot().waitTicks(5);
                 last = clientPlayerY();
@@ -1833,6 +1843,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         Reply listed = Reply.of("artest dim list", dims);
         assertTrue("could not read the registered dimensions: " + dims, listed.has(FORGE_DIMS));
         int[] ids = listed.intArray(FORGE_DIMS);
+        // STAYS A LOOP, and the link that looks right does not answer. `ledger_settled` is awaited
+        // elsewhere in this class and carries `ship` and `cell` — the CELL, not the Forge dimension
+        // id, which is minted fresh on every boot and is the very thing this search exists to
+        // discover. So a record can say the craft settled without saying where to ask for it, and
+        // what remains is a scan of the registered dimensions. What this cannot see: a slot that
+        // answered and stopped answering between two attempts.
         for (int attempt = 0; attempt < 30; attempt++) {
             for (int id : ids) {
                 String trimmed = String.valueOf(id);
@@ -1884,6 +1900,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     protected double[] awaitShipPose(int dim) throws Exception {
         assertNotNull("awaitShipPose is about THIS pilot's ship, and the arrangement has not named"
                 + " one yet", arrangedShipId);
+        // STAYS A LOOP: what it reads is a state that FLICKERS — whether this ship is loaded and
+        // queryable RIGHT NOW. `ledger_settled` records that it settled once, which is satisfied by
+        // a settle since undone, and no record says "it is loaded at this instant" because that is
+        // not an event anything commits. What this cannot see: a craft that came up and unloaded
+        // again between two attempts.
         for (int attempt = 0; attempt < 40; attempt++) {
             // ASKED BY NAME. This was `ship-info <dim> 0 0 0` — an unbounded nearest lookup —
             // defended by asserting the cell held exactly one loaded ship. That defence answers a
@@ -1919,15 +1940,14 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         events.await(mark, "ship_spawned", "the build must become a ship in the physics mod's own"
                 + " registry - a ship count that never rises cannot tell an assembler that refused"
                 + " from a queue that never drained", RESTORE_LINK_BUDGET_TICKS);
-        for (int attempt = 0; attempt < 40; attempt++) {
-            exec("artest vs load-ships " + dim);
-            int loaded = readIntOr(exec("artest vs ship-count " + dim), "count", -1);
-            if (loaded >= 1) {
-                return loaded;
-            }
-            bot().waitTicks(5);
-        }
-        return 0;
+        // The spawn is a LINK and is awaited above. What follows was a poll for the LOAD, and it
+        // is asserted instead: a headless server has no player to hold a craft loaded, so the ask
+        // is made once — and then it either took or it did not. Repeating the ask forty times
+        // cannot make a registered craft load if the first ask failed, it only converts that into
+        // 200 ticks of ambiguity and an answer of 0 that means several different things.
+        exec("artest vs load-ships " + dim);
+        return ShipReadiness.requireLoaded(this::exec, dim,
+                "the ship this scenario just spawned must be loaded before a login can restore it");
     }
 
     /** Clear the build site so the fixture is not welded to whatever terrain generated there. */

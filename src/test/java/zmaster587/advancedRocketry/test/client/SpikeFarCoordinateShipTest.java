@@ -173,6 +173,9 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                         ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
                 double y0 = Double.NaN;
                 String lastInfo = "";
+                // STAYS A LOOP: the spawn is already awaited as a link one line up, and what this
+                // reads is whether the craft is loaded and carrying a pose RIGHT NOW — a flickering
+                // state no record answers. What it cannot see: an unload between two reads.
                 for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
                     bot().waitTicks(5);
                     lastInfo = exec("artest vs ship-info 0 id " + shipId);
@@ -385,6 +388,9 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             double lastDist = 0d;
             int stoppedAtTick = -1;
             int quiet = 0;
+            // A WINDOW over the drift: what it answers is WHEN the craft stopped moving and how
+            // far it had gone — a tick index and a distance across samples, neither of which is a
+            // moment production commits. What it cannot see: motion inside one sampling gap.
             for (int sample = 1; sample <= SURVIVAL_SAMPLES; sample++) {
                 bot().waitTicks(SURVIVAL_SAMPLE_TICKS);
                 double[] now = shipXZ(shipId);
@@ -424,6 +430,10 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     /** The ship's world X and Z, by id. */
     private double[] shipXZ(String shipId) {
         String last = "";
+        // STAYS A LOOP: is this ship loaded and carrying a pose RIGHT NOW is a state that FLICKERS,
+        // and no record answers it — `ledger_settled` says the craft settled once, which a later
+        // unload does not retract. What this cannot see: a ship that came up and went between two
+        // reads.
         for (int i = 0; i < 10; i++) {
             try {
                 last = exec("artest vs ship-info 0 id " + shipId);
@@ -633,6 +643,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
      */
     private double shipY(String shipId) {
         String last = "";
+        // Same refusal as shipXZ above: loadedness is a flickering STATE, not an event, so the
+        // read is retried rather than linked. What this cannot see: an unload between two reads.
         for (int i = 0; i < 10; i++) {
             try {
                 last = exec("artest vs ship-info 0 id " + shipId);

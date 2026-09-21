@@ -1374,6 +1374,12 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private String findSeatAboard(int dim, int budget) throws Exception {
         assertNotNull("the build must have named its ship before the arrival side can ask about it",
                 builtShipName);
+        // STAYS A LOOP. The link that looks right is `ship_spawned`, recorded at the registry's own
+        // add — but it carries `vsShip` and `name` and no DIMENSION, and this asks whether the hull
+        // carrying that name is queryable in THIS cell, which the record cannot say. What is really
+        // being waited out is the re-assembly putting blocks into the subspace, and a claim can
+        // exist before its contents do. What this cannot see: a hull that answered and stopped
+        // answering between two attempts.
         for (int attempt = 0; attempt < budget; attempt++) {
             String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
             // absence is the answer: this is the retry loop, and "no hull carries that name yet"
@@ -1887,15 +1893,29 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         System.out.println("[M1] client's view of the pad BEFORE the teleport (600 blocks away): "
                 + before);
 
+        long floorMark = clientEvents().mark();
         exec("tp @a " + standX + " " + (by + 1) + " " + standZ + " 0 0");
 
-        JsonObject floor = null;
-        for (int attempt = 0; attempt < CLIENT_FLOOR_BUDGET_TICKS / 5; attempt++) {
-            bot().waitTicks(5);
-            floor = bot().blockState(floorX, floorY, floorZ);
-            if (floor.has("block") && floor.get("block").getAsString().contains("launchpad")) {
-                break;
+        // The client receiving the pad's CHUNK is a record — `chunk_data_applied`, carrying the
+        // chunk it applied — so this waits for that instead of asking the block how it looks. The
+        // poll it replaces could not tell "the chunk has not arrived" from "it arrived and the
+        // block is something else", and both were reported as the pad never coming.
+        JsonObject floor = bot().blockState(floorX, floorY, floorZ);
+        boolean alreadyThere = floor.has("block")
+                && floor.get("block").getAsString().contains("launchpad");
+        if (!alreadyThere) {
+            try {
+                clientEvents().awaitRecordWithFields(floorMark, "chunk_data_applied",
+                        "the client must be sent the chunk holding the pad it is stood on",
+                        CLIENT_FLOOR_BUDGET_TICKS,
+                        "cx", String.valueOf(floorX >> 4), "cz", String.valueOf(floorZ >> 4));
+            } catch (AssertionError neverApplied) {
+                // Not a verdict here: the arrangement check below owns the failure and prints what
+                // the client actually holds, which is the part that says WHICH fault this is.
+                System.out.println("[M1] no chunk_data_applied for the pad's chunk: "
+                        + neverApplied.getMessage());
             }
+            floor = bot().blockState(floorX, floorY, floorZ);
         }
         requireArranged("the CLIENT must receive the launchpad it is being stood on before anything"
                         + " is measured at the machine. Until it arrives the client sees air under"

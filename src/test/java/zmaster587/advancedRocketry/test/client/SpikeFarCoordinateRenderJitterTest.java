@@ -221,6 +221,10 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
             int settleAttempts = 0;
             int lastDelta = Integer.MAX_VALUE;
             BufferedImage previousSettle = first;
+            // STAYS A LOOP: the exit is the DIFFERENCE between two captured frames falling to zero
+            // — a value converging, where nothing decides. No record could carry it, because the
+            // quantity only exists between a PAIR of observations this loop takes itself. What it
+            // cannot see: a scene that stopped moving for one pair and resumed after.
             while (settleAttempts < SETTLE_ATTEMPTS) {
                 settleAttempts++;
                 bot().waitTicks(20);
@@ -244,6 +248,11 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
             int maxRun = 0;
             int run = 0;
             BufferedImage previous = second;
+            // A STIMULUS WINDOW: each step teleports the body further out and compares the frame
+            // with the one before, so the loop is what produces the motion being measured. Its
+            // results — how many steps repeated a frame, and the longest RUN of repeats — are
+            // statistics over the sweep, which no record could carry. What it cannot see: a frame
+            // between two steps.
             for (int step = 1; step <= STEPS; step++) {
                 double px = x + 0.5d + step * STEP_BLOCKS;
                 exec("tp " + botName + " " + fmt(px) + " " + EYE_Y + " " + fmt(ARENA_Z + 0.5d));

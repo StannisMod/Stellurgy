@@ -613,12 +613,26 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // the contract under test. Confirm we're STILL airborne, retrying the start —
         // same pattern as the assemble retry above. (The
         // engine-start hover removes the kick and this crutch with it.)
-        for (int attempt = 0; attempt < 3; attempt++) {
-            if (rocketInfo(rocketId).inFlight) {
-                return rocketId;
-            }
-            exec("artest rocket start-free-flight " + rocketId);
-            bot().waitTicks(2);
+        // The re-issued start is the STIMULUS and `rocket_flight_set` is the link this class uses
+        // everywhere else: the flag's own write, carrying the rocket it was made on. The poll of
+        // `rocket info` this replaced could only sample the state that record announces, and its
+        // "not in flight" was equally produced by a kick that had decayed and by one that had not
+        // landed yet. The start is re-sent every 2 ticks, as the loop did, because a kick that
+        // decayed is not recoverable by reading longer.
+        if (rocketInfo(rocketId).inFlight) {
+            return rocketId;
+        }
+        long restartMark = events.markInstrumented();
+        try {
+            events.awaitMatching(restartMark, "rocket_flight_set",
+                    reply -> !Events.recordsWhereAll(reply, "e", String.valueOf(rocketId),
+                            "inFlight", "true").isEmpty(),
+                    "putting THIS rocket back in flight",
+                    "the takeoff kick must leave the rocket airborne long enough to be flown", 6,
+                    () -> exec("artest rocket start-free-flight " + rocketId), 2);
+            return rocketId;
+        } catch (AssertionError neverLit) {
+            // Fall through to the diagnosis below, which prints what the rocket itself says.
         }
         RocketInfo lastInfo = rocketInfo(rocketId);
         String last = lastInfo.raw();
@@ -1427,6 +1441,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         double convErr = Double.MAX_VALUE;
         double settledErr = Double.NaN;
         int window = windowTicks(4, 20);
+        // A WINDOW, and the paragraph above says why: the measurement is the BEST convergence
+        // reached anywhere in it, not the sample the loop stopped on. No record carries a
+        // best-over-a-stretch. What it cannot see: a better residual touched between two samples.
         for (int spent = 0; spent < window; spent += 4) {
             bot().waitTicks(4);
             // Both halves of the residual read as ONE measurement, in this order: two reads a

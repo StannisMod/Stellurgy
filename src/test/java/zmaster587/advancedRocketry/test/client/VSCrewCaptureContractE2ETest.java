@@ -516,6 +516,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         StringBuilder trace = new StringBuilder();
         bot().holdKey(Keyboard.KEY_SPACE);
         try {
+            // A WINDOW, and the key is held across it: what is measured is the APEX of the jump,
+            // an extremum over the samples, and no record can carry it because it is a property of
+            // the arc rather than of any instant production commits. What it cannot see: a higher
+            // apex reached and left between two samples.
             for (int i = 0; i < 10; i++) {
                 bot().waitTicks(2);
                 samples++;
@@ -664,6 +668,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         StringBuilder trace = new StringBuilder();
         bot().holdKey(Keyboard.KEY_W);
         try {
+            // A WINDOW under a held walk: it counts how many of the samples were captured and takes
+            // the y RANGE, both properties of the traverse rather than of one instant. A record
+            // could say capture began; it could not say what fraction of a walk it held for. What
+            // it cannot see: a capture dropped and regained inside one 4-tick sample.
             for (int i = 0; i < 12; i++) {
                 bot().waitTicks(4);
                 samples++;
@@ -954,6 +962,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         long jumpMark = client.mark();
         bot().holdKey(Keyboard.KEY_SPACE);
         StringBuilder arc = new StringBuilder();
+        // A WINDOW that records the arc's SHAPE for the failure message; the verdict is the link
+        // below. A trajectory is not one record, so these samples exist to be printed, not to
+        // decide. What they cannot see: the part of the arc between two samples.
         for (int t = 0; t < 3; t++) {
             bot().waitTicks(2);
             arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f sub=%.2f] ",
@@ -970,6 +981,8 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The arc keeps being sampled while the body is airborne, because the diagnostic is a
         // trajectory and a trajectory is not one record; the WAIT below is what decides when the
         // window is over.
+        // The arc's second half, same window and same reason: it is printed, not asserted on — the
+        // landing is decided by the link that follows. What it cannot see: the ticks in between.
         for (int t = 3; t < 6; t++) {
             bot().waitTicks(2);
             arc.append(String.format(java.util.Locale.ROOT, "[t%d y=%.2f sub=%.2f] ",
@@ -1003,6 +1016,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         int[] keys = {Keyboard.KEY_W, Keyboard.KEY_D, Keyboard.KEY_S, Keyboard.KEY_A};
         StringBuilder legs = new StringBuilder();
         long walkMoveMark = clientEvents().mark();
+        // FOUR STIMULUS LEGS, not a wait: each iteration walks the body in one direction, so
+        // deleting the loop stops the walking rather than stopping the watching. The records the
+        // legs produce are read against one mark AFTER them; what the legs themselves cannot see is
+        // a capture that dropped and returned inside a single 3-tick hold.
         for (int leg = 0; leg < 4; leg++) {
             bot().holdKey(keys[leg]);
             try {
@@ -1403,6 +1420,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         boolean trackedAtEnd = false;
         bot().holdKey(Keyboard.KEY_SPACE);
         try {
+            // A WINDOW measuring the worst DROP below the running high-water mark — an extremum
+            // over the whole hold, which is the quantity the contract is about and which no single
+            // record carries. What it cannot see: a deeper drop recovered between two samples.
             for (int i = 0; i < 25; i++) {
                 bot().waitTicks(2);
                 double y = bot().reportState().get("playerY").getAsDouble();
@@ -1498,6 +1518,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         long encounterMark = client.mark();
         StringBuilder land = new StringBuilder();
         double settledY = Double.NaN;
+        // A WINDOW over the landing: what it answers is where the body SETTLES, which is a value
+        // reached asymptotically rather than an instant anything commits, and the trace it keeps is
+        // for the message. What it cannot see: a bounce between two 3-tick samples.
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
             double py = bot().reportState().get("playerY").getAsDouble();
@@ -1643,6 +1666,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double settledY = Double.NaN;
         StringBuilder enc = new StringBuilder();
         StringBuilder fine = new StringBuilder();
+        // A WINDOW that COUNTS: the split between aboard-mode and hull-stand samples is a ratio
+        // over the observation, and a ratio is not something a record can carry — each record is
+        // one moment. What it cannot see: a mode that flipped and flipped back inside 3 ticks.
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
             samples++;
@@ -2169,6 +2195,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // tick the capture takes hold: the held carry is what the next tick subtracts to recover the
         // body's own motion, so a wrong one is a real displacement and not a reading.
         StringBuilder contact = new StringBuilder();
+        // A WINDOW at one-tick resolution, kept for the contact TRACE a failure needs; the verdict
+        // is taken from the records afterwards. No record carries "how the contact looked across
+        // the fall". What it cannot see: anything finer than a tick.
         for (int i = 0; i < 25; i++) {
             bot().waitTicks(1);
             boolean tracked = DeckCapture.read(this::exec).alreadyTracked;
@@ -2353,6 +2382,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double swept = 0.0;
         double[] prev = look0;
         StringBuilder steps = new StringBuilder();
+        // A STIMULUS WINDOW: each iteration turns the real cursor, so the loop is what makes the
+        // look move, and what it accumulates is the swept ANGLE — a sum over the steps, which no
+        // record could carry. What it cannot see: how the look travelled inside one step.
         for (int i = 0; i < DECK_LOOK_TURNS; i++) {
             bot().turnLook(MOUSE_UNITS_PER_TURN, 0f);
             bot().waitTicks(2);
@@ -2486,6 +2518,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         double[] anchor = clientPos();
         double bestMag = -1.0, bestWalkedYaw = 0.0, bestHeldYaw = 0.0;
         StringBuilder legs = new StringBuilder();
+        // FOUR STIMULUS LEGS whose result is an extremum: the largest yaw divergence across the
+        // four directions. Each leg drives the body itself, and the quantity compared is a MAXIMUM
+        // over legs, which is not a moment anything records. Every leg's re-seed IS awaited as a
+        // link below. What this cannot see: a worse divergence inside a leg.
         for (int dir = 0; dir < 4; dir++) {
             long reseatMark = clientEvents().mark();
             exec("tp @a " + anchor[0] + " " + anchor[1] + " " + anchor[2] + " 0 0");

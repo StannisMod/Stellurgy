@@ -11,6 +11,7 @@ import org.lwjgl.input.Keyboard;
 
 
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.TransitSetup;
@@ -969,17 +970,12 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     }
 
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = readIntOr(exec("artest vs ship-count " + dim), "count", -1);
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        return 0;
+        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
+        // branch of this helper never executed on the server tier, at one fork or at six, because
+        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
+        // and names whether the craft never REGISTERED or registered and did not LOAD.
+        return ShipReadiness.requireLoaded(this::exec, dim,
+                "this scenario's craft must be loaded before the jump is flown");
     }
 
     private static boolean readBool(String json, String key) {

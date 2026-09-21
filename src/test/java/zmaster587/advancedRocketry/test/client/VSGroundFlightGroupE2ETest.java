@@ -188,6 +188,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         bot().holdKey(key);
         try {
             int ceiling = 2 * 60;
+            // STAYS A LOOP, twice over: the key is HELD across it, so its iterations are part of
+            // the stimulus, and what it reads is a distance that grows — a value converging on a
+            // threshold, not an event anything commits. The ceiling is patience; the exit is the
+            // measurement. What this cannot see: a craft that crossed the threshold and came back
+            // inside one 2-tick sample.
             for (int spent = 0; spent < ceiling && Math.abs(best) <= 2.0; spent += 2) {
                 bot().waitTicks(2);
                 String info = shipInfoById(shipId);
@@ -440,6 +445,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // attitude, so |dot| FALLS and then RISES back toward 1.0 as it comes round; a last-sample
         // read of a full turn says "unmoved". The old loop hid that by exiting the moment the dot
         // dropped — on the same predicate the assertion then restated.
+        // A WINDOW, and its measurement is the MINIMUM |dot| across the turn for the reason set out
+        // just above. What it cannot see: an attitude passed through between two 1-tick samples.
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             String cmd = exec("artest vs force-rot-by-id 0 " + shipId + " 0 1.0 0");
             assertTrue("force-rot must reach THIS ship's own flight computer: " + cmd,

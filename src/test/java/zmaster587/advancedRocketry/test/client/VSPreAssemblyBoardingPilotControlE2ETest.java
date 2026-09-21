@@ -835,6 +835,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         int stable = 0;
         int bestRun = 0;
         int unresolved = 0;
+        // STAYS A LOOP: settling is a VALUE converging, and the quantity it exits on — an altitude
+        // that has not moved across a run of samples — exists only BETWEEN observations, so no
+        // record could carry it. What this cannot see: a craft that held still for the run and
+        // moved immediately after, which is why the caller reads the pose again rather than
+        // trusting the run alone.
         for (int sample = 0; sample < SETTLE_MAX_SAMPLES; sample++) {
             bot().waitTicks(TICKS_PER_SAMPLE);
             double y = shipPosY();
@@ -865,6 +870,10 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     /** The largest deviation from {@code from} over a full measurement window. */
     private double measureMaxDrift(double from) throws Exception {
         double worst = 0.0;
+        // A WINDOW whose result is the LARGEST deviation across it — the method's whole purpose.
+        // A drift that appeared and was corrected is exactly what is being looked for, so a single
+        // read would report the correction. What it cannot see: a worse excursion between two
+        // samples.
         for (int sample = 0; sample < MEASURE_SAMPLES; sample++) {
             bot().waitTicks(TICKS_PER_SAMPLE);
             double y = shipPosY();

@@ -470,6 +470,11 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
      */
     private double shipY() throws Exception {
         String last = "";
+        // STAYS A LOOP: what it reads is a state that FLICKERS — is this ship loaded and carrying a
+        // pose RIGHT NOW. A link would be `ledger_settled`, and it does not answer: it records that
+        // the craft settled ONCE, which is satisfied by a settle since undone, and a headless
+        // server can let a craft go between two reads. What this cannot see: a ship that was
+        // loaded and unloaded inside one 2-tick gap.
         for (int i = 0; i < 10; i++) {
             last = shipInfoById();
             if (ShipInfo.isLoaded(last)) {

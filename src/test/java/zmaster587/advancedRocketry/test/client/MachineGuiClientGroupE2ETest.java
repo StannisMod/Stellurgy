@@ -609,6 +609,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 Reply.of(fixture).ok());
 
         String completed = "";
+        // STAYS A LOOP because its ITERATIONS are the stimulus: each one re-issues `try-complete`,
+        // which is production being ASKED to validate the multiblock, and what makes the ask
+        // succeed is the next ask rather than more patience on the last one. A link would have to
+        // be a record of the validation succeeding, and the same re-ask would still be what
+        // produced it. What this cannot see: which of the eight asks was the one that took.
         for (int attempt = 0; attempt < 8; attempt++) {
             completed = exec("artest machine try-complete " + dim + " " + x + " " + Y + " " + z);
             // absence is the answer: this is the wait, and "the flag is not there yet" is

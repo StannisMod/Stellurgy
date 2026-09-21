@@ -428,6 +428,11 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
     /** Polls ~30 s for the planet clock to jump past the staged night (sleep takes 100+ ticks). */
     private long waitForPlanetDawn(int dim) throws Exception {
         long last = -1;
+        // STAYS A LOOP: the world clock is a VALUE that advances, and the thing being asserted is
+        // that it passed a threshold — not that anything committed an event. The sleep skip itself
+        // publishes no record, so there is nothing to link on; what a link would have to be is a
+        // record of the skip being applied, at the seam where production advances the clock. What
+        // this cannot see: a clock that jumped past dawn and was set back inside one 20-tick gap.
         for (int waited = 0; waited < 600; waited += 20) {
             last = dimTime(dim);
             if (last >= ROTATIONAL_PERIOD) {

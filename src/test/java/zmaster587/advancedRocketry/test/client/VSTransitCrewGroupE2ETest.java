@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
@@ -148,17 +149,15 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
 private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = readIntOr(exec("artest vs ship-count " + dim), "count", -1);
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        return 0;
+        // ASSERTED, not waited for. ShipReadiness carries the measurement behind this: across the
+        // server tier the same helper was planted at both branches, and the branch that WAITS never
+        // executed — at one fork or at six, the ship is already loaded by the time a scenario asks.
+        // A wait that waits for nothing converts a state that should fail loudly into absorbed
+        // ambiguity and then answers 0 for several different reasons, so the postcondition replaces
+        // it and names what to look at: a craft that never registered, or one that registered and
+        // did not load.
+        return ShipReadiness.requireLoaded(this::exec, dim,
+                "this scenario's craft must be loaded before the transit is driven");
     }
 
     // ---- the jump as a CHAIN of events: PILOTED_JUMP_CHAIN, transitEvents, arrivedTargetDim live in
@@ -484,6 +483,11 @@ private String execEnvelope(String cmd) throws Exception {
     /** ORIGIN-side arrangement: poll until the fixture ship EXISTS. Asked through the queryable
      *  registry, which answers for an unloaded ship — so this waits without forcing anything. */
 private boolean waitForRegisteredShip(int dim) throws Exception {
+        // STAYS A LOOP, and the link was checked rather than assumed: `ship_spawned` is recorded at
+        // the registry's own add, which is the right MOMENT — but it carries `vsShip` and `name`
+        // and no dimension, so it cannot answer "is there a craft in THIS cell", which is the
+        // question here. What this cannot see: a craft that registered and deregistered between
+        // two reads.
         for (int i = 0; i < 40; i++) {
             if (readIntOr(execEnvelope("artest vs ship-count-all " + dim), "count", -1) >= 1) {
                 return true;

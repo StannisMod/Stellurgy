@@ -868,6 +868,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                         + " measuring a body vanilla owns", DECK_LINK_BUDGET_TICKS);
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE;
+        // A WINDOW whose verdict is the MINIMUM height over its settled tail — a body that dipped
+        // and recovered is exactly the failure being looked for, so a last-sample read would report
+        // the recovery and miss it. No record carries a minimum over a stretch of ticks. What this
+        // cannot see: a dip inside one 2-tick sample.
         for (int i = 0; i < 22; i++) {
             bot().waitTicks(2);
             double y = bot().reportState().get("playerY").getAsDouble();
@@ -978,6 +982,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         long rollMark = clientEvents.mark();
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE, settledMax = -Double.MAX_VALUE;
+        // A WINDOW taking the RANGE over its settled tail: under a roll the claim is that the body
+        // stays within a band, which is a property of the stretch and not of any instant. What this
+        // cannot see: an excursion inside one 2-tick sample.
         for (int i = 0; i < 22; i++) {
             bot().waitTicks(2);
             double y = bot().reportState().get("playerY").getAsDouble();
@@ -1281,6 +1288,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double yMin = Double.MAX_VALUE, yMax = -Double.MAX_VALUE;
         int captured = 0, camOn = 0;
         StringBuilder trace = new StringBuilder();
+        // A WINDOW that both COUNTS and takes RANGES: how many samples were captured with the deck
+        // camera on, and how far roll and height moved across them. Every one of those is a
+        // property of the observation rather than of a moment, so no record could answer. What this
+        // cannot see: a capture or a camera that flipped and returned inside one 4-tick sample.
         for (int i = 0; i < n; i++) {
             bot().waitTicks(4);
             boolean active = Boolean.parseBoolean(deckCameraText("active"));

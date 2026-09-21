@@ -10,6 +10,7 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.TransitSetup;
 import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -118,17 +119,12 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = readIntOr(exec("artest vs ship-count " + dim), "count", -1);
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        return 0;
+        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
+        // branch of this helper never executed on the server tier, at one fork or at six, because
+        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
+        // and names whether the craft never REGISTERED or registered and did not LOAD.
+        return ShipReadiness.requireLoaded(this::exec, dim,
+                "this scenario's craft must be loaded before the rider is put on it");
     }
 
     @Test
@@ -340,6 +336,10 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         int notRiding = 0, samples = 0, mountMissing = 0, riderUntracked = 0;
         double maxAnchorLag = 0.0;
         StringBuilder trace = new StringBuilder();
+        // A WINDOW that COUNTS: how many samples of a cruise found the rider unseated, his mount
+        // missing or the anchor lagging, plus the WORST lag seen. Every one of those is a statistic
+        // over the cruise, and the contract is about the cruise rather than about any tick of it.
+        // What it cannot see: a seat lost and regained inside one sampling gap.
         for (int t = 0; t < OBSERVE_TICKS; t += POLL_EVERY_TICKS) {
             bot().waitTicks(POLL_EVERY_TICKS);
             samples++;

@@ -286,6 +286,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         String reclaimed = "no re-capture: the body was never released (see the premise above)";
 
         // Sample the settle: where does the body come to rest, and what camera does the client own?
+        // A WINDOW, and the trace is its deliverable: coming to rest is a value approached over
+        // ticks, not an instant production commits, and the per-tick record read after this loop is
+        // what carries the verdict. What this cannot see: motion inside one 3-tick sample.
         StringBuilder trace = new StringBuilder();
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
@@ -486,6 +489,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         String reclaimed = "no re-capture: the episode was never broken (see the arrangement above)";
 
         // Sample the settle: where does the claimed body come to rest?
+        // A WINDOW for the same reason as its sibling above: rest is approached, not announced, and
+        // this trace is what a red reads. What it cannot see: motion inside one 3-tick sample.
         StringBuilder trace = new StringBuilder();
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
@@ -699,6 +704,12 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         DeckCapture capEnd = null;
         double[] subSeated = subEnd;
         long flightOffMark = clientEvents.mark();
+        // STAYS A LOOP because the TAP is the work: each round is a real double-tap of the space
+        // key, which is how a player toggles flight off, and a tap that did not register is not
+        // recoverable by reading longer. The read that ends it is a current STATE — is he still
+        // flying — which no record answers: a toggle record would say the flag changed once, and
+        // the hazard here is precisely a second tap flipping it back. What this cannot see: a
+        // toggle that went off and on again inside one round.
         for (int round = 0; round < 4; round++) {
             bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
             bot().waitTicks(2);
