@@ -969,9 +969,18 @@ public abstract class AbstractSharedClientE2ETest {
      * that the HAND is the slot in question, and neither is a poll.</p>
      */
     protected final void emptyTheHandOnClient(String what) throws Exception {
+        // SELECT FIRST, then READ, and only then clear. A CONDITIONAL STIMULUS HAS NO RECORD WHEN
+        // IT DOES NOTHING: `clear` on an already-empty hand changes no slot, the recorder gates on
+        // change, and a link on it would then wait out its whole budget for a record production had
+        // no reason to write. Measured 2026-09-21 — the first cut of this helper did exactly that
+        // and reddened six classes, every one of them with `recording:true` and the instrument
+        // present, i.e. the log correctly saying the thing never happened.
+        bot().selectHotbar(0);
+        if (heldIdOnClient().isEmpty()) {
+            return;
+        }
         long clearMark = clientEvents().mark();
         exec("clear @a");
-        bot().selectHotbar(0);
         try {
             clientEvents().awaitField(clearMark, "client_slot_set", "item", "empty",
                     what, HAND_LINK_BUDGET_TICKS);
@@ -983,11 +992,16 @@ public abstract class AbstractSharedClientE2ETest {
                             + " an absent one can be read as a clear that never landed");
             scenario().arrangementFailed(what + " — " + never.getMessage());
         }
-        JsonObject items = bot().reportPlayerItems();
-        String held = items.has("held") && items.getAsJsonObject("held").has("id")
-                ? items.getAsJsonObject("held").get("id").getAsString() : "?";
+        String held = heldIdOnClient();
         scenario().requireArranged(what + " — the clear reached the client, but the HAND still"
-                + " reads " + held + ": " + items, held.isEmpty());
+                + " reads " + held + ": " + bot().reportPlayerItems(), held.isEmpty());
+    }
+
+    /** The id the CLIENT renders in the main hand, or {@code "?"} when it reports no hand at all. */
+    private String heldIdOnClient() throws Exception {
+        JsonObject items = bot().reportPlayerItems();
+        return items.has("held") && items.getAsJsonObject("held").has("id")
+                ? items.getAsJsonObject("held").get("id").getAsString() : "?";
     }
 
     /** How long the client is given to be TOLD about a cleared hand, in ticks. */

@@ -1952,9 +1952,18 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // which the record does not distinguish in the burst `clear` produces. Neither is a poll.
         // (This class cannot use the shared base's emptyTheHandOnClient — it extends the harness's
         // own AbstractClientE2ETest, not the tier's shared base.)
+        // SELECT FIRST, then READ, and only then clear — a `clear` on an already-empty hand changes
+        // no slot, so the change-gated recorder writes nothing and a link on it would wait out its
+        // budget for a record that was never owed. (Measured 2026-09-21 on the tier's own copy of
+        // this helper, which reddened six classes before the read was put first.)
+        bot().selectHotbar(0);
+        JsonObject beforeClear = bot().reportPlayerItems();
+        if (beforeClear.has("held") && beforeClear.getAsJsonObject("held").has("id")
+                && beforeClear.getAsJsonObject("held").get("id").getAsString().isEmpty()) {
+            return;
+        }
         long clearMark = clientEvents().mark();
         exec("clear @a");
-        bot().selectHotbar(0);
         try {
             clientEvents().awaitField(clearMark, "client_slot_set", "item", "empty",
                     "the clear must reach the client before the hand can be read as empty", 200);
