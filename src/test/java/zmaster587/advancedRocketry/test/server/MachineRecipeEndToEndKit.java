@@ -95,10 +95,17 @@ final class MachineRecipeEndToEndKit {
     }
 
     /** Extract a list of "x y z" strings from a JSON field like
-     *  {@code "<key>":[[x,y,z],[x,y,z]]}. Returns empty if key absent. */
+     *  {@code "<key>":[[x,y,z],[x,y,z]]}. */
     private static List<String> matchAllPos(String resp, String key) {
         List<String> all = new ArrayList<>();
-        for (int[] at : Reply.of("a machine probe reply", resp).blockPosArray(key)) {
+        // absence is the answer, and it is the PRODUCER's doing: the fixture reply writes a hatch
+        // list only for a kind of hatch the machine actually has — `appendHatchPositions` returns
+        // before writing anything for an empty one — so a machine with no liquid hatches carries no
+        // `liquidInputPositions` key at all. Measured over a green server tier, this is the only
+        // site in it where an array field is genuinely absent: 24 times, across the four optional
+        // kinds. The one list that must always be there is `powerPositions`, and `placeFixture`
+        // asserts on it directly rather than leaving that claim to this reader.
+        for (int[] at : Reply.of("a machine probe reply", resp).blockPosArrayOrEmpty(key)) {
             all.add(at[0] + " " + at[1] + " " + at[2]);
         }
         return all;

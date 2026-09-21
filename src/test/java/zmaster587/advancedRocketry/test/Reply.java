@@ -35,8 +35,17 @@ import com.google.gson.JsonParser;
  * producer writes it only sometimes — and the caller owes one line saying why absence is the answer
  * THERE. {@link #has(String)} asks the absence question outright, for a claim that is about it.</p>
  *
- * <p>The rule is greppable, which is the point: {@code Or(} is every place a default is still being
- * taken, and a default nobody can find is one nobody reviews.</p>
+ * <p><b>The five ARRAY verbs obey the same rule.</b> {@link #intArray}, {@link #objectArray},
+ * {@link #textArray}, {@link #objectValues} and {@link #blockPosArray} refuse a field the reply
+ * does not carry; their {@code …OrEmpty} twins answer an empty array and take the same one-line
+ * reason. They answered EMPTY for an absent field until 2026-09-21, which is the defect this class
+ * exists to remove wearing its tidiest coat: an empty array is a well-formed answer no caller can
+ * tell from a real one, so a renamed field read as a finding about the world — no station pads, no
+ * clouds in the sky, no dimension registered. {@link #arrayLength} is the exception and keeps its
+ * {@code -1}: telling the two apart in ONE read is what that verb is for.</p>
+ *
+ * <p>The rule is greppable, which is the point: {@code Or(} and {@code OrEmpty(} are every place a
+ * default is still being taken, and a default nobody can find is one nobody reviews.</p>
  */
 public final class Reply {
 
@@ -511,10 +520,11 @@ public final class Reply {
     /**
      * How many elements the ARRAY field holds, or {@code -1} when the reply carries no such array.
      *
-     * <p>The {@code -1} is the whole point and it is not a fallback: {@link #intArray} answers an
-     * EMPTY array for a field that is absent, which is the right shape for a caller iterating and
-     * the wrong one for a caller ASKING — "the galaxy registered no dimensions" and "the probe
-     * stopped reporting them" are opposite findings behind one zero. Measured 2026-09-18: seventeen
+     * <p>The {@code -1} is the whole point and it is not a fallback: it is the one read that tells
+     * "the galaxy registered no dimensions" from "the probe stopped reporting them" — opposite
+     * findings that sit behind one zero for anyone counting. {@link #intArray} refuses the second
+     * outright and {@link #intArrayOrEmpty} merges them on purpose; this verb NAMES the difference,
+     * which is what a caller branching on it needs. Measured 2026-09-18: seventeen
      * sites spelled this as {@code contains("\"arDimensions\":[]")}, and the three beside them that
      * meant "the key is there at all" spelled it {@code contains("\"arDimensions\":[")} — a needle
      * that is a PREFIX of the first, so one of the two pairs could never have distinguished them.</p>
@@ -543,19 +553,24 @@ public final class Reply {
     }
 
     /**
-     * Every integer of an array field ({@code "arDimensions":[0,9701,9702]}), in order, or an EMPTY
-     * array when the reply carries none — an array that is present and empty and one that is absent
-     * are told apart by {@link #has}.
+     * Every integer of an array field ({@code "arDimensions":[0,9701,9702]}), in order, refusing
+     * when the reply carries no such array — for a field the producer always writes.
      *
      * <p>Seventeen call sites matched the brackets with a regex and then split the captured text on
      * commas, so each carried its own opinion about spaces, signs and an empty list.</p>
      */
     public int[] intArray(String field) {
-        if (!json.has(field) || !json.get(field).isJsonArray()) {
-            refuseIfOnlyNested(field);
-            return new int[0];
-        }
-        JsonArray array = json.getAsJsonArray(field);
+        return intsOf(field, requireArray("intArray", field));
+    }
+
+    /** The same, answering an EMPTY array when the reply carries none — for a field the producer
+     *  writes only sometimes, and the caller owes one line saying why absence is the answer. */
+    public int[] intArrayOrEmpty(String field) {
+        JsonArray array = arrayOrNull(field);
+        return array == null ? new int[0] : intsOf(field, array);
+    }
+
+    private int[] intsOf(String field, JsonArray array) {
         int[] out = new int[array.size()];
         for (int i = 0; i < out.length; i++) {
             try {
@@ -578,11 +593,8 @@ public final class Reply {
      * the caller reads "no fuel".</p>
      */
     public String object(String field) {
-        if (!json.has(field) || !json.get(field).isJsonObject()) {
-            refuseIfOnlyNested(field);
-            return null;
-        }
-        return json.getAsJsonObject(field).toString();
+        JsonObject members = objectOrNull(field);
+        return members == null ? null : members.toString();
     }
 
     /**
@@ -592,13 +604,21 @@ public final class Reply {
      * <p>The keys there belong to the producer — a registry's enum names, a dimension's ids — so a
      * caller asking "every entry" has no name to ask by, and the only reader it could otherwise
      * write is a regex over the whole rendering.</p>
+     *
+     * <p>Refuses when the reply carries no such object.</p>
      */
     public String[] objectValues(String field) {
-        if (!json.has(field) || !json.get(field).isJsonObject()) {
-            refuseIfOnlyNested(field);
-            return new String[0];
-        }
-        JsonObject members = json.getAsJsonObject(field);
+        return valuesOf(requireObject("objectValues", field));
+    }
+
+    /** The same, answering an EMPTY array when the reply carries none — for a field the producer
+     *  writes only sometimes, and the caller owes one line saying why absence is the answer. */
+    public String[] objectValuesOrEmpty(String field) {
+        JsonObject members = objectOrNull(field);
+        return members == null ? new String[0] : valuesOf(members);
+    }
+
+    private static String[] valuesOf(JsonObject members) {
         String[] out = new String[members.entrySet().size()];
         int i = 0;
         for (java.util.Map.Entry<String, JsonElement> member : members.entrySet()) {
@@ -614,13 +634,21 @@ public final class Reply {
      * <p>This is what a list-shaped reply needs and a regex cannot give: matching three coordinate
      * fields in one expression only works while they stay adjacent and in that order, and it
      * silently pairs one member's x with another's z the moment they do not.</p>
+     *
+     * <p>Refuses when the reply carries no such array.</p>
      */
     public String[] objectArray(String field) {
-        if (!json.has(field) || !json.get(field).isJsonArray()) {
-            refuseIfOnlyNested(field);
-            return new String[0];
-        }
-        JsonArray array = json.getAsJsonArray(field);
+        return elementsOf(requireArray("objectArray", field));
+    }
+
+    /** The same, answering an EMPTY array when the reply carries none — for a field the producer
+     *  writes only sometimes, and the caller owes one line saying why absence is the answer. */
+    public String[] objectArrayOrEmpty(String field) {
+        JsonArray array = arrayOrNull(field);
+        return array == null ? new String[0] : elementsOf(array);
+    }
+
+    private static String[] elementsOf(JsonArray array) {
         String[] out = new String[array.size()];
         for (int i = 0; i < out.length; i++) {
             out[i] = array.get(i).toString();
@@ -629,15 +657,21 @@ public final class Reply {
     }
 
     /**
-     * Every element of an array field as text ({@code "ships":["a","b"]}), in order, or an EMPTY
-     * array when the reply carries none.
+     * Every element of an array field as text ({@code "ships":["a","b"]}), in order, refusing when
+     * the reply carries no such array.
      */
     public String[] textArray(String field) {
-        if (!json.has(field) || !json.get(field).isJsonArray()) {
-            refuseIfOnlyNested(field);
-            return new String[0];
-        }
-        JsonArray array = json.getAsJsonArray(field);
+        return textsOf(requireArray("textArray", field));
+    }
+
+    /** The same, answering an EMPTY array when the reply carries none — for a field the producer
+     *  writes only sometimes, and the caller owes one line saying why absence is the answer. */
+    public String[] textArrayOrEmpty(String field) {
+        JsonArray array = arrayOrNull(field);
+        return array == null ? new String[0] : textsOf(array);
+    }
+
+    private static String[] textsOf(JsonArray array) {
         String[] out = new String[array.size()];
         for (int i = 0; i < out.length; i++) {
             JsonElement element = array.get(i);
@@ -667,14 +701,20 @@ public final class Reply {
 
     /**
      * Every element of an array OF positions ({@code "outputPositions":[[x,y,z],[x,y,z]]}), in
-     * order, or an empty array when the reply carries none.
+     * order, refusing when the reply carries no such array.
      */
     public int[][] blockPosArray(String field) {
-        if (!json.has(field) || !json.get(field).isJsonArray()) {
-            refuseIfOnlyNested(field);
-            return new int[0][];
-        }
-        JsonArray array = json.getAsJsonArray(field);
+        return triplesOf(field, requireArray("blockPosArray", field));
+    }
+
+    /** The same, answering an EMPTY array when the reply carries none — for a field the producer
+     *  writes only sometimes, and the caller owes one line saying why absence is the answer. */
+    public int[][] blockPosArrayOrEmpty(String field) {
+        JsonArray array = arrayOrNull(field);
+        return array == null ? new int[0][] : triplesOf(field, array);
+    }
+
+    private int[][] triplesOf(String field, JsonArray array) {
         int[][] out = new int[array.size()][];
         for (int i = 0; i < out.length; i++) {
             JsonElement element = array.get(i);
@@ -741,6 +781,59 @@ public final class Reply {
                     + " the reply answers a silent absence. Ask the member (objectArray /"
                     + " objectValues / object) for it: " + raw);
         }
+    }
+
+    /** The array at {@code field}, or {@code null} when the reply carries no such array. */
+    private JsonArray arrayOrNull(String field) {
+        if (!json.has(field) || !json.get(field).isJsonArray()) {
+            refuseIfOnlyNested(field);
+            return null;
+        }
+        return json.getAsJsonArray(field);
+    }
+
+    /** The object at {@code field}, or {@code null} when the reply carries no such object. */
+    private JsonObject objectOrNull(String field) {
+        if (!json.has(field) || !json.get(field).isJsonObject()) {
+            refuseIfOnlyNested(field);
+            return null;
+        }
+        return json.getAsJsonObject(field);
+    }
+
+    /**
+     * The array at {@code field}, refusing when the reply carries none.
+     *
+     * <p><b>Why this refuses rather than answering an empty array.</b> An array that is present and
+     * EMPTY and one that is ABSENT are opposite findings — "the galaxy registered no dimensions"
+     * against "the probe stopped reporting them" — and an empty array cannot be told from a real
+     * one by any caller, so the second reads as the first all the way up to the assertion. Measured
+     * 2026-09-20 over the whole tier: 68 array reads, 39 of which established the field's presence
+     * nowhere in their file, and one milestone assertion whose entire claim is that the array is
+     * empty — it would have passed for ever on a renamed field.</p>
+     */
+    private JsonArray requireArray(String verb, String field) {
+        JsonArray array = arrayOrNull(field);
+        if (array == null) {
+            throw new AssertionError(refusal(verb, field, "an array"));
+        }
+        return array;
+    }
+
+    /** The object at {@code field}, refusing when the reply carries none. See {@link #requireArray}. */
+    private JsonObject requireObject(String verb, String field) {
+        JsonObject members = objectOrNull(field);
+        if (members == null) {
+            throw new AssertionError(refusal(verb, field, "an object"));
+        }
+        return members;
+    }
+
+    private String refusal(String verb, String field, String shape) {
+        return command + " did not report `" + field + "` as " + shape + " — absent and empty are"
+                + " opposite findings, so `" + verb + "` refuses rather than answering one for the"
+                + " other. If the producer writes this field only sometimes, read it with `" + verb
+                + "OrEmpty` and say in one line why absence is the answer here: " + raw;
     }
 
     /** Where {@code field} sits below {@code at}, as a dotted path, or {@code null}. */
