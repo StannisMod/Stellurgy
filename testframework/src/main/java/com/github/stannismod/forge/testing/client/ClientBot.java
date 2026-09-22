@@ -818,10 +818,16 @@ public final class ClientBot implements Closeable {
         } catch (IOException unreadable) {
             budgetMillis = -1;
         }
+        // idleMillis is taken HERE, at the timeout, so it CONTAINS this wait. Saying "before the
+        // read began" would overstate the silence by the whole budget — measured 2026-09-22 on a
+        // real timeout that printed 120012 ms against a 120000 ms budget, i.e. the channel had in
+        // fact answered 12 ms before the command went out and was healthy until it.
         return "the client bridge did not answer within " + budgetMillis + " ms."
                 + " Outstanding command: " + abbreviate(sent) + "."
-                + " It had answered " + answersReceived + " command(s), the last one "
-                + idleMillis + " ms before this read began to wait."
+                + " It had answered " + answersReceived + " command(s), and had been silent for "
+                + idleMillis + " ms when this read gave up — that figure INCLUDES this wait, so"
+                + " subtract the budget to see how long the channel had been quiet before the"
+                + " command went out (a small remainder means it was healthy until this one)."
                 + " THE CHANNEL IS NOW OUT OF STEP: a late reply to this command would be read as"
                 + " the answer to the next one, so this bot must not be reused."
                 + " Three things produce this and they want different fixes — a client killed or"
