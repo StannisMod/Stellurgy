@@ -1981,20 +1981,24 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         exec("tp @a ~ ~ ~ 0 90");
         awaitClientLookApplied(lookMarkRolled,
                 "the crosshair read below is the CLIENT's, so the aim must have reached it");
-        String rolled = crosshairBlock("looking down on the rolled deck");
+        String crosshairRolled = crosshairRecord("looking down on the rolled deck");
+        String rolled = Events.text(crosshairRolled, "block");
         String feetRolled = readSubPos(exec("artest vs subspace-census"));
         String lookRolled = deckLookIn(lookMarkRolled, "while looking down on the rolled deck");
         double deckPitchRolled = Events.number(lookRolled, "deckPitchDeg");
         double worldPitchRolled = bot().reportState().get("playerPitch").getAsDouble();
         long echoesRolled = (long) deckCamera("posLookApplies");
         String deckActiveRolled = Events.text(lookRolled, "active");
-        String cam = DECK_CAMERA;
-        double rx = clientDouble(cam, "rayEyeX");
-        double ry = clientDouble(cam, "rayEyeY");
-        double rz = clientDouble(cam, "rayEyeZ");
-        double cx = clientDouble(cam, "eyeX");
-        double cy = clientDouble(cam, "eyeY");
-        double cz = clientDouble(cam, "eyeZ");
+        // The ray's eye comes off the SAME crosshair record as the block above, and the camera's
+        // off a deck_camera peek. These were six reflective reads of private fields across the
+        // socket — the last in the tier — and each one sampled whatever frame had drawn most
+        // recently, so the six numbers compared below were up to six different moments.
+        double rx = Events.number(crosshairRolled, "rayEyeX");
+        double ry = Events.number(crosshairRolled, "rayEyeY");
+        double rz = Events.number(crosshairRolled, "rayEyeZ");
+        double cx = deckCamera("eyeX");
+        double cy = deckCamera("eyeY");
+        double cz = deckCamera("eyeZ");
         double px = bot().reportState().get("playerX").getAsDouble();
         double py = bot().reportState().get("playerY").getAsDouble();
         double pz = bot().reportState().get("playerZ").getAsDouble();
@@ -2646,10 +2650,22 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * any other. Replaces a reflective read whose value could not say when it became true.</p>
      */
     private String crosshairBlock(String what) throws Exception {
+        return Events.text(crosshairRecord(what), "block");
+    }
+
+    /**
+     * The whole crosshair record, for a caller that needs more than the block off ONE reading.
+     *
+     * <p>The ray's own eye travels in this record beside the block it resolved. A caller that took
+     * the block from here and the eye from a field read would be pairing two moments — the fields
+     * are overwritten by every drawn frame, so a frame landing between the two reads silently moves
+     * the eye out from under the block.</p>
+     */
+    private String crosshairRecord(String what) throws Exception {
         String rec = Events.lastRecord(clientEvents().since(0, "deck_crosshair"));
         assertNotNull("no deck_crosshair record while " + what + " — the crosshair recorder never "
                 + "ran on this client, so there is nothing to read", rec);
-        return Events.text(rec, "block");
+        return rec;
     }
 
     private String deckLookIn(long mark, String what) throws Exception {
@@ -2659,9 +2675,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         return rec;
     }
 
-    private static final String SHIP_CAMERA_CLASS = "zmaster587.advancedRocketry.client.ShipFrameCamera";
-    /** The camera telemetry the render mixins hold test-side; production keeps none of it. */
-    private static final String DECK_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";
     /** The TEST-side accumulator behind the smoothness window — production keeps none. */
     private static final String FRAME_STEP_WINDOW =
             "zmaster587.advancedRocketry.test.trace.FrameStepWindow";
@@ -2824,10 +2837,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         return max;
     }
 
-    private String clientString(String className, String field) throws Exception {
-        return bot().readStaticField(className, field).get("value").getAsString();
-    }
-
     /**
      * The jumper's own position in his ship's frame, live, or {@code NaN} when nothing resolves it.
      *
@@ -2839,10 +2848,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private double jumperShipFrameY() throws Exception {
         return DeckCapture.read(this::exec).bodyShipFrameYOrNaN();
-    }
-
-    private double clientDouble(String className, String field) throws Exception {
-        return Double.parseDouble(clientString(className, field));
     }
 
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------

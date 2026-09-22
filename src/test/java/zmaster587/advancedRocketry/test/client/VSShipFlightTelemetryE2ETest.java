@@ -102,10 +102,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     private static final String VARIANT = "with-pilot-seat";
     private static final String KEY_BINDINGS = "zmaster587.advancedRocketry.client.KeyBindings";
-    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";
-    /** The TEST-side holder of the client's own last camera setup — production keeps no such field. */
-    private static final String DECK_CAMERA_STATE =
-            "zmaster587.advancedRocketry.test.trace.DeckCameraState";
     /**
      * The Free Flight HUD as the client last DREW it, or {@code ""} when it has drawn none.
      *
@@ -1072,14 +1068,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         JsonObject state = bot().reportState();
         System.out.println("[tier2][HEALTH] after " + afterScenario + " the client renders health="
                 + (state != null && state.has("health") ? state.get("health").getAsString() : "?"));
-    }
-
-    private String clientString(String className, String field) throws Exception {
-        return bot().readStaticField(className, field).get("value").getAsString();
-    }
-
-    private double clientDouble(String className, String field) throws Exception {
-        return Double.parseDouble(clientString(className, field));
     }
 
     /** This scenario's ship, asked by identity — captured once by {@link #buildShip}. */

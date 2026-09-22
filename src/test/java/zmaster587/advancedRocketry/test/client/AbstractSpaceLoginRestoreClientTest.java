@@ -2126,15 +2126,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     // --- the per-tick ship-frame record (client side) -----------------------------------------------
 
-    /** A client-side static field as text, or a marked placeholder - never an assertion subject. */
-    protected String clientString(String className, String field) throws Exception {
-        try {
-            return bot().readStaticField(className, field).get("value").getAsString();
-        } catch (Exception unavailable) {
-            return "<unreadable: " + unavailable.getMessage() + ">";
-        }
-    }
-
     /**
      * The client's whole per-tick record, read as ONE field. Sampling the individual statics instead
      * costs a round trip each, which stretches the very timeline being measured and hides everything

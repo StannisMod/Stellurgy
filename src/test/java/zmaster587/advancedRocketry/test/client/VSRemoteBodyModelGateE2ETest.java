@@ -146,8 +146,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      * a shared client always has a neighbour in candidacy.
      */
     private String scenarioShipId;
-    /** The render-stage counters, held test-side; production keeps none of them. */
-    private static final String DECK_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";
     /** The TEST-side accumulator behind every model-gate window — production keeps no counters. */
     private static final String REMOTE_MODEL_WINDOW =
             "zmaster587.advancedRocketry.test.trace.RemoteModelWindow";
@@ -775,14 +773,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         com.google.gson.JsonObject st = bot().reportState();
         return new double[]{st.get("playerX").getAsDouble(), st.get("playerY").getAsDouble(),
                 st.get("playerZ").getAsDouble()};
-    }
-
-    private String clientString(String className, String field) throws Exception {
-        return bot().readStaticField(className, field).get("value").getAsString();
-    }
-
-    private double clientDouble(String className, String field) throws Exception {
-        return Double.parseDouble(clientString(className, field));
     }
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */

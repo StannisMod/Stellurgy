@@ -48,30 +48,39 @@ final class WorldCommandFixtures {
     }
 
     /**
-     * Wait for something to become true, budgeting in SERVER TICKS.
+     * Wait for ONE craft to finish entering space, on the record production publishes for it.
      *
-     * <p><b>This is the difference between an experiment and a stopwatch.</b> An asynchronous
-     * mechanic needs a certain amount of WORLD to happen — so many ticks of a controller, a queue, a
-     * settle. A budget in seconds does not ask for that: it asks for a certain amount of the
-     * machine's attention, and a machine that is busy gives the same test less world for the same
-     * money. That is how a green test turns red because something unrelated was running, and it is
-     * why budgets here used to be multiplied by the build's fork count — a number about the machine,
-     * standing in for a number about the game.</p>
+     * <p>{@code ShipEntryController} posts {@code ShipCrossingEvent.LeftPlanet} in its
+     * {@code settled} callback, on the line after {@code ledger.settle(...)} — so the record and the
+     * ledger row the six call sites used to poll for are the SAME moment, not two things that
+     * usually agree. The record carries the craft's durable id, so the wait is about THIS craft:
+     * the ledger's bare form answers with whichever row it iterates first, and a slot holding two
+     * craft satisfied "somebody settled" with a neighbour's state.
      *
-     * <p>Ticks are asked of the server, so they are the same ticks the mechanic under test runs on.
-     * How OFTEN we ask is wall-clock and deliberately unimportant: polling faster changes nothing
-     * but the sharpness of the answer.</p>
+     * <p><b>The mark is the CALLER's, and it is taken before the act that starts the entry</b> —
+     * the unpark, the takeoff command. That is why this helper does not take its own: the record is
+     * written once, at the settle, and a mark taken after it has already been written is a wait for
+     * a second entry that is never going to happen. A helper that marked for you would hide exactly
+     * the ordering a reader of this wait has to get right.
      *
-     * @param tickBudget how much world the mechanic is allowed, in server ticks
-     * @param condition  what is being waited for; asked once before any waiting at all
-     * @param eachPoll   work the wait itself must keep doing — arrangement that has to be re-applied
-     *                   while the mechanic runs. May be null.
-     * @return true if the condition held within the budget
+     * <p><b>What this cannot see</b>, and the poll could: the event is skipped, with a warning in
+     * the server log, when the destination slot world is not loaded at the instant of settle
+     * ({@code ShipEntryController} guards on {@code DimensionManager.getWorld(slotDim) == null}).
+     * The crossing has just pasted the hull into that world, so no production caller has been found
+     * that reaches it — but if this wait ever times out while the ledger says SETTLED, that guard is
+     * the first place to look and this sentence is why.
+     *
+     * @param stimulus arrangement the wait must keep re-applying — on a headless server there is no
+     *                 player to keep the destination slots' ships load-queued. Not the observation:
+     *                 what decides is still the record.
+     * @return the record that ended the wait, for a caller that wants a field of what happened
      */
-    static boolean awaitWithinTicks(int tickBudget, TickCondition condition, TickAction eachPoll)
+    static String awaitEnteredSpace(zmaster587.advancedRocketry.test.Events events, long mark,
+                                    String durableShipId, String what, int tickBudget,
+                                    zmaster587.advancedRocketry.test.Events.Stimulus stimulus)
             throws Exception {
-        return GameTicks.until(AbstractSharedServerTest.client(), GameTicks.server(),
-                tickBudget, condition, eachPoll);
+        return events.awaitField(mark, "ship_left_planet", "ship", durableShipId,
+                what, tickBudget, stimulus);
     }
 
     /**
@@ -86,19 +95,6 @@ final class WorldCommandFixtures {
      */
     static void advanceTicks(int ticks) throws Exception {
         GameTicks.advance(AbstractSharedServerTest.client(), GameTicks.server(), ticks);
-    }
-
-    /**
-     * What {@link #awaitWithinTicks} is waiting for. Allowed to ask the server, so it throws.
-     *
-     * <p>Kept as a name of its own, and made a subtype so the same lambda serves both: these read
-     * better at a {@code /ar} call site than the generic ones, and the implementation is shared.</p>
-     */
-    interface TickCondition extends GameTicks.Condition {
-    }
-
-    /** Work a wait has to keep doing. Allowed to talk to the server, so it throws. */
-    interface TickAction extends GameTicks.Action {
     }
 
     /** Read an integer field out of {@code /artest planet info <dim>}

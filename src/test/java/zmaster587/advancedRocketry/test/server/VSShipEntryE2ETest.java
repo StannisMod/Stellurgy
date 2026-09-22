@@ -9,6 +9,7 @@ import zmaster587.advancedRocketry.space.GalacticCoord;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.EntryStatus;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -22,7 +23,7 @@ import zmaster587.advancedRocketry.test.RocketFixture;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitWithinTicks;
+import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitEnteredSpace;
 
 /**
  * E2E: does the tier-2 ENTRY ON-RAMP take a piloted ship from a planet dimension into space through the
@@ -128,26 +129,22 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         String tp = exec("artest vs teleport-ship-by-id 0 " + shipId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
+        // Marked BEFORE the unpark, which is the act that lets the entry start: the arrival is
+        // announced once and a mark taken after it would be waiting for a second one.
+        long entryMark = events.mark();
         exec("artest vs unpark-by-id 0 " + shipId);
-        // Keep the crossed ship loadable in its new slot while the async re-assembly settles.
-        // (The Ticker drives ShipEntryController.tick() every server tick once the stack is installed.)
 
-        // Wait on the ledger: the flight-computer tick fires the entry, the entry crosses + settles
-        // the ship. The window is ARRANGEMENT, not the contract — what is asserted is that the ship
-        // settles, not that it settles inside any particular stretch of anybody's afternoon. Budgeted
-        // in the server's own ticks so that a busy machine buys the crossing exactly as much world as
-        // an idle one does.
-        boolean settled = awaitWithinTicks(SETTLE_TICKS,
-                () -> {
-                    EntryStatus seen = EntryStatus.forShip(this::exec, durableId);
-                    return seen.found && seen.settled();
-                },
+        // Linked on the record production publishes at the settle — `ShipEntryController` posts
+        // LeftPlanet on the line after `ledger.settle(...)`. The ledger poll this replaced asked the
+        // same question one reading at a time, so its verdict moved with how often the box let it
+        // look; the record is written by the subject, at the instant it happens.
+        awaitEnteredSpace(events, entryMark, durableId,
+                "the flight-computer tick must carry this craft out of the atmosphere", SETTLE_TICKS,
                 // Keep the destination slots' ships load-queued (headless has no player to auto-load
                 // them). This is work the wait has to keep doing, not part of what is being waited for.
                 () -> loadAllEntrySlots(setup));
-        EntryStatus status = EntryStatus.forShip(this::exec, durableId);
-        assertTrue("ship never entered space via the flight-computer tick (not SETTLED); last status="
-                + status, settled);
+        EntryStatus status = EntryStatus.forShip(this::exec, durableId).requireFound(
+                "the arrival was announced, so the ledger must hold this craft's row");
 
         // The entry landed in the launch body's OWN cell — the C-1 resolution, matched gen-agnostically.
         assertEquals("entry settled in a different cell than the launch resolver answers", expectedCell,
@@ -200,17 +197,14 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
                 Reply.of(heldInput).bool("afcResolved"));
         assertTrue("climb teleport failed", Reply.of(exec("artest vs teleport-ship-by-id 0 " + shipId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)).ok());
+        long entryMark = events.mark();
         exec("artest vs unpark-by-id 0 " + shipId);
 
-        boolean settled = awaitWithinTicks(SETTLE_TICKS,
-                () -> {
-                    EntryStatus seen = EntryStatus.forShip(this::exec, durableId);
-                    return seen.found && seen.settled();
-                },
+        awaitEnteredSpace(events, entryMark, durableId,
+                "precondition: the ship must enter space, or there is nothing to jump", SETTLE_TICKS,
                 () -> loadAllEntrySlots(setup));
-        EntryStatus status = EntryStatus.forShip(this::exec, durableId);
-        assertTrue("precondition: the ship never entered space, so there is nothing to jump; last status="
-                + status, settled);
+        EntryStatus status = EntryStatus.forShip(this::exec, durableId).requireFound(
+                "the arrival was announced, so the ledger must hold this craft's row");
         int slotDim = status.slotDim;
         String originCell = status.cellKey;
         assertTrue("the entered ship's cell world is not live in a slot; status=" + status,
@@ -223,6 +217,9 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         zmaster587.advancedRocketry.space.GalacticCoord origin =
                 zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(originCell);
         assertNotNull("entry-status reported no decodable origin cell key: " + status, origin);
+        // Marked before the jump is commanded, for the reason the entry above is: the arrival is
+        // announced once, and a mark taken after it would be waiting for a second jump.
+        long jumpMark = events.mark();
         String jump = exec("artest space jump id " + durableId + " "
                 + (origin.sectorX() + 1)
                 + " " + origin.sectorY() + " " + origin.sectorZ() + " " + slotDim);
@@ -248,17 +245,20 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
         // paste lane. From here the arrival must make its own ship loadable.
 
         // Nothing below pumps the manager either: the live Ticker advances the transit every tick.
-        boolean done = awaitWithinTicks(SETTLE_TICKS,
-                () -> {
-                    String seen = exec("artest space entry-status id " + durableId);
-                    return "SETTLED".equals(extractString(seen, "state"))
-                            && targetCell.equals(extractString(seen, "cellKey"));
-                },
-                null);
+        //
+        // Linked on the arrival production announces — `ShipTransitManager.announceTransitEnded`
+        // posts `TransitEnded`, whose record carries the craft and the destination CELL. Narrowed by
+        // both: a transit that ended somewhere else is not this jump arriving, and the ledger poll
+        // this replaced could only ask "is the row SETTLED at that key yet" one reading at a time.
+        events.awaitRecordWithFields(jumpMark, "ship_transit_ended",
+                "the ship must arrive at the cell the jump was aimed at; origin=" + originCell
+                        + " requested=" + targetCell, SETTLE_TICKS,
+                "ship", durableId, "destination", targetCell);
         String arrived = exec("artest space entry-status id " + durableId);
-        assertTrue("the ship never arrived at the cell the jump was aimed at; origin=" + originCell
-                + " requested=" + targetCell + " last status=" + arrived
-                + " subsystem=" + SubsystemStatus.read(this::exec).raw(), done);
+        assertEquals("the arrival was announced for " + targetCell
+                + ", so the ledger must carry that cell; last status=" + arrived
+                + " subsystem=" + SubsystemStatus.read(this::exec).raw(),
+                targetCell, extractString(arrived, "cellKey"));
 
         // A ledger row written by the arrival itself proves only what the arrival BELIEVES. The
         // player's reading comes later, when he walks up to his ship: his presence loads it, its
@@ -355,6 +355,10 @@ public class VSShipEntryE2ETest extends AbstractSharedServerTest {
     }
 
     // --- helpers (mirror VSShipCrossingSpikeTest / VSShipTransitE2ETest) -----------------------------
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

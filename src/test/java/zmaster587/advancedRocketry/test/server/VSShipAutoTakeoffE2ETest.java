@@ -4,7 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
-import zmaster587.advancedRocketry.test.EntryStatus;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -16,6 +16,7 @@ import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitEnteredSpace;
 
 /**
  * E2E: the tier-2 AUTO-TAKEOFF autopilot — the AUTOMATED half of the entry on-ramp. Two legs on one
@@ -105,23 +106,19 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
                 + (int) sx + " " + NEAR_CEILING_Y + " " + (int) sz);
         assertTrue("hop teleport failed: " + tp, Reply.of(tp).ok());
         exec("artest vs unpark-by-id 0 " + shipId);
+        // Marked before the re-engage is allowed to carry the craft up: the arrival is announced
+        // once, and a mark taken afterwards would wait for a second climb.
+        long climbMark = events.mark();
         String reEngage = exec("artest space auto-takeoff 0 id " + shipId);
         assertTrue("auto-takeoff did not re-engage over a clear corridor: " + reEngage,
                 Reply.of(reEngage).bool("engaged"));
 
-        boolean settled = false;
-        final EntryStatus[] entry = new EntryStatus[1];
-        settled = GameTicks.until(client(), GameTicks.server(), CLIMB_TICKS,
-                () -> {
-                    // THIS ship's ledger row, not "somebody settled": the bare form reports whichever
-                    // row the ledger's iterator hands over first, and a slot the entry stack has
-                    // ledgered twice satisfies `ships >= 1` with a neighbour's SETTLED state.
-                    entry[0] = EntryStatus.forShip(this::exec, durableId);
-                    return entry[0].found && entry[0].settled();
-                },
+        // Linked on the record the entry publishes at its settle, and narrowed to THIS craft's
+        // durable id — "somebody settled" is a different question, and a slot the entry stack has
+        // ledgered twice used to answer it with a neighbour's row.
+        awaitEnteredSpace(events, climbMark, durableId,
+                "auto-takeoff must climb the ship into space", CLIMB_TICKS,
                 () -> loadAllEntrySlots(setup));
-        assertTrue("auto-takeoff never climbed the ship into space (not SETTLED); last=" + entry[0],
-                settled);
     }
 
     @After
@@ -130,6 +127,10 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
     }
 
     // --- helpers ------------------------------------------------------------------------------------
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

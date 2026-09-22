@@ -27,9 +27,12 @@ import net.minecraft.entity.EntityLivingBase;
  * reader asking about a sixty-tick window would be reading the tail. The window's SUMMARY is the
  * record, written once at {@link #close()}.</p>
  *
- * <p><b>The one live field, and why it is public.</b> {@link #samples} is polled while the window is
- * open — a scenario waits for the subject to be drawn at all before it starts measuring, and that
- * wait needs a value it can watch grow. Everything else is read off the closing record.</p>
+ * <p><b>Nothing here is reachable from outside, and a mid-window reading is a RECORD.</b> A
+ * scenario that waits for the subject to be drawn at all before it starts measuring calls
+ * {@link #peek()}, which writes the window's numbers without ending it. Every field is private:
+ * the previous design exposed {@code samples} for that poll, and a field read across the socket
+ * cannot be attributed to a moment, so "the client did not answer" and "the gate has decided
+ * nothing yet" arrived as the same zero.</p>
  *
  * <p><b>What it is, said plainly.</b> Mutable static state, per client JVM, shared by every scenario
  * in a shared-harness class — as the production fields it replaces were. The difference is that it

@@ -5,6 +5,7 @@ import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.EntrySlots;
 import zmaster587.advancedRocketry.test.EntryStatus;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
@@ -17,6 +18,7 @@ import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitEnteredSpace;
 
 /**
  * E2E: crossing OUT of an atmosphere is a PHYSICAL event, so it does not ask who is holding a key.
@@ -112,23 +114,29 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
         String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
+        // Marked before the unpark, which is what lets the entry start: the arrival is announced
+        // once, and a mark taken after it would wait for a second entry.
+        long entryMark = events.mark();
         exec("artest vs unpark-by-id 0 " + vsId);
 
-        final EntryStatus[] status = new EntryStatus[1];
-        boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
-                () -> {
-                    status[0] = EntryStatus.forShip(this::exec, durableId);
-                    return status[0].found && status[0].settled();
-                },
-                () -> loadAllEntrySlots(setup));
-        assertTrue("a ship with NOBODY at the controls must still cross out of the atmosphere — the"
-                + " crossing is world plus geometry, and an atmosphere does not check whose hands are"
-                + " on the stick; last status=" + status[0], settled);
+        // Linked on the record the entry publishes at its settle. What this scenario is ABOUT is
+        // that the announcement happens at all for an unpiloted craft, so the announcement is the
+        // right thing to wait for: the crossing is world plus geometry, and an atmosphere does not
+        // check whose hands are on the stick.
+        awaitEnteredSpace(events, entryMark, durableId,
+                "a ship with NOBODY at the controls must still cross out of the atmosphere",
+                SETTLE_TICKS, () -> loadAllEntrySlots(setup));
+        EntryStatus status = EntryStatus.forShip(this::exec, durableId).requireFound(
+                "the arrival was announced, so the ledger must hold this craft's row");
         assertEquals("entry settled in a different cell than the launch resolver answers", expectedCell,
-                status[0].cellKey);
+                status.cellKey);
     }
 
     // --- helpers (byte-identical to VSShipEntryE2ETest's, as the server-tier classes keep them) ------
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

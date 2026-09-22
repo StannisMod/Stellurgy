@@ -597,11 +597,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
     // ---- Bug: flying into a ship's airspace hijacks a walking player's camera ------------------
 
-    private static final String SHIP_CAMERA = "zmaster587.advancedRocketry.test.trace.DeckCameraState";
-    /** The TEST-side holder of the client's own last camera setup — production keeps no such field. */
-    private static final String DECK_CAMERA_STATE =
-            "zmaster587.advancedRocketry.test.trace.DeckCameraState";
-
     @Test
     public void flyingIntoAShipsAirspaceWithoutStandingOnItDoesNotHijackTheCamera() throws Exception {
         final FixtureSite site = site();
@@ -1396,14 +1391,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------
-
-    private String clientString(String className, String field) throws Exception {
-        return bot().readStaticField(className, field).get("value").getAsString();
-    }
-
-    private double clientDouble(String className, String field) throws Exception {
-        return Double.parseDouble(clientString(className, field));
-    }
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */
     private double[] buildShip(FixtureSite site) throws Exception {

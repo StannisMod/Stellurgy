@@ -18,6 +18,7 @@ import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitEnteredSpace;
 
 /**
  * E2E: does the tier-2 PLANET DESCENT take a ship in space across into a real planet dimension through the
@@ -80,20 +81,20 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
                 + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
         assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
+        // Marked before the unpark, which is what lets the entry start: the arrival is announced
+        // once, and a mark taken after it would wait for a second entry.
+        long entryMark = events.mark();
         exec("artest vs unpark-by-id 0 " + vsId);
 
-        String status = "";
-        final EntryStatus[] entryStatus = new EntryStatus[1];
-        boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
-                () -> {
-                    entryStatus[0] = EntryStatus.forShip(this::exec, shipId);
-                    return entryStatus[0].found && entryStatus[0].settled();
-                },
-                () -> loadAllEntrySlots(setup));
-        assertTrue("precondition: ship never entered space to descend from; last status="
-                + entryStatus[0], settled);
-        int slotDim = entryStatus[0].slotDim;
-        assertTrue("settled slot dim not reported: " + entryStatus[0].raw(),
+        // Linked on the record the entry publishes at its settle, rather than reading the ledger row
+        // over and over until it agrees.
+        awaitEnteredSpace(events, entryMark, shipId,
+                "precondition: the ship must enter space, or there is nothing to descend from",
+                SETTLE_TICKS, () -> loadAllEntrySlots(setup));
+        EntryStatus entryStatus = EntryStatus.forShip(this::exec, shipId).requireFound(
+                "the arrival was announced, so the ledger must hold this craft's row");
+        int slotDim = entryStatus.slotDim;
+        assertTrue("settled slot dim not reported: " + entryStatus.raw(),
                 slotDim > Integer.MIN_VALUE);
 
         // --- Phase 2: DESCEND that settled ship into the overworld. ---
