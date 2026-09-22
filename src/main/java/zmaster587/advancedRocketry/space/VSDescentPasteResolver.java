@@ -120,7 +120,7 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
             LOGGER.warn("[SPACE] descent unresolved: no physics ship at {},{},{} in dim {} "
                             + "(shipHeight={}, shipyard={})", shipWorldPos[0], shipWorldPos[1],
                     shipWorldPos[2], slotDim, shipHeight, yard);
-            return null; // VS absent / no ship there
+            return null; // no ship there
         }
         int width = (int) (yard.maxX - yard.minX);
         int depth = (int) (yard.maxZ - yard.minZ);

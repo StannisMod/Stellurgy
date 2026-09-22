@@ -1,67 +1,42 @@
 package zmaster587.advancedRocketry.test.server;
 
-import org.junit.Assume;
-import org.junit.Ignore;
 import org.junit.Test;
 
 
 import zmaster587.advancedRocketry.test.Reply;
-import zmaster587.advancedRocketry.test.RocketInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
 /**
- * Tier-2 gate — an Advanced Flight Computer in an assembled structure decides
- * whether the launch pad builds an ordinary rocket or a movable Valkyrien Skies
- * ship. The two @Test methods pin the two halves of that gate, each gated on the
- * server's real VS presence so exactly one runs per suite configuration:
+ * Tier-2 gate — an Advanced Flight Computer in an assembled structure decides whether the launch
+ * pad builds an ordinary rocket or a movable physics ship.
  *
- * <ul>
- *   <li><b>no VS</b> (default suite) — the computer is inert; an AFC-bearing build
- *       still assembles a normal {@code EntityRocket}, with the computer captured
- *       inside it. This is the soft-dependency safety contract.</li>
- *   <li><b>with VS</b> (suite run with) — the fork routes to VS
- *       ship assembly, so NO rocket is spawned.</li>
- * </ul>
+ * <p><b>There is ONE half of that gate now, not two.</b> This class used to describe a fork on
+ * whether the physics substrate was present: without it the computer was inert and the build fell
+ * back to a rocket, with it the build routed to ship assembly. The substrate is compiled into this
+ * jar, so the first branch was unreachable — its two scenarios were silently skipped on every run
+ * for months, and the production fork behind them was deleted on 2026-09-22. What is left is the
+ * gate that can actually go both ways: an AFC-bearing build assembles a ship and no rocket, and an
+ * AFC alone satisfies guidance.</p>
  *
- * <p>What the harness deliberately does NOT assert: that the VS ship then fully
- * materialises, is pilotable, or simulates physics. VS assembly is async on a
- * physics thread and largely not headless-verifiable; the observable contract here
- * is the routing decision (rocket vs no-rocket), which is deterministic.</p>
+ * <p>What this deliberately does NOT assert: that the ship then fully materialises, is pilotable,
+ * or simulates physics. Assembly is asynchronous and largely not headless-verifiable; the
+ * observable contract here is the routing decision (rocket vs no-rocket), which is deterministic.</p>
  */
 public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest {
 
 
     private static final String VARIANT = "with-advanced-flight-computer";
 
-    @Test
-    @Ignore("UNREACHABLE PREMISE, retired in place 2026-08-21. It pins what an Advanced Flight "
-            + "Computer does when Valkyrien Skies is ABSENT, and VS cannot be absent: it is vendored "
-            + "into AR's own main source set and its classes ship inside the mod. The guard used to "
-            + "be Assume.assumeFalse(serverHasVs()), which SKIPPED this on every run since VS was "
-            + "vendored - dead coverage that read as coverage. Retired rather than deleted because "
-            + "the production fallback it describes may still exist, and would then be dead code with "
-            + "no test to say so; that is its own finding, not this file's.")
-    public void flightComputerWithoutVsBuildsInertRocket() throws Exception {
-        String assemble = assembleFixture(FixtureSite.openAir(0, 1200, 1200), VARIANT);
-        // A rocket WAS built (fallback taken) ...
-        assertTrue("expected exactly one rocket from the fallback path: " + assemble,
-                (Reply.of(assemble).integer("rocketCount") == 1));
-        int entityId = extractInt(assemble, "entityId");
-        assertTrue("assemble did not report a rocket entity id: " + assemble, entityId >= 0);
-
-        RocketInfo rocket = RocketInfo.of(String.join("\n",
-                client().execute("artest rocket info " + entityId)));
-        // ... it has a storage chunk (real EntityRocket) ...
-        assertTrue("expected a normal rocket with a storage chunk: " + rocket.raw(),
-                rocket.hasStorage);
-        // ... and the Advanced Flight Computer rode along inside it, proving the
-        // block was present yet did NOT reroute the build away from the rocket path.
-        assertTrue("advanced flight computer should be captured in the built rocket: "
-                + rocket.raw(), rocket.advancedFlightComputerPresent);
-    }
+    // THE TWO "WITHOUT VS" SCENARIOS ARE DELETED, 2026-09-22, and their own @Ignore said when to do
+    // it. Retired in place on 2026-08-21 with this reason: "Retired rather than deleted because the
+    // production fallback it describes may still exist, and would then be dead code with no test to
+    // say so; that is its own finding, not this file's." That finding was made and acted on today —
+    // `TileRocketAssemblingMachine`'s no-substrate fork is gone, along with the other 85 branches on
+    // an availability probe for a class compiled into this jar. There is no fallback left for these
+    // to describe, so keeping them would pin a behaviour the code no longer has.
 
     @Test
     public void flightComputerWithVsAssemblesShipNotRocket() throws Exception {
@@ -86,19 +61,6 @@ public class AdvancedFlightComputerTierGateTest extends AbstractSharedServerTest
         assertTrue("an AFC alone must satisfy the guidance requirement and route to a ship "
                         + "(no rocket): " + assemble,
                 (Reply.of(assemble).integer("rocketCount") == 0));
-    }
-
-    @Test
-    @Ignore("UNREACHABLE PREMISE, retired in place 2026-08-21 - see the sibling without-VS test. "
-            + "Valkyrien Skies is vendored and mandatory, so this scenario has been silently skipped "
-            + "on every run rather than failing. The mirror gate it describes: without VS the AFC is "
-            + "inert, the build falls back to a rocket, and a rocket still needs a guidance computer.")
-    public void flightComputerAloneWithoutVsStillRequiresGuidance() throws Exception {
-        String coords = placeFixture(FixtureSite.openAir(0, 2000, 2000), "advanced-flight-computer-only");
-        String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
-        assertTrue("without VS, an AFC alone must not satisfy guidance — scan must be NOGUIDANCE: "
-                        + assemble,
-                "NOGUIDANCE".equals(Reply.of(assemble).text("status")));
     }
 
     /**

@@ -226,7 +226,7 @@ public final class ShipFrameTravel {
      * deck-gravity delta to the same entity, or the pull is counted twice).
      */
     public static boolean handles(EntityLivingBase entity) {
-        if (entity == null || entity.world == null || !VSIntegration.isAvailable()) {
+        if (entity == null || entity.world == null) {
             return false;
         }
         // Vanilla's own gate on travel(): an entity whose movement this side does not simulate (a mob
@@ -936,8 +936,9 @@ public final class ShipFrameTravel {
             m.put("reason", "no entity/world");
             return m;
         }
-        boolean available = VSIntegration.isAvailable();
-        m.put("vsAvailable", available);
+        // No `vsAvailable` here any more: it reported a constant, because the substrate is compiled
+        // into this jar. A field that is always the same value teaches a reader nothing and invites
+        // a test to gate on it.
         m.put("isRemote", entity.world.isRemote);
         m.put("isServerWorld", entity.isServerWorld());
         m.put("canPassengerSteer", entity.canPassengerSteer());
@@ -986,7 +987,7 @@ public final class ShipFrameTravel {
         // The handles() verdict, replicated WITHOUT its capture/release side effects.
         // excludedStateOf is itself side-effect-free (its flying-aboard branch only READS state and
         // candidates), so the probe shares it instead of drifting from the live gate.
-        boolean gated = !available || (!entity.isServerWorld() && !entity.canPassengerSteer())
+        boolean gated = (!entity.isServerWorld() && !entity.canPassengerSteer())
                 || excludedStateOf(entity) != null;
         boolean verdict;
         if (gated) {
@@ -1072,7 +1073,7 @@ public final class ShipFrameTravel {
      *             Probe-only cost; the per-tick client sampler passes false.
      */
     public static Map<String, Object> subspaceCensusFor(EntityLivingBase entity, boolean deep) {
-        if (entity == null || entity.world == null || !VSIntegration.isAvailable()) {
+        if (entity == null || entity.world == null) {
             return null;
         }
         // THE SHIP IS THE ONE THIS BODY IS DECLARED TO BE ON, or there is no census.

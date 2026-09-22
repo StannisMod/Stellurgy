@@ -126,7 +126,7 @@ public final class ShipLoadedAnnouncer {
             return;
         }
         World world = event.world;
-        if (world == null || world.isRemote || !VSIntegration.isAvailable()) {
+        if (world == null || world.isRemote) {
             return;
         }
         Map<String, UUID> now = VSIntegration.shipsReadyForPhysics(world);

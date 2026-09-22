@@ -618,25 +618,24 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                     || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse))) {
                 status = ErrorCodes.COMBINEDTHRUST;
 
-            } else if (VSIntegration.isAvailable() && flightComputerCount > 1) {
+            } else if (flightComputerCount > 1) {
                 // One craft — one command authority. A second Advanced Flight Computer would tick
                 // and steer against the linked one (both are physics force controllers), so a
                 // multi-computer build is rejected at the scan, before anything can assemble.
                 status = ErrorCodes.MULTIPLEFLIGHTCOMPUTERS;
 
-            } else if (VSIntegration.isAvailable() && scannedFlightComputerPos != null
-                    && pilotSeatCount > 1) {
+            } else if (scannedFlightComputerPos != null && pilotSeatCount > 1) {
                 // One craft — one command seat. Only the last-scanned pilot seat would be linked;
                 // a pilot in any other seat would have silently dead controls. Passenger seats
                 // (the plain seat block) are unrestricted — this counts only pilot seats.
                 status = ErrorCodes.MULTIPLEPILOTSEATS;
 
-            } else if (!hasGuidance && !hasSatellite
-                    && !(scannedFlightComputerPos != null && VSIntegration.isAvailable())) {
+            } else if (!hasGuidance && !hasSatellite && scannedFlightComputerPos == null) {
                 // An Advanced Flight Computer is the tier-2 ship's own flight computer, so it
-                // satisfies the "computer with instructions" requirement — but only when the
-                // build will actually become a ship (VS present). Without VS the computer is
-                // inert and a real guidance computer is still needed for the fallback rocket.
+                // satisfies the "computer with instructions" requirement. This used to ask whether
+                // the physics substrate was present as well, for a build that could not become a
+                // ship; the substrate is compiled into this jar, so the only build that asks is
+                // one somebody removed it from.
                 status = ErrorCodes.NOGUIDANCE;
 
             } else if (getThrust() <= getNeededThrust()) {
@@ -735,7 +734,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         // no ship is ever created. So cut the scanned structure out (leaving the pad
         // and terrain intact, exactly like the rocket path) and paste it back one
         // block higher: the air gap under it bounds the flood-fill to the craft.
-        if (scannedFlightComputerPos != null && VSIntegration.isAvailable()) {
+        if (scannedFlightComputerPos != null) {
             removeReplaceableBlocks(rocketBB);
             final StorageChunk shipStructure;
             try {

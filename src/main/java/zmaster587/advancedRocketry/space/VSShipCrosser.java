@@ -18,7 +18,7 @@ import zmaster587.advancedRocketry.integration.vs.VSIntegration;
  * decisions out against live worlds, using the proven per-ship crossing ({@link VSIntegration#crossShip})
  * plus {@link VSIntegration#parkShipAt}/{@link VSIntegration#unparkShipAt}. Both crossings paste into a
  * clear void column so the flood-fill re-assembly grabs only the ship. A safe no-op
- * (returns {@code null} - the transit aborts cleanly) when VS is absent or a world is missing.
+ * (returns {@code null} - the transit aborts cleanly) when a world is missing.
  */
 public final class VSShipCrosser implements ShipTransitManager.Crosser {
 

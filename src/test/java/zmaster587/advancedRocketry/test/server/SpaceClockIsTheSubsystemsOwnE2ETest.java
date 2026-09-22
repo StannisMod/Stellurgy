@@ -231,8 +231,9 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
     public void theClockComesBackWhereItWasAfterAReboot() throws Exception {
         // --- boot 1 --------------------------------------------------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
-        String vs = exec("artest vs available");
-
+        // A third copy of the same defect stood here: the probe was called and its answer assigned
+        // to a local nothing read. Both the verb and the question are gone; the assertion below is
+        // what actually decided anything.
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 — its world-save hook is "
                         + "what persists the clock, so without it this test would assert nothing: "

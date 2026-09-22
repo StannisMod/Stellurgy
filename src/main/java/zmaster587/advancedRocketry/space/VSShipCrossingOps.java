@@ -16,8 +16,7 @@ import zmaster587.advancedRocketry.integration.vs.VSIntegration;
  * against live worlds — the proven per-ship crossing, the rider-carrying rigid pose teleport, and
  * the crew re-seat. Shared by the entry on-ramp ({@link ShipEntryController}) and the planet
  * descent ({@link DescentController}); mirrors {@link VSShipCrosser}'s role for the transit state
- * machine. Safe no-ops (nulls/false) when VS is absent or a world is missing, so a crossing aborts
- * cleanly.
+ * machine. Safe no-ops (nulls/false) when a world is missing, so a crossing aborts cleanly.
  */
 public final class VSShipCrossingOps implements ShipCrossingService.Ops {
 

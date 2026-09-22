@@ -11,7 +11,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import zmaster587.advancedRocketry.integration.vs.VSIntegration;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 import zmaster587.advancedRocketry.tile.TileRocketAssemblingMachine;
 
@@ -103,7 +102,10 @@ public abstract class MixinTileRocketAssemblingMachineEvents {
         // shadowed by its type) from this package; the tile's public getter hands it out and an
         // enum's name is readable through Object.
         Object status = self.getStatus();
-        boolean tier2 = scannedFlightComputerPos != null && VSIntegration.isAvailable();
+        // Mirrors production's own test at the same moment. It used to carry an availability
+        // conjunct as well; production dropped it on 2026-09-22 because the substrate is compiled
+        // in, and this record must keep saying what production decided, not what it once did.
+        boolean tier2 = scannedFlightComputerPos != null;
         TestTrace.recordHere("rocket_assembled", "\"pos\":\"" + arTest$xyz(self)
                 + "\",\"status\":\"" + (status == null ? "null" : ((Enum<?>) status).name())
                 + "\",\"tier2\":" + tier2

@@ -675,17 +675,15 @@ public class TestProbeCommand extends CommandBase {
     // Valkyrien Skies integration probes ----------------------------------
 
     /**
-     * {@code vs available} — reports whether the SERVER sees Valkyrien Skies
-     * installed (the same gate the tier-2 assembly fork consults). Lets a test
-     * decide, from the server's point of view, whether to exercise the VS ship
-     * path or the no-VS fallback. Uses only the AR-side gate class, no VS types.
+     * The {@code vs} probe family.
+     *
+     * <p>There is no {@code vs available} verb. It reported whether the server saw the physics
+     * substrate installed, for a test deciding between the ship path and a no-substrate fallback —
+     * and the substrate is compiled into this jar, so the answer was a constant and the fallback it
+     * chose between does not exist. Its callers were three silent {@code Assume} skips on a
+     * condition that could never be false; they went with it on 2026-09-22.</p>
      */
     private void handleVs(ICommandSender sender, String[] args) {
-        if (args.length >= 1 && "available".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"available\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.isAvailable() + "}");
-            return;
-        }
         // motion-trace reset — drop every recorded ring, so a leg starts from an empty recorder.
         // motion-trace <dim> <afcX> <afcY> <afcZ> [windowMs] — the flight recorder's account of how
         // SMOOTHLY the ship driven by that flight computer moved over the trailing window: the
@@ -839,7 +837,9 @@ public class TestProbeCommand extends CommandBase {
             }
             int[] loads = zmaster587.advancedRocketry.integration.vs.VSIntegration.loadAllShips(world);
             if (loads == null) {
-                send(sender, "{\"error\":\"vs absent\"}");
+                // `loadAllShips` answers null for a null world, and no longer for "the substrate is
+                // absent" — that branch is gone, because the substrate is compiled into this jar.
+                send(sender, "{\"error\":\"no world\"}");
                 return;
             }
             // BOTH halves: a zero `requested` beside a non-zero `alreadyLoaded` is "nothing needed
@@ -2555,7 +2555,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"entityId\":" + item.getEntityId() + ",\"armed\":" + armed + "}");
             return;
         }
-        send(sender, "{\"error\":\"usage: vs available|ship-count <dim>|ships-registered <dim>"
+        send(sender, "{\"error\":\"usage: vs ship-count <dim>|ships-registered <dim>"
                 + "|ship-info <dim> <x> <y> <z> [maxDist]|ship-info <dim> id <shipId>"
                 + "|push-ship-by-id <dim> <shipId> <vx> <vy> <vz>"
                 + "|spin-ship-by-id <dim> <shipId> <wx> <wy> <wz>"

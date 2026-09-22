@@ -91,30 +91,16 @@ public class SpaceRestartPersistenceE2ETest {
         return String.join("\n", harness.client().execute(cmd));
     }
 
-    /**
-     * The production subsystem only registers when Valkyrien Skies is present — without tier-2 ships
-     * there is nothing for it to host, so it deliberately declines. The wiring under test would not
-     * exist, hence a skip rather than a failure.
-     */
-    private void assumeProductionSubsystemAvailable() throws Exception {
-        String vs = exec("artest vs available");
-        // The gate was MISSING: the reply was fetched into a dead local and nothing was ever decided
-        // from it, so the skip this javadoc promises had never once happened. A skip that cannot skip
-        // is worse than none — it is a claim, in a javadoc, that a whole class of environment is
-        // handled. The twin of this body in the login-restore client base was fixed first; this is
-        // the copy it left behind.
-        // absence is the answer: a build without the substrate answers no `available` at all,
-        // and that is precisely the world this gate skips in.
-        org.junit.Assume.assumeTrue("Valkyrien Skies is absent, so the production subsystem under"
-                + " test never registered and there is nothing here to exercise: " + vs,
-                Reply.of(vs).boolOr("available", false));
-    }
+    // THERE IS NO `assumeProductionSubsystemAvailable()` ANY MORE — six scenarios opened with it and
+    // all six assert `status.registered` on the next line, which asks the same question and FAILS
+    // instead of vanishing. The condition it skipped on cannot arise (the substrate is compiled into
+    // this jar), and `Assume` skips SILENTLY, so had it ever been true these six would have left the
+    // run without reddening anything. Removed 2026-09-22.
 
     @Test
     public void aSettledShipsGalacticPositionSurvivesAServerReboot() throws Exception {
         // --- boot 1: the production subsystem comes up and records a ship ------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
-        assumeProductionSubsystemAvailable();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         // If this fails the rest of the test is meaningless rather than wrong: the production wiring
@@ -186,7 +172,6 @@ public class SpaceRestartPersistenceE2ETest {
     public void aRestoredShipsSlotDimNamesTheWorldItsCellIsActuallyIn() throws Exception {
         // --- boot 1: settle the ship; its cell is materialized into whatever slot is free first ----
         harness = RealDedicatedServerHarness.startWith(root, false);
-        assumeProductionSubsystemAvailable();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 — without it nothing below "
@@ -266,7 +251,6 @@ public class SpaceRestartPersistenceE2ETest {
     public void aSavePointThatCannotRecordAFlyingShipKeepsTheFleetItAlreadyPersisted() throws Exception {
         // --- boot 1 -------------------------------------------------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
-        assumeProductionSubsystemAvailable();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
@@ -345,7 +329,6 @@ public class SpaceRestartPersistenceE2ETest {
     @Test
     public void aSavePointThatFailsPartWayLeavesBothTheFleetAndTheServerStanding() throws Exception {
         harness = RealDedicatedServerHarness.startWith(root, false);
-        assumeProductionSubsystemAvailable();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
@@ -416,7 +399,6 @@ public class SpaceRestartPersistenceE2ETest {
         // already bound to a cell would keep its id while the subsystem started handing out different
         // ones, so a ship's world and the pool's idea of that world would silently diverge.
         harness = RealDedicatedServerHarness.startWith(root, false);
-        assumeProductionSubsystemAvailable();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("production subsystem must be live: " + status.raw(), status.registered);
@@ -433,7 +415,6 @@ public class SpaceRestartPersistenceE2ETest {
         // that answered "found" unconditionally would make the restart assertion pass on a subsystem
         // that restored nothing at all.
         harness = RealDedicatedServerHarness.startWith(root, false);
-        assumeProductionSubsystemAvailable();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("production subsystem must be live: " + status.raw(), status.registered);

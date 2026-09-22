@@ -65,11 +65,9 @@ public final class ShipMeetingStop {
     private final Map<Integer, Set<String>> meetingLastTick = new HashMap<>();
 
     /** Subscribe the one instance the bus owns. Called from {@link VSIntegration}'s init beside the
-     *  other watchers, and a no-op when the substrate is absent — there are no ships to meet. */
+     *  other watchers. */
     static void register() {
-        if (VSIntegration.isAvailable()) {
-            MinecraftForge.EVENT_BUS.register(new ShipMeetingStop());
-        }
+        MinecraftForge.EVENT_BUS.register(new ShipMeetingStop());
     }
 
     @SubscribeEvent

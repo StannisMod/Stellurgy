@@ -33,9 +33,16 @@ import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 /**
  * The Valkyrien Skies-facing side of the integration. Every reference to an
  * {@code org.valkyrienskies.*} type lives in this package's bridge classes,
- * never in {@link VSIntegration}. The JVM loads this class only when
- * {@link VSIntegration#isAvailable()} is true, so its VS imports never need to
- * resolve on an AR install without VS.
+ * never in {@link VSIntegration}.
+ *
+ * <p><b>This class no longer promises what it used to, and the promise is removed rather than
+ * quietly left standing.</b> It said the JVM loads it only when
+ * {@link VSIntegration#isAvailable()} is true, "so its VS imports never need to resolve on an AR
+ * install without VS". There is no such install — the substrate is compiled into this jar — and as
+ * of 2026-09-22 no caller gates on that method at all, so the sentence described a discipline
+ * nobody was keeping. The split survives because it is a clean seam and a unit test pins it: AR's
+ * own types stay loadable without touching a physics type, which keeps the dependency legible and
+ * keeps one place to look when the substrate's API moves.</p>
  */
 final class VSBridge {
 

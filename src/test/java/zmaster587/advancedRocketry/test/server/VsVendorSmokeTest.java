@@ -31,15 +31,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class VsVendorSmokeTest extends AbstractSharedServerTest {
 
-    @Test
-    public void valkyrienSkiesIsOnTheServerClasspathAndReportsAvailable() throws Exception {
-        String resp = String.join("\n", client().execute("artest vs available"));
-        assertTrue("Valkyrien Skies must be available on the server: it is vendored into AR's own "
-                + "main source set and ships inside the mod, so an unavailable answer means the "
-                + "vendored tree stopped being compiled in or its integration stopped resolving — "
-                + "and every ship test in the suite is meaningless until that is fixed. Got: " + resp,
-                Reply.of(resp).bool("available"));
-    }
+    // The classpath assertion that used to open this class is GONE with the probe it read.
+    // `artest vs available` answered a `Class.forName` for a class compiled into this jar, so it
+    // reported a constant — and a test whose subject cannot vary is not a smoke test, it is a
+    // second copy of the build configuration. What is below asks a question that CAN fail: whether
+    // the registry answers, i.e. whether the integration is wired and not merely present.
 
     /** A ship registry that answers at all — the integration is wired, not merely on the classpath. */
     @Test

@@ -56,7 +56,6 @@ public final class DeckCapture {
     /** Whether at least one of those obstacles exists — production's own {@code > 0}. */
     public final boolean supportedByShip;
     /** The substrate's gates, as the probe found them. */
-    public final boolean vsAvailable;
     public final boolean riding;
     public final boolean flying;
     public final boolean elytraFlying;
@@ -76,7 +75,6 @@ public final class DeckCapture {
         this.shipFrameResolved = reply.bool("shipFrameResolved");
         this.shipSupportObstacles = reply.integer("shipSupportObstacles");
         this.supportedByShip = reply.bool("supportedByShip");
-        this.vsAvailable = reply.bool("vsAvailable");
         this.riding = reply.bool("isRiding");
         this.flying = reply.bool("isFlying");
         this.elytraFlying = reply.bool("isElytraFlying");

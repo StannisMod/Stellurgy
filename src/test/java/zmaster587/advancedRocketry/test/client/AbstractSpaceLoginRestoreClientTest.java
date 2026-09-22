@@ -1249,7 +1249,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected int flyOneShipIntoItsCell() throws Exception {
         serverHarness = RealDedicatedServerHarness.startWith(root, false);
-        assumeProductionSubsystemAvailable();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 (that is what the seeded "
@@ -1382,7 +1381,6 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected int seatThePilotBeforeHeLeavesTheGround() throws Exception {
         serverHarness = RealDedicatedServerHarness.startWith(root, false);
-        assumeProductionSubsystemAvailable();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1: " + status.raw(),
@@ -1623,23 +1621,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         }
     }
 
-    /**
-     * The production subsystem only registers when Valkyrien Skies is present - without tier-2 ships
-     * there is nothing for it to host, so it deliberately declines. The wiring under test would not
-     * exist, hence a skip rather than a failure.
-     */
-    protected void assumeProductionSubsystemAvailable() throws Exception {
-        String vs = exec("artest vs available");
-        // The gate was MISSING: the reply was fetched into a dead local and nothing was ever decided
-        // from it, so the skip this javadoc promises had never once happened and all six scenarios of
-        // this family ran on regardless. A skip that cannot skip is worse than none — it is a claim,
-        // in a javadoc, that a whole class of environment is handled.
-        // absence is the answer: a build without the substrate answers no `available` at all,
-        // and that is precisely the world this gate skips in.
-        org.junit.Assume.assumeTrue("Valkyrien Skies is absent, so the production subsystem under"
-                + " test never registered and there is nothing here to exercise: " + vs,
-                Reply.of(vs).boolOr("available", false));
-    }
+    // THERE IS NO `assumeProductionSubsystemAvailable()` ANY MORE. It skipped the scenario when the
+    // physics substrate was absent — a condition that cannot arise, because the substrate is
+    // compiled into this jar. Worse, `Assume` skips SILENTLY: had the condition ever been true,
+    // these scenarios would have vanished from the run and the gate would have stayed green over a
+    // mod with no ship physics at all. Both callers already assert `status.registered` on the line
+    // after it, which asks the same question and FAILS instead of disappearing. Removed 2026-09-22.
 
     // --- lifecycle ---------------------------------------------------------------------------------
 
