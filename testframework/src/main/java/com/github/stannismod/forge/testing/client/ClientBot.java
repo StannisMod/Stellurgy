@@ -37,10 +37,24 @@ public final class ClientBot implements Closeable {
     private volatile long lastAnswerNanos = System.nanoTime();
     private volatile long answersReceived;
 
+    /**
+     * How long the bot waits for a reply — and the OUTER budget of the whole bridge.
+     *
+     * <p><b>Every deadline the client side runs must be strictly shorter than this.</b> An inner
+     * budget equal to the outer one can never be reported: the client finishes waiting exactly when
+     * the caller has already given up, so its own diagnosis — which names what it was waiting for —
+     * is written to a socket nobody is reading any more. Measured 2026-09-22: `wait_world` ran a
+     * two-minute deadline of its own, inside a `runOnClientThread` whose future `get` was also two
+     * minutes, inside this. A slow world load was therefore delivered as "the client bridge did not
+     * answer", and the client's own "Timed out waiting for the client world to load" could not
+     * reach anyone by construction.</p>
+     */
+    public static final long READ_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
+
     ClientBot(Socket socket) throws IOException {
         this.socket = socket;
         this.socket.setTcpNoDelay(true);
-        this.socket.setSoTimeout((int) Duration.ofMinutes(2).toMillis());
+        this.socket.setSoTimeout((int) READ_TIMEOUT_MILLIS);
         this.reader = new BufferedReader(new java.io.InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         this.writer = new BufferedWriter(new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
         awaitReady(Duration.ofMinutes(2));

@@ -1640,7 +1640,12 @@ public final class ForgeTestClientBootstrap {
     private static JsonObject waitTicks(JsonObject request) {
         int ticks = boundedInt(request, "ticks", 0, 1000000);
         long start = CLIENT_TICKS.get();
-        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
+        // Same relation as waitForWorld, and for the same reason: at a flat two minutes this
+        // deadline equalled the bot's read timeout, so "Timed out waiting for N client ticks" —
+        // which names the tick count and is far better than "the client bridge did not answer" —
+        // could never be delivered. A client that stops ticking is now reported as one.
+        long deadline = System.nanoTime()
+                + TimeUnit.MILLISECONDS.toNanos(CLIENT_SIDE_BUDGET_MILLIS);
 
         while (CLIENT_TICKS.get() - start < ticks) {
             if (System.nanoTime() > deadline) {
@@ -1656,8 +1661,21 @@ public final class ForgeTestClientBootstrap {
         return ok();
     }
 
+    /**
+     * The client side's own budget, DERIVED from the bot's read timeout and deliberately shorter.
+     *
+     * <p>The relation is the point, not the fraction: an inner deadline equal to the outer one can
+     * never be reported, because the client stops waiting exactly when the caller has already given
+     * up on it. Three quarters leaves the bridge a quarter of the window to write a reply that says
+     * what IT was waiting for — "Timed out waiting for the client world to load" is a far better
+     * red than "the client bridge did not answer", and before 2026-09-22 it was unreachable.</p>
+     */
+    private static final long CLIENT_SIDE_BUDGET_MILLIS =
+            com.github.stannismod.forge.testing.client.ClientBot.READ_TIMEOUT_MILLIS * 3L / 4L;
+
     private static void waitForWorld() {
-        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
+        long deadline = System.nanoTime()
+                + TimeUnit.MILLISECONDS.toNanos(CLIENT_SIDE_BUDGET_MILLIS);
         while (System.nanoTime() < deadline) {
             try {
                 Boolean ready = runOnClientThread(() -> {
@@ -1683,7 +1701,11 @@ public final class ForgeTestClientBootstrap {
         FutureTask<T> task = new FutureTask<>(callable);
         mc.addScheduledTask(task);
         try {
-            return task.get(TimeUnit.MINUTES.toMillis(2), TimeUnit.MILLISECONDS);
+            // HALF the client-side budget, so a task that never runs still leaves the caller of
+            // this method time to fail with its own words — and leaves the bridge time to answer.
+            // It used to be a flat two minutes, i.e. the bot's whole read timeout, which made a
+            // busy client thread indistinguishable from a dead channel.
+            return task.get(CLIENT_SIDE_BUDGET_MILLIS / 2L, TimeUnit.MILLISECONDS);
         } catch (Exception exception) {
             throw new RuntimeException(exception);
         }
