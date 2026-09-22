@@ -728,7 +728,16 @@ public final class RealClientHarness implements AutoCloseable {
             return "";
         }
         try {
-            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            // DECODED LENIENTLY, and that is the whole point of this line. `readAllLines` with a
+            // strict UTF-8 decoder throws MalformedInputException — an IOException — on the first
+            // byte a Minecraft log happens to carry in another encoding, and the catch below then
+            // returns "". Measured 2026-09-22: two consecutive full client legs reported
+            // "Failed to start real client harness … Recent client log:" with NOTHING after it,
+            // 108 and 112 times, while the cause sat in the file this method had just failed to
+            // read. Building a String from the bytes cannot throw: malformed input becomes U+FFFD
+            // and the rest of the line survives, which is all a diagnostic needs.
+            List<String> lines = java.util.Arrays.asList(
+                    new String(Files.readAllBytes(file), StandardCharsets.UTF_8).split("\\R", -1));
             if (lines.isEmpty()) {
                 return "";
             }
@@ -744,8 +753,10 @@ public final class RealClientHarness implements AutoCloseable {
                 builder.append(lines.get(i));
             }
             return builder.toString();
-        } catch (IOException ignored) {
-            return "";
+        } catch (IOException unreadable) {
+            // NOT silent. An empty tail and an unreadable one look identical to a reader, and the
+            // second one sent two full-tier investigations looking in the wrong place.
+            return "<the client log at " + file + " could not be read: " + unreadable + ">";
         }
     }
 
