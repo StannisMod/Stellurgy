@@ -52,6 +52,31 @@ public final class ForgeTestClientBootstrap {
     private static final AtomicLong CLIENT_TICKS = new AtomicLong(0L);
 
     /**
+     * Monitor for {@link #clientWorldLive} — the record that the client world is live, published
+     * by the client thread itself and awaited, never polled.
+     *
+     * <p>The client tick handler is the first moment the client thread is ours to ask at all: the
+     * bridge accepts its socket during mod post-init, while that thread is still inside
+     * {@code Minecraft.init} loading recipes, and NOTHING scheduled on it runs until init returns.
+     * A boot wait built on {@code runOnClientThread} therefore spends its budget on the length of
+     * {@code Minecraft.init} rather than on the world, and its expiry says "the client thread is
+     * busy" — which is a statement about the box, not about the subject.</p>
+     *
+     * <p>Measured 2026-09-22 over the 57 clients of the last PASSING full client leg: the interval
+     * from the bridge coming up to the client thread's first scheduled task ran 14 s to 53 s, with
+     * 21 of the 57 at or above 45 s. A 45 s future budget over that interval therefore put a third
+     * of a healthy tier on the wrong side of a cliff nobody had measured, and three full legs
+     * (112, 108 and 8-of-8 reds) were spent on it.</p>
+     *
+     * <p>The flag tracks the CURRENT state, not the first time it became true: a relog tears the
+     * world down and builds it again, and a one-shot record would answer "ready" for the gap.</p>
+     */
+    private static final Object CLIENT_WORLD_LOCK = new Object();
+
+    /** Guarded by {@link #CLIENT_WORLD_LOCK}; written only by the client thread's tick handler. */
+    private static boolean clientWorldLive;
+
+    /**
      * The server address the last "disconnect" command left, so a later "connect" can rejoin it.
      * Only the disconnect/connect pair uses this; "reconnect" reads the address off the live
      * connection and never touches it. Client-thread confined (both writers and the reader run
@@ -1673,27 +1698,54 @@ public final class ForgeTestClientBootstrap {
     private static final long CLIENT_SIDE_BUDGET_MILLIS =
             com.github.stannismod.forge.testing.client.ClientBot.READ_TIMEOUT_MILLIS * 3L / 4L;
 
+    /**
+     * Publish whether the client world is live RIGHT NOW. Runs on the client thread only.
+     *
+     * <p>Every tick, because the property goes both ways: a disconnect or a relog takes the world
+     * down, and a waiter that had been told "ready" once would read the gap as readiness.</p>
+     */
+    private static void publishWorldLiveness() {
+        Minecraft mc = Minecraft.getMinecraft();
+        boolean live = mc.world != null && mc.player != null && mc.player.connection != null;
+        synchronized (CLIENT_WORLD_LOCK) {
+            if (live != clientWorldLive) {
+                clientWorldLive = live;
+                CLIENT_WORLD_LOCK.notifyAll();
+            }
+        }
+    }
+
+    /**
+     * Wait for the record that the client world is live — a link, not a poll.
+     *
+     * <p>The state is read FIRST and the wait entered only if it is not already true: a world that
+     * came up before the command arrived publishes no further change, and a wait that skipped the
+     * read would spend its whole budget on a client that was ready before it was asked.</p>
+     *
+     * <p>The budget bounds a DEAD client, not a slow one. Its expiry says which of the two the
+     * client is, by reporting whether the client thread has ticked at all: no ticks means it never
+     * left {@code Minecraft.init}, ticks without a world means it is running and not connecting.</p>
+     */
     private static void waitForWorld() {
         long deadline = System.nanoTime()
                 + TimeUnit.MILLISECONDS.toNanos(CLIENT_SIDE_BUDGET_MILLIS);
-        while (System.nanoTime() < deadline) {
-            try {
-                Boolean ready = runOnClientThread(() -> {
-                    Minecraft mc = Minecraft.getMinecraft();
-                    return mc.world != null && mc.player != null && mc.player.connection != null;
-                });
-                if (Boolean.TRUE.equals(ready)) {
-                    return;
+        synchronized (CLIENT_WORLD_LOCK) {
+            while (!clientWorldLive) {
+                long remainingNanos = deadline - System.nanoTime();
+                if (remainingNanos <= 0L) {
+                    throw new IllegalStateException("Timed out waiting for the client world to load"
+                            + " after " + CLIENT_SIDE_BUDGET_MILLIS + " ms; client ticks so far: "
+                            + CLIENT_TICKS.get()
+                            + " (0 means the client thread never left Minecraft.init)");
                 }
-                Thread.sleep(100L);
-            } catch (RuntimeException exception) {
-                throw exception;
-            } catch (InterruptedException interruptedException) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupted while waiting for the client world to load", interruptedException);
+                try {
+                    CLIENT_WORLD_LOCK.wait(Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remainingNanos)));
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting for the client world to load", interruptedException);
+                }
             }
         }
-        throw new IllegalStateException("Timed out waiting for the client world to load");
     }
 
     private static <T> T runOnClientThread(Callable<T> callable) {
@@ -2154,6 +2206,7 @@ public final class ForgeTestClientBootstrap {
                     installNonWarpingMouseHelper();
                 }
                 CLIENT_TICKS.incrementAndGet();
+                publishWorldLiveness();
                 // Deferred connection teardown: this event runs on the client thread OUTSIDE
                 // the scheduled-task drain, so closing the channel here cannot deadlock
                 // against an inbound packet handler (see PENDING_CONNECTION_ACTION).
