@@ -370,9 +370,10 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         long mark = events.markInstrumented();
         long clientMark = clientEvents().mark();
         bot().useItem();
-        // A window for the absence: nothing is being waited FOR, so its expiry is not the failure.
-        bot().waitTicks(20);
-
+        // No window for the absence. The server decides the whole click inside the one packet
+        // handler that records `right_click_item`, so once that record is in, a GUI it served would
+        // already be recorded beside it; and the client's own half of a use runs inside useItem,
+        // before the packet leaves.
         String clicks = events.await(mark, "right_click_item", "the click must reach the server"
                 + " before its silence can be read as the item declining to open a GUI",
                 LINK_BUDGET_TICKS);
@@ -596,9 +597,8 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         long mark = events.markInstrumented();
         bot().setLook(0f, -90f);
         bot().useItem();
-        // A window for the absence: expiry is not the failure here.
-        bot().waitTicks(20);
-
+        // No window for the absence: the spawn a PASS must not make would happen inside the same
+        // packet handler that records `right_click_item`, so it is recorded by the time that is.
         String clicks = events.await(mark, "right_click_item", "the click must reach the server"
                 + " before its silence can be read as an empty ray trace", LINK_BUDGET_TICKS);
         assertTrue("the click that reached the server must be the HOVERCRAFT's — an empty hand"

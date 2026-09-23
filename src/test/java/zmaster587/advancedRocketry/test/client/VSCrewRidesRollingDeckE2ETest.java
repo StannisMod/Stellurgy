@@ -10,6 +10,7 @@ import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -55,6 +56,11 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
     private static final String VARIANT = "with-pilot-seat";
     /** Roll to command, in degrees. Well past the angle at which an un-held entity would slide off. */
     private static final double ROLL_DEG = 45.0;
+
+    /** The roll's slew window, in ticks of the hull's world clock — the 120 client ticks it was. */
+    private static final int ROLL_WINDOW_TICKS = 120;
+    /** A deadline for the landing record, not a guess at how long four blocks of fall take. */
+    private static final int LANDING_LINK_BUDGET_TICKS = 200;
 
     private int count(String sub) throws Exception {
         String command = "artest vs " + sub + " 0";
@@ -110,7 +116,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
                 () -> count("ship-count-all"), n -> n >= 1, 5, 40);
         int all = spawned.value;
         assertTrue("assembly must create a ship (all=" + all + ")", all >= 1);
-        bot().waitTicks(40);
 
         // WHICH ship, from the assembler that minted its name. The base was the handle before, and a
         // base is a place: this class shares its world, and the lookup answered for the nearest hull
@@ -132,8 +137,21 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         exec("tp @a " + where.x + " " + (where.y + 4) + " " + where.z + " 0 0");
         awaitClientPlacedNear(dropMark, where.x, where.z,
                 "the drop onto the deck is the client's fall, so the client must first BE over the"
-                        + " deck — the ticks below are for the fall, not for the teleport");
-        bot().waitTicks(80); // the fall itself: four blocks of it, and it is a value converging
+                        + " deck");
+        // THE LANDING IS A LINK. `deck_contact` is the client's resolver owning a tick's move and
+        // putting the body on a surface it was not on the tick before, named for the ship whose
+        // deck that surface is — the end of this fall. He is four blocks up after the teleport, so
+        // the edge is owed. A body that misses the deck is not resolved when it lands and writes
+        // nothing, so an expiry here is the drop missing, not a slow fall.
+        //
+        clientEvents().awaitField(dropMark, "deck_contact", "ship", shipId,
+                "the crew member dropped over this scenario's ship must LAND on its deck",
+                LANDING_LINK_BUDGET_TICKS);
+        // Every read below is the SERVER's, which learns of the landing from the movement packet
+        // the client sends at the end of that tick — over the player's connection, not the probe's,
+        // so arrival order between the two is not given. The fence is: once the server has echoed
+        // a line the client sent after landing, the landing packet has been handled.
+        fenceWhatTheClientSent("the server must have handled the landing before it is asked about it");
 
         PlayerShipData level = PlayerShipData.read(this::exec);
         // "Aboard" is tested by CONTAINMENT (shipLoaded: the player's world position lies inside a
@@ -158,10 +176,22 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
 
         // Roll the ship about its nose. Quaternion (w,x,y,z) for ROLL_DEG about +Z.
         double half = Math.toRadians(ROLL_DEG) / 2.0;
+        double upBeforeRoll = ShipInfo.byId(this::exec, 0, shipId).upY();
         String point = exec("artest vs point-by-id 0 " + shipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
         assertTrue("attitude hold must accept the roll command: " + point, Reply.of(point).bool("commanded"));
-        bot().waitTicks(120); // let the controller actually roll the ship
+        // WINDOW: `level` before, `rolled` after, and the claim at the foot of this method is the
+        // difference between them — how far he moved on the deck against how far in the world —
+        // with both readings in its message. Counted on the hull's world clock, and the roll it
+        // bought is GATED below: a hull that has turned a few degrees satisfies every claim here
+        // without testing any of them.
+        GameTicks.advanceWorld(serverClient(), 0, ROLL_WINDOW_TICKS);
+        double upAfterRoll = ShipInfo.byId(this::exec, 0, shipId).upY();
+        scenario().requireArranged("the deck must actually be rolled before the ride is judged - the"
+                        + " test's own premise is at least half of the commanded " + ROLL_DEG
+                        + " degrees: upY " + upBeforeRoll + " -> " + upAfterRoll + " over "
+                        + ROLL_WINDOW_TICKS + " server ticks",
+                upAfterRoll < Math.cos(Math.toRadians(ROLL_DEG / 2.0)));
 
         PlayerShipData rolled = PlayerShipData.read(this::exec);
         // Client-observed resolution state (the CLIENT owns a player's movement, so ITS ShipFrameTravel

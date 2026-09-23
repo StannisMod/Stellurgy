@@ -138,6 +138,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // -1 - -1 == 0 and every zero-release pin in this class went green on it, saying nothing.
         long restReleaseMark = clientEvents().mark();
         long restMark = lastClientTick();
+        // WINDOW: an absence watched between the two marks above and the reads below; `resolved=`
+        // in the message is the window's measured width and the marks are printed beside it.
+        // Overshoot only lengthens a control that must stay at zero — the strict direction.
         bot().waitTicks(30);
         String restHistory = clientTickHistory();
         String restReleases = clientReleases(restReleaseMark, "the still-ship control window");
@@ -147,6 +150,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // THE DRIVER: roll the ship under him, and measure WHILE it turns - the release happens during
         // the attitude change, not after it.
         double h = Math.toRadians(170.0) / 2.0;
+        double upYBefore = upYOf(shipInfo());
         scenario().requireArranged("the attitude hold must accept the roll command",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
@@ -166,6 +170,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // The window is the roll's own time rather than a budget: the hold slews at about 2 rad/s,
         // so half a turn is ~31 ticks, and an attitude this far past the reference reseed is ADOPTED
         // and then HELD — a window longer than the slew cannot walk back out of the state.
+        // WINDOW: the roll's releases, travel and seat miss are counted over the records between the
+        // marks above and the reads below, and the arrangement gate names upY at both ends. Overshoot
+        // adds held-attitude ticks to a window whose pins are zeros and maxima — the strict direction.
         bot().waitTicks(ROLL_WINDOW_TICKS);
         // The shared reading, which uses the full expression 1 - 2(qx^2 + qz^2). The single-axis
         // shortcut this leg carried answers a confident 1.0 for a ship that rolled about a different
@@ -200,10 +207,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double rollTravel = bodyPointTravel(rollHistory, rollMark);
         int resolvedDuringRoll = resolvedSince(rollHistory, rollMark);
 
-        String observed = "\n  at rest:      drops=" + dropsDuringRest + " bodyTravel=" + restTravel
+        String observed = "\n  at rest (client ticks after " + restMark + "):      drops="
+                + dropsDuringRest + " bodyTravel=" + restTravel
                 + " resolved=" + resolvedSince(restHistory, restMark)
-                + "\n  during roll:  drops=" + dropsDuringRoll + " bodyTravel=" + rollTravel
-                + " resolved=" + resolvedDuringRoll + " upY=" + upY
+                + "\n  during roll (client ticks after " + rollMark + "):  drops=" + dropsDuringRoll
+                + " bodyTravel=" + rollTravel
+                + " resolved=" + resolvedDuringRoll + " upY went " + upYBefore + " -> " + upY
                 + "\n  seat:         miss=" + rollSeatMiss + " deckStep=" + deckStep
                 + " reseated=" + reseated
                 + "\n  releases at rest:     " + restReleases
@@ -212,8 +221,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         System.out.println("[roll-hold]" + observed
                 + "\n[roll-hold] pose trace :: " + clientEvents().since(poseTraceMark, "client_deck_pose_tick"));
 
-        scenario().requireArranged("the ship must actually have rotated, or nothing was driven (upY="
-                + upY + ")" + observed, upY < INVERTED_UP_Y);
+        scenario().requireArranged("the ship must actually have rotated, or nothing was driven (upY"
+                + " went " + upYBefore + " -> " + upY + " across " + ROLL_WINDOW_TICKS + " ticks: equal"
+                + " means the hold never started, different means it was still slewing)" + observed,
+                upY < INVERTED_UP_Y);
         scenario().requireArranged("the client must have resolved the body through the roll, or a clean "
                 + "result describes the instrument" + observed, resolvedDuringRoll >= RESOLVED_TICKS_MIN);
         assertEquals("CONTROL: the guard must be quiet while the ship is still - otherwise the count "
@@ -429,6 +440,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // could not fail.
         long idleReleaseMark = clientEvents().mark();
         long idleMark = lastClientTick();
+        // WINDOW: an absence watched between the two marks above and the reads below; `resolved=`
+        // in the message is its measured width. Overshoot only lengthens a control that must stay
+        // at zero — the strict direction.
         bot().waitTicks(40);
         String idleHistory = clientTickHistory();
         String idleReleases = clientReleases(idleReleaseMark, "the standing-still control window");
@@ -449,8 +463,10 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         DeckCapture capAfter = DeckCapture.read(this::exec);
 
         String observed = "\n  " + where
-                + "\n  idle (control): drops=" + dropsIdle + " resolved=" + resolvedIdle
-                + "\n  walking:        drops=" + dropsWalk + " resolved=" + resolvedWalk
+                + "\n  idle (control, client ticks after " + idleMark + "): drops=" + dropsIdle
+                + " resolved=" + resolvedIdle
+                + "\n  walking (client ticks after " + walkMark + "):        drops=" + dropsWalk
+                + " resolved=" + resolvedWalk
                 + " inputTicks=" + inputTicks + " offDeckTicks=" + offDeckTicks
                 + " walked=" + walked
                 + "\n  releases while idle:    " + idleReleases
@@ -561,9 +577,12 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // different ship pose and a different settle history.
         // Counted off the client's own release records - see the roll leg for why a difference of
         // two counter reads could not fail.
+        // No idle lead-in before the walk: the window's own witness is `resolvedControl`, which the
+        // walk alone fills, and the capture it needs is the link above — the server's copy of a
+        // walking player moves on the client's position packets, so it cannot reach the deck
+        // before the client's body has.
         long controlReleaseMark = clientEvents().mark();
         long controlMark = lastClientTick();
-        bot().waitTicks(20);
         double controlWalked = walkInBursts();
         String controlHistory = clientTickHistory();
         String controlReleases = clientReleases(controlReleaseMark, "the same walk WITHOUT a stall");
@@ -576,6 +595,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         long idleStallMark = lastClientTick();
         long idleStallReleaseMark = clientEvents().mark();
         String idleStall = exec("artest server stall " + STALL_MS);
+        // WINDOW: the stall probe answers only once the loop resumes, so these ticks are the
+        // post-resume half of the window between the two marks above and the reads below — where
+        // the two sides re-converge and any release would land. Overshoot only lengthens it.
         bot().waitTicks(20);
         String idleStallReleases = clientReleases(idleStallReleaseMark,
                 "the same freeze with him standing still");
@@ -590,12 +612,18 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // He is walked to the far edge first, so the whole freeze happens with a deck's width of
         // runway ahead of him - the freeze is not shortened to fit the fixture, the runway is
         // arranged to fit the freeze.
+        // `setLook` writes the client player's rotation on the client thread before it answers, so
+        // the next client tick already walks the new way; the body is at rest after control B.
         bot().setLook(180f, 0f);
-        bot().waitTicks(4);
         bot().holdKey(Keyboard.KEY_W);
+        // STIMULUS: one walk burst, the same dose the walking leg uses, to put the far edge behind him.
         bot().waitTicks(WALK_BURST_TICKS);
         bot().releaseKey(Keyboard.KEY_W);
         bot().setLook(0f, 0f);
+        // EXPERIMENT: a gap between the reposition walk and the window that opens below, so the
+        // first ticks of its coast — toward the edge he was walked to — fall before `stallMark`
+        // rather than inside a window whose arrangement gate is zero off-deck ticks. Deck drag
+        // spends the coast per client tick, the clock this counts; overshoot only widens the gap.
         bot().waitTicks(4);
         long stallMark = lastClientTick();
         long stallReleaseMark = clientEvents().mark();
@@ -613,6 +641,9 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // ticks, and a window that closes on the release tick is too short to be witnessed (14
         // resolved ticks, against the 20 every other window in this class is held to). Nothing walks
         // here, so the runway is not spent.
+        // WINDOW: the tail of the one opened at stallMark / stallReleaseMark above, closed by the
+        // reads below; `resolved=` in the message is its measured width. Overshoot only lengthens
+        // the watch for a release that must not come.
         bot().waitTicks(15);
         String stallHistory = clientTickHistory();
         String stallReleases = clientReleases(stallReleaseMark, "a walk held ACROSS the freeze");
@@ -621,11 +652,13 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         int offDeckAfterStall = offDeckTicksSince(stallHistory, stallMark);
         DeckCapture capAfter = DeckCapture.read(this::exec);
 
-        String observed = "\n  control A, walk, no stall:   drops=" + dropsControl + " resolved="
-                + resolvedControl + " walked=" + controlWalked
-                + "\n  control B, stall while idle: drops=" + dropsIdleStall + " resolved="
+        String observed = "\n  control A, walk, no stall (client ticks after " + controlMark + "):   drops="
+                + dropsControl + " resolved=" + resolvedControl + " walked=" + controlWalked
+                + "\n  control B, stall while idle (client ticks after " + idleStallMark + "): drops="
+                + dropsIdleStall + " resolved="
                 + resolvedIdleStall + "  " + idleStall.substring(Math.max(0, idleStall.indexOf('{')))
-                + "\n  walk ACROSS the stall:       drops=" + dropsAfterStall + " resolved="
+                + "\n  walk ACROSS the stall (client ticks after " + stallMark + "):       drops="
+                + dropsAfterStall + " resolved="
                 + resolvedAfterStall + " walked=" + stalledWalked
                 + " offDeckTicks=" + offDeckAfterStall
                 + "\n  stall probe: " + stall
@@ -776,6 +809,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // opposite fixes: the first is a window too short, the second is a command that was accepted
         // and did nothing, which no wait can repair.
         double upYBefore = upYOf(shipInfo());
+        // WINDOW: upYBefore and upY, both in the message below. Overshoot is lenient, and the gate
+        // it feeds is the arrangement for the relog, not the relog's verdict.
         bot().waitTicks(ROLL_WINDOW_TICKS);
         double upY = upYOf(shipInfo());
         assertTrue("the ship must be (near-)inverted for the relog to be able to drop the player"
@@ -911,22 +946,25 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // documented to feed its crew a constant no-input drift. Without this baseline, any creep
         // measured after the relog would be blamed on the restore by default.
         double[] idle0 = deckPoint();
+        // WINDOW: idle0 and idle1, and the creep between them is what the post-relog pin quotes.
         bot().waitTicks(30);
-        double idleCreep = alongDeck(idle0, deckPoint());
+        double[] idle1 = deckPoint();
+        double idleCreep = alongDeck(idle0, idle1);
         System.out.println("[walk-relog] CONTROL idle creep along the deck over 30 ticks = "
-                + idleCreep);
+                + idleCreep + " (" + fmt(idle0) + " -> " + fmt(idle1) + ")");
 
         double[] beforeWalk = clientPos();
         bot().holdKey(Keyboard.KEY_W);
+        // STIMULUS: twelve ticks of W, measured as the distance between beforeWalk and walking.
         bot().waitTicks(12);
         double[] walking = clientPos();
         bot().releaseKey(Keyboard.KEY_W);
-        // Give the release a couple of ticks to actually reach the server as "no input" before the
-        // logout. The subject of this leg is an inherited VELOCITY, not an inherited INPUT, and the
-        // two are separable: the velocity survives about ten ticks of deck drag, so two ticks keep
-        // nearly all of it while making it impossible for a key still held (the harness reuses one
-        // client JVM across the reconnect) to masquerade as a restore defect afterwards.
-        bot().waitTicks(2);
+        // No gap before the logout. The subject of this leg is an inherited VELOCITY, not an
+        // inherited INPUT, and the release above already ended the input: `releaseKey` clears the
+        // binding on the client thread before it answers, so no key is held across the reconnect
+        // (the harness reuses one client JVM). A walking player's input never reaches the server at
+        // all — it moves on the client's position packets — so there is nothing further to wait for,
+        // and every tick spent here only bleeds off the velocity this leg exists to carry.
         // ARRANGEMENT WITNESS: he has to be genuinely under way, or the motion this leg is about
         // never exists and a green below would mean nothing.
         assertTrue("the crew member must actually cover ground on the deck before logging out "
@@ -1415,7 +1453,6 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // ship that is, and nothing below re-derives it from a position.
         scenarioShipId = awaitShipSpawned(events, spawnMark, "a with-pilot-seat build must become a"
                 + " ship in the physics mod's own registry - not a rocket, and not nothing");
-        bot().waitTicks(40);
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");

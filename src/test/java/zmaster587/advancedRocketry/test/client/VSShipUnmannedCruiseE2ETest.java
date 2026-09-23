@@ -89,7 +89,6 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 (Reply.of(assemble).integer("rocketCount") == 0));
         shipId = awaitShipSpawned(events,
                 spawnMark, "a with-pilot-seat assembly must create a VS ship in the registry");
-        bot().waitTicks(40);
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
@@ -169,7 +168,6 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         scenario().requireArranged("the held key must have ramped a real climb before the dismount "
                         + "can test anything (y0=" + y0 + " yRamped=" + yRamped + ")",
                 yRamped - y0 > RAMPED_A_CLIMB_BLOCKS);
-        bot().waitTicks(10);
 
         // Dismount mid-cruise. (The probe dismount stands in for any exit that is not the brake
         // key — standing up must not zero the cruise; braking to a stop before standing is the
@@ -184,12 +182,20 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         events.awaitField(dismountMark, "pilot_input_set", "input", "null",
                 "the flight computer must be told the pilot has gone, or the climb below is just a"
                         + " ship that is still being piloted", 100);
+        // The window OPENS here and not at yDismount: the climb between the dismount and the
+        // computer learning of it is still piloted flight, and on a slow box that stretch alone
+        // could clear the bar and turn a dropped autopilot green.
+        double yPilotGone = shipY();
+        // WINDOW: 40 ticks of unmanned flight between yPilotGone and yUnmanned, and the claim is the
+        // climb between them. Overshoot is lenient only toward a ship still climbing: one that
+        // braked to a hover adds nothing however long the window runs.
         bot().waitTicks(40);
         double yUnmanned = shipY();
         assertTrue("an unmanned ship with Flight Assist on and a non-zero cruise setpoint must "
                         + "KEEP CRUISING after the pilot dismounts — that is what makes it an "
-                        + "autopilot (yDismount=" + yDismount + " after 2s=" + yUnmanned + ")",
-                yUnmanned - yDismount > KEPT_CRUISING_BLOCKS);
+                        + "autopilot (yDismount=" + yDismount + " yPilotGone=" + yPilotGone
+                        + " after 2s=" + yUnmanned + ")",
+                yUnmanned - yPilotGone > KEPT_CRUISING_BLOCKS);
 
         // Re-mounting must not interrupt (or reset) the executing cruise: the seat's dummy is
         // REUSED and the ship flies on while the returned pilot holds no key.
@@ -198,10 +204,18 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
                 remount.seatFound);
         assertTrue("the re-mount must REUSE the seat's single dummy: " + remount.raw(),
                 remount.reused);
+        long remountOnClient = clientEvents().mark();
         String mounted = exec("artest player mount-entity " + remount.requireDummyId());
         assertTrue("bot must re-mount the seat dummy: " + mounted,
                 Reply.of(mounted).bool("mounted"));
+        // His CLIENT performs the seating too, and a client that resets the cruise on taking the
+        // seat does it then — so the window opens only once it has, or a late seating would fall
+        // after the window and its reset go unseen.
+        awaitClientMount(remountOnClient, "the returning pilot's client must perform the re-seating"
+                + " before the cruise is watched", SEAT_LINK_BUDGET_TICKS, " | server said: " + mounted);
         double yRemount = shipY();
+        // WINDOW: 40 ticks with the pilot back in the seat on both sides, between yRemount and
+        // yAfter; the claim is over their difference and names both.
         bot().waitTicks(40);
         double yAfter = shipY();
         assertTrue("a re-mounted pilot receives the executing cruise BACK — the ship must not "

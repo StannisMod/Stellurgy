@@ -201,11 +201,19 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         // on the stored deck point, so his client-rendered position has to be at the ship.
         double[] shipPose = awaitShipPose(dim);
         assertNotNull("his ship must be live in the dimension he came back to: " + observed, shipPose);
-        // A WINDOW and one read, the same shape and the same constant as the base's own restore
-        // assertion — this loop was its twin, down to the exit condition being the assertion three
-        // lines below it. The act was his mount, which the base awaits as a link; what is left is
-        // the rider's position being written each tick, which nothing publishes.
-        bot().waitTicks(SEAT_SETTLE_TICKS);
+        // What puts a crew member on his FEET back on his deck is the deck hold's restore seed, and
+        // the CLIENT decides what to do with it. That decision is the link: WAIT is the only
+        // non-terminal answer, so the first record carrying anything else is the moment "where he
+        // stands" stops being in flux. A settle of SEAT_SETTLE_TICKS stood here, copied from the
+        // seated leg's rider convergence — but he is not riding, and the seed can arrive seconds
+        // after the join, which is exactly what a fixed count cannot know.
+        clientEvents().awaitMatching(CLIENT_SESSION_START, "deck_seed_decided",
+                seen -> Events.records(seen).stream()
+                        .anyMatch(r -> !"WAIT".equals(Events.text(r, "decision"))),
+                "a decision other than WAIT (APPLY, KEEP_PREEXISTING, ALREADY_SEEDED or EXPIRE)",
+                "the restored crew member's client must DECIDE the deck hold's restore seed - no"
+                        + " decision at all means the seed never reached it. " + observed,
+                RESTORE_LINK_BUDGET_TICKS);
         state = bot().reportState();
         double clientX = state.get("playerX").getAsDouble();
         double clientY = state.get("playerY").getAsDouble();

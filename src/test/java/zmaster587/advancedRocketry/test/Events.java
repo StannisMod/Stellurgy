@@ -934,6 +934,39 @@ public final class Events {
     }
 
     /**
+     * {@link #awaitMatching(long, String, Condition, String, String, int)} read every
+     * {@code readEveryTicks} ticks instead of every five.
+     *
+     * <p>For the one case the five-tick read is too coarse for: a record the caller must act on
+     * BEFORE the world moves on without it. A body teleported a few blocks over a deck starts
+     * falling onto it the tick the client applies the placement, so "read him at the point he was
+     * put" is a question with a few ticks of answer, and a read five ticks late describes the
+     * landing instead. The budget is unchanged and still the deadline; a finer read costs probe
+     * round trips and buys nothing where the next line has no such race, so the five-tick form stays
+     * the default.</p>
+     */
+    public String awaitMatchingEvery(long mark, String type, Condition holds, String matching,
+                                     String what, int tickBudget, int readEveryTicks)
+            throws Exception {
+        if (readEveryTicks <= 0) {
+            throw new AssertionError("awaitMatchingEvery needs a positive read period and was given "
+                    + readEveryTicks);
+        }
+        String reply = "";
+        for (int waited = 0; waited <= tickBudget; waited += readEveryTicks) {
+            reply = since(mark, type);
+            if (holds.holds(reply)) {
+                return reply;
+            }
+            step.ticks(readEveryTicks);
+        }
+        throw new AssertionError(what + " — no `" + type + "` " + matching + " was recorded"
+                + " within " + tickBudget + " ticks. What DID happen since the mark: "
+                + describe(since(mark)) + TRIAGE + " | `" + type + "` records: " + reply
+                + " | everything since the mark: " + since(mark));
+    }
+
+    /**
      * Assert an ordered chain: each type must appear, and in this order.
      *
      * <p>This is the verb a test should reach for. A contract in this project is nearly always a

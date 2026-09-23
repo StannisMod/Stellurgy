@@ -7,6 +7,7 @@ import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PlayerState;
@@ -138,13 +139,39 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         // whichever its own chain produced. The comment here claimed until 2026-09-17 that they were
         // "the same value (one ship, one identity)"; `ShipLoadedAnnouncer` posts
         // `ShipLoadedEvent(world, durable, substrateKey)` from two separate sources, so they are not.
+        //
+        // Over the CHAIN, not the first record: a load is undone by an unload, and where ships may
+        // unload (a scenario that turned the test server's permanent loading off) the load recorded
+        // right after the spawn can be gone again by the time the caller acts — it then reads a hull
+        // in the middle of its NEXT load. Usable means a load later, by `seq`, than every unload.
         String reply = events.awaitMatching(mark, "ship_usable",
-                sinceReply -> Events.anyRecordHasAnyOf(sinceReply, shipId, "ship", "vsShip"),
-                "carrying ship or vsShip = " + shipId,
-                "this scenario's ship " + shipId + " must become USABLE — the physics loop steps it —"
+                usable -> endsUsable(usable, events.since(mark, "ship_unloaded"), shipId),
+                "carrying ship or vsShip = " + shipId + ", later than every unload of it",
+                "this scenario's ship " + shipId + " must be USABLE — the physics loop steps it —"
                         + " before anything can be asked of it", tickBudget);
         scenario().record("shipUsable_" + shipId, reply);
         return reply;
+    }
+
+    /** Whether the latest load of {@code shipId} in {@code usable} is later than every unload of it
+     *  in {@code unloaded}. An empty load list is NOT YET. */
+    private static boolean endsUsable(String usable, String unloaded, String shipId) {
+        long lastLoad = Long.MIN_VALUE;
+        for (String record : Events.records(usable)) {
+            if (shipId.equals(Events.text(record, "ship")) || shipId.equals(Events.text(record, "vsShip"))) {
+                lastLoad = Math.max(lastLoad, (long) Events.number(record, "seq"));
+            }
+        }
+        if (lastLoad == Long.MIN_VALUE) {
+            return false;
+        }
+        for (String record : Events.records(unloaded)) {
+            if ((shipId.equals(Events.text(record, "vsShip")) || shipId.equals(Events.text(record, "name")))
+                    && (long) Events.number(record, "seq") > lastLoad) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** {@link #awaitShipUsable(Events, long, String, int)} with this tier's usual budget. */
@@ -188,6 +215,16 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      *  ticks: generous against an eight-fork load, short enough that a crossing which genuinely
      *  drops its rider fails here rather than waiting out a budget. */
     protected static final int CLIENT_REMOUNT_BUDGET_TICKS = 80;
+
+    /** How long either side's record of a seating may take to follow the command or click that
+     *  seats him. A link's budget: its expiry means the seating never happened. */
+    protected static final int SEAT_LINK_BUDGET_TICKS = 200;
+
+    /** {@link #liftClearOfThePad}'s two stretches of the hull's world clock: before the unpark,
+     *  for the physics object to adopt the teleported pose; after it, for a failed adoption to
+     *  show as a craft back on its pad. The 30 and 10 client ticks they were. */
+    private static final int LIFT_ADOPTION_TICKS = 30;
+    private static final int LIFT_UNPARKED_TICKS = 10;
 
     /**
      * The client PERFORMED the remount after a dimension change — as the LINK it is — and then the
@@ -493,12 +530,21 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                 + " " + x + " " + toY + " " + z);
         scenario().requireArranged("the lift off the pad must take, or the craft flies its whole"
                 + " window in ground contact: " + moved, Reply.of(moved).ok());
-        bot().waitTicks(30); // transform adoption + rider sync settle
+        // EXPERIMENT: the write above is the GAME-side transform; the loaded physics object is told
+        // to adopt it and does so on a later tick, and VSBridge.teleportShip says its caller
+        // unparks "once the adoption has propagated". Unparked sooner, the physics re-integrates its
+        // OWN pose and the craft is back on its pad. Thirty ticks of the hull's world clock is the
+        // stretch this helper has always given it; the read below, taken after the craft has flown
+        // unparked, is what reports a stretch that was too short.
+        GameTicks.advanceWorld(serverClient(), dim, LIFT_ADOPTION_TICKS);
         String unparked = exec("artest vs unpark-by-id " + dim + " " + shipId);
         scenario().requireArranged("the rigid teleport leaves the ship PARKED by the substrate's own"
                 + " recipe, and a parked ship cannot be flown: " + unparked,
                 Reply.of(unparked).ok());
-        bot().waitTicks(10);
+        // WINDOW: from the write (the teleport's own reply) to the read below, over ticks of physics
+        // running unparked — a craft whose adoption did not take is back at its pad here, and the
+        // gate below names where it was sent and where it is.
+        GameTicks.advanceWorld(serverClient(), dim, LIFT_UNPARKED_TICKS);
 
         String after = shipInfoById(dim, shipId);
         double y = ShipInfo.isLoaded(after) ? ShipInfo.of(after).y : Double.NaN;
@@ -1041,6 +1087,21 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     /** The same reading for a non-numeric field ({@code active} comes back as "true"/"false"). */
     protected final String deckCameraText(String field) throws Exception {
         return Events.text(deckCameraRecord(field), field);
+    }
+
+    /**
+     * Several numeric fields of the deck camera from ONE peek, in the order asked — so they describe
+     * one moment. Two {@link #deckCamera} calls are two peeks, and on a hull still turning they
+     * describe two attitudes: the reason a caller comparing two fields used to wait for the hull to
+     * stop first.
+     */
+    protected final double[] deckCameraAtOnce(String... fields) throws Exception {
+        String record = deckCameraRecord(String.join("+", fields));
+        double[] values = new double[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            values[i] = Events.number(record, fields[i]);
+        }
+        return values;
     }
 
     /**

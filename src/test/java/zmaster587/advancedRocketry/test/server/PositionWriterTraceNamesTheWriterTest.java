@@ -69,7 +69,11 @@ public class PositionWriterTraceNamesTheWriterTest {
         return String.join("\n", harness.client().execute(cmd));
     }
 
-    /** Put the fake player somewhere known, and let the placement that created him settle. */
+    /**
+     * Put the fake player somewhere known. Nothing trails it: {@code ensure-fake} places him on the
+     * server thread before it replies, and the position-write recorder writes from inside that
+     * placement — so its record, if any, is in the log by the time the next command runs.
+     */
     private void station(double y) throws Exception {
         String fake = exec("artest player ensure-fake 0 8.5 " + y + " 8.5");
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
@@ -85,7 +89,6 @@ public class PositionWriterTraceNamesTheWriterTest {
     @Test(timeout = 180000)
     public void aDeliberatePlacementIsRecordedWithItsCaller() throws Exception {
         station(120);
-        GameTicks.advanceWorld(harness.client(), 0, 5);
 
         long mark = events.markInstrumented();
         station(260);
@@ -119,13 +122,15 @@ public class PositionWriterTraceNamesTheWriterTest {
     @Test(timeout = 180000)
     public void ordinaryMotionIsNotRecordedAsAJump() throws Exception {
         station(120);
-        GameTicks.advanceWorld(harness.client(), 0, 5);
 
         long mark = events.markInstrumented();
         station(122);
-        GameTicks.advanceWorld(harness.client(), 0, 20);
 
+        // Read at once: the write under test is synchronous with the command above, and the fake
+        // player is never spawned into a world, so nothing else can move him in the meantime.
         String reply = exec("artest events since " + mark + " pos_jump");
+        Events.assertInstrumentRan(reply, "entity_position_writers",
+                "the 2-block move was seen by the recorder and filtered, not missed");
         Reply since = Reply.of("artest events since", reply);
         assertTrue("events since must report a count: " + reply, since.has(COUNT));
         assertEquals("a 2-block move is motion, not a jump, and must leave the timeline alone; "

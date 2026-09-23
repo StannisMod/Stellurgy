@@ -94,6 +94,8 @@ import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstra
  *   <li>{@code client_spawn_set} — the client's copy of the world spawn is what the server sent
  *       ({@code handleSpawnPosition}). Payload: {@code x}, {@code y}, {@code z}. SILENT about WHY
  *       it changed and about a bed-spawn, which is per-player and travels by another route.</li>
+ *   <li>{@code client_click_confirmed} — the server has HANDLED one container click
+ *       ({@code handleConfirmTransaction}); a barrier, not a verdict — see its seam.</li>
  *   <li>{@code client_health_updated} — the client player's health and food are what the server
  *       says ({@code handleUpdateHealth}). Payload: {@code health}, {@code food}. SILENT about
  *       saturation (in the packet, not in the pin) and about damage the client PREDICTED locally.</li>
@@ -253,6 +255,38 @@ public class MixinNetHandlerPlayClient {
      * that two records can carry the same {@code health} and {@code food}, because a change in
      * SATURATION alone also resends the packet and saturation is not recorded.</p>
      */
+    /**
+     * The SERVER has HANDLED one inventory click the client made — vanilla's own receipt, which
+     * {@code processClickWindow} sends after its {@code slotClick} has run.
+     *
+     * <p>A container click is applied on the client as a PREDICTION before its packet leaves, so a
+     * read of the client's slots after a click reports the prediction whether or not the server
+     * did the move. This record is the barrier after which the SERVER's state reflects the click;
+     * a test reads that state from the server, not from these fields.</p>
+     *
+     * <p><b>{@code accepted} is NOT "the server did this move".</b> It is whether the stack the
+     * server's {@code slotClick} RETURNED equals the one the client says its own returned — and for
+     * a quick-move (the return is written only while the same item stays in the slot) or a pickup
+     * into an empty slot (the return is the slot's old, empty content) both are empty whatever the
+     * server did. {@code false} does mean a disagreement, answered by a full resync that lands
+     * after this record.</p>
+     *
+     * <p>NOT gated: every handled click gets one. Payload: {@code window}, {@code action} (the
+     * click's own action number), {@code accepted}. SILENT about a click the server DROPPED — a
+     * window that is not the open one, or a container that cannot craft for him — which is
+     * answered with nothing at all.</p>
+     */
+    @Inject(method = "handleConfirmTransaction", at = @At("TAIL"))
+    private void forgeTest$recordClickConfirmed(
+            net.minecraft.network.play.server.SPacketConfirmTransaction packet, CallbackInfo ci) {
+        ForgeTestClientBootstrap.noteInstrumentEntered(INSTRUMENT);
+        ForgeTestClientBootstrap.noteInstrumentEntered("client_click_confirmed");
+        ForgeTestClientBootstrap.recordEvent("client_click_confirmed",
+                "\"window\":" + packet.getWindowId()
+                + ",\"action\":" + packet.getActionNumber()
+                + ",\"accepted\":" + packet.wasAccepted());
+    }
+
     @Inject(method = "handleUpdateHealth", at = @At("TAIL"))
     private void forgeTest$recordHealthUpdated(SPacketUpdateHealth packet, CallbackInfo ci) {
         ForgeTestClientBootstrap.noteInstrumentEntered(INSTRUMENT);

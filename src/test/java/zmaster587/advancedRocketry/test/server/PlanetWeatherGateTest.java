@@ -40,13 +40,13 @@ import static org.junit.Assert.assertTrue;
 public class PlanetWeatherGateTest {
 
     /**
-     * Ticks the weather cycle is given to apply a marker.
+     * Ticks the weather cycle is given to announce a dimension.
      *
      * <p>25 = the five rounds of five the previous helper spent unconditionally, kept so this
-     * change moves the FORM of the wait and not its size. It is a DEADLINE for the positive read
-     * and a WINDOW for the negative ones; neither is a measured figure for how long
-     * {@code updateWeather} actually needs after a mid-test {@code initDimension}, and nothing in
-     * this file has ever established that.</p>
+     * change moves the FORM of the wait and not its size. It is a DEADLINE for every read here —
+     * the positive one waits for rain, the negative ones for the cycle's first tick — and not a
+     * measured figure for how long {@code updateWeather} needs after a mid-test
+     * {@code initDimension}; nothing in this file has established that.</p>
      */
     private static final int SETTLE_BUDGET_TICKS = 25;
 
@@ -118,11 +118,11 @@ public class PlanetWeatherGateTest {
         }
 
         // Read the live state of each planet. The three claims are not the same SHAPE, so they are
-        // not read the same way: the thick planet MUST reach rain, which is a state to wait for and
-        // to stop waiting at; the other two must never reach it, which nothing can confirm early.
+        // not read the same way: the thick planet MUST reach rain, which is an outcome to wait for;
+        // the other two must never reach it, which is read once the cycle has decided.
         DimWeather thick = weatherUntilRaining(DIM_THICK_RAIN);
-        DimWeather thin  = weatherAfterWindow(DIM_THIN_RAIN);
-        DimWeather dry   = weatherAfterWindow(DIM_DRY_THUNDER);
+        DimWeather thin  = weatherAfterCycle(DIM_THIN_RAIN);
+        DimWeather dry   = weatherAfterCycle(DIM_DRY_THUNDER);
 
         // Contrast: same rainMarker=1, opposite atmosphere -> opposite rain state.
         assertTrue("thick-atmosphere planet with rainMarker=1 must rain (gate baseline): "
@@ -175,21 +175,40 @@ public class PlanetWeatherGateTest {
     }
 
     /**
-     * The live weather of {@code dim} after the cycle has been given a full window to act — the
-     * NEGATIVE form, for a claim that something must NOT happen.
+     * The live weather of {@code dim} once its weather cycle has run — the NEGATIVE form, for a
+     * claim that something must NOT happen.
      *
-     * <p>An absence has no event to wait for and no condition that can exit early: the only way to
-     * be wrong about "it never rained" is to look too soon, so this one spends its whole budget on
-     * purpose. That is the difference between the two helpers, and it is why there are two.</p>
+     * <p>The absence itself has no event, but the cycle that decides it does: its first tick on a
+     * dimension is recorded whatever the sky, so this waits for the decision to have been taken and
+     * then reads what it decided. The positive form waits for a specific OUTCOME instead, which is
+     * why there are two.</p>
      */
-    private DimWeather weatherAfterWindow(int dim) throws Exception {
+    private DimWeather weatherAfterCycle(int dim) throws Exception {
+        // Marked before the constructing read, for the reason weatherUntilRaining gives.
+        long mark = events().mark();
         // The constructing read: its VALUE is discarded, its side effect is the point — this is
-        // what pins the dimension and calls initDimension, so the window below ticks a real world.
+        // what pins the dimension and calls initDimension, so the cycle below runs on a real world.
         // Read through the reader even so: a world that could not be brought up must fail HERE and
         // not as "it never rained", which is what this helper's callers would otherwise report.
         weather(dim);
-        GameTicks.advance(harness.client(), GameTicks.server(), SETTLE_BUDGET_TICKS);
-        return weather(dim);
+        // Linked on the cycle's FIRST tick of this dimension, which the recorder announces whatever
+        // the state (`first:true`), so a record is owed on the healthy path too. One tick is the
+        // whole question for these two planets: the atmosphere gate and a -1 rain marker each force
+        // the sky clear on EVERY tick rather than accumulating toward it, so the state the first
+        // tick leaves is the state every later tick leaves.
+        events().awaitMatching(mark, "planet_weather_changed",
+                reply -> !Events.recordsWhere(reply, "dim", String.valueOf(dim)).isEmpty(),
+                "carrying dim = " + dim,
+                "the weather cycle must run on dim " + dim + " before its sky can be judged",
+                SETTLE_BUDGET_TICKS);
+        DimWeather now = weather(dim);
+        // And across the whole stretch, not only at the read: a sky that rained on one tick and
+        // cleared on the next is the defect, and the read alone would call it clear.
+        assertTrue("dim " + dim + " rained at some tick since its world came up, whatever it reads"
+                        + " now (" + now.raw() + "): " + events().since(mark, "planet_weather_changed"),
+                Events.recordsWhereAll(events().since(mark, "planet_weather_changed"),
+                        "dim", String.valueOf(dim), "raining", "true").isEmpty());
+        return now;
     }
 
     /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */

@@ -15,6 +15,7 @@ import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.TransitSetup;
@@ -799,15 +800,19 @@ private String hud() throws Exception {
         // ── CONTROL, in an ordinary cell ────────────────────────────────────────────────────────
         long skyBefore = skyFrames();
         long tunnelBefore = tunnelFrames();
+        // WINDOW: skyBefore/tunnelBefore and the two reads after, each asserted as a difference.
         bot().waitTicks(RENDER_WINDOW_TICKS);
+        long skyAfter = skyFrames();
+        long tunnelAfter = tunnelFrames();
         // The sky renderer must run here at all. Without it "the corridor is drawn in hyperspace"
         // answers two questions with one number, and "the corridor came up" is indistinguishable
         // from "the sky pass never ran".
         assertTrue("this sky renderer must run in an ordinary cell (sky frames " + skyBefore + " -> "
-                        + skyFrames() + "); nothing else in this test means anything if it does not",
-                skyFrames() > skyBefore);
-        assertEquals("the hyperspace corridor must NOT be drawn in an ordinary cell",
-                tunnelBefore, tunnelFrames());
+                        + skyAfter + "); nothing else in this test means anything if it does not",
+                skyAfter > skyBefore);
+        assertEquals("the hyperspace corridor must NOT be drawn in an ordinary cell (corridor frames "
+                        + tunnelBefore + " -> " + tunnelAfter + ")",
+                tunnelBefore, tunnelAfter);
         assertTrue("the HUD must not name a jump phase before the jump: " + hud(),
                 !hud().contains("HYPERSPACE"));
 
@@ -836,29 +841,42 @@ private String hud() throws Exception {
         long tunnelAtStart = tunnelFrames();
         scenario().record("tunnelAtStart", tunnelAtStart);
 
-        // The window itself stays a bounded wait, and that is not a lapse: what is measured across it
-        // is a frame COUNTER growing, which is not an event — a longer window samples more frames and
+        // WINDOW: tunnelAtStart and tunnelInFlight, asserted as a difference below. What grows across
+        // it is a frame COUNTER, which is not an event, so a longer window samples more frames and
         // changes nothing about whether the assertion can hold. Same length as the control window
-        // above, so the two readings are comparable.
+        // above, so the two readings are comparable. The HUD is NOT read off this window — see its
+        // link below.
         bot().waitTicks(RENDER_WINDOW_TICKS);
-        String hudInFlight = hud();
         long tunnelInFlight = tunnelFrames();
 
         // The premise, read AFTER the window and before anything measured in it is believed: the jump
         // must still be in the air. An arrival inside the window swaps the corridor's backdrop for
         // the arrived craft's own overlay ("FREE FLIGHT ... SPD 0.0 m/s") and stops the corridor
-        // being drawn at all, so both readings above would be about the far end. The loop this
+        // being drawn at all, so the corridor reading above would be about the far end. The loop this
         // replaces guarded the same straddle by re-reading the status mid-iteration, and it was a red
         // 3 runs in 4 before that guard existed.
         TransitStatus stillFlying = TransitStatus.read(this::exec);
         scenario().requireArranged("the jump must still be IN FLIGHT after the render window, or the"
-                        + " HUD and corridor readings above belong to the ARRIVED craft rather than"
+                        + " corridor reading above belongs to the ARRIVED craft rather than"
                         + " to the flight: transit-status=" + stillFlying,
                 stillFlying.inTransit >= 1);
 
-        assertTrue("the HUD must name the jump phase while the ship is in flight, so a pilot with no "
-                        + "controls can tell a flight from a hang - HUD read: " + hudInFlight,
-                hudInFlight.contains("HYPERSPACE"));
+        // A LINK on the HUD's own record, from the client mark taken before the departure. `ff_hud`
+        // is written whenever the drawn line CHANGES, and the control above read a line naming no
+        // jump phase, so a line naming it is owed after that mark; a read at the end of the window
+        // was a bet that the first corridor frame had been drawn by then. An arrival cannot answer
+        // this wait: the arrived craft's overlay names no jump phase. The LATEST line, not any: a
+        // HUD that named the phase for one frame and dropped it mid-flight is the failure.
+        clientEvents().awaitMatching(clientMark, "ff_hud",
+                seen -> {
+                    String last = Events.lastRecord(seen);
+                    String text = last == null ? null : Events.text(last, "text");
+                    return text != null && text.contains("HYPERSPACE");
+                },
+                "whose latest drawn line names HYPERSPACE",
+                "the HUD must name the jump phase while the ship is in flight, so a pilot with no"
+                        + " controls can tell a flight from a hang",
+                JUMP_LINK_BUDGET_TICKS);
 
         assertTrue("the corridor must be drawn in hyperspace (corridor frames " + tunnelAtStart
                         + " -> " + tunnelInFlight + " over " + RENDER_WINDOW_TICKS + " ticks)",
@@ -903,13 +921,20 @@ private String hud() throws Exception {
      */
     private DeckCapture standTheBotOnTheDeck(double shipX, double shipY, double shipZ) throws Exception {
         // One CLIENT mark for both routes: whichever gets him off, his own `dismountRidingEntity`
-        // is the record. The sneak route gets a WINDOW rather than a wait-until — the javadoc above
-        // says the trigger is not the subject, so its expiry must not fail — and the probe route
-        // that follows is REQUIRED, as the link it is.
+        // is the record. The sneak route is a link whose expiry is RECORDED rather than failed — the
+        // javadoc above says the trigger is not the subject — and the probe route that follows is
+        // REQUIRED, as the link it is. The key is held until the record arrives, not for a fixed
+        // span: how long sneak is held is no part of what either route is asked.
         long clientMark = clientEvents().mark();
         bot().holdKey(SNEAK_KEY);
-        bot().waitTicks(80);
-        bot().releaseKey(SNEAK_KEY);
+        try {
+            clientEvents().await(clientMark, "dismount",
+                    "the sneak key must take him off his seat", 80);
+        } catch (AssertionError sneakDidNotTake) {
+            scenario().record("sneakDismountLink", sneakDidNotTake.getMessage());
+        } finally {
+            bot().releaseKey(SNEAK_KEY);
+        }
         if (Events.records(clientEvents().since(clientMark, "dismount")).isEmpty()) {
             exec("artest player dismount");
             awaitClientDismount(clientMark, "the crew member must actually leave his seat, or there"
@@ -1075,13 +1100,17 @@ private String hud() throws Exception {
         // advanced in hyperspace" is a first reading rather than a change.
         long skyInCell = skyFrames();
         long tunnelInCell = tunnelFrames();
+        // WINDOW: skyInCell/tunnelInCell and the two reads after, each asserted as a difference.
         bot().waitTicks(20);
+        long skyAfterInCell = skyFrames();
+        long tunnelAfterInCell = tunnelFrames();
         assertTrue("CONTROL: this sky renderer must run in an ordinary cell, or every corridor"
                         + " reading below is a zero for the wrong reason (sky frames " + skyInCell
-                        + " -> " + skyFrames() + ")",
-                skyFrames() > skyInCell);
-        assertEquals("CONTROL: the hyperspace corridor must NOT be drawn in an ordinary cell",
-                tunnelInCell, tunnelFrames());
+                        + " -> " + skyAfterInCell + ")",
+                skyAfterInCell > skyInCell);
+        assertEquals("CONTROL: the hyperspace corridor must NOT be drawn in an ordinary cell (corridor"
+                        + " frames " + tunnelInCell + " -> " + tunnelAfterInCell + ")",
+                tunnelInCell, tunnelAfterInCell);
 
         // A third control, for the machinery leg in hyperspace further down: the same recorder, the
         // same channel and the same way of deriving the key, asked of a ship that is plainly alive
@@ -1091,6 +1120,7 @@ private String hud() throws Exception {
         String cellAfcKey = originDim + " " + cellSeat.afcX
                 + " " + cellSeat.afcY + " " + cellSeat.afcZ;
         long cellTileTicks = gameSeen(exec("artest vs motion-trace " + cellAfcKey));
+        // WINDOW: cellTileTicks and cellTileTicksAfter, both in the message, asserted as a rise.
         bot().waitTicks(20);
         long cellTileTicksAfter = gameSeen(exec("artest vs motion-trace " + cellAfcKey));
         assertTrue("CONTROL: the ship's flight computer must be recording server ticks in an"
@@ -1140,6 +1170,7 @@ private String hud() throws Exception {
 
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
+        // WINDOW: the standing and after-standing reads of both counters, all four in the messages.
         bot().waitTicks(20);
         long skyAfterStanding = skyFrames();
         long tunnelAfterStanding = tunnelFrames();
@@ -1176,6 +1207,7 @@ private String hud() throws Exception {
         int afcZ = hyperSeat.afcZ;
         String afcKey = hyperDim + " " + afcX + " " + afcY + " " + afcZ;
         long tileTicksBefore = gameSeen(exec("artest vs motion-trace " + afcKey));
+        // WINDOW: tileTicksBefore and tileTicksAfter, both in the message, asserted as a rise.
         bot().waitTicks(20);
         long tileTicksAfter = gameSeen(exec("artest vs motion-trace " + afcKey));
         assertTrue("the ship's flight computer must keep TICKING while the ship is parked in"
@@ -1198,7 +1230,15 @@ private String hud() throws Exception {
         // ...and stay there. The span is the void's OWN budget plus a margin, so "he is alive" is a
         // statement about the countdown having had every chance to fire rather than about a window
         // too short to reach it.
-        bot().waitTicks(VOID_GRACE_TICKS + VOID_GRACE_MARGIN_TICKS);
+        // EXPERIMENT: the dose is the void's grace plus a margin, in SERVER ticks — the clock the
+        // countdown runs on (`HyperspaceVoid.onServerTick`). Not client ticks: the two JVMs tick
+        // independently, and a server running slower than its client would end a client-counted
+        // span before the countdown reached its budget — "he survived" green for a void that never
+        // got the chance, which is the silent direction.
+        // Overshoot lengthens the exposure — the strict direction — and the premise gate below
+        // catches the one thing a longer span can do wrong, an arrival.
+        GameTicks.advance(serverClient(), GameTicks.server(),
+                VOID_GRACE_TICKS + VOID_GRACE_MARGIN_TICKS);
         // The PREMISE, gated before the subject is read: this leg is about a man standing in a
         // FLIGHT, so the flight has to still be happening. The server advances every transit in the
         // live stack on its own tick, so a window measured against the void's budget is also a
@@ -1229,13 +1269,17 @@ private String hud() throws Exception {
         // is a fallback for the run where the walk does not clear this fixture's 3x3 deck; it
         // replaces the WAY he leaves, never the leaving, which is what the mechanic reads.
         // Walking off is a LINK — the deck RELEASES him, and his own client records it. The walk
-        // gets a WINDOW rather than a wait-until, because it is best-effort by design (this
+        // is a fixed stimulus rather than a wait-until, because it is best-effort by design (this
         // fixture's deck is 3x3 and the comment above says the teleport replaces the WAY he leaves,
         // never the leaving); the record is then read once, and the teleport follows if it is
         // absent. What stood here polled `deck-capture` every five ticks for the state that record
         // announces.
         long offMark = clientEvents().mark();
         bot().holdKey(FORWARD_KEY);
+        // STIMULUS: the length of the walk is how far he is carried from the hull, which is what the
+        // fallback teleport's thirty blocks stand in for — five seconds of W take a body far clear
+        // of a 3x3 deck, so the one the void is then asked about is nowhere near a deck that could
+        // take him back. Stopping at the release record would leave him at the deck's edge.
         bot().waitTicks(100);
         bot().releaseKey(FORWARD_KEY);
         if (Events.records(clientEvents().since(offMark, "deck_released")).isEmpty()) {
@@ -1519,12 +1563,16 @@ private String hud() throws Exception {
         // ── READING 1, in an ordinary cell: no corridor ──────────────────────────────────────────
         long skyInCell = skyFrames();
         long tunnelInCell = tunnelFrames();
+        // WINDOW: skyInCell/tunnelInCell and the two reads after, each asserted as a difference.
         bot().waitTicks(20);
+        long skyAfterInCell = skyFrames();
+        long tunnelAfterInCell = tunnelFrames();
         assertTrue("this sky renderer must run in an ordinary cell (sky frames " + skyInCell + " -> "
-                        + skyFrames() + "); nothing below means anything if it does not",
-                skyFrames() > skyInCell);
-        assertEquals("the corridor must NOT be drawn in an ordinary cell — it says 'you are in a jump'",
-                tunnelInCell, tunnelFrames());
+                        + skyAfterInCell + "); nothing below means anything if it does not",
+                skyAfterInCell > skyInCell);
+        assertEquals("the corridor must NOT be drawn in an ordinary cell — it says 'you are in a jump'"
+                        + " (corridor frames " + tunnelInCell + " -> " + tunnelAfterInCell + ")",
+                tunnelInCell, tunnelAfterInCell);
 
         // ── INTO HYPERSPACE, then stop driving the jump ──────────────────────────────────────────
         // An un-ticked transit parks its ship in its lane indefinitely, which is the interval this
@@ -1541,11 +1589,13 @@ private String hud() throws Exception {
         // is asserted INSIDE, where the chain that would explain a failure is still readable.
         JsonObject mount = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         long tunnelSeated = tunnelFrames();
+        // WINDOW: tunnelSeated and tunnelAfterSeated, both in the message, asserted as a rise.
         bot().waitTicks(20);
-        long drawnSeated = tunnelFrames() - tunnelSeated;
+        long tunnelAfterSeated = tunnelFrames();
+        long drawnSeated = tunnelAfterSeated - tunnelSeated;
         assertTrue("the corridor must be drawn for a SEATED pilot in hyperspace — this is the leg that"
-                        + " proves the instrument can see a corridor at all (frames drawn in 20 ticks="
-                        + drawnSeated + ")",
+                        + " proves the instrument can see a corridor at all (corridor frames "
+                        + tunnelSeated + " -> " + tunnelAfterSeated + " in 20 ticks)",
                 drawnSeated > 0);
 
         // ── THE STIMULUS: he stands up, IN FLIGHT ────────────────────────────────────────────────
@@ -1563,18 +1613,22 @@ private String hud() throws Exception {
         // ── READING 3, THE CONTRACT: on his feet, the corridor is still coming ───────────────────
         long skyStanding = skyFrames();
         long tunnelStanding = tunnelFrames();
+        // WINDOW: the standing and after-standing reads of both counters, all four in the messages.
         bot().waitTicks(20);
-        long skyDrawnStanding = skyFrames() - skyStanding;
-        long drawnStanding = tunnelFrames() - tunnelStanding;
+        long skyAfterStanding = skyFrames();
+        long tunnelAfterStanding = tunnelFrames();
+        long skyDrawnStanding = skyAfterStanding - skyStanding;
+        long drawnStanding = tunnelAfterStanding - tunnelStanding;
         assertTrue("INSTRUMENT: the sky renderer must still be running in this window, or a still"
                         + " corridor below would be a still SKY and say nothing about the gate"
-                        + " (sky frames in 20 ticks=" + skyDrawnStanding + ")",
+                        + " (sky frames " + skyStanding + " -> " + skyAfterStanding + " in 20 ticks)",
                 skyDrawnStanding > 0);
         assertTrue("a crew member who stood up mid-flight must still see the corridor: hyperspace has"
                         + " nothing else in its sky, so losing it leaves him looking at a dead"
-                        + " starfield and reading his own jump as having stopped. Frames drawn in 20"
-                        + " ticks while standing=" + drawnStanding + ", against " + drawnSeated
-                        + " while seated in the same flight; sky frames standing=" + skyDrawnStanding,
+                        + " starfield and reading his own jump as having stopped. Corridor frames "
+                        + tunnelStanding + " -> " + tunnelAfterStanding + " in 20 ticks while standing,"
+                        + " against " + drawnSeated + " drawn while seated in the same flight; sky"
+                        + " frames " + skyStanding + " -> " + skyAfterStanding,
                 drawnStanding > 0);
     }
 

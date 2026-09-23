@@ -296,6 +296,8 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().asserting("a held forward key drives the craft laterally");
         bot().setKey(KEY_W, true);
         try {
+            // STIMULUS: forty client ticks of held W, measured as the difference of the pre/post
+            // reads on either side of it.
             bot().waitTicks(40);
         } finally {
             bot().setKey(KEY_W, false);

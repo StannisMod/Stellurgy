@@ -19039,6 +19039,9 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"motionZ\":" + entity.motionZ
                     + ",\"hasNoGravity\":" + entity.hasNoGravity()
                     + ",\"fallDistance\":" + entity.fallDistance
+                    // How many updates the entity has had: the only way to tell an entity that
+                    // SURVIVED its updates from one whose world never updated it.
+                    + ",\"ticksExisted\":" + entity.ticksExisted
                     + ",\"isDead\":" + entity.isDead + "}");
             return;
         }

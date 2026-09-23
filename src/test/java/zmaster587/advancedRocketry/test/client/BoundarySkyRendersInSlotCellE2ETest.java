@@ -1065,11 +1065,10 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         JsonObject gate = bot().setRenderDistance(SKY_RENDER_DISTANCE);
         assertEquals("the sky pass gate must be open when the frame is captured: " + gate,
                 SKY_RENDER_DISTANCE, gate.get("renderDistance").getAsInt());
-        // Stays a bounded wait, deliberately. What is wanted is that at least one frame ran with the
-        // final settings, and the sky's own event is an EDGE — a steady sky draws frame after frame
-        // and records none of them, so awaiting one here would hang on exactly the case this is for.
-        bot().waitTicks(6);
-
+        // No advance before the capture: what is wanted is that at least one frame ran with the final
+        // settings, and `screenshot` captures at the END of the next frame the client renders — drawn
+        // after both settings above were applied. (The sky's own event is an EDGE and could not have
+        // served: a steady sky draws frame after frame and records none of them.)
         JsonObject shot = bot().screenshot(name);
         assertTrue("screenshot must land on disk: " + shot, shot.get("exists").getAsBoolean());
         assertTrue("screenshot must come from the framebuffer, not an undefined back buffer: " + shot,

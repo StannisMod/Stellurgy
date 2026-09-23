@@ -199,8 +199,9 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
     // ─── arrangement ────────────────────────────────────────────────────────────
 
     private void buildFloor(int x) throws Exception {
+        // No advance after the ticket: the fill below loads the chunk itself, on the server thread,
+        // before it answers.
         exec("artest chunk forceload " + OVERWORLD + " " + (x >> 4) + " " + (ARENA_Z >> 4));
-        GameTicks.advanceWorld(serverClient(), OVERWORLD, 20);
         exec("artest fill " + OVERWORLD + " " + (x - 4) + " " + FLOOR_Y + " " + (ARENA_Z - 4) + " "
                 + (x + 4) + " " + FLOOR_Y + " " + (ARENA_Z + 4) + " minecraft:stone");
         exec("artest fill " + OVERWORLD + " " + (x - 4) + " " + STAND_Y + " " + (ARENA_Z - 4) + " "

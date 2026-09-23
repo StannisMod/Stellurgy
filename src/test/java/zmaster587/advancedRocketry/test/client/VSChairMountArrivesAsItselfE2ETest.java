@@ -55,6 +55,10 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
      *  substring `passenger_chair` also matches any id merely ending in it. */
     private static final String CHAIR_BLOCK = "advancedrocketry:passenger_chair";
 
+    /** How long either side's {@code mount} record may take to follow the click. A link's budget:
+     *  its expiry is "the seating never happened", never "not yet". */
+    private static final int SIT_LINK_BUDGET_TICKS = 200;
+
     /** The server's own entity report: {@code "entities":[{"id":…,"class":…,"x":…}, …]}. */
     private static final String ENTITIES = "entities";
     private static final String ENTITY_ID = "id";
@@ -115,10 +119,13 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
                         Reply.of("artest block at", placed).text("block")));
 
         // ---- ACT: the player sits down, through a real right-click on his own client. -----------
+        long sitMark = events().markInstrumented();
+        long sitOnClient = clientEvents().mark();
         JsonObject click = bot().interactBlock(CX, CY, CZ);
         scenario().requireArranged("the right-click must be accepted by the client: " + click,
                 click != null);
-        bot().waitTicks(20);
+        events().await(sitMark, "mount", "the right-click on the chair must seat the player on the"
+                + " SERVER - without that there is no mount entity to compare", SIT_LINK_BUDGET_TICKS);
 
         // ---- The server's view: the truth the client is supposed to reproduce. Read FIRST, so
         // that a client already dead to this very defect still leaves the arrangement on record. --
@@ -139,7 +146,7 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
                 + " without one this test has no subject: " + serverSide, chairEntityClass != null);
 
         // ---- ASSERT: the client is riding THAT entity, and it is the same class. ----------------
-        JsonObject riding = ridingOrDie();
+        JsonObject riding = ridingOrDie(sitOnClient);
         assertTrue("CONTROL: the client must report itself riding - if the mount never reached it,"
                 + " nothing below is evidence about class identity: " + riding,
                 riding.get("riding").getAsBoolean());
@@ -156,13 +163,17 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
     // ---- helpers -----------------------------------------------------------------------------
 
     /**
-     * The client's riding report. A client that has already died to a mis-built entity answers
-     * nothing at all — the bot sees only a dropped connection — so that case is named here rather
-     * than surfacing as a bare socket error with no cause in it.
+     * The client's riding report, once its own {@code mount} record since {@code clientMark} says it
+     * performed the seating. A client that has already died to a mis-built entity answers nothing
+     * at all — the bot sees only a dropped connection — so that case is named here rather than
+     * surfacing as a bare socket error with no cause in it. A client that is alive and never
+     * mounted fails the link itself, with its own mount chain in the message.
      */
-    private JsonObject ridingOrDie() throws Exception {
+    private JsonObject ridingOrDie(long clientMark) throws Exception {
         try {
-            return bot().reportRidingEntity();
+            return awaitClientMount(clientMark, "CONTROL: the client must perform the seating the"
+                    + " server did - if the mount never reached it, nothing below is evidence about"
+                    + " class identity", SIT_LINK_BUDGET_TICKS, "");
         } catch (Exception dead) {
             fail("the client stopped answering after it was seated on a mount entity - the symptom"
                     + " of having rebuilt it as another class and then read one of its synced"

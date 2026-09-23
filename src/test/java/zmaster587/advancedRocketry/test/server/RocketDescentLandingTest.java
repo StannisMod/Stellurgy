@@ -7,6 +7,7 @@ import zmaster587.advancedRocketry.test.RocketList;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.Events;
 
 
 import static org.junit.Assert.assertEquals;
@@ -45,6 +46,14 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     private static final double DESCENT_START_Y = 300.0;
 
     private static final int DESCENT_TIMER = 40; // mirrors EntityRocket.DESCENT_TIMER
+
+    /** World ticks a one-tick transition (the gate flipping, the touchdown) is given to be
+     *  announced: a deadline, never spent on a healthy run. */
+    private static final int GATE_TICKS = 100;
+
+    /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
+    private final Events events =
+            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private static final String ROCKET_LIST_ID = "id";
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
@@ -130,20 +139,25 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         // Setup under REAL server ticking:
         //   - assemble + force-load the rocket's chunk
         //   - state: orbit=true, flight=false, ticksExisted=DESCENT_TIMER+1
-        //   - await 5 real ticks -> onUpdate runs at least once ->
-        //     gate fires -> isInFlight flips to true.
+        //   - the next onUpdate fires the gate -> setInFlight(true), which
+        //     is recorded and awaited.
         final FixtureSite site = FixtureSite.openAir(0, 6100, 500);
         int baseX = site.x;
         int baseZ = site.z;
         int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
+        // Marked before the set-state: the gate may fire on the very next tick.
+        long mark = events.markInstrumented();
         ok(client().execute("artest rocket set-state " + id
                 + " orbit=true flight=false ticksExisted=" + (DESCENT_TIMER + 1)
                 + " posY=300 motionY=0"));
 
-        GameTicks.advanceWorld(client(), 0, 5);
-
+        // Linked on the gate's own write: `setInFlight` is the one mutator, and the set-state above
+        // wrote `false` through it, so only the gate can put a `true` for this rocket in the window.
+        events.awaitRecordWithFields(mark, "rocket_flight_set",
+                "the descent gate must set this rocket in flight under real ticking", GATE_TICKS,
+                "e", String.valueOf(id), "inFlight", "true");
         RocketInfo info = rocketInfo(id);
         assertTrue("descent gate must flip isInFlight under real ticking: " + info.raw(),
                 info.inFlight);
@@ -160,20 +174,31 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
-        ok(client().execute("artest rocket set-state " + id
+        long mark = events.markInstrumented();
+        String set = ok(client().execute("artest rocket set-state " + id
                 + " orbit=true flight=false ticksExisted=5 posY=300 motionY=0"));
+        int ticksBefore = gi(TICKS_EXISTED, set, "ticksExisted as set");
 
+        // WINDOW: ticksExisted is read on both sides of this stretch. The rocket's own counter
+        // advancing proves the gate was ASKED (it runs in the same onUpdate), and its staying at or
+        // below the timer proves it was asked only where it must answer no. Overshoot can only push
+        // the counter past the timer and turn this red; it can never make a firing gate look idle.
         GameTicks.advanceWorld(client(), 0, 5);
 
         RocketInfo info = rocketInfo(id);
-        // ticksExisted will have advanced by up to ~5 under real ticking;
-        // the gate threshold (DESCENT_TIMER=40) is still not crossed, so
-        // isInFlight remains false.
+        assertTrue("the rocket must have been ticked across the window, or the gate was never asked"
+                + " (ticksExisted " + ticksBefore + " -> " + info.ticksExisted + ")",
+                info.ticksExisted > ticksBefore);
         assertTrue("ticksExisted should remain below the descent timer "
-                + "(have " + info.ticksExisted + ", DESCENT_TIMER=" + DESCENT_TIMER + ")",
+                + "(ticksExisted " + ticksBefore + " -> " + info.ticksExisted
+                + ", DESCENT_TIMER=" + DESCENT_TIMER + ")",
                 info.ticksExisted <= DESCENT_TIMER);
         assertFalse("isInFlight must NOT be set before descent timer expires: " + info.raw(),
                 info.inFlight);
+        assertFalse("and nothing may have set it in flight and back inside the window: "
+                        + events.since(mark, "rocket_flight_set"),
+                Events.anyRecordHasAll(events.since(mark, "rocket_flight_set"),
+                        "e", String.valueOf(id), "inFlight", "true"));
     }
 
     @Test
@@ -188,16 +213,20 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(site);
         forceLoadChunksAround(0, baseX, baseZ);
 
-        ok(client().execute("artest rocket set-state " + id
+        String set = ok(client().execute("artest rocket set-state " + id
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
-                + " posY=300 motionY=0"));
+                + " posY=" + DESCENT_START_Y + " motionY=0"));
+        double posYBefore = Reply.of(set).number("posY");
 
+        // WINDOW: posY is read by the set-state itself and again after this stretch, and the claim
+        // is that it FELL. The bar is "any fall at all", so overshoot adds descent without being
+        // able to turn a craft that does not fall into one that does.
         GameTicks.advanceWorld(client(), 0, 5);
 
         double posYAfter = rocketInfo(id).posY;
-        assertTrue("gravity must have pulled the rocket downwards under "
-                + "real ticking (posY=" + posYAfter + ", started at 300)",
-                posYAfter < DESCENT_START_Y);
+        assertTrue("gravity must have pulled the rocket downwards under real ticking (posY "
+                + posYBefore + " -> " + posYAfter + ")",
+                posYAfter < posYBefore);
     }
 
     @Test
@@ -206,7 +235,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         // rocket's chunk force-loaded:
         //   - 5×5 stone floor at the site's own Y
         //   - orbit=true, flight=true, posY=siteY+2, motionY=-10
-        //   - wait 6 ticks -> move() collides with stone -> RocketLandedEvent.
+        //   - move() collides with stone -> RocketLandedEvent, which is awaited.
         //
         // THE FLOOR THIS LANDS ON IS BUILT HERE, so the site needs no terrain — which is why it is
         // an open-air site like every other scenario in this class and not a declared ground one.
@@ -226,11 +255,16 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         String countsBefore = ok(client().execute("artest rocket event-counts-full"));
         int landedBefore = gi(LANDED_COUNT, countsBefore, "landed before");
 
+        long mark = events.mark();
         ok(client().execute("artest rocket set-state " + id
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (baseY + 2) + " motionY=-10"));
 
-        GameTicks.advanceWorld(client(), 0, 6);
+        // Linked on the landing Forge publishes (RocketLandedEvent, recorded server-side), narrowed
+        // to this rocket: the shared server may be landing a sibling scenario's craft in the window.
+        events.awaitRecordWithFields(mark, "rocket_landed",
+                "the rocket must touch down on the stone floor under real ticking", GATE_TICKS,
+                "e", String.valueOf(id));
 
         String countsAfter = ok(client().execute("artest rocket event-counts-full"));
         int landedAfter = gi(LANDED_COUNT, countsAfter, "landed after");

@@ -161,6 +161,9 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         long openOnClient = clientEvents().mark();
         bot().setKey(LSHIFT, true);
         try {
+            // STIMULUS: the sneak is held across client ticks before the use, because the client
+            // publishes sneaking from its own tick; one connection delivers in order, so the server
+            // reads the sneak before the use packet that follows it.
             bot().waitTicks(6);
             bot().useItem();
             events.assertChain(openMark, "a sneak-right-click with the chip in hand must REACH the"

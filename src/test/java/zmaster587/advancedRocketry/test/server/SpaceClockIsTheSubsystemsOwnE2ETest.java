@@ -187,10 +187,11 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
     public void theClockAdvancesWithoutBeingTold() throws Exception {
         harness = RealDedicatedServerHarness.startWith(root, false);
 
-        // Wait on the SERVER's counter and measure the SPACE clock. Two different clocks, so this is
-        // not circular - and it is what the test means: the space clock must move because the server
-        // ticked, not because three seconds of somebody's wall clock went by.
         String first = exec("artest space clock");
+        // WINDOW: both clocks are read on either side of a stretch of the SERVER's counter, and every
+        // assertion below is over the two deltas, naming both reads. Not circular: the stretch is
+        // measured on one counter and the claims are about two others. The rate check compares the
+        // two deltas over the SAME stretch, so its length — overshoot included — cancels out.
         GameTicks.advance(harness.client(), GameTicks.server(), OBSERVED_TICKS);
         String second = exec("artest space clock");
 

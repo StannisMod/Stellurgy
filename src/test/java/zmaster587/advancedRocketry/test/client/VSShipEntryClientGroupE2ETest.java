@@ -330,6 +330,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // (3) Not falling: over a two-second window the client-rendered altitude must not sink
         // like a body in free fall.
         double y0 = clientPlayerY();
+        // WINDOW: y0 and y1, both in the message; the claim is over their difference.
         bot().waitTicks(40);
         double y1 = clientPlayerY();
         assertTrue("the arrived pilot must NOT be in free fall (clientY " + y0 + " -> " + y1
@@ -745,10 +746,12 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
         // Board post-assembly (the proven path - boarding variants have their own test).
         SeatMount mountInfo = SeatMount.onShip(this::exec, 0, shipUuid);
+        long seatMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("bot must mount the seat dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
-        bot().waitTicks(10);
+        awaitClientMount(seatMark, "the pilot's client must perform the seating before he flies",
+                SEAT_LINK_BUDGET_TICKS, " | server said: " + mount);
 
         return shipUuid;
     }

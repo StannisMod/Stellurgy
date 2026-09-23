@@ -42,6 +42,10 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
         // Warm the chunk and lay ONE floor block so the subject is supported the moment it spawns —
         // a fall from an unsupported spawn would kill a 10-HP cow and masquerade as the bug.
         exec("artest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4));
+        // Force-loaded, so the world keeps UPDATING the subject: the server tier has no player in
+        // it, and a world with neither players nor persistent chunks stops updating its entities
+        // after 300 idle ticks — which would let the cow survive a cull that never ran.
+        exec("artest chunk forceload 0 " + (x >> 4) + " " + (z >> 4));
         exec("artest fill 0 " + x + " " + (y - 1) + " " + z + " " + x + " " + (y - 1) + " " + z
                 + " minecraft:stone");
 
@@ -52,8 +56,12 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
         Reply mReply = Reply.of(spawned);
         assertTrue("spawn must report an entity id: " + spawned, mReply.has(ENTITY_ID));
         int id = Integer.parseInt(mReply.text(ENTITY_ID));
+        int ageBefore = Reply.of(exec("artest entity info 0 " + id)).integer(TICKS_EXISTED);
 
-        // The comment here already said what it meant: ~120 real ticks. Now it asks for them.
+        // EXPERIMENT: the dose is SURVIVAL_TICKS server ticks, and the claim below is that the cow
+        // outlived them. The defect culled it on its FIRST update, so any dose past a handful of
+        // ticks separates the two builds; overshoot only lengthens the ordeal, which can turn a
+        // green red and never the reverse.
         GameTicks.advance(client(), GameTicks.server(), SURVIVAL_TICKS);
 
         // deck-capture answers "entity not found" once the subject has been removed from the world.
@@ -66,5 +74,15 @@ public class HarnessMobSurvivalTest extends AbstractSharedServerTest {
                         + "(WorldServer culls every EntityAnimal while canSpawnAnimals() is false); "
                         + "after=" + after,
                 DeckCapture.entityMissing(after));
+        // AND IT MUST HAVE BEEN UPDATED. The cull runs inside the entity's update, so a world that
+        // never updated the cow (an idle world stops updating entities once nobody is in it and
+        // nothing is force-loaded) keeps it alive for the wrong reason — the pass above would then
+        // be a statement about the world's idleness.
+        int ageAfter = Reply.of(exec("artest entity info 0 " + id)).integer(TICKS_EXISTED);
+        assertTrue("the surviving mob must have been UPDATED across the dose, or its survival says"
+                        + " nothing about the cull: ticksExisted " + ageBefore + " -> " + ageAfter,
+                ageAfter > ageBefore);
     }
+
+    private static final String TICKS_EXISTED = "ticksExisted";
 }

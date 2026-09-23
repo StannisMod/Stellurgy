@@ -219,6 +219,7 @@ public class SpawnPointReachesClientE2ETest {
                 synced, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
 
         // Now move the spawn SILENTLY — no packet. The client must still hold A.
+        long silentMark = clientEvents().mark();
         String silent = exec("artest dim set-spawn 0 "
                 + SPAWN_B_X + " " + SPAWN_B_Y + " " + SPAWN_B_Z);
         assertTrue("silent set-spawn must have taken effect server-side: " + silent,
@@ -226,11 +227,6 @@ public class SpawnPointReachesClientE2ETest {
                         && String.valueOf(SPAWN_B_X).equals(Reply.of(silent).text("spawnX"))
                         && String.valueOf(SPAWN_B_Y).equals(Reply.of(silent).text("spawnY"))
                         && String.valueOf(SPAWN_B_Z).equals(Reply.of(silent).text("spawnZ")));
-        clientHarness.bot().waitTicks(20);
-        assertSpawnEquals("silent set-spawn must NOT have pushed a packet — if the client"
-                        + " already reads B here the arrange leaked and the assertion below"
-                        + " would be vacuous",
-                clientHarness.bot().reportSpawn(), SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
 
         // An AR planet's WorldInfo delegates spawn to the overworld, so the
         // destination's spawn is B. Assert it rather than assume it — which
@@ -251,6 +247,20 @@ public class SpawnPointReachesClientE2ETest {
         awaitClientDim(toPlanet, PLANET_DIM);
 
         JsonObject onPlanet = waitForClientSpawn(toPlanet, SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
+        // The silent set-spawn must NOT have pushed a packet, or the B above could be the leak and
+        // not the transfer. No window is needed to see a leak: one connection delivers in order,
+        // so a packet sent by the set-spawn lands BEFORE the respawn the later tp sends, and any
+        // B record ordered before the dimension change is that packet.
+        String dimChange = clientEvents().since(toPlanet, "client_dimension_changed");
+        double dimChangeSeq = Events.number(Events.records(dimChange).get(0), "seq");
+        for (String told : Events.recordsWhereAll(clientEvents().since(silentMark, "client_spawn_set"),
+                "x", String.valueOf(SPAWN_B_X), "y", String.valueOf(SPAWN_B_Y),
+                "z", String.valueOf(SPAWN_B_Z))) {
+            assertTrue("silent set-spawn must NOT have pushed a packet: the client was told B before"
+                    + " it changed dimension, so the B read above is the leak and not the transfer."
+                    + " Leaked record " + told + " | dimension change " + dimChange,
+                    Events.number(told, "seq") > dimChangeSeq);
+        }
         assertEquals("client should be on the planet: " + onPlanet,
                 PLANET_DIM, onPlanet.get("dim").getAsInt());
         assertSpawnEquals("client world spawn after cross-dim transfer", onPlanet,

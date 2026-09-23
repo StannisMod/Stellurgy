@@ -46,6 +46,14 @@ import zmaster587.advancedRocketry.universe.RegionScan;
  * research switch off, so every cell is due at once) is one {@code region_scan_begun} then, on the
  * tile's next server tick, one {@code region_scan_advanced} with {@code complete:true} — the aim
  * never runs the completion itself.</p>
+ *
+ * <h2>{@code crystal_deposited}</h2>
+ *
+ * <p>The Deposit button's work DONE: {@code uploadCrystalHere} returned, and the crystal's addresses
+ * are now this body's knowledge. Taken at RETURN with production's own {@code {landed, total}}, so
+ * a deposit that taught nothing (every address without a world) is a record with
+ * {@code landed:0} rather than a silence. SILENT about the button packet that did not reach the
+ * handler, and about a deposit made by any caller but this method.</p>
  */
 @Mixin(TileObservatory.class)
 public abstract class MixinTileObservatoryEvents {
@@ -109,6 +117,16 @@ public abstract class MixinTileObservatoryEvents {
                 + "\",\"discoveries\":" + lastScanDiscoveries
                 + ",\"cellsDone\":" + reached
                 + ",\"complete\":" + (activeScan == null));
+    }
+
+    @Inject(method = "uploadCrystalHere", at = @At("RETURN"))
+    private void arTest$crystalDeposited(CallbackInfoReturnable<int[]> cir) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        TileObservatory self = (TileObservatory) (Object) this;
+        int[] result = cir.getReturnValue();
+        TestTrace.recordHere("crystal_deposited", "\"pos\":\"" + arTest$xyz(self)
+                + "\",\"landed\":" + (result == null ? -1 : result[0])
+                + ",\"total\":" + (result == null ? -1 : result[1]));
     }
 
     private static String arTest$xyz(TileObservatory tile) {

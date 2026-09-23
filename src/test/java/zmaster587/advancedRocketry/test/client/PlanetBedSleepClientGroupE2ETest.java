@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.client;
 
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -56,6 +57,10 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
 
     /** The time-locked planet — the shipped default's side. */
     private static final int DIM_LOCKED = 9502;
+
+    /** Passes of a planet's own clock after a `time set` — one recomputes the skylight the bed's
+     *  daytime gate reads, and the second makes sure a pass began after the write. */
+    private static final int SKYLIGHT_WORLD_TICKS = 2;
     /** The planet the skip is allowed on. */
     private static final int DIM_SKIP = 9501;
 
@@ -181,7 +186,10 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         setFlag(true);
         exec("time set " + STAGED_NIGHT);
         setFlag(false);
-        bot().waitTicks(30); // skylightSubtracted has to catch up for trySleep
+        // EXPERIMENT: trySleep's daytime gate reads skylightSubtracted, which WorldServer.tick
+        // recomputes from the clock on every pass of THAT world — so a pass of the planet's own
+        // clock is the whole of what is needed, counted there rather than on the client.
+        GameTicks.advanceWorld(serverClient(), DIM_LOCKED, SKYLIGHT_WORLD_TICKS);
 
         long staged = dimTime(DIM_LOCKED);
         scenario().requireArranged("the staging must have reached the planet's own clock, or the"
@@ -249,7 +257,8 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         // that lands in the per-dim state. Phase 20000/30000 ≈ 0.67 is night on the planet;
         // 20000/24000 is night in the overworld.
         exec("time set " + STAGED_NIGHT);
-        bot().waitTicks(30); // let skylightSubtracted catch up (isDaytime gate)
+        // EXPERIMENT: the same daytime gate, recomputed on a pass of the planet's own clock.
+        GameTicks.advanceWorld(serverClient(), DIM_SKIP, SKYLIGHT_WORLD_TICKS);
 
         JsonObject before = dimTimeJson(DIM_SKIP);
         long staged = before.get("worldTime").getAsLong();
@@ -378,7 +387,13 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
 
         // Vanilla console /tp (same-dim) puts the player on the platform, a bed-reach-range step
         // north of the bed head (|Δz| = 2.5 ≤ 3).
+        long placedMark = clientEvents().mark();
         exec("tp " + PLAYER + " 8.5 " + BED_Y + " 7.5");
+        awaitClientPlacedNear(placedMark, 8.5, 7.5,
+                "the player's own client must stand him on the platform - his movement is his");
+        // WINDOW: from the placement at y=BED_Y to the read below. A player's position is his
+        // client's to move, so a platform that is not there shows as the fall his client simulates
+        // over these ticks; both ends are in the arrangement's message.
         bot().waitTicks(20);
 
         // AND HE MUST STILL BE THERE. A /tp onto a platform that is not there drops him to the

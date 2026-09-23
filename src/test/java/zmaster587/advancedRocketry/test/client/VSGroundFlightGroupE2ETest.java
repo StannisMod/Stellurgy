@@ -308,7 +308,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                 + " " + (bx + 8) + " " + (by + 40) + " " + (bz + 8));
         scenario().record("teleportA", moved);
         exec("artest vs unpark-by-id 0 " + idA);
-        bot().waitTicks(20);
+        // No advance before the reads: both verbs run on the server thread before they answer, so
+        // the id-keyed report below reads the teleport's own write.
 
         // LEG 1 — the id still names A, and the position it reports is A's NEW one.
         String byIdA = shipInfoById(idA);
@@ -359,11 +360,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         final FixtureSite site = site();
         final int BX = site.x, BY = site.y, BZ = site.z;
 
-        // Keep the client FAR AWAY during assembly + spawn. VS crashes with
-        // "Tried loading a ShipData that was already loaded?" if a player is near the
-        // ship as it spawns (spawn-load and proximity-load collide in one server tick).
-        // Assemble with no observer, let the ship settle, THEN approach so a single
-        // proximity load runs.
+        // Keep the client FAR AWAY during assembly + spawn. VS crashed with
+        // "Tried loading a ShipData that was already loaded?" if a player was near the
+        // ship as it spawned (spawn-load and proximity-load collided in one server tick).
+        // Assemble with no observer, THEN approach. Nothing needs to settle in between: the
+        // spawn registers the ship (`ship_spawned`) and constructs its physics object in the
+        // same pass of the ship manager's tick, so once that record is in, there is no spawn
+        // left in flight for the approach to collide with.
         long awayMark = clientEvents().mark();
         exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, BX + 600, BZ + 600,
@@ -380,7 +383,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                 (Reply.of(assemble).integer("rocketCount") == 0));
         final String shipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
-        bot().waitTicks(40); // settle before any observer approaches
 
         // Now walk the client ONTO the ship's projected location. A real client near the
         // ship pulls its chunks in and VS loads it — the thing testServer never does.
@@ -598,7 +600,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                 (Reply.of(assemble).integer("rocketCount") == 0));
         // The identity, off this scenario's own creation record — not re-derived from the base below.
         final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
-        bot().waitTicks(40);
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (BX + 0.5) + " " + (BY + 6) + " " + (BZ + 0.5) + " 0 0");
@@ -677,7 +678,6 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // moved a block, and it stays valid through the sixty-tick climb below — the flight that no
         // positional bound survives.
         final String shipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship");
-        bot().waitTicks(40);
 
         // Approach so the client loads the ship (and its seat/AFC tiles).
         long approachMark = clientEvents().mark();
@@ -767,7 +767,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // camera again: both must have climbed, and the rider's climb must track the server ship's.
         // Before the fix that glues the seat dummy to the moving ship, the dummy stays at spawn while
         // the ship departs, so these client deltas would be ~0 even though the server ship moved.
-        bot().waitTicks(6); // let the client ship transform settle at the new altitude
+        // EXPERIMENT: the comparison is DEFINED six client ticks after the key is released — the
+        // offset is part of what is measured (a rider lagging his ship by more than the bar at six
+        // ticks is the failure). The bar, RIDER_TRACKS_SHIP_BLOCKS, is the test's own and was not
+        // measured at this offset; it is not derived from it either.
+        bot().waitTicks(6);
         String afterSettle = shipInfoById(shipId);
         double serverYAfter = ShipInfo.of(afterSettle).y;
         double riderYAfter = bot().reportRidingEntity().get("posY").getAsDouble();
@@ -804,6 +808,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // releasing the vertical key leaves the ship climbing, and a horizontal leg flown at pad
         // height could be stopped by a hillside rather than by the ship's own controls.
         bot().holdKey(Keyboard.KEY_R);
+        // STIMULUS: 60 ticks of vertical thrust — the climb clear of the terrain, then cut.
         bot().waitTicks(60);
         bot().releaseKey(Keyboard.KEY_R);
         cutAndSettle();
@@ -857,7 +862,9 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             bot().setLook(st.get("playerYaw").getAsFloat() + 30f, st.get("playerPitch").getAsFloat());
             bot().waitTicks(1);
         }
-        bot().waitTicks(4);
+        // No settle before the read: the cockpit pin ASSIGNS the ship's nose to the player's yaw on
+        // every client tick (no easing), and the loop's own one-tick advance already ran one after
+        // the last look.
         double camYawAfter = bot().reportState().get("playerYaw").getAsDouble();
         float shipNoseYaw = shipNoseYaw(shipInfoById(shipId));
         assertTrue("a hard sideways mouse look must NOT free-look the camera — the view stays locked "
@@ -875,12 +882,17 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     /**
      * Zero the cruise setpoint and let the ship come to rest. Flight Assist RETAINS a released
      * throttle, so without this each leg would measure the one before it still coasting.
+     *
+     * <p>One held span and no wait after the release: with Flight Assist on, the cut zeroes the
+     * setpoint and the assist then holds that zero whether the key is down or not, so ticks after
+     * the release were more of the same brake. They are folded into the hold (40 + 10), which keeps
+     * the brake the ship is given unchanged.</p>
      */
     private void cutAndSettle() throws Exception {
         bot().holdKey(Keyboard.KEY_X);          // throttle cut
-        bot().waitTicks(40);
+        // STIMULUS: how long the brake-to-hover is applied before the next leg's baseline is read.
+        bot().waitTicks(50);
         bot().releaseKey(Keyboard.KEY_X);
-        bot().waitTicks(10);
     }
 
     /** One world axis of a ship's pose, named by what it IS rather than by the producer's field

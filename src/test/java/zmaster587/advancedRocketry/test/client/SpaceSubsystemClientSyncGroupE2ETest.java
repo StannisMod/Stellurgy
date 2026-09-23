@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 
 import static org.junit.Assert.assertEquals;
@@ -250,22 +251,27 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
         // direction that matters: any run the poll would have passed had at most this long to
         // settle. The height is printed, so the next reader can size it from a measurement rather
         // than inherit it.
+        double placedY = bot().reportState().get("playerY").getAsDouble();
+        // WINDOW: from the Y the reposition left him at to the read after it, both in the message.
         bot().waitTicks(SETTLE_WINDOW_TICKS);
         double clientY = bot().reportState().get("playerY").getAsDouble();
         boolean settled = clientY > 63.5 && clientY < 68.0;
-        System.out.println("[spacesync] client Y after " + SETTLE_WINDOW_TICKS + " ticks: " + clientY
-                + " (the band is 63.5..68.0)");
+        System.out.println("[spacesync] client Y " + placedY + " -> " + clientY + " over "
+                + SETTLE_WINDOW_TICKS + " ticks (the band is 63.5..68.0)");
         JsonObject clientBlock = bot().blockState(0, 64, 0);
         String serverView = exec("artest player health");
-        assertTrue("client-rendered Y must settle at the platform (~65), got " + clientY
-                + "; client block(0,64,0)=" + clientBlock + "; server player: " + serverView, settled);
+        assertTrue("client-rendered Y must settle at the platform (~65), went " + placedY + " -> "
+                + clientY + " over " + SETTLE_WINDOW_TICKS + " ticks; client block(0,64,0)="
+                + clientBlock + "; server player: " + serverView, settled);
 
         // "Keeps rendering" is a NEGATIVE over a window, so the window stays — expiry is the pass.
         // What changes is the evidence: the end-state read below says where he IS, and the event log
         // says he was never moved out and back in between the two reads, which a pair of samples
         // cannot distinguish from a client that left the world and returned.
         long holdMark = clientLog.mark();
-        bot().waitTicks(40);
+        // WINDOW: forty ticks of the SERVER's clock — whatever would throw him out is the server's
+        // doing — from holdMark to the log read below.
+        GameTicks.advance(serverClient(), GameTicks.server(), 40);
         String changes = clientLog.since(holdMark, "client_dimension_changed");
         Events.assertInstrumentRan(changes, "client_dimension_changed",
                 "the client was never respawned out of the slot dim during the hold");
@@ -333,7 +339,9 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
             scenario().measuring("what a player OUTSIDE the cell is sent (the control)");
             Events clientLog = clientEvents();
             long controlMark = clientLog.mark();
-            bot().waitTicks(40);
+            // WINDOW: an absence of feeds over forty ticks of the SERVER's clock, which is the
+            // clock the feed is sent on; client ticks would give a busy box fewer sends to miss.
+            GameTicks.advance(serverClient(), GameTicks.server(), 40);
             String outside = clientLog.since(controlMark, "system_bodies_received");
             scenario().record("skyFeedsWhileOutside", outside);
             assertTrue("a player who is not in the cell's world must not be sent its sky; the client"

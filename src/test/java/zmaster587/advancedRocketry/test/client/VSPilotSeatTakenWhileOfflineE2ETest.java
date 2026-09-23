@@ -261,10 +261,13 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // ---- ASSERT 3: the returner is NOT seated — twice, so a late re-mount cannot hide. ------
         assertFalse("a pilot whose seat was taken while he was offline must NOT come back seated: "
                 + observed, isRiding(riding));
+        // WINDOW: an absence watched for twenty ticks after the reconcile's own dismount record;
+        // both reads — at the reconcile and after the window — are in the message.
         bot().waitTicks(20);
         JsonObject ridingLater = bot().reportRidingEntity();
-        assertFalse("...and must STAY unseated (no delayed re-mount stealing the seat back): "
-                + ridingLater, isRiding(ridingLater));
+        assertFalse("...and must STAY unseated (no delayed re-mount stealing the seat back): at the"
+                + " reconcile " + riding + ", twenty ticks later " + ridingLater,
+                isRiding(ridingLater));
 
         // ---- ASSERT 4: he is restored STANDING ABOARD, at his post — not dropped at spawn, -----
         // not fallen off the hull. Client-observed position against the seat's live world

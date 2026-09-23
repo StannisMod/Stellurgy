@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
@@ -86,6 +87,15 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     /** How long the CLIENT is given to perform a seating or a release the server has already done,
      *  in ticks — a ceiling on one round trip. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
+    /** How long the CLIENT is given to show something it has been told or pressed — a changed HUD
+     *  line, an opened screen, its own chat line echoed back — in ticks: a ceiling on one round
+     *  trip. */
+    private static final int CLIENT_SHOWS_BUDGET_TICKS = 200;
+
+    /** How long a held key's input is given to be APPLIED to the rocket on the server, in ticks — a
+     *  ceiling on one client tick and one packet. */
+    private static final int KEY_APPLIED_BUDGET_TICKS = 100;
 
     /**
      * How far the craft must rise for a vertical-thrust leg to have measured a CLIMB, in blocks.
@@ -427,6 +437,69 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     // value being followed by a comma.
 
     /**
+     * Hold {@code key} and wait until the input it makes has been APPLIED to THIS rocket on the
+     * server — the moment a window driven by that key may start.
+     *
+     * <p>The record is the server's own {@code applyFreeFlightInput} trace, and the wait names the
+     * input's CONTENT ({@code "vert=1"}, {@code "cut=true"}) as well as its rocket. A bare "some trace
+     * for this rocket" is also answered by a lifecycle line — the liftoff, the first free-flight
+     * tick — and by the input of a key released a moment earlier, so a window opened on it could
+     * start before the key it is about had arrived. Matching the trace's wording ties this to a
+     * production string; when that string changes the wait EXPIRES, which is the loud direction.
+     * The vertical channel is matched on its sign and leading digit only, because the trace formats
+     * the number with the server JVM's default locale.</p>
+     *
+     * <p>Owed, not hoped for: production sends pilot input only when it DIFFERS from the last one
+     * sent, and every caller holds a key whose effect is not already in force.</p>
+     */
+    private void holdKeyUntilApplied(int rocketId, int key, String inputCarries, String what)
+            throws Exception {
+        Events events = events();
+        long mark = events.markInstrumented();
+        bot().holdKey(key);
+        String id = String.valueOf(rocketId);
+        events.awaitMatching(mark, "rocket_ff_traced", reply -> {
+            for (String rec : Events.recordsWhere(reply, "e", id)) {
+                // The recorder always writes `msg`; a record without one is not an input trace.
+                String msg = Events.text(rec, "msg");
+                if (msg != null && msg.startsWith("applyFreeFlightInput")
+                        && msg.contains(inputCarries)) {
+                    return true;
+                }
+            }
+            return false;
+        }, "applying an input carrying " + inputCarries + " to rocket " + rocketId, what,
+                KEY_APPLIED_BUDGET_TICKS);
+    }
+
+    /**
+     * Wait until the LATEST Free Flight HUD line the client drew since {@code mark} satisfies
+     * {@code drawn}, and answer that line.
+     *
+     * <p>The latest, not any: the recorder writes a line each time it CHANGES, so the last record is
+     * what the pilot is looking at, and a line drawn and then replaced is not. An empty window is NOT
+     * YET. The caller must be OWED a record after its mark: the recorder writes nothing for a line
+     * identical to the one it drew on the tick before, and nothing at all while the HUD is not drawn
+     * — but a HUD that comes back after being away is recorded even with its old line.</p>
+     */
+    private String awaitHudLine(long mark, java.util.function.Predicate<String> drawn,
+                                String matching, String what) throws Exception {
+        String reply = clientEvents().awaitMatching(mark, "ff_hud", seen -> {
+            String last = Events.lastRecord(seen);
+            String line = last == null ? null : Events.text(last, "text");
+            return line != null && drawn.test(line);
+        }, matching, what, CLIENT_SHOWS_BUDGET_TICKS);
+        return Events.text(Events.lastRecord(reply), "text");
+    }
+
+    /** The rendered VRT setpoint ({@code group} 1) or actual ({@code group} 2) of a HUD line, or
+     *  {@code NaN} when the line draws no VRT pair — which every comparison then answers false. */
+    private static double hudVrt(String line, int group) {
+        Matcher m = HUD_VRT.matcher(line);
+        return m.find() ? Double.parseDouble(m.group(group)) : Double.NaN;
+    }
+
+    /**
      * A measurement WINDOW, in client ticks, equal to the ceiling the poll it replaces was allowed.
      *
      * <h2>Why the polls went, and why the number is this number</h2>
@@ -531,8 +604,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Snapshot motion BEFORE ticks (right after start).
         double myBefore = rocketInfo(rocketId).motionY;
 
-        // Let the REAL server tick loop run — onUpdate->tickFreeFlight runs
-        // every server tick because the rocket is in FF + isInFlight.
+        // WINDOW: twenty ticks of the REAL server loop (onUpdate->tickFreeFlight runs every tick
+        // while the rocket is in FF + isInFlight) between the myBefore and myAfter reads; the
+        // assertion is over their difference and names both.
         bot().waitTicks(20);
 
         double myAfter = rocketInfo(rocketId).motionY;
@@ -572,14 +646,14 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertEquals("default mode must be CLASSIC_LAUNCH: " + info0.raw(),
                 RocketInfo.CLASSIC_LAUNCH, info0.flightMode);
 
+        // No wait: the probe sets the mode on the server thread before it replies, and `rocket
+        // info` reads that same server entity.
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
-        bot().waitTicks(5);
         RocketInfo info1 = rocketInfo(rocketId);
         assertEquals("after toggle, info must report FREE_FLIGHT: " + info1.raw(),
                 RocketInfo.FREE_FLIGHT, info1.flightMode);
 
         exec("artest rocket set-flight-mode " + rocketId + " CLASSIC_LAUNCH");
-        bot().waitTicks(5);
         RocketInfo info2 = rocketInfo(rocketId);
         assertEquals("flip-back must restore CLASSIC_LAUNCH: " + info2.raw(),
                 RocketInfo.CLASSIC_LAUNCH, info2.flightMode);
@@ -656,6 +730,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("vertical input must apply: " + inputResp, Reply.of(inputResp).bool("applied"));
 
         double yBefore = rocketInfo(rocketId).posY;
+        // WINDOW: thirty ticks of full vertical input between the yBefore and yAfter reads; the
+        // climb assertion is over their difference and names both.
         bot().waitTicks(30);
         RocketInfo after = rocketInfo(rocketId);
         double yAfter = after.posY;
@@ -680,7 +756,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         final double xb = before.posX;
         final double zb = before.posZ;
         exec("artest rocket free-flight-input " + rocketId + " 1 1 0 0 0");
-        // A WINDOW, not a poll-until-travelled: the poll exited on "moved more than a block", which
+        // WINDOW: between the `before` and `moved` reads, and both assertions are over their
+        // difference. Not a poll-until-travelled: the poll exited on "moved more than a block", which
         // is the assertion below, so the displacement could only ever be confirmed or timed out.
         // The window is the poll's own ceiling, so the takeoff-kick grace and the horizontal ramp
         // still get every tick they used to. The probe's own reply is what says the input was
@@ -693,8 +770,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         double horiz = Math.sqrt((xa - xb) * (xa - xb) + (za - zb) * (za - zb));
         assertTrue("forward thrust must move the rocket horizontally "
-                        + "(horiz=" + horiz + "; " + moved.raw() + ")", horiz > 1.0);
-        assertTrue("forward at yaw=0 must be predominantly +Z, got dz=" + (za - zb),
+                        + "(horiz=" + horiz + "; before " + before.raw() + "; after " + moved.raw()
+                        + ")", horiz > 1.0);
+        assertTrue("forward at yaw=0 must be predominantly +Z, got dz=" + (za - zb)
+                        + " (zBefore=" + zb + " zAfter=" + za + ")",
                 (za - zb) > 0);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
@@ -709,6 +788,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         exec("artest rocket free-flight-input " + rocketId + " 0 1 1 0 0");
         double yawBefore = rocketInfo(rocketId).rotationYaw;
+        // WINDOW: eight ticks of yaw input between the yawBefore and yawAfter reads; the assertion
+        // is over their difference and names both.
         bot().waitTicks(8);
         double yawAfter = rocketInfo(rocketId).rotationYaw;
 
@@ -749,6 +830,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // half of its subject and must be asserted as itself rather than inferred from altitude.
         climbEvents.awaitField(climbMark, "rocket_ff_traced", "e", rocketId,
                 "holding the real climb key must deliver a free-flight input to this rocket", 100);
+        // WINDOW: between the svrYBefore and svrYAfter reads, and the climb assertion is over their
+        // difference and names both. The client's Y is read at the window's end beside the server's
+        // — one comparison of the two sides, not a second window.
         bot().waitTicks(windowTicks(4, 10));
         RocketInfo svrInfo = rocketInfo(rocketId);
         double svrYAfter = svrInfo.posY;
@@ -789,8 +873,17 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // keypress path is covered by realZKeyThrustClimbsServerAndClientTracks.)
         // This isolates the actual contract under test: given server motion, does
         // the CLIENT render advance smoothly every tick?
+        // The ladder needs a CLIENT that already knows the craft is climbing: until a velocity
+        // update reaches it, the client has nothing to dead-reckon with and every sample reads
+        // still — the freeze this test exists to catch, manufactured by starting too early. The
+        // HUD's VRT "actual" is drawn from the client rocket's own motion, which is exactly that
+        // knowledge. A change is owed: the input just applied moves the craft off its hover, and
+        // the setpoint beside the actual starts ramping.
+        long climbSeenMark = clientEvents().mark();
         exec("artest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
-        bot().waitTicks(8); // past the launch-kick transient, into a steady climb
+        awaitHudLine(climbSeenMark, line -> hudVrt(line, 2) > 0,
+                "drawing a positive VRT actual",
+                "the client must be told the craft is climbing before its per-tick render is sampled");
 
         // A SAMPLING LADDER, not a poll: the per-tick delta IS the subject, so the reads cannot
         // be collapsed into one window read at the end — "it advanced every tick" and "it froze
@@ -828,10 +921,17 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // a control legend keyed to the pilot's bindings, and the FA state. Read
         // the actually-rendered text from the client (reflective static), so a
         // missing lang key (which I18n echoes back raw) fails these assertions.
+        // The mark goes before the whole arrangement, so the in-flight form is a change after it
+        // whatever the previous scenario left drawn. That form is recognised by its ENGINE line,
+        // which none of the assertions below reads, so the wait cannot answer for them. A record
+        // is owed within one flash: "Engines started" gives way to ENGINES ON sixty client ticks
+        // after the client sees the flight begin, and each is a new line.
+        long hudMark = clientEvents().mark();
         int rocketId = mountFreshFreeFlightRocket();
-        bot().waitTicks(10); // let the overlay render a few frames
-
-        String hud = freeFlightHud();
+        String hud = awaitHudLine(hudMark,
+                line -> line.contains("ENGINES ON") || line.contains("Engines started"),
+                "drawing the in-flight engine line",
+                "a pilot whose rocket is in flight must be shown the in-flight HUD");
 
         assertTrue("FF HUD must show the active-mode indicator: " + hud,
                 hud.contains("FREE FLIGHT"));
@@ -892,6 +992,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("start-free-flight must auto-fill fuel, got " + fuelBefore, fuelBefore > 0);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 1 0 0 0");
+        // WINDOW: twenty ticks of thrust between the fuelBefore and fuelAfter reads; the drain
+        // assertion is over their difference and names both.
         bot().waitTicks(20);
 
         int fuelAfter = primaryFuelAmount(exec("artest rocket fuel " + rocketId));
@@ -944,8 +1046,21 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertEquals("precondition: no screen should be open before pressing E",
                 "", currentScreen());
 
+        // The key is held until the client opens a screen, and the record of that is its own:
+        // `client_gui_opened`, which a CLOSE also writes (as "none") — hence the filter. A screen is
+        // owed, because none is open (asserted above). WHICH screen is left to the assertion below,
+        // so a key that opened the wrong one still fails here.
+        long guiMark = clientEvents().mark();
         bot().setKey(KEY_INVENTORY, true);
-        bot().waitTicks(3);
+        clientEvents().awaitMatching(guiMark, "client_gui_opened", seen -> {
+            for (String rec : Events.records(seen)) {
+                if (!"none".equals(Events.text(rec, "gui"))) {
+                    return true;
+                }
+            }
+            return false;
+        }, "opening a screen", "pressing the inventory key on foot must open a screen",
+                CLIENT_SHOWS_BUDGET_TICKS);
         String screen = currentScreen();
         bot().setKey(KEY_INVENTORY, false);
         bot().closeScreen();
@@ -983,6 +1098,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         eEvents.awaitField(eMark, "rocket_ff_traced", "e", rocketId,
                 "the held keys must deliver a free-flight input to this rocket while E is down",
                 100);
+        // WINDOW: between the xBefore and xAfter reads, and the strafe assertion is over their
+        // difference and names both; the screen is read at the window's end, when an inventory
+        // the key had opened would be showing.
         bot().waitTicks(windowTicks(5, 5));
 
         String screenDuring = currentScreen();
@@ -1025,6 +1143,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // the claim is "the key path is alive for this rocket", and the DIRECTION is the assertion.
         qEvents.awaitField(qMark, "rocket_ff_traced", "e", rocketId,
                 "the held keys must deliver a free-flight input to this rocket", 100);
+        // WINDOW: between the xBefore and xAfter reads; the assertion is over their difference and
+        // names both.
         bot().waitTicks(windowTicks(5, 5));
         double xAfter = rocketInfo(rocketId).posX;
         bot().releaseKey(Keyboard.KEY_Q);
@@ -1044,8 +1164,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // to the climb's accumulated upward inertia, which a position check is not).
         int rocketId = mountFreshFreeFlightRocket();
 
+        // Each window below opens when its key's input has ARRIVED, so the time a packet takes to
+        // cross is not charged against the climb or the brake being measured.
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
+                "holding R must deliver a climb input to this rocket");
         double y0 = rocketInfo(rocketId).posY;
-        bot().holdKey(Keyboard.KEY_R);
+        // WINDOW: twenty ticks of R between the y0 and y1 reads; the climb assertion is over their
+        // difference and names both.
         bot().waitTicks(20);
         RocketInfo climbInfo = rocketInfo(rocketId);
         double y1 = climbInfo.posY;
@@ -1054,9 +1179,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("R must climb (y0=" + y0 + " y1=" + y1 + ")", y1 - y0 > CLIMBED_BLOCKS);
 
         // F is downward thrust: it must reduce the vertical velocity vs the climb.
-        bot().holdKey(Keyboard.KEY_F);
-        // A WINDOW, not a poll-until-braked: the poll's predicate was `my < myUp - 0.05` and the
-        // assertion below is the same expression, so nothing here could fail except the ceiling.
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_F, "vert=-1",
+                "holding F must deliver a descent input to this rocket");
+        // WINDOW: between the myUp and myDown reads, and the assertion is over their difference
+        // and names both. Not a poll-until-braked: the poll's predicate was `my < myUp - 0.05` and
+        // the assertion below is the same expression, so nothing could fail except the ceiling.
         bot().waitTicks(windowTicks(5, 2));
         double myDown = rocketInfo(rocketId).motionY;
         bot().releaseKey(Keyboard.KEY_F);
@@ -1073,23 +1200,34 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // a climbing craft stops accelerating and eases back toward hover.
         int rocketId = mountFreshFreeFlightRocket();
 
-        // Establish a climb.
-        bot().holdKey(Keyboard.KEY_R);
+        // Establish a climb. Both legs below start counting when their key's input has ARRIVED, so
+        // the time a packet takes to cross is not charged against what is measured.
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
+                "holding R must deliver a climb input to this rocket");
+        // EXPERIMENT: twelve ticks of R from its arrival is the dose, and the precondition is what
+        // they did — upward motion. Not a difference from the moment R arrived: the liftoff hover
+        // may still be rising then, and the pilot's setpoint takes over from zero.
         bot().waitTicks(12);
         double myClimb = rocketInfo(rocketId).motionY;
-        assertTrue("precondition: R must be producing upward motion, got " + myClimb,
+        assertTrue("precondition: R must be producing upward motion twelve ticks after it"
+                        + " arrived, got " + myClimb,
                 myClimb > PRODUCING_CLIMB);
 
         // Now also hold X (cut) — vertical input is zeroed; with FA-off coast the
         // craft no longer accelerates upward (motionY stops growing).
-        bot().holdKey(Keyboard.KEY_X);
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_X, "cut=true",
+                "holding X must deliver a throttle cut to this rocket");
+        double myAtCut = rocketInfo(rocketId).motionY;
+        // WINDOW: between the myAtCut and myCut reads; the assertion is over their difference and
+        // names both.
         bot().waitTicks(12);
         double myCut = rocketInfo(rocketId).motionY;
         bot().releaseKey(Keyboard.KEY_X);
         bot().releaseKey(Keyboard.KEY_R);
 
-        assertTrue("throttle-cut must stop upward acceleration (climb=" + myClimb
-                + " afterCut=" + myCut + ")", myCut <= myClimb + 1e-3);
+        assertTrue("throttle-cut must stop upward acceleration (when the cut arrived " + myAtCut
+                + ", twelve ticks later " + myCut + "; the climb had reached " + myClimb + ")",
+                myCut <= myAtCut + 1e-3);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -1102,7 +1240,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // real R key first, then hold the real X.
         int rocketId = mountFreshFreeFlightRocket();
 
-        bot().holdKey(Keyboard.KEY_R);
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
+                "holding R must deliver a climb input to this rocket");
+        // STIMULUS: fifteen ticks of R from its arrival builds the climb the cut is then asked to
+        // brake; the check below says whether it did.
         bot().waitTicks(15);
         bot().releaseKey(Keyboard.KEY_R);
         RocketInfo preInfo = rocketInfo(rocketId);
@@ -1118,9 +1259,14 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                     + "\n  after-step: " + postStep);
         }
 
-        bot().holdKey(Keyboard.KEY_X);
-        // A WINDOW: the poll's predicate was `|my| < 0.05`, which is the assertion below.
-        bot().waitTicks(windowTicks(5, 8));
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_X, "cut=true",
+                "holding X must deliver a throttle cut to this rocket");
+        // EXPERIMENT: forty SERVER ticks of cut from its arrival is the dose, and the assertion is
+        // what they did — braked to a hover. The brake is the rocket's own server-side update, so
+        // its clock is the server's: counted there, forty is forty brake steps on any box, where
+        // forty client ticks bought a busy one fewer. It replaced a poll whose predicate,
+        // `|my| < 0.05`, was the assertion below, so the old leg could only time out, never fail.
+        GameTicks.advance(serverClient(), GameTicks.server(), windowTicks(5, 8));
         RocketInfo info = rocketInfo(rocketId);
         double myCut = info.motionY;
         bot().releaseKey(Keyboard.KEY_X);
@@ -1145,6 +1291,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         tpNearBuildSite();
         int rocketId = buildAndAssemble();
         tpOntoPad();
+        long seatedMark = clientEvents().mark();
         exec("artest player mount-entity " + rocketId);
         exec("artest rocket set-flight-mode " + rocketId + " FREE_FLIGHT");
         // Fuel up (a freshly-assembled fixture is empty): the ENGINE_START
@@ -1152,7 +1299,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // these tests exercise the start RITUAL, so they fly fuelled.
         String fuel = exec("artest rocket fill-fuel " + rocketId);
         assertTrue("fill-fuel must succeed: " + fuel, Reply.of(fuel).ok());
-        bot().waitTicks(5);
+        // The start ritual is the CLIENT's: its key handler counts a Space hold only for a pilot it
+        // knows is seated in a free-flight rocket. The pre-launch HUD is drawn exactly then, so its
+        // appearance is the link — the mount and the mode have both reached the client.
+        awaitHudLine(seatedMark, line -> line.contains("Free Flight Mode"),
+                "drawing the pre-launch title",
+                "the pilot's client must be seated in the free-flight rocket before he reaches for"
+                        + " the start key");
         return rocketId;
     }
 
@@ -1171,6 +1324,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // here as isInFlight=false.
         Events events = events();
         long holdMark = events.markInstrumented();
+        long hudMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_SPACE);
         try {
             awaitFlightSet(events, holdMark, rocketId, true,
@@ -1178,7 +1332,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         } finally {
             bot().releaseKey(Keyboard.KEY_SPACE);
         }
-        bot().waitTicks(40);             // let the liftoff hover settle — a value, not a link
+        // EXPERIMENT: forty SERVER ticks after the engines lit is the moment the claim is about —
+        // the start ritual's ease (the rocket's own server update, gain 0.25 a tick) has closed on
+        // its fixed hover target within a handful of them. Counted on the server, forty is forty
+        // steps of that law on any box; more of them move neither number, the target being fixed.
+        GameTicks.advance(serverClient(), GameTicks.server(), 40);
 
         RocketInfo info = rocketInfo(rocketId);
         assertTrue("3 s Space hold must start the engines (isInFlight=true): " + info.raw(),
@@ -1191,8 +1349,14 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                 Math.abs(my) < HOVER_STATIONARY);
 
         // The pilot SEES the engine state: the rendered HUD reports ENGINES ON
-        // (or the transient "Engines started" flash right after the start).
-        String hud = freeFlightHud();
+        // (or the transient "Engines started" flash right after the start). What the client draws
+        // is its own event, not a consequence of the forty ticks above: the wait is for the
+        // in-flight form, recognised by its title, which the assertion does not read. Owed: the
+        // hold's progress lines come after the mark, and even an in-flight line identical to one
+        // drawn before it is followed by ENGINES ON when the start flash ends, sixty ticks in.
+        String hud = awaitHudLine(hudMark, line -> line.contains("FREE FLIGHT"),
+                "drawing the in-flight title",
+                "the pilot must be shown the in-flight HUD once the engines are lit");
         assertTrue("HUD must show the engines running: " + hud,
                 hud.contains("ENGINES ON") || hud.contains("Engines started"));
 
@@ -1205,16 +1369,39 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         Events events = events();
         long holdMark = events.markInstrumented();
+        long holdHudMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_SPACE);
-        bot().waitTicks(25);             // well under the 60-tick requirement
+        // STIMULUS: twenty-five ticks of Space, well under the 60-tick requirement — the early
+        // release is the experiment.
+        bot().waitTicks(25);
 
-        // Mid-hold the pilot must SEE the start progress.
-        String hudMidHold = freeFlightHud();
-        assertTrue("HUD must show engine-start progress while holding: " + hudMidHold,
-                hudMidHold.contains("STARTING ENGINES"));
+        // Mid-hold the pilot must SEE the start progress — the line ON SCREEN now, with the key still
+        // down, which is the latest record since the hold began. Any progress line in the history
+        // would also be satisfied by a counter that reset mid-hold: one "STARTING ENGINES" drawn and
+        // then replaced by "ENGINES OFF" while Space was still held.
+        String holdHud = clientEvents().since(holdHudMark, "ff_hud");
+        String onScreen = Events.lastRecord(holdHud);
+        assertTrue("HUD must show engine-start progress while holding - on screen now: " + onScreen
+                        + " | since the hold began: " + holdHud,
+                onScreen != null && String.valueOf(Events.text(onScreen, "text"))
+                        .contains("STARTING ENGINES"));
 
+        long releaseHudMark = clientEvents().mark();
         bot().releaseKey(Keyboard.KEY_SPACE);
-        bot().waitTicks(20);
+        // The release is the client's to act on, and it shows it: the progress line gives way to
+        // the plain pre-launch form. Recognised by the title and the progress line's absence, so the
+        // ENGINES OFF assertion below still reads something the wait did not ask for.
+        String hud = awaitHudLine(releaseHudMark,
+                line -> line.contains("Free Flight Mode") && !line.contains("STARTING ENGINES"),
+                "drawing the pre-launch title without the progress line",
+                "releasing Space early must put the pre-launch HUD back");
+        // And the negative below needs a BOUND. "The engines were never lit" is a statement about
+        // everything the client sent up to its release — the hold, and whatever the release tick
+        // did — and a start sent at that tick would reach the server after any fixed pause chosen
+        // for a fast box. The fence closes it exactly: once the server has echoed a line sent after
+        // the release was drawn, every packet before it has run.
+        fenceWhatTheClientSent("the server must have handled everything the client sent up to"
+                + " the release before 'never lit' can be read");
 
         RocketInfo info = rocketInfo(rocketId);
         assertFalse("early release must cancel the start (still not in flight): " + info.raw(),
@@ -1231,7 +1418,6 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
                         + " shut off again. Writes to any rocket's in-flight flag since the hold"
                         + " began: " + flightWrites,
                 Events.recordsWhere(flightWrites, "e", String.valueOf(rocketId)).isEmpty());
-        String hud = freeFlightHud();
         assertTrue("HUD must be back to ENGINES OFF after the cancel: " + hud,
                 hud.contains("ENGINES OFF"));
 
@@ -1243,11 +1429,37 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Full cycle through real keys: start via probe (covered above), then
         // descend with the real F key until touchdown — engines must shut off
         // and the HUD must say so.
-        int rocketId = mountFreshFreeFlightRocket();
-        bot().waitTicks(30); // settle into the liftoff hover
-
+        // What the descent needs before it starts is not a settled hover but an ARMED landing
+        // detector: production arms it only once the craft has left the ground, so a craft pushed
+        // down before its liftoff never "lands" at all. The arming is its own trace, and the chain
+        // is read from a mark before the launch: the LAST liftoff must follow the LAST start, since a
+        // start re-arms nothing until the craft lifts again.
         Events events = events();
+        long flightMark = events.markInstrumented();
+        int rocketId = mountFreshFreeFlightRocket();
+        String id = String.valueOf(rocketId);
+        events.awaitMatching(flightMark, "rocket_ff_traced", reply -> {
+            int lastStart = -1;
+            int lastLiftoff = -1;
+            java.util.List<String> mine = Events.recordsWhere(reply, "e", id);
+            for (int i = 0; i < mine.size(); i++) {
+                // The recorder always writes `msg`; a record without one is no lifecycle line.
+                String msg = Events.text(mine.get(i), "msg");
+                if (msg == null) {
+                    continue;
+                }
+                if (msg.startsWith("startFreeFlight")) {
+                    lastStart = i;
+                } else if (msg.startsWith("liftoff")) {
+                    lastLiftoff = i;
+                }
+            }
+            return lastLiftoff > lastStart;
+        }, "arming the landing detector after the last start",
+                "the craft must lift off its pad, or no descent can end in a touchdown", 120);
+
         long descentMark = events.markInstrumented();
+        long shutdownHudMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_F);
         try {
             // A touchdown is two commits, not a state: the engines are shut off (the in-flight flag
@@ -1263,8 +1475,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             bot().releaseKey(Keyboard.KEY_F);
         }
 
-        bot().waitTicks(5);
-        String hud = freeFlightHud();
+        // The client learns of the shutdown on its own schedule; what it draws then is the
+        // pre-launch form, recognised by its title, which the assertion does not read. Owed as long
+        // as the client drew the flight at all — before the mark or after it — since the pre-launch
+        // form then differs from the last line it drew.
+        String hud = awaitHudLine(shutdownHudMark, line -> line.contains("Free Flight Mode"),
+                "drawing the pre-launch title",
+                "a pilot whose engines were shut off must be shown the pre-launch HUD again");
         assertTrue("HUD must reflect the shutdown (stopped flash or ENGINES OFF): " + hud,
                 hud.contains("Engines stopped") || hud.contains("ENGINES OFF"));
 
@@ -1283,11 +1500,14 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // REAL rendered HUD text.
         int rocketId = mountFreshFreeFlightRocket();
 
-        bot().holdKey(Keyboard.KEY_R);
-        // A WINDOW: the poll exited on `setpoint > 0.4 && actual > 0.1`, which is exactly the pair
-        // of assertions below — so neither could fail except by the ceiling, and the failure text
-        // then blamed the ramp for a timeout. Both numbers are read off ONE rendered HUD frame,
-        // which is what lets "the actual is chasing the setpoint" be a statement about one moment.
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
+                "holding R must deliver a climb input to this rocket");
+        // EXPERIMENT: twenty-five ticks of R from its arrival is the dose, and the assertions are
+        // what it did to the ramped setpoint and the velocity chasing it. It replaced a poll that
+        // exited on `setpoint > 0.4 && actual > 0.1` — exactly the pair of assertions below — so
+        // neither could fail except by the ceiling, and the failure text then blamed the ramp for a
+        // timeout. Both numbers are read off ONE rendered HUD frame, which is what lets "the actual
+        // is chasing the setpoint" be a statement about one moment.
         bot().waitTicks(windowTicks(5, 5));
         String hudClimb = freeFlightHud();
         bot().releaseKey(Keyboard.KEY_R);
@@ -1303,17 +1523,17 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("HUD must show the speed readout: " + hudClimb,
                 hudClimb.contains("SPD"));
 
-        // Cut: the setpoint marker must return to zero on the rendered HUD.
+        // Cut: the setpoint marker must return to zero on the rendered HUD. Not a converging value:
+        // production zeroes the whole setpoint in ONE step when a cut arrives, so the zero is a
+        // change the client draws, and the draw is the record. The wait IS the assertion — its
+        // failure prints every line the HUD drew since the key went down. Owed: the setpoint read
+        // above is well off zero.
+        long cutHudMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_X);
-        // A WINDOW: the poll exited on `|setpoint| <= 0.01` and the assertEquals below is the same
-        // number with the same tolerance.
-        bot().waitTicks(windowTicks(5, 3));
-        String hudCut = freeFlightHud();
+        awaitHudLine(cutHudMark, line -> Math.abs(hudVrt(line, 1)) <= 0.01,
+                "drawing a VRT setpoint of zero",
+                "the cut must zero the VRT setpoint the pilot's HUD shows");
         bot().releaseKey(Keyboard.KEY_X);
-        Matcher m2 = HUD_VRT.matcher(hudCut);
-        assertTrue("HUD must still render the VRT pair after the cut: " + hudCut, m2.find());
-        assertEquals("cut must zero the rendered VRT setpoint",
-                0.0, Double.parseDouble(m2.group(1)), 0.01);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
         exec("artest player dismount");
@@ -1325,17 +1545,24 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // must say so (the N keybind path is edge-driven and not injectable —
         // the probe flips the same server state the key would).
         int rocketId = mountFreshFreeFlightRocket();
-        bot().waitTicks(5);
 
+        // Each flip reaches the client as a packet and shows as a changed in-flight title. The wait
+        // is for the title's FA STATE; the assertion reads the Newtonian label beside it, so a HUD
+        // whose state and label disagree still fails. Both are owed: FA starts on, and each probe
+        // flips it.
+        long offMark = clientEvents().mark();
         exec("artest rocket set-flight-assist " + rocketId + " off");
-        bot().waitTicks(5);
-        String hud = freeFlightHud();
+        String hud = awaitHudLine(offMark, line -> line.contains("Flight Assist: OFF"),
+                "drawing Flight Assist OFF",
+                "switching Flight Assist off must reach the pilot's HUD");
         assertTrue("HUD must label the Newtonian mode when FA is off: " + hud,
                 hud.contains("Newtonian"));
 
+        long onMark = clientEvents().mark();
         exec("artest rocket set-flight-assist " + rocketId + " on");
-        bot().waitTicks(5);
-        String hudOn = freeFlightHud();
+        String hudOn = awaitHudLine(onMark, line -> line.contains("Flight Assist: ON"),
+                "drawing Flight Assist ON",
+                "switching Flight Assist back on must reach the pilot's HUD");
         assertFalse("HUD must drop the Newtonian label when FA is back on: " + hudOn,
                 hudOn.contains("Newtonian"));
 
@@ -1528,9 +1755,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int rocketId = mountFreshFreeFlightRocket();
         openFlightCameraWindow(); // this bank's own numbers, not the previous scenario's
         bot().holdKey(Keyboard.KEY_R);   // climb clear of the pad while banking
+        // STIMULUS: five ticks of climb input ahead of the drag, so the bank is flown clear of the
+        // pad; nothing is read on its account.
         bot().waitTicks(5);
 
         double yaw0 = bot().reportRidingEntity().get("rotationYaw").getAsDouble();
+        double roll0 = flightCameraNow("camRoll");
         // A real rightward mouse drag: repeated +8° horizontal swipes saturate the
         // absolute roll cursor, which then holds a steady bank rate.
         for (int i = 0; i < 8; i++) {
@@ -1538,16 +1768,20 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             bot().setLook(st.get("playerYaw").getAsFloat() + 8f, st.get("playerPitch").getAsFloat());
             bot().waitTicks(1);
         }
-        // A WINDOW: the poll exited on `|r| > 15.0`, which is the assertion below.
+        // WINDOW: between the roll0/yaw0 and camRoll/yaw1 reads; both assertions are over the
+        // difference and name both ends. It replaced a poll that exited on `|r| > 15.0`, which is
+        // the bank assertion.
         bot().waitTicks(windowTicks(3, 5));
         double camRoll = flightCameraNow("camRoll");
         double yaw1 = bot().reportRidingEntity().get("rotationYaw").getAsDouble();
         bot().releaseKey(Keyboard.KEY_R);
 
         assertTrue("mouse-horizontal must BANK the craft — client camera roll must "
-                + "grow (roll=" + camRoll + "°)", Math.abs(camRoll) > BANKED_DEG);
+                + "grow (roll0=" + roll0 + "° roll=" + camRoll + "°)",
+                angDiff(camRoll, roll0) > BANKED_DEG);
         assertTrue("mouse-horizontal must NOT change the heading — client yaw drifted "
-                + angDiff(yaw1, yaw0) + "° (roll must not couple into yaw)",
+                + angDiff(yaw1, yaw0) + "° (yaw0=" + yaw0 + "° yaw1=" + yaw1
+                + "°; roll must not couple into yaw)",
                 angDiff(yaw1, yaw0) < YAW_DRIFT_WHILE_BANKING_DEG);
 
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0");
@@ -1569,11 +1803,17 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // Climb well clear of the pad, then CUT to a gravity-cancelled hover: with
         // a zero velocity setpoint FA holds position regardless of attitude, so the
         // craft can loop in place without body-up thrust flying it into the ground.
-        bot().holdKey(Keyboard.KEY_R);
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_R, "vert=1",
+                "holding R must deliver a climb input to this rocket");
+        // STIMULUS: thirty ticks of climb from the input's arrival is the altitude the loop is flown
+        // at; nothing is read on its account.
         bot().waitTicks(30);
         bot().releaseKey(Keyboard.KEY_R);
-        bot().holdKey(Keyboard.KEY_X);   // cut -> hover (attitude-independent)
-        bot().waitTicks(5);
+        // Cut -> hover (attitude-independent). The drag may start the moment the cut has ARRIVED:
+        // from then the setpoint is zero whatever the nose does, and a craft still braking is only
+        // carried further from the ground.
+        holdKeyUntilApplied(rocketId, Keyboard.KEY_X, "cut=true",
+                "holding X must deliver a throttle cut to this rocket");
 
         // Real downward mouse drag: saturate the absolute pitch cursor, which then
         // holds full pitch rate and carries the nose past vertical and over.
@@ -1582,9 +1822,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
             bot().setLook(st.get("playerYaw").getAsFloat(), st.get("playerPitch").getAsFloat() + 8f);
             bot().waitTicks(1);
         }
-        // A WINDOW: the poll exited on `z < -0.5`, which is the assertion below. `minForwardZ` is an
-        // ACCUMULATOR — a minimum over the flight — so reading it at the end of the window sees
-        // every frame in it, and nothing is lost by not sampling along the way.
+        // EXPERIMENT: sixty ticks of the saturated pitch cursor is the dose that must carry the nose
+        // over the top, and the assertion is what it did. `minForwardZ` is an ACCUMULATOR — a
+        // minimum over the flight — so reading it at the end sees every frame, and nothing is lost
+        // by not sampling along the way. It replaced a poll that exited on `z < -0.5`, which was
+        // the assertion.
         bot().waitTicks(windowTicks(5, 12));
         double minFwdZ = flightCameraNow("minForwardZ");
         // `riding`, not `!= null`: reportRidingEntity throws on a failed reply and otherwise
@@ -1702,18 +1944,25 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     @Test
     public void rollChannelIntegratesAndClientRendersWithoutCrash() throws Exception {
         int rocketId = mountFreshFreeFlightRocket();
-        bot().waitTicks(20);
         double roll0 = rocketInfo(rocketId).freeFlightRoll;
 
         // Command a steady bank-right: probe args are
         // id fwd vert yaw pitch brake cut strafe roll -> roll = last (=+1).
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 1");
+        // WINDOW: ten ticks of commanded roll between the roll0 and roll1 reads; the assertion is
+        // over their difference and names both.
         bot().waitTicks(10);
         double roll1 = rocketInfo(rocketId).freeFlightRoll;
 
         // Stop and let the client keep rendering the banked craft a moment.
         exec("artest rocket free-flight-input " + rocketId + " 0 0 0 0 0 0 0 0");
+        long renderMark = openFlightCameraWindow();
+        // EXPERIMENT: ten ticks of the client drawing the banked craft is the dose, and the claim
+        // is that it survived them. The window counts the in-flight frames it saw, so a client that
+        // drew none cannot pass on an empty dose.
         bot().waitTicks(10);
+        double framesDrawn = Events.number(
+                closeFlightCameraWindow(renderMark, "the banked craft's render"), "frames");
         // Both halves were compile-time true: a present JSON primitive never renders as a null
         // String, and reportRidingEntity throws rather than returning null. What the sentence
         // means is that the pilot is still aboard the banked craft.
@@ -1723,6 +1972,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         assertTrue("commanded roll must integrate server-side (roll0=" + roll0
                 + " roll1=" + roll1 + ")", angDiff(roll1, roll0) > SERVER_ROLL_INTEGRATED_DEG);
+        assertTrue("the client must have drawn the banked craft in flight at all (in-flight frames"
+                + " in the render window: " + framesDrawn + ")", framesDrawn > 0);
         assertTrue("client must survive rendering the banked craft (camera-roll mixin)",
                 stillRiding);
     }

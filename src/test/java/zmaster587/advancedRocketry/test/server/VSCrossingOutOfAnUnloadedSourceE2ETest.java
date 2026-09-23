@@ -87,13 +87,23 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
         int registryBefore = queryableShips();
         int loadedBefore = loadedShips();
 
-        // Marked before the crossing: it cuts the hull and pastes a new one, so the arrival is a
-        // fresh registry add carrying the same durable name and a new physics id.
+        // Marked before the crossing: it cuts the hull and pastes a new one, so the source's entry
+        // is removed and the arrival is a fresh registry add. The crossing re-assembles under the
+        // identity the ship crossed with (VSIntegration.crossShip), so `shipId` names both — the
+        // removal is the SOURCE's, because nothing removes the arrival.
         long crossMark = events.mark();
         String cross = repack(BASE_X, BUILD_Y, BASE_X + HOP, SKY_Y);
         assertTrue("the crossing itself failed, so this test measures nothing: " + cross,
                 Reply.of(cross).ok());
-        settle();
+        // The crossing owes the registry two changes, and both land on later world ticks: the cut
+        // source is marked dead and collected by the physics mod's own pass, and the paste is
+        // queued and registered when the spawn queue drains. Linked on each by its own identity,
+        // neither of which loads anything; the counts are read only once both have happened.
+        events.awaitField(crossMark, "ship_removed", "vsShip", shipId,
+                "a crossing out of an UNLOADED source left its registry entry behind — the cut source"
+                        + " " + shipId + " was never collected", WAIT_TICKS);
+        events.awaitField(crossMark, "ship_spawned", "arShip", durableShipId,
+                "the crossed ship was never registered at the destination", WAIT_TICKS);
 
         int registryAfter = queryableShips();
         int loadedAfter = loadedShips();
@@ -299,7 +309,12 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
                 arrived);
     }
 
-    /** A bounded pause for the world ticks that spawn a queued ship and collect a cut one. */
+    /**
+     * The stretch {@link #requireArrivedAt} spends on the arrived hull's world transform before it
+     * reads the pose. STILL A BUDGET: a single absolute read follows it, and no record says when the
+     * transform has reached the pasted position. The spawn and the source's collection it used to
+     * cover are linked on their own records now.
+     */
     private void settle() throws Exception {
         GameTicks.advance(client(), GameTicks.server(), SETTLE_TICKS);
     }

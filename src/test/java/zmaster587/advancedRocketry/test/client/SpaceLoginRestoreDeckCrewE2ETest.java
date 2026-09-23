@@ -69,6 +69,13 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
      * that the ids churned.</p>
      */
     @Test
+    @Ignore("HELD FOR THE BODY-MOVEMENT CONTRACT BATCH, by the maintainer's ruling of 2026-09-23:"
+            + " every deck-hold red waits for the contract on moving an entity aboard a craft. Red"
+            + " on a full client tier (ledger #522): a capture the LOGIN installed takes all six"
+            + " walk inputs (6/6) and the collision sweep pins the step on five and six of them,"
+            + " where a capture re-installed by a sit-and-stand walks 0.94 on the same deck. Green"
+            + " alone, and green on the next full tier — so it is intermittent, not gone. RE-ENABLE"
+            + " with that batch; the acceptance is this method green on a full tier, twice.")
     public void aCrewMemberWhoRelogsWithoutARestartIsNotDraggedAlongHisDeck() throws Exception {
         int slotDim = seatThePilotAboardHisShip();
 
@@ -232,7 +239,6 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
             bot().waitTicks(10);
             upY = shipUpY(jsonOf(exec("artest vs ship-info " + slotDim + " id " + rolledShipId)));
         }
-        bot().waitTicks(20);
         String info = jsonOf(exec("artest vs ship-info " + slotDim + " id " + rolledShipId));
         requireArranged("the ship must be (near-)inverted before the relog, or this leg is "
                 + "silently the upright one again (upY=" + upY + "): " + info, upY < INVERTED_UP_Y);

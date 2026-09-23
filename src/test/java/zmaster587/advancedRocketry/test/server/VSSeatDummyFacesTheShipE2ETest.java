@@ -104,7 +104,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
                 Reply.of(exec("artest vs point-by-id 0 " + shipId
                         + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded"));
 
-        // A WINDOW, NOT A WAIT, and the difference is what this line is for. A yaw slewing round is a
+        // WINDOW: not a wait, and the difference is what this line is for. A yaw slewing round is a
         // converging VALUE — nothing announces it and there is no edge to link on — so the shape it
         // owes is two reads with a stretch of the subject's own clock between them, and an assertion
         // that names both. The poll it replaces asked the same question the assertion below asks
@@ -112,7 +112,9 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         // claim about how fast the box is: a slow one expires and reds, a fast one leaves early and
         // the assertion is a formality. The slew is driven by the attitude controller's own tick at a
         // fixed rate per tick, so a fixed stretch of that controller's world turns the ship the same
-        // amount on every machine, and the window is spent on purpose.
+        // amount on every machine, and the window is spent on purpose. Overshoot eases the
+        // lower-bound gate below, but only up to the commanded heading, where the hold parks; the
+        // verdict itself is the mount-vs-ship agreement, which extra ticks cannot loosen.
         GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);
         double shipYawAfter = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
 

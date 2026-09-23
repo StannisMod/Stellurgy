@@ -85,6 +85,23 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     private static final int HOLD_SAMPLES = 10;
     /** @see #HOLD_SAMPLES */
     private static final int HOLD_TICKS_BETWEEN = 10;
+
+    /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks — a
+     *  deadline on a round trip and the input path's first tick after it, not a settling time. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * How long a seated client may go without writing a ship-path cursor sample, in ticks.
+     *
+     * <p>A deadline, not a wait: that path writes one on every tick it runs, so a healthy client
+     * answers on the next tick and this only bounds how long a DEAD input path takes to be
+     * reported.</p>
+     */
+    private static final int CURSOR_RECORD_BUDGET_TICKS = 20;
+
+    /** How long the computer is given to record the cut's zero cruise once the key has been held,
+     *  in ticks — a deadline on a delivered packet. */
+    private static final int CUT_LINK_BUDGET_TICKS = 100;
     private static final String DUMMY_ID = "dummyId";
     private static final String CRUISE_FWD = "cruiseForward";
     private static final String CRUISE_RIGHT = "cruiseRight";
@@ -102,17 +119,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     private static final String VARIANT = "with-pilot-seat";
     private static final String KEY_BINDINGS = "zmaster587.advancedRocketry.client.KeyBindings";
-    /**
-     * The Free Flight HUD as the client last DREW it, or {@code ""} when it has drawn none.
-     *
-     * <p>The recorder writes only when the line CHANGES, so the latest record is the current text.
-     * Replaces a reflective read of a field that is now private — a read the compiler cannot check,
-     * which is why it had to be found by scanning the channel rather than by building.</p>
-     */
-    private String freeFlightHud() throws Exception {
-        String rec = Events.lastRecord(clientEvents().since(0, "ff_hud"));
-        return rec == null ? "" : Events.text(rec, "text");
-    }
+    /** How long the client may take to draw a boarded pilot's HUD: a deadline, never a settle. */
+    private static final int HUD_LINK_BUDGET_TICKS = 200;
     /** The client's own flight-cursor dead-zone: inside it the ship is commanded no rotation at all. */
     private static final double CURSOR_DEADZONE = 0.05;
 
@@ -262,16 +270,26 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
 
+        long boardedHudMark = clientEvents().mark();
         double[] ship = buildAndBoardShip(site);
 
         // --- The HUD panel. Climb, then read the text the CLIENT actually rendered. Before the ship's
         // velocity reached the client the panel had no speed line at all, and no bars.
-        String hudBefore = freeFlightHud();
-        assertTrue("a seated tier-2 pilot must get a Free Flight HUD at all: '" + hudBefore + "'",
-                !hudBefore.isEmpty());
+        // THIS pilot's HUD, from a mark taken before he boarded: the recorder writes a HUD that
+        // appears, so a record is owed the moment it is drawn for him — and one drawn for somebody
+        // in an earlier scenario is outside the window.
+        clientEvents().awaitMatching(boardedHudMark, "ff_hud",
+                seen -> {
+                    String last = Events.lastRecord(seen);
+                    String text = last == null ? null : Events.text(last, "text");
+                    return text != null && !text.isEmpty();
+                },
+                "carrying a non-empty HUD line",
+                "a seated tier-2 pilot must get a Free Flight HUD at all", HUD_LINK_BUDGET_TICKS);
 
         Events events = events();
         long throttleMark = events.markInstrumented();
+        long climbHudMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
         ClientPoll.Result<Double> lift;
         try {
@@ -293,15 +311,20 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 climbed - ship[1] > 1.0);
 
         // The client's own velocity readout must be non-zero while the ship is moving. Read it from the
-        // rendered HUD text: that is the string the pilot is looking at, not an internal field.
-        // Event-gated: poll the rendered HUD until it shows a non-zero speed (bounded ceiling +
-        // early exit).
-        ClientPoll.Result<String> hud = ClientPoll.until(bot()::waitTicks,
-                this::freeFlightHud,
-                VSShipFlightTelemetryE2ETest::hasNonZeroSpeedReadout, 2, 30);
-        String hudMoving = hud.value;
-        assertTrue("the tier-2 flight HUD must show the ship's real speed while it is moving; "
-                + "the client rendered: '" + hudMoving + "'", hud.satisfied);
+        // rendered HUD text: that is the string the pilot is looking at, not an internal field. The
+        // HUD is recorded each time its line CHANGES, so a speed readout appearing is a record, from
+        // a mark taken before the climb began — the link, where a poll of the latest line stood.
+        // The LATEST line, not any: a readout that showed speed for one frame and then fell back to
+        // zero while the ship still moves is the failure, and "some line had a speed" hides it.
+        String climbHud = clientEvents().awaitMatching(climbHudMark, "ff_hud",
+                seen -> {
+                    String last = Events.lastRecord(seen);
+                    return last != null && hasNonZeroSpeedReadout(Events.text(last, "text"));
+                },
+                "whose latest line carries a non-zero speed readout",
+                "the tier-2 flight HUD must show the ship's real speed while it is moving",
+                HUD_LINK_BUDGET_TICKS);
+        String hudMoving = Events.text(Events.lastRecord(climbHud), "text");
 
         // --- The spin brake. Deflect the flight cursor sideways through the client's OWN raw-mouse
         // entry point, so the ship rolls, then centre the cursor and watch the spin die.
@@ -375,10 +398,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         //
         // Cut it the way a player does, with the cut key, not with a probe: the cruise is the
         // pilot's own channel and this scenario is about the pilot's own controls.
-        bot().holdKey(Keyboard.KEY_X);
-        bot().waitTicks(20);
-        bot().releaseKey(Keyboard.KEY_X);
-        bot().waitTicks(10);
+        cutTheCruise(20, "the cut key must zero the cruise before the brake is judged");
         String cruiseAfterCut = exec("artest vs ff-cruise-read-by-id 0 " + scenarioShipId);
         scenario().record("cruiseAfterCut", cruiseAfterCut);
         assertTrue("ARRANGEMENT: the cruise must be ZERO before the brake is judged, or this leg"
@@ -390,6 +410,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                         && Math.abs(readDouble(cruiseAfterCut, CRUISE_RIGHT)) < EXACTLY_ZERO
                         && Math.abs(readDouble(cruiseAfterCut, CRUISE_UP)) < EXACTLY_ZERO);
 
+        // EXPERIMENT: BRAKE_SETTLE_TICKS is the dose of world the brake is given, and the claim is
+        // about the hold that follows it. Overshoot is lenient only toward a brake that converges a
+        // little late; a rate that plateaus or climbs — a latched command, a stale driver — fails
+        // the worst-of-hold read however long the settle ran.
         bot().waitTicks(BRAKE_SETTLE_TICKS);
         java.util.List<Double> hold = ClientPoll.observe(bot()::waitTicks,
                 () -> shipInfo().omega, HOLD_SAMPLES, HOLD_TICKS_BETWEEN);
@@ -489,8 +513,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
-        bot().waitTicks(20);
 
+        // THIS pilot's camera and not a previous scenario's, although the roll is client memory:
+        // buildAndBoardShip linked on his client's `flight_cursor` on the ship path, written in a
+        // client tick, and the client draws that tick's frame before it serves a request queued
+        // after the record was read — so the roll below was computed with him in the seat.
         double rollUpright = deckCamera("roll");
         assertTrue("an upright ship must leave the camera level (roll=" + rollUpright + ")",
                 Math.abs(rollUpright) < UPRIGHT_CAMERA_ROLL_DEG);
@@ -500,9 +527,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         rollShipUpsideDownWithTheMouse(bx, by, bz);
 
         // Where exactly a rigid body coasts to is not the contract; that it went over, and that the
-        // camera went with it, is. Read the pair adjacently so they describe the same instant.
-        double shipUpY = deckCamera("shipUpY");
-        double rollInverted = deckCamera("roll");
+        // camera went with it, is. Read the pair from ONE peek, so they describe the same instant
+        // whether or not the hull is still turning.
+        double[] upAndRoll = deckCameraAtOnce("shipUpY", "roll");
+        double shipUpY = upAndRoll[0];
+        double rollInverted = upAndRoll[1];
         assertTrue("the ship must actually have rolled past vertical (its up points " + shipUpY + ")",
                 shipUpY < ROLLED_PAST_VERTICAL_UP_Y);
 
@@ -535,7 +564,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         boolean framebufferWasOn = bot().setFramebuffer(true).get("previous").getAsBoolean();
         JsonObject shot;
         try {
-            bot().waitTicks(10); // let frames render into the freshly bound framebuffer
+            // Taken at the end of the next rendered frame, which is drawn into the framebuffer just bound.
             shot = bot().screenshot("tier2-inverted");
         } finally {
             bot().setFramebuffer(framebufferWasOn);
@@ -579,12 +608,22 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         String point = exec("artest vs point-by-id 0 " + scenarioShipId
                 + " " + Math.cos(half) + " 0.0 0.0 " + Math.sin(half));
         assertTrue("attitude hold must accept the roll: " + point, Reply.of(point).bool("commanded"));
+        // EXPERIMENT: 200 ticks of the slew and the held roll, and the claim is what they did to the
+        // body standing on the deck. Overshoot only keeps him on the tilted deck longer, which is the
+        // strict direction for "he stayed put".
         bot().waitTicks(200);
 
-        // An attitude SLEW is a value converging, so it stays a wait — but the value it converges to
-        // is recorded here, because "he barely moved across the deck" is vacuous on a deck that never
-        // rolled and nothing in this scenario said which of the two happened.
-        scenario().record("upYAfterRoll", shipInfo().upY());
+        // The dose is ASSERTED, not just recorded: "he barely moved across the deck" is vacuous on a
+        // deck that never rolled, and a slow slew delivers less roll in the same ticks, which would
+        // turn this into a pass on a level deck. The line is the scenario's own — past 45 degrees
+        // is where the drag anisotropy it pins starts to dominate — and a 75-degree roll reads
+        // cos(75) = 0.26.
+        double upYAfterRoll = shipInfo().upY();
+        scenario().record("upYAfterRoll", upYAfterRoll);
+        scenario().requireArranged("the deck must actually have rolled past 45 degrees before a crew"
+                + " member's drift across it says anything (ship up Y=" + upYAfterRoll
+                + ", past 45 degrees is below " + Math.cos(Math.toRadians(45.0)) + ")",
+                upYAfterRoll < Math.cos(Math.toRadians(45.0)));
 
         double[] afterRoll = localOf(crewId);
 
@@ -662,6 +701,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // STATICALLY inverted deck rides fine - the 75deg test). Reproduces the maintainer's ~174deg case,
         // which was a ship oscillating/hunting near the unstable inverted attitude (nonzero omega).
         exec("artest vs spin-ship-by-id 0 " + scenarioShipId + " 2.0 0.0 0.0");
+        // EXPERIMENT: 30 ticks of a 2 rad/s spin, and the claim counts the drops inside them.
+        // Overshoot only lengthens the spin, which gives a thrashing capture more drops to show.
         bot().waitTicks(30);
         exec("artest vs spin-ship-by-id 0 " + scenarioShipId + " 0.0 0.0 0.0");
 
@@ -734,6 +775,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("must lay the world floor under the deck",
                 Reply.of(exec("artest fill 0 " + (sx - 3) + " " + fy + " " + (sz - 3) + " "
                         + (sx + 3) + " " + fy + " " + (sz + 3) + " minecraft:stone")).ok());
+        // EXPERIMENT: the body stands 60 ticks over ground that was not there before, and the claim
+        // is that no tick of them released it. Overshoot only lengthens the exposure — the strict
+        // direction for an absence.
         bot().waitTicks(60);
 
         String releases = events.since(floorMark, "deck_released");
@@ -806,10 +850,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // with a NON-zero setpoint deliberately leaves the ship CRUISING (the autopilot contract,
         // pinned by VSShipUnmannedCruiseE2ETest); the station-hold this test pins is the parked
         // pilot's case - zero setpoint - whose regression mode is the -g*dt sink measured below.
-        bot().holdKey(Keyboard.KEY_X);
-        bot().waitTicks(10);
-        bot().releaseKey(Keyboard.KEY_X);
-        bot().waitTicks(5);
+        // The zero is awaited, not assumed: a dismount that overtook the cut would leave exactly the
+        // cruising ship this scenario is not about.
+        cutTheCruise(10, "the cut key must zero the cruise before the pilot stands up, or the"
+                + " unmanned ship below is the cruising autopilot and not the parked hold");
 
         // Stand up. A parked ship that has been flown holds station while unmanned: the flight computer
         // commands a ZERO world velocity and holds the attitude - the exact path this bug lives on.
@@ -835,7 +879,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         scenario().requireArranged("the unmanned ship must decide to HOLD STATION before 'it did not"
                 + " sink' is a statement about the hold: " + hold,
                 matchingRecords(hold, "\"held\":true") > 0);
-        bot().waitTicks(60); // let the controller brake the climb out and settle onto the hold
+        // EXPERIMENT: 60 ticks for the hold to brake out the climb's residual motion, then the
+        // window below judges it. The defect is a STEADY sink, which extra ticks cannot hide; what
+        // overshoot forgives is only a hold that settles a little late.
+        bot().waitTicks(60);
 
         double yStart = shipInfo().y;
         double worstVelY = 0.0;
@@ -895,7 +942,6 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 (Reply.of(assemble).integer("rocketCount") == 0));
         scenarioShipId = awaitShipSpawned(events, spawnMark,
                 "a with-pilot-seat assembly must create a VS ship in the queryable registry");
-        bot().waitTicks(40);
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
@@ -939,10 +985,67 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         String mountInfo = exec("artest vs seat-mount-at 0 " + seat.seatX + " "
                 + seat.seatY + " " + seat.seatZ);
         int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
-        assertTrue("bot must mount the seat dummy: " + mountInfo,
-                Reply.of(exec("artest player mount-entity " + dummyId)).bool("mounted"));
-        bot().waitTicks(10); // let the mount replicate and the client recognise the pilot seat
+        long seatMark = clientEvents().mark();
+        String mount = exec("artest player mount-entity " + dummyId);
+        assertTrue("bot must mount the seat dummy: " + mount, Reply.of(mount).bool("mounted"));
+        // Two facts every scenario then leans on, each the CLIENT's own record: he is riding the
+        // dummy, and the ship-pilot input path has taken him as its pilot. The second is a
+        // `flight_cursor` on the "ship" path, which that path writes on every tick it runs and on
+        // no other — so it is owed on every healthy seating, and its absence is a seat the client
+        // never recognised rather than a slow one.
+        awaitClientMount(seatMark, "the client must be riding the seat dummy before anything is"
+                + " flown from it", SEAT_LINK_BUDGET_TICKS, " | server said: " + mount);
+        clientEvents().awaitField(seatMark, "flight_cursor", "path", "ship",
+                "the client's ship-pilot input path must take the seated bot as its pilot",
+                SEAT_LINK_BUDGET_TICKS);
         return ship;
+    }
+
+    /**
+     * Cut the Flight-Assist cruise with the pilot's own key, and return once THIS ship's computer
+     * has recorded the zero.
+     *
+     * <p>The zeroing reaches {@code cruise_setpoint_changed} through the pilot ramp, which records
+     * only a tick on which the setpoint CHANGED. So a cruise that is already zero writes nothing,
+     * and waiting for one would expire on a healthy run: the setpoint is read first and the link is
+     * taken only when a change is owed. The predicate is over the LAST record, because the window
+     * can hold a ramp on its way down and only its end is the zero the caller relies on.</p>
+     *
+     * <p>No ship filter: the computers of this class's earlier scenarios are riderless, and a
+     * riderless computer's ramp has no input to change a setpoint with.</p>
+     *
+     * @param holdTicks how long the cut key is held, in client ticks
+     */
+    private void cutTheCruise(int holdTicks, String what) throws Exception {
+        String before = exec("artest vs ff-cruise-read-by-id 0 " + scenarioShipId);
+        // afcResolved is written on every branch of the verb; the three numbers only when it is
+        // true, so they are read only then. An unresolved computer owes no record here, and the
+        // caller's own read after the cut is what reports it.
+        boolean owed = Reply.of(before).bool("afcResolved")
+                && !(Math.abs(readDouble(before, CRUISE_FWD)) < EXACTLY_ZERO
+                        && Math.abs(readDouble(before, CRUISE_RIGHT)) < EXACTLY_ZERO
+                        && Math.abs(readDouble(before, CRUISE_UP)) < EXACTLY_ZERO);
+        Events events = events();
+        long cutMark = events.markInstrumented();
+        bot().holdKey(Keyboard.KEY_X);
+        try {
+            // STIMULUS: how long the cut is held — the key is sampled per client tick and sent.
+            bot().waitTicks(holdTicks);
+        } finally {
+            bot().releaseKey(Keyboard.KEY_X);
+        }
+        if (owed) {
+            events.awaitMatching(cutMark, "cruise_setpoint_changed",
+                    reply -> {
+                        String last = Events.lastRecord(reply);
+                        return last != null
+                                && Math.abs(Events.number(last, "forward")) < EXACTLY_ZERO
+                                && Math.abs(Events.number(last, "right")) < EXACTLY_ZERO
+                                && Math.abs(Events.number(last, "up")) < EXACTLY_ZERO;
+                    },
+                    "whose LAST record is a zero cruise (forward, right and up all zero)",
+                    what + " (cruise before the cut: " + before + ")", CUT_LINK_BUDGET_TICKS);
+        }
     }
 
     /**
@@ -954,7 +1057,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // own pacing: no extra wait is added to take a reading, and the reading is never older than
         // the pass before it.
         long cursorMark = clientEvents().mark();
-        bot().waitTicks(2);
+        // The first pass's window is not paced by a pass before it, so it is opened on the record
+        // it reads: the ship path's own cursor sample since the mark.
+        clientEvents().awaitField(cursorMark, "flight_cursor", "path", "ship",
+                "the ship-pilot input path must be running before the ship is rolled with it",
+                CURSOR_RECORD_BUDGET_TICKS);
         // STAYS A LOOP, and its iterations are the stimulus: each pass asks for more roll through
         // the real cursor, so deleting the loop does not stop the test watching — it stops the ship
         // TURNING. The exit reads an attitude converging past a threshold, which is a value and not
@@ -972,8 +1079,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
             cursorMark = clientEvents().mark();
             bot().waitTicks(2);
         }
+        // No settle after centring: the caller reads the attitude and the camera from one peek, so
+        // the two agree about one instant whether or not the brake has finished.
         centreFlightCursor();
-        bot().waitTicks(40); // let the spin brake settle the ship where the pilot left it
     }
 
     /**
@@ -1004,6 +1112,11 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private double flightCursorX(String what) throws Exception {
         long mark = clientEvents().mark();
+        // WINDOW: one client tick between the mark and the read, and the claim is over what the log
+        // gained in it. The ship path runs once per CLIENT tick and this counts client ticks, so
+        // the window holds exactly one run however slow the box is. Not a link on purpose: a link
+        // steps five ticks, and the centring loop's nudges are the stimulus — slowing them five-fold
+        // lets the ship roll on under a cursor still being brought home.
         bot().waitTicks(1);
         return cursorXSince(mark, what);
     }
@@ -1012,8 +1125,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      *  supplies the ticks, so that taking a reading never adds one. */
     private double cursorXSince(long mark, String what) throws Exception {
         String rec = Events.lastRecord(clientEvents().since(mark, "flight_cursor"));
-        assertNotNull("no flight_cursor record " + what + " — the client's flight-input path did not "
-                + "run in that window, so there is no cursor reading to act on", rec);
+        assertNotNull("no flight_cursor record " + what + " between client mark " + mark
+                + " and now — the client's flight-input path did not run in that window, so there is"
+                + " no cursor reading to act on", rec);
         return Events.number(rec, "x");
     }
 
@@ -1024,6 +1138,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     /** Whether the rendered HUD carries a speed readout with a non-zero value. */
     private static boolean hasNonZeroSpeedReadout(String hud) {
+        if (hud == null) {
+            return false;
+        }
         Matcher m = Pattern.compile("([0-9]+\\.[0-9]+)").matcher(hud);
         while (m.find()) {
             if (Double.parseDouble(m.group(1)) > 0.05) {
@@ -1181,10 +1298,18 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                         + " resolver never captured it for this craft, so nothing below is about how"
                         + " a captured body rides THIS deck", 200,
                 "e", String.valueOf(crewId), "ship", scenarioShipId);
-        // The capture is the link; coming to REST on the deck is the body's own fall settling, which
-        // is a value and stays a wait.
-        bot().waitTicks(40);
+        // The LANDING is a link too: `deck_contact` is the resolver putting this body on a surface it
+        // was not on at its previous move. It is an EDGE, and a body that touched down before the
+        // deck took it moved on an unresolved tick and never writes one — so the state is read
+        // first, and the landing is awaited only when one is still owed. Once captured, a body's
+        // moves are the resolver's, so an airborne captured body cannot land unrecorded.
         PlayerShipData resting = PlayerShipData.byId(this::exec, 0, crewId);
+        if (!resting.onGround) {
+            events.awaitField(dropMark, "deck_contact", "e", String.valueOf(crewId),
+                    "the dropped body (entity " + crewId + ") must LAND on the deck that took it",
+                    200);
+            resting = PlayerShipData.byId(this::exec, 0, crewId);
+        }
         scenario().requireArranged("the dropped body must come to REST on the deck before its drift"
                 + " across that deck can mean anything: " + resting.raw(),
                 resting.onGround);

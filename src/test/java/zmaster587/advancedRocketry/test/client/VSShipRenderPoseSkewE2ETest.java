@@ -188,6 +188,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // (inverted, so the world-top is a hull-stand surface). Gate on the MEASURED attitude,
         // never elapsed ticks.
         double h = Math.toRadians(160.0) / 2.0;
+        double upBefore = shipInfo().upY();
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("artest vs point-by-id 0 " + shipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
@@ -199,15 +200,17 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // The attitude is a physical value nobody publishes and the hold never decides it has
         // arrived, so there is no link to await here — but the hold KEEPS the attitude once reached,
         // so giving the slew its ticks and then measuring reads the same state a longer wait would.
+        // WINDOW: upBefore -> upY, both in the gate's message, so a red says whether the hull
+        // never moved (a command accepted and ignored) or was still slewing (a short window).
         bot().waitTicks(ROLL_WINDOW_TICKS);
         ShipInfo info = shipInfo();
         // The ship's own up, world-frame, from the attitude quaternion the probe reports.
         double upY = info.upY();
-        System.out.println("[poseskew] upY after " + ROLL_WINDOW_TICKS + " ticks: " + upY
-                + " (the gate is < -0.3)");
-        assertTrue("the ship must reach the steep inversion before the hull leg (upY=" + upY
-                + " after " + ROLL_WINDOW_TICKS + " ticks of a commanded 160-degree roll): "
-                + info.raw(), upY < STEEP_INVERSION_UP_Y);
+        System.out.println("[poseskew] upY " + upBefore + " -> " + upY + " over " + ROLL_WINDOW_TICKS
+                + " ticks (the gate is < -0.3)");
+        assertTrue("the ship must reach the steep inversion before the hull leg (upY " + upBefore
+                + " -> " + upY + " over " + ROLL_WINDOW_TICKS + " ticks of a commanded 160-degree"
+                + " roll): " + info.raw(), upY < STEEP_INVERSION_UP_Y);
         // The drop point must be FREE AIR, and nothing here guaranteed that it was. The fixture is
         // assembled into a 10-block band cleared inside whatever ground the base sits in, and the
         // rolled ship then sinks, so shipY+7 can land INSIDE the world's own terrain. Measured once:
@@ -217,8 +220,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         // subspace, so this removes world terrain only — the hull is untouched, and so is the
         // ground BELOW the ship, which is whatever its descent rests against.
         clearDropColumn(info.x, info.y, info.z);
-        bot().waitTicks(20);
-        info = shipInfo(); // re-read: the ship may settle once the terrain above it is gone
+        info = shipInfo(); // re-read after the fill, which ran on the server thread before it answered
         double sx = info.x, sy = info.y, sz = info.z;
         String dropBlock = exec("artest block at 0 " + (int) Math.floor(sx) + " "
                 + (int) Math.floor(sy + 7) + " " + (int) Math.floor(sz));
@@ -424,6 +426,8 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
      */
     private double crossSideDelta() throws Exception {
         long mark = clientMark();
+        // WINDOW: the sample is whatever the client committed in two of its own ticks, from the mark
+        // to the read below; none is NaN, which every caller counts as "no signal".
         bot().waitTicks(2);
         String latest = Events.lastRecord(clientEvents().since(mark, "render_pose_skew"));
         if (latest == null) {
@@ -516,7 +520,6 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     private double[] buildShip(Events events, FixtureSite site) throws Exception {
         final int bx = site.x, by = site.y, bz = site.z;
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
 
         // The registry's own record of the ship being ADDED, since a mark taken before the assembly
         // was queued. That makes it THIS scenario's ship by construction, and — the part a count
@@ -540,10 +543,12 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 + spawned, spawnedCount == 1);
         shipId = Events.lastField(spawned, "vsShip");
         assertTrue("a ship_spawned record must name the ship: " + spawned, shipId != null);
-        bot().waitTicks(40);
 
+        long backMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
-        bot().waitTicks(20);
+        ClientEvents.awaitPlacedNear(clientEvents(), backMark, bx + 0.5, bz + 0.5,
+                "the client must be back at the build site before the craft is asked to load around"
+                        + " it", SHIP_SPAWN_BUDGET_TICKS);
 
         // READINESS, as production's own event. This was a bounded poll of `ship-info` for
         // `managed:true`, under a comment saying nothing in the vocabulary records that transition —

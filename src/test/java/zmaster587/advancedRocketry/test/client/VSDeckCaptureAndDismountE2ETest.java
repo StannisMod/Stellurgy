@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.client;
 
 import org.junit.FixMethodOrder;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
@@ -12,13 +13,13 @@ import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.ShipFrameCheck;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -74,6 +75,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      * load and still fails a scenario that never gets there rather than waiting out a budget.
      */
     private static final int DECK_LINK_BUDGET_TICKS = 240;
+
+    /**
+     * Attitude-slew windows, in ticks of the hull's WORLD clock — the same numbers these slews were
+     * given in client ticks before, moved onto the clock the hull's world advances on. Nothing
+     * publishes "the attitude has arrived" (the hold never decides it has), so each slew is a
+     * window whose two ends are read and named by its gate; a short one fails loudly as a hull
+     * that did not get there, never as a pass.
+     */
+    private static final int SLEW_WINDOW_TICKS = 120;
+    private static final int SIDE_SLEW_WINDOW_TICKS = 160;
+    private static final int LONG_SLEW_WINDOW_TICKS = 200;
 
     /**
      * How far the CLIENT's rendering of a body's height may sit from the SERVER's, in blocks, on a
@@ -344,6 +356,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // an inference from two Y samples. An absence only means something once the instrument has
         // announced itself, which is what assertInstrumentRan is for.
         long sinkMark = clientEvents.mark();
+        // WINDOW: clientY (read above) to clientYLater, with every release the client logged in
+        // between; the assertion is over their difference and prints both. Overshoot only gives a
+        // sinking body longer to sink, so a slow box makes this stricter, never more lenient.
         bot().waitTicks(60);
         double clientYLater = bot().reportState().get("playerY").getAsDouble();
         String sinkReleases = clientEvents.since(sinkMark, "deck_released");
@@ -367,14 +382,21 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
-        bot().waitTicks(20); // let the seated idle pilot's hold stabilise the ship
 
         // Lift into a real hover with the pilot's own vertical-up key. The delivery link, the window
         // and why the climb is measured rather than awaited all live in the helper.
         hoverOnPilotThrust(scenarioShipId, CLEAR_HOVER_GAIN_BLOCKS);
-        bot().waitTicks(10);
 
-        double shipYPre = shipInfo().y;
+        // EXPERIMENT: the sag window opens ten ticks of the hull's world clock after the thrust cut.
+        // The helper returns the instant it cuts, and the hull then coasts UP past its hold (measured
+        // +3.07..+4.75 against a hold to +3.0) — a climb that, left inside the window, would cancel
+        // the very sag it measures, which is the silent direction. Its vertical velocity at the
+        // window's start is printed with the verdict, so a coast still under way is visible.
+        GameTicks.advanceWorld(serverClient(), 0, 10);
+        // The start of the sag window below, read at the instant before the stimulus it measures.
+        ShipInfo atWindowStart = shipInfo();
+        double shipYPre = atWindowStart.y;
+        double velYAtWindowStart = atWindowStart.velY;
 
         // Dismount exactly as the maintainer did: the real sneak key. (While seated it also feeds the
         // flight brake, but a held sneak still triggers vanilla's dismount.) Confirm on the CLIENT that
@@ -433,7 +455,26 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 "the flight computer must take an unmanned decision once the pilot stands up — with"
                         + " no record of one, a ship that then falls cannot be told from a ship whose"
                         + " computer never noticed it was unmanned", DECK_LINK_BUDGET_TICKS);
-        bot().waitTicks(40); // and then let a ship that is NOT holding visibly fall
+
+        // The pilot must stay aboard: resolved on the deck in the ship frame, and rendered there by his
+        // own client - not dropped into the world. The client's capture is a link and is awaited as
+        // one; a seat dismount seeds it, so a client that never TOOK him since the un-seating is the
+        // "left in the world" half of the report, named instead of inferred from two heights.
+        // Awaited BEFORE the reads below, because the server's capture and the client's height are
+        // both read there and both are only meaningful once his own client has taken him.
+        //
+        // The EDGE and not the per-tick commit, because the sentence below is "must take him": a
+        // RIDING body is excluded from capture (`isExcludedFromCapture`), so it holds none while he
+        // is seated and standing up has to produce an entry. Where a body may already be held at the
+        // mark, this wait would have nothing to close on and `awaitCaptureHeldBy` is the form.
+        clientEvents.awaitField(clientDismountMark, "deck_entered","ship", scenarioShipId,
+                "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up"
+                        + " mid-hover", DECK_LINK_BUDGET_TICKS);
+
+        // WINDOW: shipYPre (read before the dismount) to shipYPost, and velYPost at its end; the sag
+        // assertion is over their difference and prints both. Forty ticks is how long a hull whose
+        // hold is off needs to fall visibly; overshoot only lets it fall further.
+        bot().waitTicks(40);
         ShipInfo info = shipInfo();
         double shipYPost = info.y;
         double velYPost = info.velY;
@@ -442,8 +483,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 "the dismounted pilot must be resolved on the deck of the ship he was flying");
         double serverY = server.playerY;
         double clientY = bot().reportState().get("playerY").getAsDouble();
-        System.out.println("[deckcap] dismount shipY " + shipYPre + "->" + shipYPost + " velYPost="
-                + velYPost + " serverY=" + serverY + " clientY=" + clientY);
+        System.out.println("[deckcap] dismount shipY " + shipYPre + "->" + shipYPost + " velY "
+                + velYAtWindowStart + "->" + velYPost + " serverY=" + serverY + " clientY=" + clientY);
         System.out.println("[deckcap] dismount capture=" + capture.raw());
 
         // The ship must keep hovering, not drop, when the pilot stands up. The computer's own
@@ -453,7 +494,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // statement is zero; two blocks is the sag a station-keeping hull shows while it corrects,
         // and a hull that is actually falling is metres down inside this window.
         assertTrue("a hovering ship must not fall when the pilot dismounts: it dropped from " + shipYPre
-                + " to " + shipYPost + ". The computer's unmanned decision was " + hold,
+                + " to " + shipYPost + " (vertical velocity " + velYAtWindowStart + " -> " + velYPost
+                + "). The computer's unmanned decision was " + hold,
                 shipYPre - shipYPost < HOVER_SAG_BLOCKS);
         // THE TEST'S OWN, and a SIGN with slack rather than a rate: what it refuses is a hull that
         // has begun to accelerate downward. Vanilla gravity alone reaches this within a few ticks,
@@ -461,18 +503,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("a hovering ship must not start falling when the pilot dismounts (velY=" + velYPost
                 + "). The computer's unmanned decision was " + hold, velYPost > STARTED_FALLING_VEL_Y);
 
-        // The pilot must stay aboard: resolved on the deck in the ship frame, and rendered there by his
-        // own client - not dropped into the world. The client's capture is a link and is awaited as
-        // one; a seat dismount seeds it, so a client that never TOOK him since the un-seating is the
-        // "left in the world" half of the report, named instead of inferred from two heights.
-        //
-        // The EDGE and not the per-tick commit, because the sentence below is "must take him": a
-        // RIDING body is excluded from capture (`isExcludedFromCapture`), so it holds none while he
-        // is seated and standing up has to produce an entry. Where a body may already be held at the
-        // mark, this wait would have nothing to close on and `awaitCaptureHeldBy` is the form.
-        clientEvents.awaitField(clientDismountMark, "deck_entered","ship", scenarioShipId,
-                "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up"
-                        + " mid-hover", DECK_LINK_BUDGET_TICKS);
         assertTrue("the dismounted pilot must be resolved on the deck, not handed to vanilla: " + capture.raw(),
                 capture.verdict && capture.shipSupportObstacles > 0);
         // THE TEST'S OWN, and deliberately between the level bound and the tilted one: the pilot is
@@ -487,6 +517,13 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     // ---- Bug: a ship reloaded from a save drops a walking client player through its deck ---------
 
     @Test
+    @Ignore("HELD FOR THE BODY-MOVEMENT CONTRACT BATCH, by the maintainer's ruling of 2026-09-23:"
+            + " every deck-hold red waits for the contract on moving an entity aboard a craft. Red"
+            + " on a full client tier: the returning player's own client never took him onto the"
+            + " RELOADED deck (no capture within 240 ticks), and its log shows the ship loaded and"
+            + " then unloaded again after he returned. Green alone, and green on the next full tier"
+            + " — intermittent, not gone. RE-ENABLE with that batch; the acceptance is this method"
+            + " green on a full tier, twice.")
     public void aClientPlayerReturningToASavedShipStandsOnItsDeckInsteadOfFallingThrough() throws Exception {
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
@@ -607,11 +644,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Roll the ship so its world AABB spans a large air volume with a tilted deck - the airspace you
         // cross flying up to a ship. Attitude hold does it with no pilot aboard.
         double h = Math.toRadians(45.0) / 2.0;
+        double upBeforeRoll = shipInfo().upY();
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
-        bot().waitTicks(120);
+        // WINDOW: the slew, on the hull's world clock, with both ends in the gate — a deck that has
+        // not tilted is not "the airspace you cross flying up to a ship" this leg describes.
+        GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
         ShipInfo info = shipInfo();
+        scenario().requireArranged("the ship must be rolled before the fly-in: upY " + upBeforeRoll
+                        + " -> " + info.upY() + " over " + SLEW_WINDOW_TICKS + " server ticks",
+                info.upY() < Math.cos(Math.toRadians(30.0)));
         double sx = info.x, sy = info.y, sz = info.z;
 
         // NEGATIVE (the bug): a player who has NEVER stood on this deck flies into its airspace, off the
@@ -626,7 +669,19 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         Events clientEvents = clientEvents();
         long flyInMark = clientEvents.mark();
         exec("tp @a " + sx + " " + (sy + 3) + " " + sz + " 0 0");
-        bot().waitTicks(1); // one render pass at the off-deck point before he can fall onto the deck
+        // The reads below must describe him AT the off-deck point, and he starts falling onto the
+        // deck the tick his client applies it — so the placement is linked, read every tick rather
+        // than every five. A read that followed the link ran after at least one client pass there.
+        clientEvents.awaitMatchingEvery(flyInMark, "client_pos_look_applied",
+                reply -> ClientEvents.appliedNear(reply, sx, sz),
+                "placing the client at the fly-in point",
+                "the fly-in teleport must reach the client before its view there can be read",
+                DECK_LINK_BUDGET_TICKS, 1);
+        // EXPERIMENT: one client tick counted FROM the placement's own record. The record is taken
+        // while the client drains its task queue, and a read queued behind it could run before the
+        // client ticks or draws at the new point at all — describing the old one. One tick is one
+        // pass there; he has fallen about a tenth of a block by then.
+        bot().waitTicks(1);
         DeckCapture flyInCap = DeckCapture.read(this::exec);
         boolean inAABB = flyInCap.aboardByContainment;
         boolean onShipBlock = flyInCap.supportedByShip;
@@ -666,11 +721,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
 
         // POSITIVE control: level the ship and land him ON the deck. Now the deck camera SHOULD engage -
         // so the negative above is a real on-deck/off-deck discrimination, not the camera never firing.
+        double upBeforeLevel = shipInfo().upY();
         assertTrue("attitude hold must accept levelling",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0")
                         ).bool("commanded"));
-        bot().waitTicks(120);
+        // WINDOW: the levelling slew on the hull's world clock; both ends in the gate.
+        GameTicks.advanceWorld(serverClient(), 0, SLEW_WINDOW_TICKS);
         ShipInfo lvl = shipInfo();
+        scenario().requireArranged("the ship must be level again before the positive control lands"
+                        + " him on its deck: upY " + upBeforeLevel + " -> " + lvl.upY() + " over "
+                        + SLEW_WINDOW_TICKS + " server ticks",
+                lvl.upY() > Math.cos(Math.toRadians(15.0)));
         // The control is the camera's STATE, and it may NOT be its engage edge — a fact about the
         // recorder, not a preference. `deck_camera_changed` is written at
         // {@code ShipFrameCamera.recordCamera} only when `active` differs from what the last frame
@@ -726,7 +787,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         try {
 
         buildAndBoardShip(site);
-        bot().waitTicks(20);
 
         // Fly it into a hover, then stand up: it is now an unmanned, station-keeping, hovering ship -
         // exactly the state a saved hovering ship is in on disk.
@@ -774,7 +834,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // as a regex failure reading like the contract breaking.
         String reloaded = awaitThisShip(events, reloadMark, "ship_loaded",
                 "arrangement: the saved ship must come back before its hold can be judged");
-        bot().waitTicks(80); // give a ship that lost its hold time to visibly fall
+        // WINDOW: hoverY (read before the unload) to afterY; the assertion is over their difference
+        // and prints both. Eighty ticks after the reload is how long a hull whose hold did not come
+        // back needs to fall visibly; overshoot only lets it fall further.
+        bot().waitTicks(80);
 
         // What the flight computer restored from NBT, and what it then decided unmanned. Read, not
         // awaited: the contract below is the ALTITUDE, and these two records are what let its failure
@@ -818,7 +881,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
-        bot().waitTicks(20);
 
         // Put the craft at a steep but STANDABLE tilt, then stand up FROM the seat while it is
         // tilted — the maintainer's "after leaving, I fall through" is on a non-upright ship, which
@@ -835,7 +897,11 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             bot().waitTicks(4);
         }
         exec("artest vs force-clear-by-id 0 " + scenarioShipId);
+        double releasedUpY = shipUpYFromInfo(shipInfo());
         centreFlightCursor();
+        // WINDOW: releasedUpY (the instant the command is cut) to `tilted`, and the assertion below
+        // holds BOTH ends in the envelope and prints both — the craft has to KEEP the tilt it was
+        // brought to, not merely pass through it. Overshoot only gives it longer to drift out.
         bot().waitTicks(30);
         double tilted = shipUpYFromInfo(shipInfo());
         // An ASSERT, not an Assume: the tilt is commanded to a value inside the envelope, so failing
@@ -847,7 +913,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // enough level that the tilt this leg is about barely exists. Production draws neither
         // line — it holds whatever attitude it was pointed at.
         assertTrue("arrangement: the craft must sit in the steep-but-standable envelope before the"
-                + " subject is exercised (upY=" + tilted + ")", tilted >= STANDABLE_TILT_MIN_UP_Y && tilted < STANDABLE_TILT_MAX_UP_Y);
+                + " subject is exercised, and stay there once the command is cut (upY at release="
+                + releasedUpY + ", after the window=" + tilted + ")",
+                releasedUpY >= STANDABLE_TILT_MIN_UP_Y && releasedUpY < STANDABLE_TILT_MAX_UP_Y
+                        && tilted >= STANDABLE_TILT_MIN_UP_Y && tilted < STANDABLE_TILT_MAX_UP_Y);
 
         double[] seat = readShipInfoXYZ(shipInfo());
         // The seat dismount seeds the ex-pilot's capture on the CLIENT, and that is the link this
@@ -947,7 +1016,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
-        bot().waitTicks(20);
 
         // Stand up on the LEVEL deck: the dismount capture packet seeds the ex-pilot on the deck.
         //
@@ -964,14 +1032,18 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 DECK_LINK_BUDGET_TICKS);
 
         // Roll the now-UNMANNED ship (a mounted pilot would overwrite the target) to the commanded attitude.
+        double upBeforeTilt = shipUpYFromInfo(shipInfo());
         assertTrue("attitude hold must accept the " + label + " roll command",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " " + qw + " 0.0 0.0 " + qz)
                         ).bool("commanded"));
-        bot().waitTicks(200); // slew to the roll and settle - stationary, not a transient
+        // WINDOW: the slew to the roll, on the hull's world clock; the regime gate names both ends.
+        GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);
         double tilted = shipUpYFromInfo(shipInfo());
         // Reliable command -> a HARD assert that the regime was reached (fail loudly, not a silent skip).
-        assertTrue("the ship must reach the " + label + " regime for the test to mean anything (upY="
-                + tilted + " expected [" + upYLo + "," + upYHi + "])", tilted >= upYLo && tilted <= upYHi);
+        assertTrue("the ship must reach the " + label + " regime for the test to mean anything (upY "
+                + upBeforeTilt + " -> " + tilted + " over " + LONG_SLEW_WINDOW_TICKS
+                + " server ticks, expected [" + upYLo + "," + upYHi + "])",
+                tilted >= upYLo && tilted <= upYHi);
 
         double shipPosY = readShipInfoXYZ(shipInfo())[1];
         long rollMark = clientEvents.mark();
@@ -1073,10 +1145,15 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Then let go, and let it sit: REACHING an attitude and KEEPING it are different questions,
         // and everything below needs the second one.
         exec("artest vs force-clear-by-id 0 " + scenarioShipId);
+        double reachedUpY = invertedUpY;
+        // WINDOW: reachedUpY (the loop's last read, just before the hold is cut) to the read below,
+        // and the assertion holds BOTH ends inverted and prints both. Overshoot only gives the craft
+        // longer to right itself.
         bot().waitTicks(40);
         ShipInfo info0 = shipInfo();
         invertedUpY = shipUpYFromInfo(info0);
-        System.out.println("[deckcap] force-invert upY=" + invertedUpY + " info=" + info0);
+        System.out.println("[deckcap] force-invert reachedUpY=" + reachedUpY + " upY=" + invertedUpY
+                + " info=" + info0);
         // An ASSERT, not an Assume: the attitude write is deterministic, so a craft that is not
         // inverted here is a real change in how a craft holds an adopted attitude — which is a thing
         // this suite should go red for, not skip over. The skip it replaces hid this scenario for as
@@ -1084,8 +1161,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // THE TEST'S OWN arrangement fact, and a strict one because this leg's whole subject is
         // the inverted case: -0.85 of deck-normal Y is about 150 degrees over, well past the
         // point where world-up and ship-up could be confused for one another.
-        assertTrue("arrangement: the craft must be INVERTED before the subject is exercised (upY="
-                + invertedUpY + "): " + info0, invertedUpY < INVERTED_UP_Y);
+        assertTrue("arrangement: the craft must be INVERTED before the subject is exercised, and"
+                + " stay inverted once the hold is cut (upY when cut=" + reachedUpY
+                + ", after the window=" + invertedUpY + "): " + info0,
+                reachedUpY < INVERTED_UP_Y && invertedUpY < INVERTED_UP_Y);
 
         // ENTER the seat on the inverted ship — located inside THIS ship, not "the first seat in
         // the world" (see mountPilotSeatOfShipAt). The mark is taken here rather than inside the
@@ -1144,7 +1223,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         final int bx = site.x, by = site.y, bz = site.z;
 
         buildAndBoardShip(site);
-        bot().waitTicks(20);
 
         // Command the craft over to inverted and let it hold there. The subject is what the pilot's
         // controls do ONCE INVERTED — the maintainer's report is that they stop working there — and
@@ -1157,8 +1235,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             bot().waitTicks(4);
         }
         exec("artest vs force-clear-by-id 0 " + scenarioShipId);
+        double releasedUpY = deckCamera("shipUpY");
         centreFlightCursor();
-        bot().waitTicks(40); // let it settle inverted, omega -> ~0
+        // WINDOW: releasedUpY (the instant the command is cut) to shipUpY, and the assertion holds
+        // BOTH ends inverted and prints both. The same ticks let the slew's residual spin decay
+        // before the turn below; that spin is printed as omegaSettled and asserted nowhere.
+        bot().waitTicks(40);
         double shipUpY = deckCamera("shipUpY");
         // An ASSERT: the attitude is commanded, so not being there is news, not a dice roll. And it
         // is read from the CLIENT's own camera state, which is what the pilot below is looking at.
@@ -1166,9 +1248,14 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // read off the CLIENT's camera state, which lags the hull it is drawing, so the same
         // attitude reads shallower here. What it asserts is the same premise — past horizontal.
         assertTrue("arrangement: the craft must be inverted ON THE CLIENT before its controls are"
-                + " tested there (shipUpY=" + shipUpY + ")", shipUpY < INVERTED_UP_Y_ON_CLIENT);
+                + " tested there, and stay inverted once the command is cut (shipUpY when cut="
+                + releasedUpY + ", after the window=" + shipUpY + ")",
+                releasedUpY < INVERTED_UP_Y_ON_CLIENT && shipUpY < INVERTED_UP_Y_ON_CLIENT);
         double omegaSettled = shipInfo().omega;
         System.out.println("[deckcap] inverted-control shipUpY=" + shipUpY + " omegaSettled=" + omegaSettled);
+        // The baseline the turn below is judged against. The hull is NOT still here — measured on the
+        // 2026-09-23 gate, 0.28 rad/s left over from the slew — so "the turn spun it up" is asked
+        // ABOVE that residue: the pilot's command must add the bar to what the slew left.
 
         // Now, WHILE inverted, command a fresh turn. The ship must respond - its angular velocity must
         // rise - just as it does upright. If it stays at rest, the controls are dead at inversion.
@@ -1183,7 +1270,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // refusal there; it is not repeated here. It carried a 1.5x budget for no stated reason;
         // both windows are now the same shape.
         double omegaTurning = ClientPoll.until(bot()::waitTicks,
-                () -> shipInfo().omega, o -> o > 0.1, 2, 30).value;
+                () -> shipInfo().omega, o -> o > omegaSettled + TURN_COMMAND_OMEGA_RAD_PER_S, 2, 30).value;
         System.out.println("[deckcap] inverted-control cursor=" + cursor + " omegaTurning=" + omegaTurning);
 
         // THE TEST'S OWN sensitivity bar, in the cursor's own normalised units: what it refuses is
@@ -1191,7 +1278,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("a hard flight-cursor deflection must register on the client even when inverted "
                 + "(cursor=" + cursor + ")", Math.abs(cursor) > CURSOR_DEFLECTED);
         assertTrue("a seated pilot must still be able to TURN the ship when it is inverted - commanding a "
-                + "turn must spin it up, not leave it dead (omega=" + omegaTurning + ")", omegaTurning > TURN_COMMAND_OMEGA_RAD_PER_S);
+                + "turn must spin it up, not leave it dead (omega " + omegaSettled + " before the command,"
+                + " " + omegaTurning + " after)", omegaTurning > omegaSettled + TURN_COMMAND_OMEGA_RAD_PER_S);
     }
 
     /** Feed a raw mouse delta to the client's own ship-pilot handler, as the window's mouse would. */
@@ -1228,11 +1316,13 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      * would nudge two hundred times and hand back a stale number that reads like a measurement.</p>
      */
     private double flightCursorX(String what) throws Exception {
+        // The ship path writes one `flight_cursor` per client tick while a pilot seat is handling
+        // input, so the first record after the mark is the next tick's cursor, with every delta
+        // accepted before the mark already in it.
         long mark = clientEvents().mark();
-        bot().waitTicks(1);
-        String rec = Events.lastRecord(clientEvents().since(mark, "flight_cursor"));
-        assertNotNull("no flight_cursor record " + what + " — the client's flight-input path did not "
-                + "run in that tick, so there is no cursor reading to act on", rec);
+        String rec = Events.lastRecord(clientEvents().await(mark, "flight_cursor",
+                "a flight_cursor reading " + what + " — the client's flight-input path is not running,"
+                        + " so there is no cursor reading to act on", DECK_LINK_BUDGET_TICKS));
         return Events.number(rec, "x");
     }
 
@@ -1268,10 +1358,19 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 deckCapture.verdict);
 
         double h = Math.toRadians(90.0) / 2.0; // 90deg roll about the nose (+Z): deck on its side
+        double upBeforeSide = shipInfo().upY();
         assertTrue("attitude hold must accept the tilt",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " 0.0 0.0 " + Math.sin(h))).bool("commanded"));
-        bot().waitTicks(160); // slew to the tilt and settle - the ship is now HELD stationary
+        // WINDOW: the slew to the side, on the hull's world clock; both ends in the gate. The
+        // sampling below is of a deck ON ITS SIDE, and "on its side" is the band this class already
+        // holds the same 90-degree command to (aFreshlyDismountedPilotStaysCaptured...Ninety).
+        GameTicks.advanceWorld(serverClient(), 0, SIDE_SLEW_WINDOW_TICKS);
+        double upOnSide = shipInfo().upY();
+        scenario().requireArranged("the deck must be on its side before its stability is sampled:"
+                        + " upY " + upBeforeSide + " -> " + upOnSide + " over "
+                        + SIDE_SLEW_WINDOW_TICKS + " server ticks, band [-0.35, 0.35]",
+                upOnSide >= -0.35 && upOnSide <= 0.35);
 
         // Sample across frames while the ship is stationary. Any variation is instability, not motion.
         // The mark opens BEFORE the sampling: "the capture did not flicker" is an absence, and five
@@ -1350,15 +1449,19 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // `{"managed":false}`, the hull unloaded under it mid-slew, on the second run of a tree
         // whose first run was green. What keeps it loaded is no longer anything this leg says: a
         // test server holds every ship loaded from the moment the probes register.
+        double upBeforeFlip = shipInfo().upY();
         assertTrue("attitude hold must accept the flip",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " 0.17365 0.0 0.0 0.98481")
                         ).bool("commanded"));
-        bot().waitTicks(200); // slew all the way over and settle
+        // WINDOW: the flip, on the hull's world clock; its far end is the frame check's own up
+        // below, and the gate there names upBeforeFlip beside it.
+        GameTicks.advanceWorld(serverClient(), 0, LONG_SLEW_WINDOW_TICKS);
 
         ShipInfo info = shipInfo();
         double sx = info.x, sy = info.y, sz = info.z;
-        exec("tp @a " + sx + " " + (sy + 1) + " " + sz + " 0 0"); // inside the AABB so the probe resolves
-        bot().waitTicks(2);
+        // Inside the AABB so the probe resolves. No wait: the check is the SERVER's, it resolves the
+        // hull from the server player's position, and `tp` has written that before it replies.
+        exec("tp @a " + sx + " " + (sy + 1) + " " + sz + " 0 0");
 
         ShipFrameCheck tc = ShipFrameCheck.ofFirstPlayer(this::exec)
                 .requireMeasured("the frame check must run on the player standing on this deck");
@@ -1369,8 +1472,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // THE TEST'S OWN arrangement fact. The controller settles shy of a full 180 (axis-angle is
         // singular there), near 135 degrees, so this asks for what it can actually reach: deck-up
         // well below horizontal, which is all the consistency check underneath needs.
-        assertTrue("ship must be strongly inverted (deck-up points well below horizontal): "
-                + tc.raw(), tc.upQuatY() < STRONGLY_INVERTED_UP_Y);
+        assertTrue("ship must be strongly inverted (deck-up points well below horizontal): upY "
+                + upBeforeFlip + " -> " + tc.upQuatY() + " over " + LONG_SLEW_WINDOW_TICKS
+                + " server ticks; " + tc.raw(), tc.upQuatY() < STRONGLY_INVERTED_UP_Y);
 
         // THE decisive check: the MOVEMENT frame (VS vector rotate, used by ShipFrameTravel) and the
         // CAMERA/gravity frame (the attitude quaternion) must describe the SAME rotation. A disagreement
@@ -1411,7 +1515,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 (Reply.of(assemble).integer("rocketCount") == 0));
         scenarioShipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a NEW VS ship in the queryable registry (async spawn)");
-        bot().waitTicks(40);
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
@@ -1441,8 +1544,11 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     /** Build the ship and sit the bot on its pilot seat; returns the ship's world position. */
     private double[] buildAndBoardShip(FixtureSite site) throws Exception {
         double[] ship = buildShip(site);
+        long seatClientMark = clientEvents().mark();
         mountPilotSeatOfShipAt(site.x, site.y, site.z);
-        bot().waitTicks(10); // let the mount replicate and the client recognise the pilot seat
+        awaitClientMount(seatClientMark, "the bot must be seated as HIS OWN CLIENT renders him before"
+                + " this helper hands the ship back — every caller drives him as a seated pilot, and"
+                + " the pilot keys and mouse are read on the client", DECK_LINK_BUDGET_TICKS, "");
         return ship;
     }
 

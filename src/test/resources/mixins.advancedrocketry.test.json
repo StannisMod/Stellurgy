@@ -51,6 +51,7 @@
     "MixinGuiHandlerEvents",
     "MixinTileRocketAssemblingMachineEvents",
     "MixinTileObservatoryEvents",
+    "MixinTilePlanetSelectorEvents",
     "MixinTileNavigationComputerEvents",
     "MixinItemStationChipEvents",
     "MixinRocketInventoryHelperEvents",

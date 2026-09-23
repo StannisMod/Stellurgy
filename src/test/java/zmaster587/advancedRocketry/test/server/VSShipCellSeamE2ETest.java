@@ -550,6 +550,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
         // Let the craft fly on.
         double beforeY = arrivedShip(carriedSlot, arranged.arShipId).y;
+        // WINDOW: the deck's height is read on both sides of this stretch of its own world, and the
+        // control below is over the difference, naming both reads. Overshoot eases that control,
+        // but it also carries the deck further from a body it does not hold, so the witness after
+        // it only gets harder to pass.
         GameTicks.advanceWorld(client(), carriedSlot, KEEPS_ABOARD_TICKS);
         ShipInfo shipAfter = arrivedShip(carriedSlot, arranged.arShipId);
         double afterY = shipAfter.y;
@@ -669,6 +673,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // since stopped also satisfies.
         String gateBefore = entryGate(srcVsId);
         String censusBefore = extractString(gateBefore, "tickCensus");
+        // WINDOW: the census is read on both sides of this stretch and the assertion below is that
+        // the two differ, naming both. "It moved at all" is the bar, so overshoot cannot make a
+        // computer that never ticks look like one that does.
         GameTicks.advanceWorld(client(), 0, TICK_CENSUS_WINDOW);
         String gateAfter = entryGate(srcVsId);
         String censusAfter = extractString(gateAfter, "tickCensus");
@@ -682,8 +689,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // A null on either read means the computer is no longer in this world — entry has already
         // cut it out, which is this gate's condition reached rather than failed.
         if (censusBefore != null && censusAfter != null) {
-            assertFalse("this craft's flight computer is not being TICKED — its census stayed at "
-                            + censusBefore + " across " + TICK_CENSUS_WINDOW + " ticks of dim 0"
+            assertFalse("this craft's flight computer is not being TICKED — its census went "
+                            + censusBefore + " -> " + censusAfter + " across " + TICK_CENSUS_WINDOW
+                            + " ticks of dim 0"
                             + (identityBefore == identityAfter
                                     ? " (the same object both times, identity " + identityBefore + ")"
                                     : " — AND THE TWO READS WERE DIFFERENT OBJECTS, "

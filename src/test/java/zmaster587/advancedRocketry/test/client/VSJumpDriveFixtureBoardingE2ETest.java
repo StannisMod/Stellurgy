@@ -302,6 +302,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // who is riding what, so the replication half below is a record on this log.
         long seatPressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
@@ -346,6 +347,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         long navMark = events.markInstrumented();
         long navClientMark = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
@@ -587,6 +589,8 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // javadoc), so its expiry must not fail — and a poll-until-off cannot express "give the key
         // this long and then read what happened", which is what this actually wants.
         bot().holdKey(Keyboard.KEY_LSHIFT);
+        // STIMULUS: a best-effort sneak held for a fixed stretch; its expiry is not a failure, and
+        // the guaranteed route below is linked.
         bot().waitTicks(2 * budget);
         bot().releaseKey(Keyboard.KEY_LSHIFT);
         boolean bySneak = !Events.records(clientEvents().since(clientMark, "dismount")).isEmpty();

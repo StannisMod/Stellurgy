@@ -83,9 +83,12 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
         long heldMark = events.mark();
         exec("artest space release " + HELD_CELL);
 
+        String unloads = unloadRecordsOver(heldMark);
         assertEquals("a cell still bound to its slot must keep that slot's world for the whole"
                         + " stretch that removed the unheld one — not merely be loaded again at the"
-                        + " end of it", 0, unloadsOf(heldMark, held.slotDim()));
+                        + " end of it. `world_unloaded` from seq " + heldMark + " across "
+                        + SWEEP_BUDGET_TICKS + " server ticks: " + unloads,
+                0, Events.countRecords(unloads, "dim", String.valueOf(held.slotDim())));
         String stillThere = exec("artest space cell-slot " + HELD_CELL);
         assertTrue("a cell still bound to its slot must keep that slot's world, even with no occupant, "
                         + "no player and no chunks — leg 1 proves the sweep would otherwise take it: "
@@ -115,17 +118,19 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
     }
 
     /**
-     * Watch this cell's slot for the same stretch of world that removed the unheld one, and answer
-     * whether it was unloaded in it.
+     * Every {@code world_unloaded} from {@code mark} to the end of a stretch as long as the whole
+     * budget leg 1's sweep was allowed — and so at least as long as that sweep actually took.
      *
-     * <p>A WINDOW, not a wait, and the difference is the whole leg: the claim is that nothing took
+     * <p>A window, not a wait, and the difference is the whole leg: the claim is that nothing took
      * this world, which is a statement about a stretch of time rather than about one moment. The
      * version this replaces spent the budget polling and then asserted on the LAST reading — which
      * is green for a world that was unloaded and re-materialized inside the window.</p>
      */
-    private int unloadsOf(long mark, int slotDim) throws Exception {
+    private String unloadRecordsOver(long mark) throws Exception {
+        // WINDOW: the log is read from the caller's mark to the end of this stretch, and the caller
+        // asserts over everything in between, naming both ends. Overshoot only widens the stretch
+        // the sweep had to take the held world in, which can turn a green red and never the reverse.
         GameTicks.advance(client(), GameTicks.server(), SWEEP_BUDGET_TICKS);
-        return Events.countRecords(events.since(mark, "world_unloaded"), "dim",
-                String.valueOf(slotDim));
+        return events.since(mark, "world_unloaded");
     }
 }

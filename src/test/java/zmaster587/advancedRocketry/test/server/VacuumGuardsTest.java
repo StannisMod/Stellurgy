@@ -6,7 +6,6 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
-import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
 
@@ -28,9 +27,6 @@ import static org.junit.Assert.assertTrue;
  * Player supply: {@code ensure-fake}.
  */
 public class VacuumGuardsTest {
-
-    /** The 40 requested ticks plus room for the AtmosphereHandler to settle — the old 2500 ms. */
-    private static final int SETTLE_TICKS = 50;
 
     private static final int DIM_VAC = 9611;
     private static final int DIM_AIR = 9612;
@@ -96,16 +92,16 @@ public class VacuumGuardsTest {
         return reply.text(field);
     }
 
-    /** Stations the fake player in the dim and lets the dim's
-     *  AtmosphereHandler settle so the guards query a live atmosphere. */
+    /**
+     * Stations the fake player in the dim. Nothing is waited for after it: {@code ensure-fake}
+     * initialises the dimension on the server thread before it replies, and the world's load event
+     * registers its AtmosphereHandler inside that initialisation. Both guards ask that handler for
+     * the atmosphere at a POSITION — its blobs, or the dimension's own default — which no tick
+     * populates; the per-player cache the living updates fill is not what either guard reads.
+     */
     private void enterDim(int dim) throws Exception {
         String fake = exec("artest player ensure-fake " + dim + " 8.5 120 8.5");
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
-        exec("artest player tick-living 40");
-        // Let the server run those ticks plus room for the AtmosphereHandler to settle, so the guards
-        // below query a live atmosphere. In ticks: the settle is per-tick work, and a busy box used to
-        // buy it fewer of them.
-        GameTicks.advance(harness.client(), GameTicks.server(), SETTLE_TICKS);
     }
 
     /** Sleep in a vacuum dim is refused with OTHER_PROBLEM. */

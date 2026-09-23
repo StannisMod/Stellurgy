@@ -355,7 +355,8 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
 
     private BufferedImage capture(String name) throws Exception {
         bot().setHudHidden(true);
-        bot().waitTicks(4);
+        // `screenshot` captures at the end of the next frame the client renders, which is drawn
+        // after the HUD was hidden: nothing to advance for.
         JsonObject shot = bot().screenshot(name);
         assertTrue("screenshot must land on disk: " + shot, shot.get("exists").getAsBoolean());
         Path dst = outDir.resolve(name + ".png");

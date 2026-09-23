@@ -334,10 +334,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         double preY1 = requireClimbWith(Keyboard.KEY_R, preY0,
                 "control leg: the seated pilot must be able to fly his ship in its cell BEFORE the"
                         + " restart");
-        // Let the station-hold settle the hovering ship before he logs out: the restore below
-        // compares his login position against the ship's LIVE pose, and a ship still drifting
-        // upward when the server stops turns that comparison into a moving target.
-        bot().waitTicks(30);
+        // No settle before the logout. One stood here for "a ship still drifting when the server
+        // stops turns the restore's comparison into a moving target" — but that comparison reads the
+        // ship's LIVE pose after the client's, on the far side of the restart, against a pilot
+        // SEATED on it, and a seated pilot drifts with his ship. Nothing below reads the drift.
 
         // The restore can only be exercised if he is STILL aboard in the slot dimension at the moment
         // the server writes him to disk. Assert that here rather than at the end: a pilot who has
@@ -509,6 +509,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // claim. The act this was really waiting on is his own mount, and that is a link, awaited
         // above; what is left is the rider's position being written each tick, which nothing
         // publishes and no record could carry. So: give it the ticks, then read.
+        double joinY = state.get("playerY").getAsDouble();
+        // WINDOW: a value converging, where nothing decides. Its two ends are `joinY` (read the
+        // instant the mount link closed) and the read below, and both are printed and asserted
+        // against, so a red says whether he was converging or never left the wrong height.
         bot().waitTicks(SEAT_SETTLE_TICKS);
         state = bot().reportState();
         double clientX = state.get("playerX").getAsDouble();
@@ -524,9 +528,11 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         System.out.println("[restore] seat settle after " + SEAT_SETTLE_TICKS + " ticks: client="
                 + clientX + "," + clientY + "," + clientZ + " ship=" + shipPose[0] + ","
                 + shipPose[1] + "," + shipPose[2] + " dY=" + Math.abs(clientY - shipPose[1])
-                + " (the bar is " + POSE_EPSILON + ")");
+                + " joinY=" + joinY + " (the bar is " + POSE_EPSILON + ")");
         observed = "clientDim=" + dim + " riding=" + bot().reportRidingEntity() + " state=" + state
-                + " shipPose=[" + shipPose[0] + "," + shipPose[1] + "," + shipPose[2] + "]" + pools;
+                + " shipPose=[" + shipPose[0] + "," + shipPose[1] + "," + shipPose[2] + "]"
+                + " clientY at the mount link=" + joinY + ", " + SEAT_SETTLE_TICKS
+                + " ticks later=" + clientY + pools;
         assertEquals("he must come back at his ship on X: " + observed,
                 shipPose[0], clientX, POSE_EPSILON);
         assertEquals("he must come back at his ship on Y: " + observed,
@@ -615,6 +621,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // on it. A release is an EVENT with production's own reason string on it, and an empty log
         // is only an answer once the recorder says it was listening.
         long idleReleaseMark = clientEvents().mark();
+        // WINDOW: deckBefore / deckAfter and the tick history from fromTick bound it, and every
+        // assertion below is over what happened between the two reads.
         bot().waitTicks(OBSERVE_TICKS);
         String idleReleases = clientReleases(idleReleaseMark, "an idle window with no input at all");
         long dropsInIdle = guardReleases(idleReleases);
@@ -812,8 +820,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // difference of two counter reads could not fail.
         long walkReleaseMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_W);
-        // Six ticks, not twelve: the fixture's deck is small, and a walk long enough to carry him off
-        // its edge ends the capture - which reads as a silent record rather than as a clean body.
+        // STIMULUS: six ticks of W, not twelve: the fixture's deck is small, and a walk long enough
+        // to carry him off its edge ends the capture - which reads as a silent record rather than as
+        // a clean body.
         bot().waitTicks(6);
         bot().releaseKey(Keyboard.KEY_W);
         String walkHistory = clientTickHistory();
@@ -823,9 +832,12 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 + "\n      re-seat passes: "
                 + clientEvents().since(walkReleaseMark, "deck_reseat_pass");
         long dropsInWalk = guardReleases(clientReleases(walkReleaseMark, "a swept and committed walk"));
+        // EXPERIMENT: the idle window opens two client ticks after the release, so the walk's last
+        // applied input tick is outside it and "idle" means no input at all.
         bot().waitTicks(2);
         long idleFrom = lastClientTick();
         long idleReleaseMark = clientEvents().mark();
+        // WINDOW: from idleFrom to the history read below, with the deck's pose on either side.
         bot().waitTicks(OBSERVE_TICKS);
         String idleHistory = clientTickHistory();
         long dropsInIdle = guardReleases(clientReleases(idleReleaseMark,
@@ -970,6 +982,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         requireArranged("the drive must reach THIS ship's own flight computer, or the window "
                 + "below observes a motionless deck and cannot fail: " + driven,
                 Reply.of(driven).bool("afcResolved"));
+        // EXPERIMENT: the pulse is the dose — long enough to set the ship moving, short enough that
+        // the window the caller opens next watches the hold SETTLING it (see THROTTLE_PULSE_TICKS).
         bot().waitTicks(THROTTLE_PULSE_TICKS);
     }
 
@@ -1047,6 +1061,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             if (!seat.seatFound) {
                 return "<no seat to re-capture through: " + seat.raw() + ">";
             }
+            long seatMark = clientEvents().mark();
             String mount = exec("artest player mount-entity " + seat.requireDummyId());
             // absence is the answer, and here it is the WHOLE point of the method: the verb writes
             // `{"error":"entity not found"}` with no `mounted` when the seat dummy has gone, and a
@@ -1055,17 +1070,29 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             if (!Reply.of(mount).boolOr("mounted", false)) {
                 return "<could not re-seat: " + mount + ">";
             }
-            bot().waitTicks(20);
+            try {
+                ClientEvents.awaitMounted(clientEvents(), seatMark,
+                        "the re-capture diagnostic's seating, replicated to the client", 100);
+            } catch (AssertionError notSeated) {
+                return "<the client never followed the re-seat: " + notSeated.getMessage() + ">";
+            }
+            long standMark = clientEvents().mark();
             String dismount = exec("artest player dismount");
             if (!Reply.of(dismount).ok()) {
                 return "<could not stand up again: " + dismount + ">";
             }
-            bot().waitTicks(40);
+            try {
+                awaitClientEvent(standMark, "dismount",
+                        "the re-capture diagnostic's standing up, replicated to the client", 100);
+            } catch (AssertionError notStood) {
+                return "<the client never followed the stand-up: " + notStood.getMessage() + ">";
+            }
             // Under MOTION, like the subject window - a re-capture measured on a motionless deck
             // would come back all zeros and could not be compared with anything.
             commandWindowCruise(dim);
             double[] deckBefore = awaitShipPose(dim);
             long fromTick = lastClientTick();
+            // WINDOW: the same one the subject measures, bounded by the two deck reads.
             bot().waitTicks(OBSERVE_TICKS);
             double[] deckAfter = awaitShipPose(dim);
             String history = clientTickHistory();

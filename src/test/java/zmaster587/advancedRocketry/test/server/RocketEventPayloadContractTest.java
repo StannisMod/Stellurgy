@@ -3,11 +3,13 @@ package zmaster587.advancedRocketry.test.server;
 import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
+import zmaster587.advancedRocketry.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -44,6 +46,14 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
     private static final int DESCENT_TIMER = 40; // mirrors EntityRocket.DESCENT_TIMER
+
+    /** World ticks the touchdown is given to be announced: a deadline, never spent on a healthy
+     *  run — the fall is one tick onto a plate two blocks below. */
+    private static final int LANDING_TICKS = 100;
+
+    /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
+    private final Events events =
+            new Events(cmd -> exec(cmd), ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private static final String ENTITY_ID = "entityId";
     private static final String PRELAUNCH_ID = "preLaunchEntityId";
@@ -142,10 +152,15 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
         // orbit+flight gate enters the line-1284 landed branch on the
         // first real tick that move() resolves a downward collision.
+        long mark = events.mark();
         exec("artest rocket set-state " + rocketId
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (CY + 2) + " motionY=-10");
-        GameTicks.advanceWorld(client(), 0, 6);
+        // Linked on the landing Forge publishes, narrowed to this rocket: the payload read below is
+        // the recorder's LAST landing, so it is only this rocket's once this rocket has landed.
+        events.awaitRecordWithFields(mark, "rocket_landed",
+                "the rocket must touch down on the stone floor under real ticking", LANDING_TICKS,
+                "e", String.valueOf(rocketId));
 
         String countsAfter = exec("artest rocket event-counts-full");
         int landedAfter = extract(countsAfter, LANDED_COUNT);
@@ -194,9 +209,19 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // onUpdate as the increment (super first, then body) so the
         // tick that bumps the counter to 20 is the one that posts the
         // event.
-        exec("artest rocket set-state " + rocketId
+        String set = exec("artest rocket set-state " + rocketId
                 + " orbit=true flight=false ticksExisted=18 posY=300 motionY=0");
+        // EXPERIMENT: the dose is the rocket's own counter crossing 20, and 3 ticks of its world
+        // carry it from 18 through 20 — one increment per tick of the world it is ticked in. The
+        // gate is an equality, so overshoot adds ticks past 21 where it is shut and cannot fire the
+        // event a second time or hide it. No record of RocketDeOrbitingEvent exists to link on; the
+        // counter read below is what says the dose was delivered.
         GameTicks.advanceWorld(client(), 0, 3);
+        int ticksAfter = RocketInfo.byId(cmd -> exec(cmd), rocketId).ticksExisted;
+        assertTrue("the rocket's counter must have crossed the deorbit gate at 20, or the event had"
+                        + " no tick to fire on (ticksExisted " + extract(set, "ticksExisted") + " -> "
+                        + ticksAfter + ")",
+                ticksAfter >= 20);
 
         String countsAfter = exec("artest rocket event-counts-full");
         int deOrbitAfter = extract(countsAfter, DEORBIT_COUNT);

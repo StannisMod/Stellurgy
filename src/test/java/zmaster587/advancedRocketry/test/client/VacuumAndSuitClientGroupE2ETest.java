@@ -7,6 +7,7 @@ import org.junit.runners.MethodSorters;
 
 
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -158,8 +159,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         exec("artest player clear-armor");
         exec("gamerule naturalRegeneration false");
         exec("gamemode survival @a");
+        // WINDOW: ten ticks of survival on the spot he was placed, watched for damage — he arrived
+        // in creative, so full health is the start of the window by construction, and a spot that
+        // hurts (inside a block, over nothing) shows as less at its end.
         bot().waitTicks(10);
-
         double health = health(bot().reportState());
         scenario().record("healthOnPlatform", health);
         scenario().requireArranged("the player must be standing unhurt on his platform before the"
@@ -401,7 +404,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             // recorder and a mixin configuration that was never queued.
             Events events = events();
             long mark = events.markInstrumented();
-            bot().waitTicks(ABSENCE_WINDOW_TICKS);
+            // WINDOW: from the mark to the log read below, counted on the player's OWN world clock —
+            // the atmosphere judges him on that world's ticks, so client ticks would buy a busy box
+            // fewer judgments and a quieter log.
+            GameTicks.advanceWorld(serverClient(), plot().dim, ABSENCE_WINDOW_TICKS);
 
             String drains = events.since(mark, "suit_air_drained");
             assertEquals("a breathable atmosphere must never reach the suit's tank at all; drains"
@@ -584,7 +590,8 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             // player was judged. markInstrumented is what rules out an instrument that was not there.
             Events events = events();
             long mark = events.markInstrumented();
-            bot().waitTicks(ABSENCE_WINDOW_TICKS);
+            // WINDOW: the same absence window, on the player's own world clock.
+            GameTicks.advanceWorld(serverClient(), plot().dim, ABSENCE_WINDOW_TICKS);
 
             String drains = events.since(mark, "suit_air_drained");
             assertEquals("a breathable atmosphere must never reach the enchanted suit's buffer;"

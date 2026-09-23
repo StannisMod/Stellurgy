@@ -140,6 +140,10 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
      */
     private static final double RIDER_TRACKING_TOLERANCE = 3.0;
 
+    /** How long the client's copy of the rider may take to follow a rigid teleport of his ship —
+     *  a deadline for one discrete write, never a settle. */
+    private static final int RIDER_ARRIVAL_LINK_BUDGET_TICKS = 200;
+
     /**
      * How far along X the craft is moved a SECOND time, in blocks. Far enough that the move is a
      * real relocation rather than a nudge, and small against {@code HALF_CELL} so the seam cannot
@@ -258,7 +262,6 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         String tpY = exec("artest vs teleport-ship-by-id " + cellDim + " " + shipId
                 + " " + BX + " " + EXTREME_Y + " " + BZ);
         assertTrue("teleport-ship to extreme Y must succeed: " + tpY, Reply.of(tpY).ok());
-        bot().waitTicks(30); // transform adoption + rider sync settle
         // THE PREMISE THIS SCENARIO DIED OF, now asserted. In an ordinary world the teleport above is
         // followed by the entry on-ramp taking the craft into a cell under a NEW identity, and every
         // reading afterwards is about a craft this test never flew. Here the craft is already in a
@@ -273,7 +276,8 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         String unparked = exec("artest vs unpark-by-id " + cellDim + " " + shipId);
         assertTrue("the teleport leaves the ship PARKED by VS's own recipe, and a parked ship cannot"
                 + " be flown — the unpark must take: " + unparked, Reply.of(unparked).ok());
-        bot().waitTicks(10);
+        // Both verbs above run on the server thread before they answer, so this read is of the
+        // write; what still travels is the CLIENT's copy of the rider, awaited below.
         String serverInfoAfterTp = shipInfoById();
         scenario().requireArranged("the teleported ship must still be loaded, or there is no server "
                         + "pose for the rider to be compared against: " + serverInfoAfterTp,
@@ -285,6 +289,19 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         // hard-coded destination, so it could fail either because the rider came adrift or because
         // the ship never went where it was sent, and the message could not tell the two apart.
         double shipYAfterTp = ShipInfo.of(serverInfoAfterTp).y;
+        // The rider's arrival on THIS client is a position write far larger than any flight moves,
+        // so its own `pos_jump` records it — with the Y it was written to. The link is the first
+        // such write that lands him within tracking tolerance of where the server has the ship.
+        final String rider = botName();
+        clientEvents().awaitMatching(riderMark, "pos_jump",
+                seen -> Events.records(seen).stream().anyMatch(r ->
+                        rider.equals(Events.text(r, "who"))
+                                && Math.abs(Events.number(r, "to") - shipYAfterTp)
+                                        < RIDER_TRACKING_TOLERANCE),
+                "a jump of " + rider + " to within " + RIDER_TRACKING_TOLERANCE + " of the ship's"
+                        + " Y " + shipYAfterTp,
+                "the CLIENT-rendered rider must be carried to the top of the pose band WITH his"
+                        + " ship", RIDER_ARRIVAL_LINK_BUDGET_TICKS);
         // IS HE STILL ABOARD AT ALL — asked before he is measured, because the two are different
         // questions and only one of them has an answer shaped like a number. A bare
         // `reportRidingEntity().get("posY")` raised a NullPointerException here with no message at
@@ -328,12 +345,13 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         String tp2 = exec("artest vs teleport-ship-by-id " + cellDim + " " + shipId
                 + " " + (BX + SECOND_RELOCATION_X) + " " + EXTREME_Y + " " + BZ);
         assertTrue("the second teleport must succeed: " + tp2, Reply.of(tp2).ok());
-        bot().waitTicks(30);
         String unparked2 = exec("artest vs unpark-by-id " + cellDim + " " + shipId);
         assertTrue("the second teleport leaves the craft PARKED, and a parked craft cannot be flown"
                 + " — a red below would then be about the park, not about the physics: " + unparked2,
                 Reply.of(unparked2).ok());
-        bot().waitTicks(10);
+        // No advance: both verbs finished on the server thread, and what follows asks the server
+        // first. The client's copy of the move is along X, which no record carries; the climb leg
+        // below measures Y differences on either side of its own key, so it does not depend on it.
 
         String afterSecond = shipInfoById();
         // THE MOVE ITSELF, before anything is asked about flying. A craft that did not arrive cannot
@@ -428,6 +446,9 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         double yAfter = lift.value;
         assertTrue("[" + label + "] the vertical-up key must lift the ship (yBefore=" + yBefore
                 + " yAfter=" + yAfter + ")", yAfter - yBefore > 1.0);
+        // EXPERIMENT: the comparison is DEFINED six client ticks after the cut — a rider lagging his
+        // ship by more than RIDER_TRACKING_TOLERANCE at that offset is the failure. The tolerance is
+        // the test's own and was not measured at this offset.
         bot().waitTicks(6);
         double serverDelta = shipY() - yBefore;
         // Through the guard for the same reason as the read before the climb: a pilot who came adrift

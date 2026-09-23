@@ -107,9 +107,13 @@ public class AdvancementsTriggerTest {
         exec("artest chunk forceload " + dim + " " + (((int) x) >> 4) + " " + (((int) z) >> 4));
         assertTrue("tick-living must succeed",
                 Reply.of(exec("artest player tick-living " + ticks)).ok());
-        // Wait OFF the server thread: a console command runs ON the server thread, so a probe that
-        // sleeps there blocks ticking entirely. The wait belongs in the test jvm — and it OBSERVES
-        // the world's clock rather than hoping for it, so a world that is not ticking says so.
+        // EXPERIMENT: the dose is `ticks` living updates, and the callers' assertions are about what
+        // that many did (a name gate, a distance gate: "none of them granted it"). The ticker posts
+        // one update per SERVER tick and stops at `ticks`; this world's clock can only advance on a
+        // server tick, so `ticks + 10` of it deliver every update, and cross the same %20 windows
+        // the updates are judged against. Overshoot adds no updates — the dose is capped by the
+        // ticker, not by this wait — so the verdict does not move with the box's speed. Measured
+        // on the world's clock so a world that is not ticking fails here, naming itself.
         GameTicks.advanceWorld(harness.client(), dim, ticks + 10);
     }
 
@@ -123,7 +127,10 @@ public class AdvancementsTriggerTest {
      *  within 1–2 %20-tick trigger windows. Baseline asserted first. */
     @Test
     public void standingNearLanderOnLunaFiresWentToTheMoon() throws Exception {
-        stationAndTick(DIM_LUNA, 2347, 95, 67, 0 + 1); // station only, 1 tick
+        // Station only, with NO living update: this spot is already inside the distance gate, so a
+        // single update that happened to land on a %20 window granted the very advancement the
+        // baseline below says is not granted yet — about one run in twenty.
+        stationAndTick(DIM_LUNA, 2347, 95, 67, 0);
         assertEquals("baseline: WENT_TO_THE_MOON must not be granted yet",
                 false, isDone(exec("artest player advancement " + ADV_WENT)));
 

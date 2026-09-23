@@ -99,8 +99,9 @@ public class SatelliteUnknownTypeClientE2ETest extends AbstractClientE2ETest {
                         + " unresolved — that is the branch readClient must then drop",
                 DECODE_BUDGET_TICKS);
 
-        // PACING: give the failure its window. The pre-fix NPE escaped on the packet thread and the
-        // disconnect followed within a tick or two of the decode above.
+        // WINDOW: an absence, watched for SETTLE_TICKS from the decode record above to the log read
+        // below. The pre-fix NPE escaped on the packet thread and the disconnect followed within a
+        // tick or two of the decode.
         bot().waitTicks(SETTLE_TICKS);
 
         // ABSENCE: production dropped the satellite instead of NPEing, so the client was never

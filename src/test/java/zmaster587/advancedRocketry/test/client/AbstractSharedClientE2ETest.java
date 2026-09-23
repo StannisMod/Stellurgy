@@ -900,6 +900,33 @@ public abstract class AbstractSharedClientE2ETest {
     }
 
     /**
+     * A BARRIER: return once the server has handled every packet this client sent before the call.
+     *
+     * <p>The bot sends a chat line carrying a fresh nonce and waits for the server's echo of it.
+     * The server runs a player's movement, click and chat packets from ONE queue on its main
+     * thread, in arrival order ({@code PacketThreadUtil.checkThreadAndEnqueue} in each handler), and
+     * the connection delivers in the order sent — so the echo cannot come back before everything
+     * queued ahead of the line has run. A mod packet run straight from its channel handler — a
+     * libVulpes machine packet, a pilot's ENGINE_START — runs earlier still. It is the only record
+     * that says "the server has seen everything up to here" about packets that record nothing
+     * themselves.</p>
+     *
+     * <p>SILENT about packets sent AFTER the call, and about anything the server does on its own
+     * clock rather than in answer to a packet.</p>
+     */
+    protected final void fenceWhatTheClientSent(String what) throws Exception {
+        String nonce = "fence-" + System.nanoTime();
+        long mark = clientEvents().mark();
+        bot().sendChat(nonce);
+        clientEvents().awaitMatching(mark, "client_chat_received",
+                seen -> Events.anyRecordFieldContains(seen, "text", nonce),
+                "echoing " + nonce, what, FENCE_LINK_BUDGET_TICKS);
+    }
+
+    /** How long a fence's echo may take: one queued round trip, a deadline and never a settle. */
+    private static final int FENCE_LINK_BUDGET_TICKS = 200;
+
+    /**
      * Wait until the CLIENT has APPLIED a server placement within one block of {@code x, z}.
      *
      * <p>The far side of a teleport, offered here because it is the same wait the prologue makes

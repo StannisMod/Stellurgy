@@ -110,6 +110,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
      */
     private static final int INVERSION_SLEW_TICKS = 200;
 
+    /** The 60-degree roll's slew window, in the hull's world ticks — the 150 client ticks it used
+     *  to be, moved onto the clock the hull's world advances on. */
+    private static final int ROLL_SLEW_TICKS = 150;
+
     // Every contract this class pins is a CLIENT fact — the resolver that releases and reclaims a
     // body inside a hull is the client's, and for an {@code EntityPlayerMP} the server rebases the
     // position instead of releasing at all, so a server probe can answer "still tracked" straight
@@ -188,12 +192,19 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // Seat the bot, invert the ship under him, dismount INSIDE: the dismount seed captures
         // him ABOARD in the cockpit of the inverted ship.
         buildAndBoardShip(site);
-        bot().waitTicks(20);
         double h = Math.toRadians(170.0) / 2.0;
+        double upBefore = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
         assertTrue("attitude hold must accept the inversion",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        bot().waitTicks(200);
+        // WINDOW: the same slew window the roofed-deck scenario below argues, counted on the hull's
+        // world clock; its two ends are upBefore and the read after, and the gate names both.
+        GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
+        double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
+        scenario().requireArranged("the hull must be upside down before the pilot is released inside"
+                        + " it, or this is the upright case again: upY " + upBefore + " -> " + upAfter
+                        + " over " + INVERSION_SLEW_TICKS + " server ticks",
+                upAfter < 0.0);
 
         // The arrangement as a CHAIN, not a budget: the probe un-seats him and the deck takes him.
         // `dismount` is recorded at the un-seating and `deck_entered` at the capture production
@@ -253,7 +264,17 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
         // Subject validity (fixture geometry by measurement): the released body must still BE
         // inside the ship's block region, or the run is measuring a doorway ejection.
-        bot().waitTicks(2);
+        //
+        // Two links, because the read is of a CLIENT census and it has to be one taken after the
+        // client applied the teleport: a census from before it reports the stand he was moved off,
+        // which is inside the region by construction and would pass this check on any teleport.
+        String moved = clientEvents.await(releaseMark, "client_pos_look_applied",
+                "the in-hull teleport must land on the client", DECK_LINK_BUDGET_TICKS);
+        long movedSeq = (long) Events.number(Events.lastRecord(moved), "seq");
+        clientEvents.await(movedSeq + 1, "subspace_census",
+                "the client must take a census after applying the teleport; none at all means no"
+                        + " ship claims his position on his own client",
+                DECK_LINK_BUDGET_TICKS);
         String subAfterRelease = censusField("subPos");
         String regionStr = censusField("region");
         assertTrue("the released body must remain INSIDE the ship's block region (sub="
@@ -397,8 +418,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // camera, the reported "captured, but the camera never flips" desync. The contract: the
         // deck reclaims it without standing support and carries it back AGAINST world gravity.
         buildAndBoardShip(site, "with-roofed-deck");
-        bot().waitTicks(20);
         double h = Math.toRadians(170.0) / 2.0;
+        double upBeforeInversion = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
         assertTrue("attitude hold must accept the inversion",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
@@ -416,6 +437,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // the SLEW advances on, so on a starved box this window can still end short — and then the
         // read below says so, loudly and typed. A link on the hull reaching its commanded attitude
         // would remove that too; nothing publishes one yet.
+        // WINDOW: upBeforeInversion -> the read below, both named by the gate.
         GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
         ShipInfo inverted = ShipInfo.byId(this::exec, 0, scenarioShipId);
         // WHY -sqrt(1/2): the step below moves the body world-DOWN, and it only reaches the cavity
@@ -424,8 +446,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // maps the step into the deck plane" stops being possible. The command asks for 170.
         scenario().requireArranged("the hull must be well into its inversion before the body is displaced,"
                         + " or a world-down step lands in the deck plane rather than the cavity:"
-                        + " upY=" + inverted.upY() + " after " + INVERSION_SLEW_TICKS
-                        + " server ticks; " + inverted.raw(),
+                        + " upY " + upBeforeInversion + " -> " + inverted.upY() + " over "
+                        + INVERSION_SLEW_TICKS + " server ticks; " + inverted.raw(),
                 inverted.upY() < -Math.sqrt(0.5));
 
         // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_entered`, and
@@ -612,14 +634,28 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // regardless of the roll; a world-up ascent would instead leak most of its motion into
         // the subspace deck PLANE (at 60 deg: cos60 = 0.5 up, sin60 = 0.87 sideways) - and
         // turning flight off hands the body to deck gravity, which seats it back on the deck.
+        //
+        // Flight needs creative, and creative is what the shared base restores before every
+        // scenario (AbstractSharedClientE2ETest.resetBetweenScenarios). Not re-issued here: a
+        // `gamemode` resends the abilities with flight OFF, and one landing after the double-tap
+        // below would switch the flight it starts back off.
         buildAndBoardShip(site);
-        exec("gamemode creative @a"); // flight needs creative; the harness default is not
-        bot().waitTicks(20);
         double h = Math.toRadians(60.0) / 2.0;
+        double upBefore = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
         assertTrue("attitude hold must accept the roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        bot().waitTicks(150);
+        // WINDOW: the slew, counted on the hull's world clock, with both ends in the gate. The gate's
+        // angle is not a choice: the ascent bounds below (ASCENT_ALONG_NORMAL_BLOCKS 1.2 along the
+        // normal, ASCENT_LATERAL_BLOCKS 1.6 across it) tell a deck-normal ascent from a world-up one
+        // only past tan(theta) = 1.6 / 1.2, i.e. 53.1 degrees — below that a world-up climb can pass
+        // both. So the hull must be past it, with a degree of margin inside the commanded 60.
+        GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);
+        double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
+        scenario().requireArranged("the hull must be rolled past the angle the ascent bounds can"
+                        + " discriminate at (53.1 degrees): upY " + upBefore + " -> " + upAfter
+                        + " over " + ROLL_SLEW_TICKS + " server ticks",
+                upAfter < Math.cos(Math.toRadians(54.0)));
 
         // Same arrangement chain as the two interior scenarios.
         Events events = events();
@@ -638,12 +674,15 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         Events clientEvents = clientEvents();
         long flightMark = clientEvents.mark();
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitTicks(2);
+        bot().waitTicks(2); // STIMULUS: the first tap's press
         bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitTicks(2);
+        bot().waitTicks(2); // STIMULUS: the gap between taps, inside vanilla's toggle window
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-        bot().waitTicks(2);
+        bot().waitTicks(2); // STIMULUS: the second tap's press, the one that toggles flight
         bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        // EXPERIMENT: the held-ascend phase is defined to begin four client ticks after the second
+        // tap's release. A player's own motion is simulated by his client, one step per client
+        // tick, so this is four steps of the tap's residual climb on any box — not a wait for it.
         bot().waitTicks(4);
 
         // The double-tap itself climbs a few blocks (a deck jump + held-space flight ticks), so
@@ -779,8 +818,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 "turning flight off must hand the body to deck gravity and put it in CONTACT with"
                         + " the ship's geometry — a body merely hovering at the right height was"
                         + " never seated by anything", DECK_LINK_BUDGET_TICKS);
-        // A short settle after the contact: the claim below is about where the body CAME TO REST,
-        // and the contact is the moment it first touched. Not a wait — a window.
+        // WINDOW: from the first contact (the `landing` record, printed below) to where the body is
+        // ten ticks on (capEnd and subSeated, also printed); the assertion holds the contact on THIS
+        // ship at one end and the seat on its deck at the other. A body that touched and then slid
+        // or bounced away is what the far end is for, and overshoot only gives it longer to do so.
         bot().waitTicks(10);
         capEnd = DeckCapture.read(this::exec);
         subSeated = parseSub(censusField("subPos"));
@@ -885,7 +926,6 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                     + " | spawn-diag: " + exec("artest vs spawn-diag").replace('\n', ' ')
                     + " | assemble said: " + assemble.replace('\n', ' '), neverSpawned);
         }
-        bot().waitTicks(40);
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");
@@ -910,22 +950,23 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
         // Fixture completeness by measurement: how many blocks did the assembled ship actually
         // get (region census + the ship's own blockPositions count + iron in the grown
-        // neighbourhood)? Sampled twice a second apart to tell a stalled-but-progressing
-        // relocation from a settled short count. The census probe resolves the ship by
-        // containment, so stand the bot INSIDE the craft's world box for the reading.
+        // neighbourhood)? The census probe resolves the ship by containment of the SERVER player,
+        // so stand the bot INSIDE the craft's world box for the reading; `tp` has moved the server
+        // player before it replies, so nothing is waited for.
+        //
+        // ONE sample. There used to be two, a second apart, to tell a relocation still in progress
+        // from a settled short count — but the substrate registers a ship only after injecting its
+        // blocks, in the same tick (`WorldServerShipManager.spawnNewShips`), so by the
+        // `ship_spawned` awaited above there is no relocation left to be in progress.
         exec("tp @a " + (bx + 3.5) + " " + (by + 6) + " " + (bz + 3.5) + " 0 0");
-        bot().waitTicks(4);
         String census1 = exec("artest vs subspace-census");
-        bot().waitTicks(20);
-        String census2 = exec("artest vs subspace-census");
         // The deck is built at (rocketX+-2, rocketY+3, rocketZ+-2) with rocket=(base+3,base+1,base+3),
         // i.e. world (bx+1..bx+5, by+4, bz+1..bz+5) before assembly relocates it into the ship.
         String leftover = exec("testforblock " + (bx + 3) + " " + (by + 4) + " " + (bz + 3)
                 + " minecraft:iron_block")
                 + " | " + exec("testforblock " + (bx + 5) + " " + (by + 4) + " " + (bz + 5)
                 + " minecraft:iron_block");
-        System.out.println("[interior] census postBuild#1=" + census1);
-        System.out.println("[interior] census postBuild#2=" + census2);
+        System.out.println("[interior] census postBuild=" + census1);
         System.out.println("[interior] leftoverDeckAtBase=" + leftover);
         // Roofed-variant diagnostic: iron left at the roof plane after assembly means the roof
         // did not join the ship - pre-lift (by+9) = never scanned, post-lift (by+10) = scanned

@@ -125,8 +125,11 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
             // that has to precede it is already asserted above. Let the brake settle, then require
             // the altitude to be stable over a 3-second window — with the key STILL physically
             // held, so a surviving latch would be climbing at cruise speed here.
+            // EXPERIMENT: the window opens forty ticks after the destruction — the brake's share of
+            // the experiment; a hold slower than that reads as motion, loudly, never as a pass.
             bot().waitTicks(40);
             double y1 = shipY(ship.id);
+            // WINDOW: y1 -> y2, both in the message.
             bot().waitTicks(60);
             double y2 = shipY(ship.id);
             assertTrue("after the seat is destroyed the ship must HOLD, never fly the dead pilot's "
@@ -145,8 +148,10 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         final FixtureSite site = site();
         final int bx = site.x, by = site.y, bz = site.z;
         FlyingShip ship = assembleLoadAndFly(site);
+        // No settle after the release: breaking the computer ends every channel into it whether
+        // or not the release has reached it, and the climb it could have carried is what the
+        // window below watches for.
         bot().releaseKey(Keyboard.KEY_R);
-        bot().waitTicks(10);
 
         Events events = events();
         long breakMark = events.markInstrumented();
@@ -179,6 +184,7 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         // A brainless ship must never keep thrusting upward: the dead computer's channels die
         // with the tile. (It is free to FALL — only continued powered climb is the defect.)
         double y1 = shipY(ship.id);
+        // WINDOW: y1 -> y2, both in the message; the claim is over their difference.
         bot().waitTicks(80);
         double y2 = shipY(ship.id);
         assertTrue("a ship whose flight computer was destroyed must not keep climbing under the "
@@ -235,7 +241,6 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         FlyingShip ship = new FlyingShip();
         ship.id = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
-        bot().waitTicks(40); // settle before the observer approaches; the LOAD is awaited below
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");

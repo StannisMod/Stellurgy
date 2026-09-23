@@ -95,10 +95,10 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         long t1 = parseGroup(TIME_PATTERN, first, "time");
         long w1 = parseGroup(WORLD_TIME_PATTERN, first, "worldTotalTime");
 
-        // Wait for TICKS of the server's own counter rather than for milliseconds. Not circular:
-        // three different counters are involved — the wait watches MinecraftServer's tick counter,
-        // and the assertions below are about vanilla's worldTotalTime and AR's own handler time. What
-        // the old sleep bought was "probably a few ticks"; this buys the ticks.
+        // WINDOW: both counters are read on each side of this stretch and each assertion below is
+        // over the difference, naming both reads. Not circular: the stretch is measured on
+        // MinecraftServer's tick counter, the assertions on vanilla's worldTotalTime and AR's own
+        // handler time. "It moved at all" is the bar, so overshoot cannot let a frozen counter pass.
         GameTicks.advance(client(), GameTicks.server(), OBSERVED_TICKS);
 
         String second = ok(client().execute("artest event tick-counter"));
@@ -110,7 +110,8 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         //     (so any failure to see t advance is the handler's fault,
         //     not "the server was paused").
         //   - t advancing proves the handler subscription is live.
-        assertTrue("vanilla world totalTime must advance over 400ms: w1=" + w1 + " w2=" + w2,
+        assertTrue("vanilla world totalTime must advance over " + OBSERVED_TICKS
+                        + " server ticks: w1=" + w1 + " w2=" + w2,
                 w2 > w1);
         assertTrue("PlanetEventHandler.time must advance under server ticks: "
                         + "t1=" + t1 + " t2=" + t2 + " (server ticking? w1=" + w1 + " w2=" + w2 + ")",

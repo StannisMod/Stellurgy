@@ -206,6 +206,24 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * ABSENCE of that record beside a present {@code right_click_block}, which is exactly the
      * distinction the old screen poll could not make.</p>
      */
+    /** How long a GUI round trip may take — a deadline for one discrete record, never a settle. */
+    private static final int GUI_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * Press a GUI control whose server handler answers by RE-OPENING the machine's screen, and wait
+     * for the client to display that screen. The re-open is the press's receipt: it happens inside
+     * the handler that applied the press, so the state the press changed is on the server by the
+     * time the client records it.
+     */
+    private void clickAndAwaitReopen(int buttonId, String what) throws Exception {
+        long mark = clientEvents().mark();
+        bot().clickButtonById(buttonId);
+        // The record names the screen by its SIMPLE class name, not GUI_MODULAR's qualified one.
+        clientEvents().awaitField(mark, "client_gui_opened", "gui", "GuiModular",
+                what + " must be applied by the server, which re-opens the screen when it is",
+                GUI_LINK_BUDGET_TICKS);
+    }
+
     private String openMachineGui(int[] at) throws Exception {
         Events events = events();
         long serverMark = events.mark();
@@ -230,8 +248,15 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
         String screen = screenOf(bot().reportState());
         if (!screen.startsWith(GUI_MODULAR)) {
+            long directMark = clientEvents().mark();
             JsonObject direct = bot().interactBlock(at[0], at[1], at[2]);
-            bot().waitTicks(20);
+            String afterDirect;
+            try {
+                afterDirect = clientEvents().await(directMark, "client_gui_opened",
+                        "a direct interact on the machine, for the failure message", GUI_LINK_BUDGET_TICKS);
+            } catch (AssertionError none) {
+                afterDirect = "no screen opened for it";
+            }
             scenario().arrangementFailed("right-clicking the machine must open its GUI, and the"
                     + " chain says WHERE it stopped rather than that the screen was empty."
                     + " screen=\"" + screen + "\""
@@ -239,7 +264,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                     + " containersTheServerOpened=" + events.since(serverMark, "container_opened")
                     + " screensTheClientDisplayed=" + displayed
                     + " afterDirectClick=\"" + screenOf(bot().reportState())
-                    + "\" clickResult=" + direct
+                    + "\" (" + afterDirect + ") clickResult=" + direct
                     + " blockAtMachine=" + bot().blockState(at[0], at[1], at[2])
                     + " playerState=" + bot().reportState());
         }
@@ -570,8 +595,9 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     @Test
     public void shiftClickingChipMovesItIntoTheGuidanceComputer() throws Exception {
         int[] at = placeMachineAndStandOnIt("advancedrocketry:guidanceComputer");
+        // No advance: the give's slot packet leaves before the window the GUI below opens, on one
+        // connection, so a client showing that window already holds the chip.
         exec("give @a " + CHIP + " 1");
-        bot().waitTicks(20);
 
         scenario().arranging("open the guidance computer's GUI");
         String screen = openMachineGui(at);
@@ -584,14 +610,23 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 + before, chipSlot != -1);
 
         scenario().asserting("a shift-click quick-moves the chip into the machine's own slot");
+        // `report_slots` reads the CLIENT's copy of the container, and the client applies its own
+        // prediction of a quick-move before the packet is even sent — so the slots below would show
+        // the move whether or not the server made it. The server answers every click it handles with
+        // a confirmation, sent after its own slotClick ran: that record is the barrier. It is NOT the
+        // verdict — for a quick-move `accepted` compares two empty stacks whatever happened — so the
+        // verdict is read from the machine's own inventory on the server.
+        long clickMark = clientEvents().mark();
         bot().clickSlot(chipSlot, 0, "QUICK_MOVE");
-        // LEFT AS A SETTLE, and the reason is a gap rather than a choice: no event records a slot
-        // transfer. `report_slots` reads the CLIENT's copy of the container, and the client applies
-        // its own prediction of a quick-move before the packet is even sent, so what is pinned
-        // below is the move as the player sees it — a server that dropped the click would leave the
-        // prediction standing and this would still pass. The link that would close it is a record at
-        // ContainerModular.transferStackInSlot's return, routed by the player's world.
-        bot().waitTicks(10);
+        clientEvents().await(clickMark, "client_click_confirmed",
+                "the server must handle the shift-click at all", GUI_LINK_BUDGET_TICKS);
+        String machineInventory = exec("artest hatch read " + plot().dim + " " + at[0] + " " + at[1]
+                + " " + at[2]);
+        // The SERVER must have moved the chip into the guidance computer — a positive claim, so the
+        // reply's refusing reader: it fails naming the machine's whole inventory if the chip is not
+        // one of its slots.
+        Reply.of("artest hatch read " + at[0] + " " + at[1] + " " + at[2], machineInventory)
+                .element("slots", "item", CHIP);
 
         JsonObject after = bot().reportSlots();
         assertTrue("shift-click did not move the chip into a guidance computer slot: " + after,
@@ -726,17 +761,15 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String screen = openMachineGui(at);
         scenario().record("screen", screen)
                 .describeOnFailureWith("artest telescope info " + where);
-        bot().clickButtonById(2);
-        bot().waitTicks(20);
+        // Each of these presses is a round trip the server closes by RE-OPENING the GUI from inside
+        // the handler that applied it (TileObservatory.useNetworkData: tab switch, aim distance),
+        // so the client's own record of that screen is the press's receipt — and the next press
+        // must land on the re-opened screen anyway.
+        clickAndAwaitReopen(2, "the region-scan tab");
 
         scenario().asserting("the aim buttons reach the machine, and Observe starts the look");
-        // LEFT AS A SETTLE: nothing records a packet reaching TileObservatory.useNetworkData, so
-        // these two presses have no receipt of their own; the aim read back from the server below
-        // is the assertion, and a slow round trip would fail it as "the aim never moved".
-        bot().clickButtonById(5);
-        bot().waitTicks(15);
-        bot().clickButtonById(5);
-        bot().waitTicks(15);
+        clickAndAwaitReopen(5, "the first aim-distance press");
+        clickAndAwaitReopen(5, "the second aim-distance press");
 
         TelescopeReading aimed = TelescopeReading.at(this::exec, where);
         long aimDistance = aimed.aimDistance;
@@ -819,11 +852,12 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().record("planetButtonId", planetId);
 
         scenario().asserting("clicking it registers the selection server-side");
-        // LEFT AS A SETTLE for the same reason as the telescope's aim: nothing records a packet
-        // reaching TilePlanetSelector.useNetworkData, so the server-side selection read below is
-        // both the assertion and the only receipt this click has.
+        long selectMark = events().markInstrumented();
         bot().clickButtonById(planetId);
-        bot().waitTicks(20);
+        events().awaitField(selectMark, "selector_selection_set", "pos",
+                at[0] + "," + at[1] + "," + at[2],
+                "clicking planet button " + planetId + " must reach THIS selector's server copy",
+                GUI_LINK_BUDGET_TICKS);
 
         String selectorInfo = exec("artest selector info " + plot().dim + " " + at[0] + " " + at[1]
                 + " " + at[2]);

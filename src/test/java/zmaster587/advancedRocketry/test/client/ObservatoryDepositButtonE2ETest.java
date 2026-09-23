@@ -34,6 +34,9 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
     /** The Deposit control's own id on that tab. */
     private static final int BUTTON_DEPOSIT = 10;
 
+    /** How long a GUI round trip may take: a deadline for a discrete record, never a settle. */
+    private static final int GUI_LINK_BUDGET_TICKS = 200;
+
     private static final int X = 5200;
     private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z = 5200;
@@ -95,16 +98,26 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         assertTrue("right-clicking the observatory must open a GUI, got: " + screen,
                 screen.contains("Gui"));
 
+        // A tab press is a round trip: the client asks, the server re-opens the GUI on the chosen
+        // tab, and only that re-opened screen carries the Deposit control.
+        long tabMark = clientEvents().mark();
         bot().clickButtonById(TAB_REGION_SCAN);
-        bot().waitTicks(10);
+        clientEvents().awaitField(tabMark, "client_gui_opened", "gui", "GuiModular",
+                "the survey tab must be re-opened by the server before its Deposit control exists",
+                GUI_LINK_BUDGET_TICKS);
+        long depositMark = events().markInstrumented();
         bot().clickButtonById(BUTTON_DEPOSIT);
-        bot().waitTicks(20);
+        String deposited = events().awaitField(depositMark, "crystal_deposited",
+                "pos", X + "," + Y + "," + Z,
+                "pressing Deposit must make THIS observatory read its crystal into the world's"
+                        + " knowledge", GUI_LINK_BUDGET_TICKS);
 
         // The button's promise, asked of the server: the address the machine held is now something a
         // tier-1 pad standing on this world may be aimed at, and it is known LOCALLY - a deposit may
         // not touch the pack's global floor.
         String after = exec("artest planet knowledge 0 " + fresh);
-        assertTrue("after the click a pad here must be offered that world: " + after,
+        assertTrue("after the click a pad here must be offered that world: " + after
+                        + " | the deposit's own record: " + deposited,
                 Reply.of(after).bool("known"));
         assertTrue("and it must be known LOCALLY, not announced to the whole game: " + after,
                 Reply.of(after).bool("local"));

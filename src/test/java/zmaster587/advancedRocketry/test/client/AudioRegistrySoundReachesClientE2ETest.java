@@ -53,8 +53,9 @@ public class AudioRegistrySoundReachesClientE2ETest extends AbstractClientE2ETes
     public void serverPlayedArSoundReachesClientSoundManager() throws Exception {
         // ARRANGEMENT: pin the player at a known spot so the 16-block sound broadcast
         // radius trivially covers the play position.
+        // No advance: the broadcast radius is measured against the SERVER's copy of him, which `tp`
+        // has moved before it answers.
         serverClient().execute("tp @a 8.5 79 8.5");
-        bot().waitTicks(5);
 
         // ARRANGEMENT GATE, and it is about the HOST, not about the subject: PlaySoundEvent only
         // fires once the client sound system initialised (SoundManager.loaded). Without an audio

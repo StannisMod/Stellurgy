@@ -57,6 +57,18 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     private static final double COMMANDED_VZ = 10.0;
     private static final int DRIVE_TICKS = 25;
 
+    /**
+     * The displacement the drive must beat over DRIVE_TICKS, in blocks, read as a rate so a longer
+     * stretch asks for proportionally more.
+     *
+     * <p>It is the CONTROL's number, and that is what it measures: the setpoint control above moves
+     * the craft less than a block over the same stretch, so this separates "the drive moved it" from
+     * "nothing drove it". It does NOT pin how much of the commanded speed arrives — ten b/s would
+     * cover about twelve blocks, and a drive delivering a tenth of that still passes. That is a
+     * claim about the flight computer's gain, and this test does not make it.</p>
+     */
+    private static final double MIN_DISPLACEMENT_PER_DRIVE = 1.0;
+
     /** This class's reader of the server's ordered event log. */
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
@@ -148,10 +160,14 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         // than deleting it, is what stops the class quietly going back to the setpoint.
         String setpoint = exec("artest vs push-ship-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
         assertTrue("push-ship-by-id must find the ship: " + setpoint, Reply.of(setpoint).bool("pushed"));
+        // WINDOW: z is read before the setpoint and after this stretch, and the control is an UPPER
+        // bound on the difference — overshoot gives a working setpoint longer to show itself, so it
+        // can only turn this red.
         GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
         double zAfterSetpoint = ShipInfo.byId(this::exec, 0, shipId[0]).z;
         assertTrue("a raw velocity setpoint must NOT be mistaken for a working drive: the ship moved "
-                        + (zAfterSetpoint - zBefore) + " blocks on a bare setpoint, which means this"
+                        + (zAfterSetpoint - zBefore) + " blocks (z " + zBefore + " -> "
+                        + zAfterSetpoint + ") on a bare setpoint, which means this"
                         + " control has stopped controlling and the test below no longer proves the"
                         + " CONTROLLER moved anything",
                 Math.abs(zAfterSetpoint - zBefore) < 1.0);
@@ -163,16 +179,23 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         String drive = exec("artest vs force-vel-by-id 0 " + shipId[0] + " 0 0 " + COMMANDED_VZ);
         assertTrue("the command must reach THIS ship's own flight computer: " + drive,
                 Reply.of(drive).bool("afcResolved"));
-        GameTicks.advance(client(), GameTicks.server(), DRIVE_TICKS);
+        // WINDOW: z is read just before the command (zAfterSetpoint) and after this stretch, and the
+        // claim is a LOWER bound on the difference — the direction in which overshoot is silent,
+        // because a longer stretch lets a drive too weak to pass on time pass anyway. So the bar is
+        // scaled by the ticks this box actually delivered: the rate it demands does not change.
+        long driven = GameTicks.advanceObserved(client(), GameTicks.server(), DRIVE_TICKS);
         double zAfter = ShipInfo.byId(this::exec, 0, shipId[0]).z;
+        double requiredDisplacement = MIN_DISPLACEMENT_PER_DRIVE * driven / DRIVE_TICKS;
 
         // A strict displacement, not merely "changed": it pins that VS integrated the commanded
         // motion into position. A substrate that ignored the command, or damped it to zero, would
         // leave the ship put — and the control above proves that outcome is reachable here.
-        assertTrue("a commanded +Z velocity must translate the ship through VS physics "
-                        + "(zBefore=" + zBefore + " zAfterSetpoint=" + zAfterSetpoint
+        assertTrue("a commanded +Z velocity must translate the ship through VS physics: it moved "
+                        + (zAfter - zAfterSetpoint) + " blocks in " + driven + " server ticks,"
+                        + " needing more than " + requiredDisplacement
+                        + " (zBefore=" + zBefore + " zAfterSetpoint=" + zAfterSetpoint
                         + " zAfter=" + zAfter + ")",
-                zAfter - zBefore > 1.0);
+                zAfter - zAfterSetpoint > requiredDisplacement);
     }
 
     private int shipCount(String sub) throws Exception {

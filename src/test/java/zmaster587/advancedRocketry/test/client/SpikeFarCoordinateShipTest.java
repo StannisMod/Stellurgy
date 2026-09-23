@@ -528,6 +528,9 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
+        // EXPERIMENT: the comparison is DEFINED six client ticks after the cut — a rider lagging his
+        // ship by more than TRACK_TOLERANCE at that offset is what this spike reports. The tolerance
+        // is the spike's own and was not measured at this offset.
         bot().waitTicks(6);
         double serverDelta = shipY(shipId) - yBefore;
         double riderDelta = riderY() - riderYBefore;

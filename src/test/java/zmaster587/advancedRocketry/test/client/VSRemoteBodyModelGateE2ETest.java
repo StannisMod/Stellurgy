@@ -567,6 +567,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     private String watchModelGate(int ticks) throws Exception {
         long mark = clientEvents().mark();
         ClientWindow window = ClientWindow.open(bot(), REMOTE_MODEL_WINDOW);
+        // WINDOW: opened and closed around these ticks; its one record is the whole reading.
         bot().waitTicks(ticks);
         window.close();
         String summary = Events.lastRecord(clientEvents().since(mark, "remote_model_window"));
@@ -594,6 +595,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *  depends on the fixture's dynamic state, so it gates on the measured attitude, never on a
      *  tick count (under suite load the slew takes longer than any fixed wait). */
     private void rollShip(int bx, int by, int bz) throws Exception {
+        String infoBefore = shipInfo();
+        double qxBefore = readDouble(infoBefore, Q_X), qzBefore = readDouble(infoBefore, Q_Z);
+        double upBefore = 1.0 - 2.0 * (qxBefore * qxBefore + qzBefore * qzBefore);
         assertTrue("attitude hold must accept the steep roll",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " " + STEEP_ROLL)
                         ).bool("commanded"));
@@ -604,14 +608,17 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // assertion three lines below it can be timed out and never disproved. Give the slew its
         // ticks, then read: the hold applies torque toward its target every tick and HOLDS the
         // attitude once it is there, so a window longer than the slew reads the same state.
+        // WINDOW: upBefore -> upY, both in the gate's message — equal means the command was ignored,
+        // different-but-short means the window was.
         bot().waitTicks(ROLL_WINDOW_TICKS);
         // The ship's own up, world-frame, from the attitude quaternion the probe reports.
         String info = shipInfo();
         double qx = readDouble(info, Q_X), qz = readDouble(info, Q_Z);
         double upY = 1.0 - 2.0 * (qx * qx + qz * qz);
-        System.out.println("[modelgate] upY after " + ROLL_WINDOW_TICKS + " ticks: " + upY
-                + " (the gate is < -0.85)");
-        assertTrue("the ship must reach the steep roll for either leg to mean anything (upY=" + upY + ")",
+        System.out.println("[modelgate] upY " + upBefore + " -> " + upY + " over " + ROLL_WINDOW_TICKS
+                + " ticks (the gate is < -0.85)");
+        assertTrue("the ship must reach the steep roll for either leg to mean anything (upY "
+                + upBefore + " -> " + upY + " over " + ROLL_WINDOW_TICKS + " ticks)",
                 upY < STEEP_ROLL_UP_Y);
     }
 
@@ -724,7 +731,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         String spawned = exec("artest vs drop-living 0 minecraft:cow " + x + " " + y + " " + z);
         System.out.println("[modelgate] spawn raw: " + spawned.replace('\n', ' '));
         assertTrue("the subject mob must spawn: " + spawned, Reply.of(spawned).ok());
-        bot().waitTicks(20);
+        // No settle: its arrival on the client is awaited as the client's own join record, from
+        // subjectSpawnMark, by whoever next needs it there.
         return Reply.of("artest entity spawn", spawned).integer(ENTITY_ID);
     }
 
@@ -748,8 +756,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         double dx = x - me[0], dy = y - me[1], dz = z - me[2];
         float yaw = (float) (Math.toDegrees(Math.atan2(-dx, dz)));
         float pitch = (float) (-Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz))));
+        // No advance: setLook writes the rotation on the client thread before it answers, and
+        // everything read below is the client's.
         bot().setLook(yaw, pitch);
-        bot().waitTicks(20);
 
         // Read the look BACK. Setting it is not the same as it taking effect, and an unverified
         // aim is one more way for a draw-stage zero to mean nothing: a subject behind the camera
@@ -799,7 +808,6 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         scenarioShipId = awaitShipSpawned(events, spawnMark, "assembly must create a VS ship in the"
                 + " physics registry (the spawn is queued, so this is a deadline for a discrete event"
                 + " and not a guess at how long a value takes to settle)");
-        bot().waitTicks(40);
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 6) + " " + (bz + 0.5) + " 0 0");

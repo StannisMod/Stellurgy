@@ -143,7 +143,6 @@ public class SpikeVerticalSubBlockRoundTripTest extends AbstractClientE2ETest {
         // past the first tick is of a falling player.
         exec("gamemode spectator " + botName);
         exec("artest chunk forceload " + OVERWORLD + " " + (ARENA_X >> 4) + " " + (ARENA_Z >> 4));
-        GameTicks.advanceWorld(serverClient(), OVERWORLD, 20);
 
         List<String> report = new ArrayList<>();
         List<String> inconclusive = new ArrayList<>();

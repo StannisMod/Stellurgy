@@ -184,6 +184,10 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         assertTrue("the hull left behind could not be commanded to rotate: " + rot,
                 Reply.of(rot).bool("afcResolved"));
 
+        // WINDOW: the subject's position was read at the hazard (`before`) and is read again after
+        // this stretch of the hull rotating; the verdict is the horizontal distance between the two,
+        // and its message names both. The bar is an UPPER bound, so overshoot gives the hull longer
+        // to throw the body and can only turn a green red.
         GameTicks.advance(client(), GameTicks.server(), WINDOW_TICKS);
 
         // One reading at the end is enough for the verdict: a fling is a DISPLACEMENT, and a body

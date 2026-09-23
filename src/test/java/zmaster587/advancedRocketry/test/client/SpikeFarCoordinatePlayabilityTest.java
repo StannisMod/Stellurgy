@@ -295,8 +295,8 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
                 exec("artest chunk forceload " + OVERWORLD + " " + cx + " " + cz);
             }
         }
-        GameTicks.advanceWorld(serverClient(), OVERWORLD, 60);
-
+        // No advance around the fills: each loads the chunks it writes, on the server thread,
+        // before it answers, and the reads that check the arena are the server's.
         int x1 = x - 4;
         int x2 = x + WALL_OFFSET + 4;
         exec("artest fill " + OVERWORLD + " " + x1 + " " + FLOOR_Y + " " + (ARENA_Z - 6) + " "
@@ -304,7 +304,6 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
         // Hollow out everything up to (but not including) the wall plane at x+WALL_OFFSET.
         exec("artest fill " + OVERWORLD + " " + (x1 + 1) + " " + STAND_Y + " " + (ARENA_Z - 5) + " "
                 + (x + WALL_OFFSET - 1) + " " + (FLOOR_Y + 5) + " " + (ARENA_Z + 5) + " minecraft:air");
-        GameTicks.advanceWorld(serverClient(), OVERWORLD, 20);
     }
 
     /**

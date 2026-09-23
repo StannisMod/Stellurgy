@@ -156,6 +156,8 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
         events.await(selfMark, "right_click_block", "the self-click must REACH the server — an"
                 + " absence of messages below means nothing if the click was dropped on the reach"
                 + " check before the block ever saw it", NOTICE_BUDGET_TICKS);
+        // WINDOW: an absence of notices, watched from the click's own record to the log reads below,
+        // for SILENCE_WINDOW_TICKS — which the assertion names.
         bot().waitTicks(SILENCE_WINDOW_TICKS);
         String selfQueued = events.since(selfMark, "action_bar_queued");
         String selfSent = events.since(selfMark, "status_message_sent");

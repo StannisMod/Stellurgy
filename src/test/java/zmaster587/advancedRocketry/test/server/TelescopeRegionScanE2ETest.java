@@ -37,10 +37,9 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
     private static final int MORE_THAN_ONE_TERRITORY_STEPS = 2;
 
     /**
-     * How much WORLD a survey is allowed to make progress in before it is inspected - the old
-     * 1 500 ms and 2 000 ms, said in the ticks the survey actually advances on.
+     * How much WORLD a starved survey is watched across before it is inspected - the old 2 000 ms,
+     * said in the ticks the survey actually advances on.
      */
-    private static final int MID_SURVEY_TICKS = 30;
     private static final int STARVED_SURVEY_TICKS = 40;
 
     /** World a whole survey is given to finish in - the old 40 x 250 ms and 60 x 250 ms. */
@@ -299,12 +298,16 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         surveySetup(true, 1, 30);
         observatoryWithCrystal(x);
 
+        long scanMark = events.mark();
         TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 3"))
                 .requireOk("the survey did not start");
-        // A survey advances per TICK, so how far it gets is a number of ticks. The old wall-clock
-        // pause gave it fewer of them on a busy box - which made "still scanning" easier to satisfy
-        // exactly when the machine was slowest, i.e. the test got weaker under load.
-        GameTicks.advance(client(), GameTicks.server(), MID_SURVEY_TICKS);
+        // Linked on the survey's first resolved step that did not finish it: that is "mid-region"
+        // said by the machine, and it makes the "kept what it had surveyed" claim below one about a
+        // count of at least one. The fixed pause this replaces was one step long, so it could just
+        // as well interrupt a survey that had resolved nothing and prove nothing about keeping it.
+        events.awaitRecordWithFields(scanMark, "region_scan_advanced",
+                "the survey must resolve a first step before it can be interrupted mid-region",
+                SURVEY_TICKS, "pos", posKey(x), "complete", "false");
         TelescopeReading before = scope(x);
         assertTrue("the survey must still be running to be interrupted: " + before.raw(),
                 before.scanning);
@@ -331,15 +334,22 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         exec("artest config set telescopeSurveyDataPerStep 50");
         try {
             observatoryWithCrystal(x);
-            TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 2"))
-                    .requireOk("the survey did not start");
+            TelescopeReading started = TelescopeReading.of(exec("artest telescope scan " + where(x)
+                    + " 1 0 0 2")).requireOk("the survey did not start");
+            assertEquals("a fresh survey has resolved nothing yet: " + started.raw(),
+                    0, started.cellsDone());
 
+            // WINDOW: the survey's progress is read as it starts and again after this stretch, and
+            // the claim is that it did not move. The stretch is over a dozen steps' worth at this
+            // pacing, which a fed instrument spends resolving cells; overshoot only gives a starved
+            // one longer to cheat, which can turn a green red and never the reverse.
             GameTicks.advance(client(), GameTicks.server(), STARVED_SURVEY_TICKS);
             TelescopeReading after = scope(x);
             assertTrue("an instrument with no data must still be waiting, not finished: "
                     + after.raw(), after.scanning);
-            assertEquals("and must not have resolved a single cell on credit",
-                    0, after.cellsDone());
+            assertEquals("and must not have resolved a single cell on credit (cellsDone "
+                            + started.cellsDone() + " -> " + after.cellsDone() + ")",
+                    started.cellsDone(), after.cellsDone());
         } finally {
             exec("artest config set telescopeSurveyDataPerStep 0");
         }

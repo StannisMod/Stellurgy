@@ -161,7 +161,6 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
                 + " the relog", LINK_BUDGET_TICKS);
         scenario().requireArranged("control leg: the pilot must be able to fly BEFORE the relog. "
                 + before, before.climbed());
-        bot().waitTicks(30); // let the station-hold settle the hovering ship
 
         // ---- ACT: the real relog — full server logout (player data saved) + fresh login. -------
         // The mark is taken before the reconnect: the re-seating happens DURING the login, and a

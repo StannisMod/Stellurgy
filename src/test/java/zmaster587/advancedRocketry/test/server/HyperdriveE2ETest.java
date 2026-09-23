@@ -301,11 +301,15 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
         long before = drive(SHIP_E).charge;
         assertEquals("a drained bank starts empty", 0L, before);
 
+        // WINDOW: the bank is read on both sides of 100 ticks of its own world, and the claim is
+        // that the second read equals the first. Overshoot gives an unfed bank MORE time to fill
+        // itself, so a slow box can only make this stricter.
         zmaster587.advancedRocketry.test.GameTicks.advanceWorld(client(), 0, 100);
 
         DriveInfo after = drive(SHIP_E);
         assertEquals("100 ticks of a running server must not have put a single unit into a bank that"
-                        + " nothing is feeding: " + after.raw(), 0L, after.charge);
+                        + " nothing is feeding (charge " + before + " -> " + after.charge + "): "
+                        + after.raw(), before, after.charge);
         assertTrue("and it must still WANT charge, or this proves nothing", after.burstCost > 0L);
     }
 

@@ -37,11 +37,10 @@ final class WorldCommandFixtures {
      * <p>The server's own tick counter. A test that needs to know how long it is willing to wait for
      * something asks here rather than looking at a watch.</p>
      *
-     * <p>The three tick helpers below are DELEGATES. The implementation lives in the public
-     * {@link GameTicks}, because this class is package-private and bound to the shared-server
-     * harness while a third of the suite's waiting sites are in classes that cannot reach it — and
-     * because two implementations of "wait for the game" is exactly one too many. What stays here is
-     * the vocabulary: these names read better at a {@code /ar} call site.</p>
+     * <p>A DELEGATE. The implementation lives in the public {@link GameTicks}, because this class
+     * is package-private and bound to the shared-server harness while most of the suite cannot
+     * reach it — and because two readers of one clock is exactly one too many. What stays here is
+     * the vocabulary: the name reads better at a {@code /ar} call site.</p>
      */
     static long serverTick() throws Exception {
         return GameTicks.read(AbstractSharedServerTest.client(), GameTicks.server());
@@ -81,20 +80,6 @@ final class WorldCommandFixtures {
             throws Exception {
         return events.awaitField(mark, "ship_left_planet", "ship", durableShipId,
                 what, tickBudget, stimulus);
-    }
-
-    /**
-     * Let the world run for this many server ticks.
-     *
-     * <p>For an OBSERVATION window rather than a wait: when a test wants to watch something hold
-     * still, the window has to be measured in the ticks the subject runs on. A window in seconds
-     * covers fewer of the subject's ticks on a busy machine, which does not merely make the test
-     * slower — it makes it BLIND, and a drift that needed forty ticks to show up passes as stable.
-     * That is the failure direction worth spending a helper on: a wall-clock wait turns green into
-     * red, a wall-clock observation turns red into green.</p>
-     */
-    static void advanceTicks(int ticks) throws Exception {
-        GameTicks.advance(AbstractSharedServerTest.client(), GameTicks.server(), ticks);
     }
 
     /** Read an integer field out of {@code /artest planet info <dim>}

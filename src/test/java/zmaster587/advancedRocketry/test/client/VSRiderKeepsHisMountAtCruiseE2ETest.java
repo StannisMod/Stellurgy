@@ -177,13 +177,11 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         Reply nameMReply = Reply.of(health);
         String botName = nameMReply.text(PLAYER_NAME);
 
+        long enterMark = clientEvents().mark();
         scenario().requireArranged("the bot must enter the cell",
                 readBool(exec("artest space enter " + botName + " " + dim
                         + " " + sx + " " + sy + " " + sz), "ok"));
-        bot().waitTicks(20);
-        int clientDim = bot().reportWeather().get("dim").getAsInt();
-        scenario().requireArranged("the client must have followed into the cell — it renders dim "
-                + clientDim + ", the ship is in " + dim, clientDim == dim);
+        awaitClientDim(enterMark, dim, "the client must follow the bot into the ship's cell");
 
         // The subject is a mount on a MOVING SHIP whose data-watcher is quiet - a passenger seat,
         // not the pilot's. This is not a detail: a mount bound to a LINKED pilot seat republishes six

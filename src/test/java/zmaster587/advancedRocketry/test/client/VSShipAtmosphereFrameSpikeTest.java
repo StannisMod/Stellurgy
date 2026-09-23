@@ -9,6 +9,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -97,14 +98,16 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     private static final int CABIN_INSET = 420;
 
     /**
-     * How long the atmosphere gate is given to evaluate a moved player, in ticks.
+     * How many ticks of dim 0's OWN clock the atmosphere gate is given after a teleport.
      *
-     * <p>The gate runs on the player's own {@code LivingUpdateEvent}, so one server tick after the
-     * teleport is the whole of what is being waited for; the rest is slack for a loaded box. It is
-     * the budget the twenty-read probe poll it replaces spent ({@code 20 * 5}), kept so the
-     * conversion changes the FORM of the wait and not how long it is willing to wait.</p>
+     * <p>The gate runs on the player's own {@code LivingUpdateEvent}, which a server player fires
+     * from the network pass that follows every world pass ({@code MinecraftServer
+     * .updateTimeLightAndEntities}). Two world ticks therefore contain at least one evaluation of
+     * him at his new position, on any box — which is why this counts the SERVER's world clock and
+     * not the client's: a hundred client ticks, which stood here, bought however many server ticks
+     * the box happened to deliver.</p>
      */
-    private static final int ATMOSPHERE_GATE_WINDOW_TICKS = 100;
+    private static final int GATE_WORLD_TICKS = 2;
 
     /**
      * Wide enough for the ship AND its control cabin, which stand {@value #CABIN_INSET} blocks
@@ -303,12 +306,10 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     private String cachedAtmosphereWithPlayerAt(double x, double y, double z) throws Exception {
         long mark = events().markInstrumented();
         exec("tp @a " + x + " " + y + " " + z + " 0 0");
-        // A WINDOW, and it is not a poll: there is nothing here to ask twice. The handler ticks
-        // EVERY entity in its dimension on that entity's own living update, so it evaluates the
-        // player at his new position on the next server tick — both legs of this test are in dim 0,
-        // and `tp` has already moved the server's copy of him by the time the command answers. What
-        // the window is for is load, not convergence.
-        bot().waitTicks(ATMOSPHERE_GATE_WINDOW_TICKS);
+        // EXPERIMENT: GATE_WORLD_TICKS of dim 0's clock, which is a dose of gate evaluations, not a
+        // budget — both legs of this test are in dim 0, and `tp` has already moved the server's copy
+        // of him by the time the command answers.
+        GameTicks.advanceWorld(serverClient(), 0, GATE_WORLD_TICKS);
         String changes = events().since(mark, "player_atmosphere_changed");
 
         // AN ABSENCE IS AN ANSWER HERE, and this is what makes it one. One leg of this test expects

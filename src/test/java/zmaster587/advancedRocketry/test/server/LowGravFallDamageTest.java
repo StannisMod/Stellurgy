@@ -7,7 +7,6 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -80,12 +79,15 @@ public class LowGravFallDamageTest {
         return String.join("\n", harness.client().execute(cmd));
     }
 
+    /**
+     * Stations the fake player in {@code dim}. Nothing is waited for after it: {@code ensure-fake}
+     * initialises the dimension and moves the player into it on the server thread before it
+     * replies, and {@code try-fall} posts its event synchronously against that same player — the
+     * next command reads the write itself.
+     */
     private void stationFake(int dim) throws Exception {
         String fake = exec("artest player ensure-fake " + dim + " 8.5 120 8.5");
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
-        // Off-thread settle: the wait runs in the test jvm, because a command handler runs on the
-        // server thread and would block the clock it is waiting for.
-        GameTicks.advanceWorld(harness.client(), dim, 20);
     }
 
     /** Overworld: not an IPlanetaryProvider &rarr; distance untouched. */

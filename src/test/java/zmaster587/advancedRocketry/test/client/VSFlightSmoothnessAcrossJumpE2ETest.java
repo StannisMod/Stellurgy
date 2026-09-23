@@ -293,7 +293,9 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         Leg before = measure("before-jump", originDim, afcOrigin);
 
         // ---- ACT: the jump. Probe-driven so the park cannot race the measurement either side. ---
-        bot().waitTicks(40); // let the station-hold settle, so the departure anchor is a still pose
+        // No settle before the departure: the anchor below is read by identity at the moment it is
+        // used, and every leg measures the motion INSIDE its own window — a residual coast from the
+        // control leg is in no reading the verdict rests on.
         // BY IDENTITY: the control leg above LIFTS the ship clear of the ground, so its berth is
         // exactly the place it is no longer at. A bounded read there answers managed:false and an
         // unbounded one answers about whatever else is loaded; neither is this ship.
@@ -358,6 +360,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // defect. Measured 6 of 6 in leg B before this leg existed: one 199-266 ms tick, with ZERO
         // chunks arriving in the window — so whatever it is, it is not the loading the report
         // suspected.
+        // EXPERIMENT: leg C is DEFINED as the same flight SETTLE_TICKS after leg B — the gap is the
+        // variable that tells a transient from a lasting change.
         bot().waitTicks(SETTLE_TICKS);
         Leg settled = measure("after-jump-settled", targetDim, afcArrived);
 
@@ -750,6 +754,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         exec("artest vs motion-trace reset");
         bot().holdKey(Keyboard.KEY_R);
         try {
+            // STIMULUS: FLY_TICKS of held climb — the flight each leg's traces describe.
             bot().waitTicks(FLY_TICKS);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);

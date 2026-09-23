@@ -259,17 +259,24 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // The probe attitude channel is used deliberately: it carries its own zero velocity and does
         // not go through the `stationKeeping` gate, so it can steady a craft that has never flown —
         // which is exactly this craft's state.
+        String poseBeforeLevel = shipInfoById(originDim, shipId);
         assertTrue("the craft must accept a level attitude command before it is flown",
                 Reply.of(exec("artest vs point-by-id " + originDim + " " + shipId + " 1.0 0.0 0.0 0.0")
                         ).bool("commanded"));
-        // A WINDOW, sized from the computer's own limits rather than polled: the hold slews at a
-        // 2.0 rad/s ceiling and ramps to it at 4.0 rad/s^2, so even a half-turn is about 45 ticks.
-        // The achieved attitude is printed so the size can be re-argued from a measurement.
+        // WINDOW: a converging attitude, where nothing decides it has arrived — the hold never
+        // publishes "level". Its two ends are poseBeforeLevel and poseBeforeClimb, and both reach the
+        // gate's message, so a red says whether the hull was slewing (short window) or never moved
+        // (a command accepted and not obeyed, which no window repairs). Sized from the computer's own
+        // limits: a 2.0 rad/s ceiling reached at 4.0 rad/s^2, so even a half-turn is about 45 ticks.
+        // Overshoot is lenient, and the gate it feeds is an ARRANGEMENT, never the verdict.
         bot().waitTicks(LEVEL_WINDOW_TICKS);
         String poseBeforeClimb = shipInfoById(originDim, shipId);
-        System.out.println("[relog] after " + LEVEL_WINDOW_TICKS + " level ticks :: " + poseBeforeClimb);
+        System.out.println("[relog] level window :: before=" + poseBeforeLevel
+                + " || after " + LEVEL_WINDOW_TICKS + " ticks=" + poseBeforeClimb);
         requireUprightForAnAltitudeClaim(poseBeforeClimb,
-                "the seated pilot's own key flies his craft before the transit");
+                "the seated pilot's own key flies his craft before the transit (up-Y went "
+                        + upYOf(poseBeforeLevel) + " -> " + upYOf(poseBeforeClimb) + " across the "
+                        + LEVEL_WINDOW_TICKS + "-tick level window)");
         // AND THEN LET GO. The probe channel does not merely aim the hull: it carries a zero
         // velocity and keeps commanding it, so a craft left under it is being told to stay exactly
         // where it is. Leaving it active would put the pilot's own key in competition with a
@@ -280,7 +287,6 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                         + " it commands a zero velocity, so a craft still under it cannot climb",
                 Reply.of(exec("artest vs force-clear-by-id " + originDim + " " + shipId)
                         ).ok());
-        bot().waitTicks(10);
         long clientPilotMark = clientEvents().mark();
         if (!climbedWithinAttempts(3)) {
             scenario().arrangementFailed("control leg: the pilot must be able to fly BEFORE the"
@@ -289,9 +295,12 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                     + " shipBeforeClimb=" + poseBeforeClimb
                     + " shipAfterClimb=" + shipInfoById(originDim, shipId));
         }
-        bot().waitTicks(30); // let the station-hold settle before the departure snapshot
 
         // The climb moved the ship: the departure anchor is its CURRENT pose, never the build pose.
+        // No settle before it: `transit-name` above gave the stack this craft's durable id, and a
+        // named departure relocates its anchor to the flight computer's live position by identity
+        // (`anchorRelocated` in the reply), so these three numbers are not what the jump reads —
+        // and a pilot may jump a craft that is still easing off a climb.
         ShipInfo shipNow = ShipInfo.of(shipInfoById(originDim, shipId));
         int ax = (int) Math.round(shipNow.x);
         int ay = (int) Math.round(shipNow.y);

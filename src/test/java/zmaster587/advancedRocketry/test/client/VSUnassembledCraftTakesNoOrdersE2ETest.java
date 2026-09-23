@@ -135,7 +135,6 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         // own ship, and the mount below has to name it rather than take the first loaded seat.
         String controlShipId = awaitShipSpawned(events, spawnMark,
                 "assembly must create a VS ship in the queryable registry (async spawn)");
-        bot().waitTicks(40);
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (SHIP_X + 0.5) + " " + (SHIP_Y + 6) + " " + (SHIP_Z + 0.5) + " 0 0");
@@ -303,6 +302,10 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         tapKey(Keyboard.KEY_N);
         tapKey(Keyboard.KEY_K);
         tapKey(Keyboard.KEY_J);
+        // EXPERIMENT: the claim is "no command arrived within SILENCE_WINDOW_TICKS of the taps" —
+        // an absence has no record to link on, only a deadline. The control leg's jump arrived on
+        // the same seam, so the window is long enough to have seen one; overshoot only lengthens
+        // it, which is the strict direction for an absence.
         bot().waitTicks(SILENCE_WINDOW_TICKS);
         String commands = events.since(deafMark, "pilot_command_received");
         Events.assertInstrumentRan(commands, "pilot_seat_events",
@@ -319,11 +322,17 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         bot().holdKey(Keyboard.KEY_R);
         bot().holdKey(Keyboard.KEY_W);
         try {
+            // STIMULUS: 40 ticks of held flight keys — many samples of the client's per-tick gate,
+            // and two of its once-a-second re-assertions of a held intent.
             bot().waitTicks(40);
         } finally {
             bot().releaseKey(Keyboard.KEY_W);
             bot().releaseKey(Keyboard.KEY_R);
         }
+        // EXPERIMENT: the tail of the server-side silence. The client-side reads below are complete
+        // at the release, but an input sent on the hold's last tick is still in flight to the seat,
+        // and "nothing reached a seat" is only a claim once it has had time to land. Overshoot only
+        // lengthens the absence window — the strict direction.
         bot().waitTicks(10);
 
         // THE POSITIVE PRECONDITION, and the reason this leg is worth anything: the client's gate
@@ -370,12 +379,18 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
     // ---- Instruments ----------------------------------------------------------------------------
 
-    /** One press-and-release of a key binding, as the keyboard would deliver it. */
+    /**
+     * One press-and-release of a key binding, as the keyboard would deliver it.
+     *
+     * <p>No key-up time follows the release: every caller taps a DIFFERENT binding next (or none),
+     * and independent bindings do not need to see each other released. Tapping the SAME key twice
+     * in a row would need a client tick between the release and the next press to be two edges.</p>
+     */
     private void tapKey(int keyCode) throws Exception {
         bot().holdKey(keyCode);
+        // STIMULUS: held across client ticks, so the edge-triggered handler samples it pressed.
         bot().waitTicks(2);
         bot().releaseKey(keyCode);
-        bot().waitTicks(4);
     }
 
 

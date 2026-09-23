@@ -379,8 +379,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // ---- LEG 1: stand the craft up on a pad. Blocks only — no interaction happens here. -----
         tLeg = System.currentTimeMillis();
+        // No settle: the server moved him before `tp` answered, and the fixture is placed server-side.
         exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
-        bot().waitTicks(10);
         int[] builderPos = placeFixture();
         System.out.println("[M1] leg 1 (fixture placed) " + elapsed(tLeg)
                 + " builder=" + describe(builderPos));
@@ -612,8 +612,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "own window — the console shows the hotbar and nothing else, so a crystal "
                         + "anywhere but the hotbar could never be inserted. slots=" + slots,
                 crystalSlot >= 0);
+        // No advance between the two clicks: both travel on one connection and the server applies
+        // them in the order sent, each against the client's prediction of the one before.
         bot().clickSlot(crystalSlot, 0, "PICKUP");
-        bot().waitTicks(5);
+        long insertMark = clientEvents().mark();
         bot().clickSlot(CONSOLE_SLOT_SHIP, 0, "PICKUP");
 
         // A WINDOW, then ONE READ — and NOT a wait for `crystal_copied`, which is a different
@@ -625,10 +627,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // `memoryOf(getStackInSlot(SLOT_SHIP))`, so once the click has been applied the list simply
         // IS what the crystal in that slot knows.
         //
-        // So there is no link to await, and a poll would be asking until the answer looks right. The
-        // window bounds what a slot click costs — one packet to the server and the container's own
-        // apply — and the read after it is the measurement.
-        bot().waitTicks(SLOT_APPLIED_TICKS);
+        // So nothing in the CONSOLE records the insertion — but the click itself has a receipt:
+        // the server answers every container click it handles, after its own slotClick ran. That
+        // is the barrier, and only that: its `accepted` compares the stacks the click RETURNED,
+        // which for a pickup into an empty slot are empty on both sides whatever happened. What
+        // the insertion did is the list the server reads next.
+        clientEvents().await(insertMark, "client_click_confirmed",
+                "the server must handle the click that puts the crystal into the console's SHIP slot",
+                SLOT_APPLIED_TICKS);
         String navStatus = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
         int listed = readIntOr(navStatus, NAV_SHIP_ADDRESSES, 0);
         assertTrue("putting a memory crystal into the console's SHIP slot must give the pilot a list "
@@ -641,8 +647,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // Reopen the window: its buttons are built when the screen is, so the list the pilot clicks
         // on is the one he sees after the crystal is in. Closing and looking again is what he does.
+        // No settle: the close and the right-click that reopens travel in order on one connection.
         bot().closeScreen();
-        bot().waitTicks(10);
         consoleScreen = openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget);
         requireArranged("the console must reopen once the crystal is in it: " + consoleScreen,
                 consoleScreen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
@@ -693,7 +699,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "without it the console is handing him a coordinate the destination has "
                         + "already left. nav=" + targetInfo,
                 targetDim != Integer.MIN_VALUE && targetDim >= 0);
-        bot().waitTicks(10);
+        // No settle before ARM: the pick it depends on was already read back from the server above.
         long armMark = events.mark();
         bot().clickButtonById(BUTTON_ARM);
 
@@ -744,9 +750,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // ---- LEG 7: he fires the jump with the real jump key. -----------------------------------
         tLeg = System.currentTimeMillis();
         // The key handler bails outright while any screen is up, so the console is shut first — the
-        // same thing a player does before reaching for the controls.
+        // same thing a player does before reaching for the controls. `closeScreen` clears it on the
+        // client thread before it answers, which is where the key handler looks.
         bot().closeScreen();
-        bot().waitTicks(10);
 
         // And he sits back down: the jump key is the PILOT's, routed through the seat he occupies, so
         // a player standing on his own deck cannot fire the drive he just armed.
@@ -1155,6 +1161,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         long latchClientMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_R);          // vertical-up: still flying, still climbing
         try {
+            // STIMULUS: the climb key held over the whole watch; the log read after it is the
+            // absence, and the release half below is its sensitivity control.
             bot().waitTicks(LATCH_WATCH_SAMPLES * 10);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -1436,8 +1444,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** One press of the jump key, edge-triggered the way the real keyboard delivers it. */
     private void pressJumpKey() throws Exception {
         bot().setKey(Keyboard.KEY_J, true);
+        // STIMULUS: down across client ticks, then up across client ticks — so that a second press
+        // right after this one is a new edge and not a continuation of this one.
         bot().waitTicks(5);
         bot().setKey(Keyboard.KEY_J, false);
+        // STIMULUS: the key-up half of the edge.
         bot().waitTicks(20);
     }
 
@@ -1528,6 +1539,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private String flyBurst(int key, int burstTicks, int cutTicks) throws Exception {
         bot().holdKey(key);
         try {
+            // STIMULUS: the burst.
             bot().waitTicks(burstTicks);
         } finally {
             bot().releaseKey(key);
@@ -1545,6 +1557,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private String cutThrottle(int cutTicks) throws Exception {
         bot().holdKey(Keyboard.KEY_X);
         try {
+            // STIMULUS: the throttle cut, held for the caller's cutTicks.
             bot().waitTicks(cutTicks);
         } finally {
             bot().releaseKey(Keyboard.KEY_X);
@@ -1870,6 +1883,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** One real use-key press, the way the mouse handler writes it. */
     private void pressUse() throws Exception {
         bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
     }
@@ -1966,8 +1980,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // Put him back on it. The first teleport happened while the client had nothing to stand on,
         // so wherever he has fallen to is where he is; this is the one that lands on a floor both
         // sides agree exists.
+        long backOnThePad = clientEvents().mark();
         exec("tp @a " + standX + " " + (by + 1) + " " + standZ + " 0 0");
-        bot().waitTicks(20);
+        ClientEvents.awaitPlacedNear(clientEvents(), backOnThePad, standX, standZ,
+                "the client must apply the teleport back onto the pad it now has",
+                CLIENT_FLOOR_BUDGET_TICKS);
 
         JsonObject state = bot().reportState();
         // `playerY`, checked against the harness rather than assumed: a `y` that is absent reads as

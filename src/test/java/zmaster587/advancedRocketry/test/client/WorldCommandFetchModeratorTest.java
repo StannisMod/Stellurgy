@@ -189,13 +189,20 @@ public class WorldCommandFetchModeratorTest {
         exec("artest place 0 " + sx + " " + (sy - 1) + " " + sz + " minecraft:stone");
         exec("artest place 0 " + tx + " " + (ty - 1) + " " + tz + " minecraft:stone");
 
+        Events bot1Log = ClientEvents.of(bot1Harness.bot());
+        long bot1Placed = bot1Log.mark();
+        long bot2Placed = bot2Events().mark();
         exec("tp " + BOT1_NAME + " " + (sx + 0.5) + " " + sy + " " + (sz + 0.5));
         exec("tp " + BOT2_NAME + " " + (tx + 0.5) + " " + ty + " " + (tz + 0.5));
 
-        // Give the clients a few ticks to acknowledge their new positions
-        // before we sample them.
-        bot1Harness.bot().waitTicks(5);
-        bot2Harness.bot().waitTicks(5);
+        // Each client APPLIES its own placement before anything else happens. The reads below are
+        // the server's and need no wait; this is for the fetch's own link further down, which takes
+        // any `client_pos_look_applied` on bot2's log after its mark — a late copy of THIS placement
+        // would satisfy it and the read after it would find him where this line put him.
+        ClientEvents.awaitPlacedNear(bot1Log, bot1Placed, sx + 0.5, sz + 0.5,
+                "bot1 must stand at the moderator's spot before the fetch", LINK_BUDGET_TICKS);
+        ClientEvents.awaitPlacedNear(bot2Events(), bot2Placed, tx + 0.5, tz + 0.5,
+                "bot2 must stand at its starting spot before the fetch", LINK_BUDGET_TICKS);
 
         // Sanity-check pre-state: bots are at distinct positions.
         PlayerPosition bot1Pre = PlayerPosition.of(this::exec, BOT1_NAME);

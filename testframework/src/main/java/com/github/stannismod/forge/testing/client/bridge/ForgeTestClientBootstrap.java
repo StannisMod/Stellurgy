@@ -101,6 +101,24 @@ public final class ForgeTestClientBootstrap {
             PENDING_CONNECTION_ACTION = new java.util.concurrent.atomic.AtomicReference<>();
 
     /**
+     * The one {@code screenshot} capture waiting for a frame to be DRAWN, performed at the END of
+     * the next {@code RenderTickEvent} and released by it.
+     *
+     * <p>Why a frame and not a scheduled task: {@code runOnClientThread} runs inside
+     * {@code runTick}, BEFORE that loop's frame is rendered, so the pixels it can read are the
+     * previous frame's — drawn before whatever the test just changed (the HUD hidden, a
+     * framebuffer bound, a teleport). Every caller therefore advanced a few ticks first, and a
+     * number of ticks buys no number of frames: under load the loop runs several ticks per
+     * frame. At the end of a frame's render the frame the capture wants is the one in the
+     * buffer.</p>
+     *
+     * <p>Owned by this client JVM, which this bridge serves for its whole life; at most one
+     * capture is pending, because the bridge answers one request at a time.</p>
+     */
+    private static final java.util.concurrent.atomic.AtomicReference<FutureTask<JsonObject>>
+            PENDING_FRAME_CAPTURE = new java.util.concurrent.atomic.AtomicReference<>();
+
+    /**
      * Ring buffer of sound locations the client {@code SoundManager} was asked
      * to play ({@code PlaySoundEvent} fires once per {@code playSound(ISound)}
      * on the real client). Read via {@code report_sounds}, reset via
@@ -152,6 +170,7 @@ public final class ForgeTestClientBootstrap {
         installClientLogFile();
         installEventMixins();
         FMLCommonHandler.instance().bus().register(new TickCounter());
+        FMLCommonHandler.instance().bus().register(new FrameCapturer());
         FMLCommonHandler.instance().bus().register(new SoundRecorder());
         FMLCommonHandler.instance().bus().register(new GuiOpenRecorder());
         FMLCommonHandler.instance().bus().register(new EntityJoinRecorder());
@@ -1549,27 +1568,20 @@ public final class ForgeTestClientBootstrap {
                 // The only way a headless test can see what the client actually DREW. Vanilla's F2
                 // cannot be driven: it is dispatched off the raw LWJGL key-event queue, which
                 // set_key (a KeyBinding state write) never reaches. So call the same helper directly,
-                // on the client thread, where the GL context is current.
-                return runOnClientThread(() -> {
+                // on the client thread, where the GL context is current — at the END of the next
+                // rendered frame (see PENDING_FRAME_CAPTURE), so what is captured was drawn after
+                // this request, and a caller never has to guess how many ticks make a frame.
+                return captureAtTheEndOfTheNextFrame(() -> {
                     Minecraft mc = Minecraft.getMinecraft();
                     String name = requireString(request, "name");
                     String fileName = name.endsWith(".png") ? name : name + ".png";
                     // Without the FBO, ScreenShotHelper falls back to glReadPixels of the current READ
-                    // buffer. Read the FRONT buffer, which at least holds the frame on screen; the
-                    // caller should have enabled the framebuffer if it means to trust the pixels.
+                    // buffer, which at the end of a frame's render — before the swap — is the BACK
+                    // buffer holding that frame. The caller should have enabled the framebuffer if it
+                    // means to trust the pixels.
                     boolean fbo = OpenGlHelper.isFramebufferEnabled();
-                    int previousReadBuffer = fbo ? 0 : GL11.glGetInteger(GL11.GL_READ_BUFFER);
-                    if (!fbo) {
-                        GL11.glReadBuffer(GL11.GL_FRONT);
-                    }
-                    try {
-                        ScreenShotHelper.saveScreenshot(mc.mcDataDir, fileName,
-                                mc.displayWidth, mc.displayHeight, mc.getFramebuffer());
-                    } finally {
-                        if (!fbo) {
-                            GL11.glReadBuffer(previousReadBuffer);
-                        }
-                    }
+                    ScreenShotHelper.saveScreenshot(mc.mcDataDir, fileName,
+                            mc.displayWidth, mc.displayHeight, mc.getFramebuffer());
                     File written = new File(new File(mc.mcDataDir, "screenshots"), fileName);
                     JsonObject response = ok();
                     response.addProperty("path", written.getAbsolutePath());
@@ -1761,6 +1773,25 @@ public final class ForgeTestClientBootstrap {
             return task.get(CLIENT_SIDE_BUDGET_MILLIS / 2L, TimeUnit.MILLISECONDS);
         } catch (Exception exception) {
             throw new RuntimeException(exception);
+        }
+    }
+
+    /**
+     * Run {@code capture} at the END of the next frame the client renders, and answer its result.
+     * The frame-side half is {@link FrameCapturer}.
+     */
+    private static JsonObject captureAtTheEndOfTheNextFrame(Callable<JsonObject> capture) {
+        FutureTask<JsonObject> task = new FutureTask<>(capture);
+        if (!PENDING_FRAME_CAPTURE.compareAndSet(null, task)) {
+            throw new IllegalStateException("a screenshot is already waiting for a frame");
+        }
+        try {
+            return task.get(CLIENT_SIDE_BUDGET_MILLIS / 2L, TimeUnit.MILLISECONDS);
+        } catch (Exception exception) {
+            throw new RuntimeException("no frame was rendered to capture (client ticks so far: "
+                    + CLIENT_TICKS.get() + ")", exception);
+        } finally {
+            PENDING_FRAME_CAPTURE.compareAndSet(task, null);
         }
     }
 
@@ -2195,6 +2226,20 @@ public final class ForgeTestClientBootstrap {
     /** Six significant figures, {@code Locale.ROOT} — a coordinate, never a locale's comma. */
     private static String jsonNumber(double v) {
         return String.format(Locale.ROOT, "%.6g", v);
+    }
+
+    /** Performs a pending {@code screenshot} once a frame has been drawn — see
+     *  {@link #PENDING_FRAME_CAPTURE}. */
+    private static final class FrameCapturer {
+        @SubscribeEvent
+        public void onRenderTick(TickEvent.RenderTickEvent event) {
+            if (event.phase == TickEvent.Phase.END) {
+                FutureTask<JsonObject> capture = PENDING_FRAME_CAPTURE.getAndSet(null);
+                if (capture != null) {
+                    capture.run();
+                }
+            }
+        }
     }
 
     private static final class TickCounter {

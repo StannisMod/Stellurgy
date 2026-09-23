@@ -273,6 +273,7 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         // mark taken here it cannot be missed however the two sides interleave.
         long pressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 

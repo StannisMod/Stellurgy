@@ -55,12 +55,16 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
     @Test
     public void vsShipReloadsLiveAfterASlotRebind() throws Exception {
 
-        // Assemble a ship in a fresh pool slot (cell "deep").
+        // Assemble a ship in a fresh pool slot (cell "deep"). The substrate spawns it from a queue
+        // it drains on a later tick, and `ship_spawned` is that drain's own record.
+        Events serverLog = new Events(this::exec, bot()::waitTicks);
+        long spawnMark = serverLog.markInstrumented();
         String asm = exec("artest space vs-assemble deep");
         Reply mReply = Reply.of(asm);
         assertTrue("vs-assemble must report a slot dim: " + asm, mReply.has(SLOT));
         int slot = Integer.parseInt(mReply.text(SLOT));
-        bot().waitTicks(40); // let VS process the async spawn queue
+        serverLog.await(spawnMark, "ship_spawned", "the assembled ship must be spawned by the"
+                + " substrate's queue before its registry can be asked about it", 200);
 
         // Sanity: the ship must exist in VS's queryable registry (assembly succeeded).
         Reply cmReply = Reply.of(exec("artest vs ship-count-all " + slot));
@@ -87,7 +91,6 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
                 DIM_LINK_BUDGET_TICKS);
         assertTrue("slot must reload after the ship's world is unloaded: ",
                 Reply.of(exec("artest space reload " + slot + " deep")).bool("present"));
-        bot().waitTicks(20);
 
         // Bot returns onto the ship; it must RE-LOAD live after the rebind.
         enterPoolNearShip(slot);

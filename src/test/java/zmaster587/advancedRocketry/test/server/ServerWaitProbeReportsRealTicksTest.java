@@ -93,6 +93,9 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
                 Reply.of(clock).bool("onServerThread"));
 
         long before = GameTicks.count(client(), 0);
+        // EXPERIMENT: this advance is the SUBJECT — GameTicks' contract that a wait never returns
+        // short — and the assertions below are about what it did, measured against the world's own
+        // clock read on either side. Overshoot is allowed by that contract and asserted as such.
         long observed = GameTicks.advanceWorld(client(), 0, TICKS);
         long after = GameTicks.count(client(), 0);
 
@@ -116,6 +119,8 @@ public class ServerWaitProbeReportsRealTicksTest extends AbstractSharedServerTes
         long serverBefore = GameTicks.read(client(), GameTicks.server());
         long worldBefore = GameTicks.read(client(), GameTicks.world(0));
 
+        // EXPERIMENT: the advance on the SERVER clock is the subject, and the claim is what it did
+        // to both clocks — each read before and after, each required to have moved at least TICKS.
         GameTicks.advance(client(), GameTicks.server(), TICKS);
 
         assertTrue("the server's own tick counter must advance: " + serverBefore + " -> "

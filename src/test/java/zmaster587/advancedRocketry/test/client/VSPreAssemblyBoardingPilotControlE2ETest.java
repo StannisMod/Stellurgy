@@ -400,7 +400,6 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         String assemble = assembleFixture();
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 Reply.of(assemble).ok());
-        bot().waitTicks(20);
 
         // CONTRACT, first half: sitting still means sitting. Assembling the ship under a seated
         // player must not throw him out of his seat.
@@ -784,7 +783,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         String mount = exec("artest player mount-entity " + mountInfo.requireDummyId());
         scenario().requireArranged("the bot must mount the seat's dummy: " + mount,
                 Reply.of(mount).bool("mounted"));
-        bot().waitTicks(10);
+        // No settle: the caller links on both sides' mount records from marks it took before this.
         return "seatMount=" + mountInfo.raw() + " mount=" + mount;
     }
 

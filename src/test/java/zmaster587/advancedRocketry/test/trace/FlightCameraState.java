@@ -59,6 +59,8 @@ public final class FlightCameraState implements TraceWindow {
      *  suppress an unchanged line: the value a reader gets comes from the {@code ff_hud} record. */
     public static final class Hud {
         String last = "";
+        /** The client world's clock when the HUD was last drawn; see {@link #noteHud}. */
+        long lastDrawnAt = Long.MIN_VALUE;
     }
 
     private static List<FlightCameraState> windows() {
@@ -152,11 +154,23 @@ public final class FlightCameraState implements TraceWindow {
      * moment it started saying something. One record per change keeps the ring meaningful — a
      * twenty-tick wait costs a handful of records instead of a hundred — and gives every change a
      * sequence number.</p>
+     *
+     * <p><b>A HUD that APPEARS is a change too</b>, even with the line it last showed. The memory
+     * lives as long as the client, and nothing is drawn while no rocket is flown — so without this,
+     * a scenario whose first HUD line matched the previous scenario's last one recorded nothing,
+     * and a wait for "the HUD shows X" passed or expired on test ORDER. A gap of more than one tick
+     * of the client world's clock since the last draw is read as the HUD having been away.</p>
      */
     public static void noteHud(String joinedLine) {
         String line = joinedLine == null ? "" : joinedLine;
         Hud hud = SideTrace.client().memory(Hud.class, Hud::new);
-        if (line.equals(hud.last)) {
+        net.minecraft.client.multiplayer.WorldClient world =
+                net.minecraft.client.Minecraft.getMinecraft().world;
+        long now = world == null ? Long.MIN_VALUE : world.getTotalWorldTime();
+        boolean reappeared = now == Long.MIN_VALUE || hud.lastDrawnAt == Long.MIN_VALUE
+                || now > hud.lastDrawnAt + 1;
+        hud.lastDrawnAt = now;
+        if (line.equals(hud.last) && !reappeared) {
             return;
         }
         hud.last = line;
