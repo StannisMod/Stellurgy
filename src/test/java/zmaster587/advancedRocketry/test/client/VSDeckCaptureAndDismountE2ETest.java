@@ -291,8 +291,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         //
         // This used to note that the record was a per-tick COMMIT, so a body the build step had
         // already left standing on this deck satisfied the await at once — and called that
-        // acceptable. It was not: that is exactly the defect ledger #501 cost seven scenarios on,
-        // and this class held two of them. The wait is now on the EDGE, so the teleport has to
+        // acceptable. It was not: that is exactly the defect that cost seven scenarios before the
+        // per-tick commit was removed, and this class held two of them. The wait is now on the EDGE, so the teleport has to
         // produce a capture of its own before it returns. What this scenario's bug looks like is NO
         // capture on the client at all while the server holds him, and a capture that existed and
         // was then lost shows up in the release absence over the sink window below.

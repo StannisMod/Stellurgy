@@ -195,7 +195,7 @@ public final class DeckCameraState {
     // and ends the window, and `open` zeroes the counters so a scenario's count is its own. The
     // counters are the reason this matters most — cameraHookCalls and posLookApplies are cumulative
     // for the life of the client, so on a shared harness a threshold on either was satisfiable by
-    // whatever ran before you (`sharing-client-harness`, rule 1).
+    // whatever ran before you.
 
     // Read accessors for the RECORDING mixins, which need the previous state to say whether this
     // frame CHANGED anything ("the camera engaged", "it was released"). Methods rather than the

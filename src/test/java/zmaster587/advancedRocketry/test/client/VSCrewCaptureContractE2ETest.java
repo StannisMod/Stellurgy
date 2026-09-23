@@ -1371,7 +1371,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     // What it measured that is NOT covered elsewhere, said plainly rather than quietly dropped: that
     // a body standing on a hard-accelerating deck stays on it. That is a real contract and it is
     // worth a scenario -- one that asserts the body is still aboard at the end of the climb, through
-    // the two edges, with no reference to any guard. TASK-437 stage 4 owns writing it.
+    // the two edges, with no reference to any guard. No such scenario exists yet.
 
     // ---- Excluded states: the dismount deck-hold must never snap a creative-flying ex-pilot -----
 

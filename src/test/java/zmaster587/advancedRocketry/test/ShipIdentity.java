@@ -188,7 +188,7 @@ public final class ShipIdentity {
      * contained a record immediately, and the wait returned before its own stimulus had applied.
      * With the commit gone there is nothing to observe but the two edges, and an edge cannot
      * predate the mark it is read after. The two questions are one question. <i>Measured
-     * 2026-09-16, ledger #501: seven client scenarios, eight refuted hypotheses, and the body in
+     * 2026-09-16, and it cost seven client scenarios and eight refuted hypotheses: the body in
      * the trail was already held in HULL-STAND by the very craft the scenario was about to
      * teleport it onto.</i></p>
      *

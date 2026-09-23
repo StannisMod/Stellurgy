@@ -68,7 +68,7 @@ import static org.junit.Assert.assertTrue;
  * and the cell bound has to be justified by something else or dropped.</p>
  */
 @org.junit.Ignore("RETIRED 2026-09-16, answered. The render does not quantize out to 24M (measured"
-        + " 2026-08-12; TASK-249 and the space model's far-coordinate table). Kept rather than deleted"
+        + " 2026-08-12: frames compared clean at every rung). Kept rather than deleted"
         + " because that table cites this class as its evidence. Un-ignoring is removing this"
         + " annotation and nothing else: do it if the cell bound moves or the render path changes.")
 public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
@@ -78,12 +78,12 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
     // cites this class as the evidence for its far-coordinate table, and a citation needs a target.
     //
     // IT ANSWERED ITS QUESTION. Measured 2026-08-12: the camera walked 0.05 blocks a step and frames
-    // compared CLEAN at every rung out to 24M. Recorded in TASK-249 ("L2 landed — the render does not
-    // quantize, and neither does the wire"). That measurement stands; this class re-establishing it
+    // compared CLEAN at every rung out to 24M: the render does not quantize, and neither does the
+    // wire. That measurement stands; this class re-establishing it
     // every run buys nothing and costs a client boot and five screenshots.
     //
-    // NOT converted into a contract test, which is `spike-experiment-design` rule 9's first ending,
-    // because it proved a NEGATIVE about the renderer at coordinates the game does not put players
+    // NOT converted into a contract test, which is the usual first ending for a spike that has
+    // answered its question, because it proved a NEGATIVE about the renderer at coordinates the game does not put players
     // at yet. There is no mechanic to pin. The second ending — @Ignore — is honest here for the one
     // condition that makes it honest: un-ignoring is removing the annotation and nothing else. The
     // instrument is complete, both its controls included.

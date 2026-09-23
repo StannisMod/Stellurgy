@@ -2157,8 +2157,9 @@ public final class ShipFrameTravel {
      * handshake's "installed during my window" test was comparing against a number that never sat
      * still; the state object a caller held became garbage between ticks; and the instrument on
      * {@code STATE.put} — placed there because it is the one write site and therefore complete —
-     * became a PER-TICK record that fifty-four test call sites then read as evidence of a capture.
-     * That is ledger #501.</p>
+     * became a PER-TICK record that fifty-four test call sites then read as evidence of a capture —
+     * so a wait opened over a body that was already held returned at once, on an episode that was
+     * already running, before its own stimulus had applied.</p>
      *
      * <p>What is written here is the tick's physics carry-over, and only that: the deck point the
      * next pose-follow pass re-images, and the carry the next tick subtracts back out. The state —

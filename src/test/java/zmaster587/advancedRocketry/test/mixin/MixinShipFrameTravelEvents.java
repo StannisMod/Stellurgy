@@ -221,8 +221,8 @@ public abstract class MixinShipFrameTravelEvents {
     // one write site and therefore complete — fired twenty times a second per body per side. Fifty-
     // four test call sites read it as evidence that a deck held a body, which is the one thing a
     // commit cannot be: a body already held emits one immediately after ANY mark, so a wait on it
-    // returns on an episode that was already running. That is ledger #501, and it cost seven client
-    // scenarios and eight refuted hypotheses.
+    // returns on an episode that was already running. It cost seven client scenarios and eight
+    // refuted hypotheses before it was found.
     //
     // `captureState` now runs only at an EDGE, so a record here would be `deck_entered` with a
     // different name. The two edges are the vocabulary: `deck_entered` and `deck_released`.
