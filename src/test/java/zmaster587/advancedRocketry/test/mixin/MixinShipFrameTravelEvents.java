@@ -1,9 +1,5 @@
 package zmaster587.advancedRocketry.test.mixin;
 
-import java.util.Map;
-
-import com.google.common.collect.MapMaker;
-
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -17,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
 import zmaster587.advancedRocketry.test.trace.DeckGateWindow;
+import zmaster587.advancedRocketry.test.trace.EntityTrace;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -138,32 +135,18 @@ public abstract class MixinShipFrameTravelEvents {
     private static final String INSTRUMENT_CARRY = "deck_carry_events";
     private static final String INSTRUMENT_CONTACT = "deck_contact_events";
 
-    /**
-     * {@code onGround} as of each body's previous {@code travel} return. Private static (allowed).
-     *
-     * <p>IDENTITY keys, and that is not a preference: {@code Entity.equals}/{@code hashCode} are
-     * the ENTITY ID, so on an integrated server — every client test — the client's copy of a player
-     * and the server's copy are EQUAL and share one slot in a hash map. The two sides then eat each
-     * other's edges: the side that returns from {@code travel} second sees the other's
-     * {@code grounded} as "before" and stays silent on a landing that really happened. Production's
-     * own capture map hit this and answers it the same way ({@code ShipFrameTravel.STATE}, built
-     * with {@code MapMaker().weakKeys()}); {@code weakKeys()} switches comparison to {@code ==} and
-     * makes the collision unrepresentable. Concurrent too, so the two sides' threads need no
-     * external synchronization.</p>
+    /*
+     * What these recorders remember per body — `onGround` at the previous travel return, and the
+     * last `deck_gate_decided` written — is held BY the body, in EntityTrace.DeckGate. Two static
+     * weak-identity maps held it until 2026-09-23; identity mattered because `Entity.equals` compares
+     * the entity id, so two copies of one player in one JVM would have shared a slot and eaten each
+     * other's edges. Memory kept on the object itself cannot collide that way.
      */
-    private static final Map<Entity, Boolean> arTest$groundedAtLastTravel =
-            new MapMaker().weakKeys().<Entity, Boolean>makeMap();
 
     /** How long a body's unchanged gate verdict may go unrecorded. Five seconds: short enough that
      *  any test window worth calling a window contains one record, long enough that a stable body
      *  costs a hundredth of what the per-tick form cost. See {@code arTest$gateDecided}. */
     private static final long ARTEST_GATE_HEARTBEAT_TICKS = 100L;
-
-    /** The last {@code deck_gate_decided} written per body: the world time in the high bits and
-     *  {@code handled | tracked} in the low two — see {@code arTest$gateDecided} for why the gate is
-     *  deduplicated at all. Identity keys for the same reason as the map above. */
-    private static final Map<Entity, Long> arTest$lastGateRecord =
-            new MapMaker().weakKeys().<Entity, Long>makeMap();
 
     /**
      * HEAD of {@code captureState}: the body is about to be held by {@code shipId} and is not held
@@ -373,8 +356,8 @@ public abstract class MixinShipFrameTravelEvents {
         TestTrace.instrument(entity, INSTRUMENT_GATE_WINDOW);
         // Before the player filter and before the heartbeat below, because the window answers a
         // different question from `deck_gate_decided` and must not inherit its resolution: see
-        // DeckGateWindow, which says why a heartbeat cannot answer it. Closed, this is an int
-        // compare.
+        // DeckGateWindow, which says why a heartbeat cannot answer it. With no window open, this is
+        // a lookup that finds none.
         DeckGateWindow.sample(entity, cir.getReturnValueZ());
         if (!(entity instanceof EntityPlayer) || entity.world == null) {
             return;
@@ -407,11 +390,13 @@ public abstract class MixinShipFrameTravelEvents {
         // the two verdict bits at the bottom.
         long now = entity.world.getTotalWorldTime();
         long stamp = (handled ? 2L : 0L) | (tracked ? 1L : 0L);
-        Long last = arTest$lastGateRecord.get(entity);
-        if (last != null && (last & 3L) == stamp && now - (last >>> 2) < ARTEST_GATE_HEARTBEAT_TICKS) {
+        EntityTrace.DeckGate memory =
+                EntityTrace.memory(entity, EntityTrace.DeckGate.class, EntityTrace.DeckGate::new);
+        long last = memory.lastGateRecord;
+        if (last >= 0 && (last & 3L) == stamp && now - (last >>> 2) < ARTEST_GATE_HEARTBEAT_TICKS) {
             return;
         }
-        arTest$lastGateRecord.put(entity, (now << 2) | stamp);
+        memory.lastGateRecord = (now << 2) | stamp;
         TestTrace.record(entity, "deck_gate_decided", "\"e\":" + entity.getEntityId()
                 + ",\"who\":\"" + TestTrace.json(entity.getName())
                 + "\",\"handled\":" + handled
@@ -427,7 +412,10 @@ public abstract class MixinShipFrameTravelEvents {
             return;
         }
         boolean grounded = entity.onGround;
-        Boolean before = arTest$groundedAtLastTravel.put(entity, grounded);
+        EntityTrace.DeckGate memory =
+                EntityTrace.memory(entity, EntityTrace.DeckGate.class, EntityTrace.DeckGate::new);
+        Boolean before = memory.groundedAtLastTravel;
+        memory.groundedAtLastTravel = grounded;
         // An EDGE, not a state: the resolver owned this tick's move AND put the body on a surface it
         // was not on at the previous travel return. A body already grounded when captured has no edge.
         if (!cir.getReturnValueZ() || !grounded || (before != null && before)) {

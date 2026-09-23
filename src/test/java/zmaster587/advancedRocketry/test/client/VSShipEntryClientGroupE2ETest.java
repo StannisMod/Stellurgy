@@ -312,7 +312,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                     "entity_mount_writes", "the client's own mounts must be observed at all before an"
                             + " absent one can be read as a pilot the crossing stood up");
             throw new AssertionError(never.getMessage() + " | seat delivery: "
-                    + exec("artest vs seat-delivery"));
+                    + seatDelivery());
         }
         // Position-writer timeline for the arrival, printed win-or-lose: the harness deletes its
         // child workdirs on close, so the only way to read the writers post-run is through the
@@ -324,7 +324,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         JsonObject riding = bot().reportRidingEntity();
         assertTrue("the pilot must still be ON the seat his client was given, and not have been"
                         + " taken off it again: " + riding
-                        + " delivery=" + exec("artest vs seat-delivery"),
+                        + " delivery=" + seatDelivery(),
                 isRiding(riding));
 
         // (3) Not falling: over a two-second window the client-rendered altitude must not sink
@@ -353,7 +353,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("the pilot must still CONTROL his ship after the crossing - the fresh seat "
                         + "binding on the re-assembled ship must carry his input. clientY " + before
                         + " -> " + lift + " (need +" + MIN_CONTROL_CLIMB + ")"
-                        + " delivery=" + exec("artest vs seat-delivery"),
+                        + " delivery=" + seatDelivery(),
                 lift.satisfied);
 
         // (5) He carries the durable aboard record. That record - not his dimension id, which is a
@@ -530,7 +530,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                     // delivered does not). Sampled at the same cadence as the altitude so the two
                     // timelines line up tick for tick.
                     if (diag.length() < 900) {
-                        String d = exec("artest vs seat-delivery");
+                        // The SERVER half's own record: its fields are read by name below, and the
+                        // two-half reading nests them where a by-name read refuses to look.
+                        String d = seatDeliveryServer();
                         // The POOL rides along with the delivery counters, and it is the reading that
                         // matters most here: the premise "the pool is full" is measured once, before
                         // the climb, and this leg then spends minutes climbing. If the pressure
@@ -657,12 +659,12 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 Events.countRecords(clientEvents().since(0, "mount"), "ok", "true") > 0);
         assertTrue("a REFUSED entry must leave the pilot IN HIS SEAT - the crossing may unseat"
                         + " nobody until it is granted, and his client was told to take him off it: "
-                        + dismounts + " delivery=" + exec("artest vs seat-delivery"),
+                        + dismounts + " delivery=" + seatDelivery(),
                 Events.countRecordsWithField(dismounts, "who") == 0);
         // ...and he is still on it now, read ONCE.
         JsonObject riding = bot().reportRidingEntity();
         assertTrue("a REFUSED entry must leave the pilot IN HIS SEAT. riding=" + riding
-                        + " delivery=" + exec("artest vs seat-delivery"), isRiding(riding));
+                        + " delivery=" + seatDelivery(), isRiding(riding));
 
         // Still in the launch world: the ship never crossed, and neither did the pilot.
         JsonObject weather = bot().reportWeather();
@@ -823,15 +825,14 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     // which sees a message the ring has already dropped, does not move when the language file does,
     // and says the server SENT it rather than that a scrape happened to catch it.
 
-    /** The client-side pilot-input gate discriminators (the delivery chain's CLIENT half). */
+    /**
+     * The pilot-input gate discriminators — the delivery chain, both halves, this scenario's — and
+     * what the server and the client say about the ship. The client half's record carries the client
+     * tick it was taken on in its envelope, which is what the reflective read of the harness's tick
+     * counter used to add here.
+     */
     private String clientGateStats() throws Exception {
-        String cls = "zmaster587.advancedRocketry.command.test.SeatDiag";
-        return "open=" + bot().readStaticField(cls, "shipGateOpenTicks").get("value").getAsString()
-                + " closed=" + bot().readStaticField(cls, "shipGateClosedTicks").get("value").getAsString()
-                + " sends=" + bot().readStaticField(cls, "shipInputSendCount").get("value").getAsString()
-                + " clientTicks=" + bot().readStaticField(
-                        "com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap",
-                        "CLIENT_TICKS").get("value").getAsString()
+        return "delivery=" + seatDelivery()
                 + " wallMs=" + System.currentTimeMillis()
                 + " shipData=" + exec("artest vs player-ship-data")
                 + " riding=" + bot().reportRidingEntity();
@@ -868,6 +869,11 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static String firstGroupOr(String field, String reply, String fallback) {
         // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
         // default as an argument, so every call site names what a missing field means there.
+        // A reply that is not JSON at all — an unreadable half says so in parentheses — is the
+        // same absence.
+        if (reply == null || !reply.trim().startsWith("{")) {
+            return fallback;
+        }
         return Reply.of(reply).textOr(field, fallback);
     }
 

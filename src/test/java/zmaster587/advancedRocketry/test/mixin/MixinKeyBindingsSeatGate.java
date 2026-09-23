@@ -9,15 +9,15 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.client.KeyBindings;
-import zmaster587.advancedRocketry.command.test.SeatDiag;
 import zmaster587.advancedRocketry.entity.EntityDummy;
+import zmaster587.advancedRocketry.test.trace.SeatGateWindow;
 
 /**
  * The CLIENT half of the pilot-input chain: whether this client even tried to send.
  *
  * <p>The gate refuses silently — a mount that resolves no linked seat simply produces no packet,
  * which from the server's side is indistinguishable from a packet that was sent and lost. So the
- * decision is worth counting, and the counters used to live on the keybind handler itself.</p>
+ * decision is worth counting — into every open {@link SeatGateWindow}.</p>
  *
  * <p>Read off the method's own RETURN rather than from inside its branches: it returns {@code true}
  * exactly when the player is piloting a ship this tick, which IS the gate. The closed side is
@@ -31,9 +31,9 @@ public abstract class MixinKeyBindingsSeatGate {
     private void arTest$gateDecision(Minecraft mc, EntityPlayerSP player,
                                      CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) {
-            SeatDiag.clientGate(true);
+            SeatGateWindow.gate(true);
         } else if (player != null && player.getRidingEntity() instanceof EntityDummy) {
-            SeatDiag.clientGate(false);
+            SeatGateWindow.gate(false);
         }
     }
 
@@ -48,6 +48,6 @@ public abstract class MixinKeyBindingsSeatGate {
     // crashes at postInit registering keybinds.
     private void arTest$inputSent(Minecraft mc, EntityPlayerSP player,
                                   CallbackInfoReturnable<Boolean> cir) {
-        SeatDiag.clientSent();
+        SeatGateWindow.sent();
     }
 }

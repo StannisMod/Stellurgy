@@ -45,8 +45,6 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
     private static final String POOL_DIMS = "dims";
     /** The slot the settle actually bound the cell to — the one place that decides it. */
     private static final String BOUND_DIM = "slotDim";
-    private static final String CLIENT_BODIES_CLASS =
-            "zmaster587.advancedRocketry.network.PacketSystemBodiesSync";
     private static final String CLOCK = "zmaster587.advancedRocketry.space.SpaceClockSync";
 
     /** How far the server's clock is jumped. Far past anything a sync period could account for. */
@@ -359,12 +357,15 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
                     "a pilot standing in a cell must be sent that cell's sky", LINK_BUDGET_TICKS);
             scenario().record("skyFeedInside", received);
 
-            // The CONTENTS are still read from the client's own store: `system_bodies_received`
-            // carries the counts and which slot dims arrived, not the bodies themselves, so the
-            // three pins below have no event to move onto. They are what says the descend target
-            // survived the wire — the reason this scenario exists — and they stay.
-            JsonObject sf = bot().readStaticField(CLIENT_BODIES_CLASS, "CLIENT_BODIES");
-            String value = sf.get("isNull").getAsBoolean() ? "" : sf.get("value").getAsString();
+            // The CONTENTS, as the client's store took them: `system_bodies_received` carries the
+            // store's rendering (`stored`) at the moment the packet replaced it, so the three pins
+            // below read the bodies themselves off the record of the arrival rather than off a
+            // private map read across the socket at whatever moment the read happened to land.
+            // They are what says the descend target survived the wire — the reason this scenario
+            // exists. The LAST arrival since the mark is the store's content: each packet replaces
+            // the store wholesale.
+            String stored = Events.lastRecord(clientLog.since(insideMark, "system_bodies_received"));
+            String value = stored == null ? "" : Events.text(stored, "stored");
             assertTrue("client CLIENT_BODIES must carry the slot dim's bodies, got: " + value
                             + " (the arrival itself was recorded: " + received + ")",
                     value.contains(slotDim + "=[") && value.contains("RenderBody{"));

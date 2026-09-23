@@ -615,9 +615,13 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
 
     // ---- migrated: VSJumpTellsThePilotWhatIsHappeningE2ETest ----
 
-    private static final String SKY = "zmaster587.advancedRocketry.command.test.RenderDiag";
+    /** The client-side window counting sky and corridor frames — see {@code RenderFrameWindow}. */
+    private static final String RENDER_FRAME_WINDOW =
+            "zmaster587.advancedRocketry.test.trace.RenderFrameWindow";
 
-    private static final String TUNNEL = "zmaster587.advancedRocketry.command.test.RenderDiag";
+    /** This scenario's frame window, opened on its first reading. Every reader here compares a
+     *  count before and after a stimulus, so where the window starts does not enter any verdict. */
+    private ClientWindow renderFrames;
 
     /** Above vanilla's sky-pass floor of 4 chunks; the harness otherwise pins the client at 2. */
 private static final int SKY_RENDER_DISTANCE = 8;
@@ -743,20 +747,26 @@ private String hud() throws Exception {
     }
 
     /** Frames on which this sky renderer ran at all, whatever it decided to draw. */
-private long skyFrames() throws Exception {
-        return readCounter(SKY, "skyFramesDrawn");
+    private long skyFrames() throws Exception {
+        return renderFrameCount("skyFrames");
     }
 
-    /** A client-side counter, read as text: the bridge hands values back as strings. */
-private long readCounter(String className, String field) throws Exception {
-        com.google.gson.JsonObject sf = bot().readStaticField(className, field);
-        assertTrue("the client must expose " + className + "#" + field + ": " + sf,
-                !sf.get("isNull").getAsBoolean());
-        return Long.parseLong(sf.get("value").getAsString().trim());
-    }
-
+    /** Frames the hyperspace corridor drew. */
     private long tunnelFrames() throws Exception {
-        return readCounter(TUNNEL, "tunnelFramesDrawn");
+        return renderFrameCount("tunnelFrames");
+    }
+
+    /** One count of this scenario's frame window, as the record a peek writes. */
+    private long renderFrameCount(String field) throws Exception {
+        if (renderFrames == null) {
+            renderFrames = ClientWindow.open(bot(), RENDER_FRAME_WINDOW);
+        }
+        long mark = clientEvents().mark();
+        renderFrames.peek();
+        String rec = Events.lastRecord(clientEvents().since(mark, "render_frame_window"));
+        assertTrue("no render_frame_window record after a peek — the client did not answer, so "
+                + field + " has no reading", rec != null);
+        return (long) Events.number(rec, field);
     }
 
     // The class read the client's chat here — `chat()`, a 200-line dump matched for "Jump engaged"

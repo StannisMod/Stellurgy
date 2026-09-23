@@ -6,10 +6,10 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import zmaster587.advancedRocketry.client.render.planet.HyperspaceTunnel;
-import zmaster587.advancedRocketry.command.test.RenderDiag;
+import zmaster587.advancedRocketry.test.trace.RenderFrameWindow;
 
 /**
- * Counts the corridor's drawn frames.
+ * Counts the corridor's drawn frames into every open {@link RenderFrameWindow}.
  *
  * <p>TAIL and not HEAD: the count means "a frame was DRAWN", and the renderer can return early. The
  * production counter this replaces sat at the very end of the method for the same reason.</p>
@@ -24,6 +24,6 @@ public abstract class MixinHyperspaceTunnelDiag {
     @Inject(method = "render", at = @At("TAIL"))
     private static void arTest$tunnelFrameDrawn(float partialTicks, net.minecraft.world.World world,
                                                 CallbackInfo ci) {
-        RenderDiag.tunnelFrameDrawn();
+        RenderFrameWindow.tunnelFrame();
     }
 }

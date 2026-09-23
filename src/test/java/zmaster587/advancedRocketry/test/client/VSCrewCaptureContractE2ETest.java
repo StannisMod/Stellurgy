@@ -112,7 +112,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final int CAPTURE_LINK_BUDGET_TICKS = 200;
 
     /**
-     * How many gate decisions the deck-gate window may record PER SIDE around a capture stimulus.
+     * How many gate decisions the (client's) deck-gate window may record around a capture stimulus.
      *
      * <p>Sized from the question, not from the wait: the capture is decided in the handful of ticks
      * after the body arrives, and forty of them either side spans that with room for the arrival to
@@ -509,7 +509,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // The frame half is a window OPENED here and closed after the arc, so the numbers describe
         // this jump rather than everything the client has drawn since it booted.
         long jumpStepMark = clientEvents().mark();
-        bot().invokeStaticInt(FRAME_STEP_WINDOW, "open");
+        ClientWindow jumpStepWindow = ClientWindow.open(bot(), FRAME_STEP_WINDOW);
         long posLook0 = (long) deckCamera("posLookApplies");
         long jumpMark = client.mark();
         int samples = 0;
@@ -544,7 +544,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // nobody is not an answer about the capture.
         String releases = client.since(jumpMark, "deck_released");
         String held = client.since(jumpMark, "deck_carry");
-        bot().invokeStaticInt(FRAME_STEP_WINDOW, "close");
+        jumpStepWindow.close();
         String jumpSteps = Events.lastRecord(
                 clientEvents().since(jumpStepMark, "frame_step_window"));
         long posLookD = (long) deckCamera("posLookApplies") - posLook0;
@@ -1192,11 +1192,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 deckCapture2.alreadyTracked);
 
         long mark = clientEvents().mark();
-        com.google.gson.JsonObject armed = bot().invokeStaticInt(
-                "org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
-                "arTest$armPoseTrace", 120);
-        scenario().requireArranged("the per-tick trace must arm on the client: " + armed,
-                armed != null);
+        ClientWindow poseTrace = ClientWindow.open(bot(), DECK_POSE_TRACE_WINDOW, 120);
 
         // Drive it, so the pose has something to say: a still craft's every tick looks alike whether
         // a pose arrived or not, which is exactly the case this cannot learn anything from.
@@ -1210,6 +1206,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         }
         exec("artest vs seat-input-by-id 0 " + scenarioShipId + " 0 0 0 0 0 0");
         bot().waitTicks(20);
+        poseTrace.close();
 
         String trace = clientEvents().since(mark, "client_deck_pose_tick");
         System.out.println("[crewcap] deck-pose per-tick trace ::\n" + trace);
@@ -1274,19 +1271,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // produced a movement packet identical to standing still. The code that owns the position is
         // the only thing that can declare an impossible one, which is exactly how it happened in
         // play.
-        // Named on the TARGET class: a mixin's own class is gone by runtime, its members live in
-        // what it was applied to.
-        com.google.gson.JsonObject shoved = bot().invokeStaticInt(
-                "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
-                "arTest$armShove", 40);
-        scenario().requireArranged("the shove must be armed on the client, or nothing declares an"
-                + " impossible position: " + shoved, shoved != null);
+        ClientWindow shove = ClientWindow.open(bot(),
+                "zmaster587.advancedRocketry.test.trace.ShoveArming", 40);
         // The armed shove TAKING is a link, and the client's own commit records it: awaited from the
         // mark taken before the arming, so a red says "the travel commit never took the step" rather
         // than reporting a height twenty ticks later.
         client.await(shoveMark, "ship_frame_travel_shove", "the client's own travel commit must take"
                 + " the armed step, or nothing in this scenario ever declares an impossible position"
                 + " and the height check below passes on a body that never moved", 200);
+        shove.close();
         bot().waitTicks(20); // let the declaration make its round trip and the body settle
 
         double endY = bot().reportState().get("playerY").getAsDouble();
@@ -1499,7 +1492,9 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 upY < INVERTED_DECK_UP_Y);
         double sx = info.x, sy = info.y, sz = info.z;
 
-        // Fall onto the world-top of the inverted hull from a few blocks up.
+        // Fall onto the world-top of the inverted hull from a few blocks up. The camera's own
+        // window opens BEFORE the teleport, so "never engages" below covers the whole encounter.
+        long cameraMark = clientEvents().mark();
         exec("tp @a " + sx + " " + (sy + HULL_DROP_HEIGHT_BLOCKS) + " " + sz + " 0 0");
         // The freshly-teleported client may not tick until its destination chunks stream in (the
         // whole encounter would then sample a frozen body and prove nothing). The premise is that
@@ -1564,10 +1559,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                     "the hull stand must be on the hull this scenario put him on");
         }
         // (c) His camera stays his own - the deck-levelled view never engages for a hull stander.
-        boolean camActive = Boolean.parseBoolean(
-                deckCameraText("active"));
+        //
+        // "NEVER" is a claim about the whole encounter, so it is read off the engage EDGES since a
+        // mark taken before the teleport, not off the one standing value at the end: that value is
+        // false by default and false again after a camera that engaged and released, so on its own
+        // it passed both on a camera that never ran and on one that turned on and off mid-encounter.
+        // The instrument's own roster says the camera hook was being asked at all.
+        String cameraEdges = clientEvents().since(cameraMark, "deck_camera_changed");
+        Events.assertInstrumentRan(cameraEdges, "deck_camera_events",
+                "the deck camera did or did not engage for the hull-top stander");
+        int engaged = Events.countRecords(cameraEdges, "active", "true");
+        boolean camActive = Boolean.parseBoolean(deckCameraText("active"));
         assertTrue("the deck camera must never engage for a hull-top stander (the outer hull keeps "
-                + "world-frame semantics)", !camActive);
+                + "world-frame semantics): " + engaged + " engage edge(s) in the encounter, standing"
+                + " value active=" + camActive + " :: " + cameraEdges, engaged == 0 && !camActive);
         // (d) And the capture machinery must not churn against him — the client's own external-move
         // releases in THIS window, each naming the gate that fired.
         long churn = Events.countRecordsWithField(releases, "reason");
@@ -2615,7 +2620,7 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // JVM-wide, so on a shared client they carried whatever the previous scenario had left in
         // them whenever the reset was forgotten — and nothing said so.
         long stepMark = clientEvents().mark();
-        bot().invokeStaticInt(FRAME_STEP_WINDOW, "open");
+        ClientWindow stepWindow = ClientWindow.open(bot(), FRAME_STEP_WINDOW);
         try {
             for (int i = 0; i < 20; i++) {
                 bot().holdKey(Keyboard.KEY_SPACE);
@@ -2625,10 +2630,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             bot().releaseKey(Keyboard.KEY_SPACE);
         }
         bot().waitTicks(5);
-        bot().invokeStaticInt(FRAME_STEP_WINDOW, "close");
-        String stepWindow = Events.lastRecord(clientEvents().since(stepMark, "frame_step_window"));
+        stepWindow.close();
+        String stepSummary = Events.lastRecord(clientEvents().since(stepMark, "frame_step_window"));
         System.out.println("[crewcap] jump-steps "
-                + (stepWindow == null ? "(the render seam sampled no aboard frame)" : stepWindow));
+                + (stepSummary == null ? "(the render seam sampled no aboard frame)" : stepSummary));
     }
 
     /**
@@ -2678,6 +2683,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     /** The TEST-side accumulator behind the smoothness window — production keeps none. */
     private static final String FRAME_STEP_WINDOW =
             "zmaster587.advancedRocketry.test.trace.FrameStepWindow";
+
+    /** The per-tick deck-pose trace's budget, armed per scenario. */
+    private static final String DECK_POSE_TRACE_WINDOW =
+            "zmaster587.advancedRocketry.test.trace.DeckPoseTraceWindow";
 
     /** The client's own world look direction, from the rotation it reports. */
     private double[] clientLook() throws Exception {

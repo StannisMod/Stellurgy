@@ -80,8 +80,13 @@ public abstract class MixinPacketSystemBodiesSyncEvents {
                 }
             }
         }
+        // `stored` is what the client's render store now HOLDS: executeClient replaces the store
+        // wholesale with exactly this packet's map, so its rendering is the store's. A reader that
+        // needs the bodies themselves reads it here, at the moment the store took them, instead of
+        // reaching into production's private map across the socket.
         TestTrace.recordHere("system_bodies_received", "\"dims\":" + (byDim == null ? 0 : byDim.size())
                 + ",\"bodies\":" + bodies + ",\"nebulae\":" + nebulae
-                + ",\"slotDims\":\"" + slotDims + "\"");
+                + ",\"slotDims\":\"" + slotDims + "\""
+                + ",\"stored\":\"" + TestTrace.json(byDim == null ? "{}" : byDim.toString()) + "\"");
     }
 }

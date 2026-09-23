@@ -3,12 +3,13 @@ package zmaster587.advancedRocketry.test.mixin;
 import net.minecraft.util.math.AxisAlignedBB;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 
-import zmaster587.advancedRocketry.test.trace.DeckPoseTraceState;
+import zmaster587.advancedRocketry.test.trace.PoseArrival;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -34,8 +35,22 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
         "org.valkyrienskies.mod.common.ships.interpolation.SimpleEMATransformInterpolator",
         "org.valkyrienskies.mod.common.ships.interpolation.DeclaredMotionTransformInterpolator"
 }, remap = false)
-public abstract class MixinClientDeckPoseTrace {
+public abstract class MixinClientDeckPoseTrace implements PoseArrival {
 
+    /** What the last pose handed to THIS interpolator said — see {@link PoseArrival}. */
+    @Unique
+    private double[] arTest$arrival;
+
+    @Override
+    public double[] arTest$takeArrival() {
+        double[] state = arTest$arrival;
+        if (state == null) {
+            return PoseArrival.none();
+        }
+        double[] answer = state.clone();
+        state[0] = 0d;
+        return answer;
+    }
 
     @Inject(method = "onNewTransformPacket(Lorg/valkyrienskies/mod/common/ships/ship_transform/ShipTransform;"
             + "Lnet/minecraft/util/math/AxisAlignedBB;DDDDDD)V", at = @At("HEAD"), remap = false)
@@ -49,7 +64,7 @@ public abstract class MixinClientDeckPoseTrace {
         final org.joml.Quaterniondc q = newTransform.rotationQuaternion(
                 valkyrienwarfare.api.TransformType.SUBSPACE_TO_GLOBAL);
         final double omega = Math.sqrt(angularX * angularX + angularY * angularY + angularZ * angularZ);
-        DeckPoseTraceState.noteArrival(this, newTransform.getPosY(), linearY,
-                q.w(), q.x(), q.y(), q.z(), omega);
+        arTest$arrival = new double[]{1d, newTransform.getPosY(), linearY,
+                q.w(), q.x(), q.y(), q.z(), omega};
     }
 }

@@ -1,12 +1,14 @@
 package zmaster587.advancedRocketry.test.mixin;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
 
-import zmaster587.advancedRocketry.test.trace.DeckPoseTraceState;
+import zmaster587.advancedRocketry.test.trace.DeckPoseTraceWindow;
+import zmaster587.advancedRocketry.test.trace.PoseArrival;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -33,22 +35,14 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
 @Mixin(value = PhysicsObject.class, remap = false)
 public abstract class MixinClientDeckPoseTickTrace {
 
-    /** The shown pose of the previous tick, per craft: {@code [y, qw, qx, qy, qz]}.
+    /** The shown pose of THIS craft's previous tick: {@code [y, qw, qx, qy, qz]} — a field of the
+     *  craft itself, which is what the weak map it used to live in was keyed by.
      *
      *  <p>The orientation is here because the fault this trace was extended for is an ANGLE. The
      *  first version recorded the vertical only — and a rotational lurch is invisible in a column of
      *  Y values, which is how two green classes were nearly read as readiness to ship.</p> */
-    private static final java.util.Map<Object, double[]> arTest$prevShown =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<Object, double[]>());
-
-    /** Whether to record at all — a 200-tick window per craft would otherwise fill the log on every
-     *  scenario that has a ship in it. Armed by a test through the harness's static-invoke bridge. */
-    private static int arTest$traceTicksLeft;
-
-    private static int arTest$armPoseTrace(int ticks) {
-        arTest$traceTicksLeft = ticks;
-        return ticks;
-    }
+    @Unique
+    private double[] arTest$prevShown;
 
 
     /** The angle between two orientations, radians — the shortest arc, so a quaternion and its
@@ -65,22 +59,24 @@ public abstract class MixinClientDeckPoseTickTrace {
             return;
         }
         TestTrace.instrumentHere("client_deck_pose_tick");
-        // Ask for THIS craft's arrival and clear it in the same step — the interpolator is the key
-        // the pose handler recorded under.
-        final double[] arrival = DeckPoseTraceState.takeArrival(self.getTransformInterpolator());
+        // Ask for THIS craft's arrival and clear it in the same step, every tick whether or not the
+        // trace is armed, so an arming never inherits a stale flag. The interpolator holds it; an
+        // interpolator neither of the traced classes is has never been handed one we could see.
+        final Object interpolator = self.getTransformInterpolator();
+        final double[] arrival = interpolator instanceof PoseArrival
+                ? ((PoseArrival) interpolator).arTest$takeArrival() : PoseArrival.none();
         final boolean arrived = arrival[0] > 0d;
-        if (arTest$traceTicksLeft <= 0) {
+        if (!DeckPoseTraceWindow.spend()) {
             return;
         }
-        arTest$traceTicksLeft--;
 
         final org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform shown =
                 self.getShipData().getShipTransform();
         final double shownY = shown.getPosY();
         final org.joml.Quaterniondc shownQ =
                 shown.rotationQuaternion(valkyrienwarfare.api.TransformType.SUBSPACE_TO_GLOBAL);
-        final double[] prev = arTest$prevShown.put(self,
-                new double[]{shownY, shownQ.w(), shownQ.x(), shownQ.y(), shownQ.z()});
+        final double[] prev = arTest$prevShown;
+        arTest$prevShown = new double[]{shownY, shownQ.w(), shownQ.x(), shownQ.y(), shownQ.z()};
         final double stepY = prev == null ? 0.0 : shownY - prev[0];
         // The ANGLE the shown pose turned through this tick, and how far its orientation stands from
         // the one last declared. Both in radians: a lurch is a step several times the craft's own

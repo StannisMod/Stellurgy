@@ -162,8 +162,8 @@ public class TestProbeCommand extends CommandBase {
                 case "infra":
                     handleInfra(server, sender, tail(args));
                     break;
-                case "diag":
-                    handleDiag(sender, tail(args));
+                case "invoke-static":
+                    handleInvokeStatic(sender, tail(args));
                     break;
                 case "place":
                     handlePlace(server, sender, tail(args));
@@ -1712,28 +1712,6 @@ public class TestProbeCommand extends CommandBase {
             probeApplySeatInput(sender, seat, args, 3);
             return;
         }
-        // seat-delivery - read the SERVER JVM's pilot-input delivery diagnostics (the ungated
-        // statics on TilePilotSeat): how many control packets arrived, how many passed both server
-        // gates, the last packet's gate verdict, and what the server's own last rider resolution
-        // saw. Read-only, no waits; the client-side halves of the same chain are read reflectively
-        // from the client JVM by the test.
-        if (args.length >= 1 && "seat-delivery".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"ok\":true"
-                    + ",\"received\":" + SeatDiag.pilotInputPacketsReceived
-                    + ",\"delivered\":" + SeatDiag.pilotInputPacketsDelivered
-                    + ",\"commandsReceived\":" + SeatDiag.pilotCommandPacketsReceived
-                    + ",\"lastVerdict\":\"" + SeatDiag.lastPilotInputVerdict + "\""
-                    + ",\"riderResolveCount\":" + SeatDiag.riderResolveCount
-                    + ",\"lastRiderResolve\":\"" + SeatDiag.lastRiderResolve + "\""
-                    // No rebind columns. Four counters and a last-outcome string used to ride along
-                    // here, and they named no queue entry: on a shared server a delta across one
-                    // stimulus said "the queue gave up on somebody", and two entries built at the
-                    // same fixture coordinates carried the same anchor. The queue records each entry
-                    // it takes and each one it lets go, naming the player and the stale mount —
-                    // `crew_rebind_queue`, beside the `crew_rebind_decided` decisions.
-                    + "}");
-            return;
-        }
         // arrival-trace - the SERVER JVM's position-writer timeline around ship crossings, as one
         // readable line: every deliberate placement, mount and dismount, each naming the code that
         // did it. Read-only, no waits; the client half is read from the client JVM through its own
@@ -2568,7 +2546,7 @@ public class TestProbeCommand extends CommandBase {
                 + "|seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
                 + "|teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ>"
                 + "|unpark-by-id <dim> <shipId>"
-                + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|seat-delivery|arrival-trace"
+                + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|arrival-trace"
                 + "|player-ship-data|would-take-over|deck-capture [<dim> <id>]"
                 + "|subspace-census [<dim> <id>]\"}");
     }
@@ -15079,29 +15057,47 @@ public class TestProbeCommand extends CommandBase {
     }
 
     /**
-     * {@code /artest diag reset} — zero the SERVER copy of the pilot-input counters.
+     * {@code /artest invoke-static <class> <method> [int...]} — call a static method taking only
+     * {@code int}s on the SERVER thread, and reply with what it returned.
      *
-     * <p>Exists to give {@code SeatDiag}'s reset an OWNER. Its counters are cumulative for the life
-     * of the JVM, and a shared harness runs every scenario of a class against one server — so a
-     * failure in the fourteenth scenario printed totals belonging to all fourteen. Nothing asserts
-     * on them, which is why this was invisible: the only damage a leaking diagnostic does is to the
-     * diagnosis, and a wrong diagnosis costs a session rather than a red.</p>
+     * <p>The server-side twin of the client harness's {@code invoke_static_int}, and it exists for
+     * the same reason: an instrument that accumulates per tick lives in the JVM that ticks, and the
+     * only way a test can create, read and release one there is to call into it. Until this verb, a
+     * client-side window could be opened by a test and a server-side one could not, so an instrument
+     * written for "both sides" armed only the client and every server half printed empty.</p>
      *
-     * <p>Deliberately NOT a reset of every diagnostic holder in this package, and the two exclusions
-     * are the point. {@code RenderDiag}'s readers all take a before and an after and compare the
-     * DELTA, so a cumulative counter tells them the truth and zeroing it would buy nothing.
-     * {@code ClientDiag} holds one value written once when the client's proxy comes up and read by
-     * one boot-baseline scenario: a per-scenario reset would replace the only reading it ever gets
-     * with {@code NaN}. A reset is only correct where the reader asks an absolute question about
-     * ONE scenario.</p>
+     * <p>Generic on purpose: this class names no test class, the caller does. A failure — no such
+     * class, no such method, the method threw — is an error reply naming it, never an empty
+     * {@code ok}.</p>
      */
-    private void handleDiag(ICommandSender sender, String[] args) {
-        if (args.length >= 1 && "reset".equalsIgnoreCase(args[0])) {
-            SeatDiag.reset();
-            send(sender, "{\"ok\":true,\"reset\":[\"SeatDiag\"]}");
+    private void handleInvokeStatic(ICommandSender sender, String[] args) {
+        if (args.length < 2) {
+            send(sender, "{\"error\":\"usage: /artest invoke-static <class> <method> [int...]\"}");
             return;
         }
-        send(sender, "{\"error\":\"usage: /artest diag reset\"}");
+        Class<?>[] types = new Class<?>[args.length - 2];
+        Object[] values = new Object[args.length - 2];
+        for (int i = 2; i < args.length; i++) {
+            types[i - 2] = int.class;
+            try {
+                values[i - 2] = Integer.parseInt(args[i]);
+            } catch (NumberFormatException e) {
+                send(sender, "{\"error\":\"not an int: " + escapeJson(args[i]) + "\"}");
+                return;
+            }
+        }
+        try {
+            java.lang.reflect.Method method = Class.forName(args[0]).getDeclaredMethod(args[1], types);
+            method.setAccessible(true);
+            Object result = method.invoke(null, values);
+            send(sender, "{\"ok\":true,\"returned\":\""
+                    + escapeJson(result == null ? "" : String.valueOf(result)) + "\"}");
+        } catch (Throwable t) {
+            Throwable cause = t instanceof java.lang.reflect.InvocationTargetException
+                    && t.getCause() != null ? t.getCause() : t;
+            send(sender, "{\"error\":\"invoke-static " + escapeJson(args[0] + "#" + args[1])
+                    + " failed: " + escapeJson(String.valueOf(cause)) + "\"}");
+        }
     }
 
     private void handlePlace(MinecraftServer server, ICommandSender sender, String[] args) {

@@ -5,6 +5,7 @@ import net.minecraft.entity.Entity;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -128,8 +129,10 @@ public abstract class MixinRocketEventHandlerCameraFrame {
     }
 
     /** The ship up the redirect above took from the branch's own quaternion, held for the few
-     *  instructions between it and the push. Client render thread, one frame, single-threaded. */
-    private static double[] arTest$pilotUp = null;
+     *  instructions between it and the push — a field of the handler that is drawing the frame.
+     *  Client render thread, one frame, single-threaded. */
+    @Unique
+    private double[] arTest$pilotUp;
 
     /** The seated tier-2 pilot's camera: the ship attitude, pushed whole. */
     @Inject(method = "onFreeFlightCameraSetup",
@@ -174,15 +177,26 @@ public abstract class MixinRocketEventHandlerCameraFrame {
     /**
      * The crosshair this frame: what it resolved, and where its ray started.
      *
-     * <p>Anchored on the test-mode query that opens the {@code [FF-TRACE/CAM]} block — the first
-     * production call after the two pilot branches have returned, so this is the walking path only,
-     * which is where production sampled it. The query itself runs on every frame (it is the first
-     * operand of the {@code &&}); what it GATES is only the log line.</p>
+     * <p>Anchored on the {@code ShipFrameTravel.isResolvingAboard} call — the first production call
+     * after the two pilot branches have returned, on every frame of the walking path, for whatever
+     * body is being viewed. That is where production sampled the crosshair, and where this hook
+     * always fired.</p>
+     *
+     * <p><b>It used to anchor on a test-mode query</b> that opened an {@code [FF-TRACE/CAM]} log block
+     * in production — a block kept in shipping code partly because this hook needed a seam. The
+     * block is gone. The two re-anchors first considered each changed what the recorder sees (the
+     * {@code DeckLook.frame} call fires for the client's own view only, and only once aboard; HEAD
+     * fires for pilot frames too). This one does not: it is the statement that followed the block,
+     * so it runs on exactly the frames the old anchor ran on.</p>
+     *
+     * <p>{@code allow = 1}: the method holds one such call today, and a second one would silently
+     * move this hook to wherever it landed. Allowing one makes that a failure at apply time instead.</p>
      */
     @Inject(method = "onFreeFlightCameraSetup",
             at = @At(value = "INVOKE",
-                    target = "Lzmaster587/advancedRocketry/command/test/"
-                            + "TestProbeCommandRegistration;isTestMode()Z"),
+                    target = "Lzmaster587/advancedRocketry/integration/vs/ShipFrameTravel;"
+                            + "isResolvingAboard(Lnet/minecraft/entity/Entity;)Z"),
+            allow = 1,
             remap = false)
     private void arTest$crosshair(EntityViewRenderEvent.CameraSetup event, CallbackInfo ci) {
         TestTrace.instrumentHere(INSTRUMENT);

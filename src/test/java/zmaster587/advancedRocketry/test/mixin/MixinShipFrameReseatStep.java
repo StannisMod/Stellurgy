@@ -7,8 +7,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
-import zmaster587.advancedRocketry.test.trace.DeckReseatState;
+import zmaster587.advancedRocketry.test.trace.SideTrace;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
+import zmaster587.advancedRocketry.test.trace.TravelPassMemory;
 
 /**
  * How far each re-seat moves a body, measured at the move itself.
@@ -40,7 +41,10 @@ public abstract class MixinShipFrameReseatStep {
                     target = "Lnet/minecraft/entity/Entity;setPosition(DDD)V"))
     private static void arTest$reseatStep(Entity entity, double x, double y, double z) {
         TestTrace.instrumentHere("deck_reseat_step");
-        DeckReseatState.noteReseat(new double[]{x, y, z}, entity.posX, entity.posY, entity.posZ);
+        if (entity.world != null) {
+            TravelPassMemory.of(SideTrace.of(entity.world))
+                    .noteReseat(x, y, z, entity.posX, entity.posY, entity.posZ);
+        }
         entity.setPosition(x, y, z);
     }
 }

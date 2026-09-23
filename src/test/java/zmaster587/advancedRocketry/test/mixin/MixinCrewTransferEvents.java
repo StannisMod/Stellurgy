@@ -1,6 +1,5 @@
 package zmaster587.advancedRocketry.test.mixin;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -15,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.space.CrewTransfer;
+import zmaster587.advancedRocketry.test.trace.CrewTransferMemory;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -71,12 +71,7 @@ public abstract class MixinCrewTransferEvents {
 
     private static final String INSTRUMENT = "crew_transfer_events";
 
-    /** {@code dim:ship:vsShip} → the last {@code block} recorded for a refused re-seat. */
-    private static final Map<String, String> LAST_RESEAT_BLOCK = new HashMap<String, String>();
-
-    /** {@code who:staleDummy:anchor} → the last outcome recorded for a pending rebind. */
-    private static final Map<String, CrewTransfer.RebindOutcome> LAST_REBIND_OUTCOME =
-            new HashMap<String, CrewTransfer.RebindOutcome>();
+    // What each recorder last wrote is the server's — CrewTransferMemory, in its SideTrace.
 
     @Inject(method = "reseat", at = @At("RETURN"))
     private static void arTest$reseated(WorldServer dstWorld, BlockPos anchor,
@@ -87,17 +82,18 @@ public abstract class MixinCrewTransferEvents {
         int dim = dstWorld == null ? 0 : dstWorld.provider.getDimension();
         String key = dim + ":" + expectedShipId + ":" + vsShipUuid;
         String block = "";
+        Map<String, String> lastBlock = CrewTransferMemory.here().lastReseatBlock;
         if (seated) {
-            LAST_RESEAT_BLOCK.remove(key);
+            lastBlock.remove(key);
         } else {
             block = CrewTransfer.lastReseatBlock();
             if (block == null) {
                 block = "";
             }
-            if (block.equals(LAST_RESEAT_BLOCK.get(key))) {
+            if (block.equals(lastBlock.get(key))) {
                 return; // same refusal as last tick — an edge is what the chain reads
             }
-            LAST_RESEAT_BLOCK.put(key, block);
+            lastBlock.put(key, block);
         }
         TestTrace.recordServer("crew_transfer_reseated", "\"dim\":" + dim
                 + ",\"ship\":\"" + expectedShipId + "\",\"vsShip\":\"" + vsShipUuid
@@ -116,13 +112,15 @@ public abstract class MixinCrewTransferEvents {
         CrewTransfer.RebindOutcome outcome = cir.getReturnValue();
         String who = player == null ? "" : player.getName();
         String key = who + ":" + staleDummyId + ":" + arTest$xyz(anchor);
+        Map<String, CrewTransfer.RebindOutcome> lastOutcome =
+                CrewTransferMemory.here().lastRebindOutcome;
         if (outcome == CrewTransfer.RebindOutcome.REBOUND) {
-            LAST_REBIND_OUTCOME.remove(key); // terminal: the pending entry is dropped on it
+            lastOutcome.remove(key); // terminal: the pending entry is dropped on it
         } else {
-            if (outcome == LAST_REBIND_OUTCOME.get(key)) {
+            if (outcome == lastOutcome.get(key)) {
                 return; // still waiting on the same thing as last tick
             }
-            LAST_REBIND_OUTCOME.put(key, outcome);
+            lastOutcome.put(key, outcome);
         }
         int dim = world == null ? 0 : world.provider.getDimension();
         TestTrace.recordServer("crew_rebind_decided", "\"outcome\":\"" + outcome

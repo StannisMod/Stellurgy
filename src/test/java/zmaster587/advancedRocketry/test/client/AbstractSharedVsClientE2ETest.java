@@ -898,18 +898,20 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     }
 
     /**
-     * The deck-GATE window: what {@code ShipFrameTravel.handles} decided about ONE body, per tick,
-     * on BOTH sides. Invoked on the client, but it arms both resolvers — a client test runs against
-     * an INTEGRATED server, so there is one JVM, one static, and one entity id shared by the two
-     * copies of the player. See {@code DeckGateWindow} for why {@code deck_gate_decided} (a
+     * The deck-GATE window: what the CLIENT's {@code ShipFrameTravel.handles} decided about ONE body,
+     * per tick. Client only — the harness's static-invoke bridge runs in the client JVM and the
+     * server is a separate one. See {@code DeckGateWindow} for why {@code deck_gate_decided} (a
      * hundred-tick heartbeat) cannot answer a question posed over three ticks.
      */
     private static final String DECK_GATE_WINDOW =
             "zmaster587.advancedRocketry.test.trace.DeckGateWindow";
 
+    /** This scenario's deck-gate window while one is open — see {@link ClientWindow}. */
+    private ClientWindow deckGateWindow;
+
     /**
      * Arm the deck-gate window on this scenario's own player for the next {@code recordsEach} gate
-     * decisions per side.
+     * decisions.
      *
      * <p>Call it BEFORE the stimulus whose gate decisions are in question — a window opened after
      * the teleport cannot see the ticks the teleport landed in, which are the ones that decide
@@ -920,8 +922,8 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * entity id, and inferring it from a log record would make the arming depend on the subject
      * having already been recorded.</p>
      *
-     * @param recordsEach how many records each side may write — see {@code DeckGateWindow#open}, the
-     *                    budget is deliberately the caller's to state
+     * @param recordsEach how many records the window may write — see {@code DeckGateWindow#open},
+     *                    the budget is deliberately the caller's to state
      * @return the entity id it armed
      */
     protected final int openDeckGateWindow(int recordsEach) throws Exception {
@@ -929,13 +931,16 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         // asserted: a window armed on the wrong body is silent in exactly the way a body nobody
         // asked about is.
         int entityId = DeckCapture.read(this::exec).entityId;
-        bot().invokeStaticInt(DECK_GATE_WINDOW, "open", entityId, recordsEach);
+        closeDeckGateWindow(); // one gate window per scenario at a time; a new arming ends the last
+        deckGateWindow = ClientWindow.open(bot(), DECK_GATE_WINDOW, entityId, recordsEach);
         return entityId;
     }
 
-    /** Close the deck-gate window. Safe to call on a window that is already closed. */
+    /** Close the deck-gate window. Safe to call when none is open, or on one already closed. */
     protected final void closeDeckGateWindow() throws Exception {
-        bot().invokeStaticInt(DECK_GATE_WINDOW, "close");
+        if (deckGateWindow != null) {
+            deckGateWindow.close();
+        }
     }
 
     /** The stimulus a {@link #awaitCaptureUnderGateWatch} watches — whatever puts the body on the
@@ -946,7 +951,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
 
     /**
      * Run {@code stimulus} with the deck-gate window open on this scenario's player, then wait for
-     * the capture — and when it does not arrive, print what the gate decided on both sides.
+     * the capture — and when it does not arrive, print {@link #deckGateTrail}.
      *
      * <p><b>The window is opened before the stimulus</b>, because the decisions in question are the
      * ones taken in the ticks the stimulus lands in. The failure this exists for reports a body in
@@ -970,7 +975,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      *
      * @param clientMark  a mark from {@code clientEvents()}, taken before the stimulus
      * @param serverMark  a mark from {@code events()}, taken before the stimulus
-     * @param recordsEach the gate window's budget per side; state it from the length of the
+     * @param recordsEach the gate window's record budget; state it from the length of the
      *                    stimulus, not from habit
      */
     protected final String awaitCaptureUnderGateWatch(long clientMark, long serverMark, String shipId,
@@ -994,21 +999,27 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
     }
 
     /**
-     * Both sides' gate decisions since their OWN marks, for a failure message.
+     * What each side's gate said since that side's OWN mark, for a failure message.
      *
-     * <p>Two marks and not one, and that is the whole point: the client and the server keep separate
-     * sequences, so a single mark read against both logs answers about the wrong numbering on one of
-     * them. Each half is taken from the log that produced its mark.</p>
+     * <p>Two marks and not one: the client and the server keep separate sequences, so a single mark
+     * read against both logs answers about the wrong numbering on one of them.</p>
+     *
+     * <p><b>The two halves are different instruments, and the caption says so.</b> The client half is
+     * the per-tick window this scenario opened. The server has no such window — nothing can open one
+     * in the server's JVM — so its half is the standing-verdict heartbeat {@code deck_gate_decided},
+     * written on a verdict change and otherwise once per hundred ticks: an empty server half means
+     * the verdict did not CHANGE in the window, never that the gate was not asked. Until 2026-09-23
+     * this printed a server {@code deck_gate_explained} that no code could ever write, under a caption
+     * reading an empty half as "nobody asked".</p>
      */
     protected final String deckGateTrail(long clientMark, long serverMark) throws Exception {
-        return "the gate's own decisions, CLIENT: " + clientEvents().since(clientMark,
+        return "the client gate's per-tick decisions: " + clientEvents().since(clientMark,
                 "deck_gate_explained")
-                + " ||| the gate's own decisions, SERVER: " + events().since(serverMark,
-                "deck_gate_explained")
-                + " ||| the windows themselves (a `records:0` here is the instrument saying nobody"
-                + " asked, not the gate saying no): " + clientEvents().since(clientMark,
+                + " ||| the client window itself (a `records:0` here is the instrument saying"
+                + " nobody asked, not the gate saying no): " + clientEvents().since(clientMark,
                 "deck_gate_window")
-                + " / " + events().since(serverMark, "deck_gate_window");
+                + " ||| the SERVER's standing verdict, heartbeat only (empty = unchanged, not"
+                + " unasked): " + events().since(serverMark, "deck_gate_decided");
     }
 
     /** The client-side deck-camera window: poses, the eye, and the two per-client counters. */
@@ -1032,16 +1043,21 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return Events.text(deckCameraRecord(field), field);
     }
 
-    /** Zero this scenario's deck-camera counters. Without it, {@code cameraHookCalls} and
-     *  {@code posLookApplies} are the whole client's, and a threshold on either is satisfied by
-     *  whatever ran before — the shared-harness trap this window exists to close. */
-    protected final void openDeckCameraWindow() throws Exception {
-        bot().invokeStaticInt(DECK_CAMERA_WINDOW, "open");
-    }
+    /**
+     * This scenario's deck-camera window, opened on its first reading and held here — a field of the
+     * TEST INSTANCE, which JUnit builds afresh for every scenario. So {@code cameraHookCalls} and
+     * {@code posLookApplies} count from this scenario's first camera reading and never from whatever
+     * ran before; a window a failed scenario left open on the client is released by the shared
+     * base's between-scenario reset.
+     */
+    private ClientWindow deckCameraWindow;
 
     private String deckCameraRecord(String field) throws Exception {
+        if (deckCameraWindow == null) {
+            deckCameraWindow = ClientWindow.open(bot(), DECK_CAMERA_WINDOW);
+        }
         long mark = clientEvents().mark();
-        bot().invokeStaticInt(DECK_CAMERA_WINDOW, "peek");
+        deckCameraWindow.peek();
         String rec = Events.lastRecord(clientEvents().since(mark, "deck_camera"));
         assertNotNull("no deck_camera record after a peek — the client did not answer, so " + field
                 + " has no reading", rec);

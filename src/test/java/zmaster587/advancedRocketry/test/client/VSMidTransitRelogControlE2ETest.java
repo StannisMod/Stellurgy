@@ -222,8 +222,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         //
         // Marked on the CLIENT's log first. The chain from a held key to a moved ship has three
         // links and only two of them are the server's: this client decides it is piloting a ship,
-        // it puts a packet on the wire, the seat receives it. `seat-delivery` is the third link's
-        // voice and it can only ever answer "nothing arrived" — which reads identically for a
+        // it puts a packet on the wire, the seat receives it. The server's delivery window is the
+        // third link's voice and it can only ever answer "nothing arrived" — which reads identically for a
         // client that never tried and a packet that was eaten on the way. The client's own gate
         // record separates them, and that is the difference between an ARRANGEMENT this test
         // failed to make and a control chain production broke.
@@ -285,7 +285,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         if (!climbedWithinAttempts(3)) {
             scenario().arrangementFailed("control leg: the pilot must be able to fly BEFORE the"
                     + " transit." + clientPilotAccount(clientPilotMark)
-                    + " delivery=" + exec("artest vs seat-delivery")
+                    + " delivery=" + seatDelivery()
                     + " shipBeforeClimb=" + poseBeforeClimb
                     + " shipAfterClimb=" + shipInfoById(originDim, shipId));
         }
@@ -422,7 +422,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         boolean flewAfterRelog = climbedWithinAttempts(3);
         assertTrue("after a mid-transit relog, held input must MOVE THE ARRIVED SHIP - control "
                 + "resumes on arrival." + (flewAfterRelog ? "" : clientPilotAccount(arrivedPilotMark))
-                + " delivery=" + exec("artest vs seat-delivery"),
+                + " delivery=" + seatDelivery(),
                 flewAfterRelog);
     }
 

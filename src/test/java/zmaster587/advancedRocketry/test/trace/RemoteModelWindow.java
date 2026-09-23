@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.trace;
 
+import java.util.List;
 import java.util.Locale;
 
 import net.minecraft.entity.EntityLivingBase;
@@ -27,20 +28,18 @@ import net.minecraft.entity.EntityLivingBase;
  * reader asking about a sixty-tick window would be reading the tail. The window's SUMMARY is the
  * record, written once at {@link #close()}.</p>
  *
- * <p><b>Nothing here is reachable from outside, and a mid-window reading is a RECORD.</b> A
- * scenario that waits for the subject to be drawn at all before it starts measuring calls
- * {@link #peek()}, which writes the window's numbers without ending it. Every field is private:
- * the previous design exposed {@code samples} for that poll, and a field read across the socket
- * cannot be attributed to a moment, so "the client did not answer" and "the gate has decided
- * nothing yet" arrived as the same zero.</p>
+ * <p><b>A mid-window reading is a RECORD.</b> A scenario that waits for the subject to be drawn at
+ * all before it starts measuring calls {@link #peek(int)}, which writes the window's numbers without
+ * ending it. A field read across the socket cannot be attributed to a moment, so "the client did not
+ * answer" and "the gate has decided nothing yet" would arrive as the same zero.</p>
  *
- * <p><b>What it is, said plainly.</b> Mutable static state, per client JVM, shared by every scenario
- * in a shared-harness class — as the production fields it replaces were. The difference is that it
- * is no longer in shipped code, and that a window must be OPENED before it means anything.</p>
+ * <p><b>Whose it is.</b> An instance per window, created by the scenario that asks, registered with
+ * the client's {@link SideTrace} and addressed by the handle {@link #open()} returned. The gate feeds
+ * every open window; two scenarios never share a count.</p>
  *
  * <p>Client render thread only. Test source set: absent from a released jar.</p>
  */
-public final class RemoteModelWindow {
+public final class RemoteModelWindow implements TraceWindow {
 
     private RemoteModelWindow() {}
 
@@ -82,40 +81,34 @@ public final class RemoteModelWindow {
      *  A green run never appends at all; a red one diagnoses without unbounded churn. */
     private static final int TRACE_BUDGET = 400;
 
-    /** Decisions about a remote body since {@link #open()} — public because it is POLLED while the
-     *  window is open; see the class note. */
-    private static long samples;
+    /** Decisions about a remote body in this window. */
+    private long samples;
 
-    private static long calls;
-    private static long rotated;
-    private static double maxDeg;
-    private static String trace = "";
+    private long calls;
+    private long rotated;
+    private double maxDeg;
+    private String trace = "";
 
-    /** Start a window. Invoked from a test through the harness's static-invoke bridge. */
+    /** Start a window; answers its handle. Invoked from a test through the static-invoke bridge. */
     public static int open() {
-        calls = 0;
-        samples = 0;
-        rotated = 0;
-        maxDeg = 0.0;
-        trace = "";
-        return 0;
+        return SideTrace.client().open(new RemoteModelWindow());
     }
 
     /** End the window and record its summary as {@code remote_model_window}; returns the decisions
      *  it saw about remote bodies. */
-    public static int close() {
-        return record();
+    public static int close(int handle) {
+        return SideTrace.client().close(handle, RemoteModelWindow.class).record();
     }
 
     /** Write the window's numbers as they stand, without ending it — for a reader polling for the
-     *  first sample. Same record type as {@link #close()}: the reader asks for the last one in its
+     *  first sample. Same record type as {@link #close(int)}: the reader asks for the last one in its
      *  own window either way, and a different type would make "the last reading" depend on which
      *  call produced it. */
-    public static int peek() {
-        return record();
+    public static int peek(int handle) {
+        return SideTrace.client().window(handle, RemoteModelWindow.class).record();
     }
 
-    private static int record() {
+    private int record() {
         TestTrace.recordHere("remote_model_window", String.format(Locale.ROOT,
                 "\"calls\":%d,\"samples\":%d,\"rotated\":%d,\"maxDeg\":%.2f"
                         + ",\"modelGateInstalled\":%d,\"trace\":\"%s\"",
@@ -124,14 +117,21 @@ public final class RemoteModelWindow {
     }
 
     /**
-     * One decision, from the gate's own return value.
+     * One decision, from the gate's own return value, to every open window.
      *
      * @param entity the body the gate was asked about
      * @param local  whether that body is this client's own player — decided by the caller, which
-     *               has the client at hand; a window class must not reach for {@code Minecraft}
+     *               has the client's player at hand
      * @param rotation the axis-angle the gate returned, or null for no/identity rotation
      */
     public static void sample(EntityLivingBase entity, boolean local, double[] rotation) {
+        List<RemoteModelWindow> open = SideTrace.client().windows(RemoteModelWindow.class);
+        for (int i = 0; i < open.size(); i++) {
+            open.get(i).add(entity, local, rotation);
+        }
+    }
+
+    private void add(EntityLivingBase entity, boolean local, double[] rotation) {
         calls++;
         if (entity == null || local) {
             return;

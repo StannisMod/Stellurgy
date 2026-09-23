@@ -13,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
 import zmaster587.advancedRocketry.item.ItemAtmosphereAnalzer;
+import zmaster587.advancedRocketry.test.trace.AtmosphereReadoutMemory;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -63,15 +64,8 @@ public abstract class MixinItemAtmosphereAnalzerEvents {
 
     private static final String INSTRUMENT = "atmosphere_readout_events";
 
-    // The last readout recorded from a REMOTE world — the HUD recomposes it every frame, and a
-    // steady sky must not fill the ring. Never consulted for a server composition.
-    private static String arTest$lastClientReadout;
-
-    // The client world that memo belongs to, weakly held so a disconnected world is still collected.
-    // Without it the memo outlives its world: a relog or a dimension change into an IDENTICAL
-    // readout would be filtered as "unchanged" against a session that has ended, and a test awaiting
-    // the first readout after the reconnect would wait for a record that was suppressed.
-    private static java.lang.ref.WeakReference<World> arTest$lastClientWorld;
+    // The last readout recorded from a REMOTE world, and its world, are the client's —
+    // AtmosphereReadoutMemory. Never consulted for a server composition.
 
     @Inject(method = "getAtmosphereReadout", at = @At("RETURN"))
     private void arTest$readoutComposed(ItemStack stack, AtmosphereType atm, World world,
@@ -94,16 +88,9 @@ public abstract class MixinItemAtmosphereAnalzerEvents {
         // A null world can only be a client caller: the server's caller is an item right-click,
         // whose world argument production declares @Nonnull. Filtering it as client-side is the
         // safe way round — the alternative floods the ring one record per rendered frame.
-        if (world == null || world.isRemote) {
-            World memoWorld = arTest$lastClientWorld == null ? null : arTest$lastClientWorld.get();
-            if (memoWorld != world) {
-                // A world this memo has never seen (first frame, a dimension change, a relog): its
-                // first readout is an edge whatever the previous world's last one happened to be.
-                arTest$lastClientWorld = new java.lang.ref.WeakReference<World>(world);
-            } else if (payload.equals(arTest$lastClientReadout)) {
-                return; // the HUD's per-frame recomposition of an unchanged readout: not an edge
-            }
-            arTest$lastClientReadout = payload;
+        if ((world == null || world.isRemote)
+                && !AtmosphereReadoutMemory.client().isEdge(world, payload)) {
+            return; // the HUD's per-frame recomposition of an unchanged readout: not an edge
         }
         TestTrace.recordHere("atmosphere_readout_composed", payload);
     }

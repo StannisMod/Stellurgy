@@ -14,8 +14,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
 import zmaster587.advancedRocketry.integration.vs.VSIntegration;
-import zmaster587.advancedRocketry.test.trace.DeckReseatState;
+import zmaster587.advancedRocketry.test.trace.SideTrace;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
+import zmaster587.advancedRocketry.test.trace.TravelPassMemory;
 
 /**
  * Watches AR's own ship-frame travel, which is where a crew member's velocity is composed.
@@ -44,46 +45,22 @@ public abstract class MixinShipFrameTravelWrites {
     /** Motion magnitude worth a record. A crew member riding a deck sits far below this. */
     private static final double MOTION_REPORT = 4.0;
 
-    /**
-     * The body whose tick is being resolved right now, per thread.
-     *
-     * <p>{@code noteTickHistory} is entity-less — which is exactly why production used to accumulate
-     * its per-tick line into one JVM-global ring and why nothing could tell one body's story out of
-     * it. Its three callers all take the entity as their first parameter, so it is captured at their
-     * HEADs and read back a few frames later at the seam that has the numbers. Per THREAD because
-     * this class resolves on the client and the server both, and an integrated game runs the two in
-     * one JVM.</p>
-     *
-     * <p>A private static on a mixin is allowed; a non-private one is not, and this is why the field
-     * is not simply shared.</p>
+    /*
+     * The relay between this class's seams — the body being resolved, the resolved-tick counter, the
+     * walk inputs — is the SIDE's, in its TravelPassMemory: `noteTickHistory` is entity-less, which is
+     * exactly why production used to accumulate its per-tick line into one JVM-global ring, so the
+     * body is captured at `travel`'s HEAD and read back a few frames later at the seam that has the
+     * numbers. The counter is counted at the per-tick seam rather than at `travel`'s return, which
+     * returns on declined and unhandled bodies too and would count something else under the same
+     * name.
      */
-    private static final ThreadLocal<EntityLivingBase> ARTEST$RESOLVING = new ThreadLocal<>();
-
-    /**
-     * Resolved ticks THIS side has produced, counted where production resolves one.
-     *
-     * <p>The leading number of the tick line, and it replaces a production counter that production
-     * itself never read. Counted at the per-tick seam rather than at {@code travel}'s return, which
-     * is a different event: {@code travel} returns on declined and unhandled bodies too, and
-     * substituting that number would have counted something else under the same name. The seam
-     * fires exactly where the counter used to be incremented, on all three resolve paths.</p>
-     *
-     * <p>Per THREAD, so an integrated game's two sides count their own. The static was JVM-global,
-     * so a client line and a server line drew from one sequence and neither described its own side's
-     * progress — which is the number a reader of a per-side record wanted in the first place.</p>
-     */
-    private static final ThreadLocal<long[]> ARTEST$TICKS = new ThreadLocal<long[]>() {
-        @Override
-        protected long[] initialValue() {
-            return new long[]{0L};
-        }
-    };
-
 
     @Inject(method = "travel", at = @At("HEAD"))
     private static void arTest$enterTravel(EntityLivingBase entity, float strafe, float vertical,
                                            float forward, float jumpMovementFactor, CallbackInfoReturnable<Boolean> cir) {
-        ARTEST$RESOLVING.set(entity);
+        if (entity != null && entity.world != null) {
+            TravelPassMemory.of(SideTrace.of(entity.world)).resolving = entity;
+        }
     }
 
     /**
@@ -103,13 +80,14 @@ public abstract class MixinShipFrameTravelWrites {
                                         double carryX, double carryY, double carryZ,
                                         boolean onDeck, int obstacleCount,
                                         boolean collidedX, boolean collidedZ, CallbackInfo ci) {
-        long ticks = ++ARTEST$TICKS.get()[0];
-        EntityLivingBase entity = ARTEST$RESOLVING.get();
+        TravelPassMemory pass = TravelPassMemory.of(SideTrace.here());
+        long ticks = ++pass.resolvedTicks;
+        EntityLivingBase entity = pass.resolving;
         if (entity == null) {
             return;
         }
         TestTrace.instrument(entity, "ship_frame_tick_events");
-        double[] walk = ARTEST$WALK.get();
+        double[] walk = pass.walk;
         // This body's own live deck point, or nothing when it is not held by a craft this side can
         // transform through. The segment says which: `B=` carries a measurement, `B?` says there is
         // none, and a zero triple would have read as a body sitting on its ship's origin.
@@ -192,28 +170,6 @@ public abstract class MixinShipFrameTravelWrites {
     }
 
     /**
-     * The walk inputs and the ship-frame motion of the tick being resolved, per thread.
-     *
-     * <p>Production hands these over at {@code noteWalkInputs}, a few frames before the seam that
-     * has the committed point — the same relay {@link #ARTEST$RESOLVING} performs for the body, and
-     * for the same reason: the two facts are computed in different places and belong in one record.
-     * Per THREAD because this class resolves on the client and the server both, in one JVM.</p>
-     *
-     * <p><b>Its staleness is the production behaviour it replaces, not a new one.</b> Only the
-     * ABOARD path computes a ship-frame motion; the two flying paths work in the world frame, so on
-     * an {@code 'f'} or {@code 'h'} tick these five numbers are the last aboard tick's. That was
-     * equally true of the five statics this holder replaces — the difference is that it is written
-     * down here instead of being inferred from a probe reply months later. Zeroes until the first
-     * aboard tick, which is a body that has not walked yet.</p>
-     */
-    private static final ThreadLocal<double[]> ARTEST$WALK = new ThreadLocal<double[]>() {
-        @Override
-        protected double[] initialValue() {
-            return new double[]{0.0, 0.0, 0.0, 0.0, 0.0};
-        }
-    };
-
-    /**
      * The sideways-drag discriminator, recorded where production computes it.
      *
      * <p>A constant lateral ship-frame motion at ZERO input names an external motion writer; a
@@ -230,7 +186,11 @@ public abstract class MixinShipFrameTravelWrites {
             return;
         }
         TestTrace.instrument(entity, "ship_frame_walk_events");
-        ARTEST$WALK.set(new double[]{strafe, forward, motionShipX, motionShipY, motionShipZ});
+        if (entity.world != null) {
+            // Handed to the per-tick line a few frames later — see TravelPassMemory#walk.
+            TravelPassMemory.of(SideTrace.of(entity.world)).walk =
+                    new double[]{strafe, forward, motionShipX, motionShipY, motionShipZ};
+        }
         TestTrace.record(entity, "ship_frame_walk",
                 "\"e\":" + entity.getEntityId()
                         + ",\"inStrafe\":" + strafe + ",\"inForward\":" + forward
@@ -265,7 +225,8 @@ public abstract class MixinShipFrameTravelWrites {
     private static void arTest$committedPose(World world, String shipId,
                                              double subX, double subY, double subZ,
                                              double[] worldPos, String mode, CallbackInfo ci) {
-        EntityLivingBase entity = ARTEST$RESOLVING.get();
+        EntityLivingBase entity = world == null ? null
+                : TravelPassMemory.of(SideTrace.of(world)).resolving;
         if (entity == null) {
             return;
         }
@@ -435,7 +396,7 @@ public abstract class MixinShipFrameTravelWrites {
      * mechanism exists in this JVM", where the gate's own prose claims "it ran during this roll".</p>
      *
      * <p>{@code maxStep} is how far the FURTHEST of those bodies was carried by this pass, from
-     * {@link DeckReseatState} — the deck's own step out from under a standing body. It rides here
+     * {@link TravelPassMemory} — the deck's own step out from under a standing body. It rides here
      * rather than being read off a field because a field answers with the last pass on either side,
      * whenever that was; on the record it belongs to a pass a reader's marks can contain. The take
      * happens before the early return, so a pass that moved nothing still releases the
@@ -447,7 +408,7 @@ public abstract class MixinShipFrameTravelWrites {
             return;
         }
         TestTrace.instrumentHere("deck_reseat_pass_events");
-        double maxStep = DeckReseatState.takePassMax();
+        double maxStep = TravelPassMemory.of(SideTrace.of(world)).takeReseatPassMax();
         int bodies = cir.getReturnValue() == null ? 0 : cir.getReturnValue();
         if (bodies <= 0) {
             return;

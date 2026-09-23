@@ -152,8 +152,6 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     private static final String FEED = "feed";
     private static final String SLOT_DIM = "slotDim";
     private static final String BODY_COUNT = "bodyCount";
-    private static final String CLIENT_BODIES_CLASS =
-            "zmaster587.advancedRocketry.network.PacketSystemBodiesSync";
 
     /**
      * Cell the ship settles in — FOUND at run time, never written down. See {@link #findEmptyCell()}.
@@ -993,10 +991,14 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         assertTrue("space enter must succeed: " + enter, Reply.of(enter).ok());
     }
 
-    /** The client's OWN copy of the render feed, read on the client thread. */
+    /**
+     * The client's OWN copy of the render feed: what the store held after the last packet it took.
+     * Each packet replaces the store wholesale, so the latest arrival record IS the store's content;
+     * "" when this client has taken none.
+     */
     private String clientBodies() throws Exception {
-        JsonObject sf = bot().readStaticField(CLIENT_BODIES_CLASS, "CLIENT_BODIES");
-        return sf.get("isNull").getAsBoolean() ? "" : sf.get("value").getAsString();
+        String rec = Events.lastRecord(clientEvents().since(0, "system_bodies_received"));
+        return rec == null ? "" : Events.text(rec, "stored");
     }
 
     /**

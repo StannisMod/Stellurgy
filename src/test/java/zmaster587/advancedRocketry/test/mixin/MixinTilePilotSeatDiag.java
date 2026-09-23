@@ -9,30 +9,33 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import zmaster587.advancedRocketry.command.test.SeatDiag;
 import zmaster587.advancedRocketry.entity.EntityDummy;
+import zmaster587.advancedRocketry.test.trace.SeatDeliveryWindow;
 import zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer;
 import zmaster587.advancedRocketry.tile.TilePilotSeat;
 
 /**
- * Names the gate that ate a pilot's input, without the seat keeping a single static.
+ * Names the gate that ate a pilot's input, without the seat keeping a single static — into every
+ * open {@link SeatDeliveryWindow} on the seat's side.
  *
  * <h2>Three facts read from production's own calls</h2>
  *
  * <p>The verdict used to be a STRING composed inside the packet handler out of two locals. Nothing
- * here recomposes it from a parallel resolution — which the old statics' javadoc rightly warned
- * against. Each fact is taken where production itself answers it: the guard at the return of
- * {@code isPilotOf}, the resolve at the return of {@code getFlightComputer}, delivery at the call
- * that hands the input to the computer. The store composes the line afterwards.</p>
+ * here recomposes it from a parallel resolution. Each fact is taken where production itself answers
+ * it: the guard at the return of {@code isPilotOf}, the resolve at the return of
+ * {@code getFlightComputer}, delivery at the call that hands the input to the computer. The verdict
+ * line is composed afterwards, at the handler's tail.</p>
  *
- * <p>Both resolvers are also asked by the HUD and the key context, many times a tick, so the two
- * gate hooks record only while a packet is in scope — opened at the handler's head, closed at its
- * tail. Without that the last verdict would describe whatever the HUD asked most recently.</p>
+ * <p>Both resolvers are also asked by the HUD and the key context, many times a tick, so the two gate
+ * hooks record only while a packet is in scope — opened at the handler's head, closed at its tail.
+ * The scope is a field of THE SEAT handling the packet, which is the object the handler, the guard
+ * and the resolve are all called on.</p>
  *
  * <h2>The resolver's own reading</h2>
  *
@@ -45,33 +48,61 @@ import zmaster587.advancedRocketry.tile.TilePilotSeat;
 @Mixin(TilePilotSeat.class)
 public abstract class MixinTilePilotSeatDiag {
 
+    /** Whether a pilot-input packet is being handled by this seat right now, and what its two gates
+     *  have answered so far. */
+    @Unique
+    private boolean arTest$inPacket;
+    @Unique
+    private boolean arTest$packetGuard;
+    @Unique
+    private boolean arTest$packetAfcResolved;
+
     @Inject(method = "useNetworkData", at = @At("HEAD"))
     private void arTest$packetArrived(EntityPlayer player, Side side, byte id, NBTTagCompound nbt,
                                       CallbackInfo ci) {
         TilePilotSeat self = (TilePilotSeat) (Object) this;
+        if (self.getWorld() == null) {
+            return;
+        }
         if (id == TilePilotSeat.PACKET_PILOT_INPUT) {
-            SeatDiag.pilotInputArrived(arTest$xyz(self.getPos()));
+            SeatDeliveryWindow.pilotInputArrived(self.getWorld());
+            arTest$inPacket = true;
+            arTest$packetGuard = false;
+            arTest$packetAfcResolved = false;
         } else if (id == TilePilotSeat.PACKET_FLIGHT_ASSIST_TOGGLE
                 || id == TilePilotSeat.PACKET_AUTO_TAKEOFF_TOGGLE
                 || id == TilePilotSeat.PACKET_JUMP) {
-            SeatDiag.commandArrived();
+            SeatDeliveryWindow.commandArrived(self.getWorld());
         }
     }
 
     @Inject(method = "useNetworkData", at = @At("TAIL"))
     private void arTest$packetHandled(EntityPlayer player, Side side, byte id, NBTTagCompound nbt,
                                       CallbackInfo ci) {
-        SeatDiag.pilotInputHandled();
+        if (!arTest$inPacket) {
+            return;
+        }
+        arTest$inPacket = false;
+        TilePilotSeat self = (TilePilotSeat) (Object) this;
+        if (self.getWorld() != null) {
+            SeatDeliveryWindow.pilotInputHandled(self.getWorld(),
+                    "seat=" + arTest$xyz(self.getPos()) + " pilotGuard=" + arTest$packetGuard
+                            + " afcResolved=" + arTest$packetAfcResolved);
+        }
     }
 
     @Inject(method = "isPilotOf", at = @At("RETURN"))
     private void arTest$pilotGuard(EntityPlayer player, CallbackInfoReturnable<Boolean> cir) {
-        SeatDiag.pilotGuard(cir.getReturnValue());
+        if (arTest$inPacket) {
+            arTest$packetGuard = cir.getReturnValue();
+        }
     }
 
     @Inject(method = "getFlightComputer", at = @At("RETURN"))
     private void arTest$afcResolved(CallbackInfoReturnable<TileAdvancedFlightComputer> cir) {
-        SeatDiag.afcResolved(cir.getReturnValue() != null);
+        if (arTest$inPacket) {
+            arTest$packetAfcResolved = cir.getReturnValue() != null;
+        }
     }
 
     @Inject(method = "useNetworkData",
@@ -80,7 +111,10 @@ public abstract class MixinTilePilotSeatDiag {
                             + "setPilotInput(Lzmaster587/advancedRocketry/api/FreeFlightInput;)V"))
     private void arTest$inputDelivered(EntityPlayer player, Side side, byte id, NBTTagCompound nbt,
                                        CallbackInfo ci) {
-        SeatDiag.pilotInputDelivered();
+        TilePilotSeat self = (TilePilotSeat) (Object) this;
+        if (self.getWorld() != null) {
+            SeatDeliveryWindow.pilotInputDelivered(self.getWorld());
+        }
     }
 
     @Inject(method = "forRider", at = @At("RETURN"))
@@ -93,7 +127,7 @@ public abstract class MixinTilePilotSeatDiag {
         BlockPos seatPos = bound != null ? bound : new BlockPos(riding);
         TileEntity te = world.getTileEntity(seatPos);
         TilePilotSeat seat = cir.getReturnValue();
-        SeatDiag.riderResolved("bound=" + (bound == null ? "null" : arTest$xyz(bound))
+        SeatDeliveryWindow.riderResolved(world, "bound=" + (bound == null ? "null" : arTest$xyz(bound))
                 + " lookup=" + arTest$xyz(seatPos)
                 + " tile=" + (te == null ? "null" : te.getClass().getSimpleName())
                 + " linked=" + (seat != null && seat.isLinked())

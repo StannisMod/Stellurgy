@@ -69,7 +69,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     }
 
 
-    private static final String MOTION_TRACE = "zmaster587.advancedRocketry.command.test.MotionTrace";
+    private static final String MOTION_TRACE_CLIENT_SUMMARY =
+            "zmaster587.advancedRocketry.test.trace.MotionTraceClientSummary";
 
     /** A channel's net displacement over the window, as an {@code [x,y,z]} array. */
     private static final String NET_MOVE = "netMove";
@@ -384,7 +385,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         assertTrue("SUBJECT LEG: the ship must actually FLY after the jump. A red here is a control "
                         + "failure, NOT a smoothness finding: the pilot's key stopped reaching the "
                         + "arrived ship's computer, which is a delivery defect with its own tests. "
-                        + after + " delivery=" + exec("artest vs seat-delivery"),
+                        + after + " delivery=" + seatDelivery(),
                 after.travel >= MIN_LEG_TRAVEL);
         // And on the leg every claim below is actually judged on. Without this the two surge
         // assertions are unfalsifiable: evenness() degenerates to 0.0 for a craft that did not
@@ -757,8 +758,15 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         leg.label = label;
         leg.serverJson = exec("artest vs motion-trace " + dim + " " + afc[0] + " " + afc[1]
                 + " " + afc[2] + " " + WINDOW_MS);
-        leg.clientJson = bot().readStaticField(MOTION_TRACE, "CLIENT_SUMMARY")
-                .get("value").getAsString();
+        // The client half, rendered on the client at THIS moment and recorded after a mark — see
+        // MotionTraceClientSummary for why its quotes come back as apostrophes.
+        long summaryMark = clientEvents().mark();
+        bot().invokeStaticInt(MOTION_TRACE_CLIENT_SUMMARY, "record");
+        String summary = Events.lastRecord(
+                clientEvents().since(summaryMark, "motion_trace_client_summary"));
+        assertNotNull("no motion_trace_client_summary record after asking — the client did not"
+                + " answer, so this leg has no client half", summary);
+        leg.clientJson = Events.text(summary, "summary").replace('\'', '"');
 
         String phys = section(leg.serverJson, "phys");
         String game = section(leg.serverJson, "game");

@@ -50,7 +50,8 @@ import zmaster587.advancedRocketry.tile.TilePilotSeat;
  *
  * <h2>Beside the older diagnostic</h2>
  *
- * <p>{@code MixinTilePilotSeatDiag} still counts the same three moments into its own store, and both
+ * <p>{@code MixinTilePilotSeatDiag} still counts the same three moments into any open
+ * {@code SeatDeliveryWindow}, and both
  * mixins apply to this seat. They coexist only because no handler here shares a NAME and descriptor
  * with one there — a shared one is merged once and the loser's injection silently calls the winner's
  * body. Any handler or helper added below must keep that distinctness.</p>

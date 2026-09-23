@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import zmaster587.advancedRocketry.test.trace.ShoveArming;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -27,38 +28,27 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  * method the real defect came out of. The arithmetic that produced the wrong number is fixed; the
  * server's refusal to ratify one is a separate promise, and it needs a subject to refuse.</p>
  *
- * <p>Armed through the harness's static-invoke bridge, one shove per arming, so a test can say
+ * <p>Armed by a scenario opening a {@link ShoveArming}, one shove per arming, so a test can say
  * exactly when it happens. Test source set: absent from a released jar.</p>
  */
 @Mixin(targets = "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel", remap = false)
 public abstract class MixinShipFrameTravelShove {
 
-    /** Blocks to add to the next committed position, once. Zero when not armed. */
-    private static int arTest$pendingShoveBlocks;
-
-    /** Arm one shove of {@code blocks} on the next travel commit. Returns what it was armed with,
-     *  so a caller can tell an arming that reached the client from one that did not.
-     *
-     *  <p>PRIVATE because a mixin may not carry a non-private static — it is merged into the target
-     *  and called there, by name, through the harness's static-invoke bridge (which reflects with
-     *  {@code setAccessible}). So a caller names {@code ShipFrameTravel}, not this class: this class
-     *  does not exist at runtime.</p> */
-    private static int arTest$armShove(int blocks) {
-        arTest$pendingShoveBlocks = blocks;
-        return blocks;
-    }
+    /* The pending shove is a window the scenario opens — ShoveArming — consumed by the next commit. */
 
     @Inject(method = "travel", at = @At("RETURN"), remap = false)
     private static void arTest$shoveAfterTravel(EntityLivingBase entity, float strafe, float vertical,
                                                 float forward, float jumpMovementFactor,
                                                 CallbackInfoReturnable<Boolean> cir) {
         TestTrace.instrumentHere("ship_frame_travel_shove");
-        if (arTest$pendingShoveBlocks == 0 || entity == null || entity.world == null
+        if (entity == null || entity.world == null
                 || !entity.world.isRemote || !Boolean.TRUE.equals(cir.getReturnValue())) {
             return;
         }
-        final int blocks = arTest$pendingShoveBlocks;
-        arTest$pendingShoveBlocks = 0;
+        final int blocks = ShoveArming.take();
+        if (blocks == 0) {
+            return;
+        }
         entity.setPosition(entity.posX, entity.posY + blocks, entity.posZ);
         // The MOTION as well as the position, because that is what the defect looked like and what
         // gets past everything upstream. Vanilla's own speed check does not compare a step against

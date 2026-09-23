@@ -155,8 +155,8 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // The per-tick pose trace, armed on the axis this scenario turns on: a body sliding across a
         // rotating deck is an ANGLE going wrong, and a column of vertical positions cannot show it.
         long poseTraceMark = clientEvents().mark();
-        bot().invokeStaticInt("org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject",
-                "arTest$armPoseTrace", 200);
+        ClientWindow poseTrace = ClientWindow.open(bot(),
+                "zmaster587.advancedRocketry.test.trace.DeckPoseTraceWindow", 200);
         // A WINDOW, not a poll. The header used to exit on `upY > -0.9`, which is the arrangement
         // gate below — so its green said "some sample was inverted" and could not be disproved. An
         // attitude converging under the hold IS a physical value, and the hold never decides it has
@@ -171,6 +171,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         // shortcut this leg carried answers a confident 1.0 for a ship that rolled about a different
         // axis, and would fail this ARRANGEMENT gate for the wrong reason.
         double upY = upYOf(shipInfo());
+        poseTrace.close();
         String rollHistory = clientTickHistory();
         double rollSeatMiss = seatMiss(rollHistory, rollMark);
         // A zero deckStep is ambiguous on its own — a pass that never ran and a pass that ran on a

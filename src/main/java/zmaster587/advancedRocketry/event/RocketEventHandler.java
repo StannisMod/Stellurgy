@@ -58,8 +58,6 @@ public class RocketEventHandler extends Gui {
     private static String displayString = "";
     private static long lastDisplayTime = -1000;
 
-    /** Frame counter that throttles the [FF-TRACE/CAM] deck-walking camera probe (test mode only). */
-    private static int ffCamTraceFrames = 0;
     private ResourceLocation background = TextureResources.rocketHud;
     private static long suppressSuffocationWarningUntil = Long.MIN_VALUE;
     private static int lastSuffocationWarningDim = Integer.MIN_VALUE;
@@ -228,24 +226,6 @@ public class RocketEventHandler extends Gui {
         // overlaps a large air (and, for a grounded ship, terrain) volume around the hull; levelling the
         // view for anyone inside it hijacks the camera of a player merely flying up through the airspace
         // or standing on the ground beside the hull - he is not on the deck, so his view must be his own.
-        // [FF-TRACE/CAM] test-gated, throttled (1/20 frames), only while aboard a ship's box: is the
-        // deck-walking camera levelling engaged, and does the levelled view keep the player's own yaw and
-        // pitch (only roll added)? A walking crew member whose view "goes where the mouse isn't" is either
-        // not resolved on the deck (isResolving=false, the branch below returns his own view) or the
-        // levelling is leaking into yaw/pitch. Self-records both cases, with no command to time by hand.
-        if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()
-                && (ffCamTraceFrames++ % 20) == 0
-                && zmaster587.advancedRocketry.integration.vs.VSIntegration.shipAttitudeAt(
-                        view.world, view.posX, view.posY, view.posZ) != null) {
-            boolean resolving = zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.isResolvingAboard(view);
-            zmaster587.advancedRocketry.AdvancedRocketry.logger.info("[FF-TRACE/CAM] walking"
-                    + " resolving=" + resolving
-                    + " deckActive=" + zmaster587.advancedRocketry.client.DeckLook.isActive()
-                    + " deckYaw=" + zmaster587.advancedRocketry.client.DeckLook.deckYawDeg()
-                    + " deckPitch=" + zmaster587.advancedRocketry.client.DeckLook.deckPitchDeg()
-                    + " worldYaw=" + (event.getYaw() - 180f)
-                    + " worldPitch=" + event.getPitch());
-        }
         // ABOARD specifically: a HULL-STAND body - standing on the OUTER hull, where the ship frame
         // has no floor beneath it - keeps world-frame semantics, so its camera is its own and is
         // never levelled to a deck it is not standing on.

@@ -93,11 +93,7 @@ public final class DeckLook {
         return (player.movementInput.jump ? 1 : 0) - (player.movementInput.sneak ? 1 : 0);
     }
 
-    // ---- Client-observable state. PRIVATE, and still readable by the deck-look e2e through
-    // readStaticField, which resolves with getDeclaredField + setAccessible - so the field NAMES
-    // are the observable and the modifier buys the tests nothing. NOT test-gated: harness child
-    // JVMs run without test mode, so a gated static is invisible to the tests that pin this
-    // contract. This class is the sole writer; the accessors below are the only way in. ----
+    // ---- Client-observable state. PRIVATE; this class is the sole writer. ----
 
     /** Whether the deck-frame look currently owns the local player's aim. */
     private static volatile boolean active = false;
@@ -108,16 +104,6 @@ public final class DeckLook {
     /** @see #active */
     public static boolean isActive() {
         return active;
-    }
-
-    /** The held DECK-frame yaw in degrees. Meaningful only while {@link #isActive()}. */
-    public static double deckYawDeg() {
-        return deckYawDeg;
-    }
-
-    /** The held DECK-frame pitch in degrees. Meaningful only while {@link #isActive()}. */
-    public static double deckPitchDeg() {
-        return deckPitchDeg;
     }
 
     /** What this class last wrote into the player's world rotation. A mismatch on the next sync

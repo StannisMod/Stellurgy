@@ -38,8 +38,8 @@ public abstract class MixinShipFrameCameraEvents {
      * <p>RETURN and not HEAD: the decision IS the return value, and the body it was made about is
      * the first parameter, so both halves are here without a local capture. Production used to
      * accumulate the same three counts, the same maximum and the same bounded trace into five
-     * statics of its own; {@link RemoteModelWindow} says why they are an accumulator rather than a
-     * record each, and why one of its fields stays readable while the window is open.</p>
+     * statics of its own; {@link RemoteModelWindow} says why they are an accumulator per open
+     * window rather than a record each.</p>
      *
      * <p>Whether the body is the LOCAL player is decided here, where {@code Minecraft} is at hand —
      * the distinction the whole scenario rests on, since a client always draws itself and a run that

@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 
+import zmaster587.advancedRocketry.test.trace.ShipTeleportMemory;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -27,10 +28,9 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  * the boolean it returned — {@code false} exactly when no ship was resolved, in which case
  * {@code vsShip} reads {@code "null"} and the write did not happen. {@code toY} is the requested
  * destination height. {@code fromY} is the ship's world-frame Y BEFORE the write; the method
- * overwrites the transform before it returns, so that value is snapshotted at HEAD into a private
- * static field and read back at RETURN (the target is static and runs on the server thread, which
- * is why one field suffices). On the no-ship return there is no source pose, and the field is
- * absent rather than stood in for.</p>
+ * overwrites the transform before it returns, so that value is snapshotted at HEAD into the side's
+ * {@link ShipTeleportMemory} and read back at RETURN. On the no-ship return there is no source pose,
+ * and the field is absent rather than stood in for.</p>
  *
  * <p>An absent {@code fromY} therefore has exactly two readings, and {@code ok} tells them apart. On
  * {@code ok:false} it is the honest one: no ship was resolved and there was no pose to read. On
@@ -58,11 +58,8 @@ public abstract class MixinVSBridgeEvents {
 
     private static final String INSTRUMENT = "vs_bridge_events";
 
-    /**
-     * World-frame Y of the ship as it stood when the current {@code teleportShip} call entered, or
-     * {@code NaN} when there was no ship (or no pose) to read. Written at HEAD, consumed at RETURN.
-     */
-    private static double arTest$fromY = Double.NaN;
+    // The ship's Y as the call entered is relayed HEAD -> RETURN through the side's
+    // ShipTeleportMemory.
 
     // CallbackInfoReturnable even at HEAD: the target returns a boolean, and mixin requires the
     // returnable form for ANY injection into such a method.
@@ -72,7 +69,7 @@ public abstract class MixinVSBridgeEvents {
                                                CallbackInfoReturnable<Boolean> cir) {
         TestTrace.instrumentHere(INSTRUMENT);
         ShipTransform before = ship == null ? null : ship.getShipTransform();
-        arTest$fromY = before == null ? Double.NaN : before.getPosY();
+        ShipTeleportMemory.of(world).fromY = before == null ? Double.NaN : before.getPosY();
     }
 
     // RETURN fires at BOTH returns: the early `ship == null -> false` and the final `true`. The
@@ -85,8 +82,9 @@ public abstract class MixinVSBridgeEvents {
         // costs nothing, and the handler that actually writes the record is the one that must be
         // able to say it ran.
         TestTrace.instrumentHere(INSTRUMENT);
-        double fromY = arTest$fromY;
-        arTest$fromY = Double.NaN;
+        ShipTeleportMemory memory = ShipTeleportMemory.of(world);
+        double fromY = memory.fromY;
+        memory.fromY = Double.NaN;
         boolean ok = cir.getReturnValueZ();
         StringBuilder payload = new StringBuilder()
                 .append("\"vsShip\":\"").append(ship == null ? "null" : ship.getUuid()).append('"');

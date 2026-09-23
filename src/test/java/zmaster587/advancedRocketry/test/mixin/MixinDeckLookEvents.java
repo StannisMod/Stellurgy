@@ -25,8 +25,13 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  *
  * <p>So this does not move the fields. It records what production DERIVED, once per client tick, on
  * the body it derived it for; a reader takes a mark and asks for its own window. That is the same
- * shape every other recorder in this package uses, and it is why production keeps its three fields
- * private and its accessors public: nothing here needs them to be visible.</p>
+ * shape every other recorder in this package uses.</p>
+ *
+ * <p>The yaw and pitch are SHADOWED FIELDS, not accessors: production had two public getters whose
+ * only callers were a test-mode log line in the camera handler and this mixin. The log line is gone,
+ * and a getter kept public for a test is a test's surface in shipping code, so the getters went with
+ * it. A mixin is merged into the class it targets, so it reads the private fields as that class
+ * would.</p>
  *
  * <p>Injected at the RETURN of {@code clientTick}, which is where the tick's state has settled: both
  * branches of {@code sync} have run, and {@code derive} — the only writer of the yaw and pitch — is
@@ -39,23 +44,18 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
 @Mixin(DeckLook.class)
 public abstract class MixinDeckLookEvents {
 
-    /** Production's own answers, asked through the accessors it already exposes. Shadowed rather
-     *  than reading the fields: what a test wants is what production would tell a caller, and if
-     *  those two ever differ it is the accessor that is the contract. */
+    /** Whether the deck look is engaged — production's own public accessor, which production itself
+     *  calls; where an accessor exists, it is the contract. */
     @Shadow
     public static boolean isActive() {
         throw new AssertionError();
     }
 
+    /** The held deck-frame yaw and pitch — the fields themselves; see the class note. */
     @Shadow
-    public static double deckYawDeg() {
-        throw new AssertionError();
-    }
-
+    private static volatile double deckYawDeg;
     @Shadow
-    public static double deckPitchDeg() {
-        throw new AssertionError();
-    }
+    private static volatile double deckPitchDeg;
 
     @Inject(method = "clientTick", at = @At("RETURN"), remap = false)
     private static void arTest$deckLookTick(Entity player, CallbackInfo ci) {
@@ -70,7 +70,7 @@ public abstract class MixinDeckLookEvents {
         TestTrace.record(player, "deck_look",
                 "\"e\":" + player.getEntityId()
                         + ",\"active\":" + isActive()
-                        + ",\"deckYawDeg\":" + deckYawDeg()
-                        + ",\"deckPitchDeg\":" + deckPitchDeg());
+                        + ",\"deckYawDeg\":" + deckYawDeg
+                        + ",\"deckPitchDeg\":" + deckPitchDeg);
     }
 }

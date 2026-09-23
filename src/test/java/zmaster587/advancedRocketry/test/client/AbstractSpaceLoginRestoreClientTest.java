@@ -1717,6 +1717,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // at all - so a climb that stalls is NOT explained by this budget and must not be read that way.
         int budget = 40;
         double last = from;
+        // THIS climb's pilot-input delivery chain, both halves, for the failure below. Opened per
+        // climb because the class restarts the server between its legs, and a window lives and dies
+        // with the server it was opened on.
+        SeatDelivery seatDelivery = SeatDelivery.open(this::exec, bot(), events(), clientEvents());
         bot().holdKey(key);
         try {
             // A WINDOW with the key HELD across it: the iterations are part of the stimulus, and
@@ -1735,7 +1739,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             String why = what + " — the client's own rendered rider altitude went from " + from
                     + " to " + last + " over " + (budget * 5) + " ticks with the key"
                     + " held, which is " + (last - from) + " against the " + MIN_CLIMB
-                    + " this needs. delivery=" + exec("artest vs seat-delivery");
+                    + " this needs. delivery=" + seatDelivery.reading();
             // This class types its arrangement failures through `ArrangementFailure`, not through a
             // `Scenario` — it is not on the shared-scenario base — so the refusal goes the same way
             // the rest of the file's do. Both calls throw; the branch picks WHICH kind.

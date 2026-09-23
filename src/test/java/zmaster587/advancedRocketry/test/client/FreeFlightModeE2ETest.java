@@ -1403,6 +1403,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // detached by tens of degrees and STAYED detached.
         // One record carries both readings of this leg, taken from the same frames.
         String camWindow = closeFlightCameraWindow(camMark, "the manoeuvring leg");
+        // The two divergence readings below are extrema that START at zero and are raised only by a
+        // pinned in-flight frame; a window that measured none reports a perfect 0.0 lock. So the
+        // window must have measured the lock at all before either reading means anything.
+        requirePinnedFrames(camWindow, "the manoeuvring leg");
         double maxErr = Events.number(camWindow, "maxErrDeg");
         assertTrue("camera must never detach from the craft on any rendered frame "
                 + "(worst frame divergence " + maxErr + "°)", maxErr < CAMERA_TRACKS_NOSE_DEG);
@@ -1498,9 +1502,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // distribution.
         System.out.println("[ff-drag] nose pitch after 8 swipes: " + nosePitch
                 + "° (the bound is 20.0°, the wrap is 90°)");
-        double maxErr = Events.number(
-                closeFlightCameraWindow(camMark, "the mouse-drag leg"), "maxErrDeg");
+        String dragWindow = closeFlightCameraWindow(camMark, "the mouse-drag leg");
+        double maxErr = Events.number(dragWindow, "maxErrDeg");
         bot().releaseKey(Keyboard.KEY_R);
+        // "Stays locked" is read off frames on which the camera WAS pinned; a flight that never
+        // pinned it measures no divergence and would report a perfect lock.
+        requirePinnedFrames(dragWindow, "the mouse-drag leg");
 
         assertTrue("mouse drag must pitch the nose down through the real "
                 + "swipe->rate->server path (got " + nosePitch + "°)", nosePitch > NOSE_PITCHED_DEG);
@@ -1631,18 +1638,30 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      * one, which is what the reading costs when it must be attributable.</p>
      */
     private double flightCameraNow(String field) throws Exception {
+        assertNotNull("no flight-camera window is open in this scenario, so " + field
+                + " would be a reading of nobody's window", flightCameraWindow);
         long mark = clientEvents().mark();
-        bot().invokeStaticInt(FLIGHT_CAMERA, "peek");
+        flightCameraWindow.peek();
         String rec = Events.lastRecord(clientEvents().since(mark, "flight_camera_window"));
         assertNotNull("no flight_camera_window record after a peek — the client did not answer, so "
                 + field + " has no reading", rec);
         return Events.number(rec, field);
     }
 
-    /** Start a flight-camera window on the client and take the mark its summary will land after. */
+    /** This scenario's flight-camera window, held by the test instance — see {@link ClientWindow}. */
+    private ClientWindow flightCameraWindow;
+
+    /**
+     * Start a flight-camera window on the client and take the mark its summary will land after. A
+     * window this scenario still holds from an earlier leg is closed first: each leg's extrema are
+     * its own, and a second window beside the first would leave the first unreleased.
+     */
     private long openFlightCameraWindow() throws Exception {
+        if (flightCameraWindow != null) {
+            flightCameraWindow.close();
+        }
         long mark = clientEvents().mark();
-        bot().invokeStaticInt(FLIGHT_CAMERA, "open");
+        flightCameraWindow = ClientWindow.open(bot(), FLIGHT_CAMERA);
         return mark;
     }
 
@@ -1653,8 +1672,21 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      * finding, not a zero divergence. The frame count inside separates a leg the renderer never
      * sampled from one it sampled and found still.</p>
      */
+    /**
+     * The window measured the camera lock on at least one frame: in flight, with the camera pinned.
+     * The lock's extrema start at zero and only a pinned frame raises them, so without this a leg in
+     * which production never pinned the camera — or in which the recorder saw no in-flight frame —
+     * reads as a perfect lock.
+     */
+    private static void requirePinnedFrames(String window, String what) {
+        double pinned = Events.number(window, "pinnedFrames");
+        assertTrue("the camera lock was measured on no pinned in-flight frame during " + what
+                + ", so its divergence of 0 describes an absent measurement, not a lock: "
+                + window, pinned > 0);
+    }
+
     private String closeFlightCameraWindow(long mark, String what) throws Exception {
-        bot().invokeStaticInt(FLIGHT_CAMERA, "close");
+        flightCameraWindow.close();
         String rec = Events.lastRecord(clientEvents().since(mark, "flight_camera_window"));
         assertNotNull("no flight_camera_window record for " + what
                 + " — the window did not close, so there is no camera reading for it", rec);

@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.trace;
 
 import java.lang.ref.Reference;
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -12,8 +13,8 @@ import net.minecraft.util.math.AxisAlignedBB;
 import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
 
 /**
- * What the deck-capture gate decided about ONE named body, per tick, on BOTH sides, over a window a
- * test opens and closes.
+ * What the client's deck-capture gate decided about ONE named body, per tick, over a window a test
+ * opens and closes.
  *
  * <h2>The question, and why an existing record could not answer it</h2>
  *
@@ -36,7 +37,7 @@ import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
  *
  * <h2>What it records</h2>
  *
- * <p>{@code deck_gate_explained}, once per world tick per SIDE while the window is open, plus again
+ * <p>{@code deck_gate_explained}, once per world tick while the window is open, plus again
  * within a tick whenever {@code handled} CHANGES — three consumers ask {@code handles} in one tick
  * ({@code travel}, {@code jump}, {@code GravityHandler}) and they are not obliged to agree. Each
  * record carries three things that have to be read together and therefore have to be written
@@ -62,17 +63,19 @@ import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
  * <p>And beside them, on the SAME record because two reads a tick apart attribute one to whatever
  * the other was: the four process-wide statics {@code ShipFrameTravel} holds
  * ({@code pendingSeed}, {@code CAPTURE_EPOCH}, {@code clientLookSource}, {@code walkTraceTicks}).
- * None of them names an owner or a release, and on an integrated server both sides share all four —
- * so "what the gate was answering FROM" is as much a part of this window as what it answered.</p>
+ * None of them names an owner or a release, so "what the gate was answering FROM" is as much a part
+ * of this window as what it answered.</p>
  *
- * <h2>Both sides from one call, and why that works here</h2>
+ * <h2>The CLIENT's resolver only — and this class used to claim both</h2>
  *
- * <p>The window is armed by ENTITY ID, not by name or by side. A client test runs against an
- * INTEGRATED server — one JVM — and the client's copy of a player and the server's copy carry the
- * same entity id (it is what {@code Entity.equals} compares, which is why production's own capture
- * map is built with {@code weakKeys()} to keep the two apart). So one {@code open(id)} from the bot
- * arms both resolvers, and {@link TestTrace#record} routes each side's records to its own log by the
- * body's world. One window, both sides, same body.</p>
+ * <p>The window is armed by ENTITY ID, on the side it is opened on, and the only side a test can open
+ * one on is the client: the harness's static-invoke bridge runs in the client JVM. Until 2026-09-23
+ * this note said a client test runs against an INTEGRATED server, so one {@code open(id)} armed both
+ * resolvers. It does not: the shared client base boots a dedicated server in a second JVM, nothing
+ * there ever opened a window, and every server-side {@code deck_gate_explained} a failure message
+ * printed was structurally empty — under a caption telling the reader an empty half meant "nobody
+ * asked". The server's half of this question has no instrument; a server-side window would need a
+ * server-side verb to open it, and none exists.</p>
  *
  * <h2>What it is SILENT about</h2>
  *
@@ -81,12 +84,7 @@ import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
  *       and it means this record can never answer a question about what happened BEFORE
  *       {@link #open}. A reader wanting the standing verdict reads {@code deck_gate_decided}, which
  *       is what a heartbeat is for.</li>
- *   <li><b>The two logs are separate sequences.</b> The client's records land in the client log and
- *       the server's in the server log; a reader takes a mark from each log for its own half and
- *       never carries one across.</li>
- *   <li><b>On a DEDICATED server the client half simply never fires</b> — there is no client in that
- *       JVM. That is not an error and not a gap in the arrangement; it is the shape of the tier.
- *       Nothing here opens a window on a dedicated server, because nothing can invoke it there.</li>
+ *   <li><b>Everything the SERVER's resolver decided</b> — see above.</li>
  *   <li><b>It does not say WHY {@code shipIdsAt} answered as it did</b>, only what it answered, and
  *       it cannot see a hull the substrate does not report as loaded at all.</li>
  *   <li><b>The statics are read REFLECTIVELY</b> and a rename makes the read fail, not disappear:
@@ -94,47 +92,43 @@ import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
  *       cannot see something says so.</li>
  * </ul>
  *
- * <h2>What it is, said plainly</h2>
+ * <h2>Whose it is</h2>
  *
- * <p>Mutable static state, per JVM, shared by every scenario in a shared-harness class — and, on an
- * integrated server, by both sides at once. That is the same property the production fields it
- * observes have; what differs is that this one is in the test source set, absent from a released
- * jar, and means nothing until a window is OPENED.</p>
+ * <p>An instance per window, created by the scenario that asks and registered with the client's
+ * {@link SideTrace} under the handle {@link #open} returns. Two windows on two bodies can be open at
+ * once and neither sees the other's decisions.</p>
  *
- * <p>The cost is one {@code explainHandles} per tick per side for ONE body while open, and zero
- * otherwise — a closed window is an int compare on the gate's existing return hook.</p>
+ * <p>The cost is one {@code explainHandles} per tick for ONE body while open, and otherwise a lookup
+ * of the open windows on the gate's existing return hook.</p>
  */
-public final class DeckGateWindow {
-
-    private DeckGateWindow() {}
-
-    /** No body: the window is closed. Entity ids are non-negative, so this cannot collide. */
-    private static final int NOT_ARMED = -1;
+public final class DeckGateWindow implements TraceWindow {
 
     /** How many loaded hulls a record names before it stops. The failing arrangement holds one and
      *  the question is whether that one covers the body; a class whose world has filled up with
      *  craft is a different finding and the count below tells the reader which case this is. */
     private static final int SHIP_BUDGET = 6;
 
-    /** The body both sides are asked about, or {@link #NOT_ARMED}. Volatile: the client and the
-     *  server tick on different threads and both read it. */
-    private static volatile int armedEntityId = NOT_ARMED;
+    /** The body this window is asked about. */
+    private final int entityId;
 
-    /** How many records each side may write before the window stops writing. Volatile for the same
-     *  reason as the id above. */
-    private static volatile int recordBudget = 0;
+    /** How many records this window may write before it stops writing. */
+    private final int recordBudget;
 
-    /** Per SIDE, so the two never deduplicate each other: index 0 server, 1 client. */
-    private static final long[] lastTick = {Long.MIN_VALUE, Long.MIN_VALUE};
-    private static final boolean[] lastHandled = {false, false};
-    private static final long[] calls = {0L, 0L};
-    private static final long[] records = {0L, 0L};
+    private long lastTick = Long.MIN_VALUE;
+    private boolean lastHandled;
+    private long calls;
+    private long records;
+
+    private DeckGateWindow(int entityId, int recordBudget) {
+        this.entityId = entityId;
+        this.recordBudget = recordBudget;
+    }
 
     /**
-     * Arm the window for one body, on both sides, and clear the counters.
+     * Arm a window for one body; answers its handle.
      *
      * <p><b>The budget is not a convenience and there is no overload that picks one.</b> A window
-     * armed before a stimulus and left open records once a tick per side; the log's ring is 256 deep
+     * armed before a stimulus and left open records once a tick; the log's ring is 256 deep
      * PER TYPE, so an unbounded window over a scenario that runs for minutes would turn its own
      * history over and hand a reader the tail of it — the exact failure the ring's own size makes
      * invisible. The caller states how many ticks of gate decisions its question is about, and when
@@ -142,81 +136,79 @@ public final class DeckGateWindow {
      * ({@code budgetExhausted}) and then goes quiet. An instrument that runs out silently is
      * indistinguishable from a subject that went quiet.</p>
      *
-     * @param entityId    the subject's entity id — the same number on the client and on the
-     *                    integrated server; see the class note
-     * @param recordsEach how many records each side may write before it stops
-     * @return the id it armed, so a caller can see its own argument came back
+     * @param entityId    the subject's entity id on the client
+     * @param recordsEach how many records the window may write before it stops
+     * @return the window's handle
      */
     public static int open(int entityId, int recordsEach) {
-        synchronized (DeckGateWindow.class) {
-            calls[0] = calls[1] = 0L;
-            records[0] = records[1] = 0L;
-            lastTick[0] = lastTick[1] = Long.MIN_VALUE;
-            recordBudget = recordsEach;
-            armedEntityId = entityId;
-        }
-        summary("open", entityId);
-        return entityId;
+        DeckGateWindow w = new DeckGateWindow(entityId, recordsEach);
+        int handle = SideTrace.client().open(w);
+        w.summary("open");
+        return handle;
     }
 
-    /** Close the window and write its summary; answers how many records it wrote on the side the
-     *  caller is on. */
-    public static int close() {
-        int was = armedEntityId;
-        armedEntityId = NOT_ARMED;
-        return summary("close", was);
+    /** Close the window and write its summary; answers how many records it wrote. */
+    public static int close(int handle) {
+        return SideTrace.client().close(handle, DeckGateWindow.class).summary("close");
     }
 
     /** Write the window's counters without closing it — for a reader checking the gate is being
-     *  reached at all before it starts believing a silence. Same record type as {@link #close()}:
-     *  a reader asks for the last one in its own window either way. */
-    public static int peek() {
-        return summary("peek", armedEntityId);
+     *  reached at all before it starts believing a silence. Same record type as {@link #close}: a
+     *  reader asks for the last one in its own window either way. */
+    public static int peek(int handle) {
+        return SideTrace.client().window(handle, DeckGateWindow.class).summary("peek");
     }
 
-    private static int summary(String phase, int entityId) {
-        int side = sideHere();
-        // No `side` key here either — the envelope carries it, and a duplicate overwrites it.
+    private int summary(String phase) {
+        // No `side` key — the envelope carries it, and a duplicate overwrites it.
         TestTrace.recordHere("deck_gate_window", String.format(Locale.ROOT,
                 "\"phase\":\"%s\",\"e\":%d,\"calls\":%d,\"records\":%d,\"budget\":%d",
-                phase, entityId, calls[side], records[side], recordBudget));
-        return (int) records[side];
+                phase, entityId, calls, records, recordBudget));
+        return (int) records;
     }
 
     /**
-     * One gate decision, from the injector on {@code ShipFrameTravel.handles}' RETURN.
+     * One gate decision, from the injector on {@code ShipFrameTravel.handles}' RETURN, to every
+     * window open on this body on the side the decision was taken.
      *
      * @param entity  the body the gate was asked about
      * @param handled what the gate actually returned for it on this call
      */
     public static void sample(EntityLivingBase entity, boolean handled) {
-        int armed = armedEntityId;
-        if (armed == NOT_ARMED || entity == null || entity.world == null
-                || entity.getEntityId() != armed) {
+        if (entity == null || entity.world == null) {
             return;
         }
-        int side = entity.world.isRemote ? 1 : 0;
-        calls[side]++;
+        List<DeckGateWindow> open = SideTrace.of(entity.world).windows(DeckGateWindow.class);
+        for (int i = 0; i < open.size(); i++) {
+            DeckGateWindow w = open.get(i);
+            if (w.entityId == entity.getEntityId()) {
+                w.decided(entity, handled);
+            }
+        }
+    }
+
+    private void decided(EntityLivingBase entity, boolean handled) {
+        calls++;
         long tick = entity.world.getTotalWorldTime();
-        // Once per tick per side, plus any answer that CHANGES inside a tick: three consumers ask
-        // per tick and a disagreement between them is exactly the kind of thing this window exists
-        // to make visible. Bounded at three records per tick per side by construction.
-        if (tick == lastTick[side] && handled == lastHandled[side]) {
+        // Once per tick, plus any answer that CHANGES inside a tick: three consumers ask per tick
+        // and a disagreement between them is exactly the kind of thing this window exists to make
+        // visible. Bounded at three records per tick by construction.
+        if (tick == lastTick && handled == lastHandled) {
             return;
         }
-        lastTick[side] = tick;
-        lastHandled[side] = handled;
+        lastTick = tick;
+        lastHandled = handled;
         int budget = recordBudget;
-        if (records[side] > budget) {
+        if (records > budget) {
             return; // already said so, once, below
         }
-        records[side]++;
-        if (records[side] > budget) {
+        records++;
+        if (records > budget) {
             // The window stops HERE and says it stopped. Silence from an exhausted instrument and
             // silence from a body nobody asked about are the same empty log otherwise.
             TestTrace.record(entity, "deck_gate_explained", "\"e\":" + entity.getEntityId()
                     + ",\"worldTick\":" + tick
-                    + ",\"calls\":" + calls[side] + ",\"budgetExhausted\":true,\"budget\":" + budget);
+                    + ",\"calls\":" + calls + ",\"budgetExhausted\":true,\"budget\":" + budget);
             return;
         }
         TestTrace.record(entity, "deck_gate_explained", "\"e\":" + entity.getEntityId()
@@ -228,7 +220,7 @@ public final class DeckGateWindow {
                 // recorder that corrupts the envelope it is written into is worse than one that
                 // omits a field, because both look like data.
                 + "\",\"worldTick\":" + tick
-                + ",\"calls\":" + calls[side]
+                + ",\"calls\":" + calls
                 + ",\"handled\":" + handled
                 + ",\"bodyX\":" + TestTrace.fmt(entity.posX)
                 + ",\"bodyY\":" + TestTrace.fmt(entity.posY)
@@ -445,13 +437,5 @@ public final class DeckGateWindow {
             return out.append(']').toString();
         }
         return "\"" + TestTrace.json(String.valueOf(v)) + "\"";
-    }
-
-    /** Which side's counters a {@code peek}/{@code close} is reporting. The RECORD's side comes from
-     *  the envelope; this only picks the slot, and it is the calling thread's side because a summary
-     *  has no entity to route by. */
-    private static int sideHere() {
-        return net.minecraftforge.fml.common.FMLCommonHandler.instance().getEffectiveSide()
-                == net.minecraftforge.fml.relauncher.Side.CLIENT ? 1 : 0;
     }
 }

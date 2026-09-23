@@ -519,8 +519,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // become an assertion again; there is none, so they stay in the failure message.
         int rebindBudget = 240;
         // The shared wait, keyed on the outcome, instead of a sample loop that re-read three things
-        // per iteration to build a message it might never print. Two of those three — the probe's
-        // seat-delivery state and the queue's own log — are DIAGNOSTICS, and a diagnostic belongs on
+        // per iteration to build a message it might never print. Two of those three — the seat
+        // delivery windows and the queue's own log — are DIAGNOSTICS, and a diagnostic belongs on
         // the failing path and at the end of the healthy one, not inside the wait: re-reading them
         // every sample cost a probe round trip per tick and changed no verdict.
         //
@@ -549,11 +549,11 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
                     + " relocated ship/seat never became resolvable, so the control chain under"
                     + " test never came up. boarding=" + how
                     + " lastDecision=" + Events.lastField(decisions, "outcome")
-                    + " delivery=" + exec("artest vs seat-delivery")
+                    + " delivery=" + seatDelivery()
                     + " | the queue's own entries in this window: " + describeGiveUps(queue)
                     + " :: " + queue + " | " + never.getMessage());
         }
-        rebindState = exec("artest vs seat-delivery");
+        rebindState = seatDelivery();
         decisions = events.since(assemblyMark, "crew_rebind_decided");
         queue = events.since(assemblyMark, "crew_rebind_queue");
         gaveUp = describeGiveUps(queue);
@@ -676,7 +676,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      * Reads both halves of the pilot-input delivery chain over the key-held window: what the CLIENT
      * decided and sent (its own event log — the gate's answer per seated tick, and every packet it
      * actually put on the wire), and what the SERVER received and delivered to the flight computer
-     * (its log, plus the read-only {@code seat-delivery} probe). Never throws — a diagnostic that
+     * (its log, plus this scenario's seat-delivery windows). Never throws — a diagnostic that
      * kills the run it is meant to explain would be worse than none — and reports read failures
      * inline instead.
      *
@@ -702,7 +702,7 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         }
         String server;
         try {
-            server = exec("artest vs seat-delivery")
+            server = seatDelivery()
                     + " received=" + events.since(serverMark, "pilot_input_received")
                     + " delivered=" + events.since(serverMark, "pilot_input_delivered");
         } catch (Exception e) {

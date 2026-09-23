@@ -414,18 +414,17 @@ public abstract class AbstractSharedClientE2ETest {
         // own. Both are un-restored global mutations of the SHARED subject, which is the one thing
         // this base class exists to stop.
         serverClient().execute("artest player set-health 20");
-        // The pilot-input counters, on BOTH sides, because they are two copies of one class in two
-        // processes and each half counts what its own side saw. They are cumulative for the life of
-        // the JVM and are printed as ABSOLUTES into twenty-one failure messages across six classes,
-        // so without this a red in the fourteenth scenario of a class reports the totals of all
-        // fourteen — and since nothing ASSERTS on them, that has never shown up as a red. A leaking
-        // diagnostic damages only the diagnosis, which is why it survives so long.
-        //
-        // The reset method existed and had no caller at all. That is the shape to recognise: the
-        // price for keeping a single-writer diagnostic static is the leak stated in its javadoc AND
-        // a reset owned by somebody, and half of it had been paid. This is the owner.
-        serverClient().execute("artest diag reset");
-        bot().invokeStaticInt("zmaster587.advancedRocketry.command.test.SeatDiag", "reset");
+        // Every trace window a failed predecessor left open, on BOTH sides, is released here — a
+        // window belongs to the scenario that opened it, and this is where a scenario that died
+        // before closing one hands it back. Each side records how many it discarded, so an
+        // inherited window is visible in the log of the scenario that inherited it.
+        exec("artest invoke-static zmaster587.advancedRocketry.test.trace.SideTrace"
+                + " discardServerWindows");
+        bot().invokeStaticInt("zmaster587.advancedRocketry.test.trace.SideTrace",
+                "discardClientWindows");
+        // This scenario's pilot-input delivery chain, both halves, from here on. Twenty-one failure
+        // messages print it; before it was a window, its counts were the JVM's since boot.
+        seatDelivery = SeatDelivery.open(this::exec, bot(), events(), clientEvents());
         // A family of scenarios can carry a channel this base knows nothing about — a seat the
         // player is still riding, a subsystem flag it switched on. It runs HERE, before the
         // teleport, because a player still bound to a vehicle is not moved by /tp: the plot
@@ -1171,6 +1170,25 @@ public abstract class AbstractSharedClientE2ETest {
     /** Runs a server probe and joins its reply — the shape every AR client test already uses. */
     protected final String exec(String command) throws Exception {
         return String.join("\n", serverClient().execute(command));
+    }
+
+    /** This scenario's pilot-input delivery windows, opened by the between-scenario reset. */
+    private SeatDelivery seatDelivery;
+
+    /**
+     * Why a pilot's input did or did not reach the ship, both halves, counted since this scenario
+     * began — for a failure message. See {@link SeatDelivery}.
+     */
+    protected final String seatDelivery() {
+        return seatDelivery == null ? "(no delivery window was opened for this scenario)"
+                : seatDelivery.reading();
+    }
+
+    /** The SERVER half of {@link #seatDelivery()} alone, as its record — for a reader that takes a
+     *  field of it by name. See {@link SeatDelivery#server()}. */
+    protected final String seatDeliveryServer() {
+        return seatDelivery == null ? "(no delivery window was opened for this scenario)"
+                : seatDelivery.server();
     }
 
     /**

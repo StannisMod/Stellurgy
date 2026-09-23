@@ -157,19 +157,6 @@ public final class MotionTrace {
      */
     public static volatile long clientShipTransformUpdates = 0L;
 
-    /**
-     * The client half of the recording, rendered on demand. Exposed as an object whose
-     * {@code toString()} does the work, because the harness's client channel can read a static
-     * FIELD but cannot call a method — and rendering eagerly every frame would cost more than the
-     * recording does.
-     */
-    public static final Object CLIENT_SUMMARY = new Object() {
-        @Override
-        public String toString() {
-            return clientSummary();
-        }
-    };
-
     /** How many rings each channel has dropped to stay inside the key budget. Never reset by a read. */
     private static final long[] KEY_EVICTIONS = new long[CHANNELS];
 

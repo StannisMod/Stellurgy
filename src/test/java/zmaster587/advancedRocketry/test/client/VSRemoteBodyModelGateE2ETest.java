@@ -149,6 +149,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     /** The TEST-side accumulator behind every model-gate window — production keeps no counters. */
     private static final String REMOTE_MODEL_WINDOW =
             "zmaster587.advancedRocketry.test.trace.RemoteModelWindow";
+    /** The window the arrival wait polls — this scenario's, held while the wait runs. */
+    private ClientWindow arrivalWindow;
 
     /**
      * How many remote-body model decisions the open window has seen, as a record.
@@ -160,7 +162,7 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private long remoteModelSamples() throws Exception {
         long mark = clientEvents().mark();
-        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "peek");
+        arrivalWindow.peek();
         String rec = Events.lastRecord(clientEvents().since(mark, "remote_model_window"));
         assertNotNull("no remote_model_window record after a peek — the client did not answer, so "
                 + "the sample count has no reading", rec);
@@ -459,15 +461,16 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // the failure branch needs comes off the closing record.
         final long windowMark = clientEvents().mark();
         final long framesBefore = (long) deckCamera("cameraHookCalls");
-        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "open");
+        arrivalWindow = ClientWindow.open(bot(), REMOTE_MODEL_WINDOW);
         ClientPoll.Result<Long> r = ClientPoll.until(bot()::waitTicks,
                 this::remoteModelSamples,
                 v -> v > 0, 15, 8);
         if (r.satisfied) {
+            arrivalWindow.close();
             return new Sampling(true, "");
         }
         long frames = (long) deckCamera("cameraHookCalls") - framesBefore;
-        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "close");
+        arrivalWindow.close();
         String window = Events.lastRecord(clientEvents().since(windowMark, "remote_model_window"));
         long models = window == null ? -1L : (long) Events.number(window, "calls");
         long loaded = (long) deckCamera("loadedEntities");
@@ -563,9 +566,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private String watchModelGate(int ticks) throws Exception {
         long mark = clientEvents().mark();
-        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "open");
+        ClientWindow window = ClientWindow.open(bot(), REMOTE_MODEL_WINDOW);
         bot().waitTicks(ticks);
-        bot().invokeStaticInt(REMOTE_MODEL_WINDOW, "close");
+        window.close();
         String summary = Events.lastRecord(clientEvents().since(mark, "remote_model_window"));
         assertTrue("the model-gate window recorded nothing at all, so the harness — not the gate — "
                 + "is what this leg would be measuring", summary != null);

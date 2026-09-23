@@ -1,7 +1,6 @@
 package zmaster587.advancedRocketry.test.mixin;
 
 import java.lang.ref.WeakReference;
-import java.util.WeakHashMap;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.inventory.Container;
@@ -11,6 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import zmaster587.advancedRocketry.test.trace.EntityTrace;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 import zmaster587.advancedRocketry.util.RocketInventoryHelper;
 
@@ -51,16 +51,9 @@ public abstract class MixinRocketInventoryHelperEvents {
 
     private static final String INSTRUMENT = "container_interact_events";
 
-    // What was last recorded for a player: the container identity and the decision. Two parallel
-    // maps rather than a nested value class, so the mixin carries no inner class for the
-    // transformer to relocate. Weak on the player so a logout does not pin the entry; the
-    // container is held weakly too, because a container references its player and a strong value
-    // would keep its own key alive. Private statics are permitted on a mixin (the refusal is for
-    // NON-private ones).
-    private static final WeakHashMap<EntityPlayer, WeakReference<Container>> LAST_CONTAINER =
-            new WeakHashMap<EntityPlayer, WeakReference<Container>>();
-    private static final WeakHashMap<EntityPlayer, Boolean> LAST_ALLOWED =
-            new WeakHashMap<EntityPlayer, Boolean>();
+    // What was last recorded for a player — the container identity and the decision — is held BY
+    // the player (EntityTrace.ContainerInteract). The container is held weakly, because a container
+    // references its player and a strong reference would keep a closed screen alive on the body.
 
     @Inject(method = "shouldAllowContainerInteract", at = @At("RETURN"))
     private static void arTest$checked(Container container, EntityPlayer player,
@@ -70,16 +63,14 @@ public abstract class MixinRocketInventoryHelperEvents {
             return;
         }
         boolean allowed = cir.getReturnValueZ();
-        synchronized (LAST_CONTAINER) {
-            WeakReference<Container> lastContainer = LAST_CONTAINER.get(player);
-            Boolean lastAllowed = LAST_ALLOWED.get(player);
-            if (lastContainer != null && lastAllowed != null
-                    && lastContainer.get() == container && lastAllowed.booleanValue() == allowed) {
-                return;
-            }
-            LAST_CONTAINER.put(player, new WeakReference<Container>(container));
-            LAST_ALLOWED.put(player, Boolean.valueOf(allowed));
+        EntityTrace.ContainerInteract last = EntityTrace.memory(player,
+                EntityTrace.ContainerInteract.class, EntityTrace.ContainerInteract::new);
+        if (last.container != null && last.allowed != null
+                && last.container.get() == container && last.allowed.booleanValue() == allowed) {
+            return;
         }
+        last.container = new WeakReference<Container>(container);
+        last.allowed = Boolean.valueOf(allowed);
         TestTrace.record(player, "container_interact_checked", "\"e\":" + player.getEntityId()
                 + ",\"who\":\"" + TestTrace.json(player.getName())
                 + "\",\"container\":\"" + TestTrace.json(containerName(container))

@@ -30,6 +30,7 @@ import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.client.ClientEvents;
+import zmaster587.advancedRocketry.test.client.SeatDelivery;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -292,7 +293,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             serverHarness = null;
             throw startFailed;
         }
+        // The loop's pilot-input delivery chain, both halves, for the failure messages below: a
+        // window opened with the pair, so its counts are this run's.
+        seatDelivery = SeatDelivery.open(this::exec, bot(),
+                new Events(this::exec, bot()::waitTicks), clientEvents());
     }
+
+    /** This run's pilot-input delivery windows — see {@link SeatDelivery}. */
+    private SeatDelivery seatDelivery;
 
     @After
     public void stopBoth() throws Exception {
@@ -527,7 +535,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         JsonObject arrivalRiding = assertStillSeated(events, entryMark, entryClientMark,
                 "the pilot who FLEW his own ship into space must still be in his seat on arrival — a "
                         + "crossing must never stand him up. clientDim=" + clientDim
-                        + " delivery=" + exec("artest vs seat-delivery"),
+                        + " delivery=" + seatDelivery.reading(),
                 budget);
         System.out.println("[M1] leg 5 (arrival, client-observed) " + elapsed(tLeg)
                 + " clientDim=" + clientDim + " riding=" + arrivalRiding);
@@ -773,7 +781,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             assertEquals("a press that did not spool must be the gate's ADVISORY, which is an 'are"
                             + " you sure' rather than a refusal — anything else is the jump being"
                             + " turned down. presses=" + pressed
-                            + " delivery=" + exec("artest vs seat-delivery")
+                            + " delivery=" + seatDelivery.reading()
                             + " riding=" + bot().reportRidingEntity()
                             + " drive=" + exec("artest drive info " + slotDim + " "
                             + describeArgs(navAfcSub)),
@@ -859,7 +867,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "stood up, so nothing about crossing a cell may stand him up. A red here is "
                         + "the crew capture, the re-seat, or the dimension hand-off, in that order — "
                         + "and the mount chain below says which. clientDim=" + jumpDim
-                        + " delivery=" + exec("artest vs seat-delivery")
+                        + " delivery=" + seatDelivery.reading()
                         + " ledger=" + ledgerAfterJump,
                 budget);
         System.out.println("[M1] leg 7 (jump fired on the key) " + elapsed(tLeg)
@@ -1066,7 +1074,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + " nearestBodyDim=" + nearestDim + " dimLoad=" + loaded
                         + " descentStatus=" + exec("artest space descent-status")
                         + " ledger=" + exec("artest space ledger-get " + shipId)
-                        + " bodies=" + bodies + " delivery=" + exec("artest vs seat-delivery"),
+                        + " bodies=" + bodies + " delivery=" + seatDelivery.reading(),
                 descentDim != jumpDim);
         assertTrue("…and where it puts him down must be a real WORLD, with ground under it. The space "
                         + "subsystem's own slot worlds are empty voids that exist to hold a cell; a "
@@ -1087,7 +1095,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 "and the pilot must still be flying his ship when it comes out over the planet he "
                         + "set out for — the loop is only closed if the man who took off is the man "
                         + "who arrives. clientDim=" + descentDim
-                        + " delivery=" + exec("artest vs seat-delivery"),
+                        + " delivery=" + seatDelivery.reading(),
                 budget);
 
         // CONTRACT (changed): a descent no longer hunts for a clear pad and sets the ship down. It

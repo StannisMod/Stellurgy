@@ -7,6 +7,7 @@ import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.BufferBuilder;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -42,9 +43,9 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  * every other chain's readout under sky frames. A record is therefore taken only when the frame's
  * tuple ({@code dim, bodies, nebulae, boundaries, labels}) DIFFERS from the last one recorded
  * ({@code "edge":"changed"}), or when the renderer RESUMED after not having drawn for more than
- * {@link #RESUME_GAP_TICKS} of the client world's clock — or in a different world object — which is
- * the frame on which the sky pass came back after being gated off, e.g. by the render distance
- * ({@code "edge":"resumed"}). The first frame after the mixin wove is a resume. The gap threshold is
+ * {@link #RESUME_GAP_TICKS} of the client world's clock, which is the frame on which the sky pass
+ * came back after being gated off, e.g. by the render distance ({@code "edge":"resumed"}). The first
+ * frame a world's renderer draws is a resume. The gap threshold is
  * a guess about how a hitch differs from an off-renderer and is confirmed only on a run.</p>
  *
  * <h2>What it is SILENT about</h2>
@@ -55,25 +56,23 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  *     return — so a transit frame never records. {@code MixinHyperspaceTunnelDiag} is the corridor's
  *     witness.</li>
  * <li>A steady frame. Two identical frames in a row produce ONE record; "the renderer drew a frame
- *     since my mark" in a steady sky is not a question this event answers — the frame counter kept
- *     by {@code MixinBoundarySkyDiag} beside it ({@code RenderDiag.skyFramesDrawn}) is, and the
+ *     since my mark" in a steady sky is not a question this event answers — the frame count
+ *     {@code MixinBoundarySkyDiag} feeds into an open {@code RenderFrameWindow} is, and the
  *     instrument {@code sky_frame_events} says the seam has run at all.</li>
- * <li>The difference between a real resume and a collected world. The previous world is held
- *     WEAKLY (a static strong reference on a shared client would pin a dead world and its chunks),
- *     so a garbage collection between two frames of the SAME world can present as
- *     {@code "edge":"resumed"}. A resume is therefore a hint, never a premise: what a test asserts on
+ * <li>A shared client whose new scenario draws exactly the sky the previous one ended in, in the
+ *     SAME world, without the renderer ever pausing: no change, no resume, no record. The
+ *     last-recorded tuple is a field of the renderer — one per slot world, since each world's
+ *     provider builds its own — so a new world starts from a resume, and the same world carries its
+ *     memory across a scenario boundary. A resume is a hint, never a premise: what a test asserts on
  *     is the tuple, and {@code edge} only says why the record was kept.</li>
- * <li>A shared client whose new scenario ends in exactly the sky the previous one ended in, without
- *     the renderer ever pausing: no change, no resume, no record. The last-recorded tuple lives in
- *     this mixin and nothing resets it between scenarios.</li>
  * <li>Whether a body was VISIBLE. {@code drawBody} returns whether a LABEL was written, so a body
  *     drawn with labels off counts in {@code bodies} and not in {@code labels}; a body so close its
  *     bearing degenerates ({@code len < 1e-6}) counts in {@code bodies} though nothing was
  *     emitted for it. Pixels are not observed here at all.</li>
  * </ul>
  *
- * <p>Sits BESIDE {@code MixinBoundarySkyDiag}, which feeds the reflective counters the older tests
- * read; the two watch the same four production calls and neither needs the other.</p>
+ * <p>Sits BESIDE {@code MixinBoundarySkyDiag}, which counts frames into an open
+ * {@code RenderFrameWindow}; neither needs the other.</p>
  */
 @Mixin(BoundarySky.class)
 public abstract class MixinBoundarySkyEvents {
@@ -83,29 +82,36 @@ public abstract class MixinBoundarySkyEvents {
     /** Client-world ticks without a drawn frame after which the next frame is a RESUME, not a hitch. */
     private static final long RESUME_GAP_TICKS = 20L;
 
+    // Fields of THIS renderer — one per slot world, built by that world's provider — so the memory
+    // lives and dies with the world whose sky it describes.
+
     // In-flight tallies for the frame being drawn right now; reset at render HEAD, read at TAIL.
-    private static int arTest$bodiesThisFrame;
-    private static int arTest$nebulaeThisFrame;
-    private static int arTest$boundariesThisFrame;
-    private static int arTest$labelsThisFrame;
+    @Unique
+    private int arTest$bodiesThisFrame;
+    @Unique
+    private int arTest$nebulaeThisFrame;
+    @Unique
+    private int arTest$boundariesThisFrame;
+    @Unique
+    private int arTest$labelsThisFrame;
 
     // The last tuple that was recorded, so a steady sky records nothing.
-    private static boolean arTest$everRecorded;
-    private static int arTest$lastDim;
-    private static int arTest$lastBodies;
-    private static int arTest$lastNebulae;
-    private static int arTest$lastBoundaries;
-    private static int arTest$lastLabels;
+    @Unique
+    private boolean arTest$everRecorded;
+    @Unique
+    private int arTest$lastDim;
+    @Unique
+    private int arTest$lastBodies;
+    @Unique
+    private int arTest$lastNebulae;
+    @Unique
+    private int arTest$lastBoundaries;
+    @Unique
+    private int arTest$lastLabels;
 
-    // When, and in which world, the renderer last reached TAIL — the resume edge.
-    //
-    // WEAK, and deliberately so: this is a static on a shared, long-lived harness client, and a
-    // strong reference here would pin the WorldClient of every scenario that ever drew a slot sky —
-    // with its chunk cache and every entity in it — until the next slot sky frame in some later
-    // scenario replaced it. A collected referent reads back as null, which compares unequal to the
-    // live world and so records a RESUME: exactly what "a world I am no longer holding" means.
-    private static java.lang.ref.WeakReference<WorldClient> arTest$lastWorld;
-    private static long arTest$lastFrameTime;
+    // When this renderer last reached TAIL, on its world's clock — the resume edge.
+    @Unique
+    private long arTest$lastFrameTime;
 
     @Inject(method = "render", at = @At("HEAD"))
     private void arTest$frameBegun(float partialTicks, WorldClient world, Minecraft mc,
@@ -157,14 +163,9 @@ public abstract class MixinBoundarySkyEvents {
         int dim = world.provider.getDimension();
         long now = world.getTotalWorldTime();
 
-        WorldClient lastWorld = arTest$lastWorld == null ? null : arTest$lastWorld.get();
-        boolean resumed = !arTest$everRecorded || world != lastWorld
+        boolean resumed = !arTest$everRecorded
                 || now - arTest$lastFrameTime > RESUME_GAP_TICKS
                 || now < arTest$lastFrameTime;
-        if (world != lastWorld) {
-            // Only on a change: a fresh WeakReference every frame would allocate on the render path.
-            arTest$lastWorld = new java.lang.ref.WeakReference<WorldClient>(world);
-        }
         arTest$lastFrameTime = now;
 
         boolean changed = !arTest$everRecorded || dim != arTest$lastDim

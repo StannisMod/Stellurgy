@@ -1,8 +1,6 @@
 package zmaster587.advancedRocketry.test.mixin;
 
 import java.util.HashMap;
-import java.util.Map;
-import java.util.WeakHashMap;
 
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -16,6 +14,7 @@ import zmaster587.advancedRocketry.api.EntityRocketBase;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereNeedsSuit;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereType;
 import zmaster587.advancedRocketry.entity.EntityElevatorCapsule;
+import zmaster587.advancedRocketry.test.trace.EntityTrace;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 
 /**
@@ -69,13 +68,8 @@ public abstract class MixinAtmosphereNeedsSuitEvents {
 
     private static final String INSTRUMENT = "suit_immunity_events";
 
-    // The last decision recorded per player, per atmosphere name. Weak on the player so a logout
-    // does not pin the entry; the inner map is a plain HashMap keyed by the atmosphere's
-    // unlocalized name (the singletons are never collected, so nothing to be weak about). A
-    // private static is permitted on a mixin (the refusal is for NON-private ones), and a static
-    // initialiser is merged — the neighbouring container gate carries the same shape.
-    private static final WeakHashMap<EntityPlayer, HashMap<String, Boolean>> LAST_DECISION =
-            new WeakHashMap<EntityPlayer, HashMap<String, Boolean>>();
+    // The last decision recorded, per atmosphere name, is held BY the player
+    // (EntityTrace.SuitDecisions) — created with the body and gone with it.
 
     @Inject(method = "isImmune", at = @At("RETURN"))
     private void arTest$decided(EntityLivingBase body, CallbackInfoReturnable<Boolean> cir) {
@@ -86,18 +80,13 @@ public abstract class MixinAtmosphereNeedsSuitEvents {
         EntityPlayer player = (EntityPlayer) body;
         boolean immune = cir.getReturnValueZ();
         String atmosphere = ((AtmosphereType) (Object) this).getUnlocalizedName();
-        synchronized (LAST_DECISION) {
-            HashMap<String, Boolean> byAtmosphere = LAST_DECISION.get(player);
-            if (byAtmosphere == null) {
-                byAtmosphere = new HashMap<String, Boolean>();
-                LAST_DECISION.put(player, byAtmosphere);
-            }
-            Boolean last = byAtmosphere.get(atmosphere);
-            if (last != null && last.booleanValue() == immune) {
-                return;
-            }
-            byAtmosphere.put(atmosphere, Boolean.valueOf(immune));
+        HashMap<String, Boolean> byAtmosphere = EntityTrace.memory(player,
+                EntityTrace.SuitDecisions.class, EntityTrace.SuitDecisions::new).byAtmosphere;
+        Boolean last = byAtmosphere.get(atmosphere);
+        if (last != null && last.booleanValue() == immune) {
+            return;
         }
+        byAtmosphere.put(atmosphere, Boolean.valueOf(immune));
         boolean creative = player.capabilities.isCreativeMode;
         boolean spectator = player.isSpectator();
         // The same NBT read production's early-out makes at the method's HEAD — read-only, and the

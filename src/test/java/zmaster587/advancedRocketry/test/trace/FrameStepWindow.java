@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.trace;
 
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -17,48 +18,34 @@ import java.util.Locale;
  * <p><b>Why an accumulator and not a record per frame.</b> This seam fires on every rendered frame.
  * The event log's ring is bounded per type, so a per-frame record would turn its own ring over in
  * seconds and a reader asking about a twenty-tick jump would be reading the tail of it — an argument
- * about a RATE, which no bound large enough to be affordable ever answers. A
- * render counter is not an event chain. What IS a record is the window's SUMMARY, written once at
- * {@link #close()} — one record, in the reader's own window, carrying every number the eight
- * production statics used to publish.</p>
+ * about a RATE, which no bound large enough to be affordable ever answers. What IS a record is the
+ * window's SUMMARY, written once at {@link #close(int)}.</p>
  *
- * <p><b>What it is, said plainly.</b> Mutable static state, per client JVM, shared by every scenario
- * in a shared-harness class — exactly what the production fields it replaces were. The difference is
- * that it is no longer in shipped code, and that a window must be OPENED: a reader that forgets
- * {@link #open()} gets whatever the previous scenario left, which is why close() records the frame
- * count beside the statistics and a zero there is a reading of its own.</p>
+ * <p><b>Whose it is.</b> An instance per window, created by the scenario that asks and registered
+ * with the client's {@link SideTrace}; the render seam feeds every open one. A scenario that did not
+ * open a window has no handle to close, so it cannot be handed another scenario's frames.</p>
  *
  * <p>Client thread only — the render hook is the only writer. Test source set: absent from a
  * released jar.</p>
  */
-public final class FrameStepWindow {
+public final class FrameStepWindow implements TraceWindow {
+
+    private long frames;
+    private long samePos;
+    private double absMax;
+    private double absSum;
+    private long absCount;
+    private double relMax;
+    private double relSum;
+    private long relCount;
+    private double lastX = Double.NaN, lastY = Double.NaN, lastZ = Double.NaN;
+    private double lastRelX = Double.NaN, lastRelY = Double.NaN, lastRelZ = Double.NaN;
 
     private FrameStepWindow() {}
 
-    private static long frames;
-    private static long samePos;
-    private static double absMax;
-    private static double absSum;
-    private static long absCount;
-    private static double relMax;
-    private static double relSum;
-    private static long relCount;
-    private static double lastX = Double.NaN, lastY = Double.NaN, lastZ = Double.NaN;
-    private static double lastRelX = Double.NaN, lastRelY = Double.NaN, lastRelZ = Double.NaN;
-
-    /** Start a window. Invoked from a test through the harness's static-invoke bridge. */
+    /** Start a window; answers its handle. Invoked from a test through the static-invoke bridge. */
     public static int open() {
-        frames = 0;
-        samePos = 0;
-        absMax = 0.0;
-        absSum = 0.0;
-        absCount = 0;
-        relMax = 0.0;
-        relSum = 0.0;
-        relCount = 0;
-        lastX = Double.NaN;
-        lastRelX = Double.NaN;
-        return 0;
+        return SideTrace.client().open(new FrameStepWindow());
     }
 
     /**
@@ -69,23 +56,31 @@ public final class FrameStepWindow {
      * that sampled nothing reports {@code -1} means and ratios, which is an absence rather than a
      * suspiciously smooth zero.</p>
      */
-    public static int close() {
-        double absMean = absCount > 0 ? absSum / absCount : -1.0;
-        double relMean = relCount > 0 ? relSum / relCount : -1.0;
+    public static int close(int handle) {
+        FrameStepWindow w = SideTrace.client().close(handle, FrameStepWindow.class);
+        double absMean = w.absCount > 0 ? w.absSum / w.absCount : -1.0;
+        double relMean = w.relCount > 0 ? w.relSum / w.relCount : -1.0;
         TestTrace.recordHere("frame_step_window", String.format(Locale.ROOT,
                 "\"frames\":%d,\"samePos\":%d,\"samePosPct\":%d"
                         + ",\"absMax\":%.5f,\"absMean\":%.5f,\"absCount\":%d,\"absRatio\":%.2f"
                         + ",\"relMax\":%.5f,\"relMean\":%.5f,\"relCount\":%d,\"relRatio\":%.2f",
-                frames, samePos, frames > 0 ? (100L * samePos / frames) : -1L,
-                absMax, absMean, absCount, absMean > 0 ? absMax / absMean : -1.0,
-                relMax, relMean, relCount, relMean > 0 ? relMax / relMean : -1.0));
-        return (int) frames;
+                w.frames, w.samePos, w.frames > 0 ? (100L * w.samePos / w.frames) : -1L,
+                w.absMax, absMean, w.absCount, absMean > 0 ? w.absMax / absMean : -1.0,
+                w.relMax, relMean, w.relCount, relMean > 0 ? w.relMax / relMean : -1.0));
+        return (int) w.frames;
     }
 
-    /** One aboard frame, from the render seam. {@code deckRef} is the deck reference this frame, or
-     *  null when no capture episode holds one — its absence breaks the relative chain rather than
-     *  silently continuing it from the last episode. */
+    /** One aboard frame, from the render seam, to every open window. {@code deckRef} is the deck
+     *  reference this frame, or null when no capture episode holds one — its absence breaks the
+     *  relative chain rather than silently continuing it from the last episode. */
     public static void sample(double x, double y, double z, double[] deckRef) {
+        List<FrameStepWindow> open = SideTrace.client().windows(FrameStepWindow.class);
+        for (int i = 0; i < open.size(); i++) {
+            open.get(i).add(x, y, z, deckRef);
+        }
+    }
+
+    private void add(double x, double y, double z, double[] deckRef) {
         frames++;
         if (x == lastX && y == lastY && z == lastZ) {
             samePos++;
