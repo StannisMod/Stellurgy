@@ -110,24 +110,21 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         // blocks (incl. the AFC tile entity) live in the slot world's far subspace shipyard; they enter
         // loadedTileEntityList only once VS loads the ship, so force-load + poll (async load).
         assertTrue("the settled ship never loaded in its slot", loadedShips(slotDim) >= 1);
-        String afc = null;
-        final String[] found = {null};
-        // The load pump is inside the condition on purpose: the lookup is only answerable while the
-        // ship is resident, which is about a tick after the pump.
-        GameTicks.until(client(), GameTicks.server(), FIND_AFC_TICKS, () -> {
-            exec("artest vs load-ships " + slotDim);
-            // By id: this scenario already knows which ship it flew up, and "the first settled ship
-            // in the slot" is a different question that happens to have the same answer today.
-            String r = exec("artest space find-afc " + slotDim + " " + shipId);
-            // absence is the answer: this is a WAIT for the ship to settle in the slot.
-            if (!Reply.of(r).boolOr("found", false)) {
-                return false;
-            }
-            found[0] = r;
-            return true;
-        });
-        afc = found[0];
-        assertTrue("could not locate the ship's flight computer in the slot", afc != null);
+        // NOT A WAIT, and it never was one — it RETRIED an operation, which is the shape ruled on
+        // when seventeen ship-load waits were deleted rather than converted: a wait exists because
+        // something is not true synchronously after an action, and here the action is the pump on
+        // the line above. The load is asked for once, and the lookup that follows is answerable
+        // because the ship is resident when it is asked — the reading directly above has already
+        // established that the slot holds a loaded ship.
+        //
+        // By id: this scenario knows which ship it flew up, and "the first settled ship in the slot"
+        // is a different question that happens to have the same answer today.
+        exec("artest vs load-ships " + slotDim);
+        String afc = exec("artest space find-afc " + slotDim + " " + shipId);
+        assertTrue("could not locate the ship's flight computer in the slot " + slotDim
+                        + " after its ships were load-queued; the slot reports "
+                        + loadedShips(slotDim) + " loaded ship(s): " + afc,
+                Reply.of(afc).boolOr("found", false));
         int ax = extractInt(afc, "x"), ay = extractInt(afc, "y"), az = extractInt(afc, "z");
 
         // Marked BEFORE the command whose effect is awaited.

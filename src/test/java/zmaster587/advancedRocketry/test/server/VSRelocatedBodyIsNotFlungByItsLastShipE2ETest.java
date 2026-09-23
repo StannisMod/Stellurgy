@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -136,19 +137,23 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
 
         // The subject: a plain item, dropped over the hull so it falls onto the deck. Only the server
         // tick moves it, so any displacement below has exactly one possible author.
+        // Marked before the drop: the association is formed on one of the ticks the item spends
+        // falling, and a mark taken after it would be waiting for the body to touch a second ship.
+        long touchMark = events.mark();
         String dropped = exec("artest vs drop-item 0 " + sx + " " + (sy + 6) + " " + sz);
         int subjectId = extractInt(dropped, "entityId");
         assertTrue("the subject item was not spawned: " + dropped, subjectId != Integer.MIN_VALUE);
 
         // CONTROL 1 — the subject must actually register the ship. A body that never touched it is
         // never dragged by it, and everything below would be a measurement of nothing.
-        final String[] touch = {""};
-        boolean armed = GameTicks.until(client(), GameTicks.server(), TOUCH_TICKS, () -> {
-            touch[0] = exec("artest vs player-ship-data 0 " + subjectId);
-            return extractString(touch[0], "lastTouchedShip") != null;
-        });
-        assertTrue("precondition: the subject never came to rest on the ship, so nothing could fling"
-                + " it; last reading=" + touch[0], armed);
+        //
+        // Linked on the tick that FORMS the association: `entity_touched_ship` is written from
+        // `Entity.move`'s return, where the substrate assigns `lastTouchedShip`, and is narrowed to
+        // this body. That matters more here than anywhere: this scenario's whole budget after the
+        // touch is the twenty ticks the association lives, and the poll it replaces spent probe
+        // calls — several ticks each — out of that same window just to find out it had started.
+        events.awaitField(touchMark, "entity_touched_ship", "entity", subjectId,
+                "the subject never came to rest on the ship, so nothing could fling it", TOUCH_TICKS);
 
         // The carry: the subject is put down far away through a position write, which is what a
         // teleport is. It does not route through move(), so the substrate never re-evaluates which
@@ -216,6 +221,10 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
 
     // --- helpers (mirror VSJumpingShipDoesNotFlingBystandersE2ETest) -------------------------------
 
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
@@ -255,9 +264,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
         return Reply.of(json).numberOr(key, 0.0);
     }
 
-    private static String extractString(String json, String key) {
-        // absence is the answer: the callers WAIT on this, and the fields they wait for —
-        // `lastTouchedShip` above all — are written as JSON null until the thing happens.
-        return Reply.of(json).textOr(key, null);
-    }
+    // The `extractString` reader that stood here is gone with the poll that needed it: nothing in
+    // this class asks a probe reply whether `lastTouchedShip` has become non-null any more, because
+    // the substrate's own association is a record now.
 }

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -75,10 +76,10 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     @Test
     public void aCrossingDoesNotLeaveAShipInTheWorldItLeft() throws Exception {
 
+        // This leg measures the ship OBJECT a crossing strands, which can only exist if the source
+        // is loaded when it is cut — which `buildShipAt` now establishes on the substrate's own
+        // records rather than on a positional poll.
         buildShipAt(LEG1_X);
-        assertTrue("this leg measures the ship OBJECT a crossing strands, which can only exist if the "
-                        + "source is loaded when it is cut - no loaded ship sits at " + LEG1_X + ","
-                        + BUILD_Y + ": " + counters(), waitUntilShipIsAt(LEG1_X, BUILD_Y));
 
         crossConserving(LEG1_X, BUILD_Y, LEG1_X + HOP, SKY_Y, "the crossing");
     }
@@ -88,8 +89,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     public void threeCrossingsDoNotAccumulateShips() throws Exception {
 
         buildShipAt(LEG2_X);
-        assertTrue("the source must be loaded when it is cut: " + counters(),
-                waitUntilShipIsAt(LEG2_X, BUILD_Y));
 
         int x = LEG2_X, y = BUILD_Y;
         for (int i = 1; i <= 3; i++) {
@@ -132,9 +131,9 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
             + " that hands it to a caller gives an answer that is about to stop being true.")
     public void theNearestShipLookupRefusesAHullWithNoBlocks() throws Exception {
 
+        // The ship must be loaded and findable before it is emptied, or this leg tests the lookup
+        // against nothing — established by `buildShipAt` on the substrate's own records.
         buildShipAt(LEG3_X);
-        assertTrue("the ship must be loaded and findable before it is emptied, or this leg tests the"
-                        + " lookup against nothing: " + counters(), waitUntilShipIsAt(LEG3_X, BUILD_Y));
 
         String looked = exec("artest vs empty-nearest-and-look 0 "
                 + LEG3_X + " " + BUILD_Y + " " + BASE_Z);
@@ -174,11 +173,14 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
         int loadedBefore = loadedShips();
         int registryBefore = queryableShips();
 
+        // Marked before the crossing: it CUTS the hull and pastes a new one, so the arrival is a
+        // fresh registry add — announced once, with the same durable name and a new physics id.
+        long crossMark = events.mark();
         String cross = repack(sx, sy, dx, dy);
         assertTrue(what + " itself failed, so this leg measures nothing: " + cross,
                 Reply.of(cross).ok());
-        assertTrue("the crossed ship never arrived at " + dx + "," + dy + "; " + what + "=" + cross
-                + " " + counters(), waitUntilShipIsAt(dx, dy));
+        requireLoadedShipAt(crossMark, dx, dy,
+                "the crossed ship never arrived at " + dx + "," + dy + "; " + what + "=" + cross);
 
         int loadedAfter = loadedShips();
         int registryAfter = queryableShips();
@@ -198,16 +200,17 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
 
     /** Build one tier-2 ship at {@code (baseX, BUILD_Y, BASE_Z)} and wait until VS has really created it. */
     private void buildShipAt(int baseX) throws Exception {
-        for (int i = 1; i <= 3; i++) {
-        }
-        int registryBefore = queryableShips();
+        // Marked before the assemble: the registry add is made inside it, and is announced once.
+        long buildMark = events.mark();
         String coords = placeFixture(FixtureSite.openAir(0, baseX, BASE_Z), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the ship never entered VS's registry at " + baseX + "," + BUILD_Y + "," + BASE_Z
-                        + ": " + counters(), registryExceeds(registryBefore));
         durableShipId = ShipIdentity.nameFromAssembly(asm);
+        // The registry-count comparison that stood here is gone with the positional poll below it:
+        // "the count went up" is a statement about the dimension, and the add itself names the craft.
+        requireLoadedShipAt(buildMark, baseX, BUILD_Y,
+                "the craft this leg builds must be a loaded ship before anything is crossed");
     }
 
     /**
@@ -254,22 +257,39 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     }
 
     /**
-     * Has the registry grown past {@code floor}? A READ, not a wait.
+     * Wait for THIS craft's hull to be registered and then LOADED, and assert WHERE it stands.
      *
-     * <p>The entry IS deferred — {@code queueShipSpawn} only adds to a spawn queue the world drains
-     * on its next tick — but nothing here can observe the pre-drain state: every probe command is
-     * drained on the server thread behind the task queue's own monitor, so two consecutive commands
-     * are separated by a complete pass. The poll this replaces could only ever spend its budget in
-     * runs where the answer was going to be no.</p>
+     * <p>Three steps, and the split is the point: the poll this replaces asked one positional
+     * question — "is a loaded ship at this pose yet" — and so could not tell a hull that was never
+     * registered from one registered and never loaded from one loaded in the wrong place. Each of
+     * those is a different defect and this class exists to tell crossings' defects apart.</p>
+     *
+     * <p>Both links are the substrate's own: {@code ship_spawned} is written from
+     * {@code QueryableShipData.addShip} and carries the durable AR id the hull was bound with, so
+     * the first wait names THIS craft; the physics id it also carries is what the second wait uses,
+     * so "the hull became loaded" is asked about the very hull the first wait found rather than
+     * about whatever else is in the dimension. Every crossing mints a NEW physics id, which is
+     * exactly why the durable name is the handle and the physics id is read out of the record.</p>
+     *
+     * <p>The pose is then an ASSERTION rather than a wait, because by this point production has
+     * said the ship is up: a hull that is loaded and standing somewhere else is a finding, not a
+     * reason to keep looking.</p>
      */
-    private boolean registryExceeds(int floor) throws Exception {
-        return queryableShips() > floor;
+    private void requireLoadedShipAt(long mark, int x, int y, String what) throws Exception {
+        String spawned = events.awaitRecordWithField(mark, "ship_spawned", "arShip", durableShipId,
+                what + " — no hull was ever registered for this craft", WAIT_TICKS);
+        String vsShip = Events.text(spawned, "vsShip");
+        events.awaitField(mark, "ship_loaded", "vsShip", vsShip,
+                what + " — hull " + vsShip + " reached the registry and never became a loaded ship",
+                WAIT_TICKS);
+        assertTrue(what + " — hull " + vsShip + " is loaded, but no loaded ship stands within "
+                        + POSE_TOLERANCE + " of " + x + "," + y + "," + BASE_Z + ": " + counters(),
+                shipIsAt(x, y));
     }
 
-    /** Poll until a loaded ship sits at {@code (x,y,BASE_Z)}. Bounded; deliberately pumps no load. */
-    private boolean waitUntilShipIsAt(int x, int y) throws Exception {
-        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> shipIsAt(x, y));
-    }
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     // --- helpers ------------------------------------------------------------------------------------
 

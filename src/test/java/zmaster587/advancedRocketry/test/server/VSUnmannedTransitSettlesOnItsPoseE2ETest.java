@@ -58,14 +58,21 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // A real craft — a deck, a flight computer, a pilot seat linked to it and a durable id. UNMANNED
         // is about who is ABOARD, not about what the hull is: a craft nobody can sit in could not be
         // flown manned either, so it cannot carry the contrast this test is named for.
+        // Marked before the fixture is built, because the registry add it is waited on below happens
+        // INSIDE that call: a mark taken after it would be waiting for a second ship.
+        long buildMark = events.mark();
         TransitSetup setup = TransitSetup.piloted(this::exec);
         int originDim = setup.originDim;
         int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
 
-        // The origin ship must be claimed by VS before the departure snapshots and cuts it. Asked through
-        // the queryable registry, so this waits for the ship to EXIST without making it loaded.
-        assertTrue("origin ship never registered in the pool-slot cell (dim " + originDim + ")",
-                waitForRegisteredShip(originDim));
+        // The origin ship must be claimed by VS before the departure snapshots and cuts it — and it
+        // is THIS craft, by its durable id, not "a ship appeared in that dim". The registry's own
+        // add is the record (`ship_spawned`, from the queryable registry's `addShip`), so this ends
+        // on the substrate claiming the hull rather than on a count that happened to be read after
+        // it did. Claiming does not make the ship loaded, which is what this leg needs.
+        events.awaitField(buildMark, "ship_spawned", "arShip", setup.durableId,
+                "the origin ship must be registered before the departure can snapshot and cut it",
+                REGISTER_TICKS);
 
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
@@ -132,16 +139,7 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         return envelope;
     }
 
-    /** Poll until VS's queryable registry holds a ship in {@code dim}; never forces a load. */
-    private boolean waitForRegisteredShip(int dim) throws Exception {
-        return GameTicks.until(client(), GameTicks.server(), REGISTER_TICKS,
-                () -> extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1);
-    }
-
-    private static int extractInt(String json, String key) {
-        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
-        // FIELD name, so it cannot know what a missing one means — and the callers here
-        // include waits, which read the shape that does not carry the field yet.
-        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
-    }
+    // The registry poll that stood here is gone, and its `extractInt` reader with it: `ship_spawned`
+    // is the registry's own add, and waiting on it names THIS craft instead of counting whatever is
+    // in a dimension.
 }

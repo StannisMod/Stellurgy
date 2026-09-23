@@ -357,22 +357,25 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 + "the body was never protected where it landed", destSlot, carriedSlot);
 
         // The release is on the crossing's own retry loop (it waits for the ship to be rebuilt in the
-        // destination), so the body can land a few ticks after the ledger has moved.
-        // WAITED ON IN FULL: found AND aboard. Waiting on "found" alone samples a moment rather than
-        // an outcome — the body is spawned during the arrival's own retry loop, and a reading taken on
-        // the tick it lands can catch the ship mid-settle and answer `aboard:false` about a body that
-        // is sitting exactly where it should be. Measured: the same scenario passes alone and fails in
-        // a full-class run at `x=-15984000`, which IS the arrival pose.
-        final String[] found = {""};
-        boolean carried = GameTicks.until(client(), GameTicks.world(carriedSlot), SETTLE_TICKS,
-                () -> {
-                    found[0] = exec("artest space loose-body-find " + bodyId + " "
-                            + carriedSlot + " " + dstVsId);
-                    // absence is the answer: this is a WAIT, and the reply it reads before the
-                    // thing happens does not carry the field at all.
-                    return Reply.of(found[0]).boolOr("found", false)
-                            && Reply.of(found[0]).boolOr("aboard", false);
-                });
+        // destination), so the body lands a few ticks after the ledger has moved — and the loop is
+        // exactly what the record makes visible: `aboard_bodies_released` is written at the return of
+        // the one method that puts a stowed body back into a world, on EVERY attempt, carrying how
+        // many it was holding and how many it placed. So this ends when the carry actually put
+        // something down in this slot, and a timeout prints the trail of `placed:0` attempts rather
+        // than an empty log.
+        //
+        // The poll it replaces asked a probe for `found AND aboard` once per step, and the two halves
+        // were unready at different moments for different reasons: the body is spawned during the
+        // arrival's own retry, and a reading taken on the tick it lands can catch the ship mid-settle
+        // and answer `aboard:false` about a body sitting exactly where it should be. Measured: the
+        // same scenario passed alone and failed in a full-class run at `x=-15984000`, which IS the
+        // arrival pose. Linking on the release removes the race from the WAIT; the two readings below
+        // are then an assertion about an outcome rather than a sample.
+        awaitCargoReleased(carryMark, carriedSlot);
+        String found = exec("artest space loose-body-find " + bodyId + " "
+                + carriedSlot + " " + dstVsId);
+        boolean carried = Reply.of(found).boolOr("found", false)
+                && Reply.of(found).boolOr("aboard", false);
         // The two failure modes are separated on the way out, because they mean different things: a
         // body that never arrived is a crossing that dropped its cargo; a body that arrived and is not
         // aboard is a crossing that put it down beside the deck.
@@ -387,18 +390,18 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         String stash = exec("artest space cargo-stash");
         assertTrue("the ship crossed the seam and left its cargo behind: the body was aboard in slot "
                         + arranged.sourceSlot + " and never appeared in the neighbour's slot "
-                        + carriedSlot + "; last find=" + found[0]
+                        + carriedSlot + "; last find=" + found
                         + " | in the SOURCE slot it is now: " + leftBehind
                         + " | the carry is still holding: " + stash
                         + " (found in the source = never stowed; held in the stash = stowed and"
                         + " never released; neither = lost outright)",
-                carried || Reply.of(found[0]).bool("found"));
+                carried || Reply.of(found).bool("found"));
         // The SHIP's pose is read again HERE, beside the body's, because "not aboard" has two very
         // different causes and one number cannot separate them: the body was put down away from the
         // deck, or the deck moved after it was put down. The two positions side by side say which.
         assertTrue("the body arrived in the right world but never came to rest ON the ship — "
                         + "production's own aboard predicate still refuses it after "
-                        + SETTLE_TICKS + " ticks. body=" + found[0]
+                        + SETTLE_TICKS + " ticks. body=" + found
                         + " ship-now=" + arrivedShip(carriedSlot, arranged.arShipId)
                         + " ship-at-arrival=" + arrived.raw(),
                 carried);
@@ -510,17 +513,15 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         String dstVsId = arrived.id;
         assertTrue("the arrived ship reported no VS id: " + arrived.raw(), dstVsId != null);
 
-        final String[] found = {""};
-        boolean landedAboard = GameTicks.until(client(), GameTicks.world(carriedSlot), SETTLE_TICKS,
-                () -> {
-                    found[0] = exec("artest space loose-body-find " + bodyId + " "
-                            + carriedSlot + " " + dstVsId);
-                    // absence is the answer: this is a WAIT, and the reply it reads before the
-                    // thing happens does not carry the field at all.
-                    return Reply.of(found[0]).boolOr("found", false)
-                            && Reply.of(found[0]).boolOr("aboard", false);
-                });
-        assertTrue("the cargo never came to rest on the arrived ship: " + found[0]
+        // Linked on the carry's own release, exactly as the first scenario is: the wait ends when
+        // production has put a body down in this slot, and the two readings that follow are then an
+        // assertion about that outcome instead of a sample that might have been taken mid-settle.
+        awaitCargoReleased(carryMark, carriedSlot);
+        String found = exec("artest space loose-body-find " + bodyId + " "
+                + carriedSlot + " " + dstVsId);
+        boolean landedAboard = Reply.of(found).boolOr("found", false)
+                && Reply.of(found).boolOr("aboard", false);
+        assertTrue("the cargo never came to rest on the arrived ship: " + found
                 + " ship=" + arrivedShip(carriedSlot, arranged.arShipId), landedAboard);
 
         // GET UNDER WAY, on the far side, with a COMMANDED speed.
@@ -623,6 +624,9 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 Reply.of(exec("artest vs teleport-ship-by-id 0 " + srcVsId + " "
                         + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz)
                         ).ok());
+        // Marked BEFORE the unpark: the unpark is what lets the craft climb, and both the entry
+        // decision and the settle below are announced once each.
+        long overLineMark = events.mark();
         exec("artest vs unpark-by-id 0 " + srcVsId);
 
         // THE CLIMB IS ASSERTED, not assumed — the same rule the move past the face already follows
@@ -633,24 +637,24 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // broken on-ramp, which it was not. The on-ramp was never asked, because its one altitude
         // condition was never met; the trigger was right and the arrangement was wrong.
         //
-        // The wait ends on EITHER reading, because both mean the craft got here: the gate agreeing it
-        // would fire, or the computer no longer being in this world at all — entry cuts the tile out,
-        // so a craft that crossed while this loop was between polls answers `afcResolved:false`, and
-        // treating that as a timeout would fail the fastest possible success.
+        // THE OVER-THE-LINE POLL IS GONE, AND NOTHING REPLACED IT, because the settle link at the
+        // end of this method already establishes what it established: a craft that reaches SETTLED
+        // was above the line. What the poll bought was an EARLIER and more specific failure, and
+        // that is now bought by the settle link's own failure message, which carries the gate trace
+        // its stimulus collects plus the computer records below.
+        //
+        // IT WAS FIRST REPLACED BY A LINK ON `entry_decided`, AND THAT WAS WRONG — MEASURED, not
+        // argued, on the gate of 2026-09-22, where all three legs of this class failed with the
+        // entry demonstrably complete (`ledger_settled` and `ship_left_planet` both inside the
+        // window) and no `entry_decided` in it. The reasoning behind that link was that the on-ramp
+        // has one caller, so a decision must exist for any craft that enters; the reasoning holds
+        // and the WINDOW did not. The decision is taken on the first AFC tick that finds the craft
+        // above the ceiling, and this arrangement teleports it there two lines BEFORE the unpark the
+        // mark follows — so the record can precede any mark placed here. A link whose record is
+        // written before the only mark you can take is not a link.
+        //
+        // The gate's own readings, collected by the settle link's stimulus below.
         final StringBuilder gateTrace = new StringBuilder();
-        boolean overTheLine = GameTicks.until(client(), GameTicks.server(), ABOVE_THE_LINE_TICKS,
-                () -> {
-                    String gate = entryGate(srcVsId);
-                    gateTrace.append(gateDigest(gate)).append(' ');
-                    // absence is the answer: this WAITS for the craft to climb over the entry
-                    // line, and the gate answers `afcResolved:false` with no decision in it
-                    // until the flight computer resolves.
-                    return Reply.of(gate).boolOr("wouldTrigger", false)
-                            || (!Reply.of(gate).boolOr("afcResolved", false));
-                });
-        assertTrue("the climb teleport reported ok and the craft is STILL not above the entry line, "
-                        + "so nothing below is about the on-ramp — it is about a craft that never "
-                        + "got there. Gate readings, oldest first: " + gateTrace, overTheLine);
 
         // AND THE COMPUTER IS RUNNING. The on-ramp has exactly one caller — this craft's own flight
         // computer, inside its own tick — so every input being right proves nothing until the
@@ -687,61 +691,37 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                                             + "position has no durable computer at all and each read "
                                             + "is making a fresh one, so the zero census says nothing "
                                             + "about the on-ramp")
-                            + ". The "
-                            + "entry on-ramp runs inside that tick and nowhere else, so the wait "
-                            + "below cannot exercise it and its timeout would name the on-ramp for "
-                            + "a mechanism that was never asked. Gate: " + entryGate(srcVsId)
-                            + " | earlier readings: " + gateTrace
+                            + ". The entry on-ramp runs inside that tick and nowhere else, so the "
+                            + "wait below cannot exercise it and its timeout would name the on-ramp "
+                            + "for a mechanism that was never asked. Gate: " + entryGate(srcVsId)
                             // Every deserialization of a flight computer since this scenario began.
                             // A tile that is read from NBT again and again is one whose chunk keeps
                             // being unloaded and re-loaded — which is a computer that cannot tick
-                            // however loaded it looks to a probe that just loaded it. Recorded on
-                            // the game's own thread, so unlike the gate's own fields this is not
-                            // describing what the reading did.
+                            // however loaded it looks to a probe that just loaded it.
                             + " | flight computers deserialized since: "
                             + events.since(claimMark, "station_keeping_restored")
-                            // Which computer OBJECTS have been ticked at all, and which were thrown
-                            // away. Read against the gate's own `afcIdentity`: the same number means
-                            // the probe is holding the object that runs, a different one means it is
-                            // holding a replacement, and no record at all means nothing here ran.
-                            // FROM THE START OF THE BOOT, not from this scenario's mark. Every
+                            // FROM THE START OF THE BOOT, not from this scenario's mark: every
                             // computer that ran at all did so before this scenario began, so a
                             // window-scoped read of this type is empty whether the seam works or
-                            // not — and an instrument that cannot be seen to fire is one whose
-                            // silence proves nothing. The sibling scenarios' records are this
-                            // reading's own control.
+                            // not. The sibling scenarios' records are this reading's own control.
                             + " | every computer ever ticked this boot: "
                             + events.since(0L, "afc_first_tick")
                             + " | invalidations: " + events.since(claimMark, "afc_invalidated")
                             // What the TICK LOOP itself is iterating, read from inside its own pass
-                            // and therefore the one reading here that the act of reading cannot have
-                            // produced. A computer missing from these records is missing from the
-                            // list, whatever a probe that just resolved it reports.
+                            // and therefore the one reading here that the act of reading cannot
+                            // have produced.
                             + " | computers in the tick loop: "
                             + events.since(claimMark, "flight_computers_in_tick_loop"),
                     censusBefore.equals(censusAfter));
         }
 
-        // Waited on BY ID: the ledger is asked about this craft, not about how many ships it holds.
-        final LedgerEntry[] status = new LedgerEntry[1];
-        final int[] polls = {0};
-        boolean settled = GameTicks.until(client(), GameTicks.server(), SETTLE_TICKS,
-                () -> {
-                    status[0] = ledger(arShipId);
-                    return status[0].stateIs("SETTLED");
-                },
-                () -> {
-                    loadAllEntrySlots(setup);
-                    // ONE READING IN TEN, so a failure carries the craft's TRAJECTORY and its
-                    // computer's tick census over the whole wait rather than one last sample. A
-                    // single reading taken at the end cannot tell a craft that never got up there
-                    // from one that got up there, was not looked at, and came back down — and those
-                    // are opposite findings.
-                    if (polls[0]++ % 10 == 0) {
-                        gateTrace.append(gateDigest(entryGate(srcVsId))).append(' ');
-                    }
-                });
-        // THE CLAIM SEQUENCE BELONGS IN THIS MESSAGE, and this is the one assertion in this class
+        // Linked on the record production publishes AT the settle — `ship_left_planet`, posted on
+        // the line after `ledger.settle` — and narrowed to this craft's durable id, which is what
+        // the poll's `ledger(arShipId)` was reaching for through a snapshot. The ledger row is then
+        // READ once, because the row is what the rest of this method needs (its cell, its slot) and
+        // reading it after the announcement is reading a settled state rather than racing one.
+        //
+        // THE CLAIM SEQUENCE BELONGS IN THE FAILURE, and this is the one assertion in this class
         // that has failed for a reason outside itself. Measured 2026-09-12: a THIRD on-ramp scenario
         // added here made whichever ran last fail HERE, 3/3, while passing alone on the same commit —
         // accumulation across methods sharing one server, not a broken entry path. The declared
@@ -749,24 +729,36 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // should arrive carrying what the pool DID: a pool does not run out because it is full, it
         // runs out because every loaded cell is still CLAIMED, and those want different fixes.
         // Records, not a snapshot — a snapshot cannot say who took a claim and never gave it back.
-        if (!settled) {
-            // ASK THE GATE ITSELF. The claim dump below says what the scenario BOUND; it cannot say
-            // why the on-ramp was never reached, and the first measurement of this failure found no
-            // entry decision at all — so the question is no longer "which resource ran out" but
-            // "which of the trigger's four inputs is not what it is on the scenarios that pass".
-            // `space entry-gate` reads exactly those, off the computer's own owners (the ceiling
-            // from entryCeiling(), the pose from the same VS call the trigger makes), plus what the
-            // controller last decided and for which ship — so "never asked" is distinguishable from
-            // "asked and refused" in the same reply.
-            fail("the ship never reached space through the entry path; last ledger="
-                    + (status[0] == null ? "never read" : status[0].raw())
+        //
+        // The gate trace is kept and is now taken by the STIMULUS, one reading in ten steps, so a
+        // failure still carries the craft's trajectory over the whole wait rather than one last
+        // sample: a craft that never got up there and one that got up there, was not looked at and
+        // came back down are opposite findings.
+        final int[] steps = {0};
+        try {
+            WorldCommandFixtures.awaitEnteredSpace(events, overLineMark, arShipId,
+                    "the ship never reached space through the entry path", SETTLE_TICKS,
+                    () -> {
+                        loadAllEntrySlots(setup);
+                        if (steps[0]++ % 10 == 0) {
+                            gateTrace.append(gateDigest(entryGate(srcVsId))).append(' ');
+                        }
+                    });
+        } catch (AssertionError neverSettled) {
+            // ASK THE GATE ITSELF. The claim dump says what the scenario BOUND; it cannot say why
+            // the on-ramp did not finish, so "never asked" and "asked and refused" are told apart
+            // by the gate's own reply, off the computer's own owners.
+            throw new AssertionError(neverSettled.getMessage()
+                    + " || last ledger=" + ledger(arShipId).raw()
                     + " | entry gate: " + entryGate(srcVsId)
                     + " | gate trace, oldest first: " + gateTrace
                     + " | cell claims since this scenario began: " + claimsSince(claimMark));
         }
-        String sourceCell = status[0].cellKey();
-        assertTrue("settled ship has no bound slot: " + status[0].raw(), status[0].slotBound);
-        int sourceSlot = status[0].slotDim();
+        LedgerEntry status = ledger(arShipId)
+                .requireFound("the entry was announced, so the ledger must hold this craft's row");
+        String sourceCell = status.cellKey();
+        assertTrue("settled ship has no bound slot: " + status.raw(), status.slotBound);
+        int sourceSlot = status.slotDim();
         assertTrue("the settled ship's cell world is not live", loadedShips(sourceSlot) >= 1);
 
         // LET GO OF THE STICK. The climb held full up to get past the entry ceiling, and the flight
@@ -1035,6 +1027,26 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // FIELD name, so it cannot know what a missing one means — and the callers here
         // include waits, which read the shape that does not carry the field yet.
         return (long) Reply.of(json).numberOr(key, Long.MIN_VALUE);
+    }
+
+    /**
+     * Wait for the carry to PUT ITS CARGO DOWN in {@code dim}, on the record the release writes.
+     *
+     * <p>{@code AboardBodies.release} is the one place a stowed body re-enters a world, and it is a
+     * retry: both crossing paths ask again each tick until the arriving hull is rebuilt enough to
+     * map a point on it, answering {@code 0} until then. {@code aboard_bodies_released} is written
+     * on every attempt with what it was holding and what it placed, so this ends on an attempt that
+     * placed something, and a timeout prints the trail of {@code placed:0} instead of an empty log.</p>
+     *
+     * <p>The mark is the caller's and is the one taken before the carry command.</p>
+     */
+    private void awaitCargoReleased(long mark, int dim) throws Exception {
+        events.awaitMatching(mark, "aboard_bodies_released",
+                reply -> Events.recordsWhere(reply, "dim", String.valueOf(dim)).stream()
+                        .anyMatch(record -> Events.number(record, "placed") >= 1),
+                "placing at least one body in dim " + dim,
+                "the carry never put this ship's cargo down in the slot it arrived in",
+                SETTLE_TICKS);
     }
 
     private static int extractInt(String json, String key) {

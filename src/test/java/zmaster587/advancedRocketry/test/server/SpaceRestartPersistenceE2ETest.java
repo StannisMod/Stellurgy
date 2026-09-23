@@ -14,6 +14,7 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -89,6 +90,18 @@ public class SpaceRestartPersistenceE2ETest {
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", harness.client().execute(cmd));
+    }
+
+    /**
+     * This boot's reader of the server's ordered event log.
+     *
+     * <p>Built per call rather than held in a field: this class starts and stops its own servers —
+     * that is its subject — and a reader captured on one boot would be addressing a process that has
+     * exited.</p>
+     */
+    private Events events() {
+        return new Events(this::exec,
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
     }
 
     // THERE IS NO `assumeProductionSubsystemAvailable()` ANY MORE — six scenarios opened with it and
@@ -339,29 +352,32 @@ public class SpaceRestartPersistenceE2ETest {
         assertTrue("the ship must be recorded in the production ledger: " + settled,
                 Reply.of(settled).ok());
 
+        // Marked before the arming: the fire is announced once and the fault does not exist yet.
+        long faultMark = events().mark();
         String armed = exec("artest space save-fault-once");
         assertTrue("the fault must actually be armed, or nothing below is exercising a failed save: "
                 + armed, Reply.of(armed).bool("armed"));
         assertTrue("and the subsystem must agree it is armed: " + SubsystemStatus.read(this::exec).raw(),
                 SubsystemStatus.read(this::exec).saveFaultArmed);
 
-        // Wait for the world autosave to walk into the fault. Every poll is itself a liveness check:
-        // on an unguarded handler the server is gone by now and exec() reports the dead process.
-        SubsystemStatus live;
-        // An autosave is scheduled on the SERVER's tick counter (every 900 ticks), so waiting for
-        // one is waiting for ticks - and the fork multiplier this budget carried was compensating for
-        // a busy box delivering fewer of them per second, which is exactly what a tick budget removes.
-        final SubsystemStatus[] seen = {null};
-        boolean fired = GameTicks.until(harness.client(), GameTicks.server(), AUTOSAVE_WAIT_TICKS,
-                () -> {
-                    seen[0] = SubsystemStatus.read(this::exec);
-                    return !seen[0].saveFaultArmed;
-                });
-        live = seen[0];
-        assertTrue("no autosave reached the armed fault within "
-                + AUTOSAVE_WAIT_TICKS + " ticks, so this run never exercised a failing save at all "
-                + "and its green would be worth nothing: "
-                + (live == null ? "the status was never read" : live.raw()), fired);
+        // Wait for the world autosave to walk into the fault, on the record written from inside the
+        // throw's own branch. An autosave is scheduled on the SERVER's tick counter (every 900
+        // ticks), so waiting for one is waiting for ticks — the fork multiplier this budget once
+        // carried was compensating for a busy box delivering fewer per second, which is what a tick
+        // budget removes.
+        //
+        // The poll it replaces read the ARMED FLAG, which is level-triggered on an edge: the flag is
+        // false before the arming and false after the firing, so a reading only means anything
+        // relative to the arming that preceded it, and nothing in the reading says which side of it
+        // the reader is on. The record says the fault FIRED.
+        events().await(faultMark, "save_fault_fired",
+                "no autosave reached the armed fault within " + AUTOSAVE_WAIT_TICKS + " ticks, so"
+                        + " this run never exercised a failing save at all and its green would be"
+                        + " worth nothing", AUTOSAVE_WAIT_TICKS);
+
+        // Read AFTER the fault fired, and it is a liveness check as much as a reading: on an
+        // unguarded handler the server is gone by now and exec() reports the dead process.
+        SubsystemStatus live = SubsystemStatus.read(this::exec);
 
         // It fired, from the server tick, and the server is still answering.
         assertTrue("the server must still be running after a save point failed — a failed save costs a "

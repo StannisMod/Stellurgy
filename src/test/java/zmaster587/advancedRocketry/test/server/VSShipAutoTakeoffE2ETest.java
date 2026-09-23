@@ -15,6 +15,7 @@ import org.junit.Test;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitEnteredSpace;
 
@@ -83,20 +84,23 @@ public class VSShipAutoTakeoffE2ETest extends AbstractSharedServerTest {
                 ).ok());
         // No manual FF input: the autopilot alone drives (its branch requires in == null). entry-setup
         // cleared any stale static input channel.
+        // Marked before the engage, because the refusal below is announced once, on the first AFC
+        // tick that raycasts the blocked corridor — which can be the tick the engage itself lands on.
+        long declineMark = events.mark();
         String engaged = exec("artest space auto-takeoff 0 id " + shipId);
         assertTrue("auto-takeoff did not engage: " + engaged, Reply.of(engaged).bool("engaged"));
 
-        // The raycast runs on the AFC's OWN tick, so this is a wait for that tick to happen a few
-        // times - which is a number of ticks, not a number of seconds.
-        final String[] status = {""};
-        boolean declined = GameTicks.until(client(), GameTicks.server(), DECLINE_TICKS, () -> {
-            status[0] = exec("artest space auto-takeoff 0 id " + shipId + " status");
-            // absence is the answer: this WAITS for the corridor to be declined, and a status
-            // taken before auto-takeoff has anything to say carries no `engaged`.
-            return (!Reply.of(status[0]).boolOr("engaged", false));
-        });
-        assertTrue("auto-takeoff did not decline a blocked corridor (still engaged): " + status[0],
-                declined);
+        // Linked on the autopilot's own refusal, narrowed to THIS craft's ship id. The raycast runs
+        // on the AFC's own tick, and `auto_takeoff_declined` is written from the RETURN of the
+        // method that clears the engaged latch — so the wait ends on the decision rather than on a
+        // status read that happened to be taken after it. The poll it replaces asked for `engaged`
+        // and treated its ABSENCE as a decline, so a status the autopilot had nothing to say about
+        // yet was indistinguishable from a corridor it had refused.
+        events.awaitField(declineMark, "auto_takeoff_declined", "ship", shipId,
+                "auto-takeoff must decline a blocked corridor", DECLINE_TICKS);
+        String status = exec("artest space auto-takeoff 0 id " + shipId + " status");
+        assertFalse("the autopilot announced a decline, so it must no longer be engaged: " + status,
+                Reply.of(status).boolOr("engaged", false));
 
         // ---- CLIMB + ENTER leg: clear the slab, hop the ship just below the ceiling, engage, enter. ----
         assertTrue("slab clear failed", Reply.of(exec("artest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)

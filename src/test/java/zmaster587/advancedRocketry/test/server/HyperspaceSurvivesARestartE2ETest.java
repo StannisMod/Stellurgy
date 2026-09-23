@@ -10,6 +10,8 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.ArrangementFailure;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.TransitStatus;
@@ -141,10 +143,42 @@ public class HyperspaceSurvivesARestartE2ETest {
         return Reply.of(json).boolOr(key, false);
     }
 
-    /** Poll for the ship the fixture assembles in its origin cell (VS assembly is asynchronous). */
-    private boolean waitForShipIn(int dim) throws Exception {
-        return GameTicks.until(harness.client(), GameTicks.server(), REGISTER_TICKS,
-                () -> readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1);
+    /**
+     * This boot's reader of the server's ordered event log.
+     *
+     * <p>Built per call rather than held in a field: {@code harness} is a different JVM on either
+     * side of the restart this class exists to measure, and a reader captured on boot 1 would be
+     * addressing a server that has stopped.</p>
+     */
+    private Events events() {
+        return new Events(this::exec,
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+    }
+
+    /**
+     * Wait for the substrate's registry to take THIS craft, and raise an arrangement failure if it
+     * never does.
+     *
+     * <p>{@code ship_spawned} is written from the registry's own {@code addShip} and carries the
+     * durable AR id the hull was bound with, so the wait ends on the add itself and names the craft
+     * the fixture just built. The count it replaces ({@code vs ship-count-all >= 1}) could not say
+     * WHICH ship it had found — a dimension holding somebody else's hull satisfied it — and needed
+     * a budget to say how long it would keep asking.</p>
+     *
+     * <p>The mark is the caller's and must precede {@link TransitSetup#piloted}: the registry add
+     * happens inside that call, so a mark taken after it would be waiting for a second ship.</p>
+     */
+    private void requireRegistered(long mark, TransitSetup setup, int dim) throws Exception {
+        try {
+            events().awaitField(mark, "ship_spawned", "arShip", setup.durableId,
+                    "the fixture ship never entered the registry in the origin cell (dim "
+                            + dim + ")", REGISTER_TICKS);
+        } catch (AssertionError neverBuilt) {
+            // The TYPE is what carries the distinction into the gate's XML: nothing has been
+            // measured yet at this line, so this is a fixture that did not come up rather than a
+            // product that is broken.
+            ArrangementFailure.arrangementFailed(neverBuilt.getMessage());
+        }
     }
 
     @Test
@@ -152,9 +186,12 @@ public class HyperspaceSurvivesARestartE2ETest {
         // ── boot 1: put a real ship into hyperspace and shut the server down under it ────────────
         harness = RealDedicatedServerHarness.startWith(root, false);
 
-        int originDim = TransitSetup.piloted(this::exec).originDim;
-        requireArranged("the fixture ship never assembled in the origin cell (dim "
-                + originDim + ")", waitForShipIn(originDim));
+        // Marked before the fixture is built: the registry add awaited below happens INSIDE
+        // `piloted`, so a mark taken after it would be waiting for a second ship.
+        long buildMark = events().mark();
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
+        requireRegistered(buildMark, setup, originDim);
 
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the departure crossing must put the ship into hyperspace: " + begin,

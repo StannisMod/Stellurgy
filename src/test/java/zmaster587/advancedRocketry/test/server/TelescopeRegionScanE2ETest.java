@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.NavStatus;
 import zmaster587.advancedRocketry.test.Reply;
@@ -48,6 +49,10 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
 
     private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4300;
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     private String exec(String command) throws Exception {
         return join(client().execute(command));
@@ -122,17 +127,31 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         systemAt(home[0] + steps * stride(x) + 13L, home[1], home[2]);
     }
 
-    /** Poll the machine until its survey is finished. Bounded in the ticks a survey advances on. */
-    private TelescopeReading awaitSurveyComplete(int x) throws Exception {
-        final TelescopeReading[] info = new TelescopeReading[1];
-        boolean finished = GameTicks.until(client(), GameTicks.server(), SURVEY_TICKS, () -> {
-            info[0] = scope(x);
-            return !info[0].scanning;
-        });
-        if (!finished) {
-            throw new AssertionError("the survey never finished: " + info[0].raw());
-        }
-        return info[0];
+    /**
+     * Wait for the machine's survey to finish, on the record the machine writes when it does.
+     *
+     * <p>{@code region_scan_advanced} is written from {@code completeRegionScanIfDue}'s RETURN
+     * whenever the scan or its discovery count changed, and carries {@code complete} — true on the
+     * step that cleared the active scan. So the wait ends on the machine SAYING it finished, not on
+     * a reading taken from outside that happened to catch {@code scanning} false. The mark is the
+     * caller's, taken before the survey is started.</p>
+     */
+    private TelescopeReading awaitSurveyComplete(long mark, int x) throws Exception {
+        events.awaitRecordWithFields(mark, "region_scan_advanced",
+                "the survey must finish", SURVEY_TICKS,
+                "pos", posKey(x), "complete", "true");
+        return scope(x);
+    }
+
+    /**
+     * How this observatory names itself in a record — the same {@code x,y,z} the mixin writes.
+     *
+     * <p>Derived from the coordinates the test PLACED it at rather than read back, so a record
+     * naming a different machine cannot satisfy a wait meant for this one. {@link #where} is the
+     * same triple with its dimension in front.</p>
+     */
+    private String posKey(int x) {
+        return x + "," + CY + "," + CZ;
     }
 
     @Test
@@ -142,10 +161,11 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         long[] home = observatoryWithCrystal(x);
         systemNearTheLookAt(x, home, 4);
 
+        long scanMark = events.mark();
         TelescopeReading.of(exec("artest telescope scan " + where(x) + " 1 0 0 4"))
                 .requireOk("the survey did not start");
 
-        TelescopeReading done = awaitSurveyComplete(x);
+        TelescopeReading done = awaitSurveyComplete(scanMark, x);
         assertTrue("the crystal learned nothing from a region holding a system: " + done.raw(),
                 done.addressesOnCrystal() >= 1);
         assertTrue("and the machine must report what it discovered: " + done.raw(),
@@ -170,21 +190,33 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         assertEquals("a fresh survey has resolved nothing yet", 0, started.cellsDone());
 
         long total = started.cells();
-        final long[] seen = {0};
-        GameTicks.until(client(), GameTicks.server(), SWEEP_TICKS, () -> {
-            TelescopeReading info = scope(x);
-            if (!info.scanning) {
-                seen[0] = total;
-                return true;
-            }
-            long done = info.cellsDone();
-            assertTrue("a sweep must never go backwards: " + done + " after " + seen[0],
-                    done >= seen[0]);
-            seen[0] = done;
-            return seen[0] >= total;
-        });
-        assertTrue("the sweep never advanced through its region (" + seen[0] + "/" + total + ")",
-                seen[0] >= total);
+        long sweepMark = events.mark();
+        awaitSurveyComplete(sweepMark, x);
+
+        // THE MONOTONICITY IS READ OFF EVERY STEP, not off the samples a poll happened to take.
+        // The machine writes `region_scan_advanced` each time its scan or discovery count moves, so
+        // the window below holds the whole sweep; the loop this replaces compared consecutive READS
+        // and could step over a backwards move between two of them entirely.
+        java.util.List<String> steps = events.recordsWhere(events.since(sweepMark,
+                "region_scan_advanced"), "pos", posKey(x));
+        assertTrue("the sweep produced no progress records at all, so nothing below is a reading of"
+                + " it", !steps.isEmpty());
+        long previous = 0L;
+        long furthest = 0L;
+        for (String step : steps) {
+            long done = (long) Events.number(step, "cellsDone");
+            assertTrue("a sweep must never go backwards: " + done + " after " + previous
+                    + " in " + step, done >= previous);
+            previous = done;
+            furthest = Math.max(furthest, done);
+        }
+        assertTrue("the sweep never advanced through its region (" + furthest + "/" + total
+                + ") across " + steps.size() + " recorded steps", furthest >= total);
+        // AND IT WALKED, rather than resolving the whole region in one pass — which is the sentence
+        // this test is named for and the one the count above cannot make: a survey that resolved all
+        // twelve cells at once would reach the same total, in a single record.
+        assertTrue("the survey resolved its region in one pass instead of sweeping it: "
+                + steps.size() + " progress record(s) for " + total + " cells", steps.size() > 1);
     }
 
     @Test
@@ -234,6 +266,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         surveySetup(false, 4, 120);
         long[] home = observatoryWithCrystal(x);
 
+        long radarMark = events.mark();
         TelescopeReading passive = TelescopeReading.of(exec("artest telescope passive " + where(x)))
                 .requireOk("the local radar did not start");
         assertTrue("the local radar is a mode of the machine, not a survey of somewhere else: "
@@ -253,7 +286,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         // An observatory stands on a PLANET, never on its own star. Under the gate this test was
         // written against, the cell it is standing in reported empty and the machine could not name
         // the system it was sitting in.
-        TelescopeReading done = awaitSurveyComplete(x);
+        TelescopeReading done = awaitSurveyComplete(radarMark, x);
         assertTrue("the radar must resolve the system the observatory is standing in: " + done.raw(),
                 done.addressesOnCrystal() >= 1);
     }
@@ -319,8 +352,9 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         long[] home = observatoryWithCrystal(x);
         systemNearTheLookAt(x, home, 3);
 
+        long handoverMark = events.mark();
         exec("artest telescope scan " + where(x) + " 1 0 0 3");
-        TelescopeReading surveyed = awaitSurveyComplete(x);
+        TelescopeReading surveyed = awaitSurveyComplete(handoverMark, x);
         assertTrue("the survey must have written something to hand over: " + surveyed.raw(),
                 surveyed.addressesOnCrystal() >= 1);
 

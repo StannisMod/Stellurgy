@@ -7,6 +7,7 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.nio.charset.StandardCharsets;
@@ -88,6 +89,10 @@ public class AdvancementsTriggerTest {
         if (harness != null) harness.close();
     }
 
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", harness.client().execute(cmd));
     }
@@ -122,14 +127,22 @@ public class AdvancementsTriggerTest {
         assertEquals("baseline: WENT_TO_THE_MOON must not be granted yet",
                 false, isDone(exec("artest player advancement " + ADV_WENT)));
 
+        // Marked BEFORE the ticks that can grant it: the grant is announced once, and a mark taken
+        // after it would be waiting for a second one that will never come.
+        long grantMark = events.mark();
         // Δy=15 from (2347,80,67) -> distSq=225 < 512 ✓. 60 ticks ≥ 3 windows.
         assertTrue(Reply.of(exec("artest player tick-living 60")).ok());
-        // Poll off-thread — the server free-runs while the test JVM sleeps.
-        // The trigger fires from a per-tick check, so the budget is that check's world.
-        boolean done = GameTicks.until(harness.client(), GameTicks.server(), GRANT_TICKS,
-                () -> isDone(exec("artest player advancement " + ADV_WENT)));
-        assertEquals("standing near (2347,80,67) on Luna must grant WENT_TO_THE_MOON",
-                true, done);
+
+        // Linked on the grant Forge publishes. Vanilla posts AdvancementEvent from
+        // PlayerAdvancements.grantCriterion inside `if (!flag1 && progress.isDone())` — once, on
+        // the tick it becomes done — so this ends on the moment the advancement was EARNED. The
+        // poll it replaces asked "is it done yet" one reading at a time, which answers about
+        // whenever it happened to look and needs a budget to say how long it is willing to keep
+        // looking.
+        events.awaitField(grantMark, "advancement_granted", "id", ADV_WENT,
+                "standing near (2347,80,67) on Luna must grant WENT_TO_THE_MOON", GRANT_TICKS);
+        assertEquals("the advancement was announced as granted, so the player's own record must"
+                        + " agree", true, isDone(exec("artest player advancement " + ADV_WENT)));
     }
 
     /** Name gate: an AR dim NOT named "Luna" never fires, same coords. */

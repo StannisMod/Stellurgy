@@ -556,6 +556,59 @@ public final class TestEventLog {
         }
 
         /**
+         * An advancement was GRANTED to a player — the completion edge, not a step towards it.
+         *
+         * <p>Vanilla posts this from {@code PlayerAdvancements.grantCriterion} inside
+         * {@code if (!flag1 && advancementprogress.isDone())}, so it fires once, on the tick the
+         * advancement becomes done, and never for a criterion that merely advanced the progress.
+         * That is exactly what a test asking "was it granted" wants, and it is why this is a
+         * subscription rather than a mixin: Forge already publishes it for a non-test audience.</p>
+         *
+         * <p>Records the advancement's registry id and the player's name. Silent about WHY it was
+         * granted — which criterion completed it is not on the event.</p>
+         */
+        @SubscribeEvent
+        public void onAdvancementGranted(
+                net.minecraftforge.event.entity.player.AdvancementEvent event) {
+            noteInstrumentEntered("server_bus_advancement_granted");
+            EntityPlayer who = event.getEntityPlayer();
+            net.minecraft.advancements.Advancement advancement = event.getAdvancement();
+            if (who == null || who.world == null || who.world.isRemote || advancement == null) {
+                return;
+            }
+            record("server", who.world.getTotalWorldTime(), "advancement_granted",
+                    "\"id\":\"" + str(String.valueOf(advancement.getId())) + "\""
+                            + ",\"who\":\"" + str(who.getName()) + "\""
+                            + ",\"dim\":" + who.world.provider.getDimension());
+        }
+
+        /**
+         * A world was UNLOADED by Forge's own sweep.
+         *
+         * <p>{@code WorldEvent.Unload} is posted from {@code DimensionManager.unloadWorlds} after
+         * the world has been saved and removed from the map, so by the time a reader sees this
+         * record the world is gone — which is the claim a test about unloading is making. A poll on
+         * "is the slot still loaded" asks the same question one sample at a time and can only ever
+         * answer about the moment it happened to look.</p>
+         *
+         * <p>Server side only: an integrated client unloads its own copy on its own clock and would
+         * double every record.</p>
+         */
+        @SubscribeEvent
+        public void onWorldUnloaded(net.minecraftforge.event.world.WorldEvent.Unload event) {
+            noteInstrumentEntered("server_bus_world_unloaded");
+            World world = event.getWorld();
+            if (world == null || world.isRemote) {
+                return;
+            }
+            // The world's own clock is read BEFORE anything else here: it is being torn down, and a
+            // provider dereferenced a moment later is not guaranteed to answer.
+            long tick = world.getTotalWorldTime();
+            record("server", tick, "world_unloaded",
+                    "\"dim\":" + world.provider.getDimension());
+        }
+
+        /**
          * A ship became USABLE — its physics will be stepped from now on.
          *
          * <p>Production's own event, subscribed to like any other consumer would rather than

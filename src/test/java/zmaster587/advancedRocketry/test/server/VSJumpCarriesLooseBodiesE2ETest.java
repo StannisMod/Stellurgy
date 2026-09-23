@@ -100,35 +100,37 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
         assertTrue("the arrival was announced but names no dimension: " + arrivedRecord,
                 targetDim >= 0);
 
-        // Still a POLL, and legitimately: the placement retries until the body is put down, which is
-        // a converging state and not an event -- nothing announces it. What is gone is the pump that
-        // used to sit INSIDE this predicate: a condition is asked and must change nothing, and the
-        // arrival it was driving is advanced by the server anyway.
+        // NOT a converging state after all, and the comment that stood here said it was. The
+        // placement IS announced: `AboardBodies.release` is the one place a stowed body re-enters a
+        // world, and `aboard_bodies_released` is written at its return — on every attempt, so the
+        // retries it makes while the arriving hull is still being rebuilt are visible too. The wait
+        // ends on an attempt that actually PLACED something in this dimension.
         //
-        // The cell's ship count NAMES what it counted, so the arrived hull is identified rather than
-        // approached; the count is still read on every iteration, because the ship is still arriving
-        // and "how many are in there" is precisely what changes while the loop runs.
-        final String[] arrived = {""};
-        boolean carried = GameTicks.until(client(), GameTicks.server(), PLACEMENT_TICKS, () -> {
-            String counted = exec("artest vs ship-count " + targetDim);
-            String[] named = Reply.of("artest vs ship-count", counted).textArray("ships");
-            if (extractInt(counted, "count") != 1 || named.length != 1) {
-                return false; // not arrived yet, or not alone — either way not a nameable answer
-            }
-            arrived[0] = exec("artest vs ship-info " + targetDim + " id " + named[0]);
-            if (!ShipInfo.isLoaded(arrived[0])) {
-                return false; // the craft is not in this world yet — keep waiting, do not read a pose
-            }
-            ShipInfo ship = ShipInfo.of(arrived[0]);
-            double px = ship.x;
-            double py = ship.y;
-            double pz = ship.z;
-            return extractInt(exec("artest space loose-body-count " + targetDim + " " + px + " "
-                    + py + " " + pz + " " + ABOARD_RADIUS), "count") >= 1;
-        });
+        // The poll it replaces read four things per step — a count, a name, a pose and a body census
+        // around that pose — and any of them being momentarily unready simply meant "not yet", so a
+        // carry that placed its cargo and a carry that never did produced the same expiry.
+        events.awaitMatching(transitMark, "aboard_bodies_released",
+                reply -> Events.recordsWhere(reply, "dim", String.valueOf(targetDim)).stream()
+                        .anyMatch(record -> Events.number(record, "placed") >= 1),
+                "placing at least one body in dim " + targetDim,
+                "the carry never put its cargo down in the arrival dimension", PLACEMENT_TICKS);
+
+        // The identity and the pose are READ once, after production has said the bodies are down —
+        // the same readings the poll took, now taken at a moment that means something.
+        String counted = exec("artest vs ship-count " + targetDim);
+        String[] named = Reply.of("artest vs ship-count", counted).textArray("ships");
+        assertEquals("the arrival dimension must hold exactly this jump's hull: " + counted,
+                1, named.length);
+        String arrivedInfo = exec("artest vs ship-info " + targetDim + " id " + named[0]);
+        assertTrue("the substrate announced the cargo down, so the hull it was placed on must be"
+                + " resolvable here: " + arrivedInfo, ShipInfo.isLoaded(arrivedInfo));
+        ShipInfo ship = ShipInfo.of(arrivedInfo);
+        String census = exec("artest space loose-body-count " + targetDim + " " + ship.x + " "
+                + ship.y + " " + ship.z + " " + ABOARD_RADIUS);
 
         assertTrue("a body lying on the deck must arrive WITH the ship — the crew is not the only "
-                + "thing aboard a jump. Ship report at the destination: " + arrived[0], carried);
+                + "thing aboard a jump. Ship report at the destination: " + arrivedInfo
+                + " body census: " + census, extractInt(census, "count") >= 1);
 
         // ...and it is not still lying in the cell it left, which is the failure this replaces: a body
         // left behind is also "somewhere", and only asking both ends tells the two apart.

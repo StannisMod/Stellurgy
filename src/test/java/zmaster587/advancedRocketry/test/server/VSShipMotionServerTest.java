@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
@@ -56,6 +57,10 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
     private static final double COMMANDED_VZ = 10.0;
     private static final int DRIVE_TICKS = 25;
 
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
@@ -75,6 +80,13 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
         // Assemble the tier-2 ship — with VS this routes to a ship (no rocket) and
         // queues an async VS relocation.
+        // MARKED BEFORE THE ASSEMBLE, not before the force-load below, and the difference is the
+        // whole conversion. `ship_loaded` is written once, from the physics object's constructor —
+        // and this server holds its ships loaded, so the hull may well become loaded during the
+        // assemble itself, before anything asks for it. A mark taken at the force-load would then
+        // open a window the record had already passed through, and the wait would expire on a ship
+        // that had been loaded for seconds.
+        long loadMark = events.mark();
         String assemble = assembleFixture(SITE, VARIANT);
         assertTrue("with VS, the AFC build must route to a ship (no rocket): " + assemble,
                 (Reply.of(assemble).integer("rocketCount") == 0));
@@ -114,25 +126,17 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
         //    about the lookup, and the build site is in a world every server-tier class shares.
         final String[] shipId = {ShipIdentity.physicsIdOf(this::exec, 0,
                 ShipIdentity.nameFromAssembly(assemble))};
-        double zBefore = Double.NaN;
-        final StringBuilder loadTrace = new StringBuilder();
-        final double[] z = {Double.NaN};
-        GameTicks.until(client(), GameTicks.server(), LOAD_TICKS, () -> {
-            int loaded = shipCount("ship-count");
-            loadTrace.append(loaded).append(' ');
-            if (loaded < 1) {
-                return false;
-            }
-            String info = exec("artest vs ship-info 0 id " + shipId[0]);
-            if (!ShipInfo.isLoaded(info)) {
-                return false;
-            }
-            z[0] = ShipInfo.of(info).z;
-            return !Double.isNaN(z[0]);
-        });
-        zBefore = z[0];
-        assertTrue("ship must become loaded after force-load — loaded over time: ["
-                        + loadTrace.toString().trim() + "], all=" + all,
+        // Linked on the physics object's own load, which is what "the ship became loaded" MEANS:
+        // `ship_loaded` is written from the PhysicsObject constructor and carries the substrate's
+        // id, so this names THIS hull rather than counting how many are loaded in the dimension.
+        // The poll it replaces read a count, then a pose, then checked the pose was a number — three
+        // readings that had to agree, taken at whatever moments the loop happened to take them.
+        events.awaitField(loadMark, "ship_loaded", "vsShip", shipId[0],
+                "the ship must become loaded after the force-load", LOAD_TICKS);
+        String loadedInfo = exec("artest vs ship-info 0 id " + shipId[0]);
+        double zBefore = ShipInfo.of(loadedInfo).z;
+        assertTrue("the substrate announced this hull loaded, so it must have a pose to report: "
+                        + loadedInfo + ", all=" + all,
                 !Double.isNaN(zBefore));
 
         // CONTROL, and the reason this class was rewritten: a raw velocity SETPOINT does not move a

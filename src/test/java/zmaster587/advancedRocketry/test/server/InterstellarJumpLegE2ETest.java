@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
@@ -131,9 +132,12 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 Reply.of(held).bool("afcResolved"));
         assertTrue("climb teleport failed", Reply.of(exec("artest vs teleport-ship-by-id 0 " + shipId + " "
                 + sx + " " + ABOVE_CEILING_Y + " " + sz)).ok());
+        // Marked BEFORE the unpark, because the unpark is what starts the entry and the settle is
+        // announced once.
+        long entryMark = events.mark();
         exec("artest vs unpark-by-id 0 " + shipId);
 
-        EntryStatus status = waitForState("SETTLED", null, setup, SETTLE_TICKS, durableId);
+        EntryStatus status = awaitEntered(entryMark, setup, SETTLE_TICKS, durableId);
         assertTrue("precondition: the ship never entered space, so there is nothing to jump; last="
                 + status.raw(), status.settled());
         int slotDim = status.slotDim;
@@ -185,6 +189,9 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
      */
     private long flyTo(long tsx, String tsy, String tsz, int slotDim, String fromCell,
                        String setup, String label, String durableId) throws Exception {
+        // Marked before the jump command: the arrival is announced once, and a mark taken after the
+        // command has already been given is a window the record can have passed through.
+        long jumpMark = events.mark();
         String jump = exec("artest space jump id " + durableId + " "
                 + tsx + " " + tsy + " " + tsz + " " + slotDim + " " + FLIGHT_SPEED);
         assertTrue("[" + label + "] the jump probe found no settled ship to move: " + jump,
@@ -197,14 +204,18 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
                 + " nothing: " + fromCell + " -> " + targetCell, !targetCell.equals(fromCell));
 
         long departed = clock();
-        EntryStatus arrived = waitForState("SETTLED", targetCell, setup, ARRIVAL_TICKS, durableId);
-        long elapsed = clock() - departed;
-        if (!targetCell.equals(arrived.cellKey)) {
-            System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after " + elapsed
-                    + " ticks; last=" + arrived.raw()
+        try {
+            awaitArrival(jumpMark, targetCell, setup, ARRIVAL_TICKS, durableId);
+        } catch (AssertionError neverArrived) {
+            // A leg that does not arrive is REPORTED, not failed here: which of the two legs is
+            // silent is the finding, and only this method's caller knows which one it asked for.
+            System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after "
+                    + (clock() - departed) + " ticks; " + neverArrived.getMessage()
+                    + " ledger=" + EntryStatus.forShip(this::exec, durableId).raw()
                     + " subsystem=" + SubsystemStatus.read(this::exec).raw());
             return -1L;
         }
+        long elapsed = clock() - departed;
         assertEquals("[" + label + "] nothing may still be in transit once the ledger reports arrival",
                 0, SubsystemStatus.read(this::exec).transits);
         return elapsed;
@@ -217,22 +228,51 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     }
 
     /**
-     * Poll THIS ship's ledger row until it reports {@code state} (and {@code cell}, when given).
-     * Keyed on the durable id: the bare {@code entry-status} answers with whichever row the ledger
-     * iterates first, so on a stack holding two craft the wait can be satisfied by a ship that never
-     * left, and the leg's measured duration would then be somebody else's.
+     * Wait for THIS craft to finish ENTERING space, then read its ledger row.
+     *
+     * <p>One of the two questions the single {@code waitForState} poll used to serve, and they are
+     * different questions with different records — which is why it had to be split before either
+     * could be linked. This one ends on {@code ship_left_planet}, published on the line after
+     * {@code ledger.settle}, so the record and the row the poll read are the same moment rather
+     * than two things that usually agree.</p>
+     *
+     * <p>The mark is the caller's and precedes the unpark that starts the entry.</p>
      */
-    private EntryStatus waitForState(String state, String cell, String setup, int budgetTicks,
-                                     String durableId) throws Exception {
-        final EntryStatus[] status = new EntryStatus[1];
-        GameTicks.until(client(), GameTicks.server(), budgetTicks,
-                () -> {
-                    status[0] = EntryStatus.forShip(this::exec, durableId);
-                    return state.equals(status[0].state)
-                            && (cell == null || cell.equals(status[0].cellKey));
-                },
+    private EntryStatus awaitEntered(long mark, String setup, int budgetTicks, String durableId)
+            throws Exception {
+        WorldCommandFixtures.awaitEnteredSpace(events, mark, durableId,
+                "the ship must finish entering space", budgetTicks,
                 () -> loadAllEntrySlots(setup));
-        return status[0];
+        return EntryStatus.forShip(this::exec, durableId);
+    }
+
+    /**
+     * Wait for THIS craft's jump to ARRIVE at {@code cell}, then read its ledger row.
+     *
+     * <p>The crossing's own {@code ship_transit_ended} carries both the craft and the destination
+     * cell, so the wait is narrowed by both: a transit that ended somewhere else is not this jump
+     * arriving, and — because one record has to carry both fields — two craft cannot satisfy the two
+     * halves between them. The poll it replaces asked the ledger the same two things, but as a
+     * SNAPSHOT: a row that reached the target and was written over by the next leg between two reads
+     * was invisible to it.</p>
+     *
+     * <p><b>What this does to the leg's measured duration, said out loud because a measurement is
+     * what the caller does with it</b>: nothing to its definition. The duration is still the space
+     * clock read before the jump subtracted from the space clock read after this returns, and this
+     * returns on the same 5-tick read granularity the poll had. What changes is only what ends the
+     * wait — production announcing the arrival instead of a reading catching the row afterwards.</p>
+     *
+     * <p>Throws when nothing arrives; the caller decides what a silence MEANS, because the hop's
+     * silence and the far leg's silence are different findings and only the caller knows which leg
+     * it is flying.</p>
+     */
+    private String awaitArrival(long mark, String cell, String setup, int budgetTicks,
+                                String durableId) throws Exception {
+        return events.awaitMatching(mark, "ship_transit_ended",
+                reply -> Events.anyRecordHasAll(reply, "ship", durableId, "destination", cell),
+                "carrying ship = " + durableId + " and destination = " + cell,
+                "the jump must arrive at the cell it was aimed at", budgetTicks,
+                () -> loadAllEntrySlots(setup));
     }
 
     @After
@@ -241,6 +281,10 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
     }
 
     // --- helpers (mirror VSShipEntryE2ETest) --------------------------------------------------------
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));

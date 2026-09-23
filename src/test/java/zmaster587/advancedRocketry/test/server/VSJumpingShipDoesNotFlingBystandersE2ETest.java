@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -115,22 +116,30 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
 
         // The subject: a plain item, dropped over the hull so it falls onto the deck. Only the server
         // tick moves it, so any displacement below has exactly one possible author.
+        // Marked before the drop: the association is formed on one of the ticks the item spends
+        // falling, and a mark taken after it would be waiting for the body to touch a second ship.
+        long touchMark = events.mark();
         String dropped = exec("artest vs drop-item 0 " + sx + " " + (sy + 6) + " " + sz);
         int subjectId = extractInt(dropped, "entityId");
         assertTrue("the subject item was not spawned: " + dropped, subjectId != Integer.MIN_VALUE);
 
         // CONTROL 1 — the subject must actually register the ship. A body that never touched it is
         // never dragged by it, and everything below would be a measurement of nothing.
-        final String[] touch = {""};
-        boolean armed = GameTicks.until(client(), GameTicks.server(), TOUCH_TICKS, () -> {
-            touch[0] = exec("artest vs player-ship-data 0 " + subjectId);
-            return extractString(touch[0], "lastTouchedShip") != null;
-        });
-        assertTrue("precondition: the subject never came to rest on the ship, so nothing could fling"
-                + " it; last reading=" + touch[0], armed);
+        //
+        // Linked on the tick that FORMS the association: `entity_touched_ship` is written from
+        // `Entity.move`'s return, where the substrate assigns `lastTouchedShip`, and is narrowed to
+        // this body. The poll it replaces cost a probe call per read out of a twenty-tick
+        // association window — the same window the experiment below needs — so a run that spent
+        // several of them looking could reach its hazard after the substrate had let the body go.
+        events.awaitField(touchMark, "entity_touched_ship", "entity", subjectId,
+                "the subject never came to rest on the ship, so nothing could fling it", TOUCH_TICKS);
 
-        double beforeX = extractDouble(touch[0], "playerX");
-        double beforeZ = extractDouble(touch[0], "playerZ");
+        // The reference position is still READ, not taken from the record: it is where the body
+        // stands once it is aboard, which is what the drift below is measured against, and it is
+        // the same reading the assertion at the hazard makes.
+        String touch = exec("artest vs player-ship-data 0 " + subjectId);
+        double beforeX = extractDouble(touch, "playerX");
+        double beforeZ = extractDouble(touch, "playerZ");
 
         // Keep the ground out of the way: a subject that lands clears its own ship association and
         // would leave the window before the measurement is taken.
@@ -202,6 +211,10 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
 
     // --- helpers (mirror VSShipDescentE2ETest) ------------------------------------------------------
 
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
@@ -246,9 +259,7 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
         return Reply.of(json).numberOr(key, 0.0);
     }
 
-    private static String extractString(String json, String key) {
-        // absence is the answer: the callers WAIT on this, and the fields they wait for —
-        // `lastTouchedShip` above all — are written as JSON null until the thing happens.
-        return Reply.of(json).textOr(key, null);
-    }
+    // The `extractString` reader that stood here is gone with the poll that needed it: nothing in
+    // this class asks a probe reply whether `lastTouchedShip` has become non-null any more, because
+    // the substrate's own association is a record now.
 }

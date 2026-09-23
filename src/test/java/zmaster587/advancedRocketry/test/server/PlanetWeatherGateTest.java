@@ -7,6 +7,7 @@ import org.junit.Assume;
 import org.junit.Before;
 import zmaster587.advancedRocketry.test.DimList;
 import zmaster587.advancedRocketry.test.DimWeather;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 
 import org.junit.Test;
@@ -151,12 +152,26 @@ public class PlanetWeatherGateTest {
      * version that advanced first would be ticking a world nobody had constructed.</p>
      */
     private DimWeather weatherUntilRaining(int dim) throws Exception {
-        final DimWeather[] last = {weather(dim)};
-        GameTicks.until(harness.client(), GameTicks.server(), SETTLE_BUDGET_TICKS, () -> {
-            last[0] = weather(dim);
-            return last[0].raining;
-        });
-        return last[0];
+        // MARKED BEFORE THE CONSTRUCTING READ, which is what makes the mark safe here: the world
+        // does not exist until that read pins it, so no weather change for this dimension can have
+        // been announced before this line, and the wait below cannot open a window the record has
+        // already passed through.
+        long mark = events().mark();
+        DimWeather first = weather(dim);
+        if (first.raining) {
+            return first; // it is already raining; there is no transition left to wait for
+        }
+        // Linked on the cycle's own tick: `planet_weather_changed` is written from
+        // `WorldProviderPlanet.updateWeather`'s return, on the transition and once per dimension.
+        // The poll it replaces asked the probe for the state every few ticks — a reading of a LEVEL
+        // where the subject is an EDGE, so it could tell neither when the rain began nor, on the
+        // dimension that never rains, whether the cycle had run at all.
+        events().awaitMatching(mark, "planet_weather_changed",
+                reply -> Events.recordsWhereAll(reply,
+                        "dim", String.valueOf(dim), "raining", "true").size() > 0,
+                "carrying dim = " + dim + " and raining = true",
+                "a thick-atmosphere planet with rainMarker=1 must reach rain", SETTLE_BUDGET_TICKS);
+        return weather(dim);
     }
 
     /**
@@ -181,5 +196,11 @@ public class PlanetWeatherGateTest {
     private DimWeather weather(int dim) throws Exception {
         return DimWeather.forDim(cmd -> String.join("\n", harness.client().execute(cmd)), dim)
                 .requireDim(dim);
+    }
+
+    /** This boot's reader of the server's ordered event log — the harness is this class's own. */
+    private Events events() {
+        return new Events(cmd -> String.join("\n", harness.client().execute(cmd)),
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
     }
 }

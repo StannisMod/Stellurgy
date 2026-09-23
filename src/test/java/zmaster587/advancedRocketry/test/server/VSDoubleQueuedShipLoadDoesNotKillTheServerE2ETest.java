@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.RocketFixture;
@@ -11,6 +12,7 @@ import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.Test;
 
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -76,12 +78,30 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
         ShipReadiness.letShipsUnload(this::exec,
                 "the ship has to UNLOAD before anything can ask for it twice");
 
+        // Marked BEFORE the build, because the unload this scenario needs happens INSIDE it —
+        // measured on the gate of 2026-09-22, where a mark taken afterwards saw no `ship_unloaded`
+        // for 200 ticks while the counters already read `loaded=0 registry=1`. The hull is loaded on
+        // the assemble and lets go again a tick or two later, and there is no second unload to wait
+        // for.
+        long unloadMark = events.mark();
         buildShip();
 
         // The enabling condition: registered, with nothing loaded behind it. Without it the immediate
         // load and the background pass cannot both want this ship, and the test measures nothing.
-        assertTrue("the ship never unloaded, so nothing here could ask for it twice: " + counters(),
-                waitUntilNoShipIsAt(BASE_X, BUILD_Y));
+        //
+        // TWO STATEMENTS, because "it happened" is not "it holds" and this arrangement needs the
+        // second. The LINK is the substrate's own `unload()`, named by THIS hull's physics id — the
+        // poll it replaces asked "no loaded ship stands at this position any more", which a hull
+        // that MOVED satisfies exactly as readily as one that unloaded. The READ is the standing
+        // fact, and it is what keeps the early mark honest: `awaitField` asks whether the window
+        // CONTAINS the record, so an unload from the middle of a load/unload/load sequence inside
+        // the build would satisfy the link alone — and the read then says the hull is loaded now and
+        // fails, instead of letting the scenario proceed with its premise false.
+        events.awaitField(unloadMark, "ship_unloaded", "vsShip", shipId,
+                "the ship never unloaded, so nothing here could ask for it twice: " + counters(),
+                WAIT_TICKS);
+        assertEquals("the ship unloaded and was loaded again, so it is NOT the unloaded-source"
+                + " arrangement this scenario needs: " + counters(), 0, loadedShips());
         assertTrue("the ship left the registry as well as the loaded set, so there is nothing to load: "
                 + counters(), queryableShips() >= 1);
 
@@ -109,14 +129,29 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
     // --- arrangement --------------------------------------------------------------------------------
 
     private void buildShip() throws Exception {
-        int registryBefore = queryableShips();
+        // Marked before the assemble: the registry add is made inside it and is announced once.
+        long buildMark = events.mark();
         String coords = placeFixture(FixtureSite.openAir(0, BASE_X, BASE_Z), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the ship never entered the registry: " + counters(),
-                registryExceeds(registryBefore));
+        // The registry's own add, naming THIS craft. The count comparison it replaces was a
+        // statement about the dimension and could be satisfied by any other scenario's hull.
+        events.awaitField(buildMark, "ship_spawned", "arShip",
+                ShipIdentity.nameFromAssembly(asm),
+                "the ship never entered the registry: " + counters(), WAIT_TICKS);
+        // Taken while the craft is still loaded: the durable->physics bridge repairs its index by
+        // reading flight computers, which force-loads the ship it is asked about — resolving the id
+        // after the unload would undo the very arrangement it is needed for.
+        shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
     }
+
+    /** This hull's physics id, captured while it is loaded and used to await its unload. */
+    private String shipId;
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     // --- observation --------------------------------------------------------------------------------
 
@@ -132,34 +167,10 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
         return "[loaded=" + loadedShips() + " registry=" + queryableShips() + "]";
     }
 
-    /**
-     * Is any loaded ship's own pose at {@code (x,y,BASE_Z)}? Asked of EVERY loaded ship in turn: the
-     * nearest-ship lookup this replaced answered with one craft however far away it was, so the pose
-     * filter that followed only ever tested the one the lookup happened to choose.
-     */
-    private boolean shipIsAt(int x, int y) throws Exception {
-        return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
-    }
+    // The pose lookup, the registry-count read and the positional unload poll that stood here are all
+    // gone together: this class never cared WHERE the hull was, only that it had been registered and
+    // then unloaded, and both of those are records the substrate writes about the hull by name.
 
-    /**
-     * Has the registry grown past {@code floor}? A READ, not a wait.
-     *
-     * <p>The entry IS deferred — {@code queueShipSpawn} only adds to a spawn queue the world drains
-     * on its next tick — but nothing here can observe the pre-drain state: every probe command is
-     * drained on the server thread behind the task queue's own monitor, so two consecutive commands
-     * are separated by a complete pass. The poll this replaces could only ever spend its budget in
-     * runs where the answer was going to be no.</p>
-     */
-    private boolean registryExceeds(int floor) throws Exception {
-        return queryableShips() > floor;
-    }
-
-    /** Poll until no loaded ship sits at {@code (x,y,BASE_Z)}, deliberately without pumping any load. */
-    private boolean waitUntilNoShipIsAt(int x, int y) throws Exception {
-        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> !shipIsAt(x, y));
-    }
-
-    /** Poll until the loaded set holds a ship. Permanent loading is already on, so nothing is re-pumped. */
     /**
      * Is a ship loaded here? A READ. {@code spawnNewShips()} and {@code loadAndUnloadShips()} run in
      * the SAME {@code tick()} invocation, so a freshly assembled craft is registered and loaded on

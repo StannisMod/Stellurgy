@@ -11,6 +11,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.api.FreeFlightInput;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
@@ -261,6 +262,37 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
     }
 
     /** This OBJECT, as distinct from the position it sits at — two tiles can share the second. */
+    /**
+     * The autopilot REFUSED a climb: the corridor overhead is blocked, so it disengaged and handed
+     * the ship back to manual.
+     *
+     * <p>This is a surfaced decline — a normal outcome the pilot is told about — and it is the one
+     * decision of the autopilot's that nothing else here can see. {@code unmanned_hold_decided} is
+     * about a computer with nobody flying it, and the {@code afc_*} pair is lifecycle; a blocked
+     * corridor changes neither, which is why the test waiting for it had nothing to link on and
+     * polled {@code auto-takeoff … status} for {@code engaged} going false instead.</p>
+     *
+     * <p>The seam is {@code driveAutoTakeoff}'s own RETURN, and the verdict is the return value
+     * rather than a re-derivation: it answers {@code false} on exactly the path that clears
+     * {@code autoTakeoffEngaged} and messages the seated pilot. A method RETURN cannot go stale in
+     * silence the way the {@code INVOKE} anchor above it can, so this shares the safe instrument
+     * name.</p>
+     *
+     * <p>EDGE-ONLY in practice without needing a flag: the decline clears the engaged latch, and
+     * {@code update} only calls this method while it is set, so a blocked corridor produces one
+     * record and not one per tick. SILENT about the climb itself (a cleared corridor returns true
+     * and says nothing) and about a disengage by any other route.</p>
+     */
+    @Inject(method = "driveAutoTakeoff", at = @At("RETURN"))
+    private void arTest$autoTakeoffDecided(CallbackInfoReturnable<Boolean> cir) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        if (Boolean.TRUE.equals(cir.getReturnValue())) {
+            return; // a corridor that was clear is the climb, and the climb has its own records
+        }
+        TestTrace.recordHere("auto_takeoff_declined", arTest$posAndShip()
+                + ",\"stationKeeping\":" + stationKeeping);
+    }
+
     @Unique
     private String arTest$identity() {
         return ",\"identity\":" + System.identityHashCode(this);

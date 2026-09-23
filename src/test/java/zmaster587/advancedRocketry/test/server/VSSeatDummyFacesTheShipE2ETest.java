@@ -54,9 +54,14 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     private static final double TURN_QW = 0.70711, TURN_QY = 0.70711;
 
     /**
-     * Budgets in SERVER TICKS, neither fork-scaled: 200 is the ten seconds the old 40 x 250 ms meant
-     * on an idle box, for a slew that runs on the attitude controller's own tick and for a ship
-     * becoming loadable.
+     * The OBSERVATION WINDOW the ship is given to turn, in SERVER TICKS and not fork-scaled — and it
+     * is spent in full, because what it measures is a converging value rather than an event.
+     *
+     * <p>Its size is the ten seconds the old {@code 40 x 250 ms} meant on an idle box, and it is in
+     * ticks for the reason the whole sweep is: the slew advances by a fixed amount per tick of the
+     * attitude controller, so a window measured in that controller's own clock turns the ship the
+     * same distance on any machine, while one measured in seconds covers fewer of its ticks on a
+     * busy box and turns it less.</p>
      */
     private static final int SLEW_TICKS = 200;
 
@@ -99,13 +104,17 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
                 Reply.of(exec("artest vs point-by-id 0 " + shipId
                         + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded"));
 
-        // The slew runs on the attitude controller's tick, so the budget is that controller's world.
-        final double[] yaw = {shipYawBefore};
-        GameTicks.until(client(), GameTicks.server(), SLEW_TICKS, () -> {
-            yaw[0] = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
-            return Math.abs(wrapDegrees(yaw[0] - shipYawBefore)) > 45.0;
-        });
-        double shipYawAfter = yaw[0];
+        // A WINDOW, NOT A WAIT, and the difference is what this line is for. A yaw slewing round is a
+        // converging VALUE — nothing announces it and there is no edge to link on — so the shape it
+        // owes is two reads with a stretch of the subject's own clock between them, and an assertion
+        // that names both. The poll it replaces asked the same question the assertion below asks
+        // (`> 45 degrees`) and exited the moment it was satisfied, which makes the budget a disguised
+        // claim about how fast the box is: a slow one expires and reds, a fast one leaves early and
+        // the assertion is a formality. The slew is driven by the attitude controller's own tick at a
+        // fixed rate per tick, so a fixed stretch of that controller's world turns the ship the same
+        // amount on every machine, and the window is spent on purpose.
+        GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);
+        double shipYawAfter = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
 
         // The gate: unless the SHIP really turned, "the mount agrees with the ship" is a comparison
         // of two zeroes and would be green on a build where nothing writes the mount at all.

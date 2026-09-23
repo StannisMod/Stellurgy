@@ -88,8 +88,26 @@ public abstract class MixinTileObservatoryEvents {
             return;
         }
         TileObservatory self = (TileObservatory) (Object) this;
+        // `cellsDone` is the scan's OWN count, not a reading taken from outside between two steps,
+        // so a reader asking "did the sweep advance monotonically" reads every step of it.
+        //
+        // The completing step needs the other branch and it is not a guess. `completeRegionScanIfDue`
+        // resolves its batch, then assigns `activeScan = advanced(...)` and drops the reference under
+        // `if (activeScan.isComplete())` and nowhere else in the method — and `isComplete()` IS
+        // `cellsDone >= totalCells` (RegionScan.isComplete). So a null reference at this RETURN, with
+        // a scan present at the HEAD, says the finished scan had resolved every cell of its region;
+        // the count reported is that region's size, taken off the scan the method entered with,
+        // whose `totalCells` an `advanced()` never changes.
+        //
+        // The branch this replaces wrote -1 here, which no reader could tell from a count, and the
+        // test that consumed it skipped those records — so the sweep could only ever be seen to
+        // reach one batch short of its region and its "it swept the whole region" assertion could
+        // not pass at all.
+        int reached = activeScan != null ? activeScan.cellsDone()
+                : (arTest$scanAtHead != null ? arTest$scanAtHead.totalCells() : 0);
         TestTrace.recordHere("region_scan_advanced", "\"pos\":\"" + arTest$xyz(self)
                 + "\",\"discoveries\":" + lastScanDiscoveries
+                + ",\"cellsDone\":" + reached
                 + ",\"complete\":" + (activeScan == null));
     }
 

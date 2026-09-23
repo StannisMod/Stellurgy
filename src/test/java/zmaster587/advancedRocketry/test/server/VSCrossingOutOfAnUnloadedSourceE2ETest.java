@@ -1,6 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -72,16 +73,23 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
     @Test
     public void aCrossingOutOfAnUnloadedSourceLeavesNoRegistryEntry() throws Exception {
 
+        // Marked BEFORE the build, because the unload this class is built on happens INSIDE it —
+        // measured on the gate of 2026-09-22, where a mark taken afterwards saw no `ship_unloaded`
+        // for 200 ticks while the counters already read `loaded=0 registry=1`. There is no second
+        // unload to wait for.
+        long unloadMark = events.mark();
         buildShip();
         // With no player near it and no permaload, VS unloads the ship again and keeps its registry entry.
         // Registered, with nothing loaded behind it, is this test's whole subject; if the ship stayed
         // loaded this would silently become a copy of the other class's arrangement.
-        assertTrue("the source ship never unloaded, so this test would measure the loaded-source "
-                        + "arrangement instead of its own: " + counters(), waitUntilNoShipIsAt(BASE_X, BUILD_Y));
+        awaitSourceUnloaded(unloadMark);
 
         int registryBefore = queryableShips();
         int loadedBefore = loadedShips();
 
+        // Marked before the crossing: it cuts the hull and pastes a new one, so the arrival is a
+        // fresh registry add carrying the same durable name and a new physics id.
+        long crossMark = events.mark();
         String cross = repack(BASE_X, BUILD_Y, BASE_X + HOP, SKY_Y);
         assertTrue("the crossing itself failed, so this test measures nothing: " + cross,
                 Reply.of(cross).ok());
@@ -93,8 +101,7 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
         // Only now prove the crossing really produced a ship at the destination. Doing it after the reads
         // keeps the load pump out of the measurement, and still fails loudly - rather than as a clean
         // conservation - if nothing ever arrived.
-        assertTrue("the crossed ship never arrived at " + (BASE_X + HOP) + "," + SKY_Y
-                + "; crossing=" + cross + " " + counters(), waitUntilShipIsAt(BASE_X + HOP, SKY_Y));
+        requireArrivedAt(crossMark, BASE_X + HOP, SKY_Y);
 
         assertEquals("a crossing out of an UNLOADED source left its registry entry behind: registered "
                         + "ships went " + registryBefore + " -> " + registryAfter + " across a crossing "
@@ -129,6 +136,9 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
 
         int registryBefore = queryableShips();
 
+        // Marked before the plant: the collection is announced once, and the record the sweep
+        // removes does not exist yet.
+        long plantMark = events.mark();
         String planted = exec("artest vs strand-blockless-record 0 "
                 + BASE_X + " " + BUILD_Y + " " + BASE_Z);
         assertTrue("the fault injection itself failed, so this leg measures nothing: " + planted,
@@ -138,37 +148,52 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
                         + "assertion below is satisfied by a plant that never happened: " + planted,
                 registryBefore + 1, extractInt(planted, "countAfterAdd"));
 
-        assertTrue("a registered ship owning NO blocks, with nothing loaded behind it and no queue "
-                        + "holding it, must be collected by the manager's own registry sweep — no "
-                        + "caller deregistered this one, which is the whole point: a path that forgets "
-                        + "to, or a hull cut while nothing was loaded to be walked, leaves exactly "
-                        + "this. It answers position lookups and it is persisted with the world. "
-                        + "Registry went " + registryBefore + " -> " + queryableShips()
-                        + " over " + WAIT_TICKS + " ticks; planted=" + planted,
-                GameTicks.until(client(), GameTicks.server(), WAIT_TICKS,
-                        () -> queryableShips() == registryBefore));
+        // Linked on the registry's own REMOVAL of the planted record, by its uuid. A registered ship
+        // owning NO blocks, with nothing loaded behind it and no queue holding it, must be collected
+        // by the manager's own registry sweep — no caller deregistered this one, which is the whole
+        // point: a path that forgets to, or a hull cut while nothing was loaded to be walked, leaves
+        // exactly this. It answers position lookups and it is persisted with the world.
+        //
+        // The count this replaces could not say WHICH entry went. Two records leaving and one
+        // arriving in the same window returns the count to where it started, and a poll reading only
+        // the total would have called that a successful sweep of the one it planted.
+        events.awaitField(plantMark, "ship_removed", "vsShip", Reply.of(planted).text("uuid"),
+                "the manager's registry sweep never collected the planted blockless record;"
+                        + " registry went " + registryBefore + " -> " + queryableShips()
+                        + "; planted=" + planted, WAIT_TICKS);
     }
 
     // --- arrangement --------------------------------------------------------------------------------
 
     private void buildShip() throws Exception {
-        int registryBefore = queryableShips();
+        // Marked before the assemble: the registry add is made inside it and is announced once.
+        long buildMark = events.mark();
         String coords = placeFixture(FixtureSite.openAir(0, BASE_X, BASE_Z), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
-        assertTrue("the ship never entered VS's registry: " + counters(),
-                registryExceeds(registryBefore));
+        durableShipId = ShipIdentity.nameFromAssembly(asm);
+        // The registry's own add, naming THIS craft — the count comparison it replaces was a
+        // statement about the dimension and could be satisfied by any other scenario's hull.
+        events.awaitField(buildMark, "ship_spawned", "arShip", durableShipId,
+                "the ship never entered VS's registry: " + counters(), WAIT_TICKS);
         // The identity is taken HERE, while the craft is still loaded, because the whole subject of
         // this class is what happens once it is not: the durable->physics bridge repairs its index by
         // reading flight computers, which force-loads the ship it is asked about. Resolving the id
         // later would therefore undo the arrangement it was needed for. The physics id survives the
         // unload — the registry keeps the entry, which is the fact under test.
-        shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
+        shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableShipId);
     }
 
     /** The craft this test built — captured while loaded, used to cut it once it is not. */
     private String shipId;
+
+    /**
+     * The same craft's DURABLE name, which the crossing carries and the physics id does not: a
+     * crossing cuts a hull and pastes a new one, so the arrival has a new physics id and the name is
+     * the only handle that spans it.
+     */
+    private String durableShipId;
 
     private String repack(int sx, int sy, int dx, int dy) throws Exception {
         // The crossing CUTS a ship, so it is told WHICH: the positional form resolves the yard as
@@ -205,38 +230,73 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
         return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
     }
 
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+
     /**
-     * Has the registry grown past {@code floor}? A READ, not a wait.
+     * Wait for the craft this test built to be UNLOADED — the substrate's own {@code unload()},
+     * named by the hull's physics id.
      *
-     * <p>The entry IS deferred — {@code queueShipSpawn} only adds to a spawn queue the world drains
-     * on its next tick — but nothing here can observe the pre-drain state: every probe command is
-     * drained on the server thread behind the task queue's own monitor, so two consecutive commands
-     * are separated by a complete pass. The poll this replaces could only ever spend its budget in
-     * runs where the answer was going to be no.</p>
+     * <p>This class's whole arrangement is a registered ship that nobody has loaded, and the poll it
+     * replaces asked for that by a POSITION: "no loaded ship stands here any more". That is the
+     * right fact asked the wrong way round — it is satisfied by a hull that moved as readily as by
+     * one that unloaded, and it cannot say which happened. The record is the unload.</p>
+     *
+     * <p><b>TWO STATEMENTS, because "it happened" is not "it holds".</b> The caller's mark precedes
+     * the build, so the window can contain a load/unload/load sequence and the link alone would be
+     * satisfied by an unload the build then undid. The read that follows is the standing fact, and
+     * it is what makes the early mark safe: a hull that is loaded NOW fails here, rather than
+     * letting the crossing below cut a loaded source — the arrangement this class exists not to
+     * be.</p>
      */
-    private boolean registryExceeds(int floor) throws Exception {
-        return queryableShips() > floor;
+    private void awaitSourceUnloaded(long mark) throws Exception {
+        events.awaitField(mark, "ship_unloaded", "vsShip", shipId,
+                "the source ship never unloaded, so this test would measure the loaded-source"
+                        + " arrangement instead of its own: " + counters(), WAIT_TICKS);
+        assertEquals("the source unloaded and was loaded again, so this is the loaded-source"
+                + " arrangement and not this class's: " + counters(), 0, loadedShips());
     }
 
     /**
-     * Poll until a loaded ship sits at {@code (x,y,BASE_Z)}. Nothing holds ships loaded here, so a load
-     * has to be pumped each round and the ship is only resident for about a tick — hence read immediately
-     * after the pump. Safe only because {@code permaload} is never set in this class.
+     * Wait for the crossing's arrival to be REGISTERED, then pump a load and read where it stands.
+     *
+     * <p><b>The registry add is not the pose, and that is why there is a window between them.</b>
+     * Measured 2026-09-22: linking on {@code ship_spawned} and reading the pose on the next line
+     * failed with {@code [loaded=1 registry=1]} — the hull was registered and loaded, and its world
+     * transform had not propagated yet. A transform converging is a VALUE, nothing announces it at
+     * this seam, so what it owes is a stretch of the world's own clock spent on purpose, not a poll
+     * asking the same question until it likes the answer. {@link #SETTLE_TICKS} is that stretch.</p>
+     *
+     * <p><b>The pump comes last, immediately before the read, and that order is load-bearing.</b>
+     * Nothing holds ships loaded in this class, so a hull is resident for about a tick after a load;
+     * pumping before the window would read a world the ship had already left again. The poll this
+     * replaces had the pump inside its own predicate, which made the arrangement and the observation
+     * one act and left the wait unable to say whether it was waiting for the ship or for its pump.</p>
      */
-    private boolean waitUntilShipIsAt(int x, int y) throws Exception {
-        // The pump is INSIDE the condition, not in eachPoll, and that is deliberate: the ship is
-        // resident for about a tick after a load, so the read has to happen immediately after the
-        // pump. eachPoll runs after the check, which would put a sleep between them and ask about a
-        // ship that had already gone again. Here the arrangement and the reading are one act.
-        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> {
-            exec("artest vs load-ships 0");
-            return shipIsAt(x, y);
-        });
-    }
-
-    /** Poll until no loaded ship sits at {@code (x,y,BASE_Z)} — deliberately without pumping any load. */
-    private boolean waitUntilNoShipIsAt(int x, int y) throws Exception {
-        return GameTicks.until(client(), GameTicks.server(), WAIT_TICKS, () -> !shipIsAt(x, y));
+    private void requireArrivedAt(long mark, int x, int y) throws Exception {
+        events.awaitField(mark, "ship_spawned", "arShip", durableShipId,
+                "the crossed ship was never registered at the destination: " + counters(),
+                WAIT_TICKS);
+        settle();
+        exec("artest vs load-ships 0");
+        // READ INTO A LOCAL, and nothing may come between it and the pump above. Java evaluates an
+        // assertion's MESSAGE before its condition, so `assertTrue("… " + counters(), shipIsAt(…))`
+        // spends three probe round-trips on the message and only then asks the question — and this
+        // class's ships are resident for about a tick after a load. Measured 2026-09-22: that exact
+        // shape reported `[loaded=1 registry=1]` from the message and `{"count":0,"ships":[]}` from
+        // a read taken moments later in the SAME failure, which is the hull unloading between two
+        // probe calls. The diagnostics are built afterwards, when the answer is already in hand.
+        boolean arrived = shipIsAt(x, y);
+        assertTrue("the arrival was registered but no loaded ship stands within " + POSE_TOLERANCE
+                        + " of " + x + "," + y + "," + BASE_Z + " after " + SETTLE_TICKS
+                        + " ticks: " + counters()
+                        // WHERE the hulls are, for a failure that survives this: "not at the
+                        // destination" has several causes a boolean cannot separate — still at the
+                        // source, mid-transform, or gone again — and each wants a different fix.
+                        // Read AFTER the verdict, so it describes the aftermath and not the subject.
+                        + " | loaded hulls now: " + exec("artest vs ships-loaded 0"),
+                arrived);
     }
 
     /** A bounded pause for the world ticks that spawn a queued ship and collect a cut one. */
