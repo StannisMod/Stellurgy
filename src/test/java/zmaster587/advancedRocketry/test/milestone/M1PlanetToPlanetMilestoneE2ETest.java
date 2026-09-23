@@ -34,6 +34,8 @@ import zmaster587.advancedRocketry.test.client.ClientEvents;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import zmaster587.advancedRocketry.test.ArrangementFailure;
+
 import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
@@ -228,6 +230,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private static final int KEY_USE_ITEM = -99;
 
     /** Button ids the assembler assigns its own controls: 0 = Scan, 1 = Build. */
+    /**
+     * The DEADLINE for one of the rocket assembler's timed passes to end, in server ticks — not how
+     * long a pass is expected to take, which is production's function of the fixture's volume. This
+     * is the 90 x 40 the Build-re-pressing loop it replaced was given for the scan and the build
+     * together, now given to each, so it binds only on a pass that never ends.
+     */
+    private static final int PASS_TICKS = 3600;
+
     private static final int BUTTON_SCAN = 0;
     private static final int BUTTON_BUILD = 1;
 
@@ -1297,6 +1307,12 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         assertAimed(aim[0], navSub, "navigation console", "navigationcomputer");
                         pressUse();
                     }, 60);
+        } catch (ArrangementFailure alreadyTyped) {
+            // The aim ran inside the stimulus and its premises are arrangement READS: a ship with no
+            // pose or a client with no world is a failure of the arrangement, and it is TYPED as one.
+            // `ArrangementFailure` is an `AssertionError`, so the catch below would swallow it and
+            // turn it into "the console never opened" — a premise refusal read as a broken mechanic.
+            throw alreadyTyped;
         } catch (AssertionError neverOpened) {
             return "ARRANGEMENT: console never opened;" + aim[0].diagnosis + " | "
                     + neverOpened.getMessage();
@@ -1590,43 +1606,49 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "all. screen=\"" + screen + "\"",
                 screen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
 
-        bot().clickButtonById(BUTTON_SCAN);
-
-        int ships = 0;
-        // The registry's own record of the ship being added (`ship_spawned`), since a mark taken
-        // before the first BUILD click: a count of ships in dim 0 was an absolute on a world nothing
-        // else builds in here, but it could not say WHICH ship, and the record names it.
+        // Marked BEFORE the Scan click: the first thing awaited below is the scan pass ENDING, and
+        // that pass starts on this click.
         Events spawnEvents = new Events(this::exec, bot()::waitTicks);
         long spawnMark = spawnEvents.markInstrumented();
-        // CLASSIFIED, and it stays a loop: every pass PRESSES BUILD again, and re-opens the screen
-        // first when something knocked it shut. Delete it and the build stops being ATTEMPTED, not
-        // merely stop being watched — so there is nothing for a chain to attach to, and the record
-        // it exits on (`ship_spawned`) is already production's own verdict rather than a sample.
+        bot().clickButtonById(BUTTON_SCAN);
+
+        // TWO PASSES, each waited for on the machine's own record. Scan and Build each start a TIMED
+        // pass that the assembler counts down one tick at a time, and production IGNORES a Build
+        // press made while a pass is still running — it returns on `isScanning()` with nothing said.
+        // The loop that stood here pressed Build every forty ticks for up to 3 600, so the press that
+        // "took" was simply the first to land after the scan had happened to end, and each press
+        // before it was thrown away unseen. `assembler_pass_finished` IS that end, so Build is
+        // pressed once, after it.
         //
-        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
-        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
-        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
-        int assembleBudget = 90;
-        for (int attempt = 0; attempt < assembleBudget && ships < 1; attempt++) {
-            // The screen can be knocked shut (a chunk reload, a stray escape); re-open it rather
-            // than clicking into nothing, so a red names the machine and not a lost window.
-            if (screenOf(bot().reportState()).isEmpty()) {
-                screen = openBuilderScreenByRealKeyPress(builderPos, budget);
-                if (!screen.startsWith("zmaster587.libVulpes.inventory.GuiModular")) {
-                    continue;
-                }
-            }
-            bot().clickButtonById(BUTTON_BUILD);
-            bot().waitTicks(40);
-            String spawned = spawnEvents.since(spawnMark, "ship_spawned");
-            ships = Events.countRecordsWithField(spawned, "vsShip");
-            // WHICH ship. The record names it and this loop was counting the records and throwing the
-            // name away — after which every later question about "the ship" went back to a position
-            // or to "the first settled row in the cell". It is kept from the moment of creation now.
-            String namedShip = Events.lastField(spawned, "vsShip");
-            if (namedShip != null && !namedShip.isEmpty()) {
-                builtShipVsId = namedShip;
-            }
+        // The loop defended itself with "VS builds the ship on its OWN thread, off the game loop,
+        // so a busy box needs more ticks". That is false of this tree: the physics mod's spawn queue
+        // is drained on the game thread inside a world tick. The defence was a claim, and it hid
+        // that the wait had never been for the ship at all — it was for the scan.
+        String machinePos = builderPos[0] + "," + builderPos[1] + "," + builderPos[2];
+        spawnEvents.awaitRecordWithFields(spawnMark, "assembler_pass_finished",
+                "the SCAN pass must end before Build can take - production discards a Build press"
+                        + " made during it", PASS_TICKS,
+                "pos", machinePos, "building", "false");
+        // The screen is READ, not re-opened: the loop re-opened it when "something knocked it shut",
+        // which turned a closed screen — a player who could no longer press Build — into a retry.
+        String openScreen = screenOf(bot().reportState());
+        assertTrue("the assembler's screen must still be open for the Build press; a screen that"
+                        + " closed on its own between Scan and Build leaves the player unable to"
+                        + " build at all. screen=\"" + openScreen + "\"",
+                openScreen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
+        bot().clickButtonById(BUTTON_BUILD);
+
+        // The registry's own record of the ship being added — not a count of ships in dim 0, which
+        // could not say WHICH ship, while the record names it.
+        String spawned = spawnEvents.await(spawnMark, "ship_spawned",
+                "the BUILD pass must add a ship to the registry", PASS_TICKS);
+        int ships = Events.countRecordsWithField(spawned, "vsShip");
+        // WHICH ship. The record names it, and a count that threw the name away sent every later
+        // question about "the ship" back to a position or to "the first settled row in the cell".
+        // It is kept from the moment of creation.
+        String namedShip = Events.lastField(spawned, "vsShip");
+        if (namedShip != null && !namedShip.isEmpty()) {
+            builtShipVsId = namedShip;
         }
         bot().closeScreen();
         return ships;
@@ -1657,6 +1679,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         assertAimed(aim[0], builderPos, "rocket assembler", "rocketbuilder");
                         pressUse();
                     }, 60);
+        } catch (ArrangementFailure alreadyTyped) {
+            // As above: the aim's premises are arrangement READS, and this catch must not turn a
+            // client with no world into "a machine that swallows the press" three frames up.
+            throw alreadyTyped;
         } catch (AssertionError neverOpened) {
             return "";
         }
@@ -1689,10 +1715,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
         for (int attempt = 0; attempt < budget; attempt++) {
             JsonObject state = bot().reportState();
-            if (!isWorldReady(state)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            // A READ, not a wait: this used to sleep five ticks and retry when the client reported
+            // no world. The player is already standing in this world when the aim starts, so a
+            // client without one is a finding about the arrangement, not a reason to keep aiming.
+            requireArranged("the client must have its world while it aims at the assembler: " + state,
+                    isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
@@ -1743,29 +1770,29 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
 
         for (int attempt = 0; attempt < budget; attempt++) {
+            // READS, not waits — all three checks below used to sleep five ticks and retry. The ship
+            // was resolved before this method was called (its computer's subspace address is an
+            // argument), so a ship that then reports no world pose, or whose points will not map to
+            // world coordinates, went away mid-arrangement; and a same-world teleport cannot cost the
+            // client its world. Each is news about the arrangement, not a pause.
             double[] shipAnchor = readTripleD(
                     dim == 0 ? findSeat().raw() : findSeatAboard(dim, budget),
                     "shipWorldX", "shipWorldY", "shipWorldZ");
-            if (shipAnchor == null) {
-                bot().waitTicks(5);
-                continue;
-            }
+            requireArranged("the ship was resolved before aiming began, so it must still report a"
+                    + " world pose in dim " + dim + " on attempt " + attempt, shipAnchor != null);
             // The floor of the stand cell is the deck's top surface, so the feet go at its y with a
             // sliver of clearance rather than at its centre.
             standWorld = toWorld(dim, shipAnchor, standSub, 0.5, 0.05, 0.5);
             targetWorld = toWorld(dim, shipAnchor, targetSub, tx, ty, tz);
-            if (standWorld == null || targetWorld == null) {
-                bot().waitTicks(5);
-                continue;
-            }
+            requireArranged("the ship's stand and target points must map to world coordinates off"
+                    + " its reported pose " + java.util.Arrays.toString(shipAnchor),
+                    standWorld != null && targetWorld != null);
             exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
             bot().waitTicks(20);
 
             JsonObject state = bot().reportState();
-            if (!isWorldReady(state)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            requireArranged("a same-world teleport must leave the client's world ready: " + state,
+                    isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();

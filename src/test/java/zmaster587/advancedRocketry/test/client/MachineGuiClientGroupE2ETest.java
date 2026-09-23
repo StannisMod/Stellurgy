@@ -86,6 +86,16 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private static final int MACHINE_DX = 16;
     private static final int MACHINE_DZ = 16;
 
+    /**
+     * The DEADLINE for one of the rocket assembler's timed passes to end, in server ticks — not how
+     * long a pass is expected to take. Its length is production's
+     * {@code buildSpeedMultiplier * volume / 10 * MAXSCANDELAY}, a function of the fixture; this is
+     * the 3 600 the re-pressing loop it replaced was given for BOTH passes together, and it is now
+     * given to each, so it binds only on a pass that never ends — an unpowered machine, or a press
+     * that never reached it.
+     */
+    private static final int PASS_TICKS = 3600;
+
     private static final String GUI_MODULAR = "zmaster587.libVulpes.inventory.GuiModular";
     private static final String GUI_CHEST = "net.minecraft.client.gui.inventory.GuiChest";
     private static final String CHIP = "advancedrocketry:planetidchip";
@@ -368,13 +378,17 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         exec("artest energy inject " + builder + " 100000000");
         bot().clickButtonById(0);
 
-        // Build is RE-PRESSED, and that stays a stimulus: production ignores a Build press while
-        // isScanning() and says nothing about it, so the press only "takes" once the scan pass has
-        // finished.
+        // TWO PASSES, and each is now waited for on the machine's own record. Scan and Build each
+        // start a TIMED pass that `performFunction` counts down one tick at a time, and production
+        // IGNORES a Build press that arrives while a pass is still running — `useNetworkData`
+        // returns on `isScanning()` with nothing said. The loop that stood here re-pressed Build
+        // every forty ticks for up to 3 600, so the press that "took" was simply the first one to
+        // land after the scan had happened to end, and every press before it was discarded unseen.
+        // `assembler_pass_finished` IS that end, so Build is pressed once, after it.
         //
-        // What the loop WAITS ON is the rocket itself, standing in this scenario's own plot. The
-        // events are what the FAILURE is made of, not what it is measured by, and the reason is a
-        // property of the recorder rather than a preference: `rocket_assembled` is taken at
+        // Success is then read off the ROCKET standing in this scenario's own plot, not off
+        // `rocket_assembled`'s status, and the reason is a property of the recorder rather than a
+        // preference: `rocket_assembled` is taken at
         // assembleRocket's RETURN and carries the tile's status AS OF THAT RETURN, and the last
         // thing a SUCCESSFUL ordinary build does before returning is re-scan its own pad "so the UI
         // immediately reflects the post-build state" — which finds the rocket it has just spawned
@@ -389,17 +403,20 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         // with the canScan/isScanning pair it was judged on, and every attempt at an assembly with
         // the status it ended on. That tells a dropped packet from a refused build from a build
         // that never ran, which the list alone cannot.
-        String assemblies = "";
-        String list = "";
-        int rocketId = -1;
-        for (int waited = 0; waited < 3600 && rocketId < 0; waited += 40) {
-            exec("artest energy inject " + builder + " 100000000");
-            bot().clickButtonById(1);
-            bot().waitTicks(40);
-            assemblies = events.since(buildMark, "rocket_assembled");
-            list = exec("artest rocket list " + dim);
-            rocketId = rocketIdInThisPlot(list);
-        }
+        String machinePos = bx + "," + by + "," + bz;
+        events.awaitRecordWithFields(buildMark, "assembler_pass_finished",
+                "the SCAN pass must end before Build can take - production discards a Build press"
+                        + " made during it", PASS_TICKS,
+                "pos", machinePos, "building", "false");
+        bot().clickButtonById(1);
+        // The build pass's own verdict. Awaited as the ASSEMBLY ending at this machine, not as a
+        // status: which status it ends on is explained above and is not the success test.
+        events.awaitRecordWithFields(buildMark, "rocket_assembled",
+                "the BUILD pass must end in an assembly at this machine", PASS_TICKS,
+                "pos", machinePos);
+        String assemblies = events.since(buildMark, "rocket_assembled");
+        String list = exec("artest rocket list " + dim);
+        int rocketId = rocketIdInThisPlot(list);
         String presses = events.since(buildMark, "assembler_command_received");
         assertTrue("clicking Scan then Build on the real GUI must ASSEMBLE a rocket standing in "
                         + plot() + "; rocket list was " + list

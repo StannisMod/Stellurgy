@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.PlayerState;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -1007,6 +1008,12 @@ public abstract class AbstractSharedClientE2ETest {
     /** How long the client is given to be TOLD about a cleared hand, in ticks. */
     private static final int HAND_LINK_BUDGET_TICKS = 200;
 
+    /**
+     * How long the chat fence is given to reach the client, in client ticks: a deadline for one
+     * packet's delivery, the same order as the other single-packet links here — not a settle.
+     */
+    private static final int CHAT_FENCE_TICKS = 200;
+
     // The POINT form of `appliedInsidePlot` lives in ClientEvents.appliedNear, because the tier has
     // two class hierarchies — these shared bases and the harness's own AbstractClientE2ETest — and a
     // wait that belongs to both must not be solved by copying it into each.
@@ -1046,33 +1053,44 @@ public abstract class AbstractSharedClientE2ETest {
      * the channel with the full reset would destroy the arrangement it was called to protect.</p>
      */
     protected final void armChatObservation() throws Exception {
-        // DRAIN, then clear, then verify — in that order, and repeat until it takes.
+        // FENCE, then clear, then verify — once each, in that order.
         //
         // A server command's completion marker is delivered to the client ASYNCHRONOUSLY: the
         // command channel answers as soon as the server has run it, and the chat packet arrives at
         // the client some ticks later. Clearing the backlog the instant the last arrangement
         // command returns therefore clears everything EXCEPT the marker still in flight, which
         // lands immediately afterwards — measured 2026-08-07, one line, one marker, on a scenario
-        // whose arrangement ended with a server command. Waiting first lets the tail land so the
-        // clear can actually remove it.
-        JsonObject cleared = null;
-        JsonObject chat = null;
-        int remaining = -1;
-        for (int attempt = 0; attempt < 4; attempt++) {
-            bot().waitTicks(5);
-            cleared = bot().clearChat();
-            bot().waitTicks(2);
-            chat = bot().reportChat(20);
-            remaining = chat.has("count") ? chat.get("count").getAsInt() : -1;
-            if (remaining == 0) {
-                break;
-            }
-        }
+        // whose arrangement ended with a server command.
+        //
+        // WHERE that line comes from was never identified, and the fence below does not need it to
+        // be. (Not a harness echo: no code in the harness writes one, whatever an older comment
+        // said. Not vanilla's feedback broadcast either, as far as can be read here: that goes only
+        // to players who `canSendCommands`, and nothing in the harness makes the bot an operator.)
+        //
+        // The loop that stood here slept five ticks, cleared, and read back, up to four times —
+        // a guess that the tail would have landed by then. What it wanted to KNOW is that nothing
+        // is still in flight, and that has an exact answer: the connection delivers packets in the
+        // order they were sent, so once the client has been told a line sent AFTER everything else,
+        // everything else has already arrived. The fence is that line — a nonce sent to this bot
+        // alone — and `client_chat_received` is the client's own record of being told it. It is sent
+        // by `/tellraw`, whose whole effect is `sendMessage` with no `notifyCommandListener` (read
+        // off `CommandMessageRaw.execute` in the decompiled source), so nothing follows the fence
+        // itself. That is the one property the fence needs, and it holds whatever produced the tail:
+        // a command that DID notify would re-create the very tail it was fencing.
+        String nonce = "arm-chat-fence-" + System.nanoTime();
+        long fenceMark = clientEvents().mark();
+        exec("tellraw " + PlayerState.botName(this::exec) + " {\"text\":\"" + nonce + "\"}");
+        clientEvents().awaitField(fenceMark, "client_chat_received", "text", nonce,
+                "the chat fence must reach this client, or nothing can say the backlog has landed",
+                CHAT_FENCE_TICKS);
+        JsonObject cleared = bot().clearChat();
+        JsonObject chat = bot().reportChat(20);
+        int remaining = chat.has("count") ? chat.get("count").getAsInt() : -1;
         scenario.record("armedChatObservation", cleared);
         scenario.requireArranged("the chat channel must be empty at the moment of the stimulus,"
-                + " so a matching line can only have come from THIS stimulus; after four"
-                + " drain-and-clear rounds it still holds " + remaining + " line(s): "
-                + (chat == null ? "?" : chat.get("lines"))
+                + " so a matching line can only have come from THIS stimulus; after the fence landed"
+                + " and the chat was cleared it still holds " + remaining + " line(s): "
+                + chat.get("lines")
                 + " — is a server command running between armChatObservation() and the stimulus?",
                 remaining == 0);
     }

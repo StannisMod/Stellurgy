@@ -189,10 +189,13 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
         for (int attempt = 0; attempt < budget; attempt++) {
             pose = findSeat();
-            if (Double.isNaN(pose.shipWorldX)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            // A READ, not a wait. This branch used to sleep five ticks and retry, as if the ship
+            // might not have a world pose yet — but the seat was resolved above this loop, off the
+            // same ship, before any aiming began. A seat that resolves and then has no pose is a
+            // ship whose transform went away mid-arrangement, and that is news, not a pause.
+            scenario().requireArranged("the seat resolved before aiming began, so the ship must still"
+                    + " report its world pose on attempt " + attempt + ": " + pose.raw(),
+                    !Double.isNaN(pose.shipWorldX));
             seatWorld = new double[]{pose.shipWorldX, pose.shipWorldY, pose.shipWorldZ};
 
             // Put the bot on the deck beside the seat, re-derived from the seat's LIVE position: a
@@ -202,10 +205,10 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
                     + " " + seatWorld[2] + " 0 0");
             bot().waitTicks(20);
             JsonObject state = bot().reportState();
-            if (!isWorldReady(state)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            // A READ, not a wait: the teleport stays in this world, so the client cannot have lost
+            // it, and a client that reports no world here is a finding rather than a reason to retry.
+            scenario().requireArranged("a same-world teleport must leave the client's world ready: "
+                    + state, isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();

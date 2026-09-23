@@ -656,8 +656,9 @@ public final class ForgeTestClientBootstrap {
                 // The observation channel ALONE, with the screen left exactly as it is.
                 //
                 // A test that reads "the player was told X" must clear the chat immediately
-                // before the stimulus, because the harness itself writes to that channel —
-                // every server command echoes a FORGE_TEST_DONE marker into it. But a GUI
+                // before the stimulus, because the arrangement itself writes to that channel,
+                // and a line it caused can still be in flight when its last command returns.
+                // But a GUI
                 // test's stimulus is a click on an OPEN screen, and reset_client_state closes
                 // the screen, so using it to arm the channel destroys the arrangement it was
                 // called to protect. Hence this narrower verb: same chat/overlay wipe, no
@@ -2032,8 +2033,9 @@ public final class ForgeTestClientBootstrap {
      * <p>Shared by {@code reset_client_state} (which also closes the screen and releases keys)
      * and {@code clear_chat} (which does not). The chat backlog is the dangerous channel in a
      * shared harness: an assertion of the form "the player was told X" searches the last N
-     * lines, so a previous scenario's identical line — or one of the harness's own
-     * {@code FORGE_TEST_DONE} markers — satisfies it with no stimulus behind it at all.</p>
+     * lines, so a previous scenario's identical line — or a line the arrangement itself caused,
+     * still in flight when the arrangement's last command returned — satisfies it with no stimulus
+     * behind it at all.</p>
      *
      * <p>{@code overlayMessageTime} is the real gate for the action bar: the overlay STRING
      * lingers after expiry, so only the countdown says "still on screen".</p>

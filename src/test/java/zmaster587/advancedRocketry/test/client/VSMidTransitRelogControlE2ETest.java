@@ -167,32 +167,26 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         assertEquals("the client must have followed into the transit origin cell",
                 originDim, bot().reportWeather().get("dim").getAsInt());
 
-        // CLASSIFIED, and it stays a loop: every pass PERFORMS the mount again — it re-spawns the
-        // seat dummy and re-issues the mount — so deleting it does not leave an unwatched mount, it
-        // leaves four mounts unattempted. The spawn half is refused inside the loop rather than
-        // retried blindly, so a dummy that was never made fails as itself; what the retry is for is
-        // the mount half, whose reply carries the player's dim against the dim the dummy was found
-        // in, and `gone` when no loaded world holds it — the three answers that separate "the wrong
-        // world was asked" from "it is not there at all".
-        String mountAt = "", mount = "";
-        boolean mounted = false;
-        // The CLIENT's mark before the FIRST attempt: every pass performs a real mount, so the
-        // record that closes the wait below may belong to any of them, and the chain predicate is
-        // what makes a retried boarding readable rather than ambiguous.
+        // ONE spawn and ONE mount. The loop that stood here re-spawned the dummy and re-issued the
+        // mount up to five times, and defended it as a stimulus loop. It was not one: both halves
+        // are synchronous server commands — `seat-mount-at` spawns the dummy inside the command,
+        // `mount-entity` looks it up in the player's own world and calls `startRiding` inside
+        // THAT command — and the player is already in this world server-side, because the server
+        // moves him before it sends the respawn the client link above waited for. Nothing is left
+        // for a second attempt to wait for; a retry could only turn a refused mount into a pause.
+        //
+        // The mount's reply keeps what the retry was said to be FOR: the player's dim against the
+        // dim the dummy was found in, and `gone` when no loaded world holds it — the answers that
+        // separate "the wrong world was asked" from "it is not there at all". They now arrive in
+        // the failure of the one attempt instead of being overwritten by the next.
         long seatClientMark = clientEvents().mark();
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            mountAt = exec("artest vs seat-mount-at " + originDim
-                    + " " + seatX + " " + seatY + " " + seatZ);
-            assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
-            mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
-            mounted = Reply.of(mount).boolOr("mounted", false);
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
-        assertTrue("the bot must mount the pilot-seat dummy (5 spawn+mount attempts): " + mount,
-                mounted);
+        String mountAt = exec("artest vs seat-mount-at " + originDim
+                + " " + seatX + " " + seatY + " " + seatZ);
+        assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
+        String mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
+        // A read of the command's own verdict, not a wait, so a missing field is a refusal.
+        assertTrue("the bot must mount the pilot-seat dummy on the first attempt: " + mount,
+                Reply.of(mount).boolOr("mounted", false));
         int dummyId = readInt(mountAt, "dummyId");
         // THE CLIENT'S OWN SEATING, waited for as the record it is. Ten ticks stood here and the
         // failure they produced is quoted in this file's own diagnostic below — "the mount reported

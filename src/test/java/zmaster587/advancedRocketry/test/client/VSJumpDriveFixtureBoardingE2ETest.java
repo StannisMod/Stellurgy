@@ -415,27 +415,27 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
 
         for (int attempt = 0; attempt < budget; attempt++) {
+            // READS, not waits — all three of the checks below used to sleep five ticks and retry.
+            // The ship was resolved before this method was called (its computer's subspace address
+            // is an argument), so a ship that then has no world pose, or whose points will not map
+            // to world coordinates, went away mid-arrangement; and a same-world teleport cannot cost
+            // the client its world. Each of those is news about the arrangement, not a pause.
             shipAnchor = readTripleD(findSeat(), SHIP_WORLD);
-            if (shipAnchor == null) {
-                bot().waitTicks(5);
-                continue;
-            }
+            scenario().requireArranged("the ship was resolved before aiming began, so it must still"
+                    + " report a world pose on attempt " + attempt, shipAnchor != null);
             // The floor of the stand cell is the deck's top surface, so the feet go at its y with a
             // sliver of clearance rather than at its centre.
             standWorld = toWorld(shipAnchor, standSub, 0.5, 0.05, 0.5);
             targetWorld = toWorld(shipAnchor, targetSub, tx, ty, tz);
-            if (standWorld == null || targetWorld == null) {
-                bot().waitTicks(5);
-                continue;
-            }
+            scenario().requireArranged("the ship's stand and target points must map to world"
+                    + " coordinates off its reported pose " + java.util.Arrays.toString(shipAnchor),
+                    standWorld != null && targetWorld != null);
             exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
             bot().waitTicks(20);
 
             JsonObject state = bot().reportState();
-            if (!isWorldReady(state)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            scenario().requireArranged("a same-world teleport must leave the client's world ready: "
+                    + state, isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();

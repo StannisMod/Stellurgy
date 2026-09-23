@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipInfo;
@@ -96,6 +97,18 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
      * a scenario that never gets there rather than waiting out a budget.
      */
     private static final int DECK_LINK_BUDGET_TICKS = 240;
+
+    /**
+     * The WINDOW the attitude hold is given to slew the hull into its inversion, in SERVER ticks of
+     * the world the hull stands in — spent in full, because a hold never decides it has arrived and
+     * so there is no record to end on. The number is the 200 the fixed client wait it replaces used.
+     *
+     * <p>It is NOT the slew's own clock: the hold's torque is applied on the physics mod's thread,
+     * which paces its fixed-interval steps by wall clock. So this window does not make the arrival
+     * box-independent; what makes the arrangement honest is the attitude read after it, which fails
+     * as an arrangement when the hull is short instead of letting a later step paper over it.</p>
+     */
+    private static final int INVERSION_SLEW_TICKS = 200;
 
     // Every contract this class pins is a CLIENT fact — the resolver that releases and reclaims a
     // body inside a hull is the client's, and for an {@code EntityPlayerMP} the server rebases the
@@ -389,7 +402,31 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("attitude hold must accept the inversion",
                 Reply.of(exec("artest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
-        bot().waitTicks(200);
+        // A WINDOW, then the attitude READ — the pair that replaces a fixed 200 CLIENT ticks and the
+        // re-stepping loop further down that existed to survive them. What the READ buys is the
+        // whole point: a hull short of its inversion now fails HERE, as an arrangement failure that
+        // names its up axis, where the loop re-teleported the body until the geometry happened to
+        // work out and so hid the short slew entirely.
+        //
+        // WHAT THE WINDOW DOES NOT BUY, and an earlier version of this comment claimed it did: the
+        // slew is not on any game clock. The hold's torque is applied on the physics mod's own
+        // thread, which steps a FIXED simulated interval per physics tick and paces those ticks by
+        // wall clock at its target rate (`VSWorldPhysicsLoop.run`). Server ticks are the clock the
+        // hull's WORLD advances on, which is why they replace the client's; they are not the clock
+        // the SLEW advances on, so on a starved box this window can still end short — and then the
+        // read below says so, loudly and typed. A link on the hull reaching its commanded attitude
+        // would remove that too; nothing publishes one yet.
+        GameTicks.advanceWorld(serverClient(), 0, INVERSION_SLEW_TICKS);
+        ShipInfo inverted = ShipInfo.byId(this::exec, 0, scenarioShipId);
+        // WHY -sqrt(1/2): the step below moves the body world-DOWN, and it only reaches the cavity
+        // if world-down is MOSTLY ship-up — the component along the hull's up axis larger than the
+        // one across the deck plane, i.e. past 135 degrees. That is where "a half-turned attitude
+        // maps the step into the deck plane" stops being possible. The command asks for 170.
+        scenario().requireArranged("the hull must be well into its inversion before the body is displaced,"
+                        + " or a world-down step lands in the deck plane rather than the cavity:"
+                        + " upY=" + inverted.upY() + " after " + INVERSION_SLEW_TICKS
+                        + " server ticks; " + inverted.raw(),
+                inverted.upY() < -Math.sqrt(0.5));
 
         // Same arrangement chain as the open-cockpit scenario: `dismount` then `deck_entered`, and
         // the MODE off production's own commit.
@@ -423,35 +460,40 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // back to the deck. The two verdicts diverge by ~3 world blocks; the settle cannot
         // straddle them.
         //
-        // The displacement targets STATE, not time: on a loaded box the attitude hold can still
-        // be converging when the fixed pre-dismount wait elapses, and a world-down step at a
-        // half-turned attitude maps mostly into the deck PLANE - the body never leaves the
-        // stand. Re-step until the measured subspace position is actually mid-cavity (the ship
-        // keeps turning between attempts), and only then judge the settle.
+        // ONE displacement, and the proof that it happened is the STIMULUS, not a position read
+        // after it. Both halves of that sentence were learned on 2026-09-23.
+        //
+        // The loop that stood here re-stepped the body up to eight times and read its subspace
+        // position two ticks after each step, until one read caught it more than half a block off
+        // the deck. That read RACES THE SUBJECT: since the capture became a state held across a
+        // move inside the hull, the deck keeps the body and re-images its stand every tick, so two
+        // ticks after the step the body can already be back where it stands. Measured on the
+        // wave's boundary gate: a single step from a hull at `upY = -0.98` — fully inverted — read
+        // `subY = 128` against a stand of 128. The loop did not survive a short slew, as an earlier
+        // note here claimed; it re-rolled that race until it lost it.
+        //
+        // So the displacement is proved by its two measured premises instead. The CLIENT applied the
+        // teleport — `client_pos_look_applied` at the world Y the step aims for — and the hull was
+        // measured past 135 degrees above, where `|upY| > sqrt(1/2)`. A 1.2-block world-down step on
+        // such a hull moves the body more than 1.2 * sqrt(1/2) = 0.85 blocks along the SHIP's up
+        // axis, into the cavity: more than the half block the old read asked for, at the instant the
+        // step lands, whatever the deck does a tick later — which is the subject below.
         Events clientEvents = clientEvents();
-        String subAfter = censusField("subPos");
-        // The mark is re-taken INSIDE the loop so it belongs to the displacement that finally lands
-        // the body mid-cavity: each earlier attempt is its own release-and-reclaim, and a mark from
-        // before the first one would let an earlier round's records answer for the last.
         long releaseMark = clientEvents.mark();
-        for (int i = 0; i < 8 && parseSub(subAfter)[1] <= sub0[1] + 0.5; i++) {
-            if (i > 0) {
-                bot().waitTicks(20); // reclaimed to the stand meanwhile; let the hold keep turning
-            }
-            releaseMark = clientEvents.mark();
-            exec("tp @a ~ ~-1.2 ~");
-            bot().waitTicks(2);
-            subAfter = censusField("subPos");
-        }
+        exec("tp @a ~ ~-1.2 ~");
+        String applied = clientEvents.await(releaseMark, "client_pos_look_applied",
+                "the displacement must land on the client", DECK_LINK_BUDGET_TICKS);
+        double appliedY = Events.number(Events.lastRecord(applied), "y");
+        scenario().requireArranged("the displacement must put the client 1.2 below where he stood:"
+                        + " applied y=" + appliedY + " against " + (preY - 1.2) + " (stood at "
+                        + preY + ")",
+                Math.abs(appliedY - (preY - 1.2)) < 0.5);
+        String subAfter = censusField("subPos");
 
-        // Subject validity (geometry by measurement): the displaced body must still be INSIDE
-        // the region AND off the deck - a body that stayed at the stand would be re-claimed by
-        // plain standing support and prove nothing about the interior gate.
+        // Still INSIDE the ship's block region — true whether the deck has already taken him back
+        // to his stand or not, so this read does not race anything.
         assertTrue("the displaced body must remain INSIDE the ship's block region (sub="
                 + subAfter + " region=" + regionStr + ")", subInRegion(subAfter, regionStr));
-        assertTrue("the displaced body must be OFF the deck, mid-cavity (sub=" + subAfter
-                + " vs stand " + sub0[1] + "; is the attitude hold converged? ship-info="
-                + shipInfo() + ")", parseSub(subAfter)[1] > sub0[1] + 0.5);
 
         // ARRANGEMENT, and it is the OPPOSITE of what it was until 2026-09-16 — see the sibling
         // scenario above for the full reasoning. This used to require that the displacement DROPPED

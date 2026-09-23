@@ -139,6 +139,52 @@ public abstract class MixinTileRocketAssemblingMachineEvents {
                 + ",\"remote\":" + (self.getWorld() != null && self.getWorld().isRemote));
     }
 
+    /** Whether production is building (true) or only scanning (false) this pass; private upstream. */
+    @Shadow private boolean building;
+
+    /** The pass state as {@code performFunction} was ENTERED — compared at its return for the edge. */
+    private boolean arTest$scanningAtHead;
+    private boolean arTest$buildingAtHead;
+
+    /**
+     * A timed PASS of the machine ended — a scan, or the build that follows it.
+     *
+     * <p>Both of the machine's GUI verbs start a pass rather than act: Scan and Build each set a
+     * progress total, {@code performFunction} counts it down one tick at a time, and only when it is
+     * spent does production call {@code scanRocket} or {@code assembleRocket} and clear the total.
+     * And production IGNORES a Build press that arrives during a pass — {@code useNetworkData}
+     * returns on {@code isScanning()} with nothing said — so a test that presses Scan and then Build
+     * has to know that the scan pass is over, or its Build is discarded in silence. Until this
+     * record there was no way to know it, and the one scenario that needed it re-pressed Build every
+     * forty ticks until a rocket appeared.</p>
+     *
+     * <p>Recorded on the EDGE — a pass that was running at the method's head and is not at its
+     * return — so it is one record per pass, not one per tick. {@code building} is the pass's kind
+     * as it was entered: production clears the flag in the same branch that ends the pass.</p>
+     *
+     * <p>SILENT about a pass that never ends (an unpowered machine counts up only while it has
+     * energy for an operation), a pass cancelled by the tile being broken, and WHAT the scan found —
+     * {@code rocket_assembled}'s status says that for a build, and nothing says it for a scan.</p>
+     */
+    @Inject(method = "performFunction", at = @At("HEAD"))
+    private void arTest$passEntered(CallbackInfo ci) {
+        TileRocketAssemblingMachine self = (TileRocketAssemblingMachine) (Object) this;
+        arTest$scanningAtHead = self.isScanning();
+        arTest$buildingAtHead = building;
+    }
+
+    @Inject(method = "performFunction", at = @At("RETURN"))
+    private void arTest$passLeft(CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT);
+        TileRocketAssemblingMachine self = (TileRocketAssemblingMachine) (Object) this;
+        if (!arTest$scanningAtHead || self.isScanning()) {
+            return; // EDGE-ONLY: this runs every tick the machine is powered
+        }
+        TestTrace.recordHere("assembler_pass_finished", "\"pos\":\"" + arTest$xyz(self)
+                + "\",\"building\":" + arTest$buildingAtHead
+                + ",\"remote\":" + (self.getWorld() != null && self.getWorld().isRemote));
+    }
+
     private static String arTest$xyz(TileRocketAssemblingMachine tile) {
         BlockPos pos = tile.getPos();
         if (pos == null) {

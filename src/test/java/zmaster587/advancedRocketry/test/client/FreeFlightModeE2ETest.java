@@ -327,24 +327,19 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int[] bp = RocketFixture.placeAt(site, this::exec, "simple", 2, 50,
                 "the rocket is assembled here and climbs fifty blocks up this column");
 
-        // Pad-bounds detection occasionally races chunk/structure state on the
-        // shared world; retry the assemble a couple of times before failing.
-        // A DRIVING loop: each pass re-issues the stimulus (rebuild, assemble again) and reads
-        // only the command's own verdict — delete it and the assemble stops happening, not
-        // merely stop being watched. The assertion below reads the last response, after the
-        // driving has stopped.
+        // ONE assemble, and the retry that stood here is gone. It re-laid the fixture and assembled
+        // again up to three times on the claim that "pad-bounds detection occasionally races
+        // chunk/structure state on the shared world" — a claim written with the feature on
+        // 2026-07-03 and never measured, which no ledger entry records, and which the arrangement
+        // rules out: the fixture is laid and assembled by two probe commands, and probe commands
+        // run one after another on the server thread, so the second cannot overtake the first.
         //
-        // The retry re-LAYS the fixture rather than re-running the whole builder: the volume's
-        // emptiness was established once, above, and asserting it again after a partial build
-        // would fail on this scenario's own blocks.
+        // A retry of an operation that "sometimes" fails is a wait on something that does not
+        // always happen, and it converts the failure into a pause. If this goes red, the reply names
+        // the refusal — and a refusal on a freshly laid pad is a finding, not weather.
         String assemble = RocketFixture.assembleBuilt(site, this::exec, bp);
-        for (int attempt = 0; attempt < 3 && !Reply.of(assemble).ok(); attempt++) {
-            bot().waitTicks(5);
-            exec("artest fixture rocket " + site.dim + " " + site.x + " " + site.y
-                    + " " + site.z + " simple");
-            assemble = RocketFixture.assembleBuilt(site, this::exec, bp);
-        }
-        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
+        assertTrue("the assembler must build the rocket laid on its pad one command earlier: "
+                + assemble, Reply.of(assemble).ok());
 
         return rocketIdInThisPlot();
     }
