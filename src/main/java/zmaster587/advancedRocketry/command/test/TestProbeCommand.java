@@ -3984,22 +3984,24 @@ public class TestProbeCommand extends CommandBase {
                                 // "bearing", not "dir": the feed below already emits a "dir" per
                                 // body, measured from the CELL's observer for the sky, and a reader
                                 // matching on the substring could not tell the two apart.
-                                // Taken as a sector delta plus an offset delta, never as the
-                                // difference of two whole-block absolutes: those cannot express the
-                                // coordinates the sector grid can name.
-                                .append(",\"bearing\":[")
-                                .append(zmaster587.advancedRocketry.space.AbsolutePos
-                                        .ofCellName(bodyAt).minus(
-                                                zmaster587.advancedRocketry.space.AbsolutePos
-                                                        .ofCellName(e.coord)).dx()).append(',')
-                                .append(zmaster587.advancedRocketry.space.AbsolutePos
-                                        .ofCellName(bodyAt).minus(
-                                                zmaster587.advancedRocketry.space.AbsolutePos
-                                                        .ofCellName(e.coord)).dy()).append(',')
-                                .append(zmaster587.advancedRocketry.space.AbsolutePos
-                                        .ofCellName(bodyAt).minus(
-                                                zmaster587.advancedRocketry.space.AbsolutePos
-                                                        .ofCellName(e.coord)).dz()).append(']')
+                                // The LOCAL offset delta, because these bodies are by contract in the
+                                // ship's own cell (`bodiesAt` returns the bodies whose cell IS this
+                                // one), so the sector delta is zero and the offsets are the whole of
+                                // it — the same terms `staticFrameDistanceSqTo` sums for "distance".
+                                // It used to be `AbsolutePos.ofCellName(a).minus(ofCellName(b))`,
+                                // under a comment claiming an offset delta, and `ofCellName` is the
+                                // cell's grid position ONLY: every ship read [0,0,0] to a body in its
+                                // own cell at any range, and a pilot steering by it flew away.
+                                .append(",\"bearing\":")
+                                .append(bodyAt.sectorX() == e.coord.sectorX()
+                                        && bodyAt.sectorY() == e.coord.sectorY()
+                                        && bodyAt.sectorZ() == e.coord.sectorZ()
+                                        ? "[" + (bodyAt.localX() - e.coord.localX()) + ","
+                                                + (bodyAt.localY() - e.coord.localY()) + ","
+                                                + (bodyAt.localZ() - e.coord.localZ()) + "]"
+                                        // announced, never a zero: a body outside the ship's cell
+                                        // breaks the premise above and has no bearing from here.
+                                        : "null,\"bearingRefused\":\"body not in the ship's cell\"")
                                 .append(",\"distance\":")
                                 .append((long) Math.sqrt(e.coord.staticFrameDistanceSqTo(bodyAt)))
                                 // "distance" is to the body's CENTRE — what the descent trigger
@@ -4605,7 +4607,8 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"durableId\":\"" + (transitDurableId == null ? "" : transitDurableId) + "\"}");
             return;
         }
-        // transit-begin <originDim> <ax> <ay> <az> <speedBlocksPerTick>: start the jump.
+        // transit-begin <originDim> <ax> <ay> <az> <speedBlocksPerTick> [body <dim>]: start the jump —
+        // to the fixture's empty neighbour cell, or, with `body`, to that dimension's launch address.
         //
         // The speed is REQUIRED, and it used to default to 5M. That default was harmless while there
         // was one mechanism and it only sized the park; it stopped being harmless the moment the
@@ -4680,6 +4683,20 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             long speed = Math.max(1L, Long.parseLong(args[5]));
+            // `body <dim>` aims the jump AT A BODY — the production launch address of that dimension,
+            // the same resolution `launch-cell` reports — instead of the fixture's empty neighbour
+            // cell. An empty cell has nothing to stand off from, so an arrival there cannot tell a
+            // standoff from its absence; this is the target that can.
+            if (args.length >= 8 && "body".equalsIgnoreCase(args[6])) {
+                zmaster587.advancedRocketry.space.GalacticCoord bodyAddress =
+                        zmaster587.advancedRocketry.space.SpaceSubsystem.launchBodyAddress(
+                                parseIntOr(args[7], Integer.MIN_VALUE));
+                if (bodyAddress == null) {
+                    send(sender, "{\"error\":\"no launch address for dim " + args[7] + "\"}");
+                    return;
+                }
+                transitTarget = bodyAddress;
+            }
             // Depart under the fixture's own DURABLE id, so the crossing resolves the ship it was told
             // about instead of whatever craft is nearest an anchor every scenario here reuses. The
             // synthetic "t" remains for fixtures that assembled nothing to name.

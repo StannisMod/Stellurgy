@@ -7,6 +7,7 @@ import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
+import zmaster587.advancedRocketry.space.ShipEntryController;
 
 import org.junit.Test;
 
@@ -84,6 +85,89 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
 
         arrivesInTheTargetCell(jumpMark, setup.requireDurableId(), "HYPERSPACE");
     }
+
+    /**
+     * A short jump AIMED AT A BODY comes out standing OFF it, and stays in space.
+     *
+     * <p>An arrival lands on the coordinate it was sent to unless something moves it, and a body's
+     * address is exactly such a coordinate — so an unmoved arrival sits at distance zero, inside the
+     * descent radius, and the flight computer's own proximity trigger takes the ship down on its
+     * first settled tick with nobody at the controls. The standoff ring exists to prevent exactly that,
+     * and this pins it on the path a SHORT jump takes: the direct crossing.</p>
+     *
+     * <p>The claim is read off the ledger rather than off the absence of a descent: the ship must
+     * still HAVE a row (a descent removes it — the ship is no longer in space), and every
+     * descend-target body of the cell it stands in must be farther than the trigger's radius, by the
+     * same centre distance the trigger compares. A cell with no body in it would make both trivially
+     * true, so the body being there is required first.</p>
+     *
+     * <p>red-witnessed: with {@code SpaceSubsystem}'s direct crosser passing the raw {@code target}
+     * to {@code requestDirectJump}, this failed with "Nearest descend-target centre: 0" — the ship
+     * SETTLED in cell 19_0_0 at bearing [0,0,0] from the planet; 2026-09-23.</p>
+     */
+    @Test
+    public void aShortJumpAtABodyArrivesOnItsStandoffRingAndStaysInSpace() throws Exception {
+
+        TransitSetup setup = setUpPilotedShip();
+        String durableId = setup.requireDurableId();
+
+        long jumpMark = events.markInstrumented();
+        // `body 0` aims at the home planet's own address; the speed makes any distance one tick of
+        // flight, so the route is the direct crossing — asserted below off the arrival record.
+        String begin = exec("artest space transit-begin " + setup.originDim + " 1 64 1 "
+                + ONE_TICK_JUMP_SPEED + " body 0");
+        assertTrue("the short jump at the home planet must begin: " + begin,
+                Reply.of(begin).bool("began"));
+        String arrived = events.awaitRecordWithFields(jumpMark, "ship_transit_ended",
+                "the jump at the home planet never ended; the durable record reads "
+                        + exec("artest space transit-export"),
+                ARRIVAL_TICKS, "ship", durableId, "route", "DIRECT");
+        int slotDim = extractInt(arrived, "dim");
+
+        // WINDOW: from the arrival record to the ledger read below, STANDOFF_WATCH_TICKS of the
+        // arrival cell's own clock — the descent trigger runs on its flight computer's tick there,
+        // and a ship inside the radius is taken down on the first of them.
+        GameTicks.advanceWorld(client(), slotDim, STANDOFF_WATCH_TICKS);
+        String bodies = exec("artest space bodies");
+        String row = null;
+        for (String ship : Reply.of("artest space bodies", bodies).objectArray("ships")) {
+            if (durableId.equals(Reply.of(ship).text("ship"))) {
+                row = ship;
+            }
+        }
+        assertTrue("a ship that jumped AT a body must still be in space afterwards — its ledger row is"
+                        + " gone, which is what a descent does. Descents since the jump: "
+                        + events.since(jumpMark, "descent_requested") + " | arrival=" + arrived
+                        + " | bodies=" + bodies,
+                row != null);
+        long nearest = Long.MAX_VALUE;
+        int descendTargets = 0;
+        for (String body : Reply.of("one ship's cell", row).objectArray("cellBodies")) {
+            Reply b = Reply.of("one cell body", body);
+            if (b.bool("descendTarget")) {
+                descendTargets++;
+                nearest = Math.min(nearest, (long) b.number("distance"));
+            }
+        }
+        assertTrue("ARRANGEMENT: the cell the jump ended in must hold the body it was aimed at, or"
+                        + " nothing here could have been stood off from: " + row,
+                descendTargets > 0);
+        assertTrue("a short jump aimed at a body must come out OFF it — outside the "
+                        + ShipEntryController.DESCENT_RADIUS_BLOCKS + "-block descent radius — or the"
+                        + " flight computer takes the ship down with nobody asking. Nearest"
+                        + " descend-target centre: " + nearest + " | row=" + row,
+                nearest > ShipEntryController.DESCENT_RADIUS_BLOCKS);
+    }
+
+    /**
+     * A jump speed that makes ANY distance one tick of flight — so the route is always the direct
+     * crossing, whatever the distance from the fixture's origin to the body aimed at.
+     */
+    private static final long ONE_TICK_JUMP_SPEED = 1L << 40;
+
+    /** Ticks of the arrival cell watched after the arrival: the trigger fires on the first one a
+     *  ship inside the radius spends settled there, and forty is that many times over. */
+    private static final int STANDOFF_WATCH_TICKS = 40;
 
     /**
      * The shared acceptance: wait for the arrival production announces, then require the ship to be

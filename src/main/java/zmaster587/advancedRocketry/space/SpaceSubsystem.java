@@ -134,8 +134,12 @@ public final class SpaceSubsystem {
                         + "a durable id, so nothing can resolve it in the ledger", shipId);
                 return false;
             }
+            // Stood OFF the destination's bodies exactly as a hyperspace arrival is (the placement set
+            // above): a short jump is the same jump, and without this it lands ON a body's address —
+            // inside the descent radius, where the flight computer takes the ship down on its first
+            // settled tick with nobody asking. A cell with no body is returned untouched.
             return this.cellCrossings.requestDirectJump(originSlotDim, originAnchor, durableId,
-                    origin, target);
+                    origin, arrivalStandoff(shipId, target, useClock.getAsLong()));
         });
     }
 
