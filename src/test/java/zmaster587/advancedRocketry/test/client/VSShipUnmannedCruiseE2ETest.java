@@ -12,6 +12,7 @@ import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
+import zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer;
 
 import static org.junit.Assert.assertTrue;
 
@@ -95,29 +96,16 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
-        // The LOAD is the one gate here the log cannot answer: `managed:true` means the physics mod
-        // owns a loaded object for this ship, and nothing records that. It stays a bounded poll — but
-        // asked BY IDENTITY, so it has no distance term to be wrong about however far this ship then
-        // climbs, and a `managed:false` reply means "not loaded" rather than "somebody else's ship".
-        double y0 = Double.NaN;
-        String lastLookup = "(never asked)";
-        // STAYS A LOOP: is this craft loaded and carrying a pose RIGHT NOW is a state that
-        // FLICKERS, and no record answers it — a settle record says it happened once, which a
-        // later unload does not retract. What it cannot see: an unload between two reads.
-        for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
-            bot().waitTicks(5);
-            lastLookup = shipInfoById(shipId);
-            if (ShipInfo.isLoaded(lastLookup)) {
-                y0 = ShipInfo.of(lastLookup).y;
-            }
-        }
+        // The LOAD is a record: `ship_usable` for THIS ship, later than every unload of it — which is
+        // what the "it flickers" argument for a loop here was about. Then ONE read, by identity.
+        awaitShipUsable(events, spawnMark, shipId);
+        String lastLookup = shipInfoById(shipId);
         // An ARRANGEMENT failure, and typed as one: a ship that never loaded has disproved nothing
         // about autopilots.
-        scenario().requireArranged("this scenario's ship (" + shipId + ") must LOAD with the client"
-                        + " present within 200 ticks — last reply " + lastLookup.replace('\n', ' ')
-                        + " (a reply with \"managed\":false is a ship the physics mod does not own"
-                        + " yet - a different wait, not a longer one)",
-                !Double.isNaN(y0));
+        scenario().requireArranged("this scenario's ship (" + shipId + ") must be loaded right after"
+                        + " its usable record — reply " + lastLookup.replace('\n', ' '),
+                ShipInfo.isLoaded(lastLookup));
+        double y0 = ShipInfo.of(lastLookup).y;
 
         // Seat the bot, ramp a vertical cruise with the REAL key (Flight Assist is on by default:
         // holding the throttle ramps the setpoint; ~3 s of full deflection reaches cruise speed).
@@ -145,21 +133,30 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
             // (No ship filter: this class builds one ship and flies it, and the mark is fresh.)
             events.awaitField(rampMark, "pilot_input_set", "input", "set",
                     "the real held key must reach the ship's flight computer at all", 100);
-            // The ramp needs the FULL hold: no early exit, because a position early-exit would
-            // release the key before the setpoint has ramped (audit: not poll-able).
-            int rampIters = 30;
-            for (int i = 0; i < rampIters; i++) {
-                bot().waitTicks(2);
-            }
+            // The ramp needs the FULL hold, and the computer says when it has it: every tick the ramp
+            // moves the setpoint it records `cruise_setpoint_changed` (`via:"pilot"`), and the ramp
+            // saturates at `SHIP_MAX_SPEED` — so "fully ramped" is the record whose `up` reached it.
+            // A position read cannot answer that (a ship still accelerating has climbed too).
+            events.awaitMatching(rampMark, "cruise_setpoint_changed",
+                    reply -> {
+                        for (String r : Events.recordsWhere(reply, "via", "pilot")) {
+                            if (Events.number(r, "up") >= TileAdvancedFlightComputer.SHIP_MAX_SPEED - 1e-3) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    },
+                    "with via = pilot and up at SHIP_MAX_SPEED",
+                    "the held throttle must ramp this ship's vertical cruise all the way to the"
+                            + " computer's own ceiling before the key is let go", 200);
             yRamped = shipY();
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        // The hold stays a fixed DURATION — the ramp is a value climbing, not a commit, and there is
-        // no single record that says "fully ramped". What the log does say is that the ramp reached
-        // the computer at all: the pilot's own throttle moved the cruise setpoint (`via:"pilot"`),
-        // which is the setting the whole rest of this scenario claims survives a dismount. Without it
-        // a red below could not tell a ramp that never happened from an autopilot that dropped it.
+        // The pilot's own throttle moved the cruise setpoint (`via:"pilot"`), which is the setting
+        // the whole rest of this scenario claims survives a dismount; the wait above already took
+        // the saturated record. Read again for the message: without it a red below could not tell a
+        // ramp that never happened from an autopilot that dropped it.
         String ramped = events.since(rampMark, "cruise_setpoint_changed");
         assertTrue("the held throttle must have moved the ship's CRUISE SETPOINT — that setting, not"
                         + " the key, is what an unmanned ship keeps executing. Recorded since the"

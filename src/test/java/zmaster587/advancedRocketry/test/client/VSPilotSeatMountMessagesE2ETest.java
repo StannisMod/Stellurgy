@@ -323,26 +323,20 @@ public class VSPilotSeatMountMessagesE2ETest extends AbstractSharedVsClientE2ETe
                 + " the next leg clicks it: " + riding + " probe=" + probe, !isRiding(riding));
     }
 
-    /** Teleport until the client OBSERVABLY stands within interaction reach of the seat. */
+    /** Stand the player so the client OBSERVABLY stands within interaction reach of the seat. */
     private void standBesideTheSeat() throws Exception {
         standBeside(SEAT_X, SEAT_Z);
     }
 
-    /** Same, for any seat column on this platform. */
+    /** Same, for any seat column on this platform: stood on a floor his client holds, read ONCE. */
     private void standBeside(int seatX, int seatZ) throws Exception {
-        double distSq = Double.POSITIVE_INFINITY;
-        JsonObject state = null;
-        for (int attempt = 0; attempt < 6 && distSq >= 25.0; attempt++) {
-            exec("tp @a " + (seatX + 0.5) + " " + SEAT_Y + " " + (seatZ + 1.5) + " 0 0");
-            bot().waitTicks(20);
-            state = bot().reportState();
-            if (state.has("worldReady") && state.get("worldReady").getAsBoolean()) {
-                double dx = state.get("playerX").getAsDouble() - (seatX + 0.5);
-                double dy = state.get("playerY").getAsDouble() - SEAT_Y;
-                double dz = state.get("playerZ").getAsDouble() - (seatZ + 0.5);
-                distSq = dx * dx + dy * dy + dz * dz;
-            }
-        }
+        standOnFloorTheClientHolds(seatX + 0.5, SEAT_Y, seatZ + 1.5, 0f, 0f,
+                "the player must be stood beside the seat");
+        JsonObject state = bot().reportState();
+        double dx = state.get("playerX").getAsDouble() - (seatX + 0.5);
+        double dy = state.get("playerY").getAsDouble() - SEAT_Y;
+        double dz = state.get("playerZ").getAsDouble() - (seatZ + 0.5);
+        double distSq = dx * dx + dy * dy + dz * dz;
         scenario().requireArranged("the client must observably stand within reach of the seat, or the "
                 + "right-click is dropped before the block sees it. state=" + state, distSq < WITHIN_REACH_DIST_SQ);
     }

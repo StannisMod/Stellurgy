@@ -178,14 +178,12 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     // TICKS_PER_SAMPLE/MEASURE_SAMPLES: the no-key control leg watches the ship for 200 ticks (10 s),
     // sampled every 5 ticks. The key-held leg is a dose of PILOT_THRUST_DOSE_TICKS, far SHORTER, which
     // only makes the comparison stronger: the drift the control bounds has less time to add up.
-    // SETTLE_*: before either leg the ship must hold one altitude within SETTLE_EPS across 100 ticks
-    // - half the measurement window, the same order of magnitude, and long enough that a post-
-    // assembly upward resolve has visibly ended rather than merely paused. SETTLE_EPS is 5 cm: far
-    // below MIN_CLIMB, far above the double-precision jitter of a physics object at rest. The settle
-    // budget is 1200 ticks (60 s), generous because a settle that never converges is itself the
-    // finding: the fixture cannot sit still and no climb measured on it would mean anything.
-    // MAX_CONTROL_DRIFT is a quarter of MIN_CLIMB: any free drift at or above that makes the
-    // key-held climb unattributable.
+    // SETTLE_STABLE_SAMPLES: before either leg the ship is given 100 ticks for a post-assembly
+    // upward resolve to END (half the measurement window, the same order of magnitude); it is the
+    // span a settle loop used to require agreement across, and it is derived, not measured. What
+    // proves the ship then sits still is the no-key control window, which is typed as the
+    // arrangement when it does not. MAX_CONTROL_DRIFT is a quarter of MIN_CLIMB: any free drift at
+    // or above that makes the key-held climb unattributable.
     private static final int TICKS_PER_SAMPLE = 5;
     private static final int MEASURE_SAMPLES = 40;
     private static final int SETTLE_STABLE_SAMPLES = 20;
@@ -219,8 +217,8 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      * how long it is willing to wait.</p>
      */
     private static final int CLIENT_TERRAIN_BUDGET_TICKS = 20 * TICKS_PER_SAMPLE;
-    private static final int SETTLE_MAX_SAMPLES = 240;
-    private static final double SETTLE_EPS = 0.05;
+    /** A deadline for the ship's `ship_usable` record, kept at the 1200 ticks this site was given. */
+    private static final int USABLE_LINK_BUDGET_TICKS = 240 * TICKS_PER_SAMPLE;
     private static final double MAX_CONTROL_DRIFT = MIN_CLIMB / 4.0;
 
     /** How the pilot gets into the seat. The variable the second test method isolates. */
@@ -597,17 +595,20 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // above already proves the craft is live and it has not yet been asked to move, so this
         // ordinarily returns on an event already in the log; the budget stays the settle budget this
         // site was given, converted to Events.await's TICKS (240 five-tick polls = 1200 ticks).
-        awaitShipUsable(events, assemblyMark, shipUuid, SETTLE_MAX_SAMPLES * TICKS_PER_SAMPLE);
+        awaitShipUsable(events, assemblyMark, shipUuid, USABLE_LINK_BUDGET_TICKS);
 
         // ---- CONTROL LEG ---------------------------------------------------------------------
         // Settle first: a freshly assembled physics object may be resolved upward out of the pad it
         // overlaps, and that motion is not the pilot's.
-        Settle rest = settleShipAltitude();
-        double yRest = rest.y;
-        scenario().requireArranged("the ship never reached a stable "
-                        + "resting altitude within " + (SETTLE_MAX_SAMPLES * TICKS_PER_SAMPLE)
-                        + " ticks, so it will not sit still and NO climb measured on it could be "
-                        + "attributed to pilot input. boarding=" + how + " — " + rest.trace,
+        // EXPERIMENT: SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE ticks for that resolve to end, then ONE
+        // reading. It replaced a loop that sampled until twenty readings agreed; the no-key control
+        // window right below is what proves the ship then sits still, and it reports the drift it
+        // saw rather than a loop's run length.
+        bot().waitTicks(SETTLE_STABLE_SAMPLES * TICKS_PER_SAMPLE);
+        double yRest = shipPosY();
+        scenario().requireArranged("the ship must report an altitude once the post-assembly resolve"
+                        + " has had its time, or NO climb measured on it could be attributed to pilot"
+                        + " input. boarding=" + how + " ship=" + shipInfo(),
                 !Double.isNaN(yRest));
 
         double controlDrift = measureMaxDrift(yRest);
@@ -715,36 +716,21 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
      * two arrangement checks that would otherwise let the server drop the click without a trace.
      */
     private String boardByRightClick() throws Exception {
-        // Where the client ACTUALLY is - not where it was told to go. The teleport is what could
-        // have failed, so measuring the target instead of the observation would check nothing.
-        // And it DOES fail on the first try: a player teleported while still falling from the
-        // staging position carries his momentum through the teleport, lands moving, and can slide
-        // off the pad - so the teleport is re-issued until the client is OBSERVABLY standing in
-        // reach, not merely told to be.
-        double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
-        double distSq = Double.POSITIVE_INFINITY;
-        for (int attempt = 0; attempt < 5 && distSq >= MAX_INTERACT_DIST_SQ; attempt++) {
-            if (attempt > 0) {
-                exec("tp @a " + standX + " " + standY + " " + standZ + " 0 0");
-            }
-            // The wait is load-bearing twice over: the server drops interactions while its own
-            // teleport is unconfirmed, and the client needs time to damp any leftover motion.
-            bot().waitTicks(20);
-            JsonObject state = bot().reportState();
-            for (int ready = 0; ready < 20 && !isWorldReady(state); ready++) {
-                bot().waitTicks(TICKS_PER_SAMPLE);
-                state = bot().reportState();
-            }
-            scenario().requireArranged("the client's world must be ready before its position can be "
-                    + "read: " + state, isWorldReady(state));
-            px = state.get("playerX").getAsDouble();
-            py = state.get("playerY").getAsDouble();
-            pz = state.get("playerZ").getAsDouble();
-            distSq = distanceSqToSeatCentre(px, py, pz);
-        }
+        // Where the client ACTUALLY is - not where it was told to go. Read ONCE: the stand teleport
+        // was awaited as applied on the client, and the seat's chunk as held by it, before the seat
+        // was measured — so by here he has been standing on a floor his client holds. A slide off
+        // the pad would be the stand's own failure, and it is reported as that rather than papered
+        // over by re-teleporting until he stays.
+        JsonObject state = bot().reportState();
+        scenario().requireArranged("the client's world must be ready before its position can be "
+                + "read: " + state, isWorldReady(state));
+        double px = state.get("playerX").getAsDouble();
+        double py = state.get("playerY").getAsDouble();
+        double pz = state.get("playerZ").getAsDouble();
+        double distSq = distanceSqToSeatCentre(px, py, pz);
         scenario().requireArranged("the client must OBSERVABLY be standing within the server's "
                         + "interaction reach of the seat, or the right-click is discarded before it "
-                        + "reaches the seat block - and repeated teleports could not put it there. "
+                        + "reaches the seat block. "
                         + "observed=(" + px + "," + py + "," + pz + ")"
                         + " distSq=" + distSq + " limit=" + MAX_INTERACT_DIST_SQ,
                 distSq < MAX_INTERACT_DIST_SQ);
@@ -800,74 +786,10 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         return mReply.has(POS_Y) ? Double.parseDouble(mReply.text(POS_Y)) : Double.NaN;
     }
 
-    /** A settle attempt: the altitude it came to rest at ({@code NaN} if it never did), and why. */
-    private static final class Settle {
-        final double y;
-        final String trace;
-        Settle(double y, String trace) { this.y = y; this.trace = trace; }
-    }
-
-    /**
-     * Waits for the ship to hold one altitude within {@link #SETTLE_EPS} across
-     * {@link #SETTLE_STABLE_SAMPLES} consecutive samples, and answers that altitude - or
-     * {@code NaN}, with the reading, if it never settles within the budget.
-     *
-     * <p>CLASSIFIED, and it stays a loop. The altitude is a physical value nobody publishes and the
-     * physics object never decides it has come to rest, so there is no link to await; but neither is
-     * this the window-then-read form that governs a converging value, because the claim is not about
-     * a VALUE at all — it is about the SEQUENCE. "The ship is sitting still" is a statement that N
-     * consecutive readings agreed, and no single read taken at the end of a window can make it: a
-     * craft still oscillating about the pad answers with a plausible altitude every time it is
-     * asked. The loop IS the measurement here, not a way of waiting for one.</p>
-     *
-     * <p>What the expiry may no longer do is report {@code NaN} and leave the caller to say
-     * "it never settled", which would be equally true of a ship that had drifted a hundred blocks
-     * and of one wobbling by six centimetres. The trace carries the last anchor, the last reading
-     * and the longest run of agreeing samples, so a refusal can be argued with rather than only
-     * repeated.</p>
-     */
-    private Settle settleShipAltitude() throws Exception {
-        double anchor = Double.NaN;
-        double last = Double.NaN;
-        int stable = 0;
-        int bestRun = 0;
-        int unresolved = 0;
-        // STAYS A LOOP: settling is a VALUE converging, and the quantity it exits on — an altitude
-        // that has not moved across a run of samples — exists only BETWEEN observations, so no
-        // record could carry it. What this cannot see: a craft that held still for the run and
-        // moved immediately after, which is why the caller reads the pose again rather than
-        // trusting the run alone.
-        for (int sample = 0; sample < SETTLE_MAX_SAMPLES; sample++) {
-            bot().waitTicks(TICKS_PER_SAMPLE);
-            double y = shipPosY();
-            last = y;
-            if (Double.isNaN(y)) {
-                unresolved++;
-                anchor = Double.NaN;
-                stable = 0;
-                continue;
-            }
-            if (Double.isNaN(anchor) || Math.abs(y - anchor) > SETTLE_EPS) {
-                anchor = y;
-                stable = 0;
-            } else {
-                stable++;
-                bestRun = Math.max(bestRun, stable);
-                if (stable >= SETTLE_STABLE_SAMPLES) {
-                    return new Settle(y, "settled at " + y + " after " + (sample + 1) + " samples");
-                }
-            }
-        }
-        return new Settle(Double.NaN, "never held one altitude to within " + SETTLE_EPS
-                + " across " + SETTLE_STABLE_SAMPLES + " samples: longest agreeing run " + bestRun
-                + ", last anchor " + anchor + ", last reading " + last + ", "
-                + unresolved + " of " + SETTLE_MAX_SAMPLES + " samples resolved no ship at all");
-    }
-
     /** The largest deviation from {@code from} over a full measurement window. */
     private double measureMaxDrift(double from) throws Exception {
         double worst = 0.0;
-        // A WINDOW whose result is the LARGEST deviation across it — the method's whole purpose.
+        // WINDOW: its result is the LARGEST deviation across it — the method's whole purpose.
         // A drift that appeared and was corrected is exactly what is being looked for, so a single
         // read would report the correction. What it cannot see: a worse excursion between two
         // samples.

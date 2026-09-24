@@ -41,15 +41,18 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
         return String.join("\n", serverClient().execute(cmd));
     }
 
-    /** Poll the loaded-ship count in the pool dim until >= 1 (bounded). */
-    private int pollLoaded(int dim, int tries) throws Exception {
-        int c = -1;
-        for (int i = 0; i < tries && c < 1; i++) {
-            bot().waitTicks(5);
-            Reply mReply = Reply.of(exec("artest vs ship-count " + dim));
-            c = mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : -1;
-        }
-        return c;
+    /**
+     * Enter the pool dim on the ship, then wait for production's own record that a ship in it became
+     * USABLE (`ship_usable`, carrying the dimension) — from a mark taken before the client moved, so
+     * it is this entry's load and not an earlier one. The slot is fresh and holds one ship, so the
+     * dimension names it. Then ONE read of the loaded count, for the assertion's message.
+     */
+    private int enterAndAwaitLoad(Events serverLog, int slot, String what) throws Exception {
+        long loadMark = serverLog.markInstrumented();
+        enterPoolNearShip(slot);
+        serverLog.awaitField(loadMark, "ship_usable", "dim", slot, what, 300);
+        Reply mReply = Reply.of(exec("artest vs ship-count " + slot));
+        return mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : -1;
     }
 
     @Test
@@ -73,8 +76,8 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
                 queryable >= 1);
 
         // Bot enters the pool dim ON the ship so VS proximity-loads it (physics active).
-        enterPoolNearShip(slot);
-        int loaded = pollLoaded(slot, 60);
+        int loaded = enterAndAwaitLoad(serverLog, slot,
+                "the ship must LOAD (physics) with a client on it in the pool dim");
         assertTrue("the ship must LOAD (physics) with a client on it in the pool dim: loaded=" + loaded,
                 loaded >= 1);
 
@@ -93,8 +96,8 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
                 Reply.of(exec("artest space reload " + slot + " deep")).bool("present"));
 
         // Bot returns onto the ship; it must RE-LOAD live after the rebind.
-        enterPoolNearShip(slot);
-        int loadedAfter = pollLoaded(slot, 60);
+        int loadedAfter = enterAndAwaitLoad(serverLog, slot,
+                "the ship must RE-LOAD live after the slot rebind");
         assertTrue("the ship must RE-LOAD live after the slot rebind: loadedAfter=" + loadedAfter,
                 loadedAfter >= 1);
 

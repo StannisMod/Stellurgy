@@ -171,36 +171,37 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * axis beats the lateral one") built from two reads a moment apart attributes one instant's
      * travel to another's — which is what the form this replaces did.</p>
      *
-     * <p><b>The drive still stops on the threshold, and that is deliberate rather than a relapse.</b>
-     * A held key goes on flying the craft, and a craft flown for the full ceiling leaves the loaded
-     * region and stops reporting a position at all (measured — see {@link #travelOrNull}). What
-     * keeps this honest is that the DOMINANCE assertion measures something the threshold did not
-     * establish: "it moved 2 blocks along Z" says nothing about whether X moved more. Where a drive
-     * must stop on its own claim, at least one assertion has to read a fact the stop did not
-     * settle, or the leg is back to asserting its own exit condition.</p>
-     *
-     * <p>The ceiling is the poll's own — 2 ticks × 60 iterations.</p>
+     * <p><b>A dose, not a drive until the threshold.</b> The key's arrival at the flight computer is
+     * a record and is awaited; then the key is held for {@link #TRAVEL_DOSE_TICKS} while the window
+     * samples, and let go. It used to be held until the travel passed 2 blocks, up to 120 ticks — and
+     * a craft flown for that full ceiling leaves the loaded region and stops reporting a position at
+     * all (measured — see {@link #travelOrNull}), which is why the dose is a quarter of it. The
+     * DOMINANCE assertion still reads a fact the travel bar does not settle: "it moved 2 blocks along
+     * Z" says nothing about whether X moved more.</p>
      */
     private double[] travelWindow(String shipId, int key, Axis driven, Axis other,
                                   double drivenBefore, double otherBefore) throws Exception {
         double best = 0.0;
         double otherThere = 0.0;
         String endedBy = "window";
+        Events log = events();
+        long pressMark = log.markInstrumented();
         bot().holdKey(key);
         try {
-            int ceiling = 2 * 60;
-            // STAYS A LOOP, twice over: the key is HELD across it, so its iterations are part of
-            // the stimulus, and what it reads is a distance that grows — a value converging on a
-            // threshold, not an event anything commits. The ceiling is patience; the exit is the
-            // measurement. What this cannot see: a craft that crossed the threshold and came back
-            // inside one 2-tick sample.
-            for (int spent = 0; spent < ceiling && Math.abs(best) <= 2.0; spent += 2) {
+            log.awaitMatching(pressMark, "pilot_input_set",
+                    seen -> Events.anyRecordHasAll(seen, "input", "set", "dim", "0"),
+                    "with input = set in dim 0",
+                    "the seated pilot's held key must reach the ship's flight computer", 200);
+            // WINDOW: under a dose of TRAVEL_DOSE_TICKS with the key held, the MAXIMUM driven travel
+            // and the other axis off the same reply are the measurement; the ship publishes no
+            // per-tick pose. What it cannot see: an excursion inside one 2-tick sample.
+            for (int spent = 0; spent < TRAVEL_DOSE_TICKS; spent += 2) {
                 bot().waitTicks(2);
                 String info = shipInfoById(shipId);
                 Double d = travelOrNull(info, driven, drivenBefore);
                 if (d == null) {
                     endedBy = "ship stopped reporting a position at " + spent + " ticks";
-                    break;
+                    continue;
                 }
                 if (Math.abs(d) > Math.abs(best)) {
                     best = d;
@@ -216,6 +217,14 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                 + " endedBy=" + endedBy);
         return new double[] {best, otherThere};
     }
+
+    /**
+     * Ticks a held travel key is given from its arrival at the flight computer. Derived, not
+     * measured: the setpoint ramps from rest to {@code SHIP_MAX_SPEED} (2 blocks a tick) over 60
+     * ticks, so the 2-block bar is passed near tick 11 and thirty ticks carry the craft ~15 blocks —
+     * well past the bar and a quarter of the 120 that was measured to fly it out of the loaded region.
+     */
+    private static final int TRAVEL_DOSE_TICKS = 30;
 
     private static final String COUNT = "count";
     private static final String DUMMY_ID = "dummyId";
@@ -406,22 +415,22 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // Now that it is loaded + physics-enabled, command a straight-UP velocity realized
         // as FORCE (the working path — a raw setpoint does nothing). Up isolates the result
         // from ground friction: the only thing to overcome is gravity, and the controller's
-        // deadbeat force (F = mass·accel, clamped to thrust authority) exceeds it. Re-command
-        // each tick and POLL for the climb — VS's physics-thread activation after a load can
-        // lag a few ticks, so drive until it rises (bounded) rather than a fixed window.
+        // deadbeat force (F = mass·accel, clamped to thrust authority) exceeds it. ONE command: a
+        // probe command stands on the computer until `force-clear` (it is a field the controller
+        // reads every tick), so re-sending it each tick added nothing but traffic.
         double yBefore = ShipInfo.of(shipInfoById(shipId)).y;
         double yAfter = yBefore;
         double maxClimb = 0.0;
         double velY = 0.0;
-        // The loop DRIVES; it no longer decides. Its exit condition used to be `yAfter - yBefore
-        // <= 1.5`, i.e. the very claim the assertion below makes — so the assertion could not fail
-        // except by the loop running out, and its message then blamed the force controller for a
-        // timeout. What is measured is the MAXIMUM climb over the window, not the last sample: a
-        // quantity read at one instant can have come back, and the window's extremum cannot.
+        String upCmd = exec("artest vs force-vel-by-id 0 " + shipId + " 0 8 0");
+        assertTrue("force-vel must reach THIS ship's own flight computer: " + upCmd,
+                Reply.of(upCmd).bool("commanded"));
+        // WINDOW: the MAXIMUM climb over the window is the measurement, not the last sample — a
+        // quantity read at one instant can have come back, and the window's extremum cannot. The link
+        // would be a record of the hull's pose passing yBefore + 1, and none exists: VS integrates the
+        // motion on its physics tick and publishes no per-tick pose. What it cannot see: a climb that
+        // peaked and fell back between two 1-tick samples (it reads low, the strict direction).
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
-            String cmd = exec("artest vs force-vel-by-id 0 " + shipId + " 0 8 0");
-            assertTrue("force-vel must reach THIS ship's own flight computer: " + cmd,
-                    Reply.of(cmd).bool("commanded"));
             bot().waitTicks(1);
             ShipInfo info = ShipInfo.of(shipInfoById(shipId));
             yAfter = info.y;
@@ -438,22 +447,20 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
 
         // The same controller must also ROTATE the ship: command a yaw angular velocity,
         // realized as TORQUE (linear zeroed -> the ship hovers while it turns). The ship's
-        // body->world attitude quaternion must move meaningfully off where it started. Poll
-        // for the turn (bounded) for the same activation-lag robustness.
+        // body->world attitude quaternion must move meaningfully off where it started. One command,
+        // for the reason given at the climb above: it stands until cleared.
         double[] qBefore = readQuat(shipInfoById(shipId));
         double dot = 1.0;
         double minDot = 1.0;
-        // The MINIMUM over the window is the measurement, and here that is not a refinement — it is
-        // the only correct reading. A ship under a held 1 rad/s yaw command passes through every
-        // attitude, so |dot| FALLS and then RISES back toward 1.0 as it comes round; a last-sample
-        // read of a full turn says "unmoved". The old loop hid that by exiting the moment the dot
-        // dropped — on the same predicate the assertion then restated.
-        // A WINDOW, and its measurement is the MINIMUM |dot| across the turn for the reason set out
-        // just above. What it cannot see: an attitude passed through between two 1-tick samples.
+        String turnCmd = exec("artest vs force-rot-by-id 0 " + shipId + " 0 1.0 0");
+        assertTrue("force-rot must reach THIS ship's own flight computer: " + turnCmd,
+                Reply.of(turnCmd).bool("commanded"));
+        // WINDOW: the MINIMUM |dot| over the window is the measurement, and here that is not a
+        // refinement — it is the only correct reading. A ship under a held 1 rad/s yaw command passes
+        // through every attitude, so |dot| FALLS and then RISES back toward 1.0 as it comes round; a
+        // last-sample read of a full turn says "unmoved", and no record carries the hull's attitude
+        // per physics tick. What it cannot see: an attitude passed through between two 1-tick samples.
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
-            String cmd = exec("artest vs force-rot-by-id 0 " + shipId + " 0 1.0 0");
-            assertTrue("force-rot must reach THIS ship's own flight computer: " + cmd,
-                    Reply.of(cmd).bool("commanded"));
             bot().waitTicks(1);
             double[] qNow = readQuat(shipInfoById(shipId));
             // |dot| of two unit quaternions is cos(halfAngle); < 0.98 => rotated by more than ~23°.
@@ -469,24 +476,35 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // ATTITUDE HOLD: command an absolute target orientation (90° yaw about world Y) and the
         // controller must drive the ship's attitude TO it and converge — the interface Free
         // Flight feeds (its per-tick target quaternion). Poll for convergence (bounded).
-        final double[] target = {0.70710678, 0.0, 0.70710678, 0.0}; // {w,x,y,z}
-        double convDot = 0.0;
-        // The FINAL value is the measurement here, and unlike the two windows above that is the
-        // right reading: the claim is that the controller CONVERGES and HOLDS, so a maximum along
-        // the way would pass on a ship that swung through the target and carried on. The loop drives
-        // the whole window and no longer exits on the predicate the assertion restates.
-        for (int i = 0; i < ATTITUDE_WINDOW_TICKS; i++) {
-            String cmd = exec("artest vs point-by-id 0 " + shipId
-                    + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]);
-            assertTrue("point must reach THIS ship's own flight computer: " + cmd,
-                    Reply.of(cmd).bool("commanded"));
-            bot().waitTicks(1);
-            double[] q = readQuat(shipInfoById(shipId));
-            convDot = Math.abs(q[0] * target[0] + q[1] * target[1] + q[2] * target[2] + q[3] * target[3]);
-        }
+        // The target is the hull's CURRENT attitude turned 90° about world Y (the world-frame turn
+        // applied on the left), so it always starts 90° away — |dot| = cos 45° = 0.707 — whatever
+        // the yaw leg above left behind. A fixed target let a hull that happened to stop near it pass
+        // with the hold doing nothing.
+        final double[] turn = {0.70710678, 0.0, 0.70710678, 0.0}; // {w,x,y,z}: 90° about +Y
+        double[] qHoldFrom = readQuat(shipInfoById(shipId));
+        final double[] target = {
+                turn[0] * qHoldFrom[0] - turn[1] * qHoldFrom[1] - turn[2] * qHoldFrom[2] - turn[3] * qHoldFrom[3],
+                turn[0] * qHoldFrom[1] + turn[1] * qHoldFrom[0] + turn[2] * qHoldFrom[3] - turn[3] * qHoldFrom[2],
+                turn[0] * qHoldFrom[2] - turn[1] * qHoldFrom[3] + turn[2] * qHoldFrom[0] + turn[3] * qHoldFrom[1],
+                turn[0] * qHoldFrom[3] + turn[1] * qHoldFrom[2] - turn[2] * qHoldFrom[1] + turn[3] * qHoldFrom[0]};
+        double startDot = Math.abs(qHoldFrom[0] * target[0] + qHoldFrom[1] * target[1]
+                + qHoldFrom[2] * target[2] + qHoldFrom[3] * target[3]);
+        // ONE command: `point-by-id` engages an attitude HOLD that stands until `force-clear` — the
+        // re-send each tick was measured unnecessary on 2026-09-23.
+        String pointCmd = exec("artest vs point-by-id 0 " + shipId
+                + " " + target[0] + " " + target[1] + " " + target[2] + " " + target[3]);
+        assertTrue("point must reach THIS ship's own flight computer: " + pointCmd,
+                Reply.of(pointCmd).bool("commanded"));
+        // WINDOW: two reads, before the command and after the window. The FINAL value is the
+        // measurement: the claim is that the controller CONVERGES and HOLDS, so a maximum along the
+        // way would pass on a ship that swung through the target and carried on. The hold never
+        // decides it has arrived, so there is no record to link on.
+        bot().waitTicks(ATTITUDE_WINDOW_TICKS);
+        double[] q = readQuat(shipInfoById(shipId));
+        double convDot = Math.abs(q[0] * target[0] + q[1] * target[1] + q[2] * target[2] + q[3] * target[3]);
         assertTrue("attitude-hold must converge the ship to the commanded orientation and still be"
-                        + " there at the end of the window (|dot to target|=" + convDot
-                        + ", 1.0 = exact)",
+                        + " there at the end of the window (|dot to target| before=" + startDot
+                        + " after " + ATTITUDE_WINDOW_TICKS + " ticks=" + convDot + ", 1.0 = exact)",
                 convDot > ATTITUDE_MOVED_DOT);
 
         // FULL FREE FLIGHT PATH: hand the flight computer a held pilot input. Its server tick
@@ -507,21 +525,21 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         double[] at = pBefore;
         double disp = 0.0;
         double maxDisp = 0.0;
-        // Drives the whole window and measures the MAXIMUM displacement: the exit condition used to
-        // be the assertion below, and a ship that moves out and drifts back reads zero at the end.
+        // Addressed by SHIP (the input used to go to a server-wide static, which no pilot has), and
+        // sent ONCE: the computer keeps a pilot input until it is handed another, so the per-tick
+        // re-send added only traffic.
+        String ffCmd = exec("artest vs ff-input-by-id 0 " + shipId
+                + " 0 1 0 0 0 0"); // throttleVertical = full up
+        if (!Reply.of(ffCmd).bool("afcResolved")) {
+            // Read only on this branch: what the ship record says at the moment the computer could
+            // not be found, which separates "never found" from "it left".
+            fail("the throttle must reach this ship's own flight computer: " + ffCmd
+                    + " | ship now: " + shipInfoById(shipId));
+        }
+        // WINDOW: the MAXIMUM displacement over the window is the measurement — a ship that moves out
+        // and drifts back reads zero at the end. No record carries the hull's pose per physics tick.
+        // What it cannot see: an excursion between two 1-tick samples (it reads low, the strict way).
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
-            // Addressed by SHIP and re-issued from its freshest pose each iteration. The input used to
-            // go to a server-wide static, which no pilot has; re-sending is also what a real pilot's
-            // client does every tick, and it keeps the address on a ship that is by now moving.
-            String cmd = exec("artest vs ff-input-by-id 0 " + shipId
-                    + " 0 1 0 0 0 0"); // throttleVertical = full up
-            if (!Reply.of(cmd).bool("afcResolved")) {
-                // Read only on this branch: which tick of the window lost the computer, and what the
-                // ship record says at that moment, separate "it was never found" from "it left".
-                fail("the throttle must reach this ship's own flight computer: " + cmd
-                        + " | window tick " + i + " of " + FLIGHT_WINDOW_TICKS
-                        + " maxDisp=" + maxDisp + " | ship now: " + shipInfoById(shipId));
-            }
             bot().waitTicks(1);
             double[] p = readVec(shipInfoById(shipId));
             at = p;
@@ -624,19 +642,20 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // the seat->AFC per-tile path must lift the ship (isolates ground friction: up only).
         double yAfter = yBefore;
         double maxSeatClimb = 0.0;
-        String lastSeat = "";
-        // Drives the whole window; the exit condition was the assertion below. Measures the MAXIMUM
-        // climb, so a ship that rises and settles back is not read as one that never rose.
+        // BY ID: this world is shared with every other scenario in the class, and the unaddressed
+        // `seat-input` takes whichever pilot seat it lists first — a command that answers
+        // afcResolved:true from somebody else's ship while this one sits still. Sent ONCE: the seat
+        // hands the computer an input the computer keeps until it is handed another.
+        String lastSeat = exec("artest vs seat-input-by-id 0 " + shipId + " 0 1 0 0 0 0"); // full up
+        assertTrue("seat-input must find THIS ship's pilot seat: " + lastSeat,
+                Reply.of(lastSeat).bool("seatFound"));
+        assertTrue("the pilot seat must resolve its linked flight computer (offset intact "
+                        + "after VS relocation): " + lastSeat,
+                Reply.of(lastSeat).bool("afcResolved"));
+        // WINDOW: the MAXIMUM climb over the window is the measurement, so a ship that rises and
+        // settles back is not read as one that never rose. No record carries the hull's pose per
+        // physics tick. What it cannot see: a peak between two 1-tick samples (reads low).
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
-            // BY ID: this world is shared with every other scenario in the class, and the
-            // unaddressed `seat-input` takes whichever pilot seat it lists first — a command that
-            // answers afcResolved:true from somebody else's ship while this one sits still.
-            lastSeat = exec("artest vs seat-input-by-id 0 " + shipId + " 0 1 0 0 0 0"); // full up
-            assertTrue("seat-input must find THIS ship's pilot seat: " + lastSeat,
-                    Reply.of(lastSeat).bool("seatFound"));
-            assertTrue("the pilot seat must resolve its linked flight computer (offset intact "
-                            + "after VS relocation): " + lastSeat,
-                    Reply.of(lastSeat).bool("afcResolved"));
             bot().waitTicks(1);
             yAfter = ShipInfo.of(shipInfoById(shipId)).y;
             maxSeatClimb = Math.max(maxSeatClimb, yAfter - yBefore);
@@ -842,6 +861,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         // (unmoved) ship nose every client tick. Read BOTH the client camera and the server ship
         // attitude, converting the latter to a heading with the SAME quat->Euler the lock uses.
         double camYawBefore = bot().reportState().get("playerYaw").getAsDouble();
+        // STIMULUS: the iterations ARE the input — six hard sideways looks, one a tick, each measured
+        // from where the last one left the view. Delete the loop and nothing is steered at all.
         for (int i = 0; i < 6; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat() + 30f, st.get("playerPitch").getAsFloat());

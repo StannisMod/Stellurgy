@@ -108,8 +108,8 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
     private static final double Y_TOLERANCE = 0.05d;
     private static final double SYNC_TOLERANCE = 0.5d;
     private static final double ARRIVAL_TOLERANCE = 1.0d;
-    /** How many (deliver, settle) rounds a rung gets before it is called undeliverable. */
-    private static final int DELIVERY_ATTEMPTS = 4;
+    /** A deadline for each of a delivery's two records (the chunk, the placement) — not a settle. */
+    private static final int DELIVERY_LINK_BUDGET_TICKS = 200;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", serverClient().execute(cmd));
@@ -353,45 +353,47 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
     }
 
     /**
-     * Delivers the player into the arena and does not return until he is STANDING in it.
+     * Delivers the player into the arena onto a floor his CLIENT holds, and reports whether he is
+     * STANDING in it.
      *
-     * <p>One delivery is not enough and the first run proved it: the chunks are force-loaded on the
-     * server but the CLIENT has not received them yet, so client-side physics see air, he falls
-     * through the floor, and the server accepts his movement packets. Delivering again once the
-     * chunks have arrived is what makes him stay. The loop converges rather than guessing a settle
-     * time, and reports which of the two conditions it never met.</p>
+     * <p>One blind delivery is not enough and the first run proved it: the chunks are force-loaded on
+     * the server but the CLIENT has not received them yet, so client-side physics see air, he falls
+     * through the floor, and the server accepts his movement packets. That used to be answered by
+     * re-delivering in a loop until he stayed; it is now the two named steps of
+     * {@link ClientEvents#placeOntoGroundItHolds} — the chunk's arrival and the placement are records
+     * — and one reading after.</p>
      *
      * @return {@code null} once he is standing, or a reason string for the INCONCLUSIVE list
      */
     private String deliverAndStand(int x) throws Exception {
-        double lastX = Double.NaN;
-        double lastY = Double.NaN;
-        String lastReply = "";
-        // STAYS A LOOP, and the refusal names the link. The re-issued far-tp IS the stimulus — a
-        // delivery that did not take is not recoverable by reading longer — and the exit is a
-        // CONVERGENCE on where the server holds him. The link that looks right is `pos_jump`, and
-        // it does not answer: it fires only on a VERTICAL write past a threshold and carries
-        // `from`/`to` in Y alone, so it cannot say he arrived at this X. What this cannot see: a
-        // delivery that landed and was undone between two attempts.
-        for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
-            lastReply = exec("artest player far-tp " + fmt(x + 0.5d) + " " + STAND_Y + " "
-                    + fmt(ARENA_Z + 0.5d));
-            GameTicks.advanceWorld(serverClient(), OVERWORLD, 40);
-            bot().waitTicks(30);
-            lastX = serverX();
-            lastY = serverY();
-            if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE
-                    && Math.abs(lastY - STAND_Y) < Y_TOLERANCE) {
-                return null;
-            }
+        String place = "artest player far-tp " + fmt(x + 0.5d) + " " + STAND_Y + " "
+                + fmt(ARENA_Z + 0.5d);
+        try {
+            ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot()), this::exec, place,
+                    x + 0.5d, STAND_Y, ARENA_Z + 0.5d,
+                    "the player must be delivered onto the arena floor at x=" + x, DELIVERY_LINK_BUDGET_TICKS);
+        } catch (AssertionError notPlaced) {
+            return "the player was never placed at x=" + x + " - arrangement, not the coordinate: "
+                    + oneLine(notPlaced.getMessage());
+        }
+        // EXPERIMENT: forty server ticks and thirty client ticks standing on the delivered floor —
+        // a floor the client does not hold drops him well inside that — and the reading after is
+        // whether he stayed.
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, 40);
+        // EXPERIMENT: the client half of the same dose.
+        bot().waitTicks(30);
+        double lastX = serverX();
+        double lastY = serverY();
+        if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE
+                && Math.abs(lastY - STAND_Y) < Y_TOLERANCE) {
+            return null;
         }
         boolean arrived = Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE;
         return (arrived
                 ? "he arrived but would not stand (posY=" + fmt(lastY) + ", floor top " + STAND_Y
-                        + ") - he is falling through a floor the client has not received"
-                : "the player never arrived (server posX=" + lastX + ", wanted " + (x + 0.5d) + ")")
-                + " after " + DELIVERY_ATTEMPTS + " deliveries - arrangement, not the coordinate."
-                + " lastReply=" + oneLine(lastReply);
+                        + ") on a floor his client was sent"
+                : "the player was placed and then was not there (server posX=" + lastX + ", wanted "
+                        + (x + 0.5d) + ")") + " - arrangement, not the coordinate.";
     }
 
     // ─── instruments ────────────────────────────────────────────────────────────

@@ -288,7 +288,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                 Reply.of(exec("artest vs force-clear-by-id " + originDim + " " + shipId)
                         ).ok());
         long clientPilotMark = clientEvents().mark();
-        if (!climbedWithinAttempts(3)) {
+        if (!climbedOnADose("control leg: the pilot's held vertical key must reach his flight computer"
+                + " before the transit")) {
             scenario().arrangementFailed("control leg: the pilot must be able to fly BEFORE the"
                     + " transit." + clientPilotAccount(clientPilotMark)
                     + " delivery=" + seatDelivery()
@@ -428,7 +429,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // a stale pre-relog crew reference would produce. Same bounded retry as the pre-leg: the
         // just-crossed ship settles asynchronously in its target cell.
         long arrivedPilotMark = clientEvents().mark();
-        boolean flewAfterRelog = climbedWithinAttempts(3);
+        boolean flewAfterRelog = climbedOnADose("after a mid-transit relog, the pilot's held vertical"
+                + " key must reach the ARRIVED ship's flight computer");
         assertTrue("after a mid-transit relog, held input must MOVE THE ARRIVED SHIP - control "
                 + "resumes on arrival." + (flewAfterRelog ? "" : clientPilotAccount(arrivedPilotMark))
                 + " delivery=" + seatDelivery(),
@@ -445,50 +447,21 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
 
     // --- helpers (mirror the tier-2 client e2e classes) -----------------------------------------
 
-    /** Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
-     *  {@code from} (bounded, early-exit); returns the last observed altitude. */
-    private double climbWith(int key, double from) throws Exception {
-        // THE MULTIPLIER STAYS, and this is what it waits on: a held key is sampled and re-sent per
-        // CLIENT TICK - on change, plus a re-assert every PilotInputCadence.REPEAT_TICKS - so a loaded
-        // box stretches the climb through the client's TICK rate. Wall-clock-bound work, which is the
-        // one shape a fork scale measures. (NOT "once per rendered frame": that was the standing
-        // explanation until 2026-08-21 and it is false.)
-        int budget = 40;
-        double last = from;
-        bot().holdKey(key);
-        try {
-            // A WINDOW with the key HELD across it: the iterations are part of the stimulus, and
-            // what is asked is whether the climb reached a threshold — a value, not an instant
-            // anything commits. What it cannot see: a climb that reached MIN_CLIMB and sagged back
-            // inside one 5-tick sample.
-            for (int i = 0; i < budget && (last - from) < MIN_CLIMB; i++) {
-                bot().waitTicks(5);
-                last = clientPlayerY();
-            }
-        } finally {
-            bot().releaseKey(key);
-        }
-        return last;
-    }
-
-    /** Up to {@code attempts} bounded held-key climb windows with a settle between them; true as
-     *  soon as one window sees the client-rendered altitude gain {@link #MIN_CLIMB}. */
-    private boolean climbedWithinAttempts(int attempts) throws Exception {
-        // STAYS A LOOP: each iteration IS a stimulus — a fresh held-key climb window — and the
-        // thing being asked is whether one of them moved the client-rendered altitude by enough.
-        // A link would have to be a record of the climb, and the drive publishes none: what exists
-        // is the input reaching the flight computer, which is already awaited where the key is
-        // pressed. What this cannot see: which attempt did it, and whether an earlier one nearly
-        // did.
-        for (int i = 0; i < attempts; i++) {
-            double from = clientPlayerY();
-            double to = climbWith(Keyboard.KEY_R, from);
-            if ((to - from) >= MIN_CLIMB) {
-                return true;
-            }
-            bot().waitTicks(40);
-        }
-        return false;
+    /**
+     * A DOSE of thrust on the pilot's vertical key in the world his client is in
+     * ({@link #climbOnPilotKey} — the key's arrival at the flight computer and its release are both
+     * records), then ONE reading: whether the client-rendered altitude gained {@link #MIN_CLIMB}.
+     *
+     * <p>It used to hold the key until the altitude crossed the threshold, and to retry that whole
+     * climb up to three times forty ticks apart — so a control chain that worked on the third try
+     * read the same as one that worked at once, and a key that never arrived read as "did not climb".
+     * Now the arrival fails naming itself, and the climb is judged once.</p>
+     */
+    private boolean climbedOnADose(String what) throws Exception {
+        double from = clientPlayerY();
+        int dim = bot().reportWeather().get("dim").getAsInt();
+        climbOnPilotKey(dim, PILOT_THRUST_DOSE_TICKS, what);
+        return (clientPlayerY() - from) >= MIN_CLIMB;
     }
 
     /**

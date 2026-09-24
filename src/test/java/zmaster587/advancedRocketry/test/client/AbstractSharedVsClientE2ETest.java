@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 
 
 
+import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
@@ -593,9 +594,17 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                 + " measured: " + before, ShipInfo.isLoaded(before));
         final double y0 = ShipInfo.of(before).y;
 
-        climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, "the pilot's held vertical key must reach the"
-                + " craft's flight computer — until it has, a craft that did not climb says nothing"
-                + " about flight");
+        try {
+            climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, "the pilot's held vertical key must reach the"
+                    + " craft's flight computer — until it has, a craft that did not climb says nothing"
+                    + " about flight");
+        } catch (ArrangementFailure already) {
+            throw already;
+        } catch (AssertionError keyNeverArrived) {
+            // The hover is SETUP for whatever the scenario is about, so a key that never reached the
+            // computer is an arrangement that did not build — typed as one, not as a contract red.
+            scenario().arrangementFailed(keyNeverArrived.getMessage());
+        }
 
         String after = shipInfoById(shipId);
         double y = ShipInfo.isLoaded(after) ? ShipInfo.of(after).y : Double.NaN;

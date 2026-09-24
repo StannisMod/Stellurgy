@@ -14,6 +14,7 @@ import zmaster587.advancedRocketry.test.Reply;
 
 import zmaster587.advancedRocketry.test.FixtureSite;
 import zmaster587.advancedRocketry.test.RocketFixture;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -75,7 +76,6 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
     }
 
     private static final String DUMMY_ID = "dummyId";
-    private static final String COUNT = "count";
 
     /** The control ship's build site. */
     /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks. */
@@ -141,18 +141,16 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
         awaitClientPlacedNear(approachMark, SHIP_X + 0.5, SHIP_Z + 0.5,
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
-        // The LOAD has no event of its own, so this stays a bounded probe read — but it is ASSERTED
-        // now: an unloaded control ship used to red at the seat-mount below as "seat-mount must find
-        // the ship's pilot seat", which names the wrong thing entirely.
-        int loaded = count("ship-count");
-        for (int i = 0; i < 40 && loaded < 1; i++) {
-            bot().waitTicks(5);
-            loaded = count("ship-count");
-        }
+        // The LOAD of THIS ship is a record (`ship_usable`, later than every unload of it) — the
+        // dimension-wide `ship-count` this used to poll was answered by any neighbour's hull. It is
+        // asserted here because an unloaded control ship used to red at the seat-mount below as
+        // "seat-mount must find the ship's pilot seat", which names the wrong thing entirely.
+        awaitShipUsable(events, spawnMark, controlShipId);
+        String controlInfo = shipInfoById(controlShipId);
         scenario().requireArranged("the control ship must LOAD with the client standing on it before"
                 + " anything is pressed — an unloaded ship has no seat to mount and no computer to"
-                + " answer, and the control leg would indict the harness's keys instead (loaded="
-                + loaded + ")", loaded >= 1);
+                + " answer, and the control leg would indict the harness's keys instead: "
+                + controlInfo, ShipInfo.isLoaded(controlInfo));
 
         SeatMount mountInfo = SeatMount.onShip(this::exec, 0, controlShipId);
         scenario().requireArranged("seat-mount must find the ship's pilot seat: " + mountInfo.raw(),
@@ -396,20 +394,15 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
     // ---- Arrangement helpers ---------------------------------------------------------------------
 
+    /** Stood on a floor his client holds, then read ONCE. */
     private void standBesideTheSeat() throws Exception {
-        double distSq = Double.POSITIVE_INFINITY;
-        JsonObject state = null;
-        for (int attempt = 0; attempt < 6 && distSq >= 25.0; attempt++) {
-            exec("tp @a " + (CRAFT_X + 0.5) + " " + CRAFT_Y + " " + (CRAFT_Z + 1.5) + " 0 0");
-            bot().waitTicks(20);
-            state = bot().reportState();
-            if (state.has("worldReady") && state.get("worldReady").getAsBoolean()) {
-                double dx = state.get("playerX").getAsDouble() - (CRAFT_X + 0.5);
-                double dy = state.get("playerY").getAsDouble() - CRAFT_Y;
-                double dz = state.get("playerZ").getAsDouble() - (CRAFT_Z + 0.5);
-                distSq = dx * dx + dy * dy + dz * dz;
-            }
-        }
+        standOnFloorTheClientHolds(CRAFT_X + 0.5, CRAFT_Y, CRAFT_Z + 1.5, 0f, 0f,
+                "the player must be stood beside the seat");
+        JsonObject state = bot().reportState();
+        double dx = state.get("playerX").getAsDouble() - (CRAFT_X + 0.5);
+        double dy = state.get("playerY").getAsDouble() - CRAFT_Y;
+        double dz = state.get("playerZ").getAsDouble() - (CRAFT_Z + 0.5);
+        double distSq = dx * dx + dy * dy + dz * dz;
         scenario().requireArranged("the client must observably stand within reach of the seat, or the "
                 + "right-click is dropped before the block sees it. state=" + state, distSq < WITHIN_REACH_DIST_SQ);
     }
@@ -438,11 +431,6 @@ public class VSUnassembledCraftTakesNoOrdersE2ETest extends AbstractSharedVsClie
 
     private static boolean isRiding(JsonObject riding) {
         return riding != null && riding.has("riding") && riding.get("riding").getAsBoolean();
-    }
-
-    private int count(String sub) throws Exception {
-        String command = "artest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integer(COUNT);
     }
 
 }

@@ -156,6 +156,19 @@ public final class ForgeTestClientBootstrap {
     private static final java.util.LinkedHashMap<String, Long> EVENTS_DROPPED_BY_TYPE =
             new java.util.LinkedHashMap<>();
     private static final int EVENT_LOG_CAP_PER_TYPE = 256;
+
+    /**
+     * {@code chunk_data_applied}'s own ring. One teleport into a column the client does not hold
+     * sends a whole view square at once — (2·16+1)² = 1089 chunks at render distance 16 — and a wait
+     * for ONE of them read after that burst found it evicted: measured 2026-09-24, 131 and 437 records
+     * of this type dropped from a 256-deep ring inside a single placement, and the placement link
+     * failed on a chunk that had arrived.
+     */
+    private static final int CHUNK_DATA_CAP = 2048;
+
+    private static int capOf(String type) {
+        return "chunk_data_applied".equals(type) ? CHUNK_DATA_CAP : EVENT_LOG_CAP_PER_TYPE;
+    }
     private static long eventSeq;
     private static volatile boolean eventsRecording;
 
@@ -269,7 +282,7 @@ public final class ForgeTestClientBootstrap {
             ring.addLast("{\"seq\":" + (eventSeq++) + ",\"tick\":" + tick
                     + ",\"side\":\"client\",\"type\":\"" + type + "\""
                     + (payload == null || payload.isEmpty() ? "" : "," + payload) + "}");
-            while (ring.size() > EVENT_LOG_CAP_PER_TYPE) {
+            while (ring.size() > capOf(type)) {
                 ring.removeFirst();
                 Long was = EVENTS_DROPPED_BY_TYPE.get(type);
                 EVENTS_DROPPED_BY_TYPE.put(type, was == null ? 1L : was + 1L);
@@ -1421,6 +1434,11 @@ public final class ForgeTestClientBootstrap {
                         return response;
                     }
                     response.addProperty("loaded", mc.world.isBlockLoaded(pos));
+                    // `loaded` is vanilla's `isBlockLoaded`, which on the client answers TRUE for the
+                    // blank EmptyChunk it stands in for every chunk the server has not sent — so it
+                    // cannot say whether the client HOLDS the chunk. `chunkEmpty` can: a chunk the
+                    // server sent is a real Chunk, and only the stand-in reports isEmpty().
+                    response.addProperty("chunkEmpty", mc.world.getChunkFromBlockCoords(pos).isEmpty());
                     if (mc.world.isBlockLoaded(pos)) {
                         response.addProperty("block", String.valueOf(mc.world.getBlockState(pos).getBlock().getRegistryName()));
                         response.addProperty("tile", mc.world.getTileEntity(pos) == null

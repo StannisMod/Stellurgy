@@ -34,6 +34,14 @@ import zmaster587.advancedRocketry.test.GameTicks;
  * <p>The two links are what make a red legible: a key that never arrived fails naming the missing
  * {@code pilot_input_set}, never as a craft that "did not climb".</p>
  *
+ * <p><b>Which computer.</b> Both links read only records from the craft's own world ({@code dim}),
+ * so a computer in another world — the ship before a crossing, a neighbour's cell — cannot close
+ * them. SILENT about a second computer in the SAME world handed an input inside the window; the
+ * record carries {@code vsShip} for a caller that holds the craft's id and needs that too.</p>
+ *
+ * <p><b>Contract or arrangement is the caller's to say.</b> A failure here is a plain assertion;
+ * a caller for whom the climb is setup rethrows it as an {@code ArrangementFailure}.</p>
+ *
  * <h2>For a pilot whose only intent is this key</h2>
  *
  * <p>The release is recognised by the computer being handed something that is not {@code set}: with
@@ -80,7 +88,9 @@ final class PilotThrust {
         long pressMark = serverLog.markInstrumented();
         bot.holdKey(Keyboard.KEY_R); // flightVerticalUp
         try {
-            serverLog.awaitField(pressMark, "pilot_input_set", "input", "set", what, LINK_TICKS);
+            serverLog.awaitMatching(pressMark, "pilot_input_set",
+                    seen -> Events.anyRecordHasAll(seen, "input", "set", "dim", String.valueOf(dim)),
+                    "with input = set in dim " + dim, what, LINK_TICKS);
             // STIMULUS: thrustTicks of the hull's world clock under the held key, from its arrival.
             // The dose, not patience — see DOSE_TICKS; the caller reads what it did.
             GameTicks.advanceWorld(server, dim, thrustTicks);
@@ -100,15 +110,19 @@ final class PilotThrust {
      * pilot's intent idle, and an idle input is sent once, on the change, and never repeated — so a
      * window whose latest record is not {@code set} is one the release has arrived in.</p>
      */
-    static void release(ClientBot bot, Events serverLog, String what) throws Exception {
+    static void release(ClientBot bot, Events serverLog, int dim, String what) throws Exception {
         long releaseMark = serverLog.mark();
         bot.releaseKey(Keyboard.KEY_R);
+        String inDim = String.valueOf(dim);
         serverLog.awaitMatching(releaseMark, "pilot_input_set",
                 seen -> {
-                    String last = Events.lastRecord(seen);
+                    String last = null;
+                    for (String r : Events.recordsWhere(seen, "dim", inDim)) {
+                        last = r;
+                    }
                     return last != null && !"set".equals(Events.text(last, "input"));
                 },
-                "whose latest input is no longer \"set\"",
+                "whose latest input in dim " + dim + " is no longer \"set\"",
                 "the released climb key must reach the flight computer before anything is read as"
                         + " the craft with its thrust cut — " + what,
                 LINK_TICKS);
@@ -118,6 +132,6 @@ final class PilotThrust {
     static void climb(ClientBot bot, Events serverLog, TestClient server, int dim, int thrustTicks,
                       String what) throws Exception {
         hold(bot, serverLog, server, dim, thrustTicks, what);
-        release(bot, serverLog, what);
+        release(bot, serverLog, dim, what);
     }
 }

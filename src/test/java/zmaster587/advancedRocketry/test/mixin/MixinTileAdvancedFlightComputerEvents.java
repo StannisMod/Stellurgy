@@ -150,7 +150,16 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
                 : ",\"yaw\":" + input.yawInput
                         + ",\"pitch\":" + input.pitchInput
                         + ",\"roll\":" + input.rollInput;
+        // WHICH craft, in the spellings a caller holds: the world it is ticked in, and the physics
+        // mod's own id of the ship whose chunk claim holds this computer (an identity, not a
+        // proximity). `ship` is the computer's durable id, minted lazily, so it cannot be the only one.
+        TileAdvancedFlightComputer self = (TileAdvancedFlightComputer) (Object) this;
+        String dim = self.getWorld() == null ? "null"
+                : String.valueOf(self.getWorld().provider.getDimension());
+        String vsShip = self.getWorld() == null || self.getPos() == null ? null
+                : VSIntegration.shipIdOwningBlock(self.getWorld(), self.getPos());
         TestTrace.recordHere("pilot_input_set", arTest$posAndShip()
+                + ",\"dim\":" + dim + ",\"vsShip\":\"" + vsShip + "\""
                 + ",\"input\":\"" + what + "\"" + channels);
     }
 

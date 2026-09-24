@@ -1600,6 +1600,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         bot().holdKey(Keyboard.KEY_R);   // stay airborne
         bot().holdKey(Keyboard.KEY_D);   // yaw the nose
+        // STIMULUS: the iterations ARE the manoeuvre — eight swipes, one a tick, each from where the
+        // last left the view; the camera window opened above records every frame, so nothing is
+        // read per iteration.
         for (int i = 0; i < 8; i++) {
             // A mouse swipe on top of the key yaw: down-right each tick.
             JsonObject st = bot().reportState();
@@ -1609,19 +1612,13 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         }
         bot().releaseKey(Keyboard.KEY_D);
         bot().releaseKey(Keyboard.KEY_R);
-        // THIS ONE STAYS A LOOP, because what it waits for is a VALUE that converges rather than
-        // an event anything DECIDES. The client bleeds the server's rotation correction
-        // geometrically, so there is no instant at which the craft "has settled" and no record
-        // production could commit for one — the exit is the DIFFERENCE between two readings, which
-        // no single record can carry. What it cannot see, written down: a yaw that stopped moving
-        // for one pair of samples and then resumed, and the shape of the bleed in between.
-        double prevYaw = Double.NaN;
-        for (int i = 0; i < 20; i++) {
-            bot().waitTicks(2);
-            double yawNow = bot().reportRidingEntity().get("rotationYaw").getAsDouble();
-            if (!Double.isNaN(prevYaw) && angDiff(yawNow, prevYaw) < 0.02) break;
-            prevYaw = yawNow;
-        }
+        // EXPERIMENT: forty client ticks with every input released — the rest the at-rest lock below
+        // is judged at. The client bleeds the server's rotation correction geometrically, so there
+        // is no instant at which the craft "has settled" and no record production could commit for
+        // one. This used to sample the yaw until two readings two ticks apart agreed (up to forty
+        // ticks), which stopped on the first pause in the bleed rather than at rest; a fixed rest of
+        // the old ceiling is the more lenient of the two for the "exact at rest" bound, and says so.
+        bot().waitTicks(40);
 
         // Frame-time lock telemetry: the worst divergence the pilot SAW on any
         // rendered frame of this flight (sampled atomically on the render
@@ -1719,6 +1716,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         // quaternion — there is no clamp to stop it) and the pitch reading turns back down
         // through the bound. So the drive is EIGHT, measured at 40.8° — twice the bound, and
         // twice as far again from the wrap.
+        // STIMULUS: the drag itself, measured at eight (above).
         for (int i = 0; i < 8; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat(),
@@ -1765,6 +1763,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         double roll0 = flightCameraNow("camRoll");
         // A real rightward mouse drag: repeated +8° horizontal swipes saturate the
         // absolute roll cursor, which then holds a steady bank rate.
+        // STIMULUS: the drag; the window after it is what is read.
         for (int i = 0; i < 8; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat() + 8f, st.get("playerPitch").getAsFloat());
@@ -1819,6 +1818,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
         // Real downward mouse drag: saturate the absolute pitch cursor, which then
         // holds full pitch rate and carries the nose past vertical and over.
+        // STIMULUS: the drag that saturates the cursor; the EXPERIMENT below is what it did.
         for (int i = 0; i < 8; i++) {
             JsonObject st = bot().reportState();
             bot().setLook(st.get("playerYaw").getAsFloat(), st.get("playerPitch").getAsFloat() + 8f);

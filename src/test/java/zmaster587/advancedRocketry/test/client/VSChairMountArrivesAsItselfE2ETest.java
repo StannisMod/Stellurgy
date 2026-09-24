@@ -98,17 +98,13 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
         scenario().requireArranged("the chair must actually be in the world once the fill reports"
                 + " success: " + rightAfter, CHAIR_BLOCK.equals(
                         Reply.of("artest block at", rightAfter).text("block")));
-        // The platform is built into a chunk the client may not hold yet, so the first teleport can
-        // land the player on nothing and he falls out of reach of the chair. Re-place him until his
-        // own client agrees he is standing on it.
-        JsonObject stood = null;
-        double standY = Double.NaN;
-        for (int attempt = 0; attempt < 6 && !(Math.abs(standY - (FY + 1)) < 0.6); attempt++) {
-            exec("tp @a " + (FX + 0.5) + " " + (FY + 1) + " " + (FZ + 0.5) + " 90 0");
-            bot().waitTicks(15);
-            stood = bot().reportState();
-            standY = stood.get("playerY").getAsDouble();
-        }
+        // The platform is built into a chunk the client may not hold yet, and a teleport onto a floor
+        // the client does not have lands him on nothing — so he is stood on it only once his client
+        // holds it (both cases named in the helper), and his position is then read ONCE.
+        standOnFloorTheClientHolds(FX + 0.5, FY + 1, FZ + 0.5, 90f, 0f,
+                "the player must be stood on the chair's platform");
+        JsonObject stood = bot().reportState();
+        double standY = stood.get("playerY").getAsDouble();
         scenario().requireArranged("the player must end up standing ON the platform - one that fell"
                         + " off it is out of reach of the chair (expected y~" + (FY + 1)
                         + ", measured " + standY + "): " + stood,

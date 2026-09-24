@@ -699,17 +699,17 @@ public abstract class AbstractSharedClientE2ETest {
         StringBuilder trail = new StringBuilder();
         boolean arrived = false;
         JsonObject last = null;
-        // A WINDOW that DECIDES NOTHING: it runs after a verdict has already been lost, and its
+        // WINDOW: one that DECIDES NOTHING — it runs after a verdict has already been lost, and its
         // only product is the trail a failure message prints. There is no link to take because
-        // there is no claim being made here. What it cannot see: where the body went between two
-        // samples — which is why the trail prints every point rather than the last.
-        for (int sample = 0; sample < 6 && !arrived; sample++) {
+        // there is no claim being made here, and it runs its full length (it used to stop on the
+        // first point inside the plot, which cut the trail at the one sample worth continuing past).
+        // What it cannot see: where the body went between two samples — which is why the trail
+        // prints every point rather than the last.
+        for (int sample = 0; sample < 6; sample++) {
             last = bot().reportState();
             trail.append(' ').append(describePlayerPoint(last));
-            arrived = isInsidePlot(last, plot);
-            if (!arrived) {
-                bot().waitTicks(5);
-            }
+            arrived |= isInsidePlot(last, plot);
+            bot().waitTicks(5);
         }
         // WHO OWNS THIS BODY, asked of the server on a scenario that has already lost its verdict —
         // so the chat markers these commands echo can no longer disturb anything.
@@ -944,6 +944,18 @@ public abstract class AbstractSharedClientE2ETest {
     protected final void awaitClientPlacedNear(long mark, double x, double z, String what)
             throws Exception {
         ClientEvents.awaitPlacedNear(clientEvents(), mark, x, z, what, PLACEMENT_LINK_BUDGET_TICKS);
+    }
+
+    /**
+     * Stand the player at {@code (x, y, z)} on a floor his CLIENT already holds, then wait for the
+     * client to apply the placement ({@link ClientEvents#placeOntoGroundItHolds}, which names why a
+     * single teleport is not enough and why a loop of them was not the answer).
+     */
+    protected final void standOnFloorTheClientHolds(double x, double y, double z, float yaw, float pitch,
+                                                    String what) throws Exception {
+        ClientEvents.placeOntoGroundItHolds(bot(), clientEvents(), this::exec,
+                "tp @a " + x + " " + y + " " + z + " " + yaw + " " + pitch, x, y, z, what,
+                PLACEMENT_LINK_BUDGET_TICKS);
     }
 
     /**

@@ -288,7 +288,8 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
      * {@code null} for "nothing commanded on that channel"; any attitude hold is dropped, since a
      * rate command and a pose command are different intentions and the pose would outrank the rate.
      *
-     * <p>Re-issued per tick by its callers, the way a real pilot's client re-sends his input.</p>
+     * <p>The command STANDS until {@link #clearProbeCommand} or another probe command replaces it; it
+     * lives on this tile instance, so a tile the chunk re-creates starts without one.</p>
      */
     public void commandProbeVelocity(double[] worldVelocity, double[] worldAngVel) {
         this.probeVelocity = worldVelocity;

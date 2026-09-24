@@ -179,16 +179,12 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what loads this craft, so the settle below is measuring a"
                         + " ship only an arrived client can have brought into being");
-        double yRest = Double.NaN;
-        for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
-            bot().waitTicks(5);
-            String sample = shipInfoAtBase();
-            if (ShipInfo.isLoaded(sample)) {
-                yRest = ShipInfo.of(sample).y;
-            }
-        }
-        scenario().requireArranged("the ship must LOAD with the client present: " + shipInfoAtBase(),
-                !Double.isNaN(yRest));
+        // The LOAD is production's own record (`ship_usable`, later than every unload of the ship),
+        // from the pre-assembly mark; then ONE read confirming it is loaded now.
+        awaitShipUsable(events, spawnMark, scenarioShipId, budget * 5);
+        String atBase = shipInfoAtBase();
+        scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
+                ShipInfo.isLoaded(atBase));
 
         String found = findSeat();
         int[] seatSub = readTriple(found, SEAT_SUB);

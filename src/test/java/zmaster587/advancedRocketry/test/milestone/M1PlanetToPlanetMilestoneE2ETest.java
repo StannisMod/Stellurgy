@@ -23,6 +23,7 @@ import zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.LedgerEntry;
 import zmaster587.advancedRocketry.test.Reply;
@@ -1393,7 +1394,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * #shipAnchorHint} — a REMEMBERED earlier pose. That second probe asks "what craft is nearest a
      * place this one has left", which the yard lookup always answers with something; and the aim loop
      * re-ran it every attempt, so the ship under the crosshair could change identity mid-aim. What is
-     * still retried is the crossing finishing, which is a fact about time.</p>
+     * still waited for is the crossing finishing — on production's own record of the named hull
+     * becoming usable in that world.</p>
      */
     // NOT on PilotSeat, and deliberately: this returns a `find-seat` reply on the happy path and a
     // `vs ship-uuid` reply when the hull cannot be named, through one variable — two producers with
@@ -1401,28 +1403,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private String findSeatAboard(int dim, int budget) throws Exception {
         assertNotNull("the build must have named its ship before the arrival side can ask about it",
                 builtShipName);
-        // STAYS A LOOP. The link that looks right is `ship_spawned`, recorded at the registry's own
-        // add — but it carries `vsShip` and `name` and no DIMENSION, and this asks whether the hull
-        // carrying that name is queryable in THIS cell, which the record cannot say. What is really
-        // being waited out is the re-assembly putting blocks into the subspace, and a claim can
-        // exist before its contents do. What this cannot see: a hull that answered and stopped
-        // answering between two attempts.
-        for (int attempt = 0; attempt < budget; attempt++) {
-            String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
-            // absence is the answer: this is the retry loop, and "no hull carries that name yet"
-        // is what it is waiting out.
-        String hullId = Reply.of("artest vs ship-uuid", hull).textOr("id", null);
-            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
-            if (Reply.of(hull).boolOr("found", false) && hullId != null) {
-                lastSeatProbe = exec("artest vs find-seat " + dim + " id " + hullId);
-                if (rememberAnchor(lastSeatProbe)) {
-                    return lastSeatProbe;
-                }
-            } else {
-                lastSeatProbe = hull;
-            }
-            bot().waitTicks(5);
-        }
+        // A LINK: the hull carrying that name becoming USABLE in THIS cell is `ship_usable`, which
+        // carries the dimension (it was `ship_spawned`, which does not, that made this a loop) —
+        // awaited over the chain, so a load undone by an unload does not answer. A usable hull is one
+        // whose blocks are in its subspace, which is what the seat search needs. Then ONE search.
+        String hullId = ShipIdentity.awaitPhysicsIdOf(this::exec,
+                new Events(this::exec, bot()::waitTicks), dim, builtShipName, budget * 5);
+        lastSeatProbe = exec("artest vs find-seat " + dim + " id " + hullId);
+        rememberAnchor(lastSeatProbe);
         return lastSeatProbe;
     }
 

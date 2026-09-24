@@ -468,39 +468,24 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
     }
 
     /**
-     * The server ship's posY, retried while the craft is not loaded here.
+     * The server ship's posY — ONE read.
      *
-     * <p>A ship that has UNLOADED answers {@code managed:false} and carries no {@code posY}, so it
-     * exhausts the retries and fails naming the reply. That is the intended report: "this ship is
-     * not loaded" is a different fact from "the ship near this point moved", and the positional form
-     * this replaced could not tell them apart.</p>
-     *
-     * <p>It is NOT tolerant of a mangled reply, and the note claiming otherwise was removed rather
-     * than kept: at extreme coordinates a VS collision mixin spams STDERR into the captured console
-     * window, and the retry was written for that — but the parse under it has refused a non-JSON
-     * reply outright since it moved onto the shared reader, so the loop never saw a second chance.
-     * A reply that is not this verb's now fails here, loudly, instead of being retried nine times
-     * and then reported as a ship that would not load.</p>
+     * <p>Every caller asks about a ship the scenario has just read as loaded (the usable link at
+     * assembly, then the loaded reads after each teleport), with its pilot aboard. A ship that has
+     * UNLOADED since answers {@code managed:false} and carries no {@code posY}, and that is reported
+     * here as what it is — the craft went away mid-measurement — rather than retried until a reply
+     * looks better. "This ship is not loaded" is a different fact from "the ship near this point
+     * moved", and the positional form this replaced could not tell them apart.</p>
      */
     private double shipY() throws Exception {
-        String last = "";
-        // STAYS A LOOP: what it reads is a state that FLICKERS — is this ship loaded and carrying a
-        // pose RIGHT NOW. A link would be `ledger_settled`, and it does not answer: it records that
-        // the craft settled ONCE, which is satisfied by a settle since undone, and a headless
-        // server can let a craft go between two reads. What this cannot see: a ship that was
-        // loaded and unloaded inside one 2-tick gap.
-        for (int i = 0; i < 10; i++) {
-            last = shipInfoById();
-            if (ShipInfo.isLoaded(last)) {
-                double y = ShipInfo.of(last).y;
-                if (!Double.isNaN(y)) {
-                    return y;
-                }
+        String last = shipInfoById();
+        if (ShipInfo.isLoaded(last)) {
+            double y = ShipInfo.of(last).y;
+            if (!Double.isNaN(y)) {
+                return y;
             }
-            bot().waitTicks(2);
         }
-        throw new AssertionError("ship-info never returned a parseable posY for ship " + shipId
-                + "; last reply: " + last);
+        throw new AssertionError("ship " + shipId + " was not loaded with a posY at this read: " + last);
     }
 
     private double readDouble(String json, String field) {

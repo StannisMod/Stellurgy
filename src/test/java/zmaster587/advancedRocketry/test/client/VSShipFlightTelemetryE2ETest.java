@@ -328,6 +328,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         // --- The spin brake. Deflect the flight cursor sideways through the client's OWN raw-mouse
         // entry point, so the ship rolls, then centre the cursor and watch the spin die.
+        // STIMULUS: twelve raw mouse deltas two ticks apart are the deflection; the cursor read after
+        // them is what is asserted.
         for (int i = 0; i < 12; i++) {
             mouseDelta(60, 0);
             bot().waitTicks(2);
@@ -879,10 +881,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
         double yStart = shipInfo().y;
         double worstVelY = 0.0;
-        // A WINDOW whose measurement is the WORST vertical velocity while the hold is supposed to
-        // be holding: a craft that drifts and corrects reads zero at the end, so the extremum is
-        // the quantity and a last read would miss it. What it cannot see: an excursion inside one
-        // 3-tick sample.
+        // WINDOW: its measurement is the WORST vertical velocity while the hold is supposed to be
+        // holding: a craft that drifts and corrects reads zero at the end, so the extremum is the
+        // quantity and a last read would miss it. The hold never decides it is holding, so no record
+        // answers. What it cannot see: an excursion inside one 3-tick sample.
         for (int i = 0; i < 40; i++) {
             bot().waitTicks(3);
             double velY = shipInfo().velY;
@@ -1055,11 +1057,13 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         clientEvents().awaitField(cursorMark, "flight_cursor", "path", "ship",
                 "the ship-pilot input path must be running before the ship is rolled with it",
                 CURSOR_RECORD_BUDGET_TICKS);
-        // STAYS A LOOP, and its iterations are the stimulus: each pass asks for more roll through
-        // the real cursor, so deleting the loop does not stop the test watching — it stops the ship
-        // TURNING. The exit reads an attitude converging past a threshold, which is a value and not
-        // an event. What this cannot see: a pass whose cursor delta was swallowed, which is why the
-        // delta itself is checked below rather than assumed from having asked.
+        // STIMULUS: a feedback controller, and its iterations are the input — each pass asks for
+        // more roll through the real cursor, so deleting the loop does not stop the test watching,
+        // it stops the ship TURNING. The pilot's own controls are the path this rolls the ship with,
+        // so a probe attitude command would roll it by a different route. It stops on its own budget,
+        // and what the scenario uses is read after the cursor is centred. What this cannot see: a
+        // pass whose cursor delta was swallowed, which is why the delta itself is checked below
+        // rather than assumed from having asked.
         for (int i = 0; i < 240; i++) {
             // Stop asking for roll BEFORE the ship is over: it is a rigid body turning at more than a
             // radian a second, and it coasts on into the brake. Aiming early lands it near inverted.
@@ -1084,6 +1088,9 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private double centreFlightCursor() throws Exception {
         double cursor = flightCursorX("before centring");
+        // STIMULUS: a feedback controller on the client's own recorded cursor — each nudge IS the
+        // pilot's input, sized by where the last one left the cursor; delete the loop and the cursor
+        // is not centred at all. It stops on its own budget, and the caller reads what it returns.
         for (int i = 0; i < 200 && Math.abs(cursor) >= CURSOR_DEADZONE * 0.5; i++) {
             int step = Math.abs(cursor) > CURSOR_DEFLECTED ? 30 : 2;
             mouseDelta(cursor > 0 ? -step : step, 0);

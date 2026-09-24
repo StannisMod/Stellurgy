@@ -806,24 +806,14 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                 "the client's ARRIVAL is what pulls the ship's chunks, so what is asked of the"
                         + " ship below is only answerable because a client got here");
 
-        // Whether the physics object is LOADED stays a bounded poll: it is a state the substrate
-        // reaches, not a commit anything records, and VS pulls a ship LOADED off the game loop — so a
-        // busy box needs more ticks to elapse before it is resident, which is what the fork
-        // multiplier is for. It is asked BY IDENTITY now, so no distance term can answer about a
-        // neighbour.
-        String info = "";
-        double[] where = null;
-        int loadIters = 40;
-        for (int i = 0; i < loadIters && where == null; i++) {
-            bot().waitTicks(5);
-            info = shipInfo();
-            if (ShipInfo.isLoaded(info)) {
-                ShipInfo pose = ShipInfo.of(info);
-                where = new double[]{pose.x, pose.y, pose.z};
-            }
-        }
+        // The LOAD is a record: `ship_usable`, later than every unload of THIS ship, from the
+        // pre-assembly mark. Then ONE read of where it stands, asked BY IDENTITY.
+        awaitShipUsable(events, spawnMark, scenarioShipId);
+        String info = shipInfo();
         scenario().requireArranged("the ship this scenario assembled (" + scenarioShipId + ") must"
-                + " LOAD with the client present; last reply was: " + info, where != null);
+                + " LOAD with the client present; the reply was: " + info, ShipInfo.isLoaded(info));
+        ShipInfo pose = ShipInfo.of(info);
+        double[] where = new double[]{pose.x, pose.y, pose.z};
         System.out.println("[modelgate] ship at (" + bx + "," + by + "," + bz + ") -> "
                 + java.util.Arrays.toString(where));
         return where;

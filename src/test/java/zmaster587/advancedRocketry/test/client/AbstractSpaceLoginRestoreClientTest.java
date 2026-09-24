@@ -25,6 +25,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.ShipReadiness;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.Chains;
+import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.ShipIdentity;
@@ -1150,48 +1151,17 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // becoming queryable — a fact about time, not about which craft answers.
         String arrivedShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
                 300);
-        // MEASURED, and the loop stays on what the measurement does NOT say. What it could still be
-        // waiting for was narrowed first: `awaitPhysicsIdOf` above has already established that the
-        // queryable registry carries this ship, `shipyardBoundsOf` builds the box straight off its
-        // chunk claim, and `pilotSeatInYard` force-loads those chunks itself before scanning — so
-        // chunk streaming is not the lag. What is left is the BLOCKS: a crossing re-assembles the
-        // hull into the subspace, and a claim can exist before its contents do.
-        //
-        // Measured 2026-09-13, both scenarios of this class that reach here, one unloaded run:
-        // ONE attempt, no refusal, and therefore zero ticks spent — so nothing below can be relying
-        // on time this loop buys. That is two samples against a comment claiming an intermittent
-        // single-shot failure under parallel-fork load, which two unloaded samples cannot refute, so
-        // the retry stays: it costs nothing when it is not needed.
-        //
-        // What the retry may no longer do is refuse in one word. `seatFound:false` covers three
-        // different arrangement faults and the probe now names the box it searched, so they can be
-        // told apart: `yard:null` is a ship with no chunk claim at all, a yard box with no seat in
-        // it is a claim whose blocks have not arrived (or a craft that genuinely carries no pilot
-        // seat), and the attempt count says whether the wait was ever real.
-        // STAYS A LOOP, and the link does not answer: `ledger_settled` names the ship and its CELL,
-        // not whether the hull's BLOCKS have landed in the subspace — which is what a seat scan
-        // needs and what a claim can precede. What this cannot see: a seat that was findable and
-        // stopped being so between two attempts.
-        PilotSeat seat = null;
-        PilotSeat firstRefusal = null;
-        int attempts = 0;
-        for (int attempt = 0; attempt < 30; attempt++) {
-            seat = PilotSeat.byId(this::exec, slotDim, arrivedShipId);
-            attempts++;
-            if (seat.found) {
-                break;
-            }
-            if (firstRefusal == null) {
-                firstRefusal = seat;
-            }
-            bot().waitTicks(10);
-        }
-        // The reader names the searched yard in its own refusal — which fault this is, not merely
-        // that there is one — so what this message adds is the part it cannot know: how many
-        // attempts were spent, and what the FIRST of them said.
+        // ONE read. The retry that stood here was measured on 2026-09-13 — both scenarios of this
+        // class that reach here, ONE attempt each, zero ticks spent — so it waited for nothing: the
+        // registry already carries the ship (`awaitPhysicsIdOf` above), `shipyardBoundsOf` builds the
+        // box off its chunk claim, and `pilotSeatInYard` force-loads those chunks before scanning. It
+        // was kept on "it costs nothing when it is not needed", which is the defence of a poll and
+        // not a reason for one. A seat missing here is the finding, and the reader names the yard it
+        // searched: `yard:null` is a ship with no chunk claim, a yard box with no seat is a claim
+        // whose blocks have not arrived (or a craft with no pilot seat).
+        PilotSeat seat = PilotSeat.byId(this::exec, slotDim, arrivedShipId);
         seat.requireFound("the pilot seat must survive the crossing and be locatable in the settled"
-                + " ship - without a seat there is nothing to be restored into. " + attempts
-                + " attempt(s) in dim " + slotDim + "; first refusal: " + firstRefusal);
+                + " ship - without a seat there is nothing to be restored into (dim " + slotDim + ")");
         int seatX = seat.seatX;
         int seatY = seat.seatY;
         int seatZ = seat.seatZ;
@@ -1355,13 +1325,10 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 ledgerStatus.ledger >= 1);
 
         // Find the slot the entry bound the cell to. Slot ids are minted per boot, so they are read
-        // rather than known: the one slot dimension whose settled ship's flight computer resolves is
-        // the ship's own. An entry that ended up ABANDONED settles the ledger too but leaves the
-        // ship at its paste site rather than at its cell pose, and then nothing resolves here - which
-        // is the right way for that outcome to surface.
-        String[] slot = awaitSettledShipSlot();
-        assertNotNull("the ledger holds a ship, but no slot dimension owns up to it - the entry "
-                + "settled without leaving a workable ship at its cell pose", slot);
+        // off the crossing's own records rather than known. An entry that ended up ABANDONED settles
+        // the ledger too but writes no arrived pose in a slot, and then the lookup refuses - which is
+        // the right way for that outcome to surface.
+        String[] slot = awaitSettledShipSlot(events, entryMark);
         int slotDim = Integer.parseInt(slot[0]);
         arrangedShipId = slot[1];
         arrangedAfcPos = slot[2] + " " + slot[3] + " " + slot[4];
@@ -1539,8 +1506,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // fresh tile.
         exec("artest vs ff-input-by-id " + LAUNCH_DIM + " " + groundShipId);
 
-        String[] slot = awaitSettledShipSlot();
-        assertNotNull("the ledger holds a ship, but no slot dimension owns up to it", slot);
+        String[] slot = awaitSettledShipSlot(events, entryMark);
         int slotDim = Integer.parseInt(slot[0]);
         arrangedShipId = slot[1];
         arrangedAfcPos = slot[2] + " " + slot[3] + " " + slot[4];
@@ -1710,61 +1676,46 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     /**
-     * Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
-     * {@code from} (bounded, early-exit), and FAIL HERE if it does not. Same
+     * A DOSE of thrust on the pilot's vertical key ({@link PilotThrust#climb} — the key's arrival at
+     * the flight computer and its release are both records, and the thrust is counted on the craft's
+     * own world clock), then ONE reading of the client-rendered rider altitude against
+     * {@link #MIN_CLIMB} over {@code from}, failing HERE if it did not climb. Same
      * stimulus/observation pair as the planet-side relog-control pin: the REAL key in, the client's
      * own rendered player altitude out.
      *
-     * <h2>Why the verdict lives here now</h2>
+     * <p>It used to hold the key until the altitude crossed the threshold, up to 200 ticks — which
+     * both flew the craft on for as long as it took and made the budget's expiry the only possible
+     * failure. The caller's next step settles a hovering hull before the server writes it to disk, so
+     * the thrust must be CUT, on the record, before anything is read: a dose ends; a poll ended when it
+     * liked the number.</p>
      *
-     * <p>Both callers used to read the returned altitude and assert {@code (y1 - y0) >= MIN_CLIMB} —
-     * the loop's own exit condition, restated. Neither could fail except by the budget running out,
-     * and the message then made a claim about held input for what was a timeout.</p>
-     *
-     * <p>This one is not fixed by a WINDOW, and the reason is worth keeping. Where a quantity can
-     * come back, a window and its extremum are right; where a drive must stop on its own threshold,
-     * an independent fact has to carry the leg. Here there is neither: the ship must NOT be flown on
-     * (the caller's next step settles a hovering hull before the server writes it to disk, and a
-     * craft still climbing turns the restore comparison into a moving target), and the climb IS the
-     * whole claim — "held input moves the ship" is what these legs are about. So the drive itself is
-     * the assertion, and the expiry IS the failure, said in those words with the altitude it
-     * reached. One assertion, in the place that knows what happened.</p>
-     *
+     * @param key  the pilot's vertical-up key — the only key {@link PilotThrust} drives
      * @param what what this climb proves, for the failure — the caller's own sentence
      */
     private double climbWith(int key, double from, String what, boolean arrangement)
             throws Exception {
-        // THE MULTIPLIER STAYS, but NOT for the reason this comment used to give. A held key is
-        // sampled and re-sent per CLIENT TICK - on change, plus a re-assert every
-        // PilotInputCadence.REPEAT_TICKS - not once per rendered frame. What a loaded box stretches
-        // is therefore the client's TICK rate, not its frame rate, and that is still wall-clock-bound
-        // work a fork scale measures correctly. The frame story was refuted 2026-08-21 by arithmetic
-        // on a red: 111 packets over ~2150 ticks is exactly the 20-tick re-assert, i.e. no starvation
-        // at all - so a climb that stalls is NOT explained by this budget and must not be read that way.
-        int budget = 40;
-        double last = from;
+        assertTrue("climbWith drives the vertical-up key only", key == Keyboard.KEY_R);
         // THIS climb's pilot-input delivery chain, both halves, for the failure below. Opened per
         // climb because the class restarts the server between its legs, and a window lives and dies
         // with the server it was opened on.
         SeatDelivery seatDelivery = SeatDelivery.open(this::exec, bot(), events(), clientEvents());
-        bot().holdKey(key);
         try {
-            // A WINDOW with the key HELD across it: the iterations are part of the stimulus, and
-            // what is asked is whether the climb reached a threshold — a value, not an instant
-            // anything commits. The input reaching the flight computer IS a record and is awaited
-            // where the key goes down; this measures what the thrust then did. What it cannot see:
-            // a climb that reached MIN_CLIMB and sagged back inside one 5-tick sample.
-            for (int i = 0; i < budget && (last - from) < MIN_CLIMB; i++) {
-                bot().waitTicks(5);
-                last = clientPlayerY();
+            PilotThrust.climb(bot(), events(), serverHarness.client(), clientDim(), PilotThrust.DOSE_TICKS,
+                    what);
+        } catch (ArrangementFailure already) {
+            throw already;
+        } catch (AssertionError keyNeverArrived) {
+            String why = keyNeverArrived.getMessage() + " delivery=" + seatDelivery.reading();
+            if (arrangement) {
+                requireArranged(why, false);
             }
-        } finally {
-            bot().releaseKey(key);
+            throw new AssertionError(why, keyNeverArrived);
         }
+        double last = clientPlayerY();
         if ((last - from) < MIN_CLIMB) {
             String why = what + " — the client's own rendered rider altitude went from " + from
-                    + " to " + last + " over " + (budget * 5) + " ticks with the key"
-                    + " held, which is " + (last - from) + " against the " + MIN_CLIMB
+                    + " to " + last + " after " + PilotThrust.DOSE_TICKS + " ticks of thrust with"
+                    + " the thrust cut, which is " + (last - from) + " against the " + MIN_CLIMB
                     + " this needs. delivery=" + seatDelivery.reading();
             // This class types its arrangement failures through `ArrangementFailure`, not through a
             // `Scenario` — it is not on the shared-scenario base — so the refusal goes the same way
@@ -1848,100 +1799,83 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     }
 
     /**
-     * The slot dimension holding the settled ship and that ship's id, as
-     * {@code [dimensionId, shipId]} - or {@code null} if no slot ever owns up to one. Slot dimension
-     * ids are minted fresh on every boot, so they can only be discovered: every registered dimension
-     * is asked whether the production ledger has a settled ship there whose flight computer resolves
-     * at the cell pose. The re-assembly is asynchronous, so this retries, force-loading the ships of
-     * any dimension that answered at all.
+     * The slot dimension holding the ship the entry since {@code entryMark} settled, that ship's id,
+     * and its flight computer's position, as {@code [dimensionId, shipId, afcX, afcY, afcZ]}.
+     *
+     * <p>Slot dimension ids are minted fresh on every boot, so they are READ, never known — and they
+     * are read off production's own records rather than by scanning every registered dimension until
+     * one answers: the ledger's settle names the ship, the crossing that carried it names its
+     * destination dimension ({@code cell_crossing_begun.destDim}), and the arrived hull's pose write
+     * ({@code crossing_pose_settled}) says its blocks are in that world. Then ONE {@code find-afc}.
+     * The caller must already have awaited {@code ledger_settled} since the same mark.</p>
      */
-    protected String[] awaitSettledShipSlot() throws Exception {
-        String dims = exec("artest dim list");
-        Reply listed = Reply.of("artest dim list", dims);
-        assertTrue("could not read the registered dimensions: " + dims, listed.has(FORGE_DIMS));
-        int[] ids = listed.intArray(FORGE_DIMS);
-        // STAYS A LOOP, and the link that looks right does not answer. `ledger_settled` is awaited
-        // elsewhere in this class and carries `ship` and `cell` — the CELL, not the Forge dimension
-        // id, which is minted fresh on every boot and is the very thing this search exists to
-        // discover. So a record can say the craft settled without saying where to ask for it, and
-        // what remains is a scan of the registered dimensions. What this cannot see: a slot that
-        // answered and stopped answering between two attempts.
-        for (int attempt = 0; attempt < 30; attempt++) {
-            for (int id : ids) {
-                String trimmed = String.valueOf(id);
-                // WHICH ship is asked for by name where the caller has one. This method is also the
-                // path that DISCOVERS the arranged ship in the first place — the scenario has just
-                // flown a craft up and does not yet know which slot took it — so on that first pass
-                // there is no id to give and the slot's own settled row answers. Once
-                // `arrangedShipId` is set (a relog, a second reading) the search is about that craft
-                // and nothing else, which is what a dimension list holding several slots needs.
-                String found = arrangedShipId == null
-                        ? exec("artest space find-afc " + trimmed)
-                        : exec("artest space find-afc " + trimmed + " " + arrangedShipId);
-                // absence is the answer: the probe answers `{"error":"world or ledger not
-                // ready"}` while the slot is still coming up, and this loop exists to sit
-                // through exactly that.
-                if (Reply.of(found).boolOr("found", false)) {
-                    // Its flight computer's own block position rides along. The ledger's id and the
-                    // VS ship uuid are DIFFERENT identities, and the by-id command verbs resolve the
-                    // second; this is how a caller holding the first reaches that ship's computer.
-                    // Its flight COMPUTER's position, not just a block of its hull - `x,y,z` is the
-                    // first non-air block in the shipyard, which is whatever the scan met first.
-                    assertTrue("the settled ship's flight computer must be locatable, and must be the"
-                            + " one whose own durable id matches the ledger's: " + found,
-                            readBool(found, "afcFound"));
-                    return new String[]{trimmed, readShipId(found),
-                            "" + readInt(found, "afcX"), "" + readInt(found, "afcY"),
-                            "" + readInt(found, "afcZ")};
-                }
-                // absence is the answer, as above.
-                if ((!Reply.of(found).boolOr("found", false))) {
-                    // That dimension is loaded and the ledger is readable there; if the ship is
-                    // simply not up yet, queueing its ships is what makes it resolvable.
-                    exec("artest vs load-ships " + trimmed);
-                }
-            }
-            bot().waitTicks(5);
+    protected String[] awaitSettledShipSlot(Events events, long entryMark) throws Exception {
+        // An ARRANGEMENT: a slot this family could not find has said nothing about a restore.
+        try {
+            return settledShipSlot(events, entryMark);
+        } catch (ArrangementFailure already) {
+            throw already;
+        } catch (AssertionError notFound) {
+            throw new ArrangementFailure(notFound.getMessage());
         }
-        return null;
+    }
+
+    private String[] settledShipSlot(Events events, long entryMark) throws Exception {
+        String settled = events.since(entryMark, "ledger_settled");
+        String durable = Events.lastField(settled, "ship");
+        assertNotNull("the entry must have settled a named ship in the ledger before its slot can be"
+                + " read: " + settled, durable);
+        String begun = events.awaitRecordWithField(entryMark, "cell_crossing_begun", "ship", durable,
+                "the settled ship must have been carried by a crossing, which names its destination",
+                RESTORE_LINK_BUDGET_TICKS);
+        int slotDim = (int) Events.number(begun, "destDim");
+        events.awaitField(entryMark, "crossing_pose_settled", "dim", slotDim,
+                "the arrived hull's pose must be written in its slot world before its flight computer"
+                        + " can be looked up there", RESTORE_LINK_BUDGET_TICKS);
+        String found = exec("artest space find-afc " + slotDim + " " + durable);
+        // Its flight computer's own block position rides along. The ledger's id and the VS ship uuid
+        // are DIFFERENT identities, and the by-id command verbs resolve the second; this is how a
+        // caller holding the first reaches that ship's computer.
+        assertTrue("the settled ship's flight computer must be locatable in its slot (dim " + slotDim
+                        + "), and must be the one whose own durable id matches the ledger's: " + found,
+                Reply.of(found).boolOr("found", false) && readBool(found, "afcFound"));
+        return new String[]{String.valueOf(slotDim), readShipId(found),
+                "" + readInt(found, "afcX"), "" + readInt(found, "afcY"),
+                "" + readInt(found, "afcZ")};
     }
 
     /**
-     * The live world position of the one ship in {@code dim}, or {@code null} if none is up within
-     * the wait.
+     * The live world position of THIS pilot's ship in {@code dim}, ASKED BY NAME.
      *
-     * <p>The cell holds exactly one ship, so the nearest ship to any point is that ship — and that
-     * premise is now CHECKED on every answer rather than stated here, because a second craft in the
-     * cell would make the reply indistinguishable from a correct one.</p>
+     * <p>A name, not the nearest ship: one loaded ship in the cell is not evidence that it is HIS,
+     * and the case where it is not is precisely the case where his has failed to load and a
+     * neighbour's has.</p>
+     *
+     * <p>Read first, linked second. The mark is taken before the first read, so a hull that is
+     * loaded now is answered at once; one that is registered but not loaded (no player in its world)
+     * is asked to load ONCE, and its load is production's own record — {@code ship_usable} for this
+     * hull, later than every unload of it — which the read cannot have missed.</p>
      */
     protected double[] awaitShipPose(int dim) throws Exception {
         assertNotNull("awaitShipPose is about THIS pilot's ship, and the arrangement has not named"
                 + " one yet", arrangedShipId);
-        // STAYS A LOOP: what it reads is a state that FLICKERS — whether this ship is loaded and
-        // queryable RIGHT NOW. `ledger_settled` records that it settled once, which is satisfied by
-        // a settle since undone, and no record says "it is loaded at this instant" because that is
-        // not an event anything commits. What this cannot see: a craft that came up and unloaded
-        // again between two attempts.
-        for (int attempt = 0; attempt < 40; attempt++) {
-            // ASKED BY NAME. This was `ship-info <dim> 0 0 0` — an unbounded nearest lookup —
-            // defended by asserting the cell held exactly one loaded ship. That defence answers a
-            // different question than the one being asked: one loaded ship is not evidence that the
-            // one loaded ship is HIS, and the case where it is not is precisely the case where his
-            // has failed to load and a neighbour's has. A name has no such gap.
-            String hull = exec("artest vs ship-uuid " + dim + " " + arrangedShipId);
-            Reply namedReply = Reply.of(hull);
-            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
-            if (Reply.of(hull).boolOr("found", false) && namedReply.has(SHIP_UUID)) {
-                String info = exec("artest vs ship-info " + dim + " id " + namedReply.text(SHIP_UUID));
-                if (ShipInfo.isLoaded(info)) {
-                    ShipInfo pose = ShipInfo.of(info);
-                    return new double[]{pose.x, pose.y, pose.z};
-                }
-            }
+        Events log = events();
+        long mark = log.markInstrumented();
+        String hullId = ShipIdentity.awaitPhysicsIdOf(this::exec, log, dim, arrangedShipId, 200);
+        String info = exec("artest vs ship-info " + dim + " id " + hullId);
+        if (!ShipInfo.isLoaded(info)) {
             exec("artest vs load-ships " + dim);
-            bot().waitTicks(5);
+            log.awaitMatching(mark, "ship_usable",
+                    usable -> ShipIdentity.endsUsable(usable, log.since(mark, "ship_unloaded"), hullId, dim),
+                    "carrying " + hullId + " in dim " + dim + ", later than every unload of it",
+                    "this pilot's ship must LOAD in its world when asked to (the read before the"
+                            + " request said: " + info + ")", 200);
+            info = exec("artest vs ship-info " + dim + " id " + hullId);
         }
-        return null;
+        assertTrue("this pilot's ship must be loaded with a pose in dim " + dim + ": " + info,
+                ShipInfo.isLoaded(info));
+        ShipInfo pose = ShipInfo.of(info);
+        return new double[]{pose.x, pose.y, pose.z};
     }
 
     /**

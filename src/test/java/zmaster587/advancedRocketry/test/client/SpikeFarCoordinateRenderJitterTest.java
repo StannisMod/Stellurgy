@@ -124,8 +124,8 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
     private static final int STEPS = 12;
     /** How many 20-tick waits the frame gets to stop changing on its own before a teleport. */
     private static final int SETTLE_ATTEMPTS = 15;
-    /** How many (deliver, settle) rounds a rung gets before it is called undeliverable. */
-    private static final int DELIVERY_ATTEMPTS = 4;
+    /** A deadline for each of a delivery's two records (the chunk, the placement) — not a settle. */
+    private static final int DELIVERY_LINK_BUDGET_TICKS = 200;
 
     private static final int OVERWORLD = 0;
     private static final int FLOOR_Y = FixtureSite.OPEN_AIR_Y;
@@ -217,29 +217,20 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
             // lighting propagation and the client's own catch-up keep changing pixels for a while
             // after a teleport. Wait for the frame to stop moving ON ITS OWN before asking whether
             // MOTION moves it — an unsettled scene answers "the frame changed" to every question.
-            BufferedImage second = null;
-            int settleAttempts = 0;
-            int lastDelta = Integer.MAX_VALUE;
-            BufferedImage previousSettle = first;
-            // STAYS A LOOP: the exit is the DIFFERENCE between two captured frames falling to zero
-            // — a value converging, where nothing decides. No record could carry it, because the
-            // quantity only exists between a PAIR of observations this loop takes itself. What it
-            // cannot see: a scene that stopped moving for one pair and resumed after.
-            while (settleAttempts < SETTLE_ATTEMPTS) {
-                settleAttempts++;
-                bot().waitTicks(20);
-                BufferedImage now = capture("jitter_" + x + "_settle" + settleAttempts);
-                lastDelta = differingPixels(previousSettle, now);
-                previousSettle = now;
-                if (lastDelta == 0) {
-                    second = now;
-                    break;
-                }
-            }
-            if (second == null) {
-                inconclusive.add("x=" + x + " the frame never stopped changing on its own after "
-                        + settleAttempts + " attempts (last delta " + lastDelta + "px) - the scene is "
-                        + "not static, so frame differences cannot be attributed to camera motion");
+            // EXPERIMENT: SETTLE_ATTEMPTS * 20 ticks — the ceiling the settle loop this replaced was
+            // given — for the scene to stop moving on its own; derived, not measured. It used to
+            // capture every twenty ticks and stop on the first identical pair, which is a poll.
+            bot().waitTicks(SETTLE_ATTEMPTS * 20);
+            BufferedImage settled = capture("jitter_" + x + "_settled");
+            // WINDOW: two captures twenty ticks apart; the verdict names the pixel count between them.
+            bot().waitTicks(20);
+            BufferedImage second = capture("jitter_" + x + "_settled2");
+            int lastDelta = differingPixels(settled, second);
+            if (lastDelta != 0) {
+                inconclusive.add("x=" + x + " the frame was still changing on its own after "
+                        + (SETTLE_ATTEMPTS * 20) + " ticks (delta " + lastDelta + "px over twenty"
+                        + " more) - the scene is not static, so frame differences cannot be"
+                        + " attributed to camera motion");
                 continue;
             }
 
@@ -248,7 +239,7 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
             int maxRun = 0;
             int run = 0;
             BufferedImage previous = second;
-            // A STIMULUS WINDOW: each step teleports the body further out and compares the frame
+            // STIMULUS: a stimulus window — each step teleports the body further out and compares the frame
             // with the one before, so the loop is what produces the motion being measured. Its
             // results — how many steps repeated a frame, and the longest RUN of repeats — are
             // statistics over the sweep, which no record could carry. What it cannot see: a frame
@@ -329,28 +320,23 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
 
     /**
      * Puts the camera at {@code (x + 0.5, y, ARENA_Z + 0.5)} through the long-jump path and returns
-     * the server's own reading of where he ended up. Retried, because the chunks are force-loaded on
-     * the SERVER while the client has not received them yet — the first delivery of a rung routinely
-     * lands in a world the client cannot see.
+     * the server's own reading of where he ended up. The chunks are force-loaded on the SERVER while
+     * the client has not received them yet — the first delivery of a rung routinely lands in a world
+     * the client cannot see — so the chunk's arrival and the placement are the two named steps of
+     * {@link ClientEvents#placeOntoGroundItHolds}. It used to re-deliver in a loop until the server
+     * held him near the rung.
      */
     private double deliver(int x, int y) throws Exception {
-        double actualX = Double.NaN;
-        // STAYS A LOOP, and the refusal names the link. The re-issued far-tp IS the stimulus — a
-        // delivery that did not take is not recoverable by reading longer — and the exit is a
-        // CONVERGENCE on where the server holds him. The link that looks right is `pos_jump`, and
-        // it does not answer: it fires only on a VERTICAL write past a threshold and carries
-        // `from`/`to` in Y alone, so it cannot say he arrived at this X. What this cannot see: a
-        // delivery that landed and was undone between two attempts.
-        for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
-            exec("artest player far-tp " + fmt(x + 0.5d) + " " + y + " " + fmt(ARENA_Z + 0.5d));
-            GameTicks.advanceWorld(serverClient(), OVERWORLD, 60);
-            bot().waitTicks(20);
-            actualX = posXOf(exec("artest player health"));
-            if (Math.abs(actualX - (x + 0.5d)) < 2d) {
-                break;
-            }
-        }
-        return actualX;
+        ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot()), this::exec,
+                "artest player far-tp " + fmt(x + 0.5d) + " " + y + " " + fmt(ARENA_Z + 0.5d),
+                x + 0.5d, y, ARENA_Z + 0.5d, "the camera must be delivered to the rung at x=" + x,
+                DELIVERY_LINK_BUDGET_TICKS);
+        // EXPERIMENT: sixty server ticks and twenty client ticks for the rung's scene to render
+        // around him before the frames are compared; the reading is the server's own.
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, 60);
+        // EXPERIMENT: the client half of the same dose.
+        bot().waitTicks(20);
+        return posXOf(exec("artest player health"));
     }
 
     private BufferedImage capture(String name) throws Exception {

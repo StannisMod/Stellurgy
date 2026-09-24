@@ -76,17 +76,29 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
     /** Commanded cruise, blocks/SECOND (the physics velocity unit): 2 blocks/tick, the reported speed. */
     private static final double COMMANDED_SPEED_BLOCKS_PER_SECOND = 40.0;
 
-    /** Ticks between the two samples a cruise-speed measurement is taken from. */
-    private static final int SETTLE_SAMPLE_TICKS = 10;
+    /** Ticks between the two samples a cruise-speed measurement is taken from — twenty, so a
+     *  reading's quantization is half what a ten-tick one carries (measured below). */
+    private static final int SETTLE_SAMPLE_TICKS = 20;
+
+    /**
+     * Ticks from the cruise command before its speed is judged. Measured 2026-09-24 in ten-tick
+     * samples: 0.58, 1.63, 2.07, 2.00, 2.07, 2.27, 2.00 blocks/tick — at cruise by the third sample
+     * (~30 ticks), so sixty is twice that.
+     */
+    private static final int CRUISE_RAMP_TICKS = 60;
 
     /** How long the CLIENT is given to perform a seating or a release the server has already done,
      *  in ticks — a ceiling on one round trip. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
 
-    /** How close two successive speed samples must be before the cruise counts as STEADY. Loose
-     *  enough to survive physics jitter, tight enough that the telemetry the mount publishes has
-     *  stopped moving - which is the condition the anchor staleness needs. */
-    private static final double STEADY_EPSILON = 0.002;
+    /**
+     * How close two successive twenty-tick speed readings must be for the cruise to count as STEADY.
+     * From the same measurement: at cruise, successive ten-tick readings differed by up to 0.27
+     * (sampling quantization — twenty ticks halves it to ~0.13), while the ramp's successive steps
+     * were 1.05 and 0.43. 0.2 sits between the two. The 0.002 it replaced was met only when two
+     * readings happened to come out identical, on the seventh attempt of a loop.
+     */
+    private static final double STEADY_TOLERANCE = 0.2;
 
     /** Four full 20-tick tracking cycles: on the broken build the mount is evicted for roughly half
      *  of every one of them. */
@@ -190,26 +202,18 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         // any speed VS will allow. A mount one block off the pilot seat resolves no flight computer,
         // publishes nothing, and is carried by the same ship - which is exactly a passenger's chair.
         int mountX = seatX + 1, mountY = seatY, mountZ = seatZ;
-        String mount = "";
-        boolean mounted = false;
-        int dummyId = -1;
-        // The CLIENT's mark before the FIRST attempt: every pass performs a real mount, so the
-        // record that closes the wait below may belong to any of them.
+        // ONE mount. It used to be retried five times ten ticks apart, which would hide WHY a first
+        // mount is refused — and a refused mount is the arrangement's own failure, reported with the
+        // server's answer. The client's mark goes before it: the link below is this mount's.
         long seatClientMark = clientEvents().mark();
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = exec("artest vs seat-mount-at " + dim
-                    + " " + mountX + " " + mountY + " " + mountZ);
-            scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
-                    readBool(mountAt, "ok"));
-            dummyId = readInt(mountAt, "dummyId");
-            mount = exec("artest player mount-entity " + dummyId);
-            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
-            mounted = Reply.of(mount).boolOr("mounted", false);
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
-        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount, mounted);
+        String mountAt = exec("artest vs seat-mount-at " + dim
+                + " " + mountX + " " + mountY + " " + mountZ);
+        scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
+                readBool(mountAt, "ok"));
+        int dummyId = readInt(mountAt, "dummyId");
+        String mount = exec("artest player mount-entity " + dummyId);
+        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount,
+                Reply.of(mount).boolOr("mounted", false));
         // THE CLIENT'S OWN SEATING, as a link. The ten ticks that stood here produced the red whose
         // text is three lines below — "the mount reported success and he is off ten ticks later" —
         // and under four client forks it was replication lag: the server reported him riding a live
@@ -243,21 +247,16 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         assertFalse("CONTROL: the client must be able to report NOT riding - otherwise the cruise"
                         + " leg cannot fail", riding());
 
-        mounted = false;
         // The CLIENT's mark, before the re-seat is ordered: the control below reads the
-        // client, and the link is what says the mount reached it.
+        // client, and the link is what says the mount reached it. ONE re-seat, for the reason above.
         long reseatClientMark = clientEvents().mark();
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = exec("artest vs seat-mount-at " + dim
-                    + " " + mountX + " " + mountY + " " + mountZ);
-            mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
-            mounted = Reply.of(mount).boolOr("mounted", false);
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
-        scenario().requireArranged("the bot must be re-seated after the control: " + mount, mounted);
+        String remountAt = exec("artest vs seat-mount-at " + dim
+                + " " + mountX + " " + mountY + " " + mountZ);
+        scenario().requireArranged("seat-mount-at must spawn the seat dummy again: " + remountAt,
+                readBool(remountAt, "ok"));
+        mount = exec("artest player mount-entity " + readInt(remountAt, "dummyId"));
+        scenario().requireArranged("the bot must be re-seated after the control: " + mount,
+                Reply.of(mount).boolOr("mounted", false));
         // WAS `waitTicks(10)` and a read. The server says it seated him; this reads the
         // CLIENT, and a budget between the two is an assertion about replication speed.
         ridingOnceTheClientHasRemounted(reseatClientMark, CLIENT_REMOUNT_BUDGET_TICKS);
@@ -302,23 +301,28 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         scenario().requireArranged("the cruise command must reach THIS ship's flight computer: "
                 + commanded, readBool(commanded, "commanded"));
 
-        double steady = Double.NaN, prev = Double.NaN;
-        for (int attempt = 0; attempt < 60 && Double.isNaN(steady); attempt++) {
-            ShipInfo s0 = ShipInfo.byId(this::exec, dim, shipId);
-            bot().waitTicks(SETTLE_SAMPLE_TICKS);
-            ShipInfo s1 = ShipInfo.byId(this::exec, dim, shipId);
-            double speed = Math.hypot(s1.x - s0.x, s1.z - s0.z) / SETTLE_SAMPLE_TICKS;
-            if (speed > EVICTION_THRESHOLD_BLOCKS_PER_TICK
-                    && !Double.isNaN(prev) && Math.abs(speed - prev) < STEADY_EPSILON) {
-                steady = speed;
-            }
-            prev = speed;
-        }
-        scenario().requireArranged("the ship must reach a STEADY cruise above "
+        // EXPERIMENT: CRUISE_RAMP_TICKS from the command for the ship to reach its cruise (measured,
+        // see the constant); then the cruise is judged ONCE, by the window below.
+        bot().waitTicks(CRUISE_RAMP_TICKS);
+        // WINDOW: three reads, two consecutive SETTLE_SAMPLE_TICKS-long speeds; the verdict names
+        // both. The physics velocity controller never decides it has arrived, so no record answers.
+        ShipInfo s0 = ShipInfo.byId(this::exec, dim, shipId);
+        // WINDOW: the first half of the same window.
+        bot().waitTicks(SETTLE_SAMPLE_TICKS);
+        ShipInfo s1 = ShipInfo.byId(this::exec, dim, shipId);
+        // WINDOW: the second half of the same window.
+        bot().waitTicks(SETTLE_SAMPLE_TICKS);
+        ShipInfo s2 = ShipInfo.byId(this::exec, dim, shipId);
+        double first = Math.hypot(s1.x - s0.x, s1.z - s0.z) / SETTLE_SAMPLE_TICKS;
+        double second = Math.hypot(s2.x - s1.x, s2.z - s1.z) / SETTLE_SAMPLE_TICKS;
+        scenario().requireArranged("the ship must be in a STEADY cruise above "
                 + EVICTION_THRESHOLD_BLOCKS_PER_TICK + " blocks/tick - while it is still accelerating"
                 + " the mount re-pins its own tracking anchor every tick and nothing can be evicted,"
-                + " so an unsettled ship makes this leg unfalsifiable. Last speed sample: " + prev,
-                !Double.isNaN(steady));
+                + " so an unsettled ship makes this leg unfalsifiable. Speeds over two consecutive "
+                + SETTLE_SAMPLE_TICKS + "-tick windows, " + CRUISE_RAMP_TICKS + " ticks after the"
+                + " command: " + first + ", " + second + " (steady within " + STEADY_TOLERANCE + ")",
+                first > EVICTION_THRESHOLD_BLOCKS_PER_TICK && second > EVICTION_THRESHOLD_BLOCKS_PER_TICK
+                        && Math.abs(first - second) < STEADY_TOLERANCE);
 
         ShipInfo before = ShipInfo.byId(this::exec, dim, shipId);
         double x0 = before.x, z0 = before.z;
@@ -333,7 +337,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         int notRiding = 0, samples = 0, mountMissing = 0, riderUntracked = 0;
         double maxAnchorLag = 0.0;
         StringBuilder trace = new StringBuilder();
-        // A WINDOW that COUNTS: how many samples of a cruise found the rider unseated, his mount
+        // WINDOW: it COUNTS how many samples of a cruise found the rider unseated, his mount
         // missing or the anchor lagging, plus the WORST lag seen. Every one of those is a statistic
         // over the cruise, and the contract is about the cruise rather than about any tick of it.
         // What it cannot see: a seat lost and regained inside one sampling gap.

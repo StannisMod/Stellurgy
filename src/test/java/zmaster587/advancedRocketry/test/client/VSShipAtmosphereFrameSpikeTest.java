@@ -13,6 +13,7 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.Plot;
 import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import static org.junit.Assert.assertTrue;
 
@@ -69,7 +70,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         return "vs-ship-atmosphere-frame";
     }
 
-    private static final String COUNT = "count";
     private static final String ATM_TYPE = "type";
     private static final String CACHED_ATM = "cachedAtmosphere";
     private static final String BLOB_SIZE = "blobSize";
@@ -163,30 +163,23 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
                 "the client must be AT the build site before the assembly, because a client near the"
                         + " ship is what makes the physics mod load it");
 
+        Events loadEvents = events();
+        long spawnMark = loadEvents.markInstrumented();
         String assemble = assembleFixture(site);
         System.out.println("[S1/ship] assemble=" + assemble);
         assertTrue("a with-pilot-seat build must route to a VS ship (no rocket): " + assemble,
                 (Reply.of(assemble).integer("rocketCount") == 0));
-        int all = 0;
-        for (int i = 0; i < 60 && all < 1; i++) {
-            bot().waitTicks(5);
-            all = count("ship-count-all");
-        }
-        scenario().requireArranged("assembly must create a VS ship (all=" + all + ", assemble="
-                + assemble + ")", all >= 1);
-
-        int loaded = 0;
-        for (int i = 0; i < 40 && loaded < 1; i++) {
-            bot().waitTicks(5);
-            loaded = count("ship-count");
-        }
-        scenario().requireArranged("the ship must LOAD with the client present (loaded=" + loaded
-                + ", all=" + all + ")", loaded >= 1);
 
         // The craft this spike built, by the name the assembler minted — so every lookup below is
-        // about it and not about whichever hull is nearest the pad on a world the tier shares.
-        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), 0,
+        // about it and not about whichever hull is nearest the pad on a world the tier shares. Its
+        // LOAD is then this ship's own `ship_usable`, not a dimension-wide count any neighbour's hull
+        // answers.
+        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, loadEvents, 0,
                 ShipIdentity.nameFromAssembly(assemble), 200);
+        awaitShipUsable(loadEvents, spawnMark, scenarioShipId);
+        String loadedInfo = shipInfoById(scenarioShipId);
+        scenario().requireArranged("the ship must LOAD with the client present: " + loadedInfo,
+                ShipInfo.isLoaded(loadedInfo));
 
         PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
                 .requireFound("find-seat must resolve the ship's subspace seat");
@@ -379,11 +372,6 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         Reply reply = Reply.of(json);
         assertTrue("field `" + field + "` not found in: " + json, reply.has(field));
         return reply.integer(field);
-    }
-
-    private int count(String sub) throws Exception {
-        Reply mReply = Reply.of(exec("artest vs " + sub + " 0"));
-        return mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : -1;
     }
 
     private String assembleFixture(FixtureSite site) throws Exception {

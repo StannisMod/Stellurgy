@@ -481,23 +481,6 @@ private String execEnvelope(String cmd) throws Exception {
         return envelope;
     }
 
-    /** ORIGIN-side arrangement: poll until the fixture ship EXISTS. Asked through the queryable
-     *  registry, which answers for an unloaded ship — so this waits without forcing anything. */
-private boolean waitForRegisteredShip(int dim) throws Exception {
-        // STAYS A LOOP, and the link was checked rather than assumed: `ship_spawned` is recorded at
-        // the registry's own add, which is the right MOMENT — but it carries `vsShip` and `name`
-        // and no dimension, so it cannot answer "is there a craft in THIS cell", which is the
-        // question here. What this cannot see: a craft that registered and deregistered between
-        // two reads.
-        for (int i = 0; i < 40; i++) {
-            if (readIntOr(execEnvelope("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                return true;
-            }
-            bot().waitTicks(5);
-        }
-        return false;
-    }
-
     /**
      * Whether the reply carries {@code key} as a field of its OWN — which is what every caller
      * here means.
@@ -514,13 +497,16 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
     @Test
     public void aCrewMemberIsReseatedOnArrivalWithNothingForcingTheShipLoaded() throws Exception {
 
+        Events arrangeLog = events();
+        long setupMark = arrangeLog.markInstrumented();
         TransitSetup setup = TransitSetup.of(execEnvelope("artest space transit-setup-piloted"));
         int originDim = setup.originDim;
 
-        // ARRANGEMENT. The fixture's assembly is async, so wait for the ship to EXIST — asked through the
-        // queryable registry, which answers for an unloaded ship and therefore forces nothing.
-        assertTrue("the piloted origin ship never assembled in the pool cell (dim " + originDim + ")",
-                waitForRegisteredShip(originDim));
+        // ARRANGEMENT. The fixture's assembly is async, so wait for the ship to EXIST: the registry's
+        // own add records `ship_spawned` with the physics key, and the setup already NAMES that key,
+        // so the record answers "is THIS craft there" without a dimension and without forcing a load.
+        arrangeLog.awaitField(setupMark, "ship_spawned", "vsShip", setup.requireShipId(),
+                "the piloted origin ship must be spawned in the pool cell (dim " + originDim + ")", 200);
 
         String botName = PlayerState.botName(this::execEnvelope);
 
@@ -532,6 +518,7 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         // The CLIENT's mark BEFORE the transfer is ordered: what made the origin ship load is this
         // body's PROXIMITY, so the seat search below is asking about a world he has to be in.
         long enterMark = clientEvents().mark();
+        long proximityLoadMark = arrangeLog.markInstrumented();
         String enter = execEnvelope("artest space enter " + botName + " " + originDim + " 1 64 1");
         assertTrue("space enter into the origin cell must succeed: " + enter, readBool(enter, "ok"));
         awaitClientDim(enterMark, originDim,
@@ -539,34 +526,14 @@ private boolean waitForRegisteredShip(int dim) throws Exception {
         assertEquals("the client must have followed into the transit origin cell",
                 originDim, bot().reportWeather().get("dim").getAsInt());
 
-        // Now locate the seat. Retried, because the ship's world position resolves only once VS has
-        // actually loaded it for the nearby bot, a tick or two after the dimension transfer — and
-        // raised as an ARRANGEMENT failure, because a seat this scenario could not find has said
-        // nothing about what happens to a crew member on arrival.
-        // WHY THIS IS STILL A BOUNDED READ and not a link, because the rest of this class is links
-        // now and the difference is worth stating. `ship_usable` is a record of a LOAD — it fires
-        // once each time the physics object becomes usable — and the question here is whether the
-        // ship is loaded RIGHT NOW, which is a state that comes and goes: the comment above records
-        // a first cut where `vs load-ships` was answered and the ship had unloaded again by the very
-        // next probe. A wait on the record would be satisfied by a load that has since been undone,
-        // which is the exact failure this arrangement exists to prevent.
-        //
-        // What DID change: the loop no longer hands its exit condition to an assertion that restates
-        // it. It fails INSIDE, typed as the arrangement it is, carrying the reading — so "the seat
-        // was never located" and "it was located without a world position" stay distinguishable
-        // without either of them being a re-check of `hasKey`.
-        //
-        // A syntactic scan for "a loop header value an assertion later reads" still counts this one,
-        // because `seat` is concatenated into an assertion in ANOTHER method of this class. It is a
-        // false positive, and this paragraph is the reason not to open the site again over it.
-        PilotSeat seat = null;
-        for (int i = 0; i < 40 && (seat == null || Double.isNaN(seat.shipWorldX)); i++) {
-            seat = PilotSeat.of(execEnvelope("artest vs find-seat " + originDim + " id "
-                    + setup.requireShipId()));
-            if (Double.isNaN(seat.shipWorldX)) {
-                bot().waitTicks(5);
-            }
-        }
+        // Now locate the seat. Its world position resolves only once the physics mod has LOADED the
+        // ship for the nearby bot, and that load is production's own record: `ship_usable` for THIS
+        // craft, later than every unload of it — so a load undone by the next probe (the first cut
+        // described above) does not satisfy it. Then ONE read, failing as the ARRANGEMENT it is: a
+        // seat this scenario could not find has said nothing about a crew member's arrival.
+        awaitShipUsable(arrangeLog, proximityLoadMark, setup.requireShipId());
+        PilotSeat seat = PilotSeat.of(execEnvelope("artest vs find-seat " + originDim + " id "
+                + setup.requireShipId()));
         if (!seat.found) {
             // Witness sensitivity: without a located seat the whole "still riding on the far side"
             // observation is vacuous, so this is refused before anything is done to the ship.
@@ -637,21 +604,16 @@ private static final int SKY_RENDER_DISTANCE = 8;
     private static final int RENDER_WINDOW_TICKS = 20;
 
     /**
-     * How many times a seat dummy is spawned afresh before the arrangement gives up. The number is
-     * the count of SPAWNS, not a tick budget — see {@link #mountTheSeatDummy}.
-     */
-    private static final int SEAT_MOUNT_ATTEMPTS = 5;
-
-    /**
-     * Spawn the ship's pilot-seat dummy and put the bot on it, retried with a FRESH spawn each
-     * attempt. Four scenarios in this class carried a copy of these ten lines.
+     * Spawn the ship's pilot-seat dummy and put the bot on it — ONCE. Four scenarios in this class
+     * carried a copy of these ten lines.
      *
-     * <p><b>A retry, not a wait.</b> {@code mount-entity} answers synchronously and completely: it
-     * says whether the player's own world held the dummy and, when it did not, whether any loaded
-     * world does ({@code playerDim} / {@code foundInDim} / {@code gone}). So there is no event to
-     * await here and nothing that arrives later — what another pass buys is a NEW dummy, because the
-     * one it asked about is glued to the ship's world position only on its first tick, and a spawn
-     * chunk that unloads before that tick leaves the returned id resolving to nothing.</p>
+     * <p>{@code mount-entity} answers synchronously and completely: it says whether the player's own
+     * world held the dummy and, when it did not, whether any loaded world does ({@code playerDim} /
+     * {@code foundInDim} / {@code gone}). It used to be retried with a fresh spawn up to five times,
+     * on the argument that a dummy is glued to the ship's world position only on its first tick and a
+     * spawn chunk that unloads before that tick leaves the id resolving to nothing. That argument
+     * describes a seat a player cannot sit in — a defect, if it happens — and a retry is the one
+     * thing that guarantees nobody finds out. So a refused mount now fails with both replies.</p>
      *
      * <p><b>Raised as an ARRANGEMENT failure.</b> A seat dummy that could not be mounted has
      * disproved nothing about hyperspace transits: it is the fixture that did not come up, and the
@@ -663,31 +625,22 @@ private static final int SKY_RENDER_DISTANCE = 8;
      */
     private void mountTheSeatDummy(Events.Probe probe, int originDim, int seatX, int seatY, int seatZ)
             throws Exception {
-        String mountAt = "", mount = "";
-        boolean mounted = false;
         // The CLIENT's mark, before anything is ordered: what the caller asserts next is the
         // client's own riding state, and the link below is what says the mount reached it.
         long clientMark = clientEvents().mark();
-        for (int attempt = 0; attempt < SEAT_MOUNT_ATTEMPTS && !mounted; attempt++) {
-            mountAt = probe.exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY
-                    + " " + seatZ);
-            scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
-                    readBool(mountAt, "ok"));
-            mount = probe.exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            // absence is the answer: this is a retry loop, and "not yet" is what it is reading for.
-            mounted = Reply.of(mount).boolOr("mounted", false);
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
+        String mountAt = probe.exec("artest vs seat-mount-at " + originDim + " " + seatX + " " + seatY
+                + " " + seatZ);
+        scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
+                readBool(mountAt, "ok"));
+        String mount = probe.exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
         // BOTH replies, because a failed mount has two unrelated causes and the second command's
         // answer cannot separate them alone: the spawn says whether a dummy was made and whether it
         // was reused, and the mount says whether the player's own world held it — `playerDim`
-        // against `foundInDim`, and `gone` when no loaded world has it at all. Retrying against the
-        // wrong world otherwise learns the same nothing five times.
-        scenario().requireArranged("the bot must mount the pilot-seat dummy (" + SEAT_MOUNT_ATTEMPTS
-                + " spawn+mount attempts) at the seat " + seatX + "," + seatY + "," + seatZ
-                + " in dim " + originDim + " — spawn=" + mountAt + " mount=" + mount, mounted);
+        // against `foundInDim`, and `gone` when no loaded world has it at all.
+        scenario().requireArranged("the bot must mount the pilot-seat dummy at the seat " + seatX + ","
+                        + seatY + "," + seatZ + " in dim " + originDim + " — spawn=" + mountAt
+                        + " mount=" + mount,
+                Reply.of(mount).boolOr("mounted", false));
         // WAS `bot().waitTicks(10)`. The server says it seated him; the caller then asserts
         // the CLIENT is riding, and between the two stood a tick budget — which is an
         // assertion about how fast this box replicates, not about the mount. The client

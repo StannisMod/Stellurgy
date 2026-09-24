@@ -146,17 +146,12 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's ARRIVAL is what loads the ship here, so the settle below is measuring"
                         + " a craft only an arrived client can have brought into being");
-        double yRest = Double.NaN;
-        String atBase = "";
-        for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
-            bot().waitTicks(5);
-            atBase = shipInfoAtBase();
-            if (ShipInfo.isLoaded(atBase)) {
-                yRest = ShipInfo.of(atBase).y;
-            }
-        }
+        // The LOAD is production's own record (`ship_usable`, later than every unload of the ship),
+        // from the pre-assembly mark; then ONE read confirming it is loaded now.
+        awaitShipUsable(events, spawnMark, shipUuid, budget * 5);
+        String atBase = shipInfoAtBase();
         scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
-                !Double.isNaN(yRest));
+                ShipInfo.isLoaded(atBase));
 
         // The seat's SUBSPACE address (stationary, what the raytrace should report) and its live
         // WORLD position (what the bot has to aim at). Both come from the same probe reading.

@@ -64,7 +64,6 @@ import static org.junit.Assert.assertTrue;
 public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
 
     private static final String BUILDER_POS = "builderPos";
-    private static final String COUNT = "count";
     private static final String DUMMY_ID = "dummyId";
 
     /** One command, then this many samples this many ticks apart, watching for motion to cease. */
@@ -92,7 +91,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     private static final double MIN_LIFT_BLOCKS = 1.0d;
     private static final double TRACK_TOLERANCE = 3.0d;
     private static final double ARRIVAL_TOLERANCE = 1.0d;
-    private static final int DELIVERY_ATTEMPTS = 4;
+    /** A deadline for each of a delivery's two records (the chunk, the placement) — not a settle. */
+    private static final int DELIVERY_LINK_BUDGET_TICKS = 200;
     /** 5-tick polls the CLIENT gets to agree it is riding the seat the server already mounted it on. */
     private static final int RIDING_ATTEMPTS = 24;
 
@@ -124,14 +124,14 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
 
         try {
             for (int x : X_LADDER) {
-                int before = count("ship-count-all");
-
                 String arrangement = arrange(x);
                 if (arrangement != null) {
                     inconclusive.add("x=" + x + " " + arrangement);
                     continue;
                 }
 
+                Events rungLog = serverEvents();
+                long spawnMark = rungLog.markInstrumented();
                 String assemble = assembleFixture(x);
                 if (assemble == null) {
                     inconclusive.add("x=" + x + " the fixture did not build or did not assemble"
@@ -146,18 +146,21 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                     continue;
                 }
 
-                int after = before;
-                for (int i = 0; i < 40 && after <= before; i++) {
-                    bot().waitTicks(5);
-                    after = count("ship-count-all");
-                }
-                if (after <= before) {
-                    verdicts.put(x, "assembly created no VS ship (count " + before + " -> " + after + ")");
+                // The registry's own add of THIS rung's craft, by the durable name its assembler
+                // minted — a dimension-wide count rose for any neighbour's hull too. An expiry is
+                // this rung's verdict, not the end of the sweep.
+                String durableName = ShipIdentity.nameFromAssembly(assemble);
+                try {
+                    rungLog.awaitField(spawnMark, "ship_spawned", "arShip", durableName,
+                            "the rung's assembly must spawn a VS ship", 200);
+                } catch (AssertionError noSpawn) {
+                    verdicts.put(x, "assembly created no VS ship: " + oneLine(noSpawn.getMessage()));
                     continue;
                 }
 
                 // Put the pilot on the ship. This is the ONLY relocation in the leg, and it is the
-                // player's, not the ship's.
+                // player's, not the ship's. The mark precedes it: his arrival is what loads the ship.
+                long loadMark = rungLog.markInstrumented();
                 String delivery = deliver(x);
                 if (delivery != null) {
                     inconclusive.add("x=" + x + " " + delivery);
@@ -168,29 +171,28 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 // back out of a bounded lookup at the rung's own spot — defensible only as long as
                 // that spot held one hull, which is a premise about the arrangement rather than
                 // about the lookup. Every later reading goes by the id, which has no distance term.
-                String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), 0,
-                        ShipIdentity.nameFromAssembly(assemble), 200);
-                double y0 = Double.NaN;
-                String lastInfo = "";
-                // STAYS A LOOP: the spawn is already awaited as a link one line up, and what this
-                // reads is whether the craft is loaded and carrying a pose RIGHT NOW — a flickering
-                // state no record answers. What it cannot see: an unload between two reads.
-                for (int i = 0; i < 40 && Double.isNaN(y0); i++) {
-                    bot().waitTicks(5);
-                    lastInfo = exec("artest vs ship-info 0 id " + shipId);
-                    if (ShipInfo.isLoaded(lastInfo)) {
-                        y0 = ShipInfo.of(lastInfo).y;
-                    }
-                }
-                if (Double.isNaN(y0)) {
-                    verdicts.put(x, "the ship never LOADED with the client present: " + oneLine(lastInfo));
+                String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, rungLog, 0, durableName, 200);
+                // The LOAD with the client present is production's record: `ship_usable` for this
+                // craft, later than every unload of it, from the mark before the delivery. Then ONE
+                // read of its pose. An expiry is this rung's verdict.
+                try {
+                    rungLog.awaitMatching(loadMark, "ship_usable",
+                            usable -> ShipIdentity.endsUsable(usable,
+                                    rungLog.since(loadMark, "ship_unloaded"), shipId, 0),
+                            "carrying ship " + shipId + " in dim 0, later than every unload of it",
+                            "the rung's ship must LOAD with the client present", 200);
+                } catch (AssertionError neverLoaded) {
+                    verdicts.put(x, "the ship never LOADED with the client present: "
+                            + oneLine(neverLoaded.getMessage()));
                     continue;
                 }
-                if (shipId == null) {
-                    verdicts.put(x, "the ship loaded but reported no id, so no later reading can be "
-                            + "attributed to it: " + oneLine(lastInfo));
+                String lastInfo = exec("artest vs ship-info 0 id " + shipId);
+                if (!ShipInfo.isLoaded(lastInfo)) {
+                    verdicts.put(x, "the ship was usable and then not loaded at the next read: "
+                            + oneLine(lastInfo));
                     continue;
                 }
+                double y0 = ShipInfo.of(lastInfo).y;
                 if (shipIds.containsValue(shipId)) {
                     verdicts.put(x, "this rung's ship is the SAME ship a previous rung measured (id "
                             + shipId + ") - the ladder is measuring one subject twice");
@@ -348,13 +350,16 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         try {
             String arrangement = arrange(0);
             assertTrue("the arena did not build: " + arrangement, arrangement == null);
+            Events oneShotLog = serverEvents();
+            long spawnMark = oneShotLog.markInstrumented();
             String assemble = assembleFixture(0);
             assertTrue("the fixture did not assemble", assemble != null);
             assertTrue("the build must route to a ship: " + oneLine(assemble),
                     (Reply.of(assemble).integer("rocketCount") == 0));
-            for (int i = 0; i < 40 && count("ship-count-all") < 1; i++) {
-                bot().waitTicks(5);
-            }
+            // The registry's own add of this craft, by the name its assembler minted.
+            oneShotLog.awaitField(spawnMark, "ship_spawned", "arShip",
+                    ShipIdentity.nameFromAssembly(assemble),
+                    "the assembly must spawn a VS ship before the pilot is delivered to it", 200);
             String delivery = deliver(0);
             assertTrue("the pilot was not delivered: " + delivery, delivery == null);
 
@@ -387,7 +392,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             double lastDist = 0d;
             int stoppedAtTick = -1;
             int quiet = 0;
-            // A WINDOW over the drift: what it answers is WHEN the craft stopped moving and how
+            // WINDOW: over the drift, what it answers is WHEN the craft stopped moving and how
             // far it had gone — a tick index and a distance across samples, neither of which is a
             // moment production commits. What it cannot see: motion inside one sampling gap.
             for (int sample = 1; sample <= SURVIVAL_SAMPLES; sample++) {
@@ -426,28 +431,25 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         }
     }
 
-    /** The ship's world X and Z, by id. */
+    /**
+     * The ship's world X and Z, by id — ONE read. Every caller asks about a ship this spike has
+     * already seen loaded with its pilot aboard, so a reply that is not loaded here is a ship that
+     * went away mid-measurement: a finding to report, not a read to retry until it looks better.
+     */
     private double[] shipXZ(String shipId) {
-        String last = "";
-        // STAYS A LOOP: is this ship loaded and carrying a pose RIGHT NOW is a state that FLICKERS,
-        // and no record answers it — `ledger_settled` says the craft settled once, which a later
-        // unload does not retract. What this cannot see: a ship that came up and went between two
-        // reads.
-        for (int i = 0; i < 10; i++) {
-            try {
-                last = exec("artest vs ship-info 0 id " + shipId);
-                if (ShipInfo.isLoaded(last)) {
-                    ShipInfo info = ShipInfo.of(last);
-                    if (!Double.isNaN(info.x) && !Double.isNaN(info.z)) {
-                        return new double[] {info.x, info.z};
-                    }
-                }
-                bot().waitTicks(2);
-            } catch (Exception e) {
-                throw new AssertionError("ship-info threw: " + e, e);
+        String last;
+        try {
+            last = exec("artest vs ship-info 0 id " + shipId);
+        } catch (Exception e) {
+            throw new AssertionError("ship-info threw: " + e, e);
+        }
+        if (ShipInfo.isLoaded(last)) {
+            ShipInfo info = ShipInfo.of(last);
+            if (!Double.isNaN(info.x) && !Double.isNaN(info.z)) {
+                return new double[] {info.x, info.z};
             }
         }
-        throw new AssertionError("ship-info never returned a parseable position; last: " + last);
+        throw new AssertionError("the loaded ship did not report a position at this read: " + last);
     }
 
     // ─── the measurement ────────────────────────────────────────────────────────
@@ -605,32 +607,30 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     }
 
     /**
-     * Puts the pilot on the ship through the long-jump path, retried: the chunks are loaded on the
-     * SERVER while the client has not received them yet, and the first delivery of a far rung lands
-     * in a world the client cannot see.
+     * Puts the pilot on the ship through the long-jump path. The chunks are loaded on the SERVER
+     * while the client has not received them yet, and a blind delivery of a far rung lands in a world
+     * the client cannot see — so the chunk's arrival and the placement are the two named steps of
+     * {@link ClientEvents#placeOntoGroundItHolds}. It used to re-deliver in a loop.
      *
      * @return {@code null} once he is there, or a reason string for the INCONCLUSIVE list
      */
     private String deliver(int x) throws Exception {
-        double lastX = Double.NaN;
-        // STAYS A LOOP, and the refusal names the link. The re-issued far-tp IS the stimulus — a
-        // delivery that did not take is not recoverable by reading longer — and the exit is a
-        // CONVERGENCE on where the server holds him. The link that looks right is `pos_jump`, and
-        // it does not answer: it fires only on a VERTICAL write past a threshold and carries
-        // `from`/`to` in Y alone, so it cannot say he arrived at this X. What this cannot see: a
-        // delivery that landed and was undone between two attempts.
-        for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
-            exec("artest player far-tp " + fmt(x + 0.5d) + " " + (BASE_Y + 6) + " "
-                    + fmt(ARENA_Z + 0.5d));
-            GameTicks.advanceWorld(serverClient(), 0, 40);
-            bot().waitTicks(30);
-            lastX = field(exec("artest player health"), "posX");
-            if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE) {
-                return null;
-            }
+        try {
+            ClientEvents.placeOntoGroundItHolds(bot(), clientEvents(), this::exec,
+                    "artest player far-tp " + fmt(x + 0.5d) + " " + (BASE_Y + 6) + " "
+                            + fmt(ARENA_Z + 0.5d),
+                    x + 0.5d, BASE_Y + 6, ARENA_Z + 0.5d,
+                    "the pilot must be delivered onto the rung's ship at x=" + x, DELIVERY_LINK_BUDGET_TICKS);
+        } catch (AssertionError notPlaced) {
+            return "the pilot was never placed at x=" + x + " - delivery, not the ship: "
+                    + oneLine(notPlaced.getMessage());
         }
-        return "the pilot never arrived (server posX=" + lastX + ", wanted " + (x + 0.5d)
-                + ") after " + DELIVERY_ATTEMPTS + " deliveries - delivery, not the ship";
+        double lastX = field(exec("artest player health"), "posX");
+        if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE) {
+            return null;
+        }
+        return "the pilot was placed and the server does not hold him there (server posX=" + lastX
+                + ", wanted " + (x + 0.5d) + ") - delivery, not the ship";
     }
 
     // ─── instruments ────────────────────────────────────────────────────────────
@@ -646,29 +646,20 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
      * four decimals, which is exactly what a clean far-coordinate result also looks like.</p>
      */
     private double shipY(String shipId) {
-        String last = "";
-        // Same refusal as shipXZ above: loadedness is a flickering STATE, not an event, so the
-        // read is retried rather than linked. What this cannot see: an unload between two reads.
-        for (int i = 0; i < 10; i++) {
-            try {
-                last = exec("artest vs ship-info 0 id " + shipId);
-                if (ShipInfo.isLoaded(last)) {
-                    double py = ShipInfo.of(last).y;
-                    if (!Double.isNaN(py)) {
-                        return py;
-                    }
-                }
-                bot().waitTicks(2);
-            } catch (Exception e) {
-                throw new AssertionError("ship-info threw: " + e, e);
+        // ONE read, for the reason shipXZ gives.
+        String last;
+        try {
+            last = exec("artest vs ship-info 0 id " + shipId);
+        } catch (Exception e) {
+            throw new AssertionError("ship-info threw: " + e, e);
+        }
+        if (ShipInfo.isLoaded(last)) {
+            double py = ShipInfo.of(last).y;
+            if (!Double.isNaN(py)) {
+                return py;
             }
         }
-        throw new AssertionError("ship-info never returned a parseable posY; last reply: " + last);
-    }
-
-    private int count(String sub) throws Exception {
-        String command = "artest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integer(COUNT);
+        throw new AssertionError("the loaded ship did not report a posY at this read: " + last);
     }
 
     private static double field(String json, String key) {

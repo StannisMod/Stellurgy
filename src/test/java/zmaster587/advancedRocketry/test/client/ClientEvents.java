@@ -2,6 +2,7 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.client.ClientBot;
 
+import zmaster587.advancedRocketry.test.ArrangementFailure;
 import zmaster587.advancedRocketry.test.Events;
 
 /**
@@ -66,6 +67,60 @@ public final class ClientEvents {
         clientLog.awaitMatching(mark, "client_pos_look_applied",
                 reply -> appliedNear(reply, x, z),
                 "placing the client at " + x + ", " + z, what, tickBudget);
+    }
+
+    /**
+     * Put the client at {@code (x, y, z)} with {@code placeCommand} (a teleport or a far delivery),
+     * onto ground his client already HOLDS, then wait for the client to apply the placement.
+     *
+     * <p>A placement into a chunk the client has not been sent lands him on nothing: his client sees
+     * air, he falls, and the server accepts the fall. Scenarios used to re-issue the placement in a
+     * loop until he happened to stay. This names the two cases instead. If the client already HOLDS
+     * the chunk column, ONE placement. If not, the first placement is what makes the server send it,
+     * awaited on the client's own {@code chunk_data_applied} (both coordinates on one record); the
+     * SECOND puts him there now that it is. The caller reads the result once.</p>
+     *
+     * <p>The COLUMN is asked about — whether the client holds a real chunk there rather than the blank
+     * stand-in it shows for unsent ones — at a height inside the world, and not the block under his feet:
+     * a move that changes only Y never re-sends a column the client already holds (vanilla's
+     * {@code PlayerChunkMap.updateMovingPlayer} compares X and Z only), so a floor-shaped question
+     * asked of a hover rung, or of a rung above the build height, would wait for a chunk that is
+     * never coming.</p>
+     *
+     * <p>A failure here is the ARRANGEMENT's — a player who could not be put somewhere has disproved
+     * nothing about what the scenario then asks — and it is thrown as an {@link ArrangementFailure}.</p>
+     *
+     * <p>Static and here for the reason {@link #awaitPlacedNear} is: both hierarchies need it.</p>
+     */
+    public static void placeOntoGroundItHolds(ClientBot bot, Events clientLog, Events.Probe server,
+                                              String placeCommand, double x, double y, double z,
+                                              String what, int tickBudget) throws Exception {
+        int fx = (int) Math.floor(x), fz = (int) Math.floor(z);
+        int probeY = Math.max(0, Math.min(255, (int) Math.floor(y) - 1));
+        com.google.gson.JsonObject column = bot.blockState(fx, probeY, fz);
+        // NOT `loaded`: on the client that is true for the blank stand-in chunk too (measured
+        // 2026-09-24 — three spikes placed their player on a column the client "held", and he fell
+        // through a floor it did not have). `chunkEmpty` is false only for a chunk the server sent.
+        boolean holdsColumn = column != null && column.has("chunkEmpty")
+                && !column.get("chunkEmpty").getAsBoolean();
+        try {
+            if (!holdsColumn) {
+                long chunkMark = clientLog.mark();
+                server.exec(placeCommand);
+                String cx = String.valueOf(fx >> 4), cz = String.valueOf(fz >> 4);
+                clientLog.awaitMatching(chunkMark, "chunk_data_applied",
+                        reply -> Events.anyRecordHasAll(reply, "cx", cx, "cz", cz),
+                        "carrying cx = " + cx + " and cz = " + cz,
+                        what + " — the client must be sent the chunk it is to be placed in", tickBudget);
+            }
+            long placeMark = clientLog.mark();
+            server.exec(placeCommand);
+            awaitPlacedNear(clientLog, placeMark, x, z, what, tickBudget);
+        } catch (ArrangementFailure already) {
+            throw already;
+        } catch (AssertionError notPlaced) {
+            throw new ArrangementFailure(notPlaced.getMessage());
+        }
     }
 
     /** Whether any {@code client_pos_look_applied} in a {@code since} reply put the client within a

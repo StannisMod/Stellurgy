@@ -330,11 +330,11 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // and needs no wait at all, because he never left.
         String reclaimed = "no re-capture: the body was never released (see the premise above)";
 
-        // Sample the settle: where does the body come to rest, and what camera does the client own?
-        // A WINDOW, and the trace is its deliverable: coming to rest is a value approached over
-        // ticks, not an instant production commits, and the per-tick record read after this loop is
-        // what carries the verdict. What this cannot see: motion inside one 3-tick sample.
         StringBuilder trace = new StringBuilder();
+        // Sample the settle: where does the body come to rest, and what camera does the client own?
+        // WINDOW: the trace is its deliverable. Coming to rest is a value approached over ticks, not
+        // an instant production commits, and the per-tick record read after this loop is what
+        // carries the verdict. What this cannot see: motion inside one 3-tick sample.
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
             // No obst=/onDeck= columns: both are in the per-tick line appended after this loop
@@ -563,10 +563,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // discriminate, and neither needs an edge.
         String reclaimed = "no re-capture: the episode was never broken (see the arrangement above)";
 
-        // Sample the settle: where does the claimed body come to rest?
-        // A WINDOW for the same reason as its sibling above: rest is approached, not announced, and
-        // this trace is what a red reads. What it cannot see: motion inside one 3-tick sample.
         StringBuilder trace = new StringBuilder();
+        // Sample the settle: where does the claimed body come to rest?
+        // WINDOW: for the same reason as its sibling above — rest is approached, not announced, and
+        // this trace is what a red reads. What it cannot see: motion inside one 3-tick sample.
         for (int i = 0; i < 30; i++) {
             bot().waitTicks(3);
             trace.append(String.format(java.util.Locale.ROOT,
@@ -794,33 +794,25 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + subHigh[1] + " -> " + subDown[1], subDown[1] < subHigh[1]);
 
         // Flight off: double-tap again; deck gravity reclaims the airborne body and seats it.
-        // The toggle targets STATE, not time: under suite load the client can stretch the two
-        // taps past vanilla's double-tap window and the toggle silently misses (the body then
-        // hovers forever and the seat wait below measures nothing) - so re-tap while the
-        // capture probe still reports the body flying.
-        boolean seated = false;
+        // ONE double-tap. It used to be retried up to four times while the capture still read
+        // "flying", on the argument that suite load stretches the two taps past vanilla's double-tap
+        // window — but the taps are four CLIENT ticks apart and the window is seven client ticks, so
+        // load cannot stretch one past the other, and the argument was never measured. A tap that
+        // did not register now fails the landing link below, naming it.
         DeckCapture capEnd = null;
         double[] subSeated = subEnd;
         long flightOffMark = clientEvents.mark();
-        // STAYS A LOOP because the TAP is the work: each round is a real double-tap of the space
-        // key, which is how a player toggles flight off, and a tap that did not register is not
-        // recoverable by reading longer. The read that ends it is a current STATE — is he still
-        // flying — which no record answers: a toggle record would say the flag changed once, and
-        // the hazard here is precisely a second tap flipping it back. What this cannot see: a
-        // toggle that went off and on again inside one round.
-        for (int round = 0; round < 4; round++) {
-            bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-            bot().waitTicks(2);
-            bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-            bot().waitTicks(2);
-            bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-            bot().waitTicks(2);
-            bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
-            bot().waitTicks(6);
-            if (!DeckCapture.read(this::exec).flying) {
-                break; // the toggle registered; NEVER tap again or flight flips back on
-            }
-        }
+        // STIMULUS: the double-tap itself, two ticks down, two up, two down.
+        bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        // STIMULUS: the same double-tap.
+        bot().waitTicks(2);
+        bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        // STIMULUS: the same double-tap.
+        bot().waitTicks(2);
+        bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
+        // STIMULUS: the same double-tap.
+        bot().waitTicks(2);
+        bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         // THE LANDING IS A LINK, and it was already being asserted twenty lines below as one —
         // `deck_contact`, the tick the deck resolver put the body on a surface it was not on before.
         // So it is waited for HERE, off the mark taken before the flight toggle, and the geometry
@@ -851,7 +843,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // scenario's own — so without the anchor the height comparison below is between two
         // frames rather than two moments, and it is that comparison, not the flag, that decides
         // "he came back down onto the deck".
-        seated = capEnd.alreadyTracked
+        boolean seated = capEnd.alreadyTracked
                 && !capEnd.hullStand
                 && capEnd.anchoredOn(scenarioShipId)
                 && subSeated[1] <= sub0[1] + 1.4;

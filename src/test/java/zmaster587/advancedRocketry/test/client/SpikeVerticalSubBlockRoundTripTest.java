@@ -117,8 +117,8 @@ public class SpikeVerticalSubBlockRoundTripTest extends AbstractClientE2ETest {
     /** How far the hover may drift across {@link #HOLD_TICKS} before the reading is a falling one. */
     private static final double HOLD_TOLERANCE = 0.01d;
     private static final int HOLD_TICKS = 20;
-    /** How many (deliver, settle) rounds a rung gets before it is called undeliverable. */
-    private static final int DELIVERY_ATTEMPTS = 4;
+    /** A deadline for each of a delivery's two records (the chunk, the placement) — not a settle. */
+    private static final int DELIVERY_LINK_BUDGET_TICKS = 200;
 
     private String botName;
 
@@ -235,39 +235,41 @@ public class SpikeVerticalSubBlockRoundTripTest extends AbstractClientE2ETest {
      * @return {@code null} once he is hovering, or a reason string for the INCONCLUSIVE list
      */
     private String deliverAndHover(int y) throws Exception {
-        double arrivedAt = Double.NaN;
-        double heldAt = Double.NaN;
-        String lastReply = "";
-        // STAYS A LOOP, and the refusal names the link. The re-issued far-tp IS the stimulus — a
-        // delivery that did not take is not recoverable by reading longer — and the exit is a
-        // CONVERGENCE on where the server holds him. The link that looks right is `pos_jump`, and
-        // it does not answer: it fires only on a VERTICAL write past a threshold and carries
-        // `from`/`to` in Y alone, so it cannot say he arrived at this X. What this cannot see: a
-        // delivery that landed and was undone between two attempts.
-        for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
-            lastReply = exec("artest player far-tp " + fmt(ARENA_X + 0.5d) + " " + fmt(y) + " "
-                    + fmt(ARENA_Z + 0.5d));
-            GameTicks.advanceWorld(serverClient(), OVERWORLD, 40);
-            bot().waitTicks(30);
-            arrivedAt = serverY();
-            if (Math.abs(arrivedAt - y) >= ARRIVAL_TOLERANCE) {
-                continue;
-            }
-            GameTicks.advanceWorld(serverClient(), OVERWORLD, HOLD_TICKS);
-            bot().waitTicks(HOLD_TICKS);
-            heldAt = serverY();
-            if (Math.abs(heldAt - arrivedAt) < HOLD_TOLERANCE) {
-                return null;
-            }
+        // The client is sent the rung's chunk first and then placed in it — the two named steps of
+        // ClientEvents.placeOntoGroundItHolds; a hover rung has no floor under it, so both steps
+        // always run. It used to re-deliver in a loop until the reading looked right.
+        String place = "artest player far-tp " + fmt(ARENA_X + 0.5d) + " " + fmt(y) + " "
+                + fmt(ARENA_Z + 0.5d);
+        try {
+            ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot()), this::exec, place,
+                    ARENA_X + 0.5d, y, ARENA_Z + 0.5d,
+                    "the player must be delivered to the rung at y=" + y, DELIVERY_LINK_BUDGET_TICKS);
+        } catch (AssertionError notPlaced) {
+            return "the player was never placed at y=" + y + " - arrangement, not the coordinate: "
+                    + oneLine(notPlaced.getMessage());
         }
-        boolean arrived = Math.abs(arrivedAt - y) < ARRIVAL_TOLERANCE;
-        return (arrived
-                ? "he arrived but would not hover (posY drifted from " + fmt(arrivedAt) + " to "
-                        + fmt(heldAt) + " in " + HOLD_TICKS + " ticks - the hold is off, so every "
-                        + "reading here would be of a falling player)"
-                : "the player never arrived (server posY=" + arrivedAt + ", wanted " + y + ")")
-                + " after " + DELIVERY_ATTEMPTS + " deliveries - arrangement, not the coordinate."
-                + " lastReply=" + oneLine(lastReply);
+        // EXPERIMENT: forty server ticks and thirty client ticks after the placement, then the
+        // HOLD_TICKS the hover must survive — the two readings are where he arrived and whether he
+        // stayed there.
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, 40);
+        // EXPERIMENT: the client half of the same dose.
+        bot().waitTicks(30);
+        double arrivedAt = serverY();
+        if (Math.abs(arrivedAt - y) >= ARRIVAL_TOLERANCE) {
+            return "the player was placed and then was not at the rung (server posY=" + arrivedAt
+                    + ", wanted " + y + ") - arrangement, not the coordinate.";
+        }
+        // EXPERIMENT: HOLD_TICKS on both clocks is the hover the rung must survive.
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, HOLD_TICKS);
+        // EXPERIMENT: the client half of the same dose.
+        bot().waitTicks(HOLD_TICKS);
+        double heldAt = serverY();
+        if (Math.abs(heldAt - arrivedAt) < HOLD_TOLERANCE) {
+            return null;
+        }
+        return "he arrived but would not hover (posY drifted from " + fmt(arrivedAt) + " to "
+                + fmt(heldAt) + " in " + HOLD_TICKS + " ticks - the hold is off, so every reading here"
+                + " would be of a falling player) - arrangement, not the coordinate.";
     }
 
     // ─── instruments ────────────────────────────────────────────────────────────

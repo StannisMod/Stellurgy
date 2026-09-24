@@ -37,9 +37,9 @@ import static org.junit.Assert.assertTrue;
  *
  * <h2>The chain and the measurement, kept apart</h2>
  *
- * <p>An altitude converging under thrust is a physical value and stays a bounded poll — but the
- * javadoc's claim above is about LINKS, and until this class asserted them a red could only print
- * two numbers. So each climb is now preceded by its own chain: the client's gate re-opened and put
+ * <p>An altitude under thrust is a physical value, bought by a DOSE of thrust and read once — but
+ * the javadoc's claim above is about LINKS, and until this class asserted them a red could only
+ * print two numbers. So each climb is now preceded by its own chain: the client's gate re-opened and put
  * a packet on the wire ({@code pilot_input_sent}, client log), and the seat handed that input to the
  * ship's flight computer ({@code pilot_input_delivered}, server log). A dead key and a tipped hull
  * used to look identical; now only one of them gets as far as the altitude assertion. The two sides
@@ -97,9 +97,8 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         exec("tp @a " + (site.x + 600) + " 120 " + (site.z + 600) + " 0 0");
         awaitClientPlacedNear(awayMark, site.x + 600, site.z + 600,
                 "the assembly below must run with no observer near it, and the observer is a client");
-        // THE MULTIPLIER STAYS on the CLIMB budgets below, and on the LOAD wait: what those wait on
-        // is wall-clock work — a physical value converging, VS building the ship off the game loop —
-        // and a busy box genuinely gives the same window less world. The IDENTITY is a different
+        // The LOAD wait's budget: what it waits on is wall-clock work — VS building the ship off the
+        // game loop — and a busy box genuinely gives the same window less world. The IDENTITY is a different
         // shape and needs no budget of ours at all — the registry's own record of the ship being
         // added, since a mark taken before the assembly was queued, is THIS scenario's ship by
         // construction, where the count it replaces is answered by every neighbour that ever
@@ -153,7 +152,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // ---- CONTROL LEG (pre-relog): the chain works before the relog, or the post-relog leg
         // cannot indict the relog. -----------------------------------------------------------
         long controlMark = events.markInstrumented();
-        Climb before = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
+        Climb before = climbWith(Keyboard.KEY_R, clientPlayerY());
         // The LINK first, the number second — so an arrangement whose key never reached the ship's
         // computer says so instead of reporting an altitude that never moved.
         events.await(controlMark, "pilot_input_delivered", "control leg: the held key must reach the"
@@ -210,7 +209,7 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
         // order — cross-side order within one tick is undefined.
         long flyMark = events.markInstrumented();
         long flyClientMark = clientEvents().mark();
-        Climb after = climbWith(Keyboard.KEY_R, clientPlayerY(), budget);
+        Climb after = climbWith(Keyboard.KEY_R, clientPlayerY());
         String clientSends = clientEvents().since(flyClientMark, "pilot_input_sent");
         assertTrue("after the relog the CLIENT's own pilot gate must re-open against the restored"
                         + " mount and put input on the wire - a gate that stayed shut is the first"
@@ -261,8 +260,14 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
     }
 
     /**
-     * Hold {@code key} until the client-rendered rider altitude climbs {@link #MIN_CLIMB} over
-     * {@code from} (bounded, early-exit), recording what the SHIP did while it happened.
+     * A DOSE of thrust on the pilot's vertical key ({@link #climbOnPilotKey}: the key's arrival at the
+     * flight computer and its release are records, the thrust is counted on the craft's world clock),
+     * then ONE reading of the client-rendered rider altitude — recording what the SHIP did.
+     *
+     * <p>It used to hold the key until the altitude crossed {@link #MIN_CLIMB}, which made the budget's
+     * expiry the only way to fail. A key that never reaches the computer is NOT thrown from here: it is
+     * carried in the trace, so the caller's own links (the client's send, the seat's delivery) fail
+     * first and name WHICH link broke.</p>
      *
      * <p>The ship's pose rides along because without it this leg's red cannot be read. It used to
      * report {@code clientY 67.107 -> 65.467} and nothing else, which reads as "the key is dead" —
@@ -272,28 +277,19 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
      * sinks while the control chain works perfectly. {@code up} is the world-frame Y of the ship's
      * own up: 1.0 upright, 0 on its side.</p>
      */
-    private Climb climbWith(int key, double from, int budget) throws Exception {
-        double last = from;
-        StringBuilder trace = new StringBuilder();
-        bot().holdKey(key);
+    private Climb climbWith(int key, double from) throws Exception {
+        assertTrue("climbWith drives the vertical-up key only", key == Keyboard.KEY_R);
+        StringBuilder trace = new StringBuilder("[start ").append(shipPose()).append("] ");
+        int dim = bot().reportWeather().get("dim").getAsInt();
         try {
-            // A WINDOW with the key HELD across it: the iterations are part of the stimulus, and
-            // what is asked is whether the climb reached a threshold — a value, not an instant
-            // anything commits. What it cannot see: a climb that reached MIN_CLIMB and sagged back
-            // inside one 5-tick sample.
-            for (int i = 0; i < budget && (last - from) < MIN_CLIMB; i++) {
-                bot().waitTicks(5);
-                last = clientPlayerY();
-                if (i % 4 == 0 && trace.length() < 700) {
-                    trace.append('[').append(i * 5).append("t y=")
-                            .append(String.format(java.util.Locale.ROOT, "%.2f", last))
-                            .append(' ').append(shipPose()).append("] ");
-                }
-            }
-        } finally {
-            bot().releaseKey(key);
+            climbOnPilotKey(dim, PILOT_THRUST_DOSE_TICKS, "the held vertical key must reach the"
+                    + " ship's flight computer");
+        } catch (AssertionError keyNeverArrived) {
+            trace.append("[key not delivered: ").append(keyNeverArrived.getMessage()).append("] ");
         }
-        trace.append("[end ").append(shipPose()).append(']');
+        double last = clientPlayerY();
+        trace.append("[end y=").append(String.format(java.util.Locale.ROOT, "%.2f", last))
+                .append(' ').append(shipPose()).append(']');
         return new Climb(from, last, trace.toString());
     }
 

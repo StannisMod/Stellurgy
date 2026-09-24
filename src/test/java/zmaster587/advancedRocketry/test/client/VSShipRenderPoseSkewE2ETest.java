@@ -165,7 +165,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         long restMark = clientMark();
         double restCrossMax = 0.0;
         StringBuilder restTrace = new StringBuilder();
-        // A WINDOW whose result is the MAXIMUM cross-side delta at rest: a skew that appears for
+        // WINDOW: its result is the MAXIMUM cross-side delta at rest: a skew that appears for
         // one frame and goes is exactly what this is looking for, so a single read would miss the
         // thing being measured. No record carries it — the quantity is a difference between two
         // rendered sides. What it cannot see: a spike between two samples, which is why the log is
@@ -301,7 +301,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
         long hullSkewMark = clientMark();
         StringBuilder hullTrace = new StringBuilder();
         double hullCrossMax = 0.0;
-        // A WINDOW over the hull-stand mode, same quantity and same reason as the rest window: the
+        // WINDOW: over the hull-stand mode, same quantity and same reason as the rest window: the
         // MAXIMUM cross-side delta across the samples, which is not a moment anything records.
         // What it cannot see: a spike inside one 13-tick gap.
         for (int i = 0; i < 6; i++) {
@@ -357,7 +357,7 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
             double moveCrossMax = 0.0, moveCrossSum = 0.0;
             int moveCrossN = 0;
             StringBuilder moveTrace = new StringBuilder();
-            // A WINDOW under motion: it takes both the MAXIMUM and the MEAN cross-side delta, and
+            // WINDOW: under motion it takes both the MAXIMUM and the MEAN cross-side delta, and
             // a mean over samples is by construction not something one record can carry. What it
             // cannot see: the skew between two samples.
             for (int i = 0; i < 8; i++) {

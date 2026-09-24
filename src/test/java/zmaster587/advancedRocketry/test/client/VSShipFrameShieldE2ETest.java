@@ -240,7 +240,7 @@ public class VSShipFrameShieldE2ETest extends AbstractSharedVsClientE2ETest {
         double[] shell1 = shellCenter();
         assertTrue("precondition: the shell must sit on the hull before it moves (shell=" + str(shell1)
                 + " ship=" + str(ship1) + ")", dist(shell1, ship1) < SHELL_ON_THE_HULL_BLOCKS);
-        // A STIMULUS loop, deliberately left as one: it is not waiting for a link but accumulating a
+        // STIMULUS: a loop deliberately left as one — it is not waiting for a link but accumulating a
         // physical displacement under repeated velocity writes the substrate keeps overwriting, and
         // "the hull has moved far enough to test tracking" is a measured quantity, not an event.
         for (int i = 0; i < 25; i++) {
