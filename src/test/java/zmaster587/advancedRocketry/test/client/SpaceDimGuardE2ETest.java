@@ -1,5 +1,8 @@
 package zmaster587.advancedRocketry.test.client;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -141,6 +144,11 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
     /**
      * With a registered station, a player who lands in the space dim outside the station's bounds
      * gets teleported to the station's spawn location — not back to the overworld.
+     *
+     * <p>red-witnessed: with the guard's call moved back into {@code PlanetEventHandler.playerTick}
+     * (the living update, inside the network handler's update) and {@code spaceDimensionGuard}
+     * disabled, this fails with "the guard must move a body off a given point ONCE … origin=206,64,154"
+     * (2026-09-24, run alone).</p>
      */
     @Test
     public void registeredStationTeleportTargetsStationSpawn() throws Exception {
@@ -197,7 +205,27 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         // is not the wait — it is the failure. A poll that expired said "he is still at 50000",
         // which is equally true of a guard that declined, a guard that never ran, and a server that
         // never received the teleport.
-        events.await(guardMark, "space_guard_relocated",
+        //
+        // And it is the relocation OF THE BODY AT 50 000, named by where it was taken from: the
+        // transfer above lands him outside every slot too, the guard relocates that arrival, and
+        // "a relocation happened" can be closed by it.
+        //
+        // The posX read right after the record is the contract, not a race: the relocation must HOLD
+        // on the server from the tick it is made. A guard that teleported from a living update did
+        // not — the network handler's update writes the pre-tick position back after it, so the
+        // server kept the old one until the client confirmed, re-fired every tick until then, and
+        // this read saw 50 000 whenever the confirm was late (red in 3 of 5 full runs, 2026-09-24).
+        events.awaitMatching(guardMark, "space_guard_relocated",
+                reply -> {
+                    for (String r : Events.records(reply)) {
+                        if (Math.abs(Events.number(r, "fromX") - 50000.0) < 2.0
+                                && Math.abs(Events.number(r, "fromZ") - 50000.0) < 2.0) {
+                            return true;
+                        }
+                    }
+                    return false;
+                },
+                "taken from (50000, 50000)",
                 "the space-dimension guard must MOVE a body standing in no station's slot onto a"
                         + " station spawn — this is the act the scenario is about, and it is a"
                         + " discrete decision production takes, not a value that settles",
@@ -221,6 +249,25 @@ public class SpaceDimGuardE2ETest extends AbstractSharedClientE2ETest {
         assertEquals("player posY must match station spawnY (within the free-fall window)",
                 spawnY, posY, 6.0);
         assertEquals("player posZ must match station spawnZ", spawnZ, posZ, 2.0);
+
+        // ONCE per position. Each relocation also tells the player he has no station, twice; a move
+        // that did not hold is re-made (and re-announced) from the SAME point on the next tick, so
+        // two relocations taken from one point are that failure — measured 2026-09-24 as four in a
+        // row from the transfer's landing point, with nothing else running.
+        String relocations = events.since(mark, "space_guard_relocated");
+        Map<String, Integer> byOrigin = new HashMap<>();
+        for (String r : Events.records(relocations)) {
+            String origin = Math.round(Events.number(r, "fromX")) + ","
+                    + Math.round(Events.number(r, "fromY")) + "," + Math.round(Events.number(r, "fromZ"));
+            byOrigin.merge(origin, 1, Integer::sum);
+        }
+        for (Map.Entry<String, Integer> e : byOrigin.entrySet()) {
+            assertEquals("the guard must move a body off a given point ONCE — a relocation that is "
+                            + "re-made from the same point did not hold on the server, and the player "
+                            + "is told twice more each time. origin=" + e.getKey()
+                            + " relocations since the transfer: " + relocations,
+                    1, (int) e.getValue());
+        }
 
         // WHICH BRANCH the guard took, as an absence — and the absence is only worth something
         // because the positive pins above say the body DID move onto the station's spawn, so the

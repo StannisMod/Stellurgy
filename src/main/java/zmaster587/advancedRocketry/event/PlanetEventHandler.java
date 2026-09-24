@@ -228,31 +228,58 @@ public class PlanetEventHandler {
             }
         }
 
-        if (event.getEntity() instanceof EntityPlayer && event.getEntity().world.provider.getDimension() == ARConfiguration.getCurrentConfig().spaceDimId && SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(event.getEntity().getPosition()) == null && !(event.getEntity().getRidingEntity() instanceof EntityRocket)) {
-            double distance = 0;
-            HashedBlockPosition teleportPosition = null;
-            for (ISpaceObject spaceObject : SpaceObjectManager.getSpaceManager().getSpaceObjects()) {
-                if (spaceObject instanceof SpaceStationObject) {
-                    SpaceStationObject station = ((SpaceStationObject) spaceObject);
-                    double distanceTo = event.getEntity().getPosition().getDistance(station.getSpawnLocation().x, station.getSpawnLocation().y, station.getSpawnLocation().z);
-                    if (distanceTo > distance) {
-                        distance = distanceTo;
-                        teleportPosition = station.getSpawnLocation();
-                    }
+        //GravityHandler.applyGravity(event.getEntity());
+    }
+
+    /**
+     * The space-dimension guard: a player in the space dimension who stands in no station's slot and
+     * is not riding a rocket is put on a station's spawn, or sent to the overworld when there is no
+     * station at all.
+     *
+     * <p>At the END of the space world's own tick, never from a living update. On the server a
+     * player's living update runs inside {@code NetHandlerPlayServer.update}, whose very next
+     * statement writes the pre-tick position back; a teleport made there does not hold until the
+     * client confirms it, so the guard fired again on every tick in between, each time re-sending its
+     * chat lines. The world tick runs before the network tick, so the handler's own capture of the
+     * position already sees the move.</p>
+     */
+    @SubscribeEvent
+    public void spaceDimensionGuard(TickEvent.WorldTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || event.world.isRemote
+                || event.world.provider.getDimension() != ARConfiguration.getCurrentConfig().spaceDimId) {
+            return;
+        }
+        // A copy: the no-station branch moves the player out of this world's list.
+        for (EntityPlayer player : new ArrayList<>(event.world.playerEntities)) {
+            evictIfOffStation(player);
+        }
+    }
+
+    private void evictIfOffStation(EntityPlayer player) {
+        if (SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(player.getPosition()) != null
+                || player.getRidingEntity() instanceof EntityRocket) {
+            return;
+        }
+        double distance = 0;
+        HashedBlockPosition teleportPosition = null;
+        for (ISpaceObject spaceObject : SpaceObjectManager.getSpaceManager().getSpaceObjects()) {
+            if (spaceObject instanceof SpaceStationObject) {
+                SpaceStationObject station = ((SpaceStationObject) spaceObject);
+                double distanceTo = player.getPosition().getDistance(station.getSpawnLocation().x, station.getSpawnLocation().y, station.getSpawnLocation().z);
+                if (distanceTo > distance) {
+                    distance = distanceTo;
+                    teleportPosition = station.getSpawnLocation();
                 }
             }
-            if (teleportPosition != null) {
-                event.getEntity().sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation1")));
-                event.getEntity().sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation2")));
-                event.getEntity().setPositionAndUpdate(teleportPosition.x, teleportPosition.y, teleportPosition.z);
-            } else {
-                event.getEntity().sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation3")));
-                event.getEntity().changeDimension(0, new BasicTeleporter(event.getEntity().getPosition()));
-            }
-
         }
-
-        //GravityHandler.applyGravity(event.getEntity());
+        if (teleportPosition != null) {
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation1")));
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation2")));
+            player.setPositionAndUpdate(teleportPosition.x, teleportPosition.y, teleportPosition.z);
+        } else {
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation3")));
+            player.changeDimension(0, new BasicTeleporter(player.getPosition()));
+        }
     }
 
     @SubscribeEvent
