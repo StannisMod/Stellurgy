@@ -19,7 +19,6 @@ import zmaster587.advancedRocketry.test.Plot;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -149,25 +148,9 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     /** The TEST-side accumulator behind every model-gate window — production keeps no counters. */
     private static final String REMOTE_MODEL_WINDOW =
             "zmaster587.advancedRocketry.test.trace.RemoteModelWindow";
-    /** The window the arrival wait polls — this scenario's, held while the wait runs. */
-    private ClientWindow arrivalWindow;
-
-    /**
-     * How many remote-body model decisions the open window has seen, as a record.
-     *
-     * <p>A peek writes the window's numbers without ending it, so the poll below waits on a reading
-     * that is attributable to a moment instead of on a field read across the socket. An empty window
-     * fails by name: "the client did not answer" and "the gate has decided nothing yet" are
-     * different findings and the poll must not merge them into a zero.</p>
-     */
-    private long remoteModelSamples() throws Exception {
-        long mark = clientEvents().mark();
-        arrivalWindow.peek();
-        String rec = Events.lastRecord(clientEvents().since(mark, "remote_model_window"));
-        assertNotNull("no remote_model_window record after a peek — the client did not answer, so "
-                + "the sample count has no reading", rec);
-        return (long) Events.number(rec, "samples");
-    }
+    /** How long the subject may take to be DRAWN once it is on the client — the fifteen-tick reads
+     *  eight times over that the poll it replaced was given. */
+    private static final int FIRST_SAMPLE_BUDGET_TICKS = 120;
 
     /**
      * The CLIENT log sequence taken immediately BEFORE the current subject was spawned — the mark its
@@ -405,15 +388,15 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
      *
      *  <p>Returns {@link Sampling#drawn}=false rather than asserting, so the caller can RE-STAGE at a
      *  fresh spot (a world body inside a ship box is intermittently not drawn under load).
-     *  When it returns false the diagnostic classifies the miss over the polled window from the two
+     *  When it returns false the diagnostic classifies the miss over the awaited window from the two
      *  render-stage controls — {@code cameraHookCalls} (frames) and the window's own {@code calls}
      *  (every living model, player included) — so a red run names its own failure stage:
      *  frames==0 → the draw stage is dead; frames&gt;0,models==0 → frames ran but no living model was
      *  drawn (applyRotations unreached); frames&gt;0,models&gt;0 → models ARE drawn but this subject is
      *  not (culled / absent from the render list).
      *
-     *  <p>Only the precondition is polled — the measurement window the caller opens afterwards stays a
-     *  FIXED wait, deliberately. The value polled here (the open window's {@code samples}) is NOT what
+     *  <p>Only the precondition is awaited — the measurement window the caller opens afterwards stays
+     *  a FIXED wait, deliberately. What is awaited here (the window's first remote sample) is NOT what
      *  either leg asserts on: its {@code rotated} is, read from that later window. Ending it
      *  early on a samples predicate would move what the assertion sees — leg A's {@code rotated == 0}
      *  gets easier the fewer samples it saw, and leg B's {@code rotated > 0} can exit before the first
@@ -434,16 +417,17 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // currently holding. The difference is the one this class paid a month for: a snapshot poll
         // cannot tell "it never arrived" from "it arrived and was gone again before I looked", and
         // those are different bugs. The record survives the removal; the snapshot did not.
-        String arrivals = "";
-        boolean arrived = false;
-        for (int waited = 0; waited <= SUBJECT_ARRIVAL_BUDGET_TICKS && !arrived; waited += 10) {
+        String arrivals;
+        try {
+            arrivals = clientEvents().awaitMatching(subjectSpawnMark, "entity_joined_world",
+                    seen -> Events.countRecords(seen, "e", String.valueOf(subjectId)) > 0,
+                    "naming the subject " + subjectId,
+                    "the staged subject must reach the CLIENT world before its drawing is watched",
+                    SUBJECT_ARRIVAL_BUDGET_TICKS);
+        } catch (AssertionError neverArrived) {
+            // Not a failure of the scenario: the caller re-stages at a fresh spot. So the expiry is
+            // turned into the returned diagnostic, and the log read once for it.
             arrivals = clientEvents().since(subjectSpawnMark, "entity_joined_world");
-            arrived = Events.countRecords(arrivals, "e", String.valueOf(subjectId)) > 0;
-            if (!arrived) {
-                bot().waitTicks(10);
-            }
-        }
-        if (!arrived) {
             // An empty log is an answer only once somebody was listening. This is an ASSERTION and
             // not part of the returned diagnostic on purpose: a recorder that never ran is a harness
             // fault, and re-staging at a fresh spot would not fix it.
@@ -461,13 +445,20 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // the failure branch needs comes off the closing record.
         final long windowMark = clientEvents().mark();
         final long framesBefore = (long) deckCamera("cameraHookCalls");
-        arrivalWindow = ClientWindow.open(bot(), REMOTE_MODEL_WINDOW);
-        ClientPoll.Result<Long> r = ClientPoll.until(bot()::waitTicks,
-                this::remoteModelSamples,
-                v -> v > 0, 15, 8);
-        if (r.satisfied) {
+        ClientWindow arrivalWindow = ClientWindow.open(bot(), REMOTE_MODEL_WINDOW);
+        // A LINK: the window records its first decision about each remote body, by id, so "THIS
+        // subject was drawn since this wait began" is a record — not a count peeked until it rose,
+        // which any neighbour's body could raise while the subject itself was culled.
+        String firstDrawn;
+        try {
+            clientEvents().awaitField(windowMark, "remote_model_first_sample", "e", subjectId,
+                    "the staged subject must be drawn through the model gate once it is on the"
+                            + " client", FIRST_SAMPLE_BUDGET_TICKS);
             arrivalWindow.close();
             return new Sampling(true, "");
+        } catch (AssertionError neverDrawn) {
+            // The caller re-stages on a miss, so the expiry becomes the diagnostic below.
+            firstDrawn = neverDrawn.getMessage();
         }
         long frames = (long) deckCamera("cameraHookCalls") - framesBefore;
         arrivalWindow.close();
@@ -490,8 +481,8 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                 : models == 0 ? "no-living-model-drawn(applyRotations unreached)"
                 : "subject-culled(models drawn, subject absent from render list)";
         return new Sampling(false, String.format(java.util.Locale.ROOT,
-                "[%s %s frames+=%d models+=%d loaded=%d %s]",
-                verdict, r, frames, models, loaded, subject));
+                "[%s frames+=%d models+=%d loaded=%d %s | the wait: %s]",
+                verdict, frames, models, loaded, subject, firstDrawn));
     }
 
     /** The subject as the SERVER holds it right now — alive, dead, or gone from the world entirely.

@@ -28,10 +28,12 @@ import net.minecraft.entity.EntityLivingBase;
  * reader asking about a sixty-tick window would be reading the tail. The window's SUMMARY is the
  * record, written once at {@link #close()}.</p>
  *
- * <p><b>A mid-window reading is a RECORD.</b> A scenario that waits for the subject to be drawn at
- * all before it starts measuring calls {@link #peek(int)}, which writes the window's numbers without
+ * <p><b>A mid-window reading is a RECORD.</b> {@link #peek(int)} writes the window's numbers without
  * ending it. A field read across the socket cannot be attributed to a moment, so "the client did not
- * answer" and "the gate has decided nothing yet" would arrive as the same zero.</p>
+ * answer" and "the gate has decided nothing yet" would arrive as the same zero. And the window's
+ * first decision about each remote body is an edge of its own, {@code remote_model_first_sample}
+ * carrying the body's id — what a scenario waits for, for ITS subject, before it starts
+ * measuring.</p>
  *
  * <p><b>Whose it is.</b> An instance per window, created by the scenario that asks, registered with
  * the client's {@link SideTrace} and addressed by the handle {@link #open()} returned. The gate feeds
@@ -83,6 +85,9 @@ public final class RemoteModelWindow implements TraceWindow {
 
     /** Decisions about a remote body in this window. */
     private long samples;
+
+    /** The remote bodies this window has already announced a first sample for. */
+    private final java.util.Set<Integer> drawnBodies = new java.util.HashSet<Integer>();
 
     private long calls;
     private long rotated;
@@ -137,6 +142,13 @@ public final class RemoteModelWindow implements TraceWindow {
             return;
         }
         samples++;
+        if (drawnBodies.add(entity.getEntityId())) {
+            // An EDGE per body: the first decision this window made about THAT body. A scenario that
+            // must not open its measurement before its own subject is on screen waits for the one
+            // carrying the subject's id — a first sample of any body would be satisfied by a
+            // neighbour's while the subject was culled.
+            TestTrace.recordHere("remote_model_first_sample", "\"e\":" + entity.getEntityId());
+        }
         if (rotation == null) {
             return; // the common (and correct) case
         }

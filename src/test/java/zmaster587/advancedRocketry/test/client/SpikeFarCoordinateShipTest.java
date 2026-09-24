@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.client;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
 import org.junit.Test;
-import org.lwjgl.input.Keyboard;
 import zmaster587.advancedRocketry.test.SeatMount;
 import zmaster587.advancedRocketry.test.Events;
 import zmaster587.advancedRocketry.test.Reply;
@@ -169,8 +168,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
                 // back out of a bounded lookup at the rung's own spot — defensible only as long as
                 // that spot held one hull, which is a premise about the arrangement rather than
                 // about the lookup. Every later reading goes by the id, which has no distance term.
-                String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
-                        ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
+                String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), 0,
+                        ShipIdentity.nameFromAssembly(assemble), 200);
                 double y0 = Double.NaN;
                 String lastInfo = "";
                 // STAYS A LOOP: the spawn is already awaited as a link one line up, and what this
@@ -360,8 +359,8 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             assertTrue("the pilot was not delivered: " + delivery, delivery == null);
 
             // By name, from the assembler that minted it — not by a bounded read at the arena origin.
-            String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
-                    ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
+            String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, serverEvents(), 0,
+                    ShipIdentity.nameFromAssembly(assemble), 200);
 
             // By ID. The `near <x> <y> <z> <maxDist>` form this used went with the rest of the
             // positional resolves on 2026-09-14: a distance to a craft whose blocks live in its
@@ -514,20 +513,22 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         return ClientEvents.of(bot());
     }
 
+    /** The SERVER's ordered event log, stepped on this client's ticks. */
+    private Events serverEvents() {
+        return new Events(this::exec, bot()::waitTicks);
+    }
+
     private double riderY() throws Exception {
         return bot().reportRidingEntity().get("posY").getAsDouble();
     }
 
     private String climbLeg(String shipId, double yBefore) throws Exception {
         double riderYBefore = riderY();
-        bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
-        try {
-            ClientPoll.until(bot()::waitTicks,
-                    () -> shipY(shipId),
-                    y -> y - yBefore > 1.5, 2, 100);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
+        // A dose of thrust from the key's arrival at the flight computer, and the release on the
+        // record too, before anything below is read.
+        PilotThrust.climb(bot(), serverEvents(), serverClient(), 0,
+                PilotThrust.DOSE_TICKS, "the spike pilot's held vertical key must reach his flight"
+                        + " computer");
         // EXPERIMENT: the comparison is DEFINED six client ticks after the cut — a rider lagging his
         // ship by more than TRACK_TOLERANCE at that offset is what this spike reports. The tolerance
         // is the spike's own and was not measured at this offset.

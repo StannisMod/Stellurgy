@@ -1,7 +1,5 @@
 package zmaster587.advancedRocketry.test.client;
 
-import java.util.Locale;
-
 import com.google.gson.JsonObject;
 
 import org.junit.FixMethodOrder;
@@ -94,9 +92,6 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static final String AFC_X = "afcX";
     private static final String AFC_Y = "afcY";
     private static final String AFC_Z = "afcZ";
-    /** The discriminator: the seat's own delivery counters, sampled across the climb. */
-    private static final String RECEIVED = "received";
-    private static final String DELIVERED = "delivered";
 
     /** The account every client harness launches under; the server keys his player data by it. */
     private static final String BOT = "ForgeTestClient";
@@ -122,8 +117,6 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      *  ship's settle jitter is well under this. */
     private static final double MAX_ARRIVAL_SINK = 5.0;
 
-    /** The refusal message's stable needle (en_US: "Space is saturated - the ship cannot enter
-     *  orbit right now. Descend and try again later."). */
     /**
      * Client ticks between two reads of the arrival's own records — the step {@link Events}'s waits
      * advance by, so a budget expressed in ITERATIONS (as the loops here were) converts by
@@ -131,15 +124,6 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * be re-derived at every site.
      */
     private static final int ARRIVAL_STEP_TICKS = 5;
-
-    /** Client ticks between two altitude readings while a control climb is being watched. */
-    private static final int CLIMB_STEP_TICKS = 5;
-
-    /**
-     * How many of those readings a control climb gets — the shared poll's iteration ceiling, which
-     * is half the reason the hand-rolled loops became calls to it.
-     */
-    private static final int CONTROL_CLIMB_POLLS = 40;
 
     /**
      * The cells this family's PROBE occupants are parked on — a fixed, family-owned list, so the
@@ -214,22 +198,19 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
         // ---- CONTROL LEG: plain flight works far below the line, or the entry leg is void. ----
         //
-        // A POLL and not a wait for a record, deliberately: an altitude climbing is a physical value
-        // converging, not a link production announces, and a longer budget samples it more without
-        // changing whether the assertion can hold. What it is NOT is a hand-rolled one — the shared
-        // helper reports the iterations it took beside the value it ended on, which is the diagnosis
-        // a red on a loaded box needs.
+        // A dose of thrust from the key's arrival, and one reading: the key's ARRIVAL at the computer
+        // is the link, and the altitude it bought is read while the key is still down, because the
+        // entry leg below goes on climbing on the same held key.
         long entryMark;
         long clientMark;
-        bot().holdKey(Keyboard.KEY_R);
         try {
-            ClientPoll.Result<Double> control = ClientPoll.until(bot()::waitTicks,
-                    () -> shipY(shipUuid),
-                    y -> !Double.isNaN(y) && (y - yRest) >= MIN_CONTROL_CLIMB,
-                    CLIMB_STEP_TICKS, CONTROL_CLIMB_POLLS);
+            holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS, "control leg: the pilot's held vertical key"
+                    + " must reach his flight computer before any climb can be asked of it");
+            double yControl = shipY(shipUuid);
             scenario().requireArranged("control leg: the pilot must be able to fly AT ALL before the "
-                            + "entry leg can indict the crossing. yRest=" + yRest + " " + control,
-                    control.satisfied);
+                            + "entry leg can indict the crossing. yRest=" + yRest + " -> " + yControl
+                            + " after " + PILOT_THRUST_DOSE_TICKS + " ticks of held thrust",
+                    !Double.isNaN(yControl) && yControl - yRest >= MIN_CONTROL_CLIMB);
             System.out.println("[GATE-STATS after control leg] " + clientGateStats());
 
             // ---- ENTRY LEG: keep climbing until the entry is COMMITTED, as the server's own chain
@@ -340,22 +321,24 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // (4) Still in control: the key lifts the ARRIVED ship - measured from the rider's own
         // client-rendered altitude (the pilot rides what the key moves).
         final double before = clientPlayerY();
-        ClientPoll.Result<Double> lift;
-        bot().holdKey(Keyboard.KEY_R);
+        // EXPERIMENT: a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival
+        // at its computer — that arrival is the first half of the contract and a link, so a seat
+        // binding that does not carry his input fails naming it rather than as a ship that would not
+        // climb — and one reading of his rendered altitude once the release has arrived.
         try {
-            // A physical value converging again, through the shared poll: a rendered altitude
-            // climbing is not a link, and its ceiling is what has to scale with load.
-            lift = ClientPoll.until(bot()::waitTicks, this::clientPlayerY,
-                    y -> !Double.isNaN(y) && (y - before) >= MIN_CONTROL_CLIMB,
-                    CLIMB_STEP_TICKS, CONTROL_CLIMB_POLLS);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
+            climbOnPilotKey(clientDim, PILOT_THRUST_DOSE_TICKS, "the pilot must still CONTROL his"
+                    + " ship after the crossing - the fresh seat binding on the re-assembled ship must"
+                    + " carry his held key to its flight computer");
+        } catch (AssertionError keyNeverArrived) {
+            throw new AssertionError(keyNeverArrived.getMessage() + " | delivery=" + seatDelivery(),
+                    keyNeverArrived);
         }
+        double after = clientPlayerY();
         assertTrue("the pilot must still CONTROL his ship after the crossing - the fresh seat "
                         + "binding on the re-assembled ship must carry his input. clientY " + before
-                        + " -> " + lift + " (need +" + MIN_CONTROL_CLIMB + ")"
-                        + " delivery=" + seatDelivery(),
-                lift.satisfied);
+                        + " -> " + after + " after " + PILOT_THRUST_DOSE_TICKS + " ticks of thrust"
+                        + " (need +" + MIN_CONTROL_CLIMB + ") delivery=" + seatDelivery(),
+                !Double.isNaN(after) && after - before >= MIN_CONTROL_CLIMB);
 
         // (5) He carries the durable aboard record. That record - not his dimension id, which is a
         // per-boot slot number - is what a logout in space is restored from; without it the login
@@ -458,9 +441,6 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 + shipInfoById(shipUuid), !Double.isNaN(yRest));
 
         // ---- CONTROL LEG: plain flight works far below the line, or the refusal leg is void. ----
-        double maxShipY = yRest;
-        StringBuilder climb = new StringBuilder(64);
-        StringBuilder diag = new StringBuilder(64);
         // The gate's own verdict, awaited as an EVENT: `entry_decided` names which of its eight
         // decisions the entry reached. The chat line is what the PLAYER reads and is still asserted,
         // but it is the second link — a refusal that was decided and never said is a different defect
@@ -474,124 +454,50 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // wrong numbering.
         long refusalChatMark = clientEvents().mark();
         String decided = null;
-        bot().holdKey(Keyboard.KEY_R);
+        String noDecision = null;
         try {
-            // Same shape as the granted leg's control: an altitude converging is a physical value,
-            // so it stays a poll — through the shared, self-reporting one. BY IDENTITY,
-            // because this leg's whole subject is a ship LEAVING the base, so the base is the one
-            // point it is guaranteed not to be at by the end.
-            ClientPoll.Result<Double> control = ClientPoll.until(bot()::waitTicks,
-                    () -> shipY(shipUuid),
-                    y -> !Double.isNaN(y) && (y - yRest) >= MIN_CONTROL_CLIMB,
-                    CLIMB_STEP_TICKS, CONTROL_CLIMB_POLLS);
+            // Same shape as the granted leg's control: a dose of thrust from the key's arrival, read
+            // BY IDENTITY while the key is still down — this leg's whole subject is a ship LEAVING
+            // the base, so the base is the one point it is guaranteed not to be at by the end.
+            holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS, "control leg: the pilot's held vertical key"
+                    + " must reach his flight computer before any climb can be asked of it");
+            double yControl = shipY(shipUuid);
             scenario().requireArranged("control leg: the pilot must be able to fly AT ALL before the "
-                            + "refusal leg can indict the entry. yRest=" + yRest + " " + control,
-                    control.satisfied);
+                            + "refusal leg can indict the entry. yRest=" + yRest + " -> " + yControl
+                            + " after " + PILOT_THRUST_DOSE_TICKS + " ticks of held thrust",
+                    !Double.isNaN(yControl) && yControl - yRest >= MIN_CONTROL_CLIMB);
 
-            // ---- REFUSAL LEG: keep climbing until the refusal message lands in the CLIENT chat.
-            // The exhausted pool refuses the entry the moment the ship crosses the line; the
-            // pilot's own chat is where the player reads it (i18n already resolved).
+            // ---- REFUSAL LEG: keep climbing, on the same held key, until the gate DECIDES.
+            // A LINK on the gate's own record, through the shared verb. The FIRST decision, not the
+            // last: a refusal arms a cooldown, and the gate then answers COOLDOWN on every later
+            // tick the craft is still above the line. The budget is the 800 five-tick reads the
+            // hand-rolled loop this replaced was given.
             //
-            // The gate is sampled along the way, sparsely (every ~100 ticks - the readout scans the
-            // ship's subspace yard, so a per-poll read would be a load source in the very climb it
-            // is watching). Without it a missing message has four indistinguishable explanations:
-            // the ship never reached the line, the trigger declined, the entry was declined, or the
-            // message was sent to nobody. The last sample and the highest altitude seen are what
-            // the assertion below reports.
-            // CLASSIFIED, and it stays: the exit is a RECORD (`entry_decided`), not a sampled state,
-            // so this is already a wait for production's own verdict. What the loop adds around that
-            // wait is the trace the failure reports — the altitude the craft actually reached, which
-            // no record carries and which a shared `awaitMatching` deliberately cannot collect (its
-            // stimulus parameter is for work a headless test must DO, never for an observation).
-            int climbBudget = 800;
-            for (int attempt = 0; attempt < climbBudget && decided == null; attempt++) {
-                bot().waitTicks(5);
-                // The FIRST decision, not the last: a refusal arms a cooldown, and the gate then answers
-                // COOLDOWN on every later tick the craft is still above the line.
-                decided = Events.firstField(events.since(refusalMark, "entry_decided"), "decision");
-                // The ALTITUDE is sampled every poll. It used to ride along with the heavy readouts
-                // below at one poll in ten, and at 40 blocks/s that is a hundred blocks between
-                // samples: a craft that crossed the ceiling and was taken by the crossing left its
-                // last seen altitude a hundred blocks short, and the failure then said it never got
-                // there. This read is off the registry — no chunk touched, no yard resolved.
-                double sampled = shipY(shipUuid);
-                if (!Double.isNaN(sampled)) {
-                    maxShipY = Math.max(maxShipY, sampled);
-                }
-                if (attempt % 10 == 0) {
-                    // The ship's own state, asked BY IDENTITY and off the registry - it neither
-                    // force-loads the ship's subspace yard nor touches a chunk, so the climb it is
-                    // watching gets exactly the resources it would have got unwatched.
-                    String s = shipInfoById(shipUuid);
-                    // THE DISCRIMINATOR, sampled ACROSS the dying climb rather than
-                    // after it. Three candidate causes, and the climb trace alone cannot separate
-                    // them: the tile instance is being replaced under the ship (afcIdentity changes),
-                    // the computer is not ticking at all (controllerTicks flat), or the packet
-                    // arrives and is refused at the seat's pilot guard (received climbs while
-                    // delivered does not). Sampled at the same cadence as the altitude so the two
-                    // timelines line up tick for tick.
-                    if (diag.length() < 900) {
-                        // The SERVER half's own record: its fields are read by name below, and the
-                        // two-half reading nests them where a by-name read refuses to look.
-                        String d = seatDeliveryServer();
-                        // The POOL rides along with the delivery counters, and it is the reading that
-                        // matters most here: the premise "the pool is full" is measured once, before
-                        // the climb, and this leg then spends minutes climbing. If the pressure
-                        // disappears in between — a probe-held cell evicted, a settled cell released,
-                        // anything — the entry is granted for a perfectly good reason and the missing
-                        // refusal says nothing about the refusal path. Sampled at the same cadence as
-                        // the altitude so the two timelines line up.
-                        SubsystemStatus spaceSample = SubsystemStatus.read(this::exec);
-                        diag.append(' ').append(attempt).append(":recv=")
-                                .append(firstGroupOr(RECEIVED, d, "?"))
-                                .append("/deliv=").append(firstGroupOr(DELIVERED, d, "?"))
-                                .append("/ledger=").append(spaceSample.ledger);
-                    }
-                    ShipInfo sample = ShipInfo.isLoaded(s) ? ShipInfo.of(s) : null;
-                    if (sample != null) {
-                        double y = sample.y;
-                        maxShipY = Math.max(maxShipY, y);
-                        // A bounded timeline, not a last-value snapshot: a climb that stops is a
-                        // shape, and the tick it changed shape at is the whole question. The
-                        // VERTICAL VELOCITY rides along because an altitude that stops rising
-                        // cannot say whether the ship is being held, braked or simply not pushed.
-                        // upY (the world-frame Y of the ship's OWN up, from its attitude) and the
-                        // horizontal distance travelled ride along for one reason: the pilot's
-                        // "climb" is a SHIP-FRAME command, so on a tilted hull it is mostly
-                        // horizontal thrust. A flat altitude with upY well under 1 and a growing
-                        // travel is a ship flying SIDEWAYS, which is a different bug from a ship
-                        // that is not being pushed at all - and the two are identical in a
-                        // y/velY trace.
-                        double upY = sample.upY();
-                        double dx = sample.x - site.x;
-                        double dz = sample.z - site.z;
-                        double horiz = Math.sqrt(dx * dx + dz * dz);
-                        if (climb.length() < 1400) {
-                            climb.append(' ').append(attempt).append(':')
-                                    .append(String.format(Locale.ROOT, "%.1f", y))
-                                    .append('/')
-                                    .append(sample.velY)
-                                    .append(String.format(Locale.ROOT, "/up=%.2f/horiz=%.1f",
-                                            upY, horiz));
-                        }
-                    }
-                }
+            // That loop also sampled the climb as it went — altitude, velocity, attitude and the
+            // pool — for an intermittent red it was built to diagnose. It was a trace riding on a
+            // wait, and it is gone with the loop; the failing branch below still reads each of those
+            // once, at the moment a missing decision is being reported.
+            try {
+                String decisions = events.awaitMatching(refusalMark, "entry_decided",
+                        seen -> Events.firstField(seen, "decision") != null,
+                        "carrying any decision",
+                        "a craft climbing under its pilot's key must present itself to the entry"
+                                + " gate at the orbit line (" + ORBIT_LINE + ")",
+                        800 * 5);
+                decided = Events.firstField(decisions, "decision");
+            } catch (AssertionError never) {
+                noDecision = never.getMessage();
             }
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        // Printed on the GREEN path too, deliberately. This class's red is intermittent and only
-        // appears under the loaded gate, so its trace is otherwise unreadable on the run you can
-        // actually iterate on - and the shape of a healthy climb is what tells you whether a sick
-        // one differs in altitude, in attitude, or only in speed.
-        System.out.println("[entryrefused] maxShipY=" + maxShipY + " yRest=" + yRest
-                + " climb(attempt:y/velY/up/horiz)=[" + climb.toString().trim() + "]");
-        // The gate is read HERE, on the failing path only, for the same reason the climb is sampled
-        // passively above: it resolves the ship through its subspace yard, which force-loads chunks.
-        // A missing refusal has four explanations - the ship never reached the line, the trigger
-        // declined, the entry declined, or nobody was there to tell - and these two readings
-        // separate all four. `lastDecision` NEVER-ASKED with a maxShipY under the ceiling is the
-        // first of them, and it exonerates every part of the entry path.
+        System.out.println("[entryrefused] decided=" + decided + " yRest=" + yRest);
+        // The gate is read HERE, after the climb and not during it: it resolves the ship through its
+        // subspace yard, which force-loads chunks, and a load source inside the climb it describes
+        // would change what it reports. A missing refusal has four explanations - the ship never
+        // reached the line, the trigger declined, the entry declined, or nobody was there to tell -
+        // and this reading with the craft's altitude separates them. `lastDecision` NEVER-ASKED with
+        // the craft under the ceiling is the first of them, and it exonerates the entry path.
         String gate = exec("artest space entry-gate 0 " + shipUuid);
 
         // THE PRECONDITION, before the verdict: a refusal can only be missing if a refusal was ever
@@ -614,19 +520,15 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             JsonObject where = bot().reportWeather();
             int clientDim = where != null && where.has("dim") ? where.get("dim").getAsInt() : -9999;
             scenario().arrangementFailed("the entry gate recorded NO decision for this climb (the craft"
-                    + " was last SEEN at " + maxShipY + " against an orbit line of " + ORBIT_LINE + "),"
+                    + " is now at " + shipY(shipUuid) + " against an orbit line of " + ORBIT_LINE + "),"
                     + " so no refusal was ever asked for and the absence of a message means nothing."
-                    + " The hull was level throughout, so the tilt this class usually dies of is NOT"
-                    + " the reason. Server events since the climb began: " + events.since(refusalMark)
+                    + " The hull is level, so the tilt this class usually dies of is NOT the reason."
+                    + " The wait: " + noDecision
                     + " WHICH of the four it is:"
                     + " subsystem=" + spaceNow.raw() + " shipsLoadedInDim0=" + loaded
                     + " shipsAtAllInDim0=" + all + " clientDim=" + clientDim
                     + " byId=" + shipInfoById(shipUuid)
-                    // The pool's OWN timeline, sampled across the climb: the premise "the pool is
-                    // full" is measured once before the climb, and a slot freed during it grants the
-                    // entry for a perfectly good reason.
-                    + " delivery+pool(attempt:recv/deliv/ledger)=[" + diag.toString().trim() + "]"
-                    + " climb(attempt:y/velY/up/horiz)=[" + climb.toString().trim() + "] gate=" + gate);
+                    + " delivery=" + seatDeliveryServer() + " gate=" + gate);
         }
 
         // THE VERDICT, the gate's own: with every slot held by an occupied cell the only decision a
@@ -865,19 +767,6 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         }
         return exec("artest vs phys-diag 0 " + shipUuid + " "
                 + gate.integer(AFC_X) + " " + gate.integer(AFC_Y) + " " + gate.integer(AFC_Z));
-    }
-
-    /** {@code field} of a probe reply, or {@code fallback} — a missing field must read as "not
-     *  answered" and never as a number, which is how a dead probe reads as a real zero. */
-    private static String firstGroupOr(String field, String reply, String fallback) {
-        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
-        // default as an argument, so every call site names what a missing field means there.
-        // A reply that is not JSON at all — an unreadable half says so in parentheses — is the
-        // same absence.
-        if (reply == null || !reply.trim().startsWith("{")) {
-            return fallback;
-        }
-        return Reply.of(reply).textOr(field, fallback);
     }
 
     private static boolean isRiding(JsonObject riding) {

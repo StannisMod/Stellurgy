@@ -430,22 +430,15 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         long climbServerMark = events().mark();
         double riderYBefore = requireStillAboard("before the " + label + " climb leg is driven",
                 climbClientMark, climbServerMark).get("posY").getAsDouble();
-        bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
-        ClientPoll.Result<Double> lift;
-        try {
-            // A MEASUREMENT, not a wait, and the window early-exits because the key is held while it
-            // runs: nothing decides an altitude, so there is no record to await and none worth
-            // adding, while the delivery of the held key — the half that IS something production
-            // does — is the link this leg's own rider comparison rests on.
-            lift = ClientPoll.until(bot()::waitTicks,
-                    this::shipY,
-                    y -> y - yBefore > 1.5, 2, 100);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        double yAfter = lift.value;
-        assertTrue("[" + label + "] the vertical-up key must lift the ship (yBefore=" + yBefore
-                + " yAfter=" + yAfter + ")", yAfter - yBefore > 1.0);
+        // EXPERIMENT: a dose of thrust from the key's arrival — which is a link inside it, so a key
+        // that never reached the computer is not read as a ship that would not climb — and one
+        // reading of the ship once the release has arrived too.
+        climbOnPilotKey(cellDim, PILOT_THRUST_DOSE_TICKS, "[" + label + "] the held vertical key must"
+                + " reach the flight computer of a ship this far out");
+        double yAfter = shipY();
+        assertTrue("[" + label + "] " + PILOT_THRUST_DOSE_TICKS + " ticks of the vertical-up key must"
+                + " lift the ship (yBefore=" + yBefore + " yAfter=" + yAfter + ")",
+                yAfter - yBefore > 1.0);
         // EXPERIMENT: the comparison is DEFINED six client ticks after the cut — a rider lagging his
         // ship by more than RIDER_TRACKING_TOLERANCE at that offset is the failure. The tolerance is
         // the test's own and was not measured at this offset.

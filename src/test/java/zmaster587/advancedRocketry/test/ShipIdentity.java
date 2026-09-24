@@ -41,12 +41,6 @@ public final class ShipIdentity {
         String exec(String command) throws Exception;
     }
 
-    /** How a caller lets the world advance between attempts — its own clock, whichever it uses. */
-    @FunctionalInterface
-    public interface Waiter {
-        void await() throws Exception;
-    }
-
     /**
      * The DURABLE ship id out of an {@code artest rocket assemble} reply — the ship's name, taken from
      * the moment that created it.
@@ -152,27 +146,83 @@ public final class ShipIdentity {
     }
 
     /**
-     * {@link #physicsIdOf} with a wait: the physics mod assembles on its own thread, so a caller that
-     * asks the instant the assembler returns is asking before the hull exists. Retries {@code
-     * attempts} times, letting {@code between} advance the caller's own clock, and fails naming the
-     * ship it could not find — never {@code null}, which downstream turns back into a guess.
+     * {@link #physicsIdOf} once the craft named {@code durableShipId} is USABLE in {@code dim}: a
+     * caller that asks the instant the assembler returns — or a crossing reports — is asking before
+     * the hull exists on the far side of the substrate's spawn queue.
+     *
+     * <p><b>A link, read first.</b> The mark is taken BEFORE the one read, so a craft that is already
+     * there is answered at once and a craft that is not is waited for on production's own
+     * announcement of it, {@code ship_usable}, which the read cannot have missed. The wait is over
+     * the CHAIN ({@link #endsUsable}): a load a later unload undid does not count. Then the id is
+     * read once more through the refusing {@link #physicsIdOf} — never {@code null}, which
+     * downstream turns back into a guess.</p>
+     *
+     * <p>It replaced a bounded retry of the same read, stepped on whatever clock the caller handed
+     * it; the budget now counts ticks of the caller's own log, the same total.</p>
+     *
+     * @param serverLog the SERVER's event log, where {@code ship_usable} is recorded
      */
-    public static String awaitPhysicsIdOf(Probe probe, int dim, String durableShipId,
-                                          int attempts, Waiter between) throws Exception {
-        String reply = "";
-        for (int attempt = 0; attempt < attempts; attempt++) {
-            reply = probe.exec("artest vs ship-uuid " + dim + " " + durableShipId);
-            // absence is the answer: this is the retry loop, and "no hull carries that name
-            // yet" is precisely what it is waiting out.
-            String hullId = Reply.of("artest vs ship-uuid", reply).textOr("id", null);
-            if (Reply.of(reply).boolOr("found", false) && hullId != null) {
-                return hullId;
-            }
-            between.await();
+    public static String awaitPhysicsIdOf(Probe probe, Events serverLog, int dim, String durableShipId,
+                                          int tickBudget) throws Exception {
+        long mark = serverLog.markInstrumented();
+        String reply = probe.exec("artest vs ship-uuid " + dim + " " + durableShipId);
+        // absence is the answer here and only here: "no hull carries that name yet" is the branch
+        // that waits, and the wait's own refusing read below is what reports it if it never comes.
+        String hullId = Reply.of("artest vs ship-uuid", reply).textOr("id", null);
+        if (Reply.of(reply).boolOr("found", false) && hullId != null) {
+            return hullId;
         }
-        throw new AssertionError("ARRANGEMENT: no hull in dim " + dim + " ever carried the name "
-                + durableShipId + " within " + attempts + " attempts, so nothing below could be"
-                + " addressed to this scenario's own craft; last reply: " + reply);
+        serverLog.awaitMatching(mark, "ship_usable",
+                usable -> endsUsable(usable, serverLog.since(mark, "ship_unloaded"), durableShipId, dim),
+                "carrying ship " + durableShipId + " in dim " + dim + ", later than every unload of it",
+                "ARRANGEMENT: this scenario's own craft " + durableShipId + " must become usable in"
+                        + " dim " + dim + ", or nothing below can be addressed to it (the read before"
+                        + " the wait said: " + reply + ")", tickBudget);
+        return physicsIdOf(probe, dim, durableShipId);
+    }
+
+    /**
+     * Whether the latest LOAD of {@code shipId} in {@code usable} ({@code ship_usable} records) is
+     * later, by {@code seq}, than every UNLOAD of that craft in {@code unloaded} ({@code
+     * ship_unloaded} records). An empty load list is NOT YET.
+     *
+     * <p>{@code shipId} may be either spelling a caller holds — the durable AR name ({@code ship}) or
+     * the substrate's key ({@code vsShip}); they are minted in different places and are not the same
+     * value. An unload carries only the substrate's key and the substrate's NAME, so it is matched by
+     * the key the load itself carried as well as by the caller's id, or a durable id would never
+     * match an unload and a load since undone would read as usable.</p>
+     *
+     * @param dim the world the craft must be usable IN, or {@code null} for any
+     */
+    public static boolean endsUsable(String usable, String unloaded, String shipId, Integer dim) {
+        long lastLoad = Long.MIN_VALUE;
+        String loadedKey = null;
+        for (String record : Events.records(usable)) {
+            if ((shipId.equals(Events.text(record, "ship")) || shipId.equals(Events.text(record, "vsShip")))
+                    && inDim(record, dim)) {
+                long seq = (long) Events.number(record, "seq");
+                if (seq > lastLoad) {
+                    lastLoad = seq;
+                    loadedKey = Events.text(record, "vsShip");
+                }
+            }
+        }
+        if (lastLoad == Long.MIN_VALUE) {
+            return false;
+        }
+        for (String record : Events.records(unloaded)) {
+            String key = Events.text(record, "vsShip");
+            boolean same = shipId.equals(key) || shipId.equals(Events.text(record, "name"))
+                    || (loadedKey != null && loadedKey.equals(key));
+            if (same && inDim(record, dim) && (long) Events.number(record, "seq") > lastLoad) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean inDim(String record, Integer dim) {
+        return dim == null || Events.number(record, "dim") == dim;
     }
 
 

@@ -892,6 +892,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         int samples = 8;
         int moved = 0;
         double prev = bot().reportRidingEntity().get("posY").getAsDouble();
+        // WINDOW: eight consecutive client ticks, each read against the one before — the per-tick
+        // delta is the measurement, on the clock the render it measures advances on.
         for (int i = 0; i < samples; i++) {
             bot().waitTicks(1);
             double cur = bot().reportRidingEntity().get("posY").getAsDouble();
@@ -1667,9 +1669,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         double convErr = Double.MAX_VALUE;
         double settledErr = Double.NaN;
         int window = windowTicks(4, 20);
-        // A WINDOW, and the paragraph above says why: the measurement is the BEST convergence
-        // reached anywhere in it, not the sample the loop stopped on. No record carries a
-        // best-over-a-stretch. What it cannot see: a better residual touched between two samples.
+        // WINDOW: the paragraph above says why — the measurement is the BEST convergence reached
+        // anywhere in it, not the sample the loop stopped on. No record carries a best-over-a-stretch.
+        // What it cannot see: a better residual touched between two samples.
         for (int spent = 0; spent < window; spent += 4) {
             bot().waitTicks(4);
             // Both halves of the residual read as ONE measurement, in this order: two reads a

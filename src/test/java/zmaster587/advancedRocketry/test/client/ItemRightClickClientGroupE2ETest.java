@@ -490,21 +490,20 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
         // arrangement wearing the contract's clothes, so the aim is MEASURED on the client itself
         // before the click rather than assumed from having asked for it.
         scenario().measuring("aim straight down and confirm the CLIENT is holding that look");
+        // A READ, not a wait: the harness writes the rotation on the client thread before it
+        // replies, so the reading after it is the look itself. A poll of it stood here and exited on
+        // its first read.
         bot().setLook(0f, 90f);
-        // ClientPoll rather than a hand-rolled loop. There is no link to take: `setLook` is the
-        // CLIENT aiming itself, it sends no packet the client then applies, and
-        // `client_pos_look_applied` records the SERVER writing a look — a different event that does
-        // not happen here. So this stays a poll, and what it buys by being the harness's one is the
-        // self-report: satisfied, iterations spent against its ceiling, and the last pitch read.
-        // What it cannot see: an aim that reached the threshold and moved off it between reads.
-        ClientPoll.Result<Double> aim = ClientPoll.until(bot()::waitTicks,
-                () -> bot().reportState().get("playerPitch").getAsDouble(),
-                seen -> seen > LOOKING_STRAIGHT_DOWN_DEG, 2, 20);
-        double pitch = aim.value;
-        scenario().record("clientPitch", aim.toString());
+        double pitch = bot().reportState().get("playerPitch").getAsDouble();
+        scenario().record("clientPitch", pitch);
         scenario().requireArranged("the client must be looking straight down before the click, or"
                 + " the item's 5-block ray traces into empty air; client pitch=" + pitch,
                 pitch > LOOKING_STRAIGHT_DOWN_DEG);
+        // STIMULUS: one client tick — the one in which the client REPORTS the new look. Vanilla sends
+        // a changed rotation from the player's own update, once per tick, and the harness counts a
+        // tick at its END, after that update; the click below leaves on the same connection after
+        // it, so the server has the look when it ray-traces the click.
+        bot().waitTicks(1);
 
         scenario().asserting("the client sees exactly one spawned hovercraft, and loses the stack");
         Events events = events();

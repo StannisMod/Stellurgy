@@ -185,8 +185,8 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
 
         // The craft this spike built, by the name the assembler minted — so every lookup below is
         // about it and not about whichever hull is nearest the pad on a world the tier shares.
-        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
-                ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
+        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), 0,
+                ShipIdentity.nameFromAssembly(assemble), 200);
 
         PilotSeat seat = PilotSeat.byId(this::exec, 0, scenarioShipId)
                 .requireFound("find-seat must resolve the ship's subspace seat");

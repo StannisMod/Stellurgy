@@ -78,6 +78,9 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
     private static final int DECK_LINK_BUDGET_TICKS = 300;
     /** How long a teleport is given to reach the CLIENT and be applied there. */
     private static final int POS_LOOK_BUDGET_TICKS = 300;
+    /** Client ticks a dropped body is watched before "did he start falling" is read: several times
+     *  the three a free body needs to fall the 0.4 blocks the premise asks for. */
+    private static final int FALL_WATCH_TICKS = 20;
 
     /**
      * How long the commanded ~160-degree roll is given to finish, in ticks.
@@ -242,26 +245,26 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
                 + " on the client before its fall can be watched", POS_LOOK_BUDGET_TICKS);
         double preY = bot().reportState().get("playerY").getAsDouble();
         long preTicks = bot().reportState().get("ticks").getAsLong();
-        // Event-gated fall detection (bounded ceiling + early exit): the loop returns the moment the
-        // body has fallen, so the ceiling is patience and not how far it falls.
-        ClientPoll.Result<Double> fall = ClientPoll.until(bot()::waitTicks,
-                () -> bot().reportState().get("playerY").getAsDouble(),
-                y -> Math.abs(y - preY) > 0.4, 2, 60);
+        // EXPERIMENT: the reading is DEFINED twenty client ticks after the placement was applied. A
+        // free body falls 0.4 blocks in about three ticks of vanilla gravity, and it is his own
+        // client's ticks that move him, so twenty is a fall on any box — or something holding him.
+        bot().waitTicks(FALL_WATCH_TICKS);
+        double fallY = bot().reportState().get("playerY").getAsDouble();
         // WHAT THIS FAILURE MAY NOT BLAME - three candidates are now excluded BY CONSTRUCTION.
-        // (1) "client tick/chunk-stream stall": the poll advances through waitTicks, which ERRORS on
-        // its own timeout, so a completed poll is proof the client ticked - the delta is
-        // printed rather than asserted so the proof travels with the red. (2) "the teleport never
-        // landed": the client's own record of applying it was awaited above, and preY was read only
-        // afterwards. (3) "the world's ground caught him": the column above the ship was filled with
-        // air and the drop point was asserted air a moment ago. What remains is something genuinely
-        // holding him up - the inverted hull's own collision, or the deck capture - and BOTH would be
-        // the PRODUCT WORKING. deck-capture is read-only and names which.
+        // (1) "client tick stall": waitTicks ERRORS on its own timeout, so a reading after it is
+        // proof the client ticked - the delta is printed rather than asserted so the proof travels
+        // with the red. (2) "the teleport never landed": the client's own record of applying it was
+        // awaited above, and preY was read only afterwards. (3) "the world's ground caught him": the
+        // column above the ship was filled with air and the drop point was asserted air a moment
+        // ago. What remains is something genuinely holding him up - the inverted hull's own
+        // collision, or the deck capture - and BOTH would be the PRODUCT WORKING. deck-capture is
+        // read-only and names which.
         long tickDelta = bot().reportState().get("ticks").getAsLong() - preTicks;
         assertTrue("the teleported client must start falling before the hull leg."
-                + " target=" + (sy + 7) + " preY=" + preY + " poll=" + fall
-                + " clientTicksElapsed=" + tickDelta
+                + " target=" + (sy + 7) + " preY=" + preY + " y after " + FALL_WATCH_TICKS
+                + " client ticks=" + fallY + " clientTicksElapsed=" + tickDelta
                 + " (so this is NOT a tick stall) capture=" + exec("artest vs deck-capture"),
-                fall.satisfied);
+                Math.abs(fallY - preY) > 0.4);
 
         // The hull-stand hold ENGAGING is a decision production commits in one place — it sets the
         // mode and then calls the one private method every mode transition goes through — so it is

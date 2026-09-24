@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.play.server.SPacketChangeGameState;
 import net.minecraft.network.play.server.SPacketChunkData;
 import net.minecraft.network.play.server.SPacketJoinGame;
 import net.minecraft.network.play.server.SPacketPlayerPosLook;
@@ -90,12 +91,18 @@ import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstra
  *       ({@code SPacketWindowItems}) and about a slot the handler REJECTED — the vanilla body drops
  *       a set-slot for a window that is not the open container, and this record cannot tell a
  *       stored stack from a dropped one; it says only that the packet was handled. Also SILENT
- *       about a REPEAT: see the change-gate on the seam below.</li>
+ *       about a REPEAT and about a change of NBT alone: see the change-gate on the seam below.</li>
+ *   <li>{@code client_slot_tag_set} — the same packet, when the slot's TAG differs from the last one
+ *       recorded for it: the NBT-only change the set-slot gate drops, in a ring of its own. Payload:
+ *       {@code window}, {@code slot}, {@code item}, {@code tagHash}.</li>
  *   <li>{@code client_spawn_set} — the client's copy of the world spawn is what the server sent
  *       ({@code handleSpawnPosition}). Payload: {@code x}, {@code y}, {@code z}. SILENT about WHY
  *       it changed and about a bed-spawn, which is per-player and travels by another route.</li>
  *   <li>{@code client_click_confirmed} — the server has HANDLED one container click
  *       ({@code handleConfirmTransaction}); a barrier, not a verdict — see its seam.</li>
+ *   <li>{@code client_game_state_changed} — the client applied a server game-state packet
+ *       ({@code handleChangeGameState}): the only way weather reaches a 1.12 client. Payload:
+ *       {@code state}, {@code value}.</li>
  *   <li>{@code client_health_updated} — the client player's health and food are what the server
  *       says ({@code handleUpdateHealth}). Payload: {@code health}, {@code food}. SILENT about
  *       saturation (in the packet, not in the pin) and about damage the client PREDICTED locally.</li>
@@ -218,6 +225,7 @@ public class MixinNetHandlerPlayClient {
     private void forgeTest$recordSlotSet(SPacketSetSlot packet, CallbackInfo ci) {
         ForgeTestClientBootstrap.noteInstrumentEntered(INSTRUMENT);
         ForgeTestClientBootstrap.noteInstrumentEntered("client_slot_set");
+        // The PACKET's stack: the record is about what the server sent, like the set-slot record.
         ItemStack stack = packet.getStack();
         String item = "empty";
         int stackSize = 0;
@@ -233,6 +241,7 @@ public class MixinNetHandlerPlayClient {
         long key = ((long) packet.getWindowId() << 32) | (packet.getSlot() & 0xFFFFFFFFL);
         // '#' cannot occur in a registry name, so the join is unambiguous.
         String now = item + '#' + stackSize;
+        forgeTest$recordSlotTagIfChanged(packet, key, item, stack);
         if (now.equals(forgeTest$lastSlotRecorded.put(key, now))) {
             return;
         }
@@ -241,6 +250,45 @@ public class MixinNetHandlerPlayClient {
                 + ",\"slot\":" + packet.getSlot()
                 + ",\"item\":\"" + jsonSafe(item) + "\""
                 + ",\"stackSize\":" + stackSize);
+    }
+
+    /**
+     * Last tag digest recorded per {@code (window, slot)} — {@code client_slot_tag_set}'s own
+     * change-gate, kept apart from {@link #forgeTest$lastSlotRecorded} for the reason that record
+     * exists at all. Same lifetime and thread as that map.
+     */
+    private java.util.HashMap<Long, Integer> forgeTest$lastSlotTag;
+
+    /**
+     * {@code client_slot_tag_set}: the client's copy of one slot now carries a DIFFERENT tag than
+     * the last one recorded for it — the change {@code client_slot_set}'s gate deliberately drops.
+     *
+     * <p>A test that waits for a stack's NBT to reach the client — a suit's air after a drain or a
+     * refill — has nothing to wait on otherwise: the item and the count do not move, so the set-slot
+     * record is gated out, and the only remaining shape was a poll of the rendered inventory. It is a
+     * separate TYPE so the churn that gate protects against lands in a ring of its own: one to two
+     * records a second of suited play turn this ring over in minutes and cost no other event
+     * anything. Payload: {@code window}, {@code slot}, {@code item}, {@code tagHash} — a content hash
+     * of the compound ({@code NBTTagCompound.hashCode}), {@code 0} for none. It says THAT the tag
+     * changed, never what it says; the test reads the slot once after it.</p>
+     */
+    private void forgeTest$recordSlotTagIfChanged(SPacketSetSlot packet, long key, String item,
+                                                  ItemStack stack) {
+        ForgeTestClientBootstrap.noteInstrumentEntered("client_slot_tag_set");
+        if (forgeTest$lastSlotTag == null) {
+            forgeTest$lastSlotTag = new java.util.HashMap<Long, Integer>();
+        }
+        int tagHash = stack == null || stack.isEmpty() || stack.getTagCompound() == null
+                ? 0 : stack.getTagCompound().hashCode();
+        Integer before = forgeTest$lastSlotTag.put(key, tagHash);
+        if (before != null && before == tagHash) {
+            return;
+        }
+        ForgeTestClientBootstrap.recordEvent("client_slot_tag_set",
+                "\"window\":" + packet.getWindowId()
+                + ",\"slot\":" + packet.getSlot()
+                + ",\"item\":\"" + jsonSafe(item) + "\""
+                + ",\"tagHash\":" + tagHash);
     }
 
     /**
@@ -294,6 +342,30 @@ public class MixinNetHandlerPlayClient {
         ForgeTestClientBootstrap.recordEvent("client_health_updated",
                 "\"health\":" + packet.getHealth()
                 + ",\"food\":" + packet.getFoodLevel());
+    }
+
+    /**
+     * The client has applied one of the server's GAME STATE changes.
+     *
+     * <p>{@code handleChangeGameState} is where the weather reaches a 1.12 client at all: the client
+     * world does not lerp its own ({@code WorldClient.updateWeather} is empty), so state {@code 1}
+     * (begin raining, strength 0), {@code 2} (end raining, strength 1), {@code 7} (rain strength
+     * {@code value}) and {@code 8} (thunder strength) are each the client being TOLD, one packet per
+     * server tick while the server's own lerp moves. Before this seam a test could only sample
+     * {@code rainStrength} and read its own timing into the ramp.</p>
+     *
+     * <p>NOT gated: the server sends a strength only when it changed, so each record is a distinct
+     * fact, and a ramp is a hundred of them — in a ring of its own. Payload: {@code state} and
+     * {@code value}, the packet's own numbers; the branch the vanilla body took for them is
+     * determined by {@code state} alone and all of them fall through to TAIL.</p>
+     */
+    @Inject(method = "handleChangeGameState", at = @At("TAIL"))
+    private void forgeTest$recordGameState(SPacketChangeGameState packet, CallbackInfo ci) {
+        ForgeTestClientBootstrap.noteInstrumentEntered(INSTRUMENT);
+        ForgeTestClientBootstrap.noteInstrumentEntered("client_game_state_changed");
+        ForgeTestClientBootstrap.recordEvent("client_game_state_changed",
+                "\"state\":" + packet.getGameState()
+                + ",\"value\":" + jsonNumber(packet.getValue()));
     }
 
     /**

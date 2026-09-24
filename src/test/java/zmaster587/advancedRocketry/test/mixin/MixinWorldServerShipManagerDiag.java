@@ -35,7 +35,9 @@ import zmaster587.advancedRocketry.command.test.SpawnDiag;
  * <p>Behaviour-preserving by construction. The two {@code @Inject}s only read. The {@code @Redirect}
  * calls the SAME factory VS would have called and returns exactly what it returned — it exists
  * because VS's abort gate reports its reason to {@code System.err}, which the harness does not
- * forward, so a ship dropped there is otherwise silent.</p>
+ * forward, so a ship dropped there is otherwise silent. It records {@code ship_spawn_flood} for every
+ * flood — anchor, blocks found, bedrock, and whether VS's own rule refuses the spawn — so a wait for
+ * a registration that never comes prints the refusal among the records since its mark.</p>
  *
  * <p>{@code require = 0} throughout: the targets are VS's, and a version that renames them should
  * cost a test its diagnostics, not stop the client at launch.</p>
@@ -87,6 +89,19 @@ public abstract class MixinWorldServerShipManagerDiag {
                                                      World floodWorld, int maxSize, boolean corners) {
         SpatialDetector detector = BlockFinder.getBlockFinderFor(type, pos, floodWorld, maxSize, corners);
         if (detector != null) {
+            // The flood's outcome AS A RECORD, beside the statics below: VS drops a spawn whose flood
+            // is too big or touched bedrock with one line on System.err and a `continue`, so a queued
+            // craft that never registers otherwise leaves a wait expiring on "no ship_spawned" and
+            // nothing to say why. `refused` applies VS's own abort rule to the same two inputs.
+            boolean refused = detector.foundSet.size()
+                    > org.valkyrienskies.mod.common.config.VSConfig.maxDetectedShipSize
+                    || detector.cleanHouse;
+            zmaster587.advancedRocketry.test.trace.TestTrace.recordHere("ship_spawn_flood",
+                    "\"x\":" + pos.getX() + ",\"y\":" + pos.getY() + ",\"z\":" + pos.getZ()
+                            + ",\"dim\":" + floodWorld.provider.getDimension()
+                            + ",\"found\":" + detector.foundSet.size()
+                            + ",\"bedrock\":" + detector.cleanHouse
+                            + ",\"refused\":" + refused);
             SpawnDiag.noteDetector(detector.foundSet.size(), detector.cleanHouse, arTest$blacklistSize());
             if (detector.foundSet.size() > FLOOD_SHAPE_THRESHOLD) {
                 arTest$recordFloodShape(detector, pos, floodWorld);

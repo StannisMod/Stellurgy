@@ -121,8 +121,8 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // in another cell, and a transit cell is a POOL slot that routinely holds an earlier
         // scenario's leavings.
         String durableId = ShipIdentity.nameFromAssembly(assembled);
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, originDim,
-                durableId, 40, () -> bot().waitTicks(5));
+        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), originDim,
+                durableId, 200);
         // The transit stack must know WHICH craft the jump is about, by its durable name: a jump
         // begun for a ship the stack cannot name captures nobody and never reaches the ledger, so a
         // relogging pilot is sent to spawn as SHIP_UNKNOWN (measured 2026-09-05, this very class).

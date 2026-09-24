@@ -3,7 +3,6 @@ package zmaster587.advancedRocketry.test.client;
 import com.google.gson.JsonObject;
 
 
-import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.DeckCapture;
 import zmaster587.advancedRocketry.test.Events;
@@ -11,6 +10,7 @@ import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.TransitStatus;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PlayerState;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 import zmaster587.advancedRocketry.test.ShipInfo;
 
 import zmaster587.advancedRocketry.test.Plot;
@@ -145,33 +145,13 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         // right after the spawn can be gone again by the time the caller acts — it then reads a hull
         // in the middle of its NEXT load. Usable means a load later, by `seq`, than every unload.
         String reply = events.awaitMatching(mark, "ship_usable",
-                usable -> endsUsable(usable, events.since(mark, "ship_unloaded"), shipId),
+                usable -> ShipIdentity.endsUsable(usable, events.since(mark, "ship_unloaded"), shipId,
+                        null),
                 "carrying ship or vsShip = " + shipId + ", later than every unload of it",
                 "this scenario's ship " + shipId + " must be USABLE — the physics loop steps it —"
                         + " before anything can be asked of it", tickBudget);
         scenario().record("shipUsable_" + shipId, reply);
         return reply;
-    }
-
-    /** Whether the latest load of {@code shipId} in {@code usable} is later than every unload of it
-     *  in {@code unloaded}. An empty load list is NOT YET. */
-    private static boolean endsUsable(String usable, String unloaded, String shipId) {
-        long lastLoad = Long.MIN_VALUE;
-        for (String record : Events.records(usable)) {
-            if (shipId.equals(Events.text(record, "ship")) || shipId.equals(Events.text(record, "vsShip"))) {
-                lastLoad = Math.max(lastLoad, (long) Events.number(record, "seq"));
-            }
-        }
-        if (lastLoad == Long.MIN_VALUE) {
-            return false;
-        }
-        for (String record : Events.records(unloaded)) {
-            if ((shipId.equals(Events.text(record, "vsShip")) || shipId.equals(Events.text(record, "name")))
-                    && (long) Events.number(record, "seq") > lastLoad) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /** {@link #awaitShipUsable(Events, long, String, int)} with this tier's usual budget. */
@@ -559,27 +539,26 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         return after;
     }
 
-    /**
-     * Client ticks the pilot's held vertical key is given to reach the altitude a scenario asked
-     * for. Generous on purpose: this is ARRANGEMENT and its expiry fails the scenario, so the budget
-     * has to cover a slow client rather than a healthy one.
-     */
-    protected static final int HOVER_LIFT_BUDGET_TICKS = 400;
+    /** {@link PilotThrust#DOSE_TICKS}, for the callers on this base. */
+    protected static final int PILOT_THRUST_DOSE_TICKS = PilotThrust.DOSE_TICKS;
 
     /**
-     * How much higher the key is held than the gain the caller asked for, so that what the craft is
-     * left at after the thrust is cut still clears it.
+     * {@link PilotThrust#climb} on this scenario's own bot and server log: a dose of thrust on the
+     * pilot's vertical key from its arrival at the flight computer, then the release, on the record.
      *
-     * <p>Inherited from the four sites this helper replaces, which held to 3 blocks and then
-     * accepted 2 — and the first measurement of it does NOT support the reason that shape implies.
-     * Across the four scenarios (2026-09-11, this fixture family), the craft held to +3.0 was left
-     * at +3.07, +4.14, +4.73 and +4.75 once the thrust was cut: the drift after release is UPWARD
-     * every time, and the margin has not yet been observed covering a sag at all. It is kept because
-     * four samples of one hull on one machine are not enough to delete a guard, not because a sag
-     * was seen. What the craft is actually left at is printed on every run — green included, where
-     * the scenario journal is silent — so whoever tightens this has evidence rather than arithmetic.</p>
+     * @param dim the world the craft is ticked in — the clock the dose is counted on
      */
-    private static final double HOVER_SETTLE_MARGIN_BLOCKS = 1.0;
+    protected final void climbOnPilotKey(int dim, int thrustTicks, String what) throws Exception {
+        PilotThrust.climb(bot(), events(), serverClient(), dim, thrustTicks, what);
+    }
+
+    /**
+     * {@link #climbOnPilotKey}'s first half, for the scenario whose subject happens WHILE the pilot
+     * is still climbing: the key stays DOWN when this returns, and the caller lets go of it.
+     */
+    protected final void holdClimbKeyFor(int dim, int thrustTicks, String what) throws Exception {
+        PilotThrust.hold(bot(), events(), serverClient(), dim, thrustTicks, what);
+    }
 
     /**
      * The gain that makes a hover a hover: far enough off the ground that nothing a scenario then
@@ -597,22 +576,10 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * what happens ON a hovering ship — a still crew member, a walk across a deck, a pilot standing
      * up mid-hover — wants this arrangement and not a rigid teleport.</p>
      *
-     * <p><b>Why this is a measurement and not a chain</b>, argued once here so no caller argues it
-     * again. Two questions are being asked and only one of them has a link:</p>
-     * <ul>
-     *   <li><em>Did the held key reach the flight computer?</em> That is something production DOES,
-     *       it is recorded where production delivers it, and it is awaited below
-     *       ({@code pilot_input_delivered}) BEFORE any altitude is believed. Without that link a
-     *       hull that could not climb and a key that never arrived produce the same red.</li>
-     *   <li><em>Did the hull climb?</em> That is an ALTITUDE. Nothing DECIDES it, so there is no
-     *       record to wait for and none worth adding — a per-tick hull position is a sample, not a
-     *       fact about the game. It is measured, inside a window.</li>
-     * </ul>
-     *
-     * <p>The window early-exits because the STIMULUS GOES ON ACTING. The key is held while it runs,
-     * so a fixed budget does not bound an observation — it decides how far the craft flies, and far
-     * enough leaves the loaded region, at which point the craft stops being ticked and stops
-     * reporting a position at all. The exit is what cuts the thrust.</p>
+     * <p><b>A dose of thrust, then one reading</b> — {@link #climbOnPilotKey}, whose javadoc argues
+     * it. The key REACHING the computer is a link and is awaited before a single tick of the dose is
+     * counted, so a hull that could not climb and a key that never arrived cannot produce the same
+     * red; the altitude is read once, after the release has arrived, and asserted.</p>
      *
      * @param shipId     the craft's identity; every read is BY IDENTITY, so a neighbour sharing the
      *                   airspace can never answer for it
@@ -626,41 +593,21 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                 + " measured: " + before, ShipInfo.isLoaded(before));
         final double y0 = ShipInfo.of(before).y;
 
-        Events events = events();
-        long liftMark = events.markInstrumented();
-        final double holdTo = gainBlocks + HOVER_SETTLE_MARGIN_BLOCKS;
-        ClientPoll.Result<Double> lift;
-        bot().holdKey(Keyboard.KEY_R);
-        try {
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> {
-                        String sample = shipInfoById(shipId);
-                        return ShipInfo.isLoaded(sample) ? ShipInfo.of(sample).y : y0;
-                    },
-                    y -> y - y0 >= holdTo, 2, HOVER_LIFT_BUDGET_TICKS / 2);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
+        climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, "the pilot's held vertical key must reach the"
+                + " craft's flight computer — until it has, a craft that did not climb says nothing"
+                + " about flight");
 
-        // The LINK before the number. Past this line the input demonstrably reached the computer, so
-        // an altitude that did not move is about the flight and nothing else.
-        events.await(liftMark, "pilot_input_delivered", "the pilot's held vertical key must reach the"
-                + " craft's flight computer — until this link is on the record, a craft that did not"
-                + " climb says nothing about flight", HOVER_LIFT_BUDGET_TICKS);
-
-        // The state the scenario will actually use: read AFTER the thrust is cut, not the sample the
-        // window exited on. A craft still under its pilot's key is not the hover the callers arrange.
         String after = shipInfoById(shipId);
         double y = ShipInfo.isLoaded(after) ? ShipInfo.of(after).y : Double.NaN;
         scenario().record("hoverGain", y - y0);
         // The journal prints on failure only, and the number worth having is the one a GREEN run
-        // leaves behind: how much of the margin above survives the thrust being cut.
-        System.out.println("[hover] ship=" + shipId + " asked=" + gainBlocks + " heldTo=" + holdTo
-                + " left=" + (y - y0) + " " + lift);
+        // leaves behind: what the dose actually bought, which is what a retuning starts from.
+        System.out.println("[hover] ship=" + shipId + " asked=" + gainBlocks + " dose="
+                + PILOT_THRUST_DOSE_TICKS + " left=" + (y - y0));
         scenario().requireArranged("the pilot must be able to fly his own craft " + gainBlocks
                 + " blocks off the ground and leave it hovering there; it is at " + (y - y0)
-                + " with the thrust cut (" + lift + "), so the hover every later reading is about"
-                + " was never established: " + after,
+                + " after " + PILOT_THRUST_DOSE_TICKS + " ticks of thrust with the thrust cut, so the"
+                + " hover every later reading is about was never established: " + after,
                 !Double.isNaN(y) && y - y0 >= gainBlocks);
         return after;
     }

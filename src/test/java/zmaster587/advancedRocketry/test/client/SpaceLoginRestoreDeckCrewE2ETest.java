@@ -71,7 +71,7 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
     @Test
     @Ignore("HELD FOR THE BODY-MOVEMENT CONTRACT BATCH, by the maintainer's ruling of 2026-09-23:"
             + " every deck-hold red waits for the contract on moving an entity aboard a craft. Red"
-            + " on a full client tier (ledger #522): a capture the LOGIN installed takes all six"
+            + " on a full client tier: a capture the LOGIN installed takes all six"
             + " walk inputs (6/6) and the collision sweep pins the step on five and six of them,"
             + " where a capture re-installed by a sit-and-stand walks 0.94 on the same deck. Green"
             + " alone, and green on the next full tier — so it is intermittent, not gone. RE-ENABLE"
@@ -91,8 +91,8 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         // On HIS deck. The capture's anchor is the PHYSICS id, and this scenario holds the durable
         // one, so the two are bridged by name rather than by asking what is standing at his feet.
         capBefore.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
-                        40, () -> bot().waitTicks(5)),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                        200),
                 "the capture the relog must restore is the one on THIS scenario's own deck");
 
         // A REAL logout that leaves the world running. Both marks BEFORE the disconnect: the client
@@ -198,8 +198,8 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                         + capUpright.raw(),
                 capUpright.alreadyTracked);
         capUpright.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
-                        40, () -> bot().waitTicks(5)),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                        200),
                 "the deck he stands on before the roll must be his own ship's");
 
         // Roll the ship to (near-)inverted UNDER him, by commanding the attitude his ship's computer
@@ -232,8 +232,8 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         // one-ship count asserted first as its premise — but a count of one is not evidence that the
         // one is THIS craft, and the case where it is not is exactly the case where this scenario's
         // ship failed to load and something else did.
-        String rolledShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
-                40, () -> bot().waitTicks(5));
+        String rolledShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                200);
         double upY = 1.0;
         for (int attempt = 0; attempt < 40 && upY > -0.9; attempt++) {
             bot().waitTicks(10);

@@ -17,6 +17,7 @@ import zmaster587.advancedRocketry.test.RocketFixture;
 import zmaster587.advancedRocketry.test.Plot;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Ground-assembled tier-2 ships, flown: four scenarios that used to be four classes and four client
@@ -514,8 +515,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             // client does every tick, and it keeps the address on a ship that is by now moving.
             String cmd = exec("artest vs ff-input-by-id 0 " + shipId
                     + " 0 1 0 0 0 0"); // throttleVertical = full up
-            assertTrue("the throttle must reach this ship's own flight computer: " + cmd,
-                    Reply.of(cmd).bool("afcResolved"));
+            if (!Reply.of(cmd).bool("afcResolved")) {
+                // Read only on this branch: which tick of the window lost the computer, and what the
+                // ship record says at that moment, separate "it was never found" from "it left".
+                fail("the throttle must reach this ship's own flight computer: " + cmd
+                        + " | window tick " + i + " of " + FLIGHT_WINDOW_TICKS
+                        + " maxDisp=" + maxDisp + " | ship now: " + shipInfoById(shipId));
+            }
             bot().waitTicks(1);
             double[] p = readVec(shipInfoById(shipId));
             at = p;
@@ -719,57 +725,36 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         double camYBefore = bot().reportState().get("playerY").getAsDouble();
 
         // Drive REAL keys: hold vertical-up. The client samples it, sends it to the seat, and the
-        // AFC lifts the ship. Up isolates from ground friction; poll for the climb (bounded).
-        // THE CLIMB IS THIS LEG'S ARRANGEMENT, and that is the correction. Its own name says what it
-        // pins — the pilot TRAVELS with the ship and the camera LOCKS to the nose — and both of
-        // those need a ship that is still there to be read. So the key is held only until the craft
-        // is unambiguously airborne and is then RELEASED: flying on is not part of the claim.
+        // AFC lifts the ship. Up isolates from ground friction.
+        // THE CLIMB IS THIS LEG'S ARRANGEMENT. Its own name says what it pins — the pilot TRAVELS
+        // with the ship and the camera LOCKS to the nose — and both of those need a ship that is
+        // still there to be read, so the key is held for a short DOSE and then RELEASED: flying on is
+        // not part of the claim. Measured: a ship under a held throttle for 200 ticks leaves the
+        // loaded region and reads back `{"managed":false,…}`, which is why the dose is the shared
+        // twenty ticks and never the old poll's ceiling.
         //
-        // Measured, and it is why this leg is not a fixed window like the four command legs above.
-        // Converting it to one (the poll's own 200-tick ceiling, spent in full) reds the scenario
-        // with `{"managed":false,"id":…}`: the poll released the key the moment the ship had risen,
-        // while a full window keeps commanding it, and a ship under a held throttle for 200 ticks
-        // leaves the loaded region. The safety argument for "window = the poll's ceiling" holds for
-        // an assertion's THRESHOLD and not for a STIMULUS that goes on acting.
-        //
-        // What makes this not the old defect: the drive is typed as ARRANGEMENT and the contract
-        // assertions below read something it did not establish — the rider's climb tracking the
-        // ship's, the camera's, and the nose lock. A climb that never happens fails as an
-        // arrangement, which is what it would be.
-        double maxLift = 0.0;
-        double yAfter = yBefore;
-        bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
-        try {
-            int ceiling = 2 * 100;
-            for (int spent = 0; spent < ceiling && maxLift <= 1.5; spent += 2) {
-                bot().waitTicks(2);
-                Double climbed = travelOrNull(shipInfoById(shipId), Y, yBefore);
-                if (climbed == null) {
-                    scenario().record("liftEndedBy", "ship no longer reporting a position at "
-                            + spent + " ticks; maxLift=" + maxLift);
-                    break;
-                }
-                yAfter = yBefore + climbed;
-                maxLift = Math.max(maxLift, climbed);
-            }
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        scenario().record("maxLift", maxLift);
+        // The contract assertions below read something the drive did not establish — the rider's
+        // climb tracking the ship's, the camera's, and the nose lock. A climb that never happens
+        // fails as an arrangement, which is what it would be.
+        climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, "the seated pilot's held vertical key must reach"
+                + " his flight computer through the FULL client path (key -> packet -> seat -> AFC)");
+        Double climbed = travelOrNull(shipInfoById(shipId), Y, yBefore);
+        scenario().record("lift", climbed);
 
         scenario().requireArranged("holding the vertical-up key while seated must get the ship "
                         + "airborne through the FULL client path (key -> packet -> seat -> AFC -> "
                         + "force) before the pilot can be asked to travel with it: yBefore="
-                        + yBefore + " yAfter=" + yAfter + " maxLift=" + maxLift,
-                maxLift > 1.0);
+                        + yBefore + " climbed=" + climbed + " after " + PILOT_THRUST_DOSE_TICKS
+                        + " ticks of thrust (null: no longer reporting a position)",
+                climbed != null && climbed > 1.0);
 
         // --- The seated pilot must TRAVEL with the ship (client-observed). Read the CLIENT rider +
         // camera again: both must have climbed, and the rider's climb must track the server ship's.
         // Before the fix that glues the seat dummy to the moving ship, the dummy stays at spawn while
         // the ship departs, so these client deltas would be ~0 even though the server ship moved.
-        // EXPERIMENT: the comparison is DEFINED six client ticks after the key is released — the
-        // offset is part of what is measured (a rider lagging his ship by more than the bar at six
-        // ticks is the failure). The bar, RIDER_TRACKS_SHIP_BLOCKS, is the test's own and was not
+        // EXPERIMENT: the comparison is DEFINED six client ticks after the release reached the
+        // flight computer — the offset is part of what is measured (a rider lagging his ship by more
+        // than the bar at six ticks is the failure). The bar, RIDER_TRACKS_SHIP_BLOCKS, is the test's own and was not
         // measured at this offset; it is not derived from it either.
         bot().waitTicks(6);
         String afterSettle = shipInfoById(shipId);

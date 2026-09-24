@@ -284,15 +284,12 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         awaitClientMount(seatMark, "the client must be riding the seat before its pilot flies it",
                 RELEASE_BUDGET_TICKS, " | server said: " + mount);
 
-        final double baseY = y0;
-        bot().holdKey(Keyboard.KEY_R);
-        // Event-gated hover-lift (bounded ceiling + early exit): the loop returns the moment the
-        // ship has climbed, so the ceiling is patience and not how far it flies.
-        // NOTE: this leg returns with KEY_R still HELD — the caller releases it, so no finally here.
-        ClientPoll.Result<Double> lift = ClientPoll.until(bot()::waitTicks,
-                () -> shipY(ship.id),
-                y -> y - baseY > 2.0, 2, 100);
-        double yAfter = lift.value;
+        // A dose of thrust from the key's arrival at the computer, and one reading. NOTE: this leg
+        // returns with KEY_R still HELD — the caller destroys the station under a pilot who is still
+        // climbing, and releases it itself.
+        holdClimbKeyFor(0, PILOT_THRUST_DOSE_TICKS, "the seated bot's held vertical key must reach"
+                + " his flight computer before its station can be destroyed under him");
+        double yAfter = shipY(ship.id);
         scenario().requireArranged("the seated bot must be flying the ship before its station can be "
                         + "destroyed (y0=" + y0 + " yAfter=" + yAfter + ")",
                 yAfter - y0 > WAS_FLYING_BLOCKS);

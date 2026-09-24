@@ -724,8 +724,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
      * uncertain: the ship is named, so the only question is whether it exists yet.
      */
     private String awaitPhysicsId(int dim, String durableShipId) throws Exception {
-        return ShipIdentity.awaitPhysicsIdOf(this::exec, dim, durableShipId, 40,
-                () -> bot().waitTicks(5));
+        return ShipIdentity.awaitPhysicsIdOf(this::exec, events(), dim, durableShipId, 200);
     }
 
     private void liftClear(int dim, int[] afc) throws Exception {

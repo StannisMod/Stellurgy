@@ -159,8 +159,7 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
         // anchored form resolved the yard nearest a point over the whole registry, so it could reach
         // a neighbour's craft — or a blockless crossing remnant — and report seatFound for it.
         String durableShipId = ShipIdentity.nameFromAssembly(assembled);
-        String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, dim, durableShipId, 40,
-                () -> bot().waitTicks(5));
+        String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), dim, durableShipId, 200);
         PilotSeat seat = PilotSeat.byId(this::exec, dim, scenarioShipId)
                 .requireFound("the pilot seat must be found, or the test is vacuous");
         int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;

@@ -19,6 +19,7 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
+import zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer;
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.Chains;
 import zmaster587.advancedRocketry.test.Events;
@@ -78,6 +79,12 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  *
  * <p>Manual server + client lifecycle: the config has to be written into the game directory before
  * the server boots.</p>
+ *
+ * <p>red-witnessed: with {@code TileAdvancedFlightComputer:642}'s {@code entryLatched = false}
+ * removed, leg 9 fails with "no `entry_latch_released` carrying ship = …" after the pilot has flown
+ * down through the line (2026-09-24). Leg 9's bounce absence and its {@code STARTED} control have
+ * no witness at their own lines: without the latch the ship bounces on arrival and leg 8 fails
+ * first, and without the on-ramp the client-world wait fails before the {@code STARTED} read.</p>
  */
 public class M1PlanetToPlanetMilestoneE2ETest {
 
@@ -198,14 +205,6 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * which asks whether the ship is above the line, not where the line is.
      */
     private static final int ORBIT_LINE = 255;
-
-    /**
-     * How many 10-tick samples the post-descent leg watches for a bounce back into space. The entry
-     * on-ramp is evaluated on every flight-computer tick, so an unheld trigger fires within a tick
-     * or two of the ship being above the line under power — this is many times the window it needs,
-     * so a green means "it did not happen", not "we did not look long enough".
-     */
-    private static final int LATCH_WATCH_SAMPLES = 40;
 
     /** Seat and standing square, as offsets from the ship's FLIGHT COMPUTER (the deck layout). */
     private static final int[] OFF_SEAT = {1, 0, 0};
@@ -1094,6 +1093,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "something else in the neighbourhood means the aim, the arrival or the "
                         + "trigger's choice of body disagreed with the pilot. pickedDim=" + targetDim
                         + " landedDim=" + descentDim + " nearestBodyDim=" + nearestDim
+                        // The client's own dimension changes since the descent mark: a landedDim
+                        // that reads as no dimension at all has to be told from a real wrong one.
+                        + " clientDimensionChanges="
+                        + clientEvents().since(descentClientMark, "client_dimension_changed")
                         + " bodies=" + bodies,
                 descentDim == targetDim);
 
@@ -1140,72 +1143,64 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 + " arrivalY=" + arrivalY + " riding=" + landedRiding);
 
         // ---- LEG 9: he stays put, and can still leave later. ------------------------------------
-        // The descent puts the ship down IN THE AIR, and that can be above this body's own orbit
-        // line (this run seeds the line to the config minimum, so it certainly is). The entry
-        // on-ramp fires on "a piloted ship is above the orbit line" — the arrival matches it
-        // exactly. Without a hysteresis the ship is taken straight back to space on the tick it
-        // arrives and the body can never be reached at all.
+        // The descent puts the ship down IN THE AIR, above this body's own orbit line (this run
+        // seeds the line to the config minimum, so it certainly is). The entry on-ramp fires on
+        // "the ship is above the line", whoever is at the controls — the arrival matches it exactly,
+        // and without a hold the ship is taken straight back to space on the tick it arrives. The
+        // hold is a latch the descent sets and only being at or below the line releases.
         //
-        // The key stays DOWN for this whole leg: `flying` is what arms the entry trigger, so a leg
-        // that let go of it would prove nothing — the trigger it is watching for would be switched
-        // off. Leg 8 released the key, which is exactly why leg 8's green was never evidence here.
+        // NO WINDOW in this leg: both halves are bounded by production's own records. The pilot
+        // flies DOWN, and the whole way down the ship is above the line under power — the on-ramp's
+        // exact condition, held off only by the latch. The release is a record; the bounce is an
+        // absence between the descent and that record, which is the entire span the ship stood
+        // above the line held.
         tLeg = System.currentTimeMillis();
-        // WATCHED AS AN ABSENCE OVER THE WHOLE WINDOW, not sampled at the end of it. A bounce is a
-        // world the client was carried into and then out of again, and a sample taken every ten
-        // ticks can miss exactly that — which is the failure this leg exists to catch, so the one
-        // reading that must not be missable was the one being sampled.
-        //
-        // An absence proves nothing on its own: the SENSITIVITY CONTROL for this instrument is the
-        // release half immediately below, which reads the same record type over the same client and
-        // REQUIRES a change. If this half is silent because the recorder is dead, that half fails.
+        long latchMark = events.markInstrumented();
         long latchClientMark = clientEvents().mark();
-        bot().holdKey(Keyboard.KEY_R);          // vertical-up: still flying, still climbing
-        try {
-            // STIMULUS: the climb key held over the whole watch; the log read after it is the
-            // absence, and the release half below is its sensitivity control.
-            bot().waitTicks(LATCH_WATCH_SAMPLES * 10);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        String bounceChanges = clientEvents().since(latchClientMark, "client_dimension_changed");
-        int bounceDim = readIntOr(Events.lastField(bounceChanges, "dim"), descentDim);
-        assertTrue("a ship that has just been PUT somewhere by a descent must stay there while its "
-                        + "pilot flies, even though the arrival is above this body's orbit line. The "
-                        + "on-ramp reads altitude alone, so the arrival looks exactly like a climb to "
-                        + "orbit unless the descent holds it off until the ship has been below the "
-                        + "line once. A dim that flipped to a space cell here is that bounce: the "
-                        + "pilot crossed a system to reach this body and was thrown back off it "
-                        + "without touching anything. dimAfterArrival=" + bounceDim
-                        + " arrivedDim=" + descentDim + " slotDims=[" + jumpSlotDims + "]"
-                        + " arrivalY=" + arrivalY + " orbitLine=" + ORBIT_LINE
-                        + " client world changes while he flew: " + bounceChanges,
-                bounceDim == descentDim);
-
-        // …and the hold must RELEASE. A latch that never clears turns "bounces off instantly" into
-        // "can never leave this planet again", which is strictly worse. Fly down through the line,
-        // which is the release condition, then climb back through it and entry must fire normally.
-        double downY = arrivalY;
+        // A link's ceiling, from the ship's own numbers: straight down from the arrival at
+        // SHIP_MAX_SPEED (m/s, a twentieth of it per tick) after its 60-tick ramp from rest. Four
+        // times that, so the ceiling is never a claim about how fast the box is.
+        double blocksPerTick = TileAdvancedFlightComputer.SHIP_MAX_SPEED / 20.0;
+        int descentTicks = 60 + (int) Math.ceil((arrivalY - ORBIT_LINE) / blocksPerTick);
+        String released;
+        String entriesWhileHeld;
+        String bounceChanges;
         bot().holdKey(Keyboard.KEY_F);          // vertical-down
         try {
-            for (int attempt = 0; attempt < budget && downY > ORBIT_LINE; attempt++) {
-                bot().waitTicks(10);
-                JsonObject state = bot().reportState();
-                if (state.has("playerY")) {
-                    downY = state.get("playerY").getAsDouble();
-                }
-            }
+            released = events.awaitRecordWithField(latchMark, "entry_latch_released", "ship", shipId,
+                    "…and the hold must RELEASE once he has flown down through the orbit line. A "
+                            + "latch that never clears turns \"bounces off instantly\" into \"can never "
+                            + "leave this planet again\", which is strictly worse. No release means he "
+                            + "never got below the line (read the pilot inputs and cruise setpoints "
+                            + "below) or the latch ignored it. arrivalY=" + arrivalY
+                            + " orbitLine=" + ORBIT_LINE,
+                    4 * descentTicks);
+            // Read at the release, before the key is let go: from here on the ship is below the
+            // line, so nothing later can land in this span.
+            entriesWhileHeld = events.since(descentMark, "entry_decided");
+            bounceChanges = clientEvents().since(latchClientMark, "client_dimension_changed");
         } finally {
             bot().releaseKey(Keyboard.KEY_F);
         }
-        requireArranged("the pilot must actually get the ship back below the orbit line, or "
-                        + "the release half of this leg never gets its stimulus. downY=" + downY
-                        + " orbitLine=" + ORBIT_LINE,
-                downY <= ORBIT_LINE);
+        assertEquals("a ship that has just been PUT somewhere by a descent must stay there while its "
+                        + "pilot flies, even though the arrival is above this body's orbit line. The "
+                        + "on-ramp reads altitude alone, so between the descent and the latch's release "
+                        + "— the whole time this ship stood above the line under power — it must not "
+                        + "have been asked to enter even once. An entry here is the bounce: the pilot "
+                        + "crossed a system to reach this body and was thrown back off it. arrivalY="
+                        + arrivalY + " orbitLine=" + ORBIT_LINE + " release=" + released
+                        + " entry decisions since the descent: " + entriesWhileHeld,
+                0, Events.countRecords(entriesWhileHeld, "ship", shipId));
+        assertEquals("…and the CLIENT was never carried off the planet in that span either — a "
+                        + "bounce and return would leave the entry log above clean only if a second "
+                        + "path moved him. arrivedDim=" + descentDim + " slotDims=[" + jumpSlotDims
+                        + "] client world changes since leg 9 began: " + bounceChanges,
+                0, Events.records(bounceChanges).size());
 
-        // THE SENSITIVITY CONTROL for the absence above, as well as this leg's own subject: the same
-        // record type, the same client, the same helper — and here a change is REQUIRED. A recorder
-        // that had died would pass the bounce half and fail here, which is what keeps the silence
-        // above from being able to mean nothing.
+        // THE SENSITIVITY CONTROL for both absences above, as well as this leg's own subject: the
+        // same two record types over the same logs — and here each is REQUIRED. A recorder that had
+        // died would pass the absences and fail here.
+        long releaseMark = events.mark();
         long releaseClientMark = clientEvents().mark();
         int releasedDim;
         bot().holdKey(Keyboard.KEY_R);          // climb back through the line under power
@@ -1215,18 +1210,18 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                             + "landed on a planet has to be able to leave it. If this stays on the "
                             + "planet the hold never released and the descent has stranded him "
                             + "instead of bouncing him. arrivedDim=" + descentDim + " slotDims=["
-                            + jumpSlotDims + "] downY=" + downY + " orbitLine=" + ORBIT_LINE,
+                            + jumpSlotDims + "] release=" + released + " orbitLine=" + ORBIT_LINE,
                     budget * 10);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        // No restatement of that verdict here. The wait above IS the assertion — it carries the
-        // sentence and the numbers, and it fails with the client's whole record of the window rather
-        // than with one last sample. A second `assertTrue` on the value it returned could only ever
-        // pass.
+        String entriesAfterRelease = events.since(releaseMark, "entry_decided");
+        assertTrue("…and it left through the ENTRY ramp, the one the latch held off — the record whose "
+                        + "absence above is the bounce verdict. entry decisions since the release: "
+                        + entriesAfterRelease,
+                Events.anyRecordHasAll(entriesAfterRelease, "ship", shipId, "decision", "STARTED"));
         System.out.println("[M1] leg 9 (stays put, then can leave) " + elapsed(tLeg)
-                + " dimAfterArrival=" + bounceDim + " downY=" + downY
-                + " dimAfterSecondClimb=" + releasedDim);
+                + " release=" + released + " dimAfterSecondClimb=" + releasedDim);
     }
 
     // ---- legs 6-8: the console, the jump key and the descent ------------------------------------
@@ -1734,6 +1729,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         double[] targetWorld = {target[0] + tx, target[1] + ty, target[2] + tz};
         Aim aim = new Aim();
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
+        // STIMULUS: each pass aims and reads back the pick, ending on the goal state — the argument
+        // is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
             JsonObject state = bot().reportState();
             // A READ, not a wait: this used to sleep five ticks and retry when the client reported
@@ -1745,7 +1742,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
             aim.distSq = look(targetWorld, px, py, pz);
-            bot().waitTicks(5);
+            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
+            // pick. MEASURED that one is not enough (2026-09-23: a one-tick step turned all three aim
+            // controllers red, deterministically, the pick read back from a look tens of degrees off
+            // the aim; five, alone, green). The mechanism is NOT established — Minecraft.runTick does
+            // call getMouseOver inside the tick the harness counts, so the lag is somewhere after
+            // it (the deck look, the physics mod's ship pick, the render frame). An open question,
+            // not a settled number.
+            bot().waitTicks(AIM_STEP_TICKS);
             aim.mouseOver = bot().reportMouseOver();
             if (isUnderCrosshair(aim.mouseOver, target)) {
                 break;
@@ -1790,6 +1794,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         double[] targetWorld = null;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
 
+        // STIMULUS: each pass stands and aims against the ship's live pose, ending on the goal
+        // state — the argument is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
             // READS, not waits — all three checks below used to sleep five ticks and retry. The ship
             // was resolved before this method was called (its computer's subspace address is an
@@ -1808,8 +1814,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             requireArranged("the ship's stand and target points must map to world coordinates off"
                     + " its reported pose " + java.util.Arrays.toString(shipAnchor),
                     standWorld != null && targetWorld != null);
+            // The stand REACHING the client is a link: the reading below is of where he was put, and
+            // twenty ticks stood here as a guess at the trip.
+            long standMark = clientEvents().mark();
             exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
-            bot().waitTicks(20);
+            ClientEvents.awaitPlacedNear(clientEvents(), standMark, standWorld[0], standWorld[2],
+                    "the stand on the deck square must reach the client before he aims from it",
+                    CLIENT_FLOOR_BUDGET_TICKS);
 
             JsonObject state = bot().reportState();
             requireArranged("a same-world teleport must leave the client's world ready: " + state,
@@ -1818,9 +1829,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
             aim.distSq = look(targetWorld, px, py, pz);
-            // The raytrace is refreshed once per client tick (Minecraft.runTick), so the new
-            // rotation needs at least one tick before objectMouseOver can reflect it.
-            bot().waitTicks(5);
+            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
+            // pick. MEASURED that one is not enough (2026-09-23: a one-tick step turned all three aim
+            // controllers red, deterministically, the pick read back from a look tens of degrees off
+            // the aim; five, alone, green). The mechanism is NOT established — Minecraft.runTick does
+            // call getMouseOver inside the tick the harness counts, so the lag is somewhere after
+            // it (the deck look, the physics mod's ship pick, the render frame). An open question,
+            // not a settled number.
+            bot().waitTicks(AIM_STEP_TICKS);
 
             aim.mouseOver = bot().reportMouseOver();
             if (isUnderCrosshair(aim.mouseOver, targetSub)) {
@@ -1913,6 +1929,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * chunk, and the reply printed there is what distinguishes them.</p>
      */
     private static final int CLIENT_FLOOR_BUDGET_TICKS = 200;
+
+    /** The aim controllers' step between an aim and the read of the pick — measured, see its use. */
+    private static final int AIM_STEP_TICKS = 5;
 
     /**
      * Put the player on the launchpad AND ESTABLISH THAT HE IS ON IT — measured through the CLIENT,
@@ -2077,9 +2096,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      */
     private int awaitClientWorldMatching(long clientMark, java.util.function.IntPredicate wanted,
                                          String matching, String what, int budget) throws Exception {
+        // An EMPTY window is NOT YET, whatever the caller's predicate says about a missing number: it
+        // used to read no record as MIN_VALUE and hand that to the predicate, so "a change OUT of
+        // cell N" was satisfied before the client had changed at all — and returned MIN_VALUE as the
+        // world it landed in.
         String reply = clientEvents().awaitMatching(clientMark, "client_dimension_changed",
-                records -> wanted.test(readIntOr(Events.lastField(records, "dim"),
-                        Integer.MIN_VALUE)),
+                records -> Events.lastField(records, "dim") != null
+                        && wanted.test(readIntOr(Events.lastField(records, "dim"),
+                                Integer.MIN_VALUE)),
                 matching, what, budget);
         return readIntOr(Events.lastField(reply, "dim"), Integer.MIN_VALUE);
     }

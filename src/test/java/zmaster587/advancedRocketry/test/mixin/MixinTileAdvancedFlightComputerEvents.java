@@ -5,6 +5,7 @@ import java.util.UUID;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.math.BlockPos;
 
+import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -14,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import zmaster587.advancedRocketry.api.FreeFlightInput;
+import zmaster587.advancedRocketry.integration.vs.VSIntegration;
 import zmaster587.advancedRocketry.test.trace.TestTrace;
 import zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer;
 
@@ -292,6 +294,41 @@ public abstract class MixinTileAdvancedFlightComputerEvents {
         TestTrace.recordHere("auto_takeoff_declined", arTest$posAndShip()
                 + ",\"stationKeeping\":" + stationKeeping);
     }
+
+    /**
+     * The post-descent entry latch RELEASED: the ship has been at or below its entry line, and the
+     * on-ramp is armed again.
+     *
+     * <p>Its arrival already leaves a record: the descent sets it on the source ship before the cut
+     * and it rides the tile's NBT, so the destination's {@code station_keeping_restored} carries
+     * {@code entryLatched}. (The setting itself does not — {@code descent_requested} is the
+     * descent's verdict, and a cut that fails after the latch still answers false.) The release had
+     * none, so a
+     * test that needed "he has been below the line" sampled the pilot's altitude until it liked
+     * it, under a budget that was really a claim about how high the previous leg had climbed.</p>
+     *
+     * <p>The seam is the one write {@code update} makes to the field, read AFTER it, so the record
+     * is the release and nothing else ({@code latchEntryUntilBelowTheLine} and {@code readFromNBT}
+     * are the other writers, in other methods). {@code shipY} and {@code ceiling} are read again
+     * here from the same sources the branch compared, in the same tick. Its own instrument name, for
+     * the unmanned seam's reason: a FIELD anchor that goes stale matches nothing and says nothing.
+     * SILENT about a latch that never releases — that is the absence the caller's budget reports.</p>
+     */
+    @Inject(method = "update",
+            at = @At(value = "FIELD",
+                    target = "Lzmaster587/advancedRocketry/tile/TileAdvancedFlightComputer;entryLatched:Z",
+                    opcode = Opcodes.PUTFIELD, shift = At.Shift.AFTER))
+    private void arTest$entryLatchReleased(CallbackInfo ci) {
+        TestTrace.instrumentHere(INSTRUMENT_LATCH);
+        TileAdvancedFlightComputer self = (TileAdvancedFlightComputer) (Object) this;
+        double[] shipPos = VSIntegration.getShipWorldPosition(self.getWorld(), self.getPos());
+        TestTrace.recordHere("entry_latch_released", arTest$posAndShip()
+                + ",\"entryLatched\":" + entryLatched
+                + ",\"shipY\":" + (shipPos == null ? "null" : TestTrace.fmt(shipPos[1]))
+                + ",\"ceiling\":" + self.entryCeiling());
+    }
+
+    private static final String INSTRUMENT_LATCH = "flight_computer_latch_events";
 
     @Unique
     private String arTest$identity() {

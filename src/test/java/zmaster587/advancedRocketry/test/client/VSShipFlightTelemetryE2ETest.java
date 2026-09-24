@@ -16,6 +16,7 @@ import javax.imageio.ImageIO;
 
 import zmaster587.advancedRocketry.test.PlayerShipData;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 import zmaster587.advancedRocketry.test.Reply;
 import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipFrameCheck;
@@ -140,6 +141,16 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * this refuses zero rather than a slow turn.</p>
      */
     private static final double SHIP_IS_TURNING_RAD_PER_S = 0.05;
+
+    /**
+     * The spin-up window: readings of the hull's rate, each at least {@link #SPIN_WINDOW_GAP} ticks
+     * of its world after the last — 120 ticks in all, the stretch the poll it replaced was allowed
+     * before it gave up. A window cannot end early, so it always costs the full stretch; the gap is
+     * short beside a commanded rate an order of magnitude over the bar, so a spin-up is not
+     * stepped over.
+     */
+    private static final int SPIN_WINDOW_SAMPLES = 25;
+    private static final int SPIN_WINDOW_GAP = 5;
 
     /**
      * What counts as ZERO for a rate this scenario has just cancelled.
@@ -288,27 +299,16 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                 "a seated tier-2 pilot must get a Free Flight HUD at all", HUD_LINK_BUDGET_TICKS);
 
         Events events = events();
-        long throttleMark = events.markInstrumented();
         long climbHudMark = clientEvents().mark();
-        bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
-        ClientPoll.Result<Double> lift;
-        try {
-            // The key REACHING the computer is a link, and it is waited for before the climb is
-            // measured: a red on the climb alone cannot tell a throttle that never arrived (a broken
-            // key binding, seat packet or dummy) from a ship that got it and did not rise.
-            events.awaitField(throttleMark, "pilot_input_set", "input", "set",
-                    "the real held throttle must reach a ship's flight computer at all", 100);
-            // Event-gated hover-lift: hold vertical-up until the ship has climbed, with a bounded
-            // ceiling + early exit.
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> shipInfo().y,
-                    y -> y - ship[1] > 2.0, 2, 100);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        double climbed = lift.value;
-        assertTrue("holding vertical-up must lift the ship: " + ship[1] + " -> " + climbed,
-                climbed - ship[1] > 1.0);
+        // EXPERIMENT: a dose of thrust from the key's arrival, then one reading with it cut. The key
+        // REACHING the computer is a link inside it, awaited before a tick of the dose is counted: a
+        // red on the climb alone could not tell a throttle that never arrived (a broken key binding,
+        // seat packet or dummy) from a ship that got it and did not rise.
+        climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS,
+                "the real held throttle must reach a ship's flight computer at all");
+        double climbed = shipInfo().y;
+        assertTrue("holding vertical-up for " + PILOT_THRUST_DOSE_TICKS + " ticks must lift the ship: "
+                + ship[1] + " -> " + climbed, climbed - ship[1] > 1.0);
 
         // The client's own velocity readout must be non-zero while the ship is moving. Read it from the
         // rendered HUD text: that is the string the pilot is looking at, not an internal field. The
@@ -336,17 +336,17 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         assertTrue("a raw mouse delta must deflect the client's flight cursor (got "
                 + cursorDeflected + ")", Math.abs(cursorDeflected) > RAW_CURSOR_DEFLECTED);
 
-        // Poll omega until the deflected cursor has actually spun the ship up. This one STAYS a poll,
-        // and the reason is the shape of its question rather than habit: "has it started turning" is
-        // LATCHING — the first observation that sees the rate above the line records a fact that
-        // cannot un-happen, so exiting there is exiting on the answer. Contrast the brake below,
-        // where "has it fallen below the line" can be true for one sample of a rate that is rising,
-        // and an early exit is therefore a way to miss the subject rather than a way to save ticks.
-        ClientPoll.Result<Double> spin = ClientPoll.until(bot()::waitTicks,
-                () -> shipInfo().omega,
-                o -> o >= 0.05, 2, 60);
-        double spinning = spin.value;
-        assertTrue("a deflected flight cursor must actually spin the ship (omega=" + spinning + ")",
+        // WINDOW: the hull's angular rate over SPIN_WINDOW_SAMPLES readings SPIN_WINDOW_GAP ticks of
+        // its world apart, with the cursor still deflected; the claim is on the LARGEST of them. No
+        // record says "it turned" — the attitude law integrates a torque every tick and nothing
+        // decides an arrival — so the rate is measured, and on the world the hull is ticked in: a
+        // window of client ticks buys a busy box more world, the lenient direction for "it spun up".
+        java.util.List<Double> spinRates = new java.util.ArrayList<Double>();
+        GameTicks.observe(serverClient(), GameTicks.world(0), SPIN_WINDOW_SAMPLES, SPIN_WINDOW_GAP,
+                () -> spinRates.add(shipInfo().omega));
+        double spinning = java.util.Collections.max(spinRates);
+        assertTrue("a deflected flight cursor must actually spin the ship (largest omega over the"
+                        + " window=" + spinning + ", every reading " + spinRates + ")",
                 spinning > SHIP_IS_TURNING_RAD_PER_S);
 
         // Marked BEFORE the centring, because the packet that says "stop" is a CHANGE: the client
@@ -414,9 +414,13 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // about the hold that follows it. Overshoot is lenient only toward a brake that converges a
         // little late; a rate that plateaus or climbs — a latched command, a stale driver — fails
         // the worst-of-hold read however long the settle ran.
-        bot().waitTicks(BRAKE_SETTLE_TICKS);
-        java.util.List<Double> hold = ClientPoll.observe(bot()::waitTicks,
-                () -> shipInfo().omega, HOLD_SAMPLES, HOLD_TICKS_BETWEEN);
+        GameTicks.advanceWorld(serverClient(), 0, BRAKE_SETTLE_TICKS);
+        // WINDOW: HOLD_SAMPLES readings HOLD_TICKS_BETWEEN ticks of the hull's world apart, and the
+        // claim is on the worst of them — on the world clock, since the brake and the rate it leaves
+        // are the hull's own, and a window of client ticks buys a stalled server fewer of them.
+        java.util.List<Double> hold = new java.util.ArrayList<Double>();
+        GameTicks.observe(serverClient(), GameTicks.world(0), HOLD_SAMPLES, HOLD_TICKS_BETWEEN,
+                () -> hold.add(shipInfo().omega));
         StringBuilder omegaTrace = new StringBuilder();
         double settled = 0.0;
         for (int i = 0; i < hold.size(); i++) {
@@ -825,26 +829,15 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // Fly it a couple of blocks up so it is genuinely airborne (and mark it "flown", which arms the
         // unmanned station-keeping hold), then release the throttle.
         Events events = events();
-        long throttleMark = events.markInstrumented();
-        bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
-        ClientPoll.Result<Double> lift;
-        try {
-            // As in test 1: the throttle's arrival at the computer is a link and is awaited as one,
-            // so a climb that never happens is not reported as a control failure when the control
-            // never got there.
-            events.awaitField(throttleMark, "pilot_input_set", "input", "set",
-                    "the real held throttle must reach a ship's flight computer at all", 100);
-            // Event-gated hover-lift (bounded ceiling + early exit): the loop returns the moment the
-            // ship has climbed, so the ceiling is patience and not how far it flies.
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> shipInfo().y,
-                    y -> y - ship[1] > 2.0, 2, 100);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        double climbed = lift.value;
-        assertTrue("holding vertical-up must lift the ship: " + ship[1] + " -> " + climbed,
-                climbed - ship[1] > 1.0);
+        // As in test 1: a dose of thrust from the key's arrival, the arrival itself a link, so a climb
+        // that never happens is not reported as a control failure when the control never got there.
+        // ARRANGEMENT here, not the subject: this scenario is about the hold that follows.
+        climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS,
+                "the real held throttle must reach a ship's flight computer at all");
+        double climbed = shipInfo().y;
+        scenario().requireArranged("the ship must be airborne before its station hold is judged:"
+                + " holding vertical-up for " + PILOT_THRUST_DOSE_TICKS + " ticks took it "
+                + ship[1] + " -> " + climbed, climbed - ship[1] > 1.0);
 
         // Park before standing up: cut (X) zeroes the Flight-Assist cruise setpoint. A dismount
         // with a NON-zero setpoint deliberately leaves the ship CRUISING (the autopilot contract,

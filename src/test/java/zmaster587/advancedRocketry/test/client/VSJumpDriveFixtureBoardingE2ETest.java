@@ -416,6 +416,8 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         double[] targetWorld = null;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
 
+        // STIMULUS: each pass stands and aims against the ship's live pose, and ends on the
+        // crosshair resting on the target — the argument is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
             // READS, not waits — all three of the checks below used to sleep five ticks and retry.
             // The ship was resolved before this method was called (its computer's subspace address
@@ -432,8 +434,12 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
             scenario().requireArranged("the ship's stand and target points must map to world"
                     + " coordinates off its reported pose " + java.util.Arrays.toString(shipAnchor),
                     standWorld != null && targetWorld != null);
+            // The stand REACHING the client is a link: the reading below is of where he was put, and
+            // twenty ticks stood here as a guess at the trip.
+            long standMark = clientEvents().mark();
             exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
-            bot().waitTicks(20);
+            awaitClientPlacedNear(standMark, standWorld[0], standWorld[2],
+                    "the stand on the deck square must reach the client before he aims from it");
 
             JsonObject state = bot().reportState();
             scenario().requireArranged("a same-world teleport must leave the client's world ready: "
@@ -449,8 +455,9 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
             double horizontal = Math.sqrt(dx * dx + dz * dz);
             bot().setLook((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D),
                     (float) (-Math.toDegrees(Math.atan2(dy, horizontal))));
-            // The raytrace is refreshed once per client tick (Minecraft.runTick), so the new
-            // rotation needs at least one tick before objectMouseOver can reflect it.
+            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
+            // pick. MEASURED that one is not enough (2026-09-23: deterministic red, the pick read
+            // back from a look tens of degrees off the aim); the mechanism is NOT established.
             bot().waitTicks(5);
 
             aim.mouseOver = bot().reportMouseOver();

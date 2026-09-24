@@ -4,6 +4,7 @@ import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
@@ -95,6 +96,14 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
      * the client: the production subsystem must be up on the second boot, and the ship must still be
      * in the ledger.</p>
      */
+    @Ignore("HELD FOR THE BODY-MOVEMENT CONTRACT BATCH, by the maintainer's ruling of 2026-09-23:"
+            + " every deck-hold red waits for the contract on moving an entity aboard a craft. Red"
+            + " on a full client tier (2026-09-24): under the capture the LOGIN restored, the walk"
+            + " travels 0.10 and 0.0 blocks with all six inputs seen, the collision sweep pinning the"
+            + " step on five and six ticks against one obstacle more than a fresh capture meets,"
+            + " while a freshly installed capture walks 1.04 and 0.94 on the same deck. Green alone —"
+            + " intermittent, not gone. RE-ENABLE with that batch; the acceptance is this method"
+            + " green on a full tier, twice.")
     @Test
     public void aPilotWhoStoodUpBeforeLoggingOutComesBackAboardOnHisFeet() throws Exception {
         int slotDim = seatThePilotAboardHisShip();
@@ -126,8 +135,8 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         // Without it the two claims are about possibly different craft and the sentence "the record
         // describes this crew member on this deck" is not established by either of them.
         capBefore.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
-                        40, () -> bot().waitTicks(5)),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                        200),
                 "the deck he is captured on must be the ship the STANDING record names");
 
         PlayerPosition serverBeforeLogout = PlayerPosition.of(this::exec, BOT);

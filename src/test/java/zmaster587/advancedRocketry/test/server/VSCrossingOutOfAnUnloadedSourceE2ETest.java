@@ -45,13 +45,12 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
     private static final double POSE_TOLERANCE = 64.0;
 
     /**
-     * Budgets in SERVER TICKS — 200 is the ten seconds the old {@code 40 x 250 ms} meant on an idle
-     * box, 60 the three seconds of {@code settle()}. On the server's clock because what is waited for
-     * (a queued spawn, a cut ship being collected) is served by the server tick loop, and the world
-     * these ships live in is precisely the one that may not be ticking.
+     * Link budgets in SERVER TICKS — 200 is the ten seconds the old {@code 40 x 250 ms} meant on an
+     * idle box. On the server's clock because what is waited for (a queued spawn, a cut ship being
+     * collected, a hull dropped by the load controller) is served by the server tick loop, and the
+     * world these ships live in is precisely the one that may not be ticking.
      */
     private static final int WAIT_TICKS = 200;
-    private static final int SETTLE_TICKS = 60;
 
     /**
      * The one class that has to TURN THE AFFORDANCE OFF, because its subject is the state the
@@ -104,6 +103,15 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
                         + " " + shipId + " was never collected", WAIT_TICKS);
         events.awaitField(crossMark, "ship_spawned", "arShip", durableShipId,
                 "the crossed ship was never registered at the destination", WAIT_TICKS);
+        // The instrument that makes the OTHER outcome legible, proven to fire on this one. The
+        // physics mod drops a queued spawn whose flood is too big or touches bedrock with a line on
+        // stderr and nothing else, so when the wait above expires the only account of why is the
+        // `ship_spawn_flood` record among what it prints. That record comes from a redirect declared
+        // `require = 0`; a green run that saw none would be the day it stopped weaving.
+        String floods = events.since(crossMark, "ship_spawn_flood");
+        assertTrue("ARRANGEMENT: the arrival's spawn flood must be on the record, and accepted — a"
+                        + " missing one means the refusal instrument no longer weaves: " + floods,
+                Events.anyRecordHasAll(floods, "refused", "false"));
 
         int registryAfter = queryableShips();
         int loadedAfter = loadedShips();
@@ -269,26 +277,52 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
     }
 
     /**
-     * Wait for the crossing's arrival to be REGISTERED, then pump a load and read where it stands.
+     * Wait for the crossing's arrival to be REGISTERED and then UNLOADED, pump a load, and read where
+     * it stands.
      *
-     * <p><b>The registry add is not the pose, and that is why there is a window between them.</b>
-     * Measured 2026-09-22: linking on {@code ship_spawned} and reading the pose on the next line
-     * failed with {@code [loaded=1 registry=1]} — the hull was registered and loaded, and its world
-     * transform had not propagated yet. A transform converging is a VALUE, nothing announces it at
-     * this seam, so what it owes is a stretch of the world's own clock spent on purpose, not a poll
-     * asking the same question until it likes the answer. {@link #SETTLE_TICKS} is that stretch.</p>
+     * <p><b>What stood between the registration and the pump was sixty ticks, and the story it
+     * carried was wrong.</b> It said the arrived hull's world transform "had not propagated yet"
+     * (measured 2026-09-22 as {@code [loaded=1 registry=1]} with no hull at the pose). But a queued
+     * ship's record is created with its transform AT the anchor it was assembled on —
+     * {@code ValkyrienUtils.createNewShip} passes the anchor's world position as the ship's position —
+     * so a registered arrival stands at its paste site from its first tick. And the same day's gate
+     * found the real cause of that exact signature: the failure message was built BEFORE the pose was
+     * read, its probe calls spent the tick the hull was resident, and one message printed
+     * {@code loaded=1} and {@code count:0} side by side. The read was moved into a local that day
+     * (below), and the sixty ticks stayed on the strength of a diagnosis the fix beside them had
+     * refuted.</p>
+     *
+     * <p><b>What the stretch did buy, and what replaces it.</b> Nothing holds ships loaded in this
+     * class, so a freshly spawned hull is loaded by its spawn and dropped by the load controller
+     * straight after. A pump that lands while it is still resident finds nothing to load and the
+     * hull is dropped under the read; a pump after the drop loads it for the read. So the wait is for
+     * that drop — the arrival's own {@code ship_unloaded}, later than its {@code ship_spawned} — and
+     * the pump follows it. That is the working hypothesis for why sixty ticks were enough; the link
+     * holds whether or not it is the whole story, because it establishes the state the pump needs.</p>
      *
      * <p><b>The pump comes last, immediately before the read, and that order is load-bearing.</b>
-     * Nothing holds ships loaded in this class, so a hull is resident for about a tick after a load;
-     * pumping before the window would read a world the ship had already left again. The poll this
-     * replaces had the pump inside its own predicate, which made the arrangement and the observation
-     * one act and left the wait unable to say whether it was waiting for the ship or for its pump.</p>
+     * A hull is resident for about a tick after a load here, so pumping before the unload link would
+     * read a world the ship had already left again.</p>
      */
     private void requireArrivedAt(long mark, int x, int y) throws Exception {
-        events.awaitField(mark, "ship_spawned", "arShip", durableShipId,
+        String spawned = events.awaitRecordWithField(mark, "ship_spawned", "arShip", durableShipId,
                 "the crossed ship was never registered at the destination: " + counters(),
                 WAIT_TICKS);
-        settle();
+        final String arrivalKey = Events.text(spawned, "vsShip");
+        final double spawnedAt = Events.number(spawned, "seq");
+        events.awaitMatching(mark, "ship_unloaded",
+                seen -> {
+                    for (String r : Events.recordsWhere(seen, "vsShip", arrivalKey)) {
+                        if (Events.number(r, "seq") > spawnedAt) {
+                            return true;
+                        }
+                    }
+                    return false;
+                },
+                "naming the arrival " + arrivalKey + ", later than its registration",
+                "the arrival must be dropped by the load controller — nothing holds ships loaded in"
+                        + " this class — before a pump can load it for the read: " + counters(),
+                WAIT_TICKS);
         exec("artest vs load-ships 0");
         // READ INTO A LOCAL, and nothing may come between it and the pump above. Java evaluates an
         // assertion's MESSAGE before its condition, so `assertTrue("… " + counters(), shipIsAt(…))`
@@ -298,25 +332,14 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
         // a read taken moments later in the SAME failure, which is the hull unloading between two
         // probe calls. The diagnostics are built afterwards, when the answer is already in hand.
         boolean arrived = shipIsAt(x, y);
-        assertTrue("the arrival was registered but no loaded ship stands within " + POSE_TOLERANCE
-                        + " of " + x + "," + y + "," + BASE_Z + " after " + SETTLE_TICKS
-                        + " ticks: " + counters()
+        assertTrue("the arrival was registered, dropped and pumped, but no loaded ship stands within "
+                        + POSE_TOLERANCE + " of " + x + "," + y + "," + BASE_Z + ": " + counters()
                         // WHERE the hulls are, for a failure that survives this: "not at the
                         // destination" has several causes a boolean cannot separate — still at the
                         // source, mid-transform, or gone again — and each wants a different fix.
                         // Read AFTER the verdict, so it describes the aftermath and not the subject.
                         + " | loaded hulls now: " + exec("artest vs ships-loaded 0"),
                 arrived);
-    }
-
-    /**
-     * The stretch {@link #requireArrivedAt} spends on the arrived hull's world transform before it
-     * reads the pose. STILL A BUDGET: a single absolute read follows it, and no record says when the
-     * transform has reached the pasted position. The spawn and the source's collection it used to
-     * cover are linked on their own records now.
-     */
-    private void settle() throws Exception {
-        GameTicks.advance(client(), GameTicks.server(), SETTLE_TICKS);
     }
 
     // --- helpers ------------------------------------------------------------------------------------

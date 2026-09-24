@@ -1056,8 +1056,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
             // loaded-tile list, and this method does not merely observe — it seats the bot — so an
             // unaddressed mount would put him on a neighbour's craft and then measure that.
             SeatMount seat = SeatMount.onShip(this::exec, dim,
-                    ShipIdentity.awaitPhysicsIdOf(this::exec, dim, arrangedShipId, 20,
-                            () -> bot().waitTicks(5)));
+                    ShipIdentity.awaitPhysicsIdOf(this::exec, events(), dim, arrangedShipId, 100));
             if (!seat.seatFound) {
                 return "<no seat to re-capture through: " + seat.raw() + ">";
             }
@@ -1149,8 +1148,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // crossing re-assembles the hull, so the physics id is a new one on this side and is
         // translated from the durable name the ledger kept. What is still awaited is the shipyard
         // becoming queryable — a fact about time, not about which craft answers.
-        String arrivedShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, slotDim, arrangedShipId,
-                30, () -> bot().waitTicks(10));
+        String arrivedShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                300);
         // MEASURED, and the loop stays on what the measurement does NOT say. What it could still be
         // waiting for was narrowed first: `awaitPhysicsIdOf` above has already established that the
         // queryable registry carries this ship, `shipyardBoundsOf` builds the box straight off its

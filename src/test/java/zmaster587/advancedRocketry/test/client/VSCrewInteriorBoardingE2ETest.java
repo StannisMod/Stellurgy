@@ -71,6 +71,18 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     /** @see #ASCENT_ALONG_NORMAL_BLOCKS */
     private static final double ASCENT_LATERAL_BLOCKS = 1.6;
 
+    /**
+     * Readings, two client ticks apart, of a flyer holding ascend on the deck — and so the DOSE of
+     * flight: four client ticks, which the 2026-09-23 gate measured taking him +2 along the deck
+     * normal (subFly=129.0, dySub=2.0 after two samples), against the {@link
+     * #ASCENT_ALONG_NORMAL_BLOCKS} the assertion asks for. One measurement, printed on every run as
+     * {@code [flyaboard]}, is what a retuning starts from.
+     */
+    private static final int FLY_ABOARD_DOSE_SAMPLES = 2;
+
+    /** Client ticks of held descend after the climb — derived, not measured; see its use. */
+    private static final int FLY_ABOARD_DESCEND_TICKS = 10;
+
     @Override
     protected String subsystem() {
         return "vs-crew-boarding";
@@ -694,17 +706,19 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         StringBuilder trace = new StringBuilder();
         int trackedSeen = 0, camSeen = 0, samples = 0;
         double[] subEnd = subFly;
-        // Climb TO A TARGET RISE (+2 subspace blocks), not for a fixed time: the climb rate
-        // varies run to run, and a timed hold can overshoot into the stay region's edge - whose
-        // release is the region-exit rule doing its job, not this pin's subject. From a ~129-130
-        // start the +2 target tops out well below that edge.
+        // A fixed DOSE of held ascend, sampled as it goes. It used to climb "to a target rise" with
+        // an early exit at +2, on the belief that the climb rate varies run to run; it is the
+        // player's own flight, stepped once per CLIENT tick by his client, and the census that
+        // measures it is taken by that same client on those same ticks — so a count of client ticks
+        // is a count of flight on any box. The stay region's edge is ~4 blocks above the hull top,
+        // and the dose stops well short of it.
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         try {
-            // The climb-sampling ceiling is a COUNT in place, with the early exit on the +2 target
-            // kept, rather than a threshold poll: this loop also accumulates the per-sample
-            // tracked/cam invariants, so it double-duties.
-            int climbIters = 10;
-            for (int i = 0; i < climbIters && subEnd[1] - subFly[1] < 2.0; i++) {
+            // EXPERIMENT: FLY_ABOARD_DOSE_SAMPLES readings two client ticks apart with ascend held —
+            // four ticks of flight, the stretch the 2026-09-23 gate measured reaching +2 (subFly=129.0
+            // dySub=2.0 after two samples). Every reading also carries the per-sample tracked/cam
+            // invariants the assertions below count.
+            for (int i = 0; i < FLY_ABOARD_DOSE_SAMPLES; i++) {
                 bot().waitTicks(2);
                 samples++;
                 DeckCapture cap = DeckCapture.read(this::exec);
@@ -759,15 +773,19 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // below is not this contract's). The descend leg also pins the OTHER vertical intent:
         // sneak sinks along the deck normal exactly as space climbs it.
         double[] subHigh = subEnd;
-        // Event-gated descend (bounded ceiling + early exit): hold sneak until the body has sunk
-        // along the deck normal, instead of a fixed 14-tick budget a frame-starved client can under-sink
-        // under concurrent-fork load. Census-Y is block-floored, so the predicate is a strict drop below
-        // the captured start height.
+        // A dose for the other vertical intent. A client that is starved of FRAMES still steps his
+        // own motion once per client TICK, so a tick count does not under-sink on a busy box — which
+        // is what the early-exit poll that stood here was written against. Census-Y is
+        // block-floored, so the assertion is a strict drop below the captured start height, and that
+        // needs MORE than a block of travel.
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_LSHIFT);
         try {
-            ClientPoll.until(bot()::waitTicks,
-                    () -> parseSub(censusField("subPos"))[1],
-                    y -> y < subHigh[1], 2, 7);
+            // EXPERIMENT: FLY_ABOARD_DESCEND_TICKS client ticks of held descend. NOT measured, and
+            // not the ascent's four: vanilla creative flight from rest covers about 1.0 block in
+            // four ticks of sneak (0.15/tick added, 0.6 kept), which a floored census can fail to
+            // register, and about 3.2 in ten. The deck below stops a longer fall; the old poll's
+            // ceiling was fourteen. The sink it bought is printed in the assertion.
+            bot().waitTicks(FLY_ABOARD_DESCEND_TICKS);
         } finally {
             bot().releaseKey(org.lwjgl.input.Keyboard.KEY_LSHIFT);
         }

@@ -193,13 +193,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         String set = exec("artest atmosphere set-density " + plot().dim + " " + density);
         scenario().requireArranged("set-density " + density + " failed: " + set,
                 Reply.of(set).ok());
-        ClientPoll.Result<Integer> reads = ClientPoll.until(
-                bot()::waitTicks, this::snapshotDensity,
-                d -> expectBreathable ? d >= 1 : d == 0, 2, 20);
-        scenario().record("densityReadBack", reads.toString());
+        int readBack = snapshotDensity();
+        scenario().record("densityReadBack", readBack);
         scenario().requireArranged("the dimension must READ " + (expectBreathable ? "breathable"
-                        + " (>=1)" : "vacuum (0)") + " before the window opens; " + reads,
-                reads.satisfied);
+                        + " (>=1)" : "vacuum (0)") + " before the window opens; it reads " + readBack,
+                expectBreathable ? readBack >= 1 : readBack == 0);
     }
 
     private void restoreDim(int originalDensity) {
@@ -234,6 +232,36 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         assertTrue("held-air-component-route response must include chestAir: " + resp,
                 held.has(CHEST_AIR));
         return held.integer(CHEST_AIR);
+    }
+
+    /** Vanilla's player container is window 0, and its chest armour slot is index 6 of it. */
+    private static final String PLAYER_WINDOW = "0";
+    private static final String CHEST_ARMOUR_SLOT = "6";
+
+    /**
+     * The client's chest air once its copy of the chest slot has caught up with {@code synced}.
+     *
+     * <p><b>A read first, then a link.</b> A slot that already reads right is answered at once — an
+     * unchanged tag writes no record, so waiting for one there would wait out the budget on the
+     * healthy path. Otherwise the wait is for the client's own record of that slot's tag CHANGING
+     * ({@code client_slot_tag_set}) since {@code clientMark}, and the air is read once after it. The
+     * armour's NBT reaches the client on its own set-slot packet, some ticks after the server-side
+     * change a scenario's own link reports, and this is that packet arriving.</p>
+     *
+     * <p><b>The mark is the caller's to place, and where matters</b>: any earlier change to the slot
+     * that is still in flight can close this wait instead of the one meant — the equip's own sync
+     * closing a wait for a drain. So a scenario confirms the slot's previous state on the client
+     * first, and takes the mark after that.</p>
+     */
+    private int clientChestAirOnceSynced(long clientMark, java.util.function.IntPredicate synced,
+                                         String what) throws Exception {
+        int now = clientChestAir();
+        if (synced.test(now)) {
+            return now;
+        }
+        clientEvents().awaitRecordWithFields(clientMark, "client_slot_tag_set", what,
+                LINK_BUDGET_TICKS, "window", PLAYER_WINDOW, "slot", CHEST_ARMOUR_SLOT);
+        return clientChestAir();
     }
 
     /**
@@ -385,17 +413,17 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             setDensityAndConfirm(100, true);
 
             scenario().arranging("equip the suit chest with a full pressure tank");
+            long equipMark = clientEvents().mark();
             String equip = exec("artest player equip-space-chest 1000");
             scenario().requireArranged("equip-space-chest must succeed: " + equip,
                     Reply.of(equip).ok());
             assertEquals("baseline chestAir", 1000, readChestAirComponentRoute());
 
-            // The client armor[2] NBT syncs a tick or two AFTER the server-side equip; sampling it
-            // immediately reads the -1 "not-synced" sentinel. Event-gated, not time-gated.
-            ClientPoll.Result<Integer> baseline = ClientPoll.until(
-                    bot()::waitTicks, this::clientChestAir, v -> v == 1000, 2, 20);
-            scenario().requireArranged("client-rendered baseline must agree (1000); " + baseline,
-                    baseline.satisfied);
+            // The client's armor[2] reaches it on its own packet after the server-side equip.
+            int baseline = clientChestAirOnceSynced(equipMark, v -> v == 1000,
+                    "the equipped tank must reach the client's chest slot");
+            scenario().requireArranged("client-rendered baseline must agree (1000); client="
+                    + baseline, baseline == 1000);
 
             scenario().asserting("80 ticks of breathable atmosphere drain nothing");
             // An absence, and the class javadoc says what stands behind it: AIR cannot tick, so no
@@ -522,6 +550,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         // initialOxygen=500: half of the pressure tank's 1000 mB capacity, which leaves headroom for
         // the pad to actually add fluid. Equipping a full tank short-circuits the pad's
         // canPerformFunction body (amtFluid = 0) and the test would measure nothing.
+        long equipMark = clientEvents().mark();
         String equip = exec("artest player equip-space-chest 500");
         scenario().requireArranged("equip-space-chest must succeed: " + equip,
                 Reply.of(equip).ok());
@@ -531,10 +560,17 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         scenario().record("chestAirBefore", airBefore);
         scenario().requireArranged("baseline chest air must be > 0 (the probe filled the pressure"
                 + " tank); actual=" + airBefore + " equip=" + equip, airBefore > 0);
+        // The CLIENT's copy too, before the fill is marked: the equip's own sync is a change to the
+        // same slot, and one still in flight would otherwise close the refill wait below.
+        int clientBefore = clientChestAirOnceSynced(equipMark, v -> v == airBefore,
+                "the equipped tank must reach the client's chest slot before its refill is watched");
+        scenario().requireArranged("the client must show the equipped tank (" + airBefore + ") before"
+                + " the refill is watched; client=" + clientBefore, clientBefore == airBefore);
 
         scenario().asserting("standing on the powered pad raises the suit's air, on both sides");
         Events events = events();
         long mark = events.markInstrumented();
+        long fillClientMark = clientEvents().mark();
         exec("tp @p " + (px + 0.5) + " " + (py + 1) + " " + (pz + 0.5));
 
         // The pad's own transfer, rather than a fixed window and a bigger number afterwards. A fill
@@ -551,12 +587,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         scenario().record("suitAirFills", fills);
 
         int airAfter = readChestAirComponentRoute();
-        // The armour slot's NBT reaches the client on its own packet, some ticks after the fill the
-        // event above reports. A persistent VALUE, so a bounded read-back rather than an event wait.
-        ClientPoll.Result<Integer> synced = ClientPoll.until(
-                bot()::waitTicks, this::clientChestAir, v -> v > airBefore, 2, 20);
-        int clientAfter = synced.value == null ? -1 : synced.value.intValue();
-        scenario().record("chestAirAfter", airAfter).record("clientChestAir", synced.toString());
+        int clientAfter = clientChestAirOnceSynced(fillClientMark, v -> v > airBefore,
+                "the refilled tank must reach the client's chest slot");
+        scenario().record("chestAirAfter", airAfter).record("clientChestAir", clientAfter);
         assertTrue("client-rendered chest tank must show the refill; client=" + clientAfter
                 + " serverBefore=" + airBefore + " serverAfter=" + airAfter
                 + " fills=" + fills, clientAfter > airBefore);
@@ -626,15 +659,23 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             standOnOwnPlatformInSurvival();
 
             scenario().arranging("equip the enchanted air suit with a full buffer");
+            long equipMark = clientEvents().mark();
             String equip = exec("artest player equip-airsuit 1000");
             scenario().requireArranged("equip-airsuit must succeed: " + equip,
                     Reply.of(equip).ok());
             assertEquals("baseline chest air before vacuum exposure", 1000, readChestAir());
+            // The CLIENT's copy too, before the drain is marked: the equip's own sync is a change to
+            // the same slot, and one still in flight would otherwise close the drain wait below.
+            int clientBefore = clientChestAirOnceSynced(equipMark, v -> v == 1000,
+                    "the equipped suit must reach the client's chest slot before its drain is watched");
+            scenario().requireArranged("the client must show the full buffer before the drain is"
+                    + " watched; client=" + clientBefore, clientBefore == 1000);
 
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
             Events events = events();
             long mark = events.markInstrumented();
+            long drainClientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the suit's air drains and the suit keeps the player unhurt");
@@ -658,13 +699,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     0, Events.countRecords(hurts, "source", "Vacuum"));
 
             int chestAirAfter = readChestAir();
-            // The armour NBT reaches the client on its own packet, after the drain the event above
-            // reports — a persistent VALUE, so a bounded read-back rather than an event wait.
-            ClientPoll.Result<Integer> synced = ClientPoll.until(
-                    bot()::waitTicks, this::clientChestAir, v -> v >= 0 && v < 1000, 2, 20);
-            int clientAir = synced.value == null ? -1 : synced.value.intValue();
+            int clientAir = clientChestAirOnceSynced(drainClientMark, v -> v >= 0 && v < 1000,
+                    "the drained buffer must reach the client's chest slot");
             double healthAfter = health(bot().reportState());
-            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", synced.toString())
+            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", clientAir)
                     .record("healthAfter", healthAfter);
 
             assertTrue("chest air must decrease in vacuum with suit; before=1000 after="
@@ -800,6 +838,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             standOnOwnPlatformInSurvival();
 
             scenario().arranging("equip the suit chest with a full pressure tank");
+            long equipMark = clientEvents().mark();
             String equip = exec("artest player equip-space-chest 1000");
             scenario().requireArranged("equip-space-chest must succeed: " + equip,
                     Reply.of(equip).ok());
@@ -808,11 +847,17 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertEquals("baseline chestAir read via ItemAirUtils -> ItemSpaceChest.getAirRemaining"
                     + " -> sum of FluidStack amounts must equal 1000",
                     1000, readChestAirComponentRoute());
+            // The CLIENT's copy too, before the drain is marked — see the enchanted-route scenario.
+            int clientBefore = clientChestAirOnceSynced(equipMark, v -> v == 1000,
+                    "the equipped tank must reach the client's chest slot before its drain is watched");
+            scenario().requireArranged("the client must show the full tank before the drain is"
+                    + " watched; client=" + clientBefore, clientBefore == 1000);
 
             double healthStart = health(bot().reportState());
             scenario().measuring("health before the vacuum window").record("healthStart", healthStart);
             Events events = events();
             long mark = events.markInstrumented();
+            long drainClientMark = clientEvents().mark();
             setDensityAndConfirm(0, false);
 
             scenario().asserting("the tank drains through the component route and the suit holds");
@@ -830,14 +875,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertEquals("a suited player must take no vacuum damage; what hurt him since the flip: "
                     + hurts, 0, Events.countRecords(hurts, "source", "Vacuum"));
 
-            // The armour NBT reaches the client on its own packet — a persistent VALUE, read back
-            // with a bounded poll rather than waited for as a link.
-            ClientPoll.Result<Integer> synced = ClientPoll.until(
-                    bot()::waitTicks, this::clientChestAir, v -> v >= 0 && v < 1000, 2, 20);
-            int clientAirAfter = synced.value == null ? -1 : synced.value.intValue();
+            int clientAirAfter = clientChestAirOnceSynced(drainClientMark, v -> v >= 0 && v < 1000,
+                    "the drained tank must reach the client's chest slot");
             int chestAirAfter = readChestAirComponentRoute();
             double healthAfter = health(bot().reportState());
-            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", synced.toString())
+            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", clientAirAfter)
                     .record("healthAfter", healthAfter);
 
             // >= 0 as well as < 1000: the -1 this reader answers for an armour slot the client has

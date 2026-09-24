@@ -187,6 +187,9 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
         double[] seatWorld = null;
         double distSq = Double.POSITIVE_INFINITY;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
+        long lastStandMark = -1L;
+        // STIMULUS: each pass stands and aims against the ship's live pose, and ends on the crosshair
+        // resting on the seat — the argument is above.
         for (int attempt = 0; attempt < budget; attempt++) {
             pose = findSeat();
             // A READ, not a wait. This branch used to sleep five ticks and retry, as if the ship
@@ -201,9 +204,15 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
             // Put the bot on the deck beside the seat, re-derived from the seat's LIVE position: a
             // freshly assembled ship settles for a while, and a stand computed once against a stale
             // pose leaves the bot in mid-air beside a ship that has since moved.
-            exec("tp @a " + (seatWorld[0] + STAND_OFF_X) + " " + (seatWorld[1] + 1.0)
-                    + " " + seatWorld[2] + " 0 0");
-            bot().waitTicks(20);
+            // The stand REACHING the client is a link: the reading below is of where he was put, and
+            // twenty ticks stood here as a guess at the trip.
+            long standMark = clientEvents().mark();
+            lastStandMark = standMark;
+            double standX = seatWorld[0] + STAND_OFF_X;
+            double standZ = seatWorld[2];
+            exec("tp @a " + standX + " " + (seatWorld[1] + 1.0) + " " + standZ + " 0 0");
+            awaitClientPlacedNear(standMark, standX, standZ,
+                    "the stand beside the seat must reach the client before he aims from it");
             JsonObject state = bot().reportState();
             // A READ, not a wait: the teleport stays in this world, so the client cannot have lost
             // it, and a client that reports no world here is a finding rather than a reason to retry.
@@ -221,8 +230,10 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
             float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D);
             float pitch = (float) (-Math.toDegrees(Math.atan2(dy, horizontal)));
             bot().setLook(yaw, pitch);
-            // The raytrace is refreshed once per client tick (Minecraft.runTick), so the new
-            // rotation needs at least one tick before objectMouseOver can reflect it.
+            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
+            // pick. MEASURED that one is not enough (2026-09-23: deterministic red, with the stand's
+            // own pos-look the only move applied, and still red with twenty ticks after the stand);
+            // the mechanism is NOT established.
             bot().waitTicks(5);
 
             aim = bot().reportMouseOver();
@@ -231,7 +242,13 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
             }
         }
 
-        String aimDiag = " observedPlayer=(" + px + "," + py + "," + pz + ")"
+        // Every server-driven move the client applied since the LAST stand, in order: a correction
+        // landing after the aim carries the server's copy of the rotation and overwrites the look,
+        // and this is the only reading that shows one did.
+        String movesSinceStand = lastStandMark < 0 ? "(no stand)"
+                : clientEvents().since(lastStandMark, "client_pos_look_applied");
+        String aimDiag = " movesSinceLastStand=" + movesSinceStand
+                + " observedPlayer=(" + px + "," + py + "," + pz + ")"
                 + " seatWorld=" + java.util.Arrays.toString(seatWorld)
                 + " seatSubspace=(" + seatSubX + "," + seatSubY + "," + seatSubZ + ")"
                 + " buildSeat=(" + buildSeatX + "," + buildSeatY + "," + buildSeatZ + ")"

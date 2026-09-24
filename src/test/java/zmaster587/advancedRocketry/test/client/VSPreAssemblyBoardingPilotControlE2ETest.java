@@ -7,7 +7,6 @@ import com.google.gson.JsonObject;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.test.SubsystemStatus;
 import zmaster587.advancedRocketry.test.SeatMount;
@@ -176,10 +175,9 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
     private static final double MIN_CLIMB = 1.0;
 
     // ---- Measurement windows -------------------------------------------------------------------
-    // TICKS_PER_SAMPLE/MEASURE_SAMPLES: the ship gets 200 ticks (10 s) to climb one block, sampled
-    // every 5 ticks. The no-key control leg runs for exactly the same 200 ticks so the two numbers
-    // are directly comparable; the key-held leg may exit EARLY once it has climbed, which only makes
-    // the comparison stronger (less time to accumulate the same drift).
+    // TICKS_PER_SAMPLE/MEASURE_SAMPLES: the no-key control leg watches the ship for 200 ticks (10 s),
+    // sampled every 5 ticks. The key-held leg is a dose of PILOT_THRUST_DOSE_TICKS, far SHORTER, which
+    // only makes the comparison stronger: the drift the control bounds has less time to add up.
     // SETTLE_*: before either leg the ship must hold one altitude within SETTLE_EPS across 100 ticks
     // - half the measurement window, the same order of magnitude, and long enough that a post-
     // assembly upward resolve has visibly ended rather than merely paused. SETTLE_EPS is 5 cm: far
@@ -630,22 +628,21 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         // The real key, through the real client input path, exactly as a player holds it. Both logs
         // are marked FIRST, so the delivery chain read afterwards describes THIS window and nothing
         // that happened while the ship was settling.
-        final double y0 = yBefore;
         long inputServerMark = events.markInstrumented();
         long inputClientMark = clientEvents().mark();
-        bot().holdKey(Keyboard.KEY_R); // flightVerticalUp
-        ClientPoll.Result<Double> lift;
+        // EXPERIMENT: a fixed dose of thrust from the key's arrival, then one reading with the thrust
+        // cut. The dose is shorter than the control's window, which only makes the comparison
+        // stronger: the same free drift has less time to add up.
         try {
-            // Event-gated hover-lift (bounded ceiling + early exit): the loop returns the moment the
-            // ship has climbed, so the ceiling is patience and not how far it flies. The probe keeps
-            // the NaN-tolerant read (returns the baseline when shipPosY is unparseable).
-            lift = ClientPoll.until(bot()::waitTicks,
-                    () -> { double y = shipPosY(); return Double.isNaN(y) ? y0 : y; },
-                    y -> (y - y0) >= MIN_CLIMB, TICKS_PER_SAMPLE, MEASURE_SAMPLES);
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
+            climbOnPilotKey(0, PILOT_THRUST_DOSE_TICKS, "a pilot who took the seat BEFORE assembling"
+                    + " must have his held vertical key reach the craft's flight computer right after"
+                    + " assembly. boarding=" + how);
+        } catch (AssertionError keyNeverArrived) {
+            throw new AssertionError(keyNeverArrived.getMessage() + " | DELIVERY: "
+                    + deliveryDiagnostics(events, inputServerMark, inputClientMark)
+                    + " | riding=" + ridingAfter + " subsystem=" + status.raw(), keyNeverArrived);
         }
-        double yAfter = lift.value;
+        double yAfter = shipPosY();
 
         // Late paste-site census: by now the relocation demonstrably finished (the settle and the
         // measurement windows ran on the live ship), so anything still at the paste site is a
@@ -662,9 +659,10 @@ public class VSPreAssemblyBoardingPilotControlE2ETest extends AbstractSharedVsCl
         assertTrue("a player who took the pilot seat BEFORE assembling his ship must be able to FLY "
                         + "that ship right after assembly: holding the vertical-up key has to lift it, "
                         + "with no re-seating. boarding=" + how
-                        + " | CONTROL (no key, same " + (MEASURE_SAMPLES * TICKS_PER_SAMPLE)
+                        + " | CONTROL (no key, " + (MEASURE_SAMPLES * TICKS_PER_SAMPLE)
                         + "-tick window): drift=" + controlDrift
-                        + " | EXPERIMENT (key held): yBefore=" + yBefore + " yAfter=" + yAfter
+                        + " | EXPERIMENT (key held " + PILOT_THRUST_DOSE_TICKS + " ticks from its"
+                        + " arrival): yBefore=" + yBefore + " yAfter=" + yAfter
                         + " climb=" + (yAfter - yBefore) + " (need >= " + MIN_CLIMB + ")"
                         + " | DELIVERY: " + delivery
                         + " | riding=" + ridingAfter + " subsystem=" + status.raw(),

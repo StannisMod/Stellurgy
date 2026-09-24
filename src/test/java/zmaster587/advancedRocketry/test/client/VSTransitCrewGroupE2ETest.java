@@ -1199,8 +1199,8 @@ private String hud() throws Exception {
         // SHARED world — every scenario in this class parks its craft in the same hyperspace — so a
         // lookup from them resolves the yard nearest that point, which is a different lane's ship
         // whenever the lanes are closer than the caller assumed.
-        String hyperShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, hyperDim, parkedHullName,
-                20, () -> bot().waitTicks(5));
+        String hyperShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), hyperDim, parkedHullName,
+                100);
         PilotSeat hyperSeat = findSeat(hyperDim, hyperShipId);
         int afcX = hyperSeat.afcX;
         int afcY = hyperSeat.afcY;
@@ -1498,8 +1498,8 @@ private String hud() throws Exception {
         // HIS deck. The physics id is re-derived from the ship's durable name because a crossing
         // mints a new one; the name is the handle that survives both crossings.
         captureOnArrival.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setup.requireDurableId(),
-                        40, () -> bot().waitTicks(5)),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), targetDim, setup.requireDurableId(),
+                        200),
                 "the deck he is put back on at the far end must be his own ship's."
                         + " What production SAID it did, so a red here separates a re-seat that named"
                         + " the wrong craft from a capture that drifted off the right one afterwards"
@@ -1734,8 +1734,8 @@ private String hud() throws Exception {
         // hold other craft, so "on a deck" and "on the deck he stood up from" are different claims
         // and only the second is what a crossing is supposed to guarantee.
         captureOnArrival.requireAnchoredOn(
-                ShipIdentity.awaitPhysicsIdOf(this::exec, targetDim, setup.requireDurableId(),
-                        40, () -> bot().waitTicks(5)),
+                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), targetDim, setup.requireDurableId(),
+                        200),
                 "the deck he stands on after the arrival must be his own ship's."
                         + " What production SAID it did, so a red here separates a re-seat that named"
                         + " the wrong craft from a capture that drifted off the right one afterwards,"

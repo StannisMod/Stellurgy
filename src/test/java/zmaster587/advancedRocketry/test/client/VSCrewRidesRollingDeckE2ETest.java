@@ -45,7 +45,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         return "vs-crew-rides-rolling-deck";
     }
 
-    private static final String COUNT = "count";
     private static final String LOCAL_X = "localX";
     private static final String LOCAL_Y = "localY";
     private static final String LOCAL_Z = "localZ";
@@ -61,11 +60,6 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
     private static final int ROLL_WINDOW_TICKS = 120;
     /** A deadline for the landing record, not a guess at how long four blocks of fall take. */
     private static final int LANDING_LINK_BUDGET_TICKS = 200;
-
-    private int count(String sub) throws Exception {
-        String command = "artest vs " + sub + " 0";
-        return Reply.of(command, exec(command)).integer(COUNT);
-    }
 
     private double readDouble(String json, String field) {
         double value = Reply.of(json).number(field);
@@ -110,25 +104,18 @@ public class VSCrewRidesRollingDeckE2ETest extends AbstractSharedVsClientE2ETest
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 (Reply.of(assemble).integer("rocketCount") == 0));
 
-        // Event-gated async-VS assembly barrier (bounded ceiling + early exit): AWAIT the SPAWNED
-        // stage instead of a fixed tick budget that reds a healthy spawn under concurrent-fork load.
-        ClientPoll.Result<Integer> spawned = ClientPoll.until(bot()::waitTicks,
-                () -> count("ship-count-all"), n -> n >= 1, 5, 40);
-        int all = spawned.value;
-        assertTrue("assembly must create a ship (all=" + all + ")", all >= 1);
+        // WHICH ship, from the assembler that minted its name — and the wait for it: this link is on
+        // `ship_usable` for THAT name, so it is also the proof that the assembly created a ship. The
+        // count of every ship in the world that stood here was satisfied by any neighbour's hull on
+        // a world this class shares.
+        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), 0,
+                ShipIdentity.nameFromAssembly(assemble), 200);
 
-        // WHICH ship, from the assembler that minted its name. The base was the handle before, and a
-        // base is a place: this class shares its world, and the lookup answered for the nearest hull
-        // whether or not that hull was the one this scenario had just built.
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, 0,
-                ShipIdentity.nameFromAssembly(assemble), 40, () -> bot().waitTicks(5));
-
+        // A poll of the world's LOADED-ship count stood after this teleport, "the ship must load with
+        // the client present". It waited for nothing: the ship was already usable one line up, and a
+        // test server keeps its ships loaded, so the count was satisfied on its first read. What the
+        // client needs of the ship — its deck under his feet — is the landing link below.
         exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
-        // Await the ship LOADING near the client (same event-gated barrier, bounded + early exit).
-        ClientPoll.Result<Integer> loadedShips = ClientPoll.until(bot()::waitTicks,
-                () -> count("ship-count"), n -> n >= 1, 5, 40);
-        int loaded = loadedShips.value;
-        assertTrue("the ship must LOAD with the client present", loaded >= 1);
 
         // The ship does not stay at the pad base — which is exactly why it is asked for by NAME.
         // Find it, then drop the bot ONTO it: standing next to a ship would prove nothing.

@@ -81,6 +81,26 @@ public final class ClientEvents {
         return false;
     }
 
+    /** Vanilla's rain-strength game state: the client sets its rain strength to the packet's value. */
+    public static final String RAIN_STRENGTH_STATE = "7";
+
+    /** Vanilla's begin-raining game state: the client starts raining at strength 0. */
+    public static final String BEGIN_RAINING_STATE = "1";
+
+    /**
+     * Whether any {@code client_game_state_changed} in a {@code since} reply told the client a rain
+     * strength of at least {@code min}. A 1.12 client does not lerp its own weather, so this is the
+     * only way its rain can rise.
+     */
+    public static boolean toldRainStrengthAtLeast(String sinceReply, double min) {
+        for (String record : Events.recordsWhere(sinceReply, "state", RAIN_STRENGTH_STATE)) {
+            if (Events.number(record, "value") >= min) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Wait until the CLIENT has SEATED him since {@code mark} and nothing has taken him off after
      * it — the replication half of a mount the server has already performed.

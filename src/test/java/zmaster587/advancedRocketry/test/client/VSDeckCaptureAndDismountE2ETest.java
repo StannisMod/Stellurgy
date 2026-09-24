@@ -88,6 +88,27 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     private static final int LONG_SLEW_WINDOW_TICKS = 200;
 
     /**
+     * The half-turn onto the craft's back: 160 ticks, the most the loop it replaced could spend (forty
+     * commands four ticks apart), against a measured ~31 ticks for half a turn at the 2 rad/s the
+     * hold reaches. It was a loop only because the command was believed to need re-sending; it does
+     * not — {@code commandProbeAttitude} keeps its target until {@code force-clear}, so one command
+     * stands for the whole window.
+     */
+    private static final int INVERT_SLEW_WINDOW_TICKS = 160;
+
+    /** The stretch an inverted craft is left alone after its hold is cut, before it is read again:
+     *  forty ticks of its world, the number these scenarios have always used. */
+    private static final int INVERTED_HOLD_WINDOW_TICKS = 40;
+
+    /** The window a turn command's answer is read over: readings of the hull's rate this many ticks
+     *  of its world apart, the largest of which is the measurement. */
+    private static final int TURN_WINDOW_GAP_TICKS = 2;
+
+    /** Client ticks a body put down five blocks over a deck is given to land and be captured there:
+     *  about three times the thirteen vanilla gravity needs for the drop. */
+    private static final int DECK_LANDING_TICKS = 40;
+
+    /**
      * How far the CLIENT's rendering of a body's height may sit from the SERVER's, in blocks, on a
      * LEVEL deck.
      *
@@ -749,13 +770,21 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // from one that never dropped.
         long onDeckMark = clientEvents.mark();
         exec("tp @a " + lvl.x + " " + (lvl.y + 5) + " " + lvl.z + " 0 0");
-        ClientPoll.Result<Boolean> camPoll = ClientPoll.<Boolean>until(bot()::waitTicks,
-                () -> Boolean.parseBoolean(deckCameraText("active")),
-                active -> active.booleanValue(), 5, 40);
+        clientEvents.awaitMatching(onDeckMark, "client_pos_look_applied",
+                reply -> ClientEvents.appliedNear(reply, lvl.x, lvl.z),
+                "placing the client over the level deck",
+                "the put-down over the level deck must reach the client before its landing can be"
+                        + " read", DECK_LINK_BUDGET_TICKS);
+        // EXPERIMENT: the reading is DEFINED forty client ticks after the put-down reached the client.
+        // He is dropped five blocks, which vanilla gravity covers in about thirteen ticks, and it is
+        // the client's own ticks that move him and resolve his capture — so forty of them are a
+        // landing and then some, on any box. A camera that has not engaged by then fails below with
+        // the capture verdict beside it.
+        bot().waitTicks(DECK_LANDING_TICKS);
         String engaged = clientEvents.since(onDeckMark, "deck_camera_changed");
-        boolean onDeckCam = camPoll.value;
+        boolean onDeckCam = Boolean.parseBoolean(deckCameraText("active"));
         DeckCapture camCapture = DeckCapture.read(this::exec);
-        System.out.println("[deckcap] cam on-deck active=" + onDeckCam + " poll=" + camPoll
+        System.out.println("[deckcap] cam on-deck active=" + onDeckCam
                 + " edgesSincePutDown=" + engaged + " cap=" + camCapture.raw());
         // The camera is DOWNSTREAM of the capture, so a bare "no deck camera" blames the renderer
         // for something that usually happened one link earlier. The capture verdict is already read
@@ -766,7 +795,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                         + " below says the body is NOT on the deck then this is not a camera fault at"
                         + " all - the body never got there. capture="
                         + camCapture.raw().replace('\n', ' ')
-                        + " poll=" + camPoll + " cameraEdgesSincePutDown=" + engaged
+                        + " cameraEdgesSincePutDown=" + engaged
                         + " playerY=" + bot().reportState().get("playerY").getAsDouble(),
                 onDeckCam);
     }
@@ -1129,29 +1158,27 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // the craft was at up.y = +0.038 with omega = 2.0 rad/s, i.e. still on its way round. Half a
         // turn at that rate needs about 31 ticks.
         //
-        // NOT a wait, and so not a chain: the loop's ITERATIONS ARE THE STIMULUS. `point-by-id`
-        // engages an attitude HOLD, and the computer applies torque toward its target quaternion
-        // every tick without ever deciding that it has arrived — there is no "reached" for a record
-        // to carry, and nothing to add one to. So the craft's attitude is a value converging under a
-        // command that has to keep STANDING while it slews, and the exit is what stops re-asserting
-        // it. What the scenario then uses is not this loop's last sample but the FRESH read below,
-        // taken after the hold is cut: reaching an attitude and keeping it are different questions.
-        double invertedUpY = 1.0;
-        for (int i = 0; i < 40 && invertedUpY > -0.9; i++) {
-            exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
-            bot().waitTicks(4);
-            invertedUpY = shipUpYFromInfo(shipInfo());
-        }
+        // NOT a chain: `point-by-id` engages an attitude HOLD, and the computer applies torque toward
+        // its target quaternion every tick without ever deciding that it has arrived — there is no
+        // "reached" for a record to carry. So the slew is a WINDOW, and the hold is a command that
+        // STANDS: set once, it is in force until the force-clear below.
+        double upBeforeSlew = shipUpYFromInfo(shipInfo());
+        String held = exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
+        scenario().requireArranged("the attitude hold must be accepted by THIS craft's computer: "
+                + held, Reply.of(held).bool("commanded"));
+        // WINDOW: upBeforeSlew -> reachedUpY over INVERT_SLEW_WINDOW_TICKS of the hull's world, both
+        // in the gate below; a slew that did not get there fails there, loudly.
+        GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);
+        double reachedUpY = shipUpYFromInfo(shipInfo());
         // Then let go, and let it sit: REACHING an attitude and KEEPING it are different questions,
         // and everything below needs the second one.
         exec("artest vs force-clear-by-id 0 " + scenarioShipId);
-        double reachedUpY = invertedUpY;
-        // WINDOW: reachedUpY (the loop's last read, just before the hold is cut) to the read below,
-        // and the assertion holds BOTH ends inverted and prints both. Overshoot only gives the craft
-        // longer to right itself.
-        bot().waitTicks(40);
+        // WINDOW: reachedUpY (read with the hold still in force) to the read below, and the
+        // assertion holds BOTH ends inverted and prints both. Overshoot only gives the craft longer
+        // to right itself.
+        GameTicks.advanceWorld(serverClient(), 0, INVERTED_HOLD_WINDOW_TICKS);
         ShipInfo info0 = shipInfo();
-        invertedUpY = shipUpYFromInfo(info0);
+        double invertedUpY = shipUpYFromInfo(info0);
         System.out.println("[deckcap] force-invert reachedUpY=" + reachedUpY + " upY=" + invertedUpY
                 + " info=" + info0);
         // An ASSERT, not an Assume: the attitude write is deterministic, so a craft that is not
@@ -1162,8 +1189,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // the inverted case: -0.85 of deck-normal Y is about 150 degrees over, well past the
         // point where world-up and ship-up could be confused for one another.
         assertTrue("arrangement: the craft must be INVERTED before the subject is exercised, and"
-                + " stay inverted once the hold is cut (upY when cut=" + reachedUpY
-                + ", after the window=" + invertedUpY + "): " + info0,
+                + " stay inverted once the hold is cut (upY before the slew=" + upBeforeSlew
+                + ", when cut=" + reachedUpY + ", after the window=" + invertedUpY + "): " + info0,
                 reachedUpY < INVERTED_UP_Y && invertedUpY < INVERTED_UP_Y);
 
         // ENTER the seat on the inverted ship — located inside THIS ship, not "the first seat in
@@ -1176,6 +1203,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 DECK_LINK_BUDGET_TICKS, "");
 
         // SYMPTOM "after entering, the ship does not react": a turn command must actually move it.
+        // Judged ABOVE what the slew left behind, read here before the command: the hull is not
+        // still after an inversion (0.27 rad/s measured in the sibling scenario below), and a bare
+        // bar would be cleared by that residue with the controls dead.
+        double omegaSettled = shipInfo().omega;
         for (int i = 0; i < 15; i++) {
             mouseDelta(60, 0);
             bot().waitTicks(2);
@@ -1187,10 +1218,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // the result is an angular RATE. A rate is measured, and the window's EXTREMUM is the
         // measurement, because a hull commanded round passes through every attitude and a last
         // sample of a completed turn reads as "unmoved".
-        // The window early-exits because the verdict is "omega crossed 0.1 at some point": the first
-        // sample that crosses settles it and every further tick is burned.
-        double omegaAfter = ClientPoll.until(bot()::waitTicks,
-                () -> shipInfo().omega, o -> o > 0.1, 2, 20).value;
+        // WINDOW: the hull's rate over 20 readings two ticks of its world apart — the stretch the poll
+        // it replaced could spend — and the verdict below is on the LARGEST of them.
+        java.util.List<Double> turnRates = new java.util.ArrayList<Double>();
+        GameTicks.observe(serverClient(), GameTicks.world(0), 20, TURN_WINDOW_GAP_TICKS,
+                () -> turnRates.add(shipInfo().omega));
+        double omegaAfter = java.util.Collections.max(turnRates);
         System.out.println("[deckcap] force-invert control cursor="
                 + flightCursorX("at the force-invert leg") + " omegaAfter=" + omegaAfter);
 
@@ -1212,7 +1245,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + " clientY=" + clientY + " serverY=" + serverY);
 
         assertTrue("after ENTERING an inverted ship, a turn command must move it, not leave it dead "
-                + "(omega=" + omegaAfter + ")", omegaAfter > TURN_COMMAND_OMEGA_RAD_PER_S);
+                + "(omega " + omegaSettled + " before the command, largest " + omegaAfter + " after)",
+                omegaAfter > omegaSettled + TURN_COMMAND_OMEGA_RAD_PER_S);
         assertTrue("after LEAVING an inverted ship, the pilot must stay resolved on the deck, not fall "
                 + "through: " + capture.raw(), capture.verdict);
     }
@@ -1230,17 +1264,22 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // over by mouse also demonstrated that the controls work on the way, but it arrived at a
         // variable attitude and SKIPPED whenever it undershot, which bought that side observation at
         // the price of the scenario running at all.
-        for (int i = 0; i < 40 && deckCamera("shipUpY") > -0.9; i++) {
-            exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
-            bot().waitTicks(4);
-        }
-        exec("artest vs force-clear-by-id 0 " + scenarioShipId);
+        // The same standing hold as the force-invert leg above, and the same argument: one command,
+        // in force until the force-clear.
+        double upBeforeSlew = deckCamera("shipUpY");
+        String held = exec("artest vs point-by-id 0 " + scenarioShipId + " 0 1 0 0");
+        scenario().requireArranged("the attitude hold must be accepted by THIS craft's computer: "
+                + held, Reply.of(held).bool("commanded"));
+        // WINDOW: upBeforeSlew -> releasedUpY over INVERT_SLEW_WINDOW_TICKS of the hull's world, both
+        // in the gate below.
+        GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);
         double releasedUpY = deckCamera("shipUpY");
+        exec("artest vs force-clear-by-id 0 " + scenarioShipId);
         centreFlightCursor();
         // WINDOW: releasedUpY (the instant the command is cut) to shipUpY, and the assertion holds
         // BOTH ends inverted and prints both. The same ticks let the slew's residual spin decay
         // before the turn below; that spin is printed as omegaSettled and asserted nowhere.
-        bot().waitTicks(40);
+        GameTicks.advanceWorld(serverClient(), 0, INVERTED_HOLD_WINDOW_TICKS);
         double shipUpY = deckCamera("shipUpY");
         // An ASSERT: the attitude is commanded, so not being there is news, not a dice roll. And it
         // is read from the CLIENT's own camera state, which is what the pilot below is looking at.
@@ -1248,8 +1287,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // read off the CLIENT's camera state, which lags the hull it is drawing, so the same
         // attitude reads shallower here. What it asserts is the same premise — past horizontal.
         assertTrue("arrangement: the craft must be inverted ON THE CLIENT before its controls are"
-                + " tested there, and stay inverted once the command is cut (shipUpY when cut="
-                + releasedUpY + ", after the window=" + shipUpY + ")",
+                + " tested there, and stay inverted once the command is cut (shipUpY before the slew="
+                + upBeforeSlew + ", when cut=" + releasedUpY + ", after the window=" + shipUpY + ")",
                 releasedUpY < INVERTED_UP_Y_ON_CLIENT && shipUpY < INVERTED_UP_Y_ON_CLIENT);
         double omegaSettled = shipInfo().omega;
         System.out.println("[deckcap] inverted-control shipUpY=" + shipUpY + " omegaSettled=" + omegaSettled);
@@ -1267,10 +1306,13 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // Same measurement as the force-invert leg above, and the same argument: `flight_cursor` is
         // the link for the command going in — asserted three lines below, not merely printed — and
         // the hull's answer is an angular rate that nothing decides and no record carries. Read the
-        // refusal there; it is not repeated here. It carried a 1.5x budget for no stated reason;
-        // both windows are now the same shape.
-        double omegaTurning = ClientPoll.until(bot()::waitTicks,
-                () -> shipInfo().omega, o -> o > omegaSettled + TURN_COMMAND_OMEGA_RAD_PER_S, 2, 30).value;
+        // refusal there; it is not repeated here.
+        // WINDOW: 30 readings two ticks of the hull's world apart, the stretch the poll it replaced
+        // could spend; the verdict below is on the LARGEST.
+        java.util.List<Double> turnRates = new java.util.ArrayList<Double>();
+        GameTicks.observe(serverClient(), GameTicks.world(0), 30, TURN_WINDOW_GAP_TICKS,
+                () -> turnRates.add(shipInfo().omega));
+        double omegaTurning = java.util.Collections.max(turnRates);
         System.out.println("[deckcap] inverted-control cursor=" + cursor + " omegaTurning=" + omegaTurning);
 
         // THE TEST'S OWN sensitivity bar, in the cursor's own normalised units: what it refuses is
@@ -1299,6 +1341,8 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      */
     private void centreFlightCursor() throws Exception {
         double cursor = flightCursorX("before centring");
+        // STIMULUS: each iteration IS a nudge of the cursor, and the loop ends on its goal state;
+        // delete it and the centring stops happening, not merely stops being watched.
         for (int i = 0; i < 200 && Math.abs(cursor) >= 0.03; i++) {
             int step = Math.abs(cursor) > 0.2 ? 30 : 2;
             mouseDelta(cursor > 0 ? -step : step, 0);

@@ -13,6 +13,7 @@ import org.junit.Test;
 
 import zmaster587.advancedRocketry.test.DimWeather;
 import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -180,18 +181,21 @@ public class WeatherClientSyncE2ETest {
         serverHarness.client().execute("artest tp " + DIM_A);
         awaitClientDim(clientLog, toA, DIM_A);
 
-        // The client now SEES dim A's wrapped weather. rainStrength is
-        // server-driven via SPacketChangeGameState (begin/end raining +
-        // strength edges), so it ramps up over a handful of ticks before
-        // settling near 1.0. Poll a short window.
-        ClientPoll.Result<JsonObject> rainA = waitForClientRainStrengthAtLeast(0.05f);
-        JsonObject onA = rainA.value;
+        // The client now SEES dim A's wrapped weather. rainStrength is server-driven: the client
+        // world does not lerp its own, and every step of the ramp arrives as a strength packet the
+        // client applies. So the rain REACHING him is a link on his own record of being told, and
+        // the report is read once after it.
+        String toldA = clientLog.awaitMatching(toA, "client_game_state_changed",
+                seen -> ClientEvents.toldRainStrengthAtLeast(seen, 0.05),
+                "telling the client a rain strength of at least 0.05",
+                "the client arriving in raining dim A must be told its rain", RAIN_LINK_BUDGET_TICKS);
+        JsonObject onA = clientHarness.bot().reportWeather();
         assertTrue("client should be in dim A after goto: " + onA,
                 onA.has("dim") && onA.get("dim").getAsInt() == DIM_A);
         assertTrue("client-visible isRaining must be true on dim A: " + onA,
                 onA.get("isRaining").getAsBoolean());
-        assertTrue("client rainStrength must climb above 0 on dim A; the ramp was watched as "
-                        + rainA, onA.get("rainStrength").getAsFloat() > 0f);
+        assertTrue("client rainStrength must climb above 0 on dim A; what it was told: " + toldA,
+                onA.get("rainStrength").getAsFloat() > 0f);
 
         // Teleport to dim B. This is the path that fires
         // PlayerChangedDimensionEvent -> PlanetWeatherEventHandler.syncToPlayer,
@@ -236,28 +240,32 @@ public class WeatherClientSyncE2ETest {
         serverHarness.client().execute("artest tp " + DIM_C);
         awaitClientDim(clientLog, toC, DIM_C);
 
-        // Sample across the would-be fade window (~5 s = 100 ticks): the
-        // client-visible strength must hold at exactly 0 the whole time. A
-        // single non-zero sample means the seeded strength leaked to the
-        // client (either via the transfer sync or the per-tick
-        // SPacketChangeGameState(7) stream from the server lerp).
-        //
-        // STILL A SAMPLING WINDOW, and deliberately: what it guards against is a per-tick STREAM of
-        // strength packets, so the pass is the window expiring with every sample at zero. The
-        // vocabulary has no event for a vanilla game-state packet, so there is nothing here to
-        // convert — the arrival in dim C above is the link, and this is the observation.
-        for (int sample = 0; sample < 6; sample++) {
-            JsonObject onC = clientHarness.bot().reportWeather();
-            assertTrue("client should be in dim C (sample " + sample + "): " + onC,
-                    onC.has("dim") && onC.get("dim").getAsInt() == DIM_C);
-            assertFalse("client must not see rain on fresh clear dim C (sample "
-                            + sample + "): " + onC,
-                    onC.get("isRaining").getAsBoolean());
-            assertEquals("client rainStrength must hold at 0 on fresh dim C (sample "
-                            + sample + "): " + onC,
-                    0f, onC.get("rainStrength").getAsFloat(), 0f);
-            clientHarness.bot().waitTicks(20);
-        }
+        // The would-be fade window (~5 s = 100 ticks): the client-visible strength must hold at
+        // exactly 0 the whole time. A seeded strength leaking to the client arrives as packets —
+        // through the transfer sync or the per-tick strength stream from the server's lerp — and the
+        // client records every one it applies. So the claim is over ALL of them, not over six samples
+        // of their result, which could straddle a short leak.
+        // WINDOW: from the arrival mark to the log read below, FADE_WINDOW_TICKS of dim C's own
+        // clock — the lerp that would send the leak runs on that world's ticks. What it cannot see:
+        // a packet sent in the window's last tick and not yet applied when the log is read.
+        GameTicks.advanceWorld(serverHarness.client(), DIM_C, FADE_WINDOW_TICKS);
+        String toldC = clientLog.since(toC, "client_game_state_changed");
+        Events.assertInstrumentRan(toldC, "client_game_state_changed",
+                "the client's weather packets must be observed at all before their absence on dim C"
+                        + " can be read as dry");
+        assertTrue("client must never be told it is raining on fresh clear dim C; game-state packets"
+                        + " since the arrival: " + toldC,
+                Events.recordsWhere(toldC, "state", ClientEvents.BEGIN_RAINING_STATE).isEmpty());
+        assertFalse("client must never be told a rain strength above 0 on fresh dim C; game-state"
+                        + " packets since the arrival: " + toldC,
+                ClientEvents.toldRainStrengthAtLeast(toldC, Double.MIN_VALUE));
+        JsonObject onC = clientHarness.bot().reportWeather();
+        assertTrue("client should be in dim C at the end of the window: " + onC,
+                onC.has("dim") && onC.get("dim").getAsInt() == DIM_C);
+        assertFalse("client must not see rain on fresh clear dim C: " + onC,
+                onC.get("isRaining").getAsBoolean());
+        assertEquals("client rainStrength must be 0 on fresh dim C at the end of the window: " + onC,
+                0f, onC.get("rainStrength").getAsFloat(), 0f);
 
         // The overworld itself must still be raining — dim C staying dry must
         // come from per-dim isolation, not from the rain set having failed.
@@ -302,28 +310,12 @@ public class WeatherClientSyncE2ETest {
     private static final int DIM_LINK_BUDGET_TICKS = 200;
 
     /**
-     * The client does NOT lerp weather itself in 1.12.2
-     * ({@code WorldClient.updateWeather()} is an empty override) — the
-     * client-visible ramp is the SERVER's lerp streamed one
-     * {@code SPacketChangeGameState(7)} per tick to in-dim players. Poll
-     * briefly so the test isn't flaky on the exact tick of the snapshot —
-     * settling above {@code minStrength} confirms the rain packets actually
-     * reach and apply client-side.
-     *
-     * <p>This one stays a POLL: a strength climbing towards 1.0 is a physical quantity converging
-     * one server lerp step at a time, not a link production commits, and there is no event for a
-     * vanilla game-state packet. What it no longer has to absorb is the crossing itself — that is
-     * awaited as its own link above, so a red here can only be about the rain.</p>
+     * How long the rain may take to reach the client once he is in a raining world — a deadline for
+     * a packet, the same 200 ticks the poll it replaced was capped at (twenty reads ten apart).
      */
-    private ClientPoll.Result<JsonObject> waitForClientRainStrengthAtLeast(float minStrength)
-            throws Exception {
-        // ClientPoll rather than a hand-rolled loop, and the difference is the SELF-REPORT: the
-        // result carries whether the predicate ever held, how many of its iterations it spent and
-        // what it last read, so a caller printing it says which of those it is complaining about.
-        return ClientPoll.until(clientHarness.bot()::waitTicks,
-                () -> clientHarness.bot().reportWeather(),
-                report -> report.has("rainStrength")
-                        && report.get("rainStrength").getAsFloat() >= minStrength,
-                10, 20);
-    }
+    private static final int RAIN_LINK_BUDGET_TICKS = 200;
+
+    /** The phantom fade this class guards against ran for about five seconds: 100 ticks of the world
+     *  it would run in, the stretch the six samples it replaced covered. */
+    private static final int FADE_WINDOW_TICKS = 100;
 }
