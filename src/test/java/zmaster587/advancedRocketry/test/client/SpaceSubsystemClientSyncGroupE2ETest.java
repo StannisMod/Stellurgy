@@ -177,6 +177,14 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
      * register pool &rarr; broadcast sync &rarr; bind a cell world &rarr; transfer the real player
      * through {@code PlayerList.transferPlayerToDimension} &rarr; the client's OWN world must be the
      * slot dim and keep rendering.</p>
+     *
+     * <p>red-witnessed (none possible for the HOLD; the settle verdict is not witnessed yet),
+     * 2026-09-28 — said so rather than faked. The
+     * hold pins the ABSENCE of any transfer out of the slot world; the only production code that
+     * moves a player between worlds is {@code CrewTransfer}'s crossing path, which this arrangement
+     * never reaches, so there is no single line whose inversion would put him in motion. What the
+     * hold CAN check it checks: its instrument is asserted to have run. The settle-on-the-platform
+     * verdict is not witnessed.</p>
      */
     @Test
     public void aRealClientEntersASlotDimAndKeepsRendering() throws Exception {
@@ -299,6 +307,12 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
      * only the dimension he is in. Standing the subject where the bodies are is therefore not a
      * workaround — it is the arrangement a real pilot is in, and the control leg below is what says
      * so.</p>
+     *
+     * <p>red-witnessed (the CONTROL and the arrival link; the contents pins are not), 2026-09-28.
+     * With {@code SystemBodiesProducer.broadcastTo} sending every cell's sky to every player — the old
+     * {@code sendToAll} — this fails at the control: "a player who is not in the cell's world must not
+     * be sent its sky". With it sending nothing: "no `system_bodies_received` naming slot dim 3 was
+     * recorded within 400 ticks".</p>
      */
     @Test
     public void aRealClientReceivesTheSettledShipsCellBodies() throws Exception {

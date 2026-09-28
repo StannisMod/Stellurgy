@@ -139,6 +139,15 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE
                 "this scenario's craft must be loaded before the rider is put on it");
     }
 
+    /**
+     * The rider keeps his mount through a coasting horizontal cruise faster than the mount's
+     * tracking headroom.
+     *
+     * <p>red-witnessed: with {@code MixinEntityTrackerRiderSeesVehicle} no longer forcing the mount
+     * visible to its own rider, this fails with "the client threw the rider off his mount 24 of 40
+     * samples", worst anchor lag 40.0 blocks against a 16-block range — 2026-09-28, on the stimulus as
+     * it stands after the settle became a dose and a two-speed window.</p>
+     */
     @Test
     public void aSeatedRiderNeverLosesTheMountHeIsRidingWhileTheShipCruises() throws Exception {
 

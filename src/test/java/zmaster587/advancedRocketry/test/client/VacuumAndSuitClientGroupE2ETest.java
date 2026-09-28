@@ -404,6 +404,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * breathable atmosphere. The breathable {@code AtmosphereType.onTick} is a no-op, so
      * {@code protectsFrom} &rarr; {@code decrementAir} is never called and the tank's oxygen stays
      * at its initial value.
+     *
+     * <p>red-witnessed: with {@code AtmosphereHandler} asking {@code VACUUM.isImmune} of every body in
+     * a breathable atmosphere every ten ticks (it spends a suit's air, hurts nobody), this fails with
+     * "a breathable atmosphere must never reach the suit's tank at all; drains recorded" — 2026-09-28.</p>
      */
     @Test
     public void breathableAtmosphereDoesNotDrainChestTank() throws Exception {
@@ -529,6 +533,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * real-client bot IS a real {@code EntityPlayerMP} on the server side of the harness.</p>
      *
      * <p>Pins the END STATE (air rises over the window) rather than a per-tick mB rate.</p>
+     *
+     * <p>red-witnessed: with {@code TileGasChargePad} draining its tank but no longer calling
+     * {@code fillable.increment}, this fails with "no `suit_air_filled` whose 'filled' is not 0" —
+     * 2026-09-28.</p>
      */
     @Test
     public void standingOnPoweredPadRefillsSuitAir() throws Exception {
@@ -603,6 +611,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * From {@code ItemSpaceArmorUseFluidE2ETest}. Counter-test: the same enchanted suit in a
      * breathable atmosphere. The breathable type's {@code onTick} is a no-op, so the
      * {@code protectsFrom} branch is never evaluated and no decrement fires.
+     *
+     * <p>red-witnessed: with the same breathable-drain inversion as
+     * {@link #breathableAtmosphereDoesNotDrainChestTank}, this fails with "a breathable atmosphere must
+     * never reach the enchanted suit's buffer; drains recorded" — 2026-09-28.</p>
      */
     @Test
     public void suitedPlayerInBreathableDimDoesNotLoseChestAir() throws Exception {
@@ -651,6 +663,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * checks the chest LAST, after the legs, the boots and the helmet, so a recorded drain means the
      * whole suit was consulted and the chest was asked to pay. Only then does the silence in
      * {@code living_hurt} say the suit held rather than that the atmosphere never looked at him.</p>
+     *
+     * <p>red-witnessed: with {@code ItemAirUtils.decrementAir} reporting the air spent without
+     * spending it (protection intact), this fails with "the drained buffer must reach the client's
+     * chest slot — no `client_slot_tag_set`" — 2026-09-28.</p>
      */
     @Test
     public void suitedPlayerInVacuumLosesChestAirOverTime() throws Exception {
@@ -830,6 +846,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * consulted (the chest is checked last), and only then does the silence in {@code living_hurt}
      * mean the suit held. The gate's own {@code immune:true} is not asserted, because that recorder
      * writes only on a CHANGE and an unbroken run of protection may produce no record at all.</p>
+     *
+     * <p>red-witnessed: with {@code ItemSpaceChest.decrementAir} reporting the air spent without
+     * draining its tank (protection intact), this fails with "the drained tank must reach the client's
+     * chest slot — no `client_slot_tag_set`" — 2026-09-28.</p>
      */
     @Test
     public void vacuumDrainsOxygenFromChestSubInventoryTank() throws Exception {

@@ -118,6 +118,19 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     private static final double MAX_ARRIVAL_SINK = 5.0;
 
     /**
+     * Ticks the arrived hull is given to brake out its cruise once the cruise is zeroed, before the
+     * pilot's key is asked to lift it.
+     *
+     * <p>Measured 2026-09-28 in {@code VSShipUnmannedCruiseE2ETest}: a hull braking from full cruise
+     * read +10.9, +0.7, 0, 0 blocks over four ten-tick slices — stopped inside 20 ticks. Twice that.</p>
+     */
+    private static final int CRUISE_BRAKE_TICKS = 40;
+
+    /** The ship's durable NAME, from the assembler that minted it: unlike its physics id, it
+     *  survives the crossing, so it is how the arrived craft is found in its cell. */
+    private String durableShipName;
+
+    /**
      * Client ticks between two reads of the arrival's own records — the step {@link Events}'s waits
      * advance by, so a budget expressed in ITERATIONS (as the loops here were) converts by
      * multiplying. Named because the conversion is otherwise a bare {@code * 5} whose meaning has to
@@ -181,6 +194,19 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
     // ── granted: he flies up, and arrives seated and in control ─────────────────────────────────
 
+    /**
+     * A pilot who flies his own ship through the orbit line arrives in its cell still seated, not
+     * falling, in control of it, and carrying the aboard record.
+     *
+     * <p>red-witnessed (the IN-CONTROL verdict, both halves; the seated, not-falling and aboard-record
+     * verdicts are not), 2026-09-28. THE KEY REACHES THE COMPUTER — with
+     * {@code CrewTransfer.boundDummyForMount} binding the arrival's fresh mount to
+     * {@code seatPos.up(3)}: "no `pilot_input_set` with input = set in dim 3". THE KEY LIFTS THE SHIP —
+     * with {@code TileAdvancedFlightComputer.setPilotInput} replacing every input off the overworld by
+     * an idle one: "clientY 77.99 -> 77.99 after 20 ticks of thrust". That second inversion first left
+     * this GREEN (+51.6 blocks): the cruise ramped on the way up crosses with the craft, and it
+     * climbed on that alone. The cruise is now zeroed by probe before the key is judged.</p>
+     */
     @Test
     public void aPilotWhoClimbsThroughTheCeilingArrivesSeatedAndInControl() throws Exception {
 
@@ -320,6 +346,23 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
 
         // (4) Still in control: the key lifts the ARRIVED ship - measured from the rider's own
         // client-rendered altitude (the pilot rides what the key moves).
+        //
+        // From REST, and that is an arrangement this verdict cannot do without: he flew through the
+        // ceiling on a held key, which ramped the Flight-Assist cruise up, and the cruise crosses
+        // with the craft. With the arrived computer IGNORING his input the ship still climbed ~52
+        // blocks over this dose on that cruise alone and the verdict passed (measured 2026-09-28).
+        // So the cruise is zeroed by probe — not by his keys, which are what is under test — and the
+        // hull is given time to brake before the key is asked anything.
+        String arrivedShipId = zmaster587.advancedRocketry.test.ShipIdentity.awaitPhysicsIdOf(
+                this::exec, events(), clientDim, durableShipName, arrivalBudget * 5);
+        String zeroed = exec("artest vs ff-cruise-by-id " + clientDim + " " + arrivedShipId
+                + " 0 0 0");
+        scenario().requireArranged("the arrived ship's cruise must be zeroed before his key is"
+                + " judged, or its own climb answers the question: " + zeroed,
+                Reply.of(zeroed).bool("afcResolved"));
+        // EXPERIMENT: CRUISE_BRAKE_TICKS for the hull to brake out the zeroed cruise (see the
+        // constant for the measurement).
+        bot().waitTicks(CRUISE_BRAKE_TICKS);
         final double before = clientPlayerY();
         // EXPERIMENT: a dose of thrust on the ARRIVED ship's own world clock, from the key's arrival
         // at its computer — that arrival is the first half of the contract and a link, so a seat
@@ -608,6 +651,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         String assemble = assembleFixture(site, VARIANT);
         scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assemble,
                 Reply.of(assemble).ok());
+        durableShipName = zmaster587.advancedRocketry.test.ShipIdentity.nameFromAssembly(assemble);
         String shipUuid = awaitShipSpawned(events, spawnMark, "a with-pilot-seat assembly must create"
                 + " a VS ship in the physics registry — its record is where this scenario's ship"
                 + " identity comes from, and every later question about the craft is keyed on it");

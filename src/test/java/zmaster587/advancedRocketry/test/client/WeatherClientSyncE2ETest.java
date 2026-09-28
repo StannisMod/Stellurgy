@@ -143,6 +143,15 @@ public class WeatherClientSyncE2ETest {
                 + "        </planet>\n";
     }
 
+    /**
+     * Each planet keeps its own weather through a real client, and a fresh planet never inherits the
+     * overworld's rain.
+     *
+     * <p>red-witnessed (the FRESH-DIM verdicts; the A/B isolation verdicts are not): with
+     * {@code PlanetWeatherManager.wrapWorldInfoIfNeeded} no longer re-seeding the rain strength after
+     * wrapping — the phantom-rain defect — this fails with "client must never be told it is raining
+     * on fresh clear dim C" — 2026-09-28.</p>
+     */
     @Test
     public void weatherIsolatedAcrossDimsThroughRealClient() throws Exception {
         clientHarness.bot().waitForWorld();

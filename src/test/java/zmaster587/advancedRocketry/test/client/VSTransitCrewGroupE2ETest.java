@@ -730,6 +730,16 @@ private String hud() throws Exception {
     // instead put the language file, the depth of the client's ring and the harness's own command
     // echoes between the test and its subject.
 
+    /**
+     * A jump shows itself to the crew: the corridor is drawn in hyperspace and not in a cell, and the
+     * HUD names the jump phase while the ship is in flight.
+     *
+     * <p>red-witnessed (the CORRIDOR and HUD verdicts; the cell sky control and the departure link are
+     * not), 2026-09-28. With {@code BoundarySky} no longer calling {@code HyperspaceTunnel.render} in
+     * hyperspace: "corridor frames 0 -> 0 over 20 ticks". With {@code KeyBindings.driveHudLines}
+     * adding no line in the transit phase: "no `ff_hud` whose latest drawn line names HYPERSPACE was
+     * recorded within 600 ticks".</p>
+     */
     @Test
     public void aJumpAnnouncesItselfInChatOnTheHudAndInTheSky() throws Exception {
 
@@ -1024,6 +1034,15 @@ private String hud() throws Exception {
      * scenario that puts a crew member in hyperspace on his FEET — so the corridor is read here, in
      * the same window that proves he is alive on his deck. The ring's suppression is NOT re-pinned
      * here: that is the seated scenario's subject, and its baseline is order-sensitive.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, each red at its own with the earlier ones green,
+     * 2026-09-28. CORRIDOR FOR A STANDING CREWMAN — {@code BoundarySky} not calling
+     * {@code HyperspaceTunnel.render}: "the corridor must keep being drawn for a crew member who has
+     * LEFT HIS SEAT". COMPUTER KEEPS TICKING — {@code TileAdvancedFlightComputer.update} returning
+     * early in hyperspace: "server-tick samples 0 -> 0". ABOARD IS SAFE — {@code HyperspaceVoid}'s
+     * {@code aboardSomething} exemption skipped: "must not be taken by the void", his client on the
+     * death screen. THE VOID KILLS — {@code HyperspaceVoid} never calling {@code attackEntityFrom}: "no
+     * `player_died` carrying source = arHyperspaceVoid was recorded within 260 ticks".</p>
      */
     @Test
     public void aCrewMemberLivesInHyperspaceUntilHeStepsOffHisShip() throws Exception {

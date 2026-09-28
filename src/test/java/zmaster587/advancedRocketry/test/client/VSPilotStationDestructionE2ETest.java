@@ -143,6 +143,16 @@ public class VSPilotStationDestructionE2ETest extends AbstractSharedVsClientE2ET
         awaitDummyRemovedOnClient(breakClientMark, ship.dummyId);
     }
 
+    /**
+     * Destroying the flight computer throws its pilot out, removes his mount, and leaves a ship that
+     * never climbs on the dead computer's last command.
+     *
+     * <p>red-witnessed (the never-thrusts verdict): it needs BOTH of production's two defences broken
+     * — VS's {@code MixinChunk.post_removeTileEntity} no longer dropping the removed tile from the
+     * ship's controller set, AND {@code TileAdvancedFlightComputer.invalidate} no longer clearing the
+     * command channels — and then fails with "y1=174.19 y2=252.81". Either one broken alone stays
+     * green, each defence sufficing on its own — 2026-09-28.</p>
+     */
     @Test
     public void breakingTheLinkedComputerDismountsThePilotAndNeverThrusts() throws Exception {
         final FixtureSite site = site();
