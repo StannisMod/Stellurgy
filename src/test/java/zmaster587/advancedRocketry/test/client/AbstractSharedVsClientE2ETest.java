@@ -231,8 +231,10 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * the crossing dropped him and no wait here would ever have helped. It also proves the client's
      * own mount recorder RAN, because an absence from a recorder nobody installed is not evidence.
      * Raised through {@code scenario().arrangementFailed}, so the failure is TYPED as an arrangement
-     * problem rather than a contract one — the same cut the message describes, made
-     * machine-readable.</p>
+     * problem: this form is for a caller that only needs him seated for a LATER subject. A caller
+     * whose subject IS the remount uses {@link #ridingOnceTheClientHasRemountedAsTheSubject}, which
+     * raises the same narrative as a contract failure — a crossing that drops its pilot is then the
+     * contract failing, not a fixture that did not come up.</p>
      *
      * @param clientMark a mark on the CLIENT log, taken BEFORE the departure. A mark belongs to one
      *                   log: the server's sequence numbers compile here and answer about the wrong
@@ -240,6 +242,31 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      */
     protected final JsonObject ridingOnceTheClientHasRemounted(long clientMark, int tickBudget)
             throws Exception {
+        String failure = whyTheClientHasNotRemounted(clientMark, tickBudget);
+        if (failure != null) {
+            scenario().arrangementFailed(failure);
+        }
+        // Read ONCE, now that the link above says the mount happened: a settled state, not a wait.
+        return bot().reportRidingEntity();
+    }
+
+    /**
+     * {@link #ridingOnceTheClientHasRemounted}, for a caller whose SUBJECT is the remount: the same
+     * wait and the same narrative, raised as an {@link AssertionError}.
+     */
+    protected final JsonObject ridingOnceTheClientHasRemountedAsTheSubject(long clientMark,
+                                                                          int tickBudget)
+            throws Exception {
+        String failure = whyTheClientHasNotRemounted(clientMark, tickBudget);
+        if (failure != null) {
+            throw new AssertionError(failure);
+        }
+        return bot().reportRidingEntity();
+    }
+
+    /** The shared wait of the two forms above: {@code null} once the client's chain ends seated,
+     *  else the narrative of why it did not, with both logs in it. */
+    private String whyTheClientHasNotRemounted(long clientMark, int tickBudget) throws Exception {
         // The SERVER's refusing mark, for the failure narrative only: it reads both honesty flags
         // and hands back the reason instead of asserting, because a recorder that is not subscribed
         // is a HARNESS gap and this method's whole job is to keep such a gap out of the verdict.
@@ -265,7 +292,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
             Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
                     "entity_mount_writes", "the client's own mounts must be observed at all before"
                             + " an absent one can be read as a remount the client never performed");
-            scenario().arrangementFailed("the client's mount chain did not END seated within "
+            return "the client's mount chain did not END seated within "
                     + tickBudget + " ticks of the crossing — either it never remounted him, or it"
                     + " did and something took him off again, and its own records below say which."
                     + " Client says "
@@ -274,10 +301,9 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
                     + "; the SERVER's mount/dismount record across the same window says " + chain
                     + " — if it seated him and the client did not follow this is a replication lag;"
                     + " if it never seated him the crossing dropped him, and that is a PRODUCT"
-                    + " defect, not a wait that was too short. (" + never.getMessage() + ")");
+                    + " defect, not a wait that was too short. (" + never.getMessage() + ")";
         }
-        // Read ONCE, now that the link above says the mount happened: a settled state, not a wait.
-        return bot().reportRidingEntity();
+        return null;
     }
 
     /**

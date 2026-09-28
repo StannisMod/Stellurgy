@@ -323,7 +323,8 @@ private int waitForLoadedShip(int dim) throws Exception {
         // crew member on the ship's seat, in the TARGET cell. The server's re-seat is a link above;
         // what is read here is whether the CLIENT followed it — as its own link, off the mark taken
         // before the departure — and the helper says which of the two failed when it did not.
-        JsonObject riding = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
+        JsonObject riding = ridingOnceTheClientHasRemountedAsTheSubject(clientMark,
+                CLIENT_REMOUNT_BUDGET_TICKS);
         assertTrue("the crew member must survive the jump still riding, on the CLIENT: " + riding
                 + " (targetDim=" + targetDim + ", clientDim=" + bot().reportWeather().get("dim").getAsInt() + ")",
                 riding.get("riding").getAsBoolean());
@@ -498,12 +499,12 @@ private String execEnvelope(String cmd) throws Exception {
      * A seated crew member is re-seated on arrival without anything forcing the ship loaded for him.
      *
      * <p>red-witnessed: with {@code CrewTransfer.reseat} ({@code CrewTransfer:295}) skipping every
-     * seated rider, the test fails after the crossing — "the client's mount chain did not END seated
-     * within 80 ticks of the crossing", 2026-09-28. It fails TYPED AS AN ARRANGEMENT FAILURE: the
-     * shared mount helper raises every unmounted end that way, so a crossing that never re-seats its
-     * pilot reads as a fixture that did not come up. That typing is a defect of its own and is not
-     * fixed here. The verdicts the wave touched are the arrangement's links (spawn, cell entry, ship
-     * usable) and the pre-jump seated control, which confirms the harness's own seat-mount.</p>
+     * seated rider, the test fails after the crossing as an {@code AssertionError} — "the client's
+     * mount chain did not END seated within 80 ticks of the crossing", 2026-09-28. It used to arrive
+     * typed as an ArrangementFailure, because the shared mount helper raised every unmounted end that
+     * way; this method now waits through the form for a caller whose SUBJECT is the remount. The
+     * verdicts the wave touched are the arrangement's links (spawn, cell entry, ship usable) and the
+     * pre-jump seated control, which confirms the harness's own seat-mount.</p>
      */
     @Test
     public void aCrewMemberIsReseatedOnArrivalWithNothingForcingTheShipLoaded() throws Exception {
@@ -581,7 +582,8 @@ private String execEnvelope(String cmd) throws Exception {
                 + " ship loaded", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
         int targetDim = arrivedTargetDim(this::execEnvelope);
 
-        JsonObject riding = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
+        JsonObject riding = ridingOnceTheClientHasRemountedAsTheSubject(clientMark,
+                CLIENT_REMOUNT_BUDGET_TICKS);
         assertTrue("a crew member must be re-seated on arrival with NOTHING forcing the ship loaded; client "
                 + "reports " + riding + " (targetDim=" + targetDim + ", clientDim="
                 + bot().reportWeather().get("dim").getAsInt() + ")",

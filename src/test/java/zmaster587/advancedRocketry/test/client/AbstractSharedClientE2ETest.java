@@ -431,6 +431,21 @@ public abstract class AbstractSharedClientE2ETest {
         // assertion below would then fail naming coordinates, which is the symptom and not the
         // cause. Everything the hook does is asserted by the hook itself.
         resetFamilyStateBeforeTeleport();
+        // Every binding a subsystem holds for this player — the aboard record, a cell claim, a deck
+        // hold, a drift run, the atmosphere he was last told — released through production's OWN
+        // service, which is the operation a player's release is. The mount the family hook above
+        // already took is the one binding that is the caller's rather than a subsystem's. Released
+        // AFTER that hook (a seated player's seat belongs to the family) and BEFORE the teleport (a
+        // deck hold would pin him where he was). What was released is recorded, so a scenario that
+        // inherited something can see what; that he is bound to nothing AFTERWARDS is asserted,
+        // because a release nobody checks cannot be told from no release.
+        String released = exec("artest player release");
+        assertTrue("the between-scenario release must run: " + released, Reply.of(released).ok());
+        scenario.record("releasedAtStart", Reply.of(released).integer("releasedCount"));
+        String stillBound = exec("artest player bindings");
+        assertEquals("after the between-scenario release the player must be bound to nothing, or the"
+                + " next scenario inherits its predecessor's ship, cell or hold: " + stillBound,
+                0, Reply.of(stillBound).arrayLength("bound"));
         // DIMENSION, and it must come before the teleport: vanilla /tp moves the player WITHIN the
         // world he is in, so a scenario left behind in the space dim or on a planet would be placed
         // at the right X/Z in the WRONG world — and the plot assertion below, which reads X and Z,

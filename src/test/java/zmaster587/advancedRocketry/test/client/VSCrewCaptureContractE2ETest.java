@@ -323,15 +323,22 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final double GROUND_WALK_Y_SPREAD_BLOCKS = 2.0;
 
     /**
-     * How far a DECLARED position may move between the two server reads either side of a client
-     * that tried to commit a forty-block step, in blocks.
+     * The step the client's own travel commit is made to declare, in blocks — chosen to land BETWEEN
+     * the two things that could refuse it, so that exactly one of them is asked.
      *
-     * <p>The TEST'S OWN, and a bound on the SERVER's record rather than on production's guard:
-     * AR's own external-move guard is far tighter (a fifth of a block plus three times the carry),
-     * so what this pins is that a divergence of that size never survives to be declared at all.
-     * Four blocks is well under the forty the client attempted and well over an ordinary tick.</p>
+     * <p>Above the deck bound's one-tick region for a parked craft:
+     * {@code DeckMovementBound.PLAYER_MAX_OWN_BLOCKS_PER_TICK + REGION_FLOOR_BLOCKS} = 3. Below
+     * vanilla's own speed check, which refuses a step whose squared length exceeds 100 over the
+     * server's copy of the motion ({@code NetHandlerPlayServer:547-551}) — ten blocks for a body the
+     * server has at rest — and refuses it FIRST, returning before the bound is consulted. Measured
+     * 2026-09-28 with a forty-block step: "moved too quickly! 0.0,40.0,0.0" in the server log, and no
+     * bound record at all.</p>
      */
-    private static final double DECLARED_STEP_BLOCKS = 4.0;
+    private static final int WILD_STEP_BLOCKS = 6;
+
+    /** Client ticks of walking before the step: long enough that the bound has judged this body on
+     *  consecutive ticks (a walking client sends a position every tick), so its region is one tick's. */
+    private static final int WALK_BEFORE_THE_STEP_TICKS = 5;
 
     /**
      * How far a body must rise for the double-tap to have actually started CREATIVE FLIGHT, in
@@ -1299,18 +1306,21 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     // ---- The server does not simply ratify what a client declares ------------------------------
 
     /**
-     * A forty-block step committed by the client's own travel never becomes a position the server
-     * holds for him.
+     * A step the client's own travel commits, larger than a body on a deck can take, is refused by the
+     * server's deck bound rather than ratified as a declared position.
      *
-     * <p>red-witnessed: none by an AR line with this stimulus — measured, 2026-09-28. The step DOES
-     * leave the client, and VANILLA refuses it: the harness server log reads "ForgeTestClient moved too
-     * quickly! 0.0,40.0,0.0", and the client applies the server's position correction two ticks after
-     * the shove, with no {@code deck_movement_bound} record in the window. So AR's bound is never
-     * consulted, and turning it off (or {@code followShipPoses} as well) leaves this green. A smaller
-     * step would reach the bound, but it would not reach these verdicts: the client re-images the body
-     * to its deck point the very next tick, so both position reads after the window are at the deck
-     * whether the bound refused the step or took it. Reaching the bound needs a verdict on the bound's
-     * own record, not a new shove size.</p>
+     * <p>Redesigned 2026-09-28. It used to shove forty blocks and read positions after the window, and
+     * neither half could see the bound: vanilla's speed check refuses forty blocks first ("moved too
+     * quickly! 0.0,40.0,0.0" in the server log, no bound record), and the client re-images the body
+     * to its deck point the next tick, so every position read afterwards is at the deck whatever the
+     * bound did. It now shoves by a step vanilla lets through and reads the bound's own verdict.</p>
+     *
+     * <p>red-witnessed: with {@code DeckMovementBound.accepts} ({@code DeckMovementBound:118})
+     * ratifying every step: "a 6-block step committed by the client's own travel must be REFUSED by
+     * the server's deck bound … refused 0, accepted 2", 2026-09-28. Healthy, the same run shape
+     * records {@code moved 6.0, accepted:false}. The step is taken from a WALKING body: from a
+     * standing one the bound accepted it on healthy production, because a standing client reports only
+     * every twenty ticks and the bound licenses up to ten ticks of movement per report.</p>
      */
     @Test
     public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
@@ -1343,12 +1353,12 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                 + " asked what it accepts FROM a deck: " + deckCapture3.raw(),
                 deckCapture3.alreadyTracked);
 
-        double startY = bot().reportState().get("playerY").getAsDouble();
         long shoveMark = client.mark();
         Events serverEvents = events();
         long boundMark = serverEvents.markInstrumented();
 
-        // Forty blocks in one tick: no input and no deck can produce it, which is the whole point.
+        // A step no input and no parked deck can produce, sized so that vanilla lets it through and
+        // only the bound can refuse it (see WILD_STEP_BLOCKS).
         //
         // Armed INSIDE the client's own travel commit rather than applied from outside it: while AR
         // holds the capture it writes this body's position every tick, so a shove from anywhere else
@@ -1356,89 +1366,68 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // produced a movement packet identical to standing still. The code that owns the position is
         // the only thing that can declare an impossible one, which is exactly how it happened in
         // play.
-        ClientWindow shove = ClientWindow.open(bot(),
-                "zmaster587.advancedRocketry.test.trace.ShoveArming", 40);
-        // The armed shove TAKING is a link, and the client's own commit records it: awaited from the
-        // mark taken before the arming, so a red says "the travel commit never took the step" rather
-        // than reporting a height twenty ticks later.
-        client.await(shoveMark, "ship_frame_travel_shove", "the client's own travel commit must take"
-                + " the armed step, or nothing in this scenario ever declares an impossible position"
-                + " and the height check below passes on a body that never moved", 200);
+        // FROM A WALKING BODY. The bound's region is scaled by the ticks since it last judged this
+        // player, capped at ten — and a STANDING client sends a position packet only every twenty
+        // ticks, so a standing body's next packet is licensed (2 + carry) x 10 + 1, about 21 blocks:
+        // more than vanilla's own ten. Measured 2026-09-28: this step from a standing body was
+        // ACCEPTED, moved 6.0. That is the bound working as written — its subject is a body moving
+        // on a wrong carry, and a moving body reports every tick — so the stimulus has to be one.
+        // STIMULUS: the walk key held from before the step until after it is taken.
+        bot().holdKey(Keyboard.KEY_W);
+        ClientWindow shove;
+        try {
+            // STIMULUS: five ticks of walking, so the bound has judged this body tick by tick.
+            bot().waitTicks(WALK_BEFORE_THE_STEP_TICKS);
+            shove = ClientWindow.open(bot(),
+                    "zmaster587.advancedRocketry.test.trace.ShoveArming", WILD_STEP_BLOCKS);
+            // The armed shove TAKING is a link, and the client's own commit records it: awaited from
+            // the mark taken before the arming, so a red says "the travel commit never took the step".
+            client.await(shoveMark, "ship_frame_travel_shove", "the client's own travel commit must"
+                    + " take the armed step, or nothing in this scenario ever declares an impossible"
+                    + " position", 200);
+        } finally {
+            bot().releaseKey(Keyboard.KEY_W);
+        }
         shove.close();
-        // WINDOW: twenty client ticks after the step, each sending the server a movement packet
-        // that declares where the client then holds the body — the declarations this leg is about —
-        // and the fence after it makes the server have HANDLED every one of them before anything
-        // is read. The window's two ends are startY and endY, both in the message.
-        bot().waitTicks(20);
-        fenceWhatTheClientSent("the server must have handled every movement packet of the window"
-                + " before what it was declared can be read");
+        // The fence makes the server have HANDLED every movement packet the client sent since the
+        // shove before the bound's records are read. It is not a settle: what is read is a record the
+        // bound wrote while handling the packet that carried the step.
+        fenceWhatTheClientSent("the server must have handled the packet that declared the step before"
+                + " the bound's verdict on it can be read");
 
-        double endY = bot().reportState().get("playerY").getAsDouble();
-        // "He still holds his deck after all of that" — HIS deck. A forty-block step that ended with
-        // the body captured by a neighbouring hull is the failure this scenario exists to catch, and
+        String shoveTrace = client.since(shoveMark, "ship_frame_travel_shove");
+        String boundTrace = String.valueOf(serverEvents.since(boundMark, "deck_movement_bound"));
+        System.out.println("[crewcap] deck-bound shove trace :: " + shoveTrace
+                + "\n[crewcap] deck-bound server trace :: " + boundTrace
+                + "\n[crewcap] deck-bound refusal frames :: " + framesOfRefusals(boundTrace));
+        Events.assertInstrumentRan(boundTrace, "deck_movement_bound",
+                "the server's movement bound was or was not asked about the step");
+
+        // WHAT THIS PINS: the BOUND's own verdict on the packet that declared the step, read off its
+        // own record — not a position read after the window. A position cannot see the bound: the
+        // client re-images the body to its deck point the very next tick (`followShipPoses`), so the
+        // next packet declares the deck again, and both the client's and the server's copy are back
+        // at the deck whether the bound refused the step or ratified it. Measured 2026-09-28.
+        //
+        // The bound records every refusal and every accepted step above a block, so the step appears
+        // either way, and which way is the verdict.
+        long refusedSteps = Events.recordsWhere(boundTrace, "accepted", "false").stream()
+                .filter(r -> Events.number(r, "moved") >= WILD_STEP_BLOCKS - 1.0).count();
+        long acceptedSteps = Events.recordsWhere(boundTrace, "accepted", "true").stream()
+                .filter(r -> Events.number(r, "moved") >= WILD_STEP_BLOCKS - 1.0).count();
+        assertTrue("a " + WILD_STEP_BLOCKS + "-block step committed by the client's own travel must"
+                        + " be REFUSED by the server's deck bound, never ratified as a declared"
+                        + " position: refused " + refusedSteps + ", accepted " + acceptedSteps
+                        + " :: " + boundTrace,
+                refusedSteps > 0 && acceptedSteps == 0);
+
+        // "He still holds his deck after all of that" — HIS deck. A step that ended with the body
+        // captured by a neighbouring hull is a failure this scenario exists to catch too, and
         // `alreadyTracked` reads the same for it.
         DeckCapture capture = deckCaptureOfThisShip(scenarioShipId,
                 "the body must still hold the deck of the ship it was shoved on");
-        // The shove's own record, so a refusal that did not happen has one reading and not two: the
-        // step was never applied, or it was applied and the server let it stand. Re-read after the
-        // settle so the trace printed is the whole window and not just the tick the await returned on.
-        String shoveTrace = client.since(shoveMark, "ship_frame_travel_shove");
-        // And what the SERVER's bound was asked about, from its own side's log: "refused nothing"
-        // and "was never asked about anything wild" are different answers.
-        String boundTrace = String.valueOf(serverEvents.since(boundMark));
-        // What the bound REFUSED in this window: its own records since the mark, never a total.
-        System.out.println("[crewcap] deck-bound shove: y " + startY + " -> " + endY
-                + " refusedInWindow=" + Events.countRecords(boundTrace, "accepted", "false")
-                + " capture=" + capture.raw() + "\n[crewcap] deck-bound shove trace :: " + shoveTrace
-                + "\n[crewcap] deck-bound server trace :: " + boundTrace
-                + "\n[crewcap] deck-bound refusal frames :: " + framesOfRefusals(boundTrace));
-        Events.assertInstrumentRan(shoveTrace, "ship_frame_travel_shove",
-                "the client's travel commit did or did not take the armed step");
-        Events.assertInstrumentRan(boundTrace, "deck_movement_bound",
-                "the server's movement bound was or was not asked about a wild step");
-
-        // WHAT THIS PINS, and what it deliberately does not.
-        //
-        // A forty-block step the client's own travel committed does not end up as anyone's position.
-        // Measured 2026-09-28 with every client record of the window printed: the travel took the
-        // step (196 from 156), the client sent it, and the server's VANILLA speed check refused it
-        // ("moved too quickly! 0.0,40.0,0.0" in the server log) and corrected him two ticks later —
-        // before AR's movement bound was consulted at all. On the tick in between, the client's own
-        // deck-follow pass (`followShipPoses`) had already put him back on his deck point.
-        //
-        // So what this scenario pins is the OUTCOME, and it is held today by vanilla and by the
-        // client's re-imaging, not by the bound it was written for: the reads below are end states,
-        // and a step one packet long has been undone by the time they are taken. The bound is the
-        // subject of a redesign that asserts on its own verdict instead.
-        assertTrue("a forty-block client-side step must not reach the server as a declared position:"
-                + " it arrived as y " + startY + " -> " + endY + " :: " + boundTrace,
-                Math.abs(endY - startY) < DECLARED_STEP_BLOCKS);
-        // And asked of the SERVER, whose copy is what a declaration moves. Its position, read after
-        // the fence above made every packet of the window HANDLED: a declaration the server took
-        // would have moved its copy the forty blocks, and a refused one is reverted to where he was.
-        // (Not its `pos_jump` records: vanilla applies an accepted move through `move`, which the
-        // position writers do not see, while the bound's own REFUSAL is a teleport back that they
-        // do — so an absence of jumps reads a working bound as the failure.)
-        PlayerPosition serverAfter = PlayerPosition.of(this::exec, botName());
-        assertTrue("a forty-block client-side step must not become the SERVER's position for him:"
-                        + " client y " + startY + " -> " + endY + ", server y now " + serverAfter.y
-                        + " :: " + boundTrace,
-                Math.abs(serverAfter.y - startY) < DECLARED_STEP_BLOCKS);
         assertTrue("the body must still hold its deck after all of that: " + capture.raw(),
                 capture.alreadyTracked);
-        // "The bound was consulted while he stood on the deck" is the `assertInstrumentRan` above and
-        // nothing else. A third assertion used to sit here reading `boundTrace.contains(
-        // "deck_movement_bound")` — satisfied by the INSTRUMENT NAME the reply's envelope carries,
-        // which is the very string that assertion had already checked, so it could not fail once the
-        // instrument line passed. It is not replaceable by a record count either: the bound records
-        // only refusals and steps above a block, so a body standing on a deck legitimately produces
-        // no record at all, and requiring one would assert the recorder's threshold rather than the
-        // product.
-        // Printed, not asserted: the refusal count is the number the region's own leg would move,
-        // and nothing here can move it without disabling the guard that fires first.
-        System.out.println("[crewcap] deck-bound region refusals in this window: "
-                + Events.countRecords(boundTrace, "accepted", "false") + " (each with both endpoints"
-                + " in the trace above)");
     }
 
     // ---- #47 driver isolation LIVED HERE, and its subject is gone (2026-09-16) --------------
@@ -2226,8 +2215,10 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * must stand on the deck ONCE before the manoeuvre" (the server reads no capture after the
      * client's capture link has passed), so both inversions tried that way — a carry bias from a
      * body's second capture, and one only on a capture after an absence — stopped there. In the full
-     * class run of the same day's gate it PASSED. The witness that remains is an inversion run inside
-     * the whole class.</p>
+     * class run of the same day's gate it PASSED; the inversion run of the whole class that followed
+     * stopped at the same arrangement again, with this method first in the class as it was in the
+     * gate. Red at the arrangement in four of five runs that day, on healthy and inverted production
+     * alike: the arrangement, not the carry, decides this method's outcome today.</p>
      */
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {

@@ -189,6 +189,44 @@ public class PlayerReleaseContractTest {
     }
 
     /**
+     * A player coming back to a ship the server no longer knows is put down at his spawn point, and
+     * the login releases EVERYTHING that bound him to a ship or a cell — not only the aboard record
+     * the orphan branch also clears by itself.
+     *
+     * <p>That is why the transfer grace is the binding asked about: the aboard record would read
+     * released whether or not the login called the release, so it cannot tell the two apart; the
+     * grace is let go by the release and by nothing else on that path. The login is the real
+     * handler — the event a join fires once the save file has been read, posted for this player.</p>
+     *
+     * <p>red-witnessed: with the orphan branch of {@code SpaceEventHandler.onPlayerLoadFromFile}
+     * releasing nothing instead of calling {@code playerRelease().toTheWorld}: "a player orphaned from
+     * a ship the server no longer knows must come back bound to nothing … {\"bound\":[\"rocket transfer
+     * grace\"]}", 2026-09-28.</p>
+     */
+    @Test
+    public void aReturningPlayerWhoseShipIsGoneIsReleasedFromEverything() throws Exception {
+        ensurePlayer();
+        // A record that says he was out in space, on a ship this server has never heard of — the
+        // SHIP_UNKNOWN orphan branch, and a grace still open when he comes back.
+        exec("artest player bind-aboard " + SHIP + " spaceborne");
+        exec("artest player bind-grace");
+        // THE CONTROL: both are held before the login, asked of the same witness as after it.
+        String before = exec("artest player bindings");
+        assertTrue("before the login he must be bound to his ship AND inside his transfer grace: "
+                        + before,
+                Reply.of(before).holdsText(BOUND, ABOARD_RECORD)
+                        && Reply.of(before).holdsText(BOUND, TRANSFER_GRACE));
+
+        String login = exec("artest player load-from-file");
+        assertTrue("the login event must be posted: " + login, Reply.of(login).ok());
+
+        String after = exec("artest player bindings");
+        assertTrue("a player orphaned from a ship the server no longer knows must come back bound to"
+                + " nothing — every binding to a ship or a cell released by the login: " + after,
+                (Reply.of(after).arrayLength(BOUND) == 0));
+    }
+
+    /**
      * The name {@code ensure-fake} creates the player under, read off the probe rather than guessed
      * ({@code TestProbeCommand}'s {@code GameProfile}). The aboard-tag witness takes a name, so a
      * wrong one here would make that assertion fail for a reason that has nothing to do with the

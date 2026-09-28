@@ -20940,14 +20940,31 @@ public class TestProbeCommand extends CommandBase {
             // subject is "a bound player becomes unbound", not how he came to be bound — which is
             // another mechanic's contract, pinned by the boarding e2es.
             if (args.length < 2) {
-                send(sender, "{\"error\":\"usage: player bind-aboard <shipUuid>\"}");
+                send(sender, "{\"error\":\"usage: player bind-aboard <shipUuid> [spaceborne]\"}");
                 return;
             }
+            // `spaceborne` gives the record a cell, which is what makes a login treat him as having
+            // been out in space — without one the login restore leaves the record alone.
+            boolean spaceborne = args.length >= 3 && "spaceborne".equals(args[2]);
             zmaster587.advancedRocketry.space.ShipAboardTag.stamp(player,
                     zmaster587.advancedRocketry.space.ShipAboardTag.Aboard.standing(
-                            java.util.UUID.fromString(args[1]), null, 0.0, 0.0, 0.0));
+                            java.util.UUID.fromString(args[1]),
+                            spaceborne ? zmaster587.advancedRocketry.space.GalacticCoord
+                                    .ofSectorLocal(0L, 0L, 0L, 0L, 0L, 0L) : null,
+                            0.0, 0.0, 0.0));
             send(sender, "{\"ok\":true,\"tagged\":" + (zmaster587.advancedRocketry.space.ShipAboardTag
                     .of(player) != null) + "}");
+            return;
+        }
+        if ("load-from-file".equals(sub)) {
+            // /artest player load-from-file — post the event a login fires once the player's save
+            // has been read, for THIS player, so the login restore decides about him exactly as it
+            // would on a real join. The headless tier has no join to make; the decision is the
+            // subject, and it is made in the handler of this event.
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                    new net.minecraftforge.event.entity.player.PlayerEvent.LoadFromFile(player,
+                            server.getDataDirectory(), player.getUniqueID().toString()));
+            send(sender, "{\"ok\":true,\"dim\":" + player.dimension + "}");
             return;
         }
         if ("bind-grace".equals(sub)) {
