@@ -244,6 +244,14 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
 
     // ── opted back in: the skip lands on the PLANET's dawn, not vanilla's ────────────────────────
 
+    /**
+     * A completed sleep on a planet whose skip is allowed wakes it at the PLANET's dawn — the next
+     * multiple of its rotational period — and leaves the overworld's clock alone.
+     *
+     * <p>red-witnessed: with {@code MixinWorldServer}'s planetary rounding replaced by vanilla's
+     * ({@code setWorldTime(vanillaRounded)} in the per-dim branch), this fails with "sleep skip must
+     * land at/after the next planetary dawn (30000), got 24007" — 2026-09-28.</p>
+     */
     @Test
     public void sleepingOnPlanetSkipsToPlanetaryDawnOnly() throws Exception {
         setFlag(true);
@@ -296,10 +304,29 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         // poll would sample is over, and the poll reports "he never got into the bed" about a player
         // who slept and woke. The event log recorded all three events; the poll saw none of them.
 
-        // Poll for the planetary dawn: next multiple of 30000 after 20000 is exactly 30000. Vanilla's
-        // hard-coded rounding would give 24000 — mid-night on this planet — which the modulo
-        // assertion rejects.
-        long planetTime = waitForPlanetDawn(DIM_SKIP);
+        // THE SKIP ITSELF, as the policy allowed it from inside the sleep redirect. `allows` is asked
+        // there and the redirect writes the clock on the next line, synchronously, in the same tick
+        // (`MixinWorldServer`, then vanilla's `wakeAllPlayers`) — so once this record exists the
+        // clock has already been written and ONE read is the measurement. Narrowed by the caller: a
+        // probe and the `/time` guard ask the same policy about the same world.
+        String skipped = events.awaitMatching(mark, "time_skip_decided",
+                seen -> zmaster587.advancedRocketry.test.Events
+                        .recordsWhere(seen, "dim", String.valueOf(DIM_SKIP)).stream()
+                        .anyMatch(decision -> "true".equals(
+                                        zmaster587.advancedRocketry.test.Events.text(decision, "allowed"))
+                                && String.valueOf(zmaster587.advancedRocketry.test.Events
+                                        .text(decision, "caller"))
+                                        .contains("roundSleepWakeToRotationalPeriod")),
+                "the sleep redirect allowing the skip on dim " + DIM_SKIP,
+                "a completed sleep on a planet whose skip is allowed must reach the policy from the"
+                        + " sleep redirect and be ALLOWED — without it the clock below was never"
+                        + " asked to move",
+                SLEEP_VERDICT_BUDGET_TICKS);
+        scenario().record("timeSkipDecision", skipped);
+
+        // Next multiple of 30000 after 20000 is exactly 30000. Vanilla's hard-coded rounding would
+        // give 24000 — mid-night on this planet — which the modulo assertion rejects.
+        long planetTime = dimTime(DIM_SKIP);
         assertTrue("sleep skip must land at/after the next planetary dawn (30000), got "
                 + planetTime, planetTime >= ROTATIONAL_PERIOD);
         assertTrue("sleep skip must land ON planetary dawn (multiple of " + ROTATIONAL_PERIOD
@@ -438,27 +465,6 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
 
     private long dimTime(int dim) throws Exception {
         return dimTimeJson(dim).get("worldTime").getAsLong();
-    }
-
-    /** Polls ~30 s for the planet clock to jump past the staged night (sleep takes 100+ ticks). */
-    private long waitForPlanetDawn(int dim) throws Exception {
-        long last = -1;
-        // STAYS A LOOP: the world clock is a VALUE that advances, and the thing being asserted is
-        // that it passed a threshold — not that anything committed an event. The sleep skip itself
-        // publishes no record, so there is nothing to link on; what a link would have to be is a
-        // record of the skip being applied, at the seam where production advances the clock. What
-        // this cannot see: a clock that jumped past dawn and was set back inside one 20-tick gap.
-        for (int waited = 0; waited < 600; waited += 20) {
-            last = dimTime(dim);
-            if (last >= ROTATIONAL_PERIOD) {
-                return last;
-            }
-            bot().waitTicks(20);
-        }
-        throw new AssertionError("planet never reached its dawn — either the player "
-                + "never fell asleep (trySleep rejected?) or the sleep skip landed off "
-                + "planetary dawn (vanilla 24000-rounding instead of rotationalPeriod); "
-                + "last planet worldTime=" + last);
     }
 
     /**

@@ -660,22 +660,13 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().requireArranged("fixture multiblock observatory failed: " + fixture,
                 Reply.of(fixture).ok());
 
-        String completed = "";
-        // STAYS A LOOP because its ITERATIONS are the stimulus: each one re-issues `try-complete`,
-        // which is production being ASKED to validate the multiblock, and what makes the ask
-        // succeed is the next ask rather than more patience on the last one. A link would have to
-        // be a record of the validation succeeding, and the same re-ask would still be what
-        // produced it. What this cannot see: which of the eight asks was the one that took.
-        for (int attempt = 0; attempt < 8; attempt++) {
-            completed = exec("artest machine try-complete " + dim + " " + x + " " + Y + " " + z);
-            // absence is the answer: this is the wait, and "the flag is not there yet" is
-            // the state it exists to sit through.
-            if (Reply.of(completed).boolOr("isComplete", false)) {
-                break;
-            }
-            bot().waitTicks(10);
-        }
-        scenario().requireArranged("the observatory structure never validated: " + completed,
+        // ONE ask: libVulpes' `attemptCompleteStructure` walks the structure's blocks synchronously
+        // inside the probe call, so no amount of ticking turns a refusal into a success. An eight-ask
+        // retry stood here; with every ask logged (2026-09-28), this validation and the 26 others in
+        // the server tier succeeded on the first. A refusal is the fixture's to explain.
+        String completed = exec("artest machine try-complete " + dim + " " + x + " " + Y + " " + z);
+        scenario().requireArranged("the observatory structure must validate on the first ask: "
+                        + completed,
                 Reply.of(completed).bool("isComplete"));
 
         // Stand on the structure's open face, one block from the controller, looking at it. The

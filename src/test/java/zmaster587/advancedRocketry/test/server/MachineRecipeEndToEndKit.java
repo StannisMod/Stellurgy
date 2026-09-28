@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.server.TestClient;
-import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,14 +39,6 @@ import static org.junit.Assert.assertTrue;
  * hatch positions for them.</p>
  */
 final class MachineRecipeEndToEndKit {
-
-    /**
-     * World between retries of a multiblock completion - the old 500 ms. The retry exists because
-     * the machine's own tick is what completes it, so the gap between asks is measured in those.
-     */
-    private static final int TICKS_BETWEEN_ATTEMPTS = 10;
-
-
 
     private MachineRecipeEndToEndKit() {}
 
@@ -112,59 +103,34 @@ final class MachineRecipeEndToEndKit {
     }
 
     /**
-     * Drives {@code /artest machine try-complete} with a retry
-     * shim. Returns the response from the last attempt that produced
-     * {@code attempted:true}, or the response from the final retry on
-     * timeout. Callers must assert their own {@code isComplete} expectation
-     * — this helper only guarantees that the validator actually ran.
+     * Asks production ONCE to validate the multiblock whose controller is at the given position —
+     * {@code /artest machine try-complete}, which calls libVulpes' {@code attemptCompleteStructure}
+     * on the controller — and returns the reply. Callers assert their own {@code isComplete}
+     * expectation, positive or negative.
      *
-     * <p>The race: {@code attemptCompleteStructure} occasionally returns
-     * {@code false} on the immediate first call after the fixture is built
-     * (chunk-load + finalization race). Re-invoking it across the natural
-     * tick gap between two probe round-trips lets the finalization settle.
-     * Budget: 8 attempts × 500 ms gap (~4 s ceiling on the non-happy path;
-     * ~0 ms cost when the first call succeeds — which is the common case).
-     * Earlier 5×200ms budget proved insufficient under parallel-3-fork
-     * pressure on multiple multiblocks
-     * (ArcFurnace, PrecisionLaserEtcher, Beacon).</p>
+     * <p><b>Once, because the answer does not change with time.</b> {@code attemptCompleteStructure}
+     * is a synchronous walk over the structure's blocks inside the probe call: it refuses on a block
+     * that is wrong or a phantom, and on a chunk that is not loaded — which on the server it loads
+     * as it asks. Nothing ticking in between can turn a refusal into a success. An eight-ask retry
+     * stood here for a "chunk-load + finalization race" under parallel forks; measured 2026-09-28
+     * with every ask logged, all 27 positive validations across the thirteen classes that build a
+     * multiblock succeeded on the FIRST ask, and the retry did its only work in the five negative
+     * scenarios — asking a structure that must refuse seven more times. A first-ask refusal now
+     * fails its caller with the reply, which is where a structure that needs asking twice belongs.</p>
      */
-    static String tryCompleteWithRetry(TestClient c, int dim, int cx, int cy, int cz) throws Exception {
-        String resp = null;
-        // STAYS A LOOP, and the reason is that its ITERATIONS are the stimulus: each one re-issues
-        // `try-complete`, which is production being ASKED to validate the multiblock. A link would
-        // have to be a record of the validation succeeding, and the thing that makes it succeed is
-        // the next ask — so waiting longer on one ask cannot produce what re-asking does. What this
-        // cannot see: which of the eight asks was the one that took.
-        for (int attempt = 0; attempt < 8; attempt++) {
-            resp = String.join("\n",
-                    c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
-            // absence is the answer: this is the wait, and "the flag is not there yet" is
-            // the state it exists to sit through.
-            if (Reply.of(resp).boolOr("attempted", false)) return resp;
-            GameTicks.advance(c, GameTicks.server(), TICKS_BETWEEN_ATTEMPTS);
-        }
-        return resp;
+    static String tryComplete(TestClient c, int dim, int cx, int cy, int cz) throws Exception {
+        return String.join("\n",
+                c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
     }
 
     static void assertFixtureValidates(TestClient c, int cx, int cy, int cz,
                                        String tag, String fixtureResp) throws Exception {
-        // Retry mitigation — see tryCompleteWithRetry above.
-        StringBuilder attempts = new StringBuilder();
-        String resp = null;
-        // Same shape as tryCompleteWithRetry: the ask IS the stimulus, so this is a loop on
-        // purpose. It differs in keeping every reply, because a red here wants to show which asks
-        // were refused and how — the count alone would not say whether the answer ever changed.
-        for (int attempt = 0; attempt < 8; attempt++) {
-            resp = String.join("\n",
-                    c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-            // absence is the answer: this is the wait, and "the flag is not there yet" is
-            // the state it exists to sit through.
-            if (Reply.of(resp).boolOr("isComplete", false)) return;
-            attempts.append("\n  attempt ").append(attempt + 1).append(": ").append(resp);
-            GameTicks.advance(c, GameTicks.server(), TICKS_BETWEEN_ATTEMPTS);
+        String resp = tryComplete(c, 0, cx, cy, cz);
+        if (!Reply.of(resp).boolOr("isComplete", false)) {
+            throw new AssertionError(tag + " — the multiblock built by the fixture must validate on"
+                    + " the first ask (see tryComplete); reply: " + resp + "\n  fixture: "
+                    + fixtureResp);
         }
-        throw new AssertionError(tag + " — multiblock not complete after 8 attempts"
-                + attempts + "\n  fixture: " + fixtureResp);
     }
 
     // ---- Recipe discovery --------------------------------------------------

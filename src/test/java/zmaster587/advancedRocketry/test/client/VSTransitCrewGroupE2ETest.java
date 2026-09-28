@@ -1659,19 +1659,40 @@ private String hud() throws Exception {
                         + " the ship: state=" + state + "; the server's chain: " + events.since(mark),
                 health != null && health.getAsFloat() > 0f);
 
-        // The CLIENT's half of the arrival, as the siblings read it.
-        boolean carriedOn = false;
-        for (int i = 0; i < 60 && !carriedOn; i++) {
-            bot().waitTicks(2);
-            carriedOn = clientDim("the arrival poll") == targetDim
-                    && DeckCapture.read(this::exec).alreadyTracked;
+        // The CLIENT's half of the arrival, as the sibling above reads it: a RECORD of his client
+        // being moved into the target cell, from the mark taken before the departure. Typed as an
+        // arrangement: a client that never arrived has measured nothing about his posture there.
+        try {
+            ClientEvents.awaitDim(clientEvents(), clientMark, targetDim,
+                    "the arrival must have carried him at all — his own client must be in the TARGET"
+                            + " cell before his posture there means anything", JUMP_LINK_BUDGET_TICKS,
+                    () -> "the server's chain: " + events.since(mark));
+        } catch (AssertionError neverArrived) {
+            scenario().requireArranged(neverArrived.getMessage(), false);
         }
+        // THE HOLD'S END, then one read of the capture. The settle the chain ended at does NOT mean
+        // the capture exists: the re-seat only places him and arms a deck hold (`CrewTransfer.
+        // placeOnDeck` -> `DeckHold.holdOnDeck`), and the capture is seeded by his CLIENT on a later
+        // tick. The hold ends on every path — captured, excluded (riding), expired, logged out, ship
+        // gone — within its bounded window, and `deck_hold_ended` records each; so this link waits on
+        // something that always happens, and the read after it is of a state production has finished
+        // deciding. Narrowed to him and to AFTER the arrival's re-seat, so an earlier hold in the
+        // flight cannot answer. Not a wait on `deck_entered`: that one does not happen on the defect,
+        // and its expiry would fail before the posture assertion the next comment puts first.
+        String botName = botName(this::exec);
+        java.util.List<String> reseats = Events.records(events.since(mark, "crew_reseated"));
+        scenario().requireArranged("the arrival's re-seat must be on record before its hold can be"
+                + " read: " + events.since(mark), !reseats.isEmpty());
+        final double reseatSeq = Events.number(reseats.get(reseats.size() - 1), "seq");
+        String holdEnd = events.awaitMatching(mark, "deck_hold_ended",
+                seen -> Events.recordsWhere(seen, "who", botName).stream()
+                        .anyMatch(ended -> Events.number(ended, "seq") > reseatSeq),
+                "the deck hold armed by the arrival's re-seat ending, on any of its branches",
+                "the arrival's deck hold must END — every branch records it, so its absence means the"
+                        + " hold was never armed or the recorder is dead: " + events.since(mark),
+                JUMP_LINK_BUDGET_TICKS);
+        scenario().record("deckHoldEnded", holdEnd);
         DeckCapture captureOnArrival = DeckCapture.read(this::exec);
-        int arrivedDim = clientDim("the arrival verdict");
-        scenario().requireArranged("the arrival must have carried him at all — his own client must be in"
-                + " the TARGET cell (" + targetDim + ") before his posture there means anything; it is"
-                + " in " + arrivedDim + ": " + captureOnArrival.raw(),
-                arrivedDim == targetDim);
         // ── THE CONTRACT, before the arrangement-shaped reading below ───────────────────────────
         // Posture first, deliberately: being off the deck is a CONSEQUENCE of having been seated, so a
         // red that leads with the missing deck capture describes the symptom's shadow. Riding at all is

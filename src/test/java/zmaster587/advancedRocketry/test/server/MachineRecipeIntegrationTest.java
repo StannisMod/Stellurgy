@@ -94,11 +94,8 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
         String outPos = opm[0] + " " + opm[1] + " " + opm[2];
         String pwrPos = ppm[0] + " " + ppm[1] + " " + ppm[2];
 
-        // 2. Validate multiblock. Use the kit's retry helper — under
-        //    parallel-fork pressure `attemptCompleteStructure` rarely loses
-        //    the chunk-load + finalization race on the immediate first call
-        //.
-        String complete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
+        // 2. Validate multiblock — one ask; see tryComplete for why once is the whole answer.
+        String complete = MachineRecipeEndToEndKit.tryComplete(
                 client(), 0, cx, cy, cz);
         assertTrue("multiblock not complete: " + complete,
                 Reply.of(complete).bool("isComplete"));

@@ -54,7 +54,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         assertEquals("expected TileObservatory tile at controller pos: " + info,
                 "TileObservatory", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
+        String tryComplete = MachineRecipeEndToEndKit.tryComplete(
                 client(), 0, CX, CY, CZ);
         assertTrue("try-complete probe errored: " + tryComplete,
                 Reply.of(tryComplete).ok());
@@ -69,7 +69,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String first = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
@@ -80,7 +80,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         assertTrue("could not replace lens: " + breakLens,
                 Reply.of(breakLens).ok());
 
-        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String broken = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after central lens removal — "
                         + "validator broken: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
@@ -93,7 +93,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String first = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
@@ -104,7 +104,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         assertTrue("could not replace motor: " + breakMotor,
                 Reply.of(breakMotor).ok());
 
-        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String broken = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after motor removal — "
                         + "validator broken: " + broken,
                 (!Reply.of(broken).bool("isComplete")));
@@ -117,7 +117,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String first = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
                 Reply.of(first).bool("isComplete"));
 
@@ -129,7 +129,7 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         assertTrue("could not fill air chamber: " + fillAir,
                 Reply.of(fillAir).ok());
 
-        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String broken = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after air-chamber fill — "
                         + "Blocks.AIR-cell validator broken: " + broken,
                 (!Reply.of(broken).bool("isComplete")));

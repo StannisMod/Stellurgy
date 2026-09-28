@@ -127,7 +127,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      *
      * <p>A bound on a round trip, not a settle and not a poll budget: the click goes to the server,
      * the container applies it, the inventory comes back. Two seconds is generous for one exchange
-     * on any box this suite runs on, and a click that has not landed in that time has not landed.</p>
+     * on any box this suite runs on, and a click that has not landed in that time has not landed.
+     * A server-side {@code give} is the second half of the same exchange alone — the slot write
+     * coming back — so it is bounded by the same number.</p>
      */
     private static final int SLOT_APPLIED_TICKS = 40;
 
@@ -591,10 +593,25 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // The crystal is handed over the way any item is handed to a player; putting it IN the console
         // is the act, and it is the act that seeds the addresses (nothing else in the game does).
+        // Linked, because the hand is read next: the server picks the crystal's slot when it runs the
+        // command, and a hand read before that slot write reaches the client could call a hand empty
+        // that the crystal is about to fill. The registry path arrives lower-cased.
+        // An ARRANGEMENT, typed as one: a vanilla `/give` that never lands says nothing about this mod.
+        long giveMark = clientEvents().mark();
         exec("give @a " + CRYSTAL_ITEM + " 1");
+        try {
+            clientEvents().awaitMatching(giveMark, "client_slot_set",
+                    reply -> Events.records(reply).stream().anyMatch(record ->
+                            CRYSTAL_ITEM.equalsIgnoreCase(String.valueOf(Events.text(record, "item")))),
+                    "the crystal arriving in a slot",
+                    "the navigation crystal handed to the pilot must reach his client's inventory",
+                    SLOT_APPLIED_TICKS);
+        } catch (AssertionError neverLanded) {
+            requireArranged(neverLanded.getMessage(), false);
+        }
         // Hold nothing: the console is opened with a bare hand, so nothing can eat the use press, and
         // the crystal is then moved by real slot clicks rather than by being used from the hand.
-        holdNothing(budget);
+        holdNothing();
 
         String consoleScreen = openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget);
         assertTrue("a real use-key press aimed at the NAVIGATION CONSOLE must open its screen on the "
@@ -1269,7 +1286,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** He takes the seat again, exactly the way he took it the first time: aim at it and press use. */
     private JsonObject sitBackDown(Events log, int dim, int[] afcSub, int budget) throws Exception {
         int[] seatSub = add(afcSub, OFF_SEAT);
-        holdNothing(budget);
+        holdNothing();
         Aim aim = aimAt(dim, afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
         assertAimed(aim, seatSub, "pilot seat", "pilotseat");
         long sitMark = log.mark();
@@ -1335,33 +1352,25 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /**
      * An empty main hand, without wiping the inventory the pilot is carrying his crystal in.
      *
-     * <p><b>This one stays a poll, and the reason is that no record exists to wait on.</b> Every
-     * other hand wait in the tier links on {@code client_slot_set}, which the client writes when
-     * the SERVER sets a slot. Nothing is set here: selecting a hotbar index is a CLIENT action, it
-     * sends {@code CPacketHeldItemChange} and produces no record on either side. What the loop is
-     * really waiting for is the client being in a ready world at all — {@code isWorldReady} is the
-     * gate every iteration tests — and that has no link either.</p>
+     * <p><b>One read, because there is nothing to wait for.</b> The harness's {@code select_hotbar}
+     * sets the held index ON THE CLIENT THREAD and answers only once it has run, so when the call
+     * returns the hand already holds slot 1's contents. Those change only when the SERVER sets the
+     * slot ({@code client_slot_set}), and nothing between here and the use press does — so a slot 1
+     * that is not empty now stays not empty however long anyone waits. The server learns the index
+     * from {@code CPacketHeldItemChange}, which leaves on the same connection ahead of the press.</p>
      *
-     * <p>The work this needs is a test mixin on the client's own held-slot change, not a longer
-     * budget; until then the loop is honest about what it cannot see: it cannot tell a hand that is
-     * still catching up from a client that was never ready, and it reports the last held id it
-     * managed to read so a red says which.</p>
+     * <p>A world that is not ready here is a failure of whatever link brought the pilot here, not a
+     * state to sit through, and the refusal says which of the two it met.</p>
      */
-    private void holdNothing(int budget) throws Exception {
+    private void holdNothing() throws Exception {
         bot().selectHotbar(1);
-        String heldId = null;
-        for (int attempt = 0; attempt < budget; attempt++) {
-            bot().waitTicks(5);
-            JsonObject items = bot().reportPlayerItems();
-            if (isWorldReady(items) && items.has("held")) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    return;
-                }
-            }
-        }
-        requireArranged("the pilot's main hand must be EMPTY so the use press reaches the "
-                + "block rather than being consumed by a held item; held=" + heldId,
+        JsonObject items = bot().reportPlayerItems();
+        boolean ready = isWorldReady(items);
+        String heldId = ready && items.has("held")
+                ? items.getAsJsonObject("held").get("id").getAsString() : null;
+        requireArranged("the pilot's main hand must be EMPTY so the use press reaches the block"
+                        + " rather than being consumed by a held item; worldReady=" + ready
+                        + " held=" + heldId + " items=" + items,
                 heldId != null && heldId.isEmpty());
     }
 
