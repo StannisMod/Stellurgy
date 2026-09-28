@@ -72,6 +72,13 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2
     private static final String CHAIR_ENTITY =
             "org.valkyrienskies.mod.common.entity.EntityMountableChair";
 
+    /**
+     * <p>red-witnessed: with {@code EntityNetworkIds:92} answering the mount dummy's id for the chair
+     * — the collision this pins: red at the server's {@code mount} link with "Connection reset", the
+     * client having died on the chair it built as the other class, 2026-09-28. Earlier than the
+     * named failure in {@code ridingOrDie}: the server-log wait paces on the client's ticks, so a
+     * dead client ends it first, and the socket error does not name the cause.</p>
+     */
     @Test
     public void aChairMountArrivesAtTheClientAsItself() throws Exception {
 

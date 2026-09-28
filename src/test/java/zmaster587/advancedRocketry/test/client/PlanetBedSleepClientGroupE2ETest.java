@@ -169,6 +169,12 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
 
     // ── the shipped default: a bed does not bring a planet's morning ─────────────────────────────
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE POLICY — {@code TimeSkipPolicy:53}
+     * allowing the skip on every planet: "no `time_skip_decided` refusing the skip on dim 9502". THE
+     * CLOCK — {@code MixinWorldServer:45}'s {@code return} after a refusal dropped, so the refused
+     * skip happens anyway: "The clock was at 20006 before the sleep and 30006 after it".</p>
+     */
     @Test
     public void sleepingOnAPlanetSetsSpawnAndWakesYouWithoutBringingMorning() throws Exception {
         // The premise, MEASURED rather than seeded: this scenario is about the default, so a build

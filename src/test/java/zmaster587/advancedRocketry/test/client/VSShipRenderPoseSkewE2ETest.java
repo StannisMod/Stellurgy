@@ -109,6 +109,13 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
      *  drawn surface and the collided surface must agree well under this. */
     private static final double VISIBLE_SKEW = 0.35;
 
+    /**
+     * <p>red-witnessed: with the hull-stand sweep's box ({@code ShipFrameTravel.hullStandTravel})
+     * centred on the SHIP's up rather than the world's — the subspace-aligned phantom: "the largest
+     * gap between the swept solid and the body's own box was 1.77 over 95 sweeps (… upY=-0.93)",
+     * 2026-09-28. The two lines the wait rewrite touched are arrangements (the drop point is air, the
+     * body starts falling).</p>
+     */
     @Test
     public void theSurfaceABodyStandsOnIsTheSurfaceTheRendererDraws() throws Exception {
         // IT MOVED TO THE BAND, 2026-09-21, which is what the note standing here said it would do.

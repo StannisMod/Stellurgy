@@ -176,7 +176,13 @@ public class WorldCommandFetchModeratorTest {
 
     private static final int LINK_BUDGET_TICKS = 200;
 
-    /** Moderator (bot1, op) fetches bot2 from position B to position A. */
+    /**
+     * Moderator (bot1, op) fetches bot2 from position B to position A.
+     *
+     * <p>red-witnessed: with {@code FetchCommand:34} placing the target at his OWN position: "post-fetch:
+     * bot2's CLIENT must render itself at bot1's pre-fetch X (100.5), got 200.5", 2026-09-28. The
+     * lines the wait rewrite touched are the placement links and the baseline — arrangements.</p>
+     */
     @Test
     public void moderatorFetchTeleportsTargetToSenderPosition() throws Exception {
         // Stage both bots at known, well-separated positions.

@@ -127,6 +127,14 @@ public class WeatherCommandRedirectE2ETest {
         if (deferred != null) throw deferred;
     }
 
+    /**
+     * <p>red-witnessed: one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand:85} not
+     * setting the flag: "no `planet_weather_changed` carrying dim = 9304 and raining = true". CLEAR —
+     * the clear branch ({@code WeatherCommand:74}) writing nothing: "… raining = false was recorded
+     * within 200 ticks". Dropping only its {@code setRaining(false)} stays GREEN: the
+     * {@code setRainTime(0)} beside it makes vanilla's weather cycle flip the flag off on the next
+     * tick, so each write suffices alone.</p>
+     */
     @Test
     public void slashWeatherOnPlanetRainsThePlanetNotTheOverworld() throws Exception {
         clientHarness.bot().waitForWorld();

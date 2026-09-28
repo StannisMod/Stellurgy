@@ -2,7 +2,6 @@ package zmaster587.advancedRocketry.test.client;
 
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
-import org.junit.Before;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -366,10 +365,15 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     /**
      * Every rocket the PREVIOUS scenario left flying goes, before this one builds its own.
      *
-     * <p>A {@code @Before} rather than an {@code @After} for the reason the base gives for its whole
-     * reset: JUnit runs {@code @After} before the rules finish, so cleanup that must be visible to
-     * the next scenario belongs at the next scenario's start. It runs AFTER the base's
-     * {@code prepareScenario} because JUnit orders a superclass's {@code @Before} first.</p>
+     * <p>At the next scenario's start rather than in an {@code @After}, for the reason the base gives
+     * for its whole reset: JUnit runs {@code @After} before the rules finish. And in the base's
+     * pre-teleport hook rather than in a {@code @Before} of this class, because a {@code @Before}
+     * here runs AFTER the base has already placed the bot in the new plot — and a scenario that fails
+     * mid-flight leaves him riding its rocket, which a placement does not move him off. Measured
+     * 2026-09-28 in an inversion run: a red scenario's still-riding pilot was found 60 blocks up and
+     * outside the NEXT scenario's plot, and that scenario died on its own "must start inside its
+     * plot" check — a red that belonged to its predecessor. Disposal dismounts riders first, so
+     * running it before the teleport hands the base a pilot on his feet.</p>
      *
      * <p><b>The plot does not cover this, and that is the finding.</b> The allocator hands each
      * scenario its own patch of world and never recycles one, so nothing else ever looks there — for
@@ -379,8 +383,8 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      * owner's patch of world under its own power; allocation cannot prevent that, and only disposal
      * can.</p>
      */
-    @Before
-    public void clearRocketsLeftFlyingByTheLastScenario() throws Exception {
+    @Override
+    protected void resetFamilyStateBeforeTeleport() throws Exception {
         System.out.println("[reset] rockets cleared from this class's world: "
                 + RocketList.clearFrom(this::exec, 0));
     }
@@ -633,6 +637,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. TOGGLE — {@code EntityRocket:874}
+     * ({@code setFlightMode}) ignoring a call while nobody rides: "after toggle, info must report
+     * FREE_FLIGHT … CLASSIC_LAUNCH". FLIP-BACK — the same setter refusing CLASSIC_LAUNCH once in
+     * FREE_FLIGHT: "flip-back must restore CLASSIC_LAUNCH … FREE_FLIGHT".</p>
+     */
     @Test
     public void modeTogglesAreObservableFromBotSide() throws Exception {
         // Toggle without mounting — exercises the server probe surface that
@@ -860,12 +870,23 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
+    /**
+     * <p>red-witnessed: with the client FF branch of {@code EntityRocket.onUpdate} no longer calling
+     * {@code setPosition} ({@code EntityRocket:1896}): "moved 0/8", 2026-09-28. And what it does NOT
+     * catch, measured the same day: a SNAP-ONLY client (no dead reckoning, the raw server position
+     * each tick) stays green, and stays green with the tracker's {@code updateFrequency} put back to
+     * 3 as well. Vanilla sends a position whenever the entity's data manager is dirty
+     * ({@code EntityTrackerEntry.java:190}) and a flying rocket writes {@code FF_Q*} every tick, so
+     * a position arrives every tick whatever the frequency. The freeze-then-jump this test was
+     * written against cannot happen on this tree; what it pins is that the client moves the craft it
+     * draws at all.</p>
+     */
     @Test
     public void freeFlightClientRenderAdvancesEveryTickNoStutter() throws Exception {
-        // Render smoothness: the client must dead-reckon every tick, so the
-        // rendered rocket advances on (almost) every single client tick. The
-        // snap-only approach froze between the every-3-tick tracker updates and
-        // jumped on update ticks — here that shows up as many zero-delta samples.
+        // Render smoothness: the rendered rocket must advance on (almost) every single client tick.
+        // Its original subject — a snap-only client freezing between tracker updates — is no longer
+        // reachable (see the javadoc); a zero-delta sample here now means the client stopped moving
+        // the craft.
         int rocketId = mountFreshFreeFlightRocket();
         // Drive a reliable, sustained server-side climb. Probe input is
         // authoritative and not subject to key-injection timing; the bot holds
@@ -917,6 +938,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     private static final String FLIGHT_CAMERA =
             "zmaster587.advancedRocketry.test.trace.FlightCameraState";
 
+    /**
+     * <p>red-witnessed: with {@code en_US.lang:740} ({@code msg.ff.hud.active}) losing its "FREE ":
+     * "FF HUD must show the active-mode indicator: FLIGHT    Flight Assist: ON …", 2026-09-28. The
+     * await before it is the in-flight link (ENGINES ON), which that inversion leaves green.</p>
+     */
     @Test
     public void freeFlightHudInFlightShowsIndicatorAndControlLegend() throws Exception {
         // Riding a FF rocket in flight: the HUD must render the mode indicator,
@@ -1022,6 +1048,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         return bot().reportState().get("screen").getAsString();
     }
 
+    /**
+     * <p>red-witnessed: with {@code KeyBindings:308} giving the inventory key the PILOTING context
+     * instead of NOT_PILOTING: "pressing the inventory key on foot must open a screen — no
+     * `client_gui_opened` opening a screen was recorded within 200 ticks", 2026-09-28.</p>
+     */
     @Test
     public void inventoryKeyOpensInventoryWhenNotPiloting() throws Exception {
         // On foot (not piloting any AR craft), pressing the inventory key must
@@ -1159,6 +1190,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict in {@code FreeFlightPhysics.rampSetpoint}
+     * ({@code FreeFlightPhysics:752}), 2026-09-28. CLIMB — a positive vertical input ignored:
+     * "R must climb (y0=151.5999964 y1=151.5999964)". DESCENT — a negative one ignored: "F must reduce
+     * vertical velocity vs the climb (myUp=1.3499 myDown=1.3999)".</p>
+     */
     @Test
     public void verticalKeysClimbAndDescend() throws Exception {
         // R climbs (real altitude gain); F is the opposite vertical thrust, so it
@@ -1196,6 +1233,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
+    /**
+     * <p>red-witnessed: with {@code FreeFlightPhysics:748} no longer zeroing the setpoint on a cut:
+     * "when the cut arrived 1.4499, twelve ticks later 2.0498", 2026-09-28. The precondition at its
+     * head is an arrangement and is not witnessed.</p>
+     */
     @Test
     public void throttleCutKeyNeutralisesThrust() throws Exception {
         // X (cut) with FA on zeroes the velocity setpoint even while R is held:
@@ -1235,6 +1277,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
+    /**
+     * <p>red-witnessed: with {@code FreeFlightPhysics:748} no longer zeroing the setpoint on a cut:
+     * "cut must brake the climb into a hover (was 1.0999…, now 1.0999…)", 2026-09-28.</p>
+     */
     @Test
     public void cutKeyBrakesToAGravityCancelledHover() throws Exception {
         // X with Flight Assist on: zero the velocity setpoint —
@@ -1311,6 +1357,14 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         return rocketId;
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. STILL LIT — the engines of a
+     * Space-started flight cut by {@code tickFreeFlight} twenty ticks in (a flag set beside
+     * {@code EntityRocket:3447}'s {@code startFreeFlight}): "3 s Space hold must start the engines
+     * (isInFlight=true): … isInFlight:false", with the start link before it green. HUD — the
+     * in-flight engine line ({@code KeyBindings:364-366}) replaced by the ENGINES OFF text: "HUD must
+     * show the engines running: FREE FLIGHT … ENGINES OFF — hold SPACE to start".</p>
+     */
     @Test
     public void realSpaceHoldStartsEnginesAndHoversOneBlock() throws Exception {
         int rocketId = mountColdFreeFlightRocket();
@@ -1365,6 +1419,16 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. PROGRESS — the progress branch of
+     * {@code KeyBindings:349} dropped: "HUD must show engine-start progress while holding - on screen
+     * now: … ENGINES OFF". PRE-LAUNCH HUD BACK — the release branch ({@code KeyBindings:522}) sending
+     * ENGINE_START: "releasing Space early must put the pre-launch HUD back". NEVER LIT — the same
+     * release start, with {@code EntityRocket:3447}'s handler then clearing the client's in-flight
+     * flag so the HUD stays pre-launch while the server flies: "early release must cancel the start
+     * … isInFlight:true". A start that also reaches the client fails the HUD verdict first; the
+     * never-lit verdict is reached only by one it does not.</p>
+     */
     @Test
     public void spaceEarlyReleaseCancelsEngineStart() throws Exception {
         int rocketId = mountColdFreeFlightRocket();
@@ -1426,6 +1490,14 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. SHUTDOWN — the touchdown in
+     * {@code tickFreeFlight} ({@code EntityRocket:1183}) not writing the in-flight flag false: "no
+     * `rocket_flight_set` carrying e = … and inFlight = false was recorded within 240 ticks". HUD —
+     * the pre-launch engine lines ({@code KeyBindings:353, 355}) not drawn: "HUD must reflect the
+     * shutdown (stopped flash or ENGINES OFF): Free Flight Mode | M Classic mode". The arming wait at
+     * its head is an arrangement link.</p>
+     */
     @Test
     public void descendKeyLandsAndShutsEnginesOff() throws Exception {
         // Full cycle through real keys: start via probe (covered above), then
@@ -1495,6 +1567,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     private static final Pattern HUD_VRT =
             Pattern.compile("VRT ([+-][0-9.]+)/([+-][0-9.]+)");
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. PAIR — {@code KeyBindings:380}
+     * drawing the Flight-Assist-off form (actual only) with assist on: "HUD must render the VRT
+     * setpoint/actual pair". CUT — {@code FreeFlightPhysics:748} no longer zeroing the setpoint: "no
+     * `ff_hud` drawing a VRT setpoint of zero was recorded within 200 ticks".</p>
+     */
     @Test
     public void hudVectorLineTracksSetpointAndVelocity() throws Exception {
         // The per-axis vector readout: holding R ramps the VRT setpoint and the
@@ -1541,6 +1619,14 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("artest player dismount");
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. OFF REACHES THE HUD —
+     * {@code KeyBindings:362} always naming the ON state: "no `ff_hud` drawing Flight Assist OFF".
+     * OFF IS LABELLED — {@code en_US.lang:743} reading just "OFF": "HUD must label the Newtonian mode
+     * when FA is off". ON REACHES THE HUD — the same line always naming OFF: "no `ff_hud` drawing
+     * Flight Assist ON". ON DROPS THE LABEL — {@code en_US.lang:742} reading "ON — Newtonian": "HUD
+     * must drop the Newtonian label when FA is back on".</p>
+     */
     @Test
     public void hudShowsNewtonianLabelWhenFlightAssistIsOff() throws Exception {
         // FA state is part of the perception contract: with FA off the HUD
@@ -1583,6 +1669,12 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         return Math.abs(((a - b + 540) % 360) - 180);
     }
 
+    /**
+     * <p>red-witnessed: with the four camera-pin lines of {@code KeyBindings:609-612} removed: "camera
+     * must never detach from the craft on any rendered frame (worst frame divergence 61.46°)",
+     * 2026-09-28. That is the verdict whose wait the tick-wait rewrite changed; the at-rest and
+     * convergence verdicts after it were outside that rewrite and are not witnessed here.</p>
+     */
     @Test
     public void cameraIsLockedToCraftYawAndPitchWhileManeuvering() throws Exception {
         // While actively maneuvering (climb + yaw key + mouse swipes), the
@@ -1796,6 +1888,11 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      * camera actually pointed goes negative (points backwards) — a clamped attitude
      * can never do that (forward.z ≳ cos 85° ≈ 0.09). Also proves the client
      * survives rendering an inverted / looping craft.
+     *
+     * <p>red-witnessed: with the ±{@code PITCH_MAX} clamp put back into
+     * {@code FreeFlightPhysics.integrateBodyRates} ({@code FreeFlightPhysics:365}), which the client's
+     * prediction shares with the server: "client min forward.z must go negative (was 0.1429)",
+     * 2026-09-28.</p>
      */
     @Test
     public void sustainedPitchLoopsPastVerticalWithNoClamp() throws Exception {
@@ -1942,6 +2039,10 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
      * client renders through it (the camera-roll mixin runs every frame) without
      * crashing. Pins the roll channel end-to-end; camera-bank direction/feel is
      * a manual-playtest perception check.
+     *
+     * <p>red-witnessed: with the roll rate in {@code tickFreeFlight} ({@code EntityRocket:1072})
+     * multiplied by zero: "commanded roll must integrate server-side (roll0=0.0 roll1=0.0)",
+     * 2026-09-28.</p>
      */
     @Test
     public void rollChannelIntegratesAndClientRendersWithoutCrash() throws Exception {

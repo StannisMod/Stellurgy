@@ -37,6 +37,16 @@ import zmaster587.advancedRocketry.test.trace.TestTrace;
  * which on this seam is the server's, so it lands in the server log stamped with that world's clock;
  * a request with no player falls back to the overworld clock.</p>
  *
+ * <h2>{@code gui_container_requested} — the question, recorded before it is answered</h2>
+ *
+ * <p>The same method at HEAD, same payload minus {@code container}. It exists because the RETURN
+ * record is silent about a request that THREW: an exception leaves the method without passing any
+ * RETURN, so "nobody asked" and "somebody asked and the handler crashed" were the same silence.
+ * Measured 2026-09-28: an unprogrammed ore scanner made to open its GUI anyway reaches
+ * {@code ContainerOreMappingSatellite} with the {@code null} satellite this handler substitutes, the
+ * constructor dereferences it, and the served-count verdict that was meant to catch exactly that
+ * stayed green. A request with no served record after it is that crash.</p>
+ *
  * <h2>What this mixin is SILENT about</h2>
  *
  * <p>The CLIENT half: {@code getClientGuiElement} is not observed here — the client's screen
@@ -56,6 +66,24 @@ public abstract class MixinGuiHandlerEvents {
     // delegated libVulpes answer) and a chain must see all of them. No local is captured, so the
     // early exit's shorter LVT is not a problem. CallbackInfoReturnable because the target returns
     // a value.
+    @Inject(method = "getServerGuiElement", at = @At("HEAD"))
+    private void arTest$containerRequested(int id, EntityPlayer player, World world, int x, int y,
+                                           int z, CallbackInfoReturnable<Object> cir) {
+        if (player != null) {
+            TestTrace.instrument(player, INSTRUMENT);
+        } else {
+            TestTrace.instrumentHere(INSTRUMENT);
+        }
+        String payload = "\"id\":" + id
+                + ",\"who\":\"" + TestTrace.json(player == null ? "?" : player.getName()) + "\""
+                + ",\"at\":\"" + x + "," + y + "," + z + "\"";
+        if (player != null && player.world != null) {
+            TestTrace.record(player, "gui_container_requested", payload);
+        } else {
+            TestTrace.recordServer("gui_container_requested", payload);
+        }
+    }
+
     @Inject(method = "getServerGuiElement", at = @At("RETURN"))
     private void arTest$containerServed(int id, EntityPlayer player, World world, int x, int y, int z,
                                         CallbackInfoReturnable<Object> cir) {

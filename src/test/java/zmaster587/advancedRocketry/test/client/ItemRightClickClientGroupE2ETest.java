@@ -352,6 +352,14 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
      * both announce themselves from INSIDE the method that is not supposed to run, and a correct
      * absence would fail it. The live control for {@code gui_container_served} is the sibling
      * scenario below, which asserts the same seam recording a served container.</p>
+     *
+     * <p>red-witnessed: with the satellite gate of {@code ItemOreScanner:85} removed, so an unbound
+     * scanner opens its GUI: "an unbound ore scanner must never ask the server for a GUI; GUI
+     * requests since the click: …", 2026-09-28. The same inversion first left this test GREEN while
+     * it counted SERVED containers: {@code GuiHandler:40} substitutes {@code null} for a satellite it
+     * cannot resolve, {@code ContainerOreMappingSatellite:23} dereferences it, and the exception
+     * leaves the handler past the RETURN-only recorder — the crash this test's name excludes read as
+     * "nothing asked". It counts requests now ({@code gui_container_requested}, recorded at HEAD).</p>
      */
     @Test
     public void rightClickWithEmptySatelliteIdOpensNoGuiAndDoesNotCrash() throws Exception {
@@ -381,9 +389,12 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
                 + " would produce the same silence below: " + clicks,
                 Events.anyRecordHas(clicks, "item", "advancedrocketry:orescanner"));
 
-        String served = events.since(mark, "gui_container_served");
-        assertEquals("an unbound ore scanner must never ask the server for a GUI; containers served"
-                + " since the click: " + served, 0, Events.typesOf(served).size());
+        // The REQUEST, not the container served for it: a request whose handler throws is served
+        // nothing and records no served container, so counting containers read "asked and crashed"
+        // as "never asked" — which is the crash this test's name promises to exclude.
+        String asked = events.since(mark, "gui_container_requested");
+        assertEquals("an unbound ore scanner must never ask the server for a GUI; GUI requests"
+                + " since the click: " + asked, 0, Events.typesOf(asked).size());
         String opened = clientEvents().since(clientMark, "client_gui_opened");
         assertEquals("empty-satellite right-click must open no screen on the client; screens the"
                         + " client was asked to display since the click: " + opened,
@@ -456,6 +467,12 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
      *
      * <p>The player is dropped to survival for the consumption half of the contract; the shared
      * reset puts the mode back for whoever runs next.</p>
+     *
+     * <p>red-witnessed: with {@code ItemHovercraft}'s {@code spawnEntity} skipped on the block branch:
+     * "a right-click at a block must reach the server and spawn the hovercraft into the world — no
+     * `entity_joined_world` was recorded within 200 ticks", 2026-09-28. (A census of verdicts by call
+     * pattern names {@code scenario().asserting(…)} here, which is a phase label; the first real
+     * verdict after the rewritten wait is this chain.)</p>
      */
     @Test
     public void rightClickAtTargetBlockSpawnsHovercraftAndConsumesStack() throws Exception {
@@ -561,6 +578,10 @@ public class ItemRightClickClientGroupE2ETest extends AbstractSharedClientE2ETes
      * <p>The absence's positive half is the click itself: {@code right_click_item} carrying the
      * hovercraft proves the item was in hand and the click was not dropped, so the silence that
      * follows is the ray trace's answer rather than the arrangement's.</p>
+     *
+     * <p>red-witnessed: with {@code ItemHovercraft}'s empty-ray-trace branch spawning a craft at the
+     * player before it passes: "no hovercraft must be spawned on an empty ray-trace; entities that
+     * joined the server world since the click: …", 2026-09-28.</p>
      */
     @Test
     public void rightClickIntoEmptyAirReturnsPassWithoutSpawn() throws Exception {

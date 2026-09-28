@@ -144,6 +144,11 @@ public class SpaceLoginRestoreRefusalE2ETest extends AbstractSpaceLoginRestoreCl
      * drags every logging-in player to the nearest ship. This job used to belong to the standing
      * pilot's leg; it stopped being able to do it the moment a standing crew member was correctly
      * restored aboard.</p>
+     *
+     * <p>red-witnessed: with the login hook ({@code SpaceEventHandler:157}) giving a player who has no
+     * aboard record a standing one on the first settled ship in the ledger — the restore that drags
+     * everyone aboard: "a player who was never aboard must come back where vanilla puts him …
+     * expected:&lt;0&gt; but was:&lt;3&gt;", 2026-09-28. The line before it is an arrangement.</p>
      */
     @Test
     public void aPlayerWhoWasNeverAboardIsNotRestoredOntoTheShip() throws Exception {

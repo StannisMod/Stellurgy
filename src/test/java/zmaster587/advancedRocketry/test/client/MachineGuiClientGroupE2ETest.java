@@ -591,6 +591,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * into a machine slot — i.e. the click drove {@code Container.transferStackInSlot} on the server
      * and the result synced back. Slots are addressed by the container slot number the report gives,
      * never by guessed coordinates.
+     *
+     * <p>red-witnessed: with {@code TileGuidanceComputer:351} not storing what is put into its slot:
+     * "`slots` holds no element whose `item` is advancedrocketry:planetidchip — it holds 0",
+     * 2026-09-28. Making {@code isItemValidForSlot} refuse the chip left this GREEN: the container's
+     * quick-move never asks it.</p>
      */
     @Test
     public void shiftClickingChipMovesItIntoTheGuidanceComputer() throws Exception {
@@ -723,6 +728,10 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * <p>The aim is read back from the SERVER after the clicks and the fixture system is placed at
      * whatever distance the clicks actually produced — so the arrangement follows the GUI rather
      * than assuming it worked.</p>
+     *
+     * <p>red-witnessed: with the distance button's write ({@code TileObservatory:1289}) skipped:
+     * "clicking the distance button twice must move the aim out from 1: … aimDistance:1",
+     * 2026-09-28.</p>
      */
     @Test
     public void theOperatorAimsTheTelescopeAndObservesWithNothingButClicks() throws Exception {
@@ -824,6 +833,11 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * &rarr; server {@code useNetworkData} &rarr; {@code dimCache}, which the
      * {@code /artest selector info} probe then confirms — the whole client&rarr;server selection
      * round-trip rather than just "the GUI opened".
+     *
+     * <p>red-witnessed: with {@code TilePlanetSelector:208-209} (the selection writes) skipped:
+     * "clicking planet button 0 did not register a selection server-side: … hasSelection:false",
+     * 2026-09-28. The link before it records at the handler's RETURN and stays green by design —
+     * it says the packet arrived, not that it was applied.</p>
      */
     @Test
     public void selectingPlanetUpdatesServerSelection() throws Exception {

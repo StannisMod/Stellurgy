@@ -202,6 +202,12 @@ public class SpawnPointReachesClientE2ETest {
      * dimension's spawn point — so the compass in the destination points there
      * rather than at a placeholder left over from a freshly constructed client
      * world.
+     *
+     * <p>red-witnessed: with {@code MixinPlayerList} cancelling {@code updateTimeAndWeatherForPlayer}
+     * at HEAD — the pre-fix shape, whose copy dropped vanilla's spawn packet: "the client must be TOLD
+     * the world spawn — no `client_spawn_set` carrying x = -2048 …" at the wait after the transfer,
+     * with the positive control before it green, 2026-09-28. The lines the wait rewrite touched are
+     * an arrangement read, the probe's own silence and the client's dimension.</p>
      */
     @Test
     public void transferredPlayerIsToldTheDestinationDimensionSpawnPoint() throws Exception {

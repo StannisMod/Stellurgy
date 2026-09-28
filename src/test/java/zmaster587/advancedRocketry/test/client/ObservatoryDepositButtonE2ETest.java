@@ -46,6 +46,13 @@ public class ObservatoryDepositButtonE2ETest extends AbstractSharedClientE2ETest
         return "knowledge-deposit";
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —
+     * {@code TileObservatory:1306} answering the button without calling {@code uploadCrystalHere}: "no
+     * `crystal_deposited` carrying pos = … was recorded within 200 ticks". THE WORLD LEARNS —
+     * {@code TileObservatory:1230}'s {@code teachThisBody} skipped: "after the click a pad here must
+     * be offered that world: … known:false".</p>
+     */
     @Test
     public void pressingDepositTeachesTheWorldTheCrystalsAddresses() throws Exception {
         String where = "0 " + X + " " + Y + " " + Z;
