@@ -42,13 +42,14 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
     private static final double RAMPED_A_CLIMB_BLOCKS = 2.0;
 
     /**
-     * How far the unmanned ship must go on climbing, in blocks, for the cruise to have SURVIVED
-     * the dismount.
+     * How far the ship must climb in the LAST ten ticks of a forty-tick window, in blocks, for its
+     * cruise to have SURVIVED a dismount or a re-mount.
      *
-     * <p>The TEST'S OWN, and deliberately above {@link #RAMPED_A_CLIMB_BLOCKS}: the claim is that
-     * it kept going, so the bar has to exceed what it had already done.</p>
+     * <p>The test's own bar, and the same RATE as before: it used to ask for 4 blocks over the whole
+     * 40 ticks, which is 1 per 10. What changed is WHERE it is asked — see
+     * {@code altitudeEveryTenTicks}.</p>
      */
-    private static final double KEPT_CRUISING_BLOCKS = 4.0;
+    private static final double KEPT_CRUISING_BLOCKS_PER_SLICE = 1.0;
 
     /** How long the CLIENT is given to PERFORM a seating the server has already done, in ticks. */
     private static final int SEAT_LINK_BUDGET_TICKS = 200;
@@ -66,6 +67,20 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
     /** THIS scenario's ship, by identity — the address every altitude sample uses. */
     private String shipId;
 
+    /**
+     * A pilot who stands up leaves his ship cruising, and one who sits back down gets the cruise
+     * back rather than a stopped or reset ship.
+     *
+     * <p>red-witnessed, both verdicts, 2026-09-28. KEEPS CRUISING — with
+     * {@code TileAdvancedFlightComputer}'s unmanned Flight-Assist command built from a zero setpoint
+     * instead of {@code velocitySetpoint}: "Climb over the LAST ten ticks of the window=0.0", the
+     * slices after the pilot left reading +10.9, +0.7, 0, 0. SURVIVES REMOUNT — with
+     * {@code EntityDummy.syncFlightTelemetry} zeroing the cruise while a rider sits with no input yet:
+     * the same message at the re-mount verdict, slices 0, 0, 0, 0. BOTH inversions first left the
+     * verdicts GREEN in their earlier form, one climb over the whole forty ticks: a ship braking from
+     * cruise to a hover still covered 11.7 and 7.4 blocks against a bar of 4. Healthy, each slice
+     * reads about +20.</p>
+     */
     @Test
     public void aDismountedPilotsShipKeepsCruisingAndSurvivesRemount() throws Exception {
 
@@ -183,16 +198,15 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         // computer learning of it is still piloted flight, and on a slow box that stretch alone
         // could clear the bar and turn a dropped autopilot green.
         double yPilotGone = shipY();
-        // WINDOW: 40 ticks of unmanned flight between yPilotGone and yUnmanned, and the claim is the
-        // climb between them. Overshoot is lenient only toward a ship still climbing: one that
-        // braked to a hover adds nothing however long the window runs.
-        bot().waitTicks(40);
-        double yUnmanned = shipY();
+        double[] unmanned = altitudeEveryTenTicks();
+        double unmannedLastSlice = unmanned[3] - unmanned[2];
         assertTrue("an unmanned ship with Flight Assist on and a non-zero cruise setpoint must "
                         + "KEEP CRUISING after the pilot dismounts — that is what makes it an "
-                        + "autopilot (yDismount=" + yDismount + " yPilotGone=" + yPilotGone
-                        + " after 2s=" + yUnmanned + ")",
-                yUnmanned - yPilotGone > KEPT_CRUISING_BLOCKS);
+                        + "autopilot. Climb over the LAST ten ticks of the window="
+                        + unmannedLastSlice + " (yDismount=" + yDismount + " yPilotGone="
+                        + yPilotGone + ", then every 10 ticks: " + java.util.Arrays.toString(unmanned)
+                        + ")",
+                unmannedLastSlice > KEPT_CRUISING_BLOCKS_PER_SLICE);
 
         // Re-mounting must not interrupt (or reset) the executing cruise: the seat's dummy is
         // REUSED and the ship flies on while the returned pilot holds no key.
@@ -211,17 +225,36 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
         awaitClientMount(remountOnClient, "the returning pilot's client must perform the re-seating"
                 + " before the cruise is watched", SEAT_LINK_BUDGET_TICKS, " | server said: " + mounted);
         double yRemount = shipY();
-        // WINDOW: 40 ticks with the pilot back in the seat on both sides, between yRemount and
-        // yAfter; the claim is over their difference and names both.
-        bot().waitTicks(40);
-        double yAfter = shipY();
+        double[] remounted = altitudeEveryTenTicks();
+        double remountedLastSlice = remounted[3] - remounted[2];
         assertTrue("a re-mounted pilot receives the executing cruise BACK — the ship must not "
-                        + "stop or reset because he sat down (yRemount=" + yRemount
-                        + " after 2s=" + yAfter + ")",
-                yAfter - yRemount > KEPT_CRUISING_BLOCKS);
+                        + "stop or reset because he sat down. Climb over the LAST ten ticks of the"
+                        + " window=" + remountedLastSlice + " (yRemount=" + yRemount
+                        + ", then every 10 ticks: " + java.util.Arrays.toString(remounted) + ")",
+                remountedLastSlice > KEPT_CRUISING_BLOCKS_PER_SLICE);
     }
 
     // ---- helpers -------------------------------------------------------------------------------
+
+    /**
+     * The hull's altitude at the end of each of four ten-tick slices, from now.
+     *
+     * <p>Why slices and not one climb over the whole forty: a ship whose cruise was DROPPED does not
+     * stop at once — it brakes, and braking from cruise speed carries it well over any whole-window
+     * bar. With the unmanned cruise zeroed in production, the single-climb form of both verdicts
+     * below stayed green. The LAST slice is where a braking ship has already stopped and a cruising
+     * one has not.</p>
+     */
+    private double[] altitudeEveryTenTicks() throws Exception {
+        double[] y = new double[4];
+        // WINDOW: four reads ten ticks apart, and the verdict is over the last difference and names
+        // all four. The link would be a record of the hull's pose per tick, and none exists.
+        for (int i = 0; i < y.length; i++) {
+            bot().waitTicks(10);
+            y[i] = shipY();
+        }
+        return y;
+    }
 
     private double shipY() throws Exception {
         return readDouble(shipInfoById(shipId), POS_Y);

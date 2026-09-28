@@ -363,6 +363,16 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * Migrated verbatim from {@code VSShipClientLoadE2ETest}. Every {@code ship-info} in the body
      * was a positional nearest query about a ship this scenario had just built; each is now keyed on
      * the id this scenario's own assembly recorded. Nothing else changed.
+     *
+     * <p>red-witnessed: one inversion per rung, 2026-09-28, each red at its own verdict with the rungs
+     * before it green. LIFT — {@code MixinTileAdvancedFlightComputer}'s linear force multiplied by
+     * {@code 0.0}: "maxClimb=0.0". YAW — its raw-rate branch leaving {@code angAccel} null: "min |quat
+     * dot| over the window=1.0". ATTITUDE HOLD — the attitude error passed to
+     * {@code attitudeHoldAngAccel} as {@code 0.0}, a hold that only brakes: "|dot to target|
+     * before=0.707… after 120 ticks=0.7986…". FREE FLIGHT — {@code TileAdvancedFlightComputer
+     * .setPilotInput} discarding its input: "max climb over the window=0.0, last=-92.2". That last
+     * inversion first left the method GREEN: the rung accepted any displacement, and a hull with no
+     * throttle falls. It asserts a climb now.</p>
      */
     @Test
     public void assembledShipLoadsWithClientPresentAndFliesAndRotatesUnderForce() throws Exception {
@@ -522,9 +532,8 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
                 + released, Reply.of(released).bool("cleared"));
 
         double[] pBefore = readVec(shipInfoById(shipId));
-        double[] at = pBefore;
-        double disp = 0.0;
-        double maxDisp = 0.0;
+        double ffClimb = 0.0;
+        double maxFfClimb = 0.0;
         // Addressed by SHIP (the input used to go to a server-wide static, which no pilot has), and
         // sent ONCE: the computer keeps a pilot input until it is handed another, so the per-tick
         // re-send added only traffic.
@@ -536,20 +545,25 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
             fail("the throttle must reach this ship's own flight computer: " + ffCmd
                     + " | ship now: " + shipInfoById(shipId));
         }
-        // WINDOW: the MAXIMUM displacement over the window is the measurement — a ship that moves out
-        // and drifts back reads zero at the end. No record carries the hull's pose per physics tick.
-        // What it cannot see: an excursion between two 1-tick samples (it reads low, the strict way).
+        // WINDOW: the MAXIMUM CLIMB over the window is the measurement — a ship that rises and settles
+        // back reads zero at the end. No record carries the hull's pose per physics tick. What it
+        // cannot see: a peak between two 1-tick samples (it reads low, the strict way).
+        //
+        // CLIMB, not displacement, and this is the verdict's whole content. It used to accept any
+        // displacement over a block, and with the flight computer ignoring pilot input entirely it
+        // stayed GREEN: released from the probe command, the hull simply FELL, and a fall is a
+        // displacement. Every rotation above is about world Y (the yaw command and the hold's 90°
+        // turn), so the hull's up is still world up and a full-up throttle must raise it.
         for (int i = 0; i < FLIGHT_WINDOW_TICKS; i++) {
             bot().waitTicks(1);
-            double[] p = readVec(shipInfoById(shipId));
-            at = p;
-            double dx = p[0] - pBefore[0], dy = p[1] - pBefore[1], dz = p[2] - pBefore[2];
-            disp = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            maxDisp = Math.max(maxDisp, disp);
+            ffClimb = readVec(shipInfoById(shipId))[1] - pBefore[1];
+            maxFfClimb = Math.max(maxFfClimb, ffClimb);
         }
-        assertTrue("a Free Flight throttle input must move the ship through the AFC's FF path "
-                        + "(max displacement over the window=" + maxDisp + ", last=" + disp + ")",
-                maxDisp > 1.0);
+        assertTrue("a full-up Free Flight throttle must RAISE the ship through the AFC's FF path"
+                        + " (max climb over the window=" + maxFfClimb + ", last=" + ffClimb
+                        + "; a negative last is a hull falling with no throttle applied; " + ffCmd
+                        + ")",
+                maxFfClimb > 1.0);
     }
 
     // ── migrated: VSShipNearbyObserverNoCrashE2ETest ─────────────────────────
@@ -603,6 +617,10 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
     /**
      * Migrated from {@code VSShipSeatDriveE2ETest}: the server-side bisection of the seat &rarr; AFC
      * &rarr; force path. Body unchanged apart from the ship oracle.
+     *
+     * <p>red-witnessed: with {@code TileAdvancedFlightComputer.setPilotInput} discarding its input,
+     * this fails at the climb with "maxClimb=0.0" (the seat still reports {@code afcResolved:true}, so
+     * the red names the computer's intake, not the seat's link) — 2026-09-28.</p>
      */
     @Test
     public void seatPathResolvesAfcAndFliesTheShip() throws Exception {

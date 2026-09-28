@@ -22,7 +22,11 @@ import zmaster587.advancedRocketry.test.PilotSeat;
 import zmaster587.advancedRocketry.test.ShipFrameCheck;
 import zmaster587.advancedRocketry.test.ShipInfo;
 import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.PlayerState;
 import zmaster587.advancedRocketry.test.RocketFixture;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipReadiness;
+import zmaster587.advancedRocketry.test.TransitSetup;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -117,6 +121,10 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     /** THIS scenario's ship, by identity — the address every question below is keyed on. */
     private String scenarioShipId;
+
+    /** The world {@link #scenarioShipId} lives in: the shared overworld, unless a scenario built its
+     *  craft in a space cell of its own. */
+    private int scenarioDim = 0;
 
     private static final String VARIANT = "with-pilot-seat";
     private static final String KEY_BINDINGS = "zmaster587.advancedRocketry.client.KeyBindings";
@@ -261,10 +269,18 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      */
     private static final double CURSOR_DEADZONE_OMEGA = 0.05;
 
-    // ---- Test 1: the flight panel + the spin brake -------------------------------------------
+    // ---- Test 1: the flight panel and the cursor's turn (its stop: the space-cell test below) ----
 
+    /**
+     * A seated pilot's throttle lifts the ship, his HUD shows its speed, and his flight cursor turns
+     * it.
+     *
+     * <p>red-witnessed (the TURN rung only; the lift and HUD rungs are not): with
+     * {@code TileAdvancedFlightComputer}'s roll rate multiplied by {@code 0.0}, this fails with
+     * "largest omega over the window=0.0" — 2026-09-28.</p>
+     */
     @Test
-    public void seatedPilotSeesLiveVelocityAndACentredCursorStopsTheShipTurning() throws Exception {
+    public void seatedPilotSeesLiveVelocityAndHisCursorTurnsTheShip() throws Exception {
         // IN THE AIR. This site was lifted before its neighbours were, as an EXPERIMENT with one
         // variable. Measured 2026-09-14 at four client forks: with the flight cursor provably inside
         // its dead-zone (worst deflection 0.016 against 0.05), this craft went on turning at
@@ -351,164 +367,135 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                         + " window=" + spinning + ", every reading " + spinRates + ")",
                 spinning > SHIP_IS_TURNING_RAD_PER_S);
 
-        // Marked BEFORE the centring, because the packet that says "stop" is a CHANGE: the client
-        // sends an idle input on the tick the cursor enters its dead-zone and never repeats it (a
-        // held NON-idle input is re-asserted on a keep-alive; an idle one is exempt). The records
-        // this mark collects are therefore the whole of what the computer was ever told to stop for.
-        long centreMark = events.markInstrumented();
-        // The CLIENT mark beside it, for the one question a red here cannot otherwise answer: did
-        // the cursor STAY centred? `flight_cursor` is written on every tick the pilot path runs, so
-        // the records since this mark are the whole history of what the client was commanding —
-        // and a ship still turning with a cursor that never left its dead-zone is a different fault
-        // from one whose pilot kept steering. Without it the two are one red.
-        long cursorMarkAfterCentring = clientEvents().mark();
-        double cursorCentred = centreFlightCursor();
-        assertTrue("the client's flight cursor must return to centre (got " + cursorCentred + ")",
-                Math.abs(cursorCentred) < CURSOR_DEADZONE);
-
-        // With the cursor centred the controller must brake the ship to rest — and STAY at rest. That
-        // second half is the contract, and it is why this is a WINDOW and not a poll.
-        //
-        // It used to be `ClientPoll.until(..., o -> o <= 0.05, ...)`, and that predicate can be
-        // satisfied by a TROUGH. An early exit is right for a latching question (has it started
-        // turning, has it climbed two blocks) because such a fact cannot un-happen; "the rate is
-        // below X" of an oscillating quantity is the opposite, and the loop stops at the first dip.
-        // Measured 2026-09-14: the poll reported satisfied at iteration 103 with omega=0.0377 while
-        // its own trajectory over that same window read 0.219, 0.288, 0.372, 0.123, 0.393 — rising,
-        // sampled at a dip. The scenario went GREEN on a ship that had plainly not stopped, and the
-        // run that reddened differed from it only in whether a sample landed in a trough.
-        //
-        // So: give the brake the ticks it has always had, then WATCH. The window cannot end early,
-        // the assertion is on the WORST reading in it, and the whole trajectory goes into the
-        // message — a rate still FALLING steeply is a brake that wanted longer; one that PLATEAUS or
-        // climbs is a ship still EXECUTING a rotation command, because the computer holds the last
-        // input it was handed and a "stop" that never landed leaves it turning at whatever
-        // deflection did; one creeping down with no floor is no braking torque at all, only the
-        // substrate's own damping.
-        // THE CONFOUND, removed before the question is asked. The climb leg above held the vertical
-        // throttle, and a held throttle RAMPS the Flight-Assist cruise setpoint while releasing it
-        // KEEPS that setpoint — the documented contract, with an e2e of its own. So a craft that has
-        // merely stopped being steered is still commanded to fly, and asking "did it stop turning"
-        // of it is a compound question.
-        //
-        // Measured 2026-09-14, which is why this is here: the physics recorder showed cmdSpeed=12.0
-        // for the whole brake window, netMove [-42,-84,+4], the craft descending eighty-four blocks
-        // onto the ground with its linear controller saturated. Every residual-rate reading this
-        // scenario has ever taken came from a craft in that state. The pit hid it — the pad held the
-        // craft where it was put, and contact friction killed the spin the controller was supposed
-        // to kill.
-        //
-        // Cut it the way a player does, with the cut key, not with a probe: the cruise is the
-        // pilot's own channel and this scenario is about the pilot's own controls.
-        cutTheCruise(20, "the cut key must zero the cruise before the brake is judged");
-        String cruiseAfterCut = exec("artest vs ff-cruise-read-by-id 0 " + scenarioShipId);
-        scenario().record("cruiseAfterCut", cruiseAfterCut);
-        assertTrue("ARRANGEMENT: the cruise must be ZERO before the brake is judged, or this leg"
-                        + " measures a craft that is still commanded to fly and merely not steered."
-                        + " The cut key is what a pilot uses and it zeroes the setpoint; if this"
-                        + " reply carries a non-zero cruise the cut did not take: " + cruiseAfterCut,
-                Reply.of(cruiseAfterCut).bool("afcResolved")
-                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_FWD)) < EXACTLY_ZERO
-                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_RIGHT)) < EXACTLY_ZERO
-                        && Math.abs(readDouble(cruiseAfterCut, CRUISE_UP)) < EXACTLY_ZERO);
-
-        // EXPERIMENT: BRAKE_SETTLE_TICKS is the dose of world the brake is given, and the claim is
-        // about the hold that follows it. Overshoot is lenient only toward a brake that converges a
-        // little late; a rate that plateaus or climbs — a latched command, a stale driver — fails
-        // the worst-of-hold read however long the settle ran.
-        GameTicks.advanceWorld(serverClient(), 0, BRAKE_SETTLE_TICKS);
-        // WINDOW: HOLD_SAMPLES readings HOLD_TICKS_BETWEEN ticks of the hull's world apart, and the
-        // claim is on the worst of them — on the world clock, since the brake and the rate it leaves
-        // are the hull's own, and a window of client ticks buys a stalled server fewer of them.
-        java.util.List<Double> hold = new java.util.ArrayList<Double>();
-        GameTicks.observe(serverClient(), GameTicks.world(0), HOLD_SAMPLES, HOLD_TICKS_BETWEEN,
-                () -> hold.add(shipInfo().omega));
-        StringBuilder omegaTrace = new StringBuilder();
-        double settled = 0.0;
-        for (int i = 0; i < hold.size(); i++) {
-            double omegaNow = hold.get(i);
-            settled = Math.max(settled, omegaNow);
-            omegaTrace.append(i == 0 ? "" : " ").append(i * HOLD_TICKS_BETWEEN).append("t:")
-                    .append(Math.round(omegaNow * 1000.0) / 1000.0);
-        }
-        // Every control packet this computer ACCEPTED since before the centring began. The recorder
-        // sits on setPilotInput, which the seat calls only after its own pilot guard, so a record
-        // here is a packet the server took — and a stream that stops while the cursor was still
-        // deflected means the computer was never told to stop, whatever the client's cursor reads.
-        // What it cannot say is what an input CONTAINED (the payload is `set` / `null`), so it
-        // counts deliveries and claims nothing more.
-        String pilotInputs = events.since(centreMark, "pilot_input_set");
-        int accepted = matchingRecords(pilotInputs, "\"input\":\"set\"");
-        // THE discriminator, and it is the whole reason this window is read at all: the computer
-        // LATCHES, so only an IDLE input stops a rotation. "The stop arrived and was ignored" and
-        // "the stop never arrived" send a reader to opposite subsystems and are indistinguishable
-        // from a count of accepted packets.
-        int idleHandedOver = matchingRecords(pilotInputs, "\"input\":\"idle\"");
-        // NOT Events.lastField: that reads STRING fields ("k":"v") and a record's tick is a bare
-        // number, so it would answer null for a stream that is plainly there.
-        String lastAcceptedTick = lastNumericField(pilotInputs, "tick");
-        // What the CLIENT was commanding through the whole settle and hold. The worst deflection the
-        // cursor reached since it was centred is the discriminator: inside the dead-zone means the
-        // client asked for nothing and the craft turned anyway; outside it means the craft was being
-        // steered and the subject of this leg was never set up.
-        String cursorAfter = clientEvents().since(cursorMarkAfterCentring, "flight_cursor");
-        double worstCursor = Math.max(maxAbsField(cursorAfter, "x"), maxAbsField(cursorAfter, "y"));
-        // HOW MANY COMPUTERS drove this ship while it was supposed to be stopping. The physics-thread
-        // recorder stamps every step with who drove it precisely because "two controllers on one ship
-        // is a stale tile instance that outlived its replacement in the ship's controller set" — and a
-        // dead instance still holding the pilot's last DEFLECTED input would command a turn forever
-        // while the live one is handed the idle. That is the difference between "the brake is wrong"
-        // and "something else is still pressing", which the rate alone cannot show.
-        PilotSeat seatNow = PilotSeat.byId(this::exec, 0, scenarioShipId);
-        String drivers = seatNow.hasAfc
-                ? exec("artest vs motion-trace 0 " + seatNow.afcX + " "
-                        + seatNow.afcY + " " + seatNow.afcZ + " 20000")
-                : "(no afc address in: " + seatNow.raw() + ")";
-        System.out.println("[tier2] omega spinning=" + spinning + " worstInHold=" + settled
-                + " worstCursorAfterCentring=" + worstCursor
-                + " settle=" + BRAKE_SETTLE_TICKS + "t hold=" + HOLD_SAMPLES + "x"
-                + HOLD_TICKS_BETWEEN + "t trace=[" + omegaTrace + "]"
-                + " pilotInputsAcceptedSinceCentring=" + accepted
-                + " lastAcceptedTick=" + lastAcceptedTick);
-        // The controller read-back that used to be printed here is GONE, and its absence is the
-        // point. It came from `artest vs afc-debug`, which read a global last-writer static on
-        // TileAdvancedFlightComputer — written by whichever flight computer ran last, on a shared
-        // client that is frequently a different craft. It answered a different question from the
-        // one this scenario asks, it was never asserted on, and production allocated an array on
-        // every physics step to keep it fed. `ship-info` below is asked about THIS ship.
-        assertTrue("with the flight cursor centred the ship must STOP turning AND STAY stopped, not"
-                + " coast: it was spinning at " + spinning + " rad/s, and after "
-                + BRAKE_SETTLE_TICKS + " ticks to brake its WORST rate across the following "
-                + ((HOLD_SAMPLES - 1) * HOLD_TICKS_BETWEEN) + "-tick hold was " + settled
-                + ". The whole hold, by tick offset: [" + omegaTrace + "]"
-                + " — a rate that PLATEAUS or climbs is a ship still executing a rotation command,"
-                + " not one failing to coast to a stop. This is the WORST of the hold and not the"
-                + " first reading under the line, deliberately: the earlier form exited on its first"
-                + " dip and passed this scenario on a ship whose rate was rising."
-                + "\n  WHICH FAULT THIS IS, from the client's own record: the worst cursor"
-                + " deflection since the centring was " + worstCursor + " against a dead-zone of "
-                + CURSOR_DEADZONE + ". Inside it, the client asked for NOTHING and the craft turned"
-                + " anyway — the command latched on the computer, which stops only on an idle input"
-                + " that is sent ONCE, on the tick the cursor enters the dead-zone, and is the one"
-                + " input deliberately exempt from the keep-alive that re-asserts a held one."
-                + " Outside it, the craft was still being STEERED and this leg never had its"
-                + " subject. A " + (-1.0) + " means the cursor recorder said nothing at all, which"
-                + " is a third thing and not a centred cursor."
-                + "\n  AND WHICH HALF OF THAT: the computer was handed " + idleHandedOver
-                + " IDLE input(s) since before the cursor was centred, beside " + accepted
-                + " deflected one(s) (the last at tick " + lastAcceptedTick + "). ZERO idle means"
-                + " the stop never reached the computer at all — look at the send and its delivery,"
-                + " where a packet whose tile is not loaded is dropped in silence. One or more means"
-                + " the stop WAS handed over and the craft turned anyway — look at what the"
-                + " controller does with an idle input, not at the wire. Every record in the window: "
-                + pilotInputs
-                + "\n  WHO WAS DRIVING, from the physics recorder — `writers` above 1 means a stale"
-                + " flight computer is still commanding this ship beside the live one, which is a"
-                + " different fault from a brake that does not brake: " + drivers,
-                settled <= CURSOR_DEADZONE_OMEGA);
+        // The STOP half of this scenario is aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim,
+        // in a space cell: in this world air drag alone takes a spin under the line within the brake
+        // dose, so a stop asked here is answered with or without a brake (measured 2026-09-28).
 
         exec("artest player dismount");
-        reportClientHealth("seatedPilotSeesLiveVelocityAndACentredCursorStopsTheShipTurning");
+        reportClientHealth("seatedPilotSeesLiveVelocityAndHisCursorTurnsTheShip");
+    }
+
+    /**
+     * A pilot who centres his flight cursor stops the ship turning — asked in a SPACE CELL, where
+     * nothing but the flight computer can stop it.
+     *
+     * <p><b>Why a cell.</b> In an atmosphere the substrate multiplies a hull's angular velocity by an
+     * air-drag factor every physics step ({@code PhysicsCalculations.applyAirDrag}, the factor from
+     * {@code FreeFlightPhysics.ambientDragFactor}). Measured 2026-09-28 in the overworld, with the
+     * flight computer forbidden to apply any torque against the spin: a ship left at ~1.0 rad/s
+     * decayed by about 12 % per ten ticks and was under the "not turning" line well inside the brake
+     * dose — the brake verdict was green with no brake at all. A cell's density is zero, the drag
+     * factor is 1, and a hull nobody brakes keeps its spin.</p>
+     *
+     * <p><b>What stops it, when it works.</b> The seated pilot's own input: as the cursor comes back
+     * the commanded rate falls and the attitude law follows it down, and inside the dead-zone the
+     * reference is pinned where the ship is, which brakes any residue. Measured the same day: the rate
+     * is already near zero on the tick the cursor reaches the dead-zone.</p>
+     *
+     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer} forbidden any angular
+     * acceleration against the current spin — spin-up allowed, braking not — this fails with "its
+     * worst rate over the hold was 1.9025…", every one of the ten readings the same: nothing else in
+     * a cell touches it. The identical inversion left the overworld form of this verdict GREEN —
+     * 2026-09-28.</p>
+     */
+    @Test
+    public void aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim() throws Exception {
+        scenarioDim = TransitSetup.empty(this::exec).originDim;
+        final FixtureSite site = FixtureSite.openAir(scenarioDim, 40, 40);
+        Events events = events();
+        String assembled = RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 16,
+                "the craft the pilot turns and then stops");
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
+                Reply.of(assembled).integer("rocketCount") == 0);
+        ShipReadiness.requireLoaded(this::exec, scenarioDim,
+                "this scenario's craft must be loaded in its cell before anyone sits in it");
+        scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, scenarioDim,
+                ShipIdentity.nameFromAssembly(assembled), 200);
+        PilotSeat seat = PilotSeat.byId(this::exec, scenarioDim, scenarioShipId)
+                .requireFound("the pilot seat inside THIS scenario's ship");
+
+        // Into the cell, at the craft: it has just been assembled and nothing has commanded it, so
+        // its world pose is where it was built.
+        long enterMark = clientEvents().mark();
+        scenario().requireArranged("the bot must enter the cell",
+                Reply.of(exec("artest space enter " + PlayerState.botName(this::exec) + " "
+                        + scenarioDim + " " + Math.round(seat.shipWorldX) + " "
+                        + Math.round(seat.shipWorldY) + " " + Math.round(seat.shipWorldZ))).bool("ok"));
+        awaitClientDim(enterMark, scenarioDim, "the client must follow the bot into the cell");
+
+        // Seated on the PILOT seat, and taken by the client's ship-pilot input path as its pilot.
+        String mountInfo = exec("artest vs seat-mount-at " + scenarioDim + " " + seat.seatX + " "
+                + seat.seatY + " " + seat.seatZ);
+        int dummyId = Reply.of("artest vs seat-mount-at", mountInfo).integer(DUMMY_ID);
+        long seatMark = clientEvents().mark();
+        String mount = exec("artest player mount-entity " + dummyId);
+        scenario().requireArranged("bot must mount the seat dummy: " + mount,
+                Reply.of(mount).bool("mounted"));
+        awaitClientMount(seatMark, "the client must be riding the pilot seat", SEAT_LINK_BUDGET_TICKS,
+                " | server said: " + mount);
+        clientEvents().awaitField(seatMark, "flight_cursor", "path", "ship",
+                "the client's ship-pilot input path must take the seated bot as its pilot",
+                SEAT_LINK_BUDGET_TICKS);
+
+        // THE SPIN, which is this scenario's premise — its own verdict lives in the overworld method.
+        // STIMULUS: twelve raw mouse deltas two ticks apart are the deflection.
+        for (int i = 0; i < 12; i++) {
+            mouseDelta(60, 0);
+            bot().waitTicks(2);
+        }
+        double cursorDeflected = flightCursorX("after twelve raw mouse deltas");
+        scenario().requireArranged("the cursor must be deflected before a stop means anything (got "
+                + cursorDeflected + ")", Math.abs(cursorDeflected) > RAW_CURSOR_DEFLECTED);
+        java.util.List<Double> spinRates = new java.util.ArrayList<Double>();
+        GameTicks.observe(serverClient(), GameTicks.world(scenarioDim), SPIN_WINDOW_SAMPLES,
+                SPIN_WINDOW_GAP, () -> spinRates.add(shipInfo().omega));
+        double spinning = java.util.Collections.max(spinRates);
+        scenario().requireArranged("the ship must be SPINNING before its stop is judged (largest"
+                        + " omega=" + spinning + ", every reading " + spinRates + ")",
+                spinning > SHIP_IS_TURNING_RAD_PER_S);
+
+        // Marked BEFORE the centring: the "stop" is an idle input sent ONCE, on the tick the cursor
+        // enters its dead-zone, so these marks hold everything the computer was ever told to stop
+        // for — and the client's own cursor record says whether it STAYED centred.
+        long centreMark = events.markInstrumented();
+        long cursorMark = clientEvents().mark();
+        double cursorCentred = centreFlightCursor();
+        scenario().requireArranged("the flight cursor must come back inside its dead-zone (got "
+                + cursorCentred + ")", Math.abs(cursorCentred) < CURSOR_DEADZONE);
+
+        // EXPERIMENT: BRAKE_SETTLE_TICKS of the cell's world are the brake's dose. With no air the
+        // dose is not a hiding place: a hull nobody brakes keeps its spin however long it runs.
+        GameTicks.advanceWorld(serverClient(), scenarioDim, BRAKE_SETTLE_TICKS);
+        // WINDOW: HOLD_SAMPLES readings HOLD_TICKS_BETWEEN ticks of the cell's world apart; the claim
+        // is on the worst of them, so a rate that dips and rises back is caught.
+        java.util.List<Double> hold = new java.util.ArrayList<Double>();
+        GameTicks.observe(serverClient(), GameTicks.world(scenarioDim), HOLD_SAMPLES,
+                HOLD_TICKS_BETWEEN, () -> hold.add(shipInfo().omega));
+        double worst = java.util.Collections.max(hold);
+        // Read only for the message — they tell three faults apart that the rate alone cannot: the
+        // pilot kept steering (cursor outside the dead-zone), the stop never reached the computer
+        // (no idle input), or it did and the craft turned anyway; and `writers` above 1 in the
+        // physics recorder is a stale computer still commanding beside the live one.
+        String pilotInputs = events.since(centreMark, "pilot_input_set");
+        String cursorAfter = clientEvents().since(cursorMark, "flight_cursor");
+        PilotSeat seatNow = PilotSeat.byId(this::exec, scenarioDim, scenarioShipId);
+        assertTrue("with the flight cursor centred the ship must STOP turning and stay stopped — in a"
+                        + " cell, where no air can stop it instead: it was spinning at " + spinning
+                        + " rad/s, and after " + BRAKE_SETTLE_TICKS + " ticks its worst rate over the"
+                        + " hold was " + worst + " (every reading " + hold + ")."
+                        + "\n  worst cursor deflection since the centring="
+                        + Math.max(maxAbsField(cursorAfter, "x"), maxAbsField(cursorAfter, "y"))
+                        + " against a dead-zone of " + CURSOR_DEADZONE
+                        + "\n  idle inputs handed to the computer="
+                        + matchingRecords(pilotInputs, "\"input\":\"idle\"")
+                        + ", every input since the centring began: " + pilotInputs
+                        + "\n  who drove the ship: " + (seatNow.hasAfc
+                                ? exec("artest vs motion-trace " + scenarioDim + " " + seatNow.afcX
+                                        + " " + seatNow.afcY + " " + seatNow.afcZ + " 20000")
+                                : "(no afc address in: " + seatNow.raw() + ")"),
+                worst <= CURSOR_DEADZONE_OMEGA);
+
+        exec("artest player dismount");
     }
 
     // ---- Test 2: the camera turns with the ship, and the eye stays out of the deck ------------
@@ -821,6 +808,13 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     // and then left UNMANNED, which makes the flight computer command a zero world velocity while holding
     // attitude - holds its altitude. Read the CLIENT-loaded ship's own world velocity + position.
 
+    /**
+     * A parked, unmanned ship holds its altitude instead of sinking.
+     *
+     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer}'s gravity feed-forward multiplied
+     * by {@code 0.0} — the original defect — this fails with "its vertical velocity peaked at
+     * -0.1633 blk/s", drift -1.33 blocks over the window — 2026-09-28.</p>
+     */
     @Test
     public void aStationKeepingShipHoldsAltitudeInsteadOfSinking() throws Exception {
         final FixtureSite site = site();
@@ -1012,7 +1006,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * @param holdTicks how long the cut key is held, in client ticks
      */
     private void cutTheCruise(int holdTicks, String what) throws Exception {
-        String before = exec("artest vs ff-cruise-read-by-id 0 " + scenarioShipId);
+        String before = exec("artest vs ff-cruise-read-by-id " + scenarioDim + " " + scenarioShipId);
         // afcResolved is written on every branch of the verb; the three numbers only when it is
         // true, so they are read only then. An unresolved computer owes no record here, and the
         // caller's own read after the cut is what reports it.
@@ -1190,7 +1184,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     /** This scenario's ship, asked by identity — captured once by {@link #buildShip}. */
     private ShipInfo shipInfo() throws Exception {
         assertTrue("shipInfo() before buildShip() captured an identity", scenarioShipId != null);
-        return ShipInfo.byId(this::exec, 0, scenarioShipId);
+        return ShipInfo.byId(this::exec, scenarioDim, scenarioShipId);
     }
 
     private double[] localOf(int entityId) throws Exception {
@@ -1213,24 +1207,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
     // same resolver. A wait answerable by any of them would be measuring the crowd. The join is the
     // `e` / `ship` FIELDS, through Events.awaitField and awaitRecordWithFields.
     //
-    // `matchingRecords` below survives for the five READS that count records after the fact; it is
-    // a substring reader and each of those five is a candidate for the same field treatment.
-
-    /**
-     * The NUMERIC {@code field} of the last record in a {@code since} reply, or {@code "none"} when
-     * no record carries one — the counterpart of {@code Events.lastField}, which reads only the
-     * string-valued fields and answers {@code null} for a record's own tick.
-     */
-    private static String lastNumericField(String sinceReply, String field) {
-        String last = null;
-        for (String record : Events.records(String.valueOf(sinceReply))) {
-            double value = Events.number(record, field);
-            if (!Double.isNaN(value)) {
-                last = Events.text(record, field);
-            }
-        }
-        return last == null ? "none" : last;
-    }
+    // `matchingRecords` below survives for the READS that count records after the fact; it is a
+    // substring reader and each of them is a candidate for the same field treatment.
 
     /**
      * The largest absolute value of a numeric {@code field} across every record in a {@code since}
