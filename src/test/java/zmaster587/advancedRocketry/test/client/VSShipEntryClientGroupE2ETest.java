@@ -198,8 +198,12 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * A pilot who flies his own ship through the orbit line arrives in its cell still seated, not
      * falling, in control of it, and carrying the aboard record.
      *
-     * <p>red-witnessed (the IN-CONTROL verdict, both halves; the seated, not-falling and aboard-record
-     * verdicts are not), 2026-09-28. THE KEY REACHES THE COMPUTER — with
+     * <p>red-witnessed: the entry chain and the IN-CONTROL verdict, both halves, 2026-09-28 — the two
+     * the wait rewrite touched; the seated, not-falling and aboard-record verdicts are not witnessed.
+     * THE ENTRY — with {@code requestEntry} deciding {@code COOLDOWN} before anything else
+     * (inserted at {@code ShipEntryController:238}, ahead of its first decision): "a ship climbing under its own power past the orbit line (255)
+     * must be taken by the entry crossing … no `cell_crossing_begun` was recorded within 4000 ticks".
+     * THE KEY REACHES THE COMPUTER — with
      * {@code CrewTransfer.boundDummyForMount} binding the arrival's fresh mount to
      * {@code seatPos.up(3)}: "no `pilot_input_set` with input = set in dim 3". THE KEY LIFTS THE SHIP —
      * with {@code TileAdvancedFlightComputer.setPilotInput} replacing every input off the overworld by
@@ -420,6 +424,16 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
     // first, `pool=[3, 4] heldByThisScenario=[4]` and a further occupy answering `exhausted:true` —
     // true at that instant, and forty ticks into the climb the entry evicted slot 3 and was granted.
 
+    /**
+     * A ship that climbs through the orbit line while every slot is held is refused, and its pilot
+     * keeps his seat.
+     *
+     * <p>red-witnessed: with the pool-full catch of {@code ShipEntryController.requestEntry}
+     * ({@code ShipEntryController:273}) deciding {@code NO_SHIP_POSITION} instead of
+     * {@code REFUSED_POOL_FULL}: "with the pool held full, the entry gate must REFUSE for a full pool -
+     * its first decision was NO_SHIP_POSITION instead", 2026-09-28. The wait before it is the link
+     * that the gate decided at all, which that inversion passes by construction.</p>
+     */
     @Test
     public void aFullPoolRefusesTheEntryAndLeavesThePilotSeated() throws Exception {
 

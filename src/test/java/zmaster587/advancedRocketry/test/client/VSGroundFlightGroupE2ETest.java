@@ -244,6 +244,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * FIRST ship's base after the second one has been parked closer to it, must be shown answering
      * with the WRONG ship: without that leg "the id form was right" would be indistinguishable from
      * "any form would have been right here".</p>
+     *
+     * <p>red-witnessed: with the teleport's transform write skipped ({@code VSBridge:1036-1037}), LEG 1
+     * fails at "…and it must report where A IS now, not where it was built (posY=153.76)", 2026-09-28.
+     * The wave removed the advance before LEG 1's reads, and what that removal risks is a STALE read —
+     * the posY verdict's claim; the "still answers" verdict before it stayed green on that inversion,
+     * the ship being loaded either way. Refusing the adoption instead left the test green: the rigid
+     * teleport never re-assembles, so there is no adoption on this path.</p>
      */
     @Test
     public void aShipQuestionKeyedOnIdNamesItsOwnShipAndTheNearestFormDoesNot() throws Exception {
@@ -699,6 +706,13 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * over the registry. This paragraph claimed it "resolves the seat inside the ship at a given
      * world anchor", which is the guarantee the first {@code @Test} of this very class exists to
      * disprove. The identity-keyed form is {@code find-seat <dim> id <shipUuid>}.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat
+     * dummy no longer glued to its ship ({@code EntityDummy:381} made server-only): "the
+     * CLIENT-rendered rider must climb with the ship … client=14.78 server=24.25". THE CAMERA STAYS
+     * LOCKED — the ship camera-pin lines ({@code KeyBindings:696-699}) removed: "camYawBefore=0.0
+     * camYawAfter=180.0". The two waits before them are arrangement links (the spawn, the client
+     * standing at the build site).</p>
      */
     @Test
     public void seatedPilotFliesShipTravelsWithItAndCameraLocksToNose() throws Exception {

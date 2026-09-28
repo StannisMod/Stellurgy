@@ -130,6 +130,11 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         assertTrue("ticksExisted must be non-negative: " + t, t >= 0);
     }
 
+    /**
+     * <p>red-witnessed: with the descent gate's {@code setInFlight(true)} ({@code EntityRocket:1841})
+     * removed: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
+     * ticks", 2026-09-28.</p>
+     */
     @Test
     public void descentTimerGateFlipsInFlightUnderRealTicks_realTick() throws Exception {
         // Production gate (EntityRocket.onUpdate line 1047):
@@ -229,6 +234,11 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                 posYAfter < posYBefore);
     }
 
+    /**
+     * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
+     * ({@code EntityRocket:2153}) removed: "no `rocket_landed` carrying e = … was recorded within 100
+     * ticks", 2026-09-28.</p>
+     */
     @Test
     public void landedEventFiresOnGroundCollisionUnderRealTicks_realTick() throws Exception {
         // Drive the line-1284 landed branch via REAL ticking with the

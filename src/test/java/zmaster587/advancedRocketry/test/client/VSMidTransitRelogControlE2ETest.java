@@ -87,7 +87,9 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
     /**
      * A pilot who relogs while his ship is in transit is re-seated on it at the far end and flies it.
      *
-     * <p>red-witnessed (the regains-control verdict; the re-seat and placement verdicts are not): with
+     * <p>red-witnessed: the regains-control verdict, the one contract verdict the wait rewrite touched
+     * — the others it touched are arrangement reads (the ship's id, the cell entry, the transit
+     * beginning); the re-seat and placement verdicts are not witnessed. With
      * {@code TileAdvancedFlightComputer.setPilotInput} replacing every input by an idle one once the
      * craft is in a world other than the one it was first flown in, this fails with "held input must
      * MOVE THE ARRIVED SHIP", every one of the client's gate readings open and his inputs sent — the

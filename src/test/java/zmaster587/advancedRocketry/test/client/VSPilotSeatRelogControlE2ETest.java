@@ -82,6 +82,17 @@ public class VSPilotSeatRelogControlE2ETest extends AbstractSharedVsClientE2ETes
      *  used for every question afterwards. Never re-derived from a position. */
     private String shipId;
 
+    /**
+     * A pilot who logs out in his seat comes back in it, and his keys still fly the ship.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. BACK ON HIS MOUNT — the seat dummy
+     * refusing to be saved with its rider (a {@code writeToNBTOptional} override on
+     * {@code EntityDummy} returning false): "no `mount` … within 400 ticks". CONTROL AFTER THE RELOG —
+     * the client's ship-input send ({@code KeyBindings:722-725}) gated to the first
+     * {@code WorldClient} the session built: "after the relog the CLIENT's own pilot gate must re-open
+     * against the restored mount and put input on the wire". The first wait the wave touched is the control leg's link before the relog, which
+     * says the key reached the ship at all.</p>
+     */
     @Test
     public void aPilotWhoRelogsSeatedKeepsControlOfHisShip() throws Exception {
 

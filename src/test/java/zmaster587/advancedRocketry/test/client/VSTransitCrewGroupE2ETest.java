@@ -494,6 +494,17 @@ private String execEnvelope(String cmd) throws Exception {
         return json != null && Reply.of(json).has(key);
     }
 
+    /**
+     * A seated crew member is re-seated on arrival without anything forcing the ship loaded for him.
+     *
+     * <p>red-witnessed: with {@code CrewTransfer.reseat} ({@code CrewTransfer:295}) skipping every
+     * seated rider, the test fails after the crossing — "the client's mount chain did not END seated
+     * within 80 ticks of the crossing", 2026-09-28. It fails TYPED AS AN ARRANGEMENT FAILURE: the
+     * shared mount helper raises every unmounted end that way, so a crossing that never re-seats its
+     * pilot reads as a fixture that did not come up. That typing is a defect of its own and is not
+     * fixed here. The verdicts the wave touched are the arrangement's links (spawn, cell entry, ship
+     * usable) and the pre-jump seated control, which confirms the harness's own seat-mount.</p>
+     */
     @Test
     public void aCrewMemberIsReseatedOnArrivalWithNothingForcingTheShipLoaded() throws Exception {
 
@@ -734,8 +745,8 @@ private String hud() throws Exception {
      * A jump shows itself to the crew: the corridor is drawn in hyperspace and not in a cell, and the
      * HUD names the jump phase while the ship is in flight.
      *
-     * <p>red-witnessed (the CORRIDOR and HUD verdicts; the cell sky control and the departure link are
-     * not), 2026-09-28. With {@code BoundarySky} no longer calling {@code HyperspaceTunnel.render} in
+     * <p>red-witnessed: the CORRIDOR and HUD verdicts, 2026-09-28 — the two the wait rewrite touched;
+     * the cell sky control and the departure link are not witnessed. With {@code BoundarySky} no longer calling {@code HyperspaceTunnel.render} in
      * hyperspace: "corridor frames 0 -> 0 over 20 ticks". With {@code KeyBindings.driveHudLines}
      * adding no line in the transit phase: "no `ff_hud` whose latest drawn line names HYPERSPACE was
      * recorded within 600 ticks".</p>
@@ -1353,6 +1364,11 @@ private String hud() throws Exception {
      * same instrument: which world is the CLIENT in while the ship is en route, and then the same
      * question again at the far end, because the clause is about BOTH crossings.</p>
      *
+     * <p>red-witnessed: with {@code CrewTransfer.placeOnDeck} skipped for a standing rider outside
+     * hyperspace only ({@code CrewTransfer:318}): "the arrival crossing must carry the crew member on
+     * his feet too … no `client_dimension_changed` carrying dim = 4 was recorded within 600 ticks",
+     * 2026-09-28. Skipping it everywhere reddened the DEPARTURE first ("into dim 13"), which is why
+     * the inversion was scoped. The wait before the verdict is the link that the ship arrived.</p>
      */
     @Test
     public void aWalkingCrewMemberTravelsWithHisShipThroughHyperspace() throws Exception {
@@ -1619,6 +1635,11 @@ private String hud() throws Exception {
      * correct behaviour reached by accident. The defect lives in the posture CHANGE, so this scenario
      * boards him seated, commits the jump from the chair, and only then puts him on his feet. That
      * sibling stays the control: it is green on either side of the fix, and this one is not.
+     *
+     * <p>red-witnessed: with {@code CrewTransfer.refreshPostures} ({@code CrewTransfer:175}) returning
+     * the departure postures unchanged: "the arrival's deck hold must END — every branch records it",
+     * 2026-09-28 — a replayed SEATED record arms no deck hold. The wait the wave touched is the link
+     * that the ship arrived, before that verdict.</p>
      */
     @Test
     public void aCrewMemberWhoStoodUpMidFlightArrivesOnHisFeet() throws Exception {

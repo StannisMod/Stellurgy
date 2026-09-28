@@ -119,6 +119,15 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         return new Plot.Lane(SHIP_LANE.originX, SHIP_LANE.originZ, 512, 512);
     }
 
+    /**
+     * RESULT-1 is the control: a sealed cabin on an assembled ship seals a blob at all.
+     *
+     * <p>red-witnessed: with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob:74}) refusing any
+     * block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: "RESULT-1: a vent in a
+     * sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…
+     * \"blobSize\":0)", 2026-09-28. The two waits before it are arrangement links (the ship's id, the
+     * ship usable).</p>
+     */
     @Test
     public void aSealedShipCabinDoesNotReachItsOwnCrew_documentsKnownBug() throws Exception {
 

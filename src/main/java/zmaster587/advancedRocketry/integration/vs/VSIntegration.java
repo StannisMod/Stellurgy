@@ -519,10 +519,14 @@ public final class VSIntegration {
         // pass collects it on the next world tick and performs the deregistration itself. Its
         // copy-blocks-back step is guarded on the block set being non-empty, so nothing is resurrected.
         //
-        // That pass walks the LOADED ships, though, so it never runs for a source nothing was holding
-        // loaded - a crewless or offline departure. Name the ship before the cut and release it by hand
-        // afterwards in exactly that case (below); after the cut it is registered but blockless, and a
-        // position lookup can no longer tell it from any other ship in the world.
+        // A source nothing was holding loaded - a crewless or offline departure - is registered but
+        // blockless after the cut, and a position lookup can no longer tell it from any other ship.
+        // It is collected by more than one hand: the substrate's world-tick pass walks the whole
+        // REGISTRY and takes any record that is dead or owns no blocks (WorldServerShipManager.tick),
+        // the spawn drain drops this identity's own blockless remnant (dropOwnBlocklessRemnant), a
+        // same-world arrival adopts it (VSBridge.adoptOwnRemnant), and it is marked dead by name below.
+        // Measured 2026-09-28 on a same-world crossing: removing the mark alone, or the mark and the
+        // adoption, still left no entry behind; with all four removed one stayed.
         //
         // This name is also the ship's IDENTITY, and the re-assembly at the destination keeps it (see
         // the assemble call below): the craft that lands is the same ship it was before the cut, so

@@ -145,7 +145,14 @@ public class AtmospherePlayerEventTest {
         return value;
     }
 
-    /** Overworld baseline: no AR atmosphere may be cached for the player. */
+    /**
+     * Overworld baseline: no AR atmosphere may be cached for the player.
+     *
+     * <p>red-witnessed: with {@code AtmosphereHandler.getAtmosphereType(Entity)} ({@code :512})
+     * answering VACUUM for dimension 0: "overworld baseline: cache must be empty or non-AR;
+     * hasCached=true atmos=vacuum", 2026-09-28. Removing the handler's own dimension check instead
+     * stays GREEN — no other world's handler exists in this scenario to answer for the overworld.</p>
+     */
     @Test
     public void arDimWithoutVisitDoesNotCacheAtmosphereForPlayer() throws Exception {
         enterDim(0, OVERWORLD_UPDATES);

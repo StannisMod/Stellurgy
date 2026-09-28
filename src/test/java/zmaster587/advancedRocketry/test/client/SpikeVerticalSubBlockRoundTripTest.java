@@ -126,6 +126,15 @@ public class SpikeVerticalSubBlockRoundTripTest extends AbstractClientE2ETest {
         return String.join("\n", serverClient().execute(cmd));
     }
 
+    /**
+     * The sub-block altitude ladder, control first.
+     *
+     * <p>red-witnessed: none by an AR line — 2026-09-28. The touched verdict is the y=200 CONTROL, and
+     * the path it measures is vanilla's: the probe's {@code far-tp} calls
+     * {@code NetHandlerPlayServer.setPlayerLocation}, the position crosses the wire in vanilla's own
+     * packets, and a spectator hovering far from any ship passes through no AR movement code. There is
+     * no production line of ours whose reversal would make the control fail.</p>
+     */
     @Test
     public void doesASubBlockAltitudeSurviveTheRoundTripHighAboveTheOrigin() throws Exception {
         bot().waitForWorld();

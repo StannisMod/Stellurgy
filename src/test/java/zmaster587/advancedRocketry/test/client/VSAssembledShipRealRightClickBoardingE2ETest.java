@@ -107,6 +107,14 @@ public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractShared
     /** The server drops a block interaction beyond (reach + 3), so the bot must observably be closer. */
     private static final double MAX_INTERACT_DIST_SQ = 64.0;
 
+    /**
+     * A real use-key press at an assembled ship's seat boards the pilot.
+     *
+     * <p>red-witnessed: with the vendored {@code MixinWorld.preRayTraceBlocks} ({@code MixinWorld:376},
+     * Valkyrien Skies) no longer intercepting the ray, so it passes through the ship: "HOP 1 (aim):
+     * the client's crosshair must resolve to a BLOCK", 2026-09-28. The two waits before it are
+     * arrangement links (the ship usable, the client standing at the seat).</p>
+     */
     @Test
     public void aRealUseKeyPressOnAnAssembledShipsSeatBoardsThePilot() throws Exception {
 

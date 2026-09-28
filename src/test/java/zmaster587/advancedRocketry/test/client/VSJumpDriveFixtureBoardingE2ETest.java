@@ -136,6 +136,15 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      */
     private static final int KEY_USE_ITEM = -99;
 
+    /**
+     * A jump craft assembles whole, and both its consoles answer a real key press.
+     *
+     * <p>red-witnessed: with the vendored {@code ShipBlockPosFinder.isValidExpansion}
+     * ({@code ShipBlockPosFinder:18}, Valkyrien Skies) refusing the navigation computer's block: "the
+     * navigation computer must have joined the ship: the flood fill out of the flight computer
+     * decides what comes along", 2026-09-28. The other two waits the rewrite touched are arrangement
+     * links (the ship usable, the client standing at the console).</p>
+     */
     @Test
     public void aJumpCraftAssemblesWholeAndBothItsConsolesAnswerARealKeyPress() throws Exception {
 

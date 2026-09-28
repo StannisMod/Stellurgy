@@ -171,6 +171,29 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
      */
     private int cellDim;
 
+    /**
+     * A seated pilot keeps control of his ship at an extreme Y, through two teleports.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE SECOND UNPARK — the id-keyed
+     * {@code VSBridge.unparkShip} failing a ship's second unpark only: "the second teleport leaves the
+     * craft PARKED … {\"ok\":false}". THE SECOND LANDING — {@code VSBridge.teleportShipToByUuid}'s
+     * transform writes ({@code VSBridge:1036-1037}) skipped on the second extreme-Y move: "the second
+     * teleport must leave the craft where it was sent: commanded X 53400 ship=… posX 3400.0". THE
+     * SECOND TELEPORT —
+     * {@code teleportShipAndEveryoneAboard} refusing its second call only: "the second teleport must
+     * succeed: {\"ok\":false,…}". THE RIDER STAYS WITH HIS SHIP — the server seat glue
+     * ({@code EntityDummy:381}) putting the mount 10 above its seat at extreme Y, and the mount's rider
+     * offset lowered by 10 so the rider himself still arrives at the seat: "the CLIENT-rendered rider
+     * must arrive WITH his ship … apart by 12.54 blocks". A client-side-only glue offset stayed green:
+     * the client's mount is placed by the server's entity tracker, not by its own glue. THE TELEPORT —
+     * {@code VSShipCrossingOps.teleportShipAndEveryoneAboard} ({@code VSShipCrossingOps:366}) refusing:
+     * "teleport-ship to extreme Y must succeed: {\"ok\":false,…}". THE UNPARK — the id-keyed
+     * {@code VSBridge.unparkShip} ({@code VSBridge:959}) never taking: "the unpark must take:
+     * {\"ok\":false}". THE RIDER ARRIVES — BOTH carriers off, the mount loop of
+     * {@code teleportShipAndItsMounts} ({@code VSShipCrossingOps:336}) and the seat glue of
+     * {@code EntityDummy} ({@code EntityDummy:381}) across a teleport-sized gap: "no `pos_jump` a jump
+     * of ForgeTestClient to within 3.0 of the ship's Y". Each carrier alone was not measured.</p>
+     */
     @Test
     public void aSeatedPilotKeepsControlAtExtremeY() throws Exception {
 

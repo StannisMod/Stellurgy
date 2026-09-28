@@ -85,6 +85,11 @@ public class PositionWriterTraceNamesTheWriterTest {
      * <p>The name is the whole point: "his position changed" was always observable and never enough.
      * The caller trail is what turns a red into a diagnosis, so it is asserted to be non-empty
      * rather than merely present.</p>
+     *
+     * <p>red-witnessed: the subject here is a TEST instrument, so the inversion is too — with
+     * {@code MixinEntityPositionWriters.JUMP_THRESHOLD} raised from 16 to 1000: "a 140-block placement
+     * of the test player must be recorded as a position write — no `pos_jump` was recorded within 60
+     * ticks", 2026-09-28.</p>
      */
     @Test(timeout = 180000)
     public void aDeliberatePlacementIsRecordedWithItsCaller() throws Exception {
@@ -118,6 +123,10 @@ public class PositionWriterTraceNamesTheWriterTest {
      * <p>Without this the previous test would pass on an instrument that records every write, which
      * is not an instrument — a rider is re-positioned by its mount every single tick, so an unfiltered
      * recorder would bury the one write that mattered under thousands that did not.</p>
+     *
+     * <p>red-witnessed: with {@code MixinEntityPositionWriters.JUMP_THRESHOLD} lowered from 16 to 1:
+     * "a 2-block move is motion, not a jump, and must leave the timeline alone", 2026-09-28. The
+     * line before it — the reply reports a count — reads the reply's shape.</p>
      */
     @Test(timeout = 180000)
     public void ordinaryMotionIsNotRecordedAsAJump() throws Exception {

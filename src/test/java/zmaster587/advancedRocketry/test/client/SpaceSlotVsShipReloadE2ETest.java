@@ -55,6 +55,14 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
         return mReply.has(COUNT) ? Integer.parseInt(mReply.text(COUNT)) : -1;
     }
 
+    /**
+     * A ship in a pool slot comes back live after its slot is unloaded and rebound.
+     *
+     * <p>red-witnessed: with {@code SpaceSlotPool.unload} ({@code SpaceSlotPool:296}) saving nothing
+     * before the slot goes: "the ship must RE-LOAD live after the slot rebind — no `ship_usable`
+     * carrying dim = 14 was recorded within 300 ticks", 2026-09-28. The two verdicts before it are
+     * the arrangement's: the ship spawned, and it is in the pool world's registry.</p>
+     */
     @Test
     public void vsShipReloadsLiveAfterASlotRebind() throws Exception {
 

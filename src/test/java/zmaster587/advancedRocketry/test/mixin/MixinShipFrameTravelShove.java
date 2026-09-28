@@ -55,8 +55,9 @@ public abstract class MixinShipFrameTravelShove {
         // a constant — it compares it against what the player's OWN declared motion would explain,
         // so a position that moves without a velocity to account for it is refused before AR's bound
         // is ever consulted (measured: a step of 40 with no motion produced a packet the server saw
-        // as 0.125 blocks). A body climbing on a wrong carry HAS the velocity, which is exactly why
-        // the server ratified thirty blocks a tick of it.
+        // as 0.125 blocks). It does NOT get a forty-block step past vanilla: measured 2026-09-28, the
+        // step with motionY=40 reached the server and was refused as "moved too quickly! 0.0,40.0,0.0"
+        // — vanilla's check reads the SERVER's copy of the motion, not the one set here.
         entity.motionY = blocks;
         TestTrace.recordHere("ship_frame_travel_shove",
                 "\"blocks\":" + blocks + ",\"toY\":" + TestTrace.fmt(entity.posY)

@@ -80,12 +80,6 @@ import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArrange
  *
  * <p>Manual server + client lifecycle: the config has to be written into the game directory before
  * the server boots.</p>
- *
- * <p>red-witnessed: with {@code TileAdvancedFlightComputer:642}'s {@code entryLatched = false}
- * removed, leg 9 fails with "no `entry_latch_released` carrying ship = …" after the pilot has flown
- * down through the line (2026-09-24). Leg 9's bounce absence and its {@code STARTED} control have
- * no witness at their own lines: without the latch the ship bounces on arrival and leg 8 fails
- * first, and without the on-ramp the client-world wait fails before the {@code STARTED} read.</p>
  */
 public class M1PlanetToPlanetMilestoneE2ETest {
 
@@ -332,6 +326,30 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         }
     }
 
+    /**
+     * The whole tier-2 loop a player drives: build at the assembler, board, fly up into space, aim at
+     * the console, arm, jump, and descend onto the target planet.
+     *
+     * <p>red-witnessed: one inversion per rung, each red at its own rung with the earlier ones green.
+     * THE BUILD (2026-09-28) — the assembler's {@code VSIntegration.assembleTier2Ship} call
+     * ({@code TileRocketAssemblingMachine:814}) skipped: the rung's helper link fails first, "the BUILD
+     * pass must add a ship to the registry — no `ship_spawned` was recorded within 3600 ticks"; the
+     * rung's own ship count restates that link. THE CRYSTAL'S ADDRESSES —
+     * {@code TileNavigationComputer.shipCrystal} reading an empty stack: "putting a memory crystal into
+     * the console's SHIP slot must give the pilot a list of places he can fly to … listed=0"; the wait
+     * before it is the server's receipt of the click, a barrier. THE PICK — the {@code NET_PICK} branch
+     * of {@code TileNavigationComputer.useNetworkData} not calling {@code setTargetBody}: "a click on a
+     * listed address must reach the navigation computer … no `nav_target_picked`". THE ARM — the
+     * {@code NET_ARM} branch never calling {@code arm()}: "pressing ARM must reach the navigation
+     * computer and be ANSWERED … no `nav_arm_decided`". THE JUMP KEY —
+     * {@code TileAdvancedFlightComputer.onJumpKey} returning at once: "the jump key, pressed by a
+     * seated pilot of an ARMED ship, must be ANSWERED … no `jump_press_decided`". THE LATCH
+     * (2026-09-24) — {@code TileAdvancedFlightComputer:642}'s {@code entryLatched = false} removed: leg
+     * 9 fails with "no `entry_latch_released` carrying ship = …" after the pilot has flown down through
+     * the line. Leg 9's stay-put verdict after it and its {@code STARTED} control have no witness at
+     * their own lines: without the latch the ship bounces on arrival and leg 8 fails first, and
+     * without the on-ramp the client-world wait fails before the {@code STARTED} read.</p>
+     */
     @Test
     public void aPlayerBuildsHisShipAtTheAssemblerBoardsItAndFliesItOffThePlanet() throws Exception {
 

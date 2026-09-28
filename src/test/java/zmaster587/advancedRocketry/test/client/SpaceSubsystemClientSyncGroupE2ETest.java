@@ -178,13 +178,15 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
      * through {@code PlayerList.transferPlayerToDimension} &rarr; the client's OWN world must be the
      * slot dim and keep rendering.</p>
      *
-     * <p>red-witnessed (none possible for the HOLD; the settle verdict is not witnessed yet),
-     * 2026-09-28 — said so rather than faked. The
-     * hold pins the ABSENCE of any transfer out of the slot world; the only production code that
-     * moves a player between worlds is {@code CrewTransfer}'s crossing path, which this arrangement
-     * never reaches, so there is no single line whose inversion would put him in motion. What the
-     * hold CAN check it checks: its instrument is asserted to have run. The settle-on-the-platform
-     * verdict is not witnessed.</p>
+     * <p>red-witnessed: both reads of the hold, 2026-09-28. THE COUNT — one transfer to the overworld
+     * about a second after the settle's health probe, i.e. inside the hold window: "a client that
+     * arrived in a slot dim must STAY there; a dimension change during the hold is it being thrown
+     * out". THE END STATE — the space-dim guard ({@code PlanetEventHandler:249}) run in every dimension
+     * but 0 and evicting a body after 320 ticks in the world, which landed after the window's log read:
+     * "the client must still be in the slot dim two seconds later expected:&lt;14&gt; but
+     * was:&lt;0&gt;". Evicting at once reddened the ARRIVAL link instead.
+     * (An earlier record here said no inversion was possible because {@code CrewTransfer} is the
+     * only world mover; the guard is a second one, and that record was wrong.)</p>
      */
     @Test
     public void aRealClientEntersASlotDimAndKeepsRendering() throws Exception {
@@ -308,7 +310,8 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
      * workaround — it is the arrangement a real pilot is in, and the control leg below is what says
      * so.</p>
      *
-     * <p>red-witnessed (the CONTROL and the arrival link; the contents pins are not), 2026-09-28.
+     * <p>red-witnessed: the CONTROL and the arrival link, 2026-09-28 — the control is the verdict the
+     * wait rewrite touched; the contents pins after it are not witnessed and were not touched.
      * With {@code SystemBodiesProducer.broadcastTo} sending every cell's sky to every player — the old
      * {@code sendToAll} — this fails at the control: "a player who is not in the cell's world must not
      * be sent its sky". With it sending nothing: "no `system_bodies_received` naming slot dim 3 was

@@ -445,6 +445,17 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- Staying aboard: a jump from the top deck must not release the capture ------------------
 
+    /**
+     * A jump from the top deck keeps the capture and lands back on the same deck.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE LANDING — {@code ShipFrameTravel.jump}
+     * ({@code ShipFrameTravel:2092}) adding 1.5 blocks a tick of ship-frame sideways motion to every
+     * aboard jump, flinging him off the deck: "the jumper was in the air when the key came up, so he
+     * must LAND on the deck he jumped from … no `deck_contact` carrying ship = …". THE JUMP LEAVES THE
+     * DECK — the same method giving the jump no upward motion: "the jump must actually leave the deck
+     * (apex=157.0 deckY=157.0)"; that one never airs him, so the conditional landing wait is skipped
+     * on it.</p>
+     */
     @Test
     public void jumpingOnTheTopDeckKeepsTheCaptureAndLandsBackOnIt() throws Exception {
         final FixtureSite site = site();
@@ -751,6 +762,15 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
             "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel";
     private static final String DUMMY_ID = "dummyId";
 
+    /**
+     * A still crew member on a deck rolled past vertical is neither dragged sideways nor churned.
+     *
+     * <p>red-witnessed: with {@code ShipFrameTravel.travel} ({@code ShipFrameTravel:1559}) declining
+     * every tick on a deck whose up points below -0.5: "the client must be resolving the crew member
+     * through the stillness window — the ship frame's frame never committed a capture for this body",
+     * 2026-09-28. That is the verdict the wait rewrite touched; the drift and churn verdicts after it
+     * are not witnessed.</p>
+     */
     @Test
     public void aStillCrewMemberOnASteeplyRolledDeckIsNotDraggedSideways() throws Exception {
         final FixtureSite site = site();
@@ -1278,6 +1298,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- The server does not simply ratify what a client declares ------------------------------
 
+    /**
+     * A forty-block step committed by the client's own travel never becomes a position the server
+     * holds for him.
+     *
+     * <p>red-witnessed: none by an AR line with this stimulus — measured, 2026-09-28. The step DOES
+     * leave the client, and VANILLA refuses it: the harness server log reads "ForgeTestClient moved too
+     * quickly! 0.0,40.0,0.0", and the client applies the server's position correction two ticks after
+     * the shove, with no {@code deck_movement_bound} record in the window. So AR's bound is never
+     * consulted, and turning it off (or {@code followShipPoses} as well) leaves this green. A smaller
+     * step would reach the bound, but it would not reach these verdicts: the client re-images the body
+     * to its deck point the very next tick, so both position reads after the window are at the deck
+     * whether the bound refused the step or took it. Reaching the bound needs a verdict on the bound's
+     * own record, not a new shove size.</p>
+     */
     @Test
     public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
         final FixtureSite site = site();
@@ -1365,22 +1399,17 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
         // WHAT THIS PINS, and what it deliberately does not.
         //
-        // A body whose own client committed a forty-block step never gets to DECLARE it. Measured
-        // three ways in one run: the client's travel took the step (its recorder says
-        // `toY:110, motionY:40`), the server saw an ordinary tick of 0.125 blocks, and the movement
-        // bound — which ran, on this body, on every packet — was never asked about anything wild.
+        // A forty-block step the client's own travel committed does not end up as anyone's position.
+        // Measured 2026-09-28 with every client record of the window printed: the travel took the
+        // step (196 from 156), the client sent it, and the server's VANILLA speed check refused it
+        // ("moved too quickly! 0.0,40.0,0.0" in the server log) and corrected him two ticks later —
+        // before AR's movement bound was consulted at all. On the tick in between, the client's own
+        // deck-follow pass (`followShipPoses`) had already put him back on his deck point.
         //
-        // That is a structural fact rather than a gap in the staging, and it is worth stating: AR's
-        // own external-move guard is far TIGHTER than the server's region (a fifth of a block plus
-        // three times the carry, against two blocks plus the carry), so anything the region would
-        // refuse the guard has already caught, and a body that lost its capture is not a body the
-        // region has an opinion about. The server bound is therefore a LAST line whose subject is
-        // AR's own client arithmetic going wrong in a way that stays legal to the guard — which is
-        // precisely what happened when a client derived a wrong deck velocity and climbed on it,
-        // and precisely what the rest of this contract removed.
-        //
-        // So this scenario pins the two halves that CAN be established: the bound is consulted for
-        // a body standing on a deck, and a divergence that large does not survive to be declared.
+        // So what this scenario pins is the OUTCOME, and it is held today by vanilla and by the
+        // client's re-imaging, not by the bound it was written for: the reads below are end states,
+        // and a step one packet long has been undone by the time they are taken. The bound is the
+        // subject of a redesign that asserts on its own verdict instead.
         assertTrue("a forty-block client-side step must not reach the server as a declared position:"
                 + " it arrived as y " + startY + " -> " + endY + " :: " + boundTrace,
                 Math.abs(endY - startY) < DECLARED_STEP_BLOCKS);
@@ -1436,6 +1465,16 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- Excluded states: the dismount deck-hold must never snap a creative-flying ex-pilot -----
 
+    /**
+     * A pilot who dismounts and takes to creative flight is never pulled back down by the deck.
+     *
+     * <p>red-witnessed: only with BOTH defences removed — the dismount hold's exclusion of an excluded
+     * body ({@code EntityDummy:240}) AND the seed's own excluded check ({@code ShipFrameTravel:790}) —
+     * does this fail: "a flying ex-pilot must never be yanked back down (maxDrop=5.1)", 2026-09-28.
+     * Either one removed alone leaves it green; each suffices. The verdict the wait rewrite touched
+     * is the premise that the double-tap started flight at all, which is vanilla's and no AR line
+     * decides.</p>
+     */
     @Test
     public void aCreativeFlyingExPilotIsNeverSnappedBackByTheDismountHold() throws Exception {
         final FixtureSite site = site();
@@ -2178,6 +2217,18 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      *  the carry a body receives for one tick of it. */
     private static final double SECONDS_PER_TICK = 0.05;
 
+    /**
+     * A body that meets a deck after the craft manoeuvred with nobody aboard is carried by what the
+     * craft is doing now, not by the average of what it did.
+     *
+     * <p>red-witnessed (not yet — the carry verdict has not been seen red), 2026-09-28. Run as the
+     * only method of its class, the method is red on HEALTHY production at its arrangement "the body
+     * must stand on the deck ONCE before the manoeuvre" (the server reads no capture after the
+     * client's capture link has passed), so both inversions tried that way — a carry bias from a
+     * body's second capture, and one only on a capture after an absence — stopped there. In the full
+     * class run of the same day's gate it PASSED. The witness that remains is an inversion run inside
+     * the whole class.</p>
+     */
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {
         final FixtureSite site = site();
@@ -2413,6 +2464,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- Deck-frame look: the walking crew's aim lives in the deck frame ------------------------
 
+    /**
+     * The mouse turns a walking crew member's aim in the deck frame, and the aim rides the deck.
+     *
+     * <p>red-witnessed: with {@code VSIntegration.flightComputerOf} ({@code VSIntegration:876})
+     * answering null: "attitude hold must accept the roll", 2026-09-28. The other wait the rewrite
+     * touched is the hop's landing on the open deck, a link on the arrangement; the aim verdicts
+     * after the roll were not touched and are not witnessed.</p>
+     */
     @Test
     public void theMouseTurnsTheWalkingCrewsAimInTheDeckFrameAndTheAimRidesTheDeck() throws Exception {
         final FixtureSite site = site();

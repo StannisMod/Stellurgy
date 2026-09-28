@@ -275,9 +275,19 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * A seated pilot's throttle lifts the ship, his HUD shows its speed, and his flight cursor turns
      * it.
      *
-     * <p>red-witnessed (the TURN rung only; the lift and HUD rungs are not): with
-     * {@code TileAdvancedFlightComputer}'s roll rate multiplied by {@code 0.0}, this fails with
-     * "largest omega over the window=0.0" — 2026-09-28.</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE HUD — {@code freeFlightHudLines}
+     * ({@code KeyBindings:341}) returning no lines for a tier-2 craft: "a seated tier-2 pilot must get
+     * a Free Flight HUD at all — no `ff_hud` carrying a non-empty HUD line". THE LIFT — the linear
+     * force ({@code MixinTileAdvancedFlightComputer:98}) multiplied by 0: "must lift the ship: 155.0
+     * -&gt; 152.82". THE SPEED READOUT — the speed line ({@code KeyBindings:391}) printing 0 for tier
+     * 2: "no `ff_hud` whose latest line carries a non-zero speed readout"; that inversion first left
+     * the test GREEN, because the check accepted any non-zero number anywhere in the HUD and the
+     * vector line supplied one — it now parses the speed line alone. THE CURSOR —
+     * {@code acceptShipPilotMouseDelta} ({@code KeyBindings:759}) scaling every delta by 0: "must
+     * deflect the client's flight cursor (got 0.0)". THE TURN — {@code TileAdvancedFlightComputer}'s
+     * roll rate multiplied by 0: "largest omega over the window=0.0". The cursor-centred and brake
+     * verdicts the wave touched live in {@link #aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim}
+     * since this method was split.</p>
      */
     @Test
     public void seatedPilotSeesLiveVelocityAndHisCursorTurnsTheShip() throws Exception {
@@ -500,6 +510,17 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- Test 2: the camera turns with the ship, and the eye stays out of the deck ------------
 
+    /**
+     * An inverted ship turns its seated pilot's camera over with it, and his eye stays on the ship's
+     * side of the deck.
+     *
+     * <p>red-witnessed: with the seated-ship camera roll ({@code RocketEventHandler:215}) given an
+     * extra 30 degrees, this fails at the upright control: "an upright ship must leave the camera
+     * level (roll=30.0)", 2026-09-28. The other verdict the wave touched is the screenshot's
+     * existence — a check on the harness's own capture, which no production line decides. The
+     * camera verdicts after the roll are not witnessed: inverting the roll itself stops the test at
+     * "the ship must actually have rolled past vertical", an arrangement.</p>
+     */
     @Test
     public void anInvertedShipTurnsThePilotsCameraOverAndKeepsHisEyeOutOfTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -1130,18 +1151,23 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         bot().invokeStaticInt(KEY_BINDINGS, "acceptShipPilotMouseDelta", dx, dy);
     }
 
-    /** Whether the rendered HUD carries a speed readout with a non-zero value. */
+    /** The SPEED line the pilot reads ({@code msg.ff.hud.speed}, "SPD <n> m/s"). */
+    private static final Pattern HUD_SPEED = Pattern.compile("SPD ([0-9]+\\.[0-9]+) m/s");
+
+    /**
+     * Whether the rendered HUD's SPEED line reads a non-zero value.
+     *
+     * <p>The speed line itself, and nothing else on the HUD. This used to accept ANY decimal above
+     * 0.05 anywhere in the text, and the vector line beside the speed line carries the ship's
+     * per-axis velocity — so, measured 2026-09-28, a HUD whose speed line was forced to read
+     * {@code SPD 0.0 m/s} still passed on the vector line's numbers.</p>
+     */
     private static boolean hasNonZeroSpeedReadout(String hud) {
         if (hud == null) {
             return false;
         }
-        Matcher m = Pattern.compile("([0-9]+\\.[0-9]+)").matcher(hud);
-        while (m.find()) {
-            if (Double.parseDouble(m.group(1)) > 0.05) {
-                return true;
-            }
-        }
-        return false;
+        Matcher m = HUD_SPEED.matcher(hud);
+        return m.find() && Double.parseDouble(m.group(1)) > 0.05;
     }
 
     /** How many distinct colours a captured frame contains - one means nothing was drawn. */

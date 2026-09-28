@@ -49,6 +49,16 @@ public class AudioRegistrySoundReachesClientE2ETest extends AbstractClientE2ETes
      *  reads. */
     private static final int SOUND_BUDGET_TICKS = 100;
 
+    /**
+     * A sound AR plays on the server reaches the real client's sound manager.
+     *
+     * <p>red-witnessed: with {@code combustionRocket} left out of {@code AudioRegistry}'s registration
+     * ({@code AudioRegistry:43}): "combustionRocket must be present in ForgeRegistries at send time:
+     * … \"registered\":false", 2026-09-28. The line the wait rewrite touched is the probe's own reply,
+     * which answers {@code ok} whenever the {@code AudioRegistry} field resolves — a check on the
+     * instrument, which the same inversion passes; the registration verdict right after it is the
+     * one that decides.</p>
+     */
     @Test
     public void serverPlayedArSoundReachesClientSoundManager() throws Exception {
         // ARRANGEMENT: pin the player at a known spot so the 16-block sound broadcast

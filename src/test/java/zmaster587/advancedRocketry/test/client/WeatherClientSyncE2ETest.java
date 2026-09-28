@@ -147,10 +147,23 @@ public class WeatherClientSyncE2ETest {
      * Each planet keeps its own weather through a real client, and a fresh planet never inherits the
      * overworld's rain.
      *
-     * <p>red-witnessed (the FRESH-DIM verdicts; the A/B isolation verdicts are not): with
+     * <p>red-witnessed: the fresh-dim packet verdicts and the overworld control, 2026-09-28, one
+     * inversion per verdict; the told-rain link on A has not been reddened and the reason is measured
+     * below. THE OVERWORLD CONTROL — dim C's wrap clearing the overworld's own rain flag: "overworld
+     * should still be raining". THE TOLD-RAIN LINK ON A — the rain reaches an arriving client by more
+     * paths than any one inversion can remove: with {@code PlanetWeatherManager.syncToPlayer} returning
+     * at once (every AR sender goes through it), the transfer's weather gate in {@code MixinPlayerList}
+     * never syncing, and the planet's strength ramp in {@code WorldProviderPlanet.updateWeather} frozen,
+     * all at once, the link still passed — a strength of 0.15 reached the client — and the test fell
+     * at the client-visible flag after it. The path still delivering it was not found.
+     * NEVER TOLD IT IS RAINING —
      * {@code PlanetWeatherManager.wrapWorldInfoIfNeeded} no longer re-seeding the rain strength after
-     * wrapping — the phantom-rain defect — this fails with "client must never be told it is raining
-     * on fresh clear dim C" — 2026-09-28.</p>
+     * wrapping, the phantom-rain defect: "client must never be told it is raining on fresh clear dim
+     * C". NEVER TOLD A STRENGTH — the re-seed ({@code PlanetWeatherManager:204}) leaving dim C at 0.15,
+     * under the 0.2 at which vanilla calls a world raining: "client must never be told a rain strength
+     * above 0 on fresh dim C". (At 1.0 the begin-raining verdict fell first.) The two end-of-window
+     * reads after them cannot go red alone: the client learns rain only from those packets, so any
+     * state that fails them was told first. The client-in-dim reads are the teleport's arrangement.</p>
      */
     @Test
     public void weatherIsolatedAcrossDimsThroughRealClient() throws Exception {

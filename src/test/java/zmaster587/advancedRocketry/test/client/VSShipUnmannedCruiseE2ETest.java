@@ -71,7 +71,13 @@ public class VSShipUnmannedCruiseE2ETest extends AbstractSharedVsClientE2ETest {
      * A pilot who stands up leaves his ship cruising, and one who sits back down gets the cruise
      * back rather than a stopped or reset ship.
      *
-     * <p>red-witnessed, both verdicts, 2026-09-28. KEEPS CRUISING — with
+     * <p>red-witnessed: the ramp and both cruise verdicts, 2026-09-28. THE RAMP — with
+     * {@code TileAdvancedFlightComputer.setPilotInput} discarding every input: "the held throttle must
+     * ramp this ship's vertical cruise all the way to the computer's own ceiling … no
+     * `cruise_setpoint_changed` with via = pilot and up at SHIP_MAX_SPEED was recorded within 200
+     * ticks"; the setpoint verdict after that link is its read-back and falls with it. The dismount
+     * and re-mount waits are links on the arrangement (he stood up; his client sat back down).
+     * KEEPS CRUISING — with
      * {@code TileAdvancedFlightComputer}'s unmanned Flight-Assist command built from a zero setpoint
      * instead of {@code velocitySetpoint}: "Climb over the LAST ten ticks of the window=0.0", the
      * slices after the pilot left reading +10.9, +0.7, 0, 0. SURVIVES REMOUNT — with

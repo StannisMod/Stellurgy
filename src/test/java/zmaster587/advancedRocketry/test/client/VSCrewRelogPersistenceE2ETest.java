@@ -550,6 +550,14 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
      * him while the server's copy stands frozen, so the resumed loop has to absorb the whole
      * accumulated step at once. A freeze on a body that was not moving has nothing to catch up on,
      * which is why it is the control rather than the stimulus.</p>
+     *
+     * <p>red-witnessed: the CONTROL, 2026-09-28 — the verdict the wait rewrite touched. The guard this
+     * javadoc describes was removed on 2026-09-16, so the count now asks whether ANY release happens
+     * during an ordinary walk. A flat 0.05-block step guard re-added to {@code ShipFrameTravel.travel}
+     * on the client, firing once: "CONTROL A: the guard must be quiet for the same walk without a
+     * stall". The same guard firing on every step instead failed the arrangement first ("the client
+     * must have resolved the body through every window") — a body released on every step is never
+     * resolved long enough to be measured.</p>
      */
     @Test
     public void aCrewMemberIsNotReleasedWhenTheServerSkipsATickBurst() throws Exception {

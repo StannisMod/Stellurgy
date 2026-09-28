@@ -195,6 +195,19 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         }
     }
 
+    /**
+     * A pilot dismounted inside an inverted ship and moved about inside it stays held by that ship
+     * with deck semantics, at his deck spot, with the ship camera engaged.
+     *
+     * <p>red-witnessed: 2026-09-28. THE INVERSION IS ACCEPTED — {@code VSIntegration.flightComputerOf}
+     * ({@code VSIntegration:876}) answering null: "attitude hold must accept the inversion". THE
+     * CONTRACT — the dismount seed installing the hull-stand mode with no hand-over to the deck: "the
+     * client camera must engage for the re-seated interior body (shipCamActive=false)". The other
+     * verdicts the wait rewrite touched are the arrangement's: the ABOARD commit after the dismount
+     * (server-committed; the seed inversion left it green), the client applying the in-hull teleport
+     * and taking a census after it, and the region check that the teleport did not carry him out
+     * through the doorway.</p>
+     */
     @Test
     public void aBodyReleasedInsideAnInvertedShipIsSeatedBackOnTheDeck()
             throws Exception {
@@ -415,6 +428,13 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     // ---- Enclosed cavity: the interior gate claims an UNSUPPORTED roofed body with a deck below -
 
+    /**
+     * A body unsupported mid-cavity of an enclosed, inverted cockpit is claimed by the deck below it.
+     *
+     * <p>red-witnessed: with {@code VSIntegration.flightComputerOf} ({@code VSIntegration:876})
+     * answering null: "attitude hold must accept the inversion", 2026-09-28 — the one verdict the wait
+     * rewrite touched here. The interior gate's own claim after it is not witnessed.</p>
+     */
     @Test
     public void aBodyLostMidCavityOfAnEnclosedInvertedShipIsReclaimedByTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -635,6 +655,21 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
 
     // ---- Flying-aboard: a captured flyer's flight kinematics resolve in the DECK frame ---------
 
+    /**
+     * A crew member who starts creative flight on the deck stays captured, flies along the deck's
+     * normal, and is put back on the deck when he turns flight off.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE LANDING — the walking path's deck
+     * gravity ({@code ShipFrameTravel:1657}) withheld from any body that has flown aboard: "turning
+     * flight off must hand the body to deck gravity and put it in CONTACT with the ship's geometry …
+     * no `deck_contact` carrying ship = … was recorded within 240 ticks". THE ROLL IS ACCEPTED — {@code VSIntegration.flightComputerOf} answering null:
+     * "attitude hold must accept the roll". THE CAPTURE IS KEPT — {@code ShipFrameTravel.excludedStateOf}
+     * ({@code ShipFrameTravel:419}) treating a creative flyer as excluded even when aboard: "starting
+     * flight on the deck must NOT release the capture". THE DESCENT — the aboard fly impulse
+     * ({@code ShipFrameTravel:1834}) dropped for descend: "holding descend must sink along the DECK
+     * NORMAL (subspace -Y): 131.0 -&gt; 132.0". The ABOARD commit after the dismount is the
+     * arrangement's link (server-committed).</p>
+     */
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
         final FixtureSite site = site();

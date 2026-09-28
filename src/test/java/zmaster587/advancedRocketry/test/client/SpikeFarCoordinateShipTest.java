@@ -100,6 +100,16 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         return String.join("\n", serverClient().execute(cmd));
     }
 
+    /**
+     * The ladder: at the origin control and at the far rung, a ship assembles, loads, is boarded,
+     * lifts on the real key, and its client rider tracks it.
+     *
+     * <p>red-witnessed: with {@code TileAdvancedFlightComputer.setPilotInput} discarding every input
+     * in the overworld: "the x=0 control failed - the instrument, not the coordinate: the vertical-up
+     * key did not lift the ship (serverLift=0.0000 …)", 2026-09-28. The waits the rewrite touched each
+     * turn an expiry into that RUNG's verdict (spawn, id, load, riding), and the control assertion is
+     * where any of them at x=0 surfaces — the path this red went through.</p>
+     */
     @Test
     public void doesAShipAssembleLoadAndFlyFarFromTheOrigin() throws Exception {
 
@@ -336,6 +346,12 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
      * </ul>
      * Prints, never asserts a threshold: there is no defensible number to assert before the first
      * pair of readings exists.
+     *
+     * <p>red-witnessed: none possible — 2026-09-28. This method asserts no contract: its measurement
+     * is printed, and every verdict the wait rewrite touched is an ARRANGEMENT typed as an assertion
+     * (the ship spawned, the pilot was delivered, the ship's id resolved, a seat was found). A
+     * red-witness pins a contract; reddening a fixture check would only show that a fixture can fail
+     * to come up.</p>
      */
     @Test
     public void howLongDoesAOneShotCommandSurvive() throws Exception {

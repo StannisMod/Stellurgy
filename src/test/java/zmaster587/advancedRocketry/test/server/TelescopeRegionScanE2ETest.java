@@ -290,6 +290,13 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
                 done.addressesOnCrystal() >= 1);
     }
 
+    /**
+     * <p>red-witnessed: with the survey written into NEITHER of the two places a save takes it from —
+     * {@code TileObservatory.writeToNBT} ({@code :480}) and {@code writeNetworkData} ({@code :426}),
+     * which {@code TileMultiBlock.writeToNBT} also calls: "the survey did not come back with the
+     * chunk: … scanning:false", 2026-09-28. Dropping only the {@code writeToNBT} copy stays GREEN —
+     * the network copy lands in the same save compound.</p>
+     */
     @Test
     public void aSurveyInFlightSurvivesItsChunkBeingUnloaded() throws Exception {
         final int x = 4540;
