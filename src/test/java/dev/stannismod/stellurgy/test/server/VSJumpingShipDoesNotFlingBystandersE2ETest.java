@@ -27,8 +27,11 @@ import static org.junit.Assert.assertTrue;
  * the whole lever arm between them. The player-visible shape is being thrown thousands of blocks,
  * accelerating.
  *
- * <p><b>The arrangement, and why each half of it is there.</b> A dropped item is the subject: its
- * movement is driven only by the server tick, so nothing but the drag path can move it. It is landed
+ * <p><b>The arrangement, and why each half of it is there.</b> An empty minecart is the subject: its
+ * movement is driven only by the server tick, so nothing but the drag path can move it. It is a
+ * minecart and not a dropped item because the hazard needs a body the SUBSTRATE holds: since
+ * 2026-09-29 a deck takes an item into its own frame and carries it with a jump, so the substrate
+ * never associates an item with the ship and there is no body left behind to fling. It is landed
  * on the ship's deck so the substrate records the touch — a body standing on ORDINARY ground has that
  * association cleared at once, and only a body that was on the SHIP can be dragged by it. The ship is
  * then jumped far away HORIZONTALLY, so the lever arm is horizontal and the verdict can ignore
@@ -114,14 +117,16 @@ public class VSJumpingShipDoesNotFlingBystandersE2ETest extends AbstractSharedSe
         ShipInfo atBuildSite = ShipInfo.of(info);
         double sx = atBuildSite.x, sy = atBuildSite.y, sz = atBuildSite.z;
 
-        // The subject: a plain item, dropped over the hull so it falls onto the deck. Only the server
-        // tick moves it, so any displacement below has exactly one possible author.
-        // Marked before the drop: the association is formed on one of the ticks the item spends
+        // The subject: an empty minecart, dropped over the hull so it falls onto the deck (see the
+        // class comment for why not an item). Only the server tick moves it.
+        // Marked before the drop: the association is formed on one of the ticks the body spends
         // falling, and a mark taken after it would be waiting for the body to touch a second ship.
         long touchMark = events.mark();
-        String dropped = exec("stellurgytest vs drop-item 0 " + sx + " " + (sy + 6) + " " + sz);
+        String dropped = exec("stellurgytest entity spawn 0 " + sx + " " + (sy + 6) + " " + sz
+                + " minecraft:minecart");
         int subjectId = extractInt(dropped, "entityId");
-        assertTrue("the subject item was not spawned: " + dropped, subjectId != Integer.MIN_VALUE);
+        assertTrue("the subject minecart was not spawned: " + dropped,
+                subjectId != Integer.MIN_VALUE && Reply.of(dropped).bool("spawned"));
 
         // CONTROL 1 — the subject must actually register the ship. A body that never touched it is
         // never dragged by it, and everything below would be a measurement of nothing.

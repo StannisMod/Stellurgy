@@ -2494,6 +2494,21 @@ public class TestProbeCommand extends CommandBase {
             m.put("playerY", subject.posY);
             m.put("playerZ", subject.posZ);
             m.put("playerOnGround", subject.onGround);
+            // Whether the world is simulating the subject at all: a body that is not being ticked
+            // stands perfectly still, and "it did not move" is then a reading about nothing.
+            m.put("ticksExisted", subject.ticksExisted);
+            // The world's own reason not to tick it: World.updateEntityWithOptionalForce updates a
+            // non-player entity only if every chunk within 32 blocks is loaded (0 inside a
+            // force-loaded chunk). The same call, asked here.
+            int ex = net.minecraft.util.math.MathHelper.floor(subject.posX);
+            int ez = net.minecraft.util.math.MathHelper.floor(subject.posZ);
+            boolean forced = !subject.world.isRemote && subject.world.getPersistentChunks()
+                    .containsKey(new net.minecraft.util.math.ChunkPos(ex >> 4, ez >> 4));
+            int range = forced ? 0 : 32;
+            m.put("updateAreaLoaded", subject.world.isAreaLoaded(new net.minecraft.util.math.BlockPos(
+                    ex - range, 0, ez - range), new net.minecraft.util.math.BlockPos(ex + range, 0, ez + range),
+                    true));
+            m.put("chunkForced", forced);
             // The body's OWN motion, beside the velocity the substrate holds for it. Both halves are
             // reported because a body can be moving for either reason and the two are cleared by
             // different things: an inherited velocity dies when the body lands, its own motion does
@@ -2501,7 +2516,67 @@ public class TestProbeCommand extends CommandBase {
             m.put("motionX", subject.motionX);
             m.put("motionY", subject.motionY);
             m.put("motionZ", subject.motionZ);
+            // Optional fourth argument: a ship id, and the subject's position IN THAT SHIP'S FRAME,
+            // mapped from the same position read above in this one call. "Did this body move along
+            // the deck" can only be answered this way: a world position differenced against a pose
+            // read by another command counts the ship's own step between the two reads as the body
+            // moving. Absent (not zero) when the ship does not resolve on this side.
+            if (args.length >= 4) {
+                double[] local = dev.stannismod.stellurgy.integration.vs.VSIntegration.toShipFrameFor(
+                        subject.world, args[3], subject.posX, subject.posY, subject.posZ);
+                m.put("shipResolved", local != null);
+                // WHICH mechanism owns the subject's movement: a deck that holds it (the craft it
+                // names), or nothing of ours - in which case the substrate's own collision does.
+                dev.stannismod.stellurgy.integration.vs.DeckFrameTick.Episode episode =
+                        ((dev.stannismod.stellurgy.integration.vs.DeckHeld) subject).stellurgy$deckEpisode();
+                m.put("deckHeldBy", episode == null ? null : episode.shipId());
+                if (local != null) {
+                    m.put("bodyShipFrameX", local[0]);
+                    m.put("bodyShipFrameY", local[1]);
+                    m.put("bodyShipFrameZ", local[2]);
+                }
+            }
             send(sender, jsonMap(m));
+            return;
+        }
+        // frame-noise <dim> <shipId> - how far a point moves when it goes into the craft's subspace
+        // and back, as the transform stands now. Every point of a 9x9x9 grid over the craft's own
+        // block region (grown by 2) is mapped subspace -> world -> subspace; the reply is the largest
+        // displacement on any axis, and the double ulp at the largest subspace coordinate met, which
+        // is the scale the error is measured against.
+        if (args.length >= 3 && "frame-noise".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            net.minecraft.util.math.AxisAlignedBB region = world == null ? null
+                    : dev.stannismod.stellurgy.integration.vs.VSIntegration.subspaceStayRegion(world, args[2], 2.0);
+            if (region == null) {
+                send(sender, "{\"error\":\"ship not loaded\"}");
+                return;
+            }
+            double worst = 0.0, largest = 0.0;
+            int samples = 0;
+            for (int i = 0; i <= 8; i++) {
+                for (int j = 0; j <= 8; j++) {
+                    for (int k = 0; k <= 8; k++) {
+                        double[] s = {region.minX + (region.maxX - region.minX) * i / 8.0,
+                                region.minY + (region.maxY - region.minY) * j / 8.0,
+                                region.minZ + (region.maxZ - region.minZ) * k / 8.0};
+                        double[] w = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                                .toWorldFrameFor(world, args[2], s[0], s[1], s[2]);
+                        double[] back = w == null ? null : dev.stannismod.stellurgy.integration.vs.VSIntegration
+                                .toShipFrameFor(world, args[2], w[0], w[1], w[2]);
+                        if (back == null) {
+                            continue;
+                        }
+                        for (int a = 0; a < 3; a++) {
+                            worst = Math.max(worst, Math.abs(back[a] - s[a]));
+                            largest = Math.max(largest, Math.abs(s[a]));
+                        }
+                        samples++;
+                    }
+                }
+            }
+            send(sender, "{\"ok\":true,\"samples\":" + samples + ",\"worstRoundTrip\":" + worst
+                    + ",\"largestCoordinate\":" + largest + ",\"ulpAtLargest\":" + Math.ulp(largest) + "}");
             return;
         }
         // drop-item <dim> <x> <y> <z> [takeover] — spawn a plain item entity. Its movement is driven
@@ -2522,7 +2597,15 @@ public class TestProbeCommand extends CommandBase {
             item.motionX = 0;
             item.motionY = 0;
             item.motionZ = 0;
-            item.setInfinitePickupDelay(); // the observing bot must not vacuum up the subject
+            // The observing bot must not vacuum up the subject - but an infinite pickup delay also
+            // forbids the item to MERGE with another (EntityItem.combineItems refuses either side at
+            // 32767), so "mergeable" keeps vanilla's ordinary delay for a scenario about merging.
+            boolean mergeable = args.length >= 6 && "mergeable".equalsIgnoreCase(args[5]);
+            if (mergeable) {
+                item.setDefaultPickupDelay();
+            } else {
+                item.setInfinitePickupDelay();
+            }
             dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode armMode =
                     args.length >= 6 ? shipLocalMode(args[5].toLowerCase(java.util.Locale.ROOT)) : null;
             boolean armed = armMode != null
@@ -19061,6 +19144,10 @@ public class TestProbeCommand extends CommandBase {
                     // How many updates the entity has had: the only way to tell an entity that
                     // SURVIVED its updates from one whose world never updated it.
                     + ",\"ticksExisted\":" + entity.ticksExisted
+                    // An item's stack size: two items that merged leave one alive carrying both.
+                    + (entity instanceof net.minecraft.entity.item.EntityItem
+                            ? ",\"itemCount\":" + ((net.minecraft.entity.item.EntityItem) entity).getItem().getCount()
+                            : "")
                     + ",\"isDead\":" + entity.isDead + "}");
             return;
         }

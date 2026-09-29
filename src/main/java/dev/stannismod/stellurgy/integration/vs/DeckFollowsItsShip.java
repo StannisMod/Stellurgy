@@ -28,6 +28,7 @@ public final class DeckFollowsItsShip {
     public void afterTheShipsHaveMoved(TickEvent.WorldTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
             ShipFrameTravel.followShipPoses(event.world);
+            DeckFrameTick.followShipPoses(event.world);
         }
     }
 }

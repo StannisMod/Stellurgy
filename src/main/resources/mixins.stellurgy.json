@@ -7,6 +7,7 @@
   "refmap": "mixins.stellurgy.refmap.json",
   "mixins": [
     "MixinEntityCellVoid",
+    "MixinEntityDeckHeld",
     "MixinEntityGravity",
     "MixinEntityLivingShipTravel",
     "MixinEntityPlayerShipFlight",
@@ -18,6 +19,7 @@
     "MixinEntityPlayerMPInventoryAccess",
     "MixinPlayerList",
     "MixinTileAdvancedFlightComputer",
+    "MixinWorldDeckFrameTick",
     "MixinWorldProvider",
     "MixinWorldServer",
     "MixinWorldServerMulti",

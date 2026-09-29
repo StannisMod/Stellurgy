@@ -39,9 +39,12 @@ import static org.junit.Assert.assertTrue;
  * a body descending past y=0 at tens of blocks per tick with its reported velocity flat — being
  * placed, not falling.
  *
- * <p><b>The arrangement.</b> A dropped item is the subject: only the server tick moves it, so any
+ * <p><b>The arrangement.</b> An empty minecart is the subject: only the server tick moves it, so any
  * displacement below has exactly one possible author. It is landed on the deck so the substrate
- * records the touch. It is then relocated far away HORIZONTALLY — so the lever arm is horizontal and
+ * records the touch. It is a minecart and not a dropped item because the hazard needs a body the
+ * SUBSTRATE holds: since 2026-09-29 a deck takes an item into its own frame the tick before it would
+ * touch, so the substrate never associates an item with the ship and the drag has no path to one.
+ * It is then relocated far away HORIZONTALLY - so the lever arm is horizontal and
  * the verdict can ignore gravity entirely — through a position write rather than a move, which is
  * what a teleport is and is why the association survives it. The hull is left where it was and spun,
  * because a hull that only translates offers a delta that distance does not amplify.
@@ -135,14 +138,16 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
                 Reply.of(exec("stellurgytest chunk warmup 0 " + ((dstX - 16) >> 4) + " " + ((dstZ - 16) >> 4) + " "
                         + ((dstX + 16) >> 4) + " " + ((dstZ + 16) >> 4))).ok());
 
-        // The subject: a plain item, dropped over the hull so it falls onto the deck. Only the server
-        // tick moves it, so any displacement below has exactly one possible author.
-        // Marked before the drop: the association is formed on one of the ticks the item spends
+        // The subject: an empty minecart, dropped over the hull so it falls onto the deck (see the
+        // class comment for why not an item). Only the server tick moves it.
+        // Marked before the drop: the association is formed on one of the ticks the body spends
         // falling, and a mark taken after it would be waiting for the body to touch a second ship.
         long touchMark = events.mark();
-        String dropped = exec("stellurgytest vs drop-item 0 " + sx + " " + (sy + 6) + " " + sz);
+        String dropped = exec("stellurgytest entity spawn 0 " + sx + " " + (sy + 6) + " " + sz
+                + " minecraft:minecart");
         int subjectId = extractInt(dropped, "entityId");
-        assertTrue("the subject item was not spawned: " + dropped, subjectId != Integer.MIN_VALUE);
+        assertTrue("the subject minecart was not spawned: " + dropped,
+                subjectId != Integer.MIN_VALUE && Reply.of(dropped).bool("spawned"));
 
         // CONTROL 1 — the subject must actually register the ship. A body that never touched it is
         // never dragged by it, and everything below would be a measurement of nothing.
