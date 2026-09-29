@@ -5503,12 +5503,18 @@ public class TestProbeCommand extends CommandBase {
                         + "computer\",\"shipId\":\"" + carryShip + "\"}");
                 return;
             }
-            boolean wouldCarry = dev.stannismod.stellurgy.space.CellSeam
-                    .shouldCarry(live[0], live[1], live[2]);
+            // The controller's own decision on this pose, asked BEFORE the carry acts on it. Not the
+            // cube predicate: inside a zone the boundary is a sphere, and the cube says "stays" for a
+            // craft the carry takes out of that zone.
+            dev.stannismod.stellurgy.space.GalacticCoord carryTo = seamCtl.carryDestination(
+                    carryRow.coord, new double[]{live[0], live[1], live[2]});
             boolean started = seamCtl.requestCarry(slotDim, afc, carryShip, carryRow.coord,
                     new double[]{live[0], live[1], live[2]});
             send(sender, "{\"ok\":true,\"started\":" + started
-                    + ",\"wouldCarry\":" + wouldCarry
+                    + ",\"wouldCarry\":" + (carryTo != null)
+                    + (carryTo == null ? ""
+                            : ",\"toCell\":\"" + carryTo.cellKey() + "\",\"toCellBlocks\":"
+                                    + carryTo.cellBlocks())
                     + ",\"shipId\":\"" + carryShip + "\""
                     + ",\"vsId\":\"" + carryHull + "\""
                     + ",\"fromCell\":\"" + carryRow.coord.cellKey() + "\""
@@ -5578,7 +5584,7 @@ public class TestProbeCommand extends CommandBase {
         // settled here. In BOTH forms the anchor block comes from the hull the durable id NAMES: the
         // ledger pose plus "the ship block nearest it" is a proximity lookup, and an arrival depth is
         // deterministic, so the resident answers it as readily as the newcomer.
-        // jump-key id <durableShipId> <cellKey> [slotDim] [speed]: the same jump, to a cell named by its
+        // jump-key id <durableShipId> <cellKey> [slotDim] [speed] [lx ly lz]: the same jump, to a cell named by its
         // KEY rather than by a galactic sector triple - which is the only way to aim at a cell inside a
         // ZONE, where the triple is counted in the zone's own lattice and means nothing on its own.
         //
@@ -5586,6 +5592,35 @@ public class TestProbeCommand extends CommandBase {
         // `fromCellKey` answers WIDTH_UNKNOWN by construction, and handing that to a crossing is the
         // defect the seam contract exists to forbid: the arithmetic downstream multiplies by a width it
         // does not have. A guessed width would not fail either - it would rename the cell.
+        // zone-sphere <zoneCellKey>: the sphere and the lattice of the zone whose own cell is that key -
+        // the radius a craft is carried OUT of it at, and the width its cells are named on. Read-only,
+        // and both are production's readings (`SpaceSubsystem.zoneSphereRadiusOf` /
+        // `latticeWidthOfZone`), because a test placing a craft against this boundary with a radius
+        // of its own would be testing its own arithmetic. `found:false` when no body stands there.
+        if (args.length >= 2 && "zone-sphere".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.space.GalacticCoord sphereCell =
+                    dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[1]);
+            if (sphereCell == null) {
+                send(sender, "{\"error\":\"unparsable cell key\",\"cellKey\":\"" + args[1] + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.UniverseRegistry sphereReg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            long sphereTick = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
+            java.util.OptionalLong radius = dev.stannismod.stellurgy.space.SpaceSubsystem
+                    .zoneSphereRadiusOf(sphereReg, sphereCell, sphereTick);
+            if (!radius.isPresent()) {
+                send(sender, "{\"ok\":true,\"found\":false,\"reason\":\"no body stands at this cell\""
+                        + ",\"cellKey\":\"" + args[1] + "\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"found\":true,\"cellKey\":\"" + sphereCell.cellKey() + "\""
+                    + ",\"radius\":" + radius.getAsLong()
+                    + ",\"latticeBlocks\":" + dev.stannismod.stellurgy.space.SpaceSubsystem
+                            .latticeWidthOfZone(sphereReg, sphereCell, sphereTick)
+                    + ",\"tick\":" + sphereTick + "}");
+            return;
+        }
         if (args.length >= 3 && "jump-key".equalsIgnoreCase(args[0])) {
             dev.stannismod.stellurgy.space.SpaceSubsystem keyStack = liveStack();
             if (keyStack == null) {
@@ -5661,15 +5696,22 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             // The origin's local offsets are kept, exactly as the sector form keeps them: "jump to this
-            // cell" means the same spot inside it, not its local-(0,0,0) corner.
+            // cell" means the same spot inside it, not its local-(0,0,0) corner — unless the caller
+            // names the spot (`<lx> <ly> <lz>` after the speed). Inside a zone it usually must: a cell
+            // there rides a body, so an offset carried over from a planet's galactic cell (where the
+            // planet may stand millions of blocks off-centre) names a point outside the zone entirely,
+            // and the ship arrives in some far cell of it. Measured 2026-09-29: an offset of
+            // -14 152 822 put a jump aimed at a moon's zone into its cell -27_0_6.
+            boolean keyNamesSpot = args.length > 8;
+            long keyLx = keyNamesSpot ? parseLongOr(args[6], 0L) : keyEntry.coord.localX();
+            long keyLy = keyNamesSpot ? parseLongOr(args[7], 0L) : keyEntry.coord.localY();
+            long keyLz = keyNamesSpot ? parseLongOr(args[8], 0L) : keyEntry.coord.localZ();
             dev.stannismod.stellurgy.space.GalacticCoord keyTarget = keyCell.zone() == null
                     ? dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
-                            keyCell.sectorX(), keyCell.sectorY(), keyCell.sectorZ(),
-                            keyEntry.coord.localX(), keyEntry.coord.localY(), keyEntry.coord.localZ())
+                            keyCell.sectorX(), keyCell.sectorY(), keyCell.sectorZ(), keyLx, keyLy, keyLz)
                     : dev.stannismod.stellurgy.space.GalacticCoord.inZone(
                             keyCell.zone(), keyCell.cellBlocks(),
-                            keyCell.sectorX(), keyCell.sectorY(), keyCell.sectorZ(),
-                            keyEntry.coord.localX(), keyEntry.coord.localY(), keyEntry.coord.localZ());
+                            keyCell.sectorX(), keyCell.sectorY(), keyCell.sectorZ(), keyLx, keyLy, keyLz);
             boolean keyBegan = keyStack.transit.beginTransit(keyShip.toString(), keyEntry.coord,
                     keySlot, keyAnchor, keyTarget, keySpeed);
             send(sender, "{\"ok\":true,\"began\":" + keyBegan

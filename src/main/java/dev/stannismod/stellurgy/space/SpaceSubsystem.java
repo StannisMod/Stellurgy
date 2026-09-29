@@ -475,7 +475,6 @@ public final class SpaceSubsystem {
         if (zoneBody == null) {
             return null;
         }
-        dev.stannismod.stellurgy.universe.SystemBody primary = primaryOf(reg, zoneCell);
         AbsolutePos craftAt = reg.originAt(craftCoord.cellCentre(), tick)
                 .plus(craftCoord.localX(), craftCoord.localY(), craftCoord.localZ());
 
@@ -498,7 +497,7 @@ public final class SpaceSubsystem {
         }
 
         // OUTWARD — past this zone's own sphere, so the parent's lattice takes it.
-        double zoneRadius = ZoneScale.realizedRadiusBlocks(zoneBody, primary, tick);
+        double zoneRadius = sphereRadiusOf(reg, zoneBody, zoneCell, tick);
         if (!CellSeam.hasLeftZone(craftAt.distanceTo(zoneBody.absoluteAt(tick)), zoneRadius)) {
             return null;
         }
@@ -617,6 +616,33 @@ public final class SpaceSubsystem {
         dev.stannismod.stellurgy.universe.SystemBody zoneBody = frameBodyAt(reg, zoneCell);
         return zoneBody == null ? GalacticCoord.WIDTH_UNKNOWN
                 : latticeOf(reg, zoneBody, primaryOf(reg, zoneCell), tick);
+    }
+
+    /**
+     * The radius of the sphere bounding the zone whose own cell is {@code zoneCell}, at {@code tick}
+     * — the sphere {@link #zoneMembershipIn} carries a craft OUT of, reached by a caller that holds a
+     * cell rather than a body.
+     *
+     * <p>Empty when no body stands at that cell. Not zero: a zero radius is a real answer (a body
+     * with no mass has no sphere, and {@link CellSeam#hasLeftZone} reads it as such), so a missing
+     * body answered with one would read as a massless body.</p>
+     *
+     * <p>Public for the reason {@link #latticeWidthOfZone} is: a test that places a craft against
+     * this boundary must read production's radius, measured against production's choice of primary.
+     * That choice is exactly where a second derivation goes wrong — see {@link #primaryOf}.</p>
+     */
+    public static java.util.OptionalLong zoneSphereRadiusOf(
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg, GalacticCoord zoneCell, long tick) {
+        dev.stannismod.stellurgy.universe.SystemBody zoneBody = frameBodyAt(reg, zoneCell);
+        return zoneBody == null ? java.util.OptionalLong.empty()
+                : java.util.OptionalLong.of(sphereRadiusOf(reg, zoneBody, zoneCell, tick));
+    }
+
+    /** The one reading of a zone's sphere, shared by the crossing and by {@link #zoneSphereRadiusOf}. */
+    private static long sphereRadiusOf(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
+                                       dev.stannismod.stellurgy.universe.SystemBody zoneBody,
+                                       GalacticCoord zoneCell, long tick) {
+        return ZoneScale.realizedRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);
     }
 
     private static long latticeOf(dev.stannismod.stellurgy.universe.UniverseRegistry reg,

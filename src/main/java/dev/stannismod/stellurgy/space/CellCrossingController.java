@@ -161,6 +161,30 @@ public final class CellCrossingController {
             // an escape on every single crossing.
             return false;
         }
+        GalacticCoord destCoord = carryDestination(cell, shipPos);
+        if (destCoord == null) {
+            return false;
+        }
+        Long cooldown = retryAfter.get(shipId);
+        if (cooldown != null && clock.getAsLong() < cooldown) {
+            return false;
+        }
+        return cross(slotDim, afcPos, shipId, ledger.get(shipId).coord, destCoord, shipPos, Kind.SEAM);
+    }
+
+    /**
+     * Where a craft at {@code shipPos} in {@code cell} would be carried, or {@code null} when it stays
+     * where it is — the decision {@link #requestCarry} acts on, without the conditions that only
+     * gate WHEN it may act (a crossing already under way, an unsettled ledger row, a cooldown).
+     *
+     * <p>Public so an observer can ask the question the carry answers instead of a neighbouring one:
+     * inside a zone the boundary is a sphere, and the cube predicate beside it says "stays" for a
+     * craft this method carries.</p>
+     */
+    public GalacticCoord carryDestination(GalacticCoord cell, double[] shipPos) {
+        if (cell == null || shipPos == null) {
+            return null;
+        }
         // INSIDE A ZONE THE BOUNDARY IS A SPHERE, and the cube is only what a slot world can hold.
         // A body's influence ends at a radius, not at a plane, so a craft that has left the sphere
         // has left the thing that carries it — whatever face it is nearest, and a craft that has
@@ -169,27 +193,21 @@ public final class CellCrossingController {
         //
         // The sphere is inscribed in the cell, so where both apply this fires FIRST and never later:
         // a craft is never carried by the cube out of a zone it had not yet left.
-        long now = clock.getAsLong();
         GalacticCoord bySphere = zones.reAddress(
-                CellSeam.coordOfPose(cell, shipPos[0], shipPos[1], shipPos[2]), now);
+                CellSeam.coordOfPose(cell, shipPos[0], shipPos[1], shipPos[2]), clock.getAsLong());
         if (bySphere != null && bySphere.sameCell(cell)) {
             bySphere = null; // it belongs where it already is; nothing to carry
-        }
-        if (bySphere == null && !CellSeam.shouldCarry(shipPos[0], shipPos[1], shipPos[2])) {
-            return false;
-        }
-        Long cooldown = retryAfter.get(shipId);
-        if (cooldown != null && now < cooldown) {
-            return false;
         }
         // The SPHERE answer aims the carry when it armed it. Falling through to the cube's
         // neighbour here would aim a sphere departure at a cube face it has not reached — and
         // inside a zone that face is millions of blocks away, so `carriedCoord` steps no axis and
         // hands back the cell the craft is leaving. The ship would then be cut and pasted into the
         // same cell, every tick, for as long as it stayed outside the sphere.
-        GalacticCoord destCoord = bySphere != null ? bySphere
-                : CellSeam.carriedCoord(cell, shipPos[0], shipPos[1], shipPos[2]);
-        return cross(slotDim, afcPos, shipId, ledger.get(shipId).coord, destCoord, shipPos, Kind.SEAM);
+        if (bySphere != null) {
+            return bySphere;
+        }
+        return CellSeam.shouldCarry(shipPos[0], shipPos[1], shipPos[2])
+                ? CellSeam.carriedCoord(cell, shipPos[0], shipPos[1], shipPos[2]) : null;
     }
 
     /**
