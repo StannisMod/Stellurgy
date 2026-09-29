@@ -16,10 +16,15 @@ public interface SlotBinder {
     int[] slotDims();
 
     /**
-     * Bind slot {@code dimId} to {@code cellKey} and (re)initialise its world against that cell's
+     * Bind slot {@code dimId} to {@code cell} and (re)initialise its world against that cell's
      * store (regenerated if the cell is clean/new, deserialized if it has stored content).
+     *
+     * <p><b>The CELL, not its key.</b> A key names a cell and cannot carry a zoned lattice's width —
+     * the width is {@code ZoneScale.cellBlocks(body, primary, tick)}, a property of the zone AT A
+     * TICK, so a reader downstream cannot put it back and must not try. Passing the coordinate whole
+     * is what lets a slot answer what cell it is rather than only what it is called.</p>
      */
-    void load(int dimId, String cellKey);
+    void load(int dimId, GalacticCoord cell);
 
     /**
      * Flush slot {@code dimId} to its currently bound cell's store and unload the world

@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -35,13 +34,24 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern PRE_STORED = Pattern.compile("\"preStored\":(-?\\d+)");
-    private static final Pattern POST_STORED = Pattern.compile("\"postStored\":(-?\\d+)");
-    private static final Pattern PRE_DATA = Pattern.compile("\"preData\":(-?\\d+)");
-    private static final Pattern POST_DATA = Pattern.compile("\"postData\":(-?\\d+)");
-    private static final Pattern BATT_MAX = Pattern.compile("\"max\":(-?\\d+)");
-    private static final Pattern MAX_DATA = Pattern.compile("\"maxData\":(-?\\d+)");
+    /** The satellite's declared storage, in power units — the cap the battery must not exceed. */
+    private static final long TYPE_POWER_STORAGE = 500L;
+
+    /**
+     * The most data points 100 ticks at a collection time of about 20 can produce.
+     *
+     * <p>Not a threshold but arithmetic on the arrangement: five collections plus one for the
+     * boundary. Named so the window and the expectation move together.</p>
+     */
+    private static final int MAX_DATA_POINTS = 6;
+
+    private static final String ID = "id";
+    private static final String PRE_STORED = "preStored";
+    private static final String POST_STORED = "postStored";
+    private static final String PRE_DATA = "preData";
+    private static final String POST_DATA = "postData";
+    private static final String BATT_MAX = "max";
+    private static final String MAX_DATA = "maxData";
 
     /** Pin: a pure SatelliteBase satellite (oreScanner has no
      *  tickEntity override) accrues energy at approximately {@code powerGen}
@@ -57,7 +67,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
 
         String resp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " " + ticks));
-        assertTrue("tick probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long pre = longField(PRE_STORED, resp, "preStored");
         long post = longField(POST_STORED, resp, "postStored");
         long delta = post - pre;
@@ -82,7 +92,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
         // powerStorage=500.
         String resp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 10"));
-        assertTrue("tick probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long post = longField(POST_STORED, resp, "postStored");
 
         String battResp = String.join("\n", client().execute(
@@ -92,7 +102,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
                 + "max=" + max, 500L, max);
         assertTrue("battery must cap at powerStorage=500 even when "
                 + "per-tick accrual would overflow; postStored=" + post,
-                post <= 500L);
+                post <= TYPE_POWER_STORAGE);
         // Cap should bite immediately — first tick (acceptEnergy(999, false))
         // clamps to 500. After 10 ticks, definitely at 500.
         assertEquals("battery must be exactly at cap after 10 saturating ticks; "
@@ -109,7 +119,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
 
         String resp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long preData = longField(PRE_DATA, resp, "preData");
         long postData = longField(POST_DATA, resp, "postData");
         long delta = postData - preData;
@@ -121,7 +131,7 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
         // Upper bound sanity — 100 ticks with collectionTime=20 cannot
         // exceed ~6 data fires (allowing one off-by-one).
         assertTrue("100 ticks at collectionTime≈20 cannot produce more "
-                + "than ~6 data points; delta=" + delta, delta <= 6);
+                + "than ~6 data points; delta=" + delta, delta <= MAX_DATA_POINTS);
     }
 
     /** Pin: {@code DataStorage.addData} caps at {@code maxData}. */
@@ -155,15 +165,15 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
                 "artest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
-                resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("could not extract id from create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+                Reply.of(resp).ok());
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
-    private long longField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+    private long longField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return (long) reply.integer(field);
     }
 }

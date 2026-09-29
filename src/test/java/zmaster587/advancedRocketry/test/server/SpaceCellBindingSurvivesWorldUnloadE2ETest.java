@@ -1,9 +1,14 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.MaterializedCell;
+
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 /**
  * Server e2e for the contract that makes a cell&rarr;slot binding usable: <b>while a cell is bound to
@@ -35,7 +40,12 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
     private static final String HELD_CELL = "911 4 911";
 
     /** Bounded per the probe-authoring wall-time rule; Forge's sweep needs a handful of ticks. */
-    private static final long SWEEP_BUDGET_MS = 10_000L;
+    /** World Forge's unload sweep is given to collect an unheld slot - the old 10 000 ms. */
+    private static final int SWEEP_BUDGET_TICKS = 200;
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
@@ -44,58 +54,83 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
     @Test
     public void aBoundCellKeepsItsWorldAndARevisitRepairsOneThatWentAnyway() throws Exception {
         // ── Leg 1: the control. With the pool's hold cleared, Forge's sweep takes the world. ──
-        String occupied = exec("artest space occupy " + UNHELD_CELL);
-        assertTrue("the cell must materialize: " + occupied, occupied.contains("\"ok\":true"));
-        assertTrue("a freshly materialized cell must have a world: " + occupied,
-                occupied.contains("\"worldLoaded\":true"));
+        MaterializedCell occupied = MaterializedCell.at(this::exec, UNHELD_CELL)
+                .requireMaterialized("the cell must materialize");
+        assertTrue("a freshly materialized cell must have a world: " + occupied.raw(),
+                occupied.worldLoaded());
 
+        // Marked before the hold is dropped, which is what lets the sweep take the world.
+        long unheldMark = events.mark();
         String dropped = exec("artest space release " + UNHELD_CELL + " drop-hold");
-        assertTrue("release must clear the hold: " + dropped, dropped.contains("\"holdDropped\":true"));
+        assertTrue("release must clear the hold: " + dropped, Reply.of(dropped).bool("holdDropped"));
 
-        String gone = awaitWorld(UNHELD_CELL, false);
+        String gone = awaitWorldGone(unheldMark, UNHELD_CELL, occupied.slotDim());
         assertTrue("the manager must still count the released cell as loaded — a cell with no occupant "
                         + "stays bound so a revisit is cheap: " + gone,
-                gone.contains("\"managerLoaded\":true"));
+                Reply.of(gone).bool("managerLoaded"));
 
         // ── Leg 2: the repair. A binding whose world went away is live again on the next visit. ──
-        String revisit = exec("artest space occupy " + UNHELD_CELL);
+        MaterializedCell revisit = MaterializedCell.at(this::exec, UNHELD_CELL)
+                .requireMaterialized("the revisit must materialize the cell again");
         assertTrue("materializing a cell must leave it live in a world, whatever happened to the slot "
-                        + "while nobody was occupying it: " + revisit,
-                revisit.contains("\"worldLoaded\":true"));
+                        + "while nobody was occupying it: " + revisit.raw(),
+                revisit.worldLoaded());
 
         // ── Leg 3: the hold. Same sequence, hold left in place: the sweep must not get this one. ──
-        String held = exec("artest space occupy " + HELD_CELL);
-        assertTrue("the second cell must materialize: " + held, held.contains("\"worldLoaded\":true"));
+        MaterializedCell held = MaterializedCell.at(this::exec, HELD_CELL)
+                .requireMaterialized("the second cell must materialize");
+        assertTrue("and it must be live in a world: " + held.raw(), held.worldLoaded());
+        long heldMark = events.mark();
         exec("artest space release " + HELD_CELL);
 
-        String stillThere = awaitWorld(HELD_CELL, true);
+        String unloads = unloadRecordsOver(heldMark);
+        assertEquals("a cell still bound to its slot must keep that slot's world for the whole"
+                        + " stretch that removed the unheld one — not merely be loaded again at the"
+                        + " end of it. `world_unloaded` from seq " + heldMark + " across "
+                        + SWEEP_BUDGET_TICKS + " server ticks: " + unloads,
+                0, Events.countRecords(unloads, "dim", String.valueOf(held.slotDim())));
+        String stillThere = exec("artest space cell-slot " + HELD_CELL);
         assertTrue("a cell still bound to its slot must keep that slot's world, even with no occupant, "
                         + "no player and no chunks — leg 1 proves the sweep would otherwise take it: "
                         + stillThere,
-                stillThere.contains("\"worldLoaded\":true"));
+                Reply.of(stillThere).bool("worldLoaded"));
     }
 
     /**
-     * Poll the cell's slot for the whole sweep budget. With {@code expectLoaded} false this returns as
-     * soon as the world is gone and fails if it never goes; with it true the budget is spent in full and
-     * the last response is returned, so "still there" means still there after the same wait that removed
-     * the unheld one.
+     * Wait for Forge's sweep to take this cell's slot world, on the record it publishes.
+     *
+     * <p>{@code WorldEvent.Unload} is posted from {@code DimensionManager.unloadWorlds} after the
+     * world is saved and dropped, so the record IS the unload rather than a sample that happened to
+     * be taken after it. The poll this replaced asked "is the slot still loaded" one reading at a
+     * time and needed a budget to say how long it was willing to keep asking.</p>
+     *
+     * <p>The mark is taken by the CALLER, before the act that releases the hold: an unload is
+     * announced once.</p>
+     *
+     * @return the cell-slot reading taken after the unload, for the caller's own assertions
      */
-    private String awaitWorld(String cell, boolean expectLoaded) throws Exception {
-        long deadline = System.currentTimeMillis() + SWEEP_BUDGET_MS;
-        String last = "";
-        while (System.currentTimeMillis() < deadline) {
-            last = exec("artest space cell-slot " + cell);
-            if (!expectLoaded && last.contains("\"worldLoaded\":false")) {
-                return last;
-            }
-            Thread.sleep(250L);
-        }
-        if (!expectLoaded) {
-            fail("Forge never unloaded the unheld cell's slot world within " + SWEEP_BUDGET_MS
-                    + " ms, so this run's control leg exercised nothing and the held leg below would "
-                    + "pass on any build. Last: " + last);
-        }
-        return last;
+    private String awaitWorldGone(long mark, String cell, int slotDim) throws Exception {
+        events.awaitField(mark, "world_unloaded", "dim", slotDim,
+                "Forge must unload the unheld cell's slot world, or this run's control leg"
+                        + " exercised nothing and the held leg below would pass on any build",
+                SWEEP_BUDGET_TICKS);
+        return exec("artest space cell-slot " + cell);
+    }
+
+    /**
+     * Every {@code world_unloaded} from {@code mark} to the end of a stretch as long as the whole
+     * budget leg 1's sweep was allowed — and so at least as long as that sweep actually took.
+     *
+     * <p>A window, not a wait, and the difference is the whole leg: the claim is that nothing took
+     * this world, which is a statement about a stretch of time rather than about one moment. The
+     * version this replaces spent the budget polling and then asserted on the LAST reading — which
+     * is green for a world that was unloaded and re-materialized inside the window.</p>
+     */
+    private String unloadRecordsOver(long mark) throws Exception {
+        // WINDOW: the log is read from the caller's mark to the end of this stretch, and the caller
+        // asserts over everything in between, naming both ends. Overshoot only widens the stretch
+        // the sweep had to take the held world in, which can turn a green red and never the reverse.
+        GameTicks.advance(client(), GameTicks.server(), SWEEP_BUDGET_TICKS);
+        return events.since(mark, "world_unloaded");
     }
 }

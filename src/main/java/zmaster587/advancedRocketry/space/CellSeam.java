@@ -47,11 +47,14 @@ public final class CellSeam {
 
     /**
      * The local offset a world-frame pose component maps to, per {@link CellWorldMapper}'s honest-3D
-     * mapping. Y carries the pose band; X and Z do not.
+     * mapping: the cell centre is the world origin on every axis, so the offset IS the world value.
+     *
+     * <p>It took a {@code boolean isY} until 2026-09-11, because Y carried a {@code +HALF_CELL}
+     * shift the other two did not. With the axes centred alike the parameter selected nothing, and a
+     * parameter that selects nothing still tells every caller it matters.</p>
      */
-    public static long localOf(double world, boolean isY) {
-        long rounded = Math.round(world);
-        return isY ? rounded - GalacticCoord.HALF_CELL - CellWorldMapper.POSE_BAND_Y : rounded;
+    public static long localOf(double world) {
+        return Math.round(world);
     }
 
     /**
@@ -65,9 +68,9 @@ public final class CellSeam {
      * arrival.</p>
      */
     public static boolean shouldCarry(double wx, double wy, double wz) {
-        return beyondMargin(localOf(wx, false))
-                || beyondMargin(localOf(wy, true))
-                || beyondMargin(localOf(wz, false));
+        return beyondMargin(localOf(wx))
+                || beyondMargin(localOf(wy))
+                || beyondMargin(localOf(wz));
     }
 
     private static boolean beyondMargin(long local) {
@@ -85,9 +88,9 @@ public final class CellSeam {
      * re-centred in Y and Z.</p>
      */
     public static GalacticCoord carriedCoord(GalacticCoord cell, double wx, double wy, double wz) {
-        long lx = localOf(wx, false);
-        long ly = localOf(wy, true);
-        long lz = localOf(wz, false);
+        long lx = localOf(wx);
+        long ly = localOf(wy);
+        long lz = localOf(wz);
         return GalacticCoord.ofSectorLocal(
                 cell.sectorX() + step(lx), cell.sectorY() + step(ly), cell.sectorZ() + step(lz),
                 placed(lx), placed(ly), placed(lz));

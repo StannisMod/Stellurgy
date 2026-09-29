@@ -1,7 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -20,8 +26,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
 
+    /** The ticks this scenario ASKS the force-tick verb for, read back from its reply. */
+    private static final int FORCED_TICKS = 20;
+
     private static final int CX = 8500;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 8500;
 
     @Test
@@ -29,21 +38,21 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock orbital-laser-drill 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock orbital-laser-drill failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         assertTrue("fixture didn't place any blocks: " + fixture,
-                fixture.contains("\"placed\":") && !fixture.contains("\"placed\":0"));
+                Reply.of(fixture).has("placed") && !(Reply.of(fixture).integer("placed") == 0));
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileOrbitalLaserDrill tile at controller pos: " + info,
-                info.contains("TileOrbitalLaserDrill"));
+        assertEquals("expected TileOrbitalLaserDrill tile at controller pos: " + info,
+                "TileOrbitalLaserDrill", MachineInfo.of(info).tileSimpleName());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("orbital-laser-drill multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -59,12 +68,12 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 80, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock orbital-laser-drill 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
 
         // (a) Energy flows through a 'P' power-input plug. structure[1][2][10]
         // -> for NORTH-facing controller (offset x=1, y=2, z=2) global
@@ -72,13 +81,11 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         // and bound to controller batteries, its `getMaxEnergyStored` reports
         // the controller's pooled max (134_217_727 RF by default).
         int plugX = cx - 9, plugY = cy + 1, plugZ = cz;
-        String storedAtPlug = join(client().execute(
-                "artest energy stored 0 " + plugX + " " + plugY + " " + plugZ));
-        assertTrue("plug must expose Forge energy capability: " + storedAtPlug,
-                storedAtPlug.contains("\"hasEnergy\":true"));
-        long capMax = parseLongField(storedAtPlug, "energyMax");
+        EnergyStore storedAtPlug = energy(plugX, plugY, plugZ)
+                .requireEnergy("plug must expose Forge energy capability");
+        long capMax = storedAtPlug.capacity();
         assertTrue("plug must report a non-trivial max storage (got " + capMax + "): "
-                + storedAtPlug, capMax > 0);
+                + storedAtPlug.raw(), capMax > 0);
 
         // (b) Force-tick the controller 20x — must not throw. Production
         // update() pulls drill state, checks completeStructure, batteries,
@@ -86,16 +93,15 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " 20"));
         assertTrue("force-tick must not error: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
         assertTrue("force-tick must report 20 ticks completed: " + tick,
-                tick.contains("\"ticked\":20"));
+                (Reply.of(tick).integer("ticked") == FORCED_TICKS));
 
         // (c) Plug's energy capability still exposed after 20 ticks (no
         // capability loss from idle ticking).
-        String storedAfter = join(client().execute(
-                "artest energy stored 0 " + plugX + " " + plugY + " " + plugZ));
-        assertTrue("plug capability must persist after ticking: " + storedAfter,
-                storedAfter.contains("\"hasEnergy\":true"));
+        EnergyStore storedAfter = energy(plugX, plugY, plugZ);
+        assertTrue("plug capability must persist after ticking: " + storedAfter.raw(),
+                storedAfter.hasEnergy);
     }
 
     @Test
@@ -103,7 +109,7 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 40, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock orbital-laser-drill 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // No baseline try-complete — break BEFORE validation. A lens cell on
         // the controller layer at structure[2][4][4] (NORTH-facing globalX =
@@ -114,22 +120,20 @@ public class OrbitalLaserDrillMultiblockTest extends AbstractSharedServerTest {
         String breakLens = join(client().execute(
                 "artest place 0 " + (cx - 3) + " " + cy + " " + (cz + 2) + " minecraft:stone"));
         assertTrue("could not replace lens cell: " + breakLens,
-                breakLens.contains("\"ok\":true"));
+                Reply.of(breakLens).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("orbital-laser-drill validated despite missing lens cell: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static long parseLongField(String json, String field) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + field + "\":(-?\\d+)").matcher(json);
-        if (!m.find()) throw new AssertionError("missing field " + field + " in: " + json);
-        return Long.parseLong(m.group(1));
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int y, int z) throws Exception {
+        return EnergyStore.at(cmd -> join(client().execute(cmd)), 0, x, y, z);
     }
 }

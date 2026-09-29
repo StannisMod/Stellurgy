@@ -154,14 +154,6 @@ public abstract class MixinTileAdvancedFlightComputer implements IPhysicsBlockCo
             tx = torque.x; ty = torque.y; tz = torque.z;
         }
 
-        TileAdvancedFlightComputer.debugControllerState = new double[]{
-                dt,
-                angAccel == null ? 0.0 : angAccel[0],
-                angAccel == null ? 0.0 : angAccel[1],
-                angAccel == null ? 0.0 : angAccel[2],
-                w.x, w.y, w.z,
-                angAccel == null ? -1.0 : 1.0};
-
         // Flight recorder, physics-thread channel: one sample per physics step. This is the clock
         // the ship's velocity actually integrates on, and it is NOT the game tick — an interval
         // that wanders here is the physics loop failing to hold its rate, which no server-side tick
@@ -179,10 +171,16 @@ public abstract class MixinTileAdvancedFlightComputer implements IPhysicsBlockCo
         double accelMag = calc.getMass() <= 0.0 ? 0.0
                 : Math.sqrt(fx * fx + fy * fy + fz * fz) / calc.getMass();
         BlockPos self2 = self.getPos();
-        zmaster587.advancedRocketry.util.MotionTrace.phys(
-                zmaster587.advancedRocketry.util.MotionTrace.keyOf(
+        zmaster587.advancedRocketry.command.test.MotionTrace.phys(
+                zmaster587.advancedRocketry.command.test.MotionTrace.keyOf(
                         physo.getWorld().provider.getDimension(),
                         self2.getX(), self2.getY(), self2.getZ()),
+                // The WORLD tick this physics step ran against, read across the thread boundary as
+                // a plain long. This loop runs on the physics thread at its own rate, so several
+                // steps share one world tick and the healthy reading is that every tick got at
+                // least one — never that each carried exactly one. A counter incremented here
+                // would count steps and call them ticks, and could not show a missed tick at all.
+                physo.getWorld().getTotalWorldTime(),
                 // WHO drove this step, and on WHICH ship. A block's flight computer is one object on
                 // one ship, so a window carrying two of either is a state to go and look at rather
                 // than a number to average — and the two cases have different causes: two

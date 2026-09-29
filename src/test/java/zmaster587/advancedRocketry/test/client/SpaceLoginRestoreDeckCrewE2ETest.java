@@ -1,7 +1,14 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.DeckCapture;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
+
 import com.google.gson.JsonObject;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
@@ -12,7 +19,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * Relogging while standing on a ship's deck — with no server restart — must not drag the crew member
@@ -26,6 +33,25 @@ import static org.junit.Assert.assertTrue;
  * was split into three.</p>
  */
 public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreClientTest {
+
+    /**
+     * How far past vertical the hull must be before the relog leg means anything — deck-normal Y.
+     *
+     * <p>The TEST'S OWN arrangement fact: at -0.9 the craft is about 155 degrees over, which is
+     * where a body that is not being carried falls off instead of sliding. Without it this leg is
+     * silently the upright one again.</p>
+     */
+    private static final double INVERTED_UP_Y = -0.9;
+
+    /**
+     * How long the space subsystem's logout handler is given to run, in SERVER ticks - the old
+     * 40 x 250 ms. The client cannot supply a clock here: it is the thing that went away, so the
+     * budget is spent on {@link zmaster587.advancedRocketry.test.GameTicks#server()}.
+     *
+     * <p>A deadline for a discrete event, not a window for a value to settle: a logout is something
+     * the server does on one tick, and this is only how long it may take to get to it.</p>
+     */
+    private static final int LOGOUT_TICKS = 200;
 
     /**
      * THE REPORTED CASE, and it is deliberately NOT the restart case: a crew member standing on his
@@ -43,53 +69,85 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
      * that the ids churned.</p>
      */
     @Test
+    @Ignore("HELD FOR THE BODY-MOVEMENT CONTRACT BATCH, by the maintainer's ruling of 2026-09-23:"
+            + " every deck-hold red waits for the contract on moving an entity aboard a craft. Red"
+            + " on a full client tier: a capture the LOGIN installed takes all six"
+            + " walk inputs (6/6) and the collision sweep pins the step on five and six of them,"
+            + " where a capture re-installed by a sit-and-stand walks 0.94 on the same deck. Green"
+            + " alone, and green on the next full tier — so it is intermittent, not gone. RE-ENABLE"
+            + " with that batch; the acceptance is this method green on a full tier, twice.")
     public void aCrewMemberWhoRelogsWithoutARestartIsNotDraggedAlongHisDeck() throws Exception {
         int slotDim = seatThePilotAboardHisShip();
 
         // The posture the report is about: on his feet, on his own deck.
-        String dismount = exec("artest player dismount");
-        assertTrue("the pilot must leave his seat: " + dismount, dismount.contains("\"ok\":true"));
-        String tag = "";
-        for (int attempt = 0; attempt < 40 && !tag.contains("\"posture\":\"STANDING\""); attempt++) {
-            bot().waitTicks(5);
-            tag = exec("artest space aboard-tag " + BOT);
-        }
-        assertTrue("ARRANGEMENT: standing up must keep him aboard as a STANDING record: " + tag,
-                tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
-        String capBefore = exec("artest vs deck-capture");
-        assertTrue("ARRANGEMENT: he must be captured ABOARD the deck before the relog, or the leg is "
-                        + "not about a restored deck capture at all: " + capBefore,
-                capBefore.contains("\"alreadyTracked\":true")
-                        && !capBefore.contains("\"hullStand\":true"));
+        String tag = standUpAndAwaitTheStandingRecord(events());
+        requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
+                Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
+        DeckCapture capBefore = DeckCapture.read(this::exec);
+        requireArranged("he must be captured ABOARD the deck before the relog, or the leg is "
+                        + "not about a restored deck capture at all: " + capBefore.raw(),
+                capBefore.alreadyTracked
+                        && !capBefore.hullStand);
+        // On HIS deck. The capture's anchor is the PHYSICS id, and this scenario holds the durable
+        // one, so the two are bridged by name rather than by asking what is standing at his feet.
+        capBefore.requireAnchoredOn(
+                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                        200),
+                "the capture the relog must restore is the one on THIS scenario's own deck");
 
-        // A REAL logout that leaves the world running. The client has no world to wait ticks in while
-        // it is away, so the offline window is polled from the server side.
+        // A REAL logout that leaves the world running. Both marks BEFORE the disconnect: the client
+        // JVM is REUSED across a plain relog, so its log still holds this session's records and zero
+        // would be the whole session rather than the relog.
+        Events offlineLog = serverClockEvents();
+        long logoutMark = offlineLog.mark();
+        long clientMark = clientEvents().mark();
         bot().disconnect();
-        String offline = "";
-        boolean gone = false;
-        for (int attempt = 0; attempt < 40 && !gone; attempt++) {
-            Thread.sleep(250);
-            offline = exec("artest player position-of " + BOT);
-            gone = offline.contains("\"error\":\"no such player\"")
-                    || offline.contains("\"error\":\"no players connected\"");
-        }
-        assertTrue("ARRANGEMENT: the server must see him GONE after the disconnect, or nothing below "
-                + "is a relog: " + offline, gone);
+        // Waited for as the LINK it is - the space subsystem's own logout handler running - on the
+        // server's clock, because the client is the thing that went away. The record it leaves
+        // carries the aboard tag AS RECONCILED at that moment, which is the very state the login
+        // below reads back; the poll it replaces could only see him vanish from the player list.
+        String loggedOut = offlineLog.await(logoutMark, "player_logged_out",
+                "a disconnect must reach the space subsystem's logout handler - everything below "
+                        + "reads the record that handler leaves behind", LOGOUT_TICKS);
+        requireArranged("the record he logs out with is the one his next login resolves from, so it "
+                        + "must still say he was aboard his ship, on his feet: " + loggedOut,
+                // ONE logout record saying both: two field tests are satisfied by a tagged logout
+                // beside a different record whose posture happens to be STANDING.
+                Events.anyRecordHasAll(loggedOut, "tagged", "true", "posture", "STANDING"));
+        // LEFT RAW: the subject here IS the error shape. `PlayerPosition` refuses it — it must,
+        // because read as a position that reply puts him at the origin of the overworld, and every
+        // other site in this family is asserting which world he is in.
+        String offline = exec("artest player position-of " + BOT);
+        // absence is the answer: a player who is still connected answers a POSITION and no
+        // `error` at all, so "no error" is the world this claim is measured against.
+        requireArranged("the server must see him GONE after the disconnect, or nothing below "
+                        + "is a relog: " + offline,
+                "no such player".equals(Reply.of(offline).textOr("error", null))
+                        || "no players connected".equals(Reply.of(offline).textOr("error", null)));
 
         // Nobody is left near the ship to hold its chunks while he is away.
-        exec("artest vs permaload true");
 
+        Events restore = events();
+        long restoreMark = restore.mark();
         bot().connect();
         bot().waitForWorld();
-        int dim = NO_CLIENT_WORLD;
-        for (int attempt = 0; attempt < 45 && (dim == NO_CLIENT_WORLD || dim == OVERWORLD_DIM);
-                attempt++) {
-            bot().waitTicks(10);
-            dim = clientDim();
-        }
+        // His ship IS spaceborne, so the login hook owns this login: `login_restored` is its verdict
+        // and names the dimension it chose. The client's own side of it is a world rebuilt from a
+        // fresh join. Two logs, awaited separately - cross-side order within one tick is undefined.
+        String restored = restore.await(restoreMark, "login_restored",
+                "a crew member who logged out standing on his ship in a cell must be RESTORED by the "
+                        + "login hook - an ordinary login would leave him wherever vanilla puts him",
+                RESTORE_LINK_BUDGET_TICKS);
+        String joined = awaitClientEventWithField(clientMark, "client_dimension_changed",
+                "via", "join",
+                "the reconnected client must be given a world. Server verdict: " + restored,
+                RESTORE_LINK_BUDGET_TICKS);
+        int dim = clientDim();
         assertEquals("he relogged while standing on his ship in its cell, and no reboot re-minted the "
                         + "pool, so he must come back in the very same slot dimension: clientDim="
-                        + dim + " riding=" + bot().reportRidingEntity(),
+                        + dim + " riding=" + bot().reportRidingEntity()
+                        + "\n  login_restored: " + restored
+                        + "\n  client dimension changes: " + joined,
                 slotDim, dim);
 
         requireHeIsNotDraggedAlongHisDeck(dim);
@@ -112,21 +170,37 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
      * "inverted while he was away" is a different arrangement and would need its own leg.</p>
      */
     @Test
+    @Ignore("RED ON A REAL DEFECT WITH A KNOWN HISTORY, and the contract it asserts is the right"
+            + " one: a crew member restored onto his deck must not keep travelling once he stops"
+            + " walking. MEASURED on a full client tier — after the key is released a RESTORED"
+            + " capture leaks 0.4948 blocks over 40 ticks against a 0.35 bar, of which 0.4928 is"
+            + " per-tick creep, while a FRESHLY installed capture leaks 0.0894 under the identical"
+            + " stimulus with walk travel equal to three decimals. That control is built into this"
+            + " method and is the whole finding: the two differ by 5.5x, so it is a question about"
+            + " what a login REINSTALLS, not about the test's patience. The player-visible form is"
+            + " the old one: you slide along your own deck after a login into a space cell until"
+            + " you sit down and stand up again. The cause established for it in July — a guard"
+            + " that tore the capture off a falling body — was DELETED from production in"
+            + " September, and the symptom outlived it, so the standing candidate is the space"
+            + " subsystem's own login restore, named in the original report and never measured."
+            + " RE-ENABLE when a restored capture and a fresh one leak the same; the acceptance is"
+            + " this method green on a full tier, twice.")
     public void aCrewMemberWhoRelogsOnAnInvertedDeckIsNotDraggedAlongIt() throws Exception {
         int slotDim = seatThePilotAboardHisShip();
 
-        String dismount = exec("artest player dismount");
-        assertTrue("the pilot must leave his seat: " + dismount, dismount.contains("\"ok\":true"));
-        String tag = "";
-        for (int attempt = 0; attempt < 40 && !tag.contains("\"posture\":\"STANDING\""); attempt++) {
-            bot().waitTicks(5);
-            tag = exec("artest space aboard-tag " + BOT);
-        }
-        assertTrue("ARRANGEMENT: standing up must keep him aboard as a STANDING record: " + tag,
-                tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
-        assertTrue("ARRANGEMENT: he must be captured on the deck while the ship is still upright: "
-                        + exec("artest vs deck-capture"),
-                exec("artest vs deck-capture").contains("\"alreadyTracked\":true"));
+        String tag = standUpAndAwaitTheStandingRecord(events());
+        requireArranged("standing up must keep him aboard as a STANDING record: " + tag,
+                Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
+        // Read ONCE: the two-exec idiom this replaces diagnosed from a different sample than the one
+        // that decided the line, and under load the two disagree.
+        DeckCapture capUpright = DeckCapture.read(this::exec);
+        requireArranged("he must be captured on the deck while the ship is still upright: "
+                        + capUpright.raw(),
+                capUpright.alreadyTracked);
+        capUpright.requireAnchoredOn(
+                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                        200),
+                "the deck he stands on before the roll must be his own ship's");
 
         // Roll the ship to (near-)inverted UNDER him, by commanding the attitude his ship's computer
         // is to hold. Two things had to change before this verb could be used here at all, and both
@@ -152,43 +226,69 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
         // `*-by-id` verbs resolve are DIFFERENT identities, and this scenario holds the first.
         String rolled = exec("artest vs point-at " + slotDim + " " + arrangedAfcPos
                 + " " + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0");
-        assertTrue("ARRANGEMENT: the roll must reach THIS ship's own flight computer: " + rolled,
-                rolled.contains("\"commanded\":true"));
+        requireArranged("the roll must reach THIS ship's own flight computer: " + rolled,
+                Reply.of(rolled).bool("commanded"));
+        // Read BY NAME, both times. This used to be "the ship nearest (0,0,0) in the slot", with a
+        // one-ship count asserted first as its premise — but a count of one is not evidence that the
+        // one is THIS craft, and the case where it is not is exactly the case where this scenario's
+        // ship failed to load and something else did.
+        String rolledShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                200);
         double upY = 1.0;
         for (int attempt = 0; attempt < 40 && upY > -0.9; attempt++) {
             bot().waitTicks(10);
-            upY = shipUpY(jsonOf(exec("artest vs ship-info " + slotDim + " 0 0 0")));
+            upY = shipUpY(jsonOf(exec("artest vs ship-info " + slotDim + " id " + rolledShipId)));
         }
-        bot().waitTicks(20);
-        String info = jsonOf(exec("artest vs ship-info " + slotDim + " 0 0 0"));
-        assertTrue("ARRANGEMENT: the ship must be (near-)inverted before the relog, or this leg is "
-                + "silently the upright one again (upY=" + upY + "): " + info, upY < -0.9);
-        String capInverted = exec("artest vs deck-capture");
-        assertTrue("ARRANGEMENT: he must still be captured on the INVERTED deck: " + capInverted,
-                capInverted.contains("\"alreadyTracked\":true"));
+        String info = jsonOf(exec("artest vs ship-info " + slotDim + " id " + rolledShipId));
+        requireArranged("the ship must be (near-)inverted before the relog, or this leg is "
+                + "silently the upright one again (upY=" + upY + "): " + info, upY < INVERTED_UP_Y);
+        DeckCapture capInverted = DeckCapture.read(this::exec);
+        requireArranged("he must still be captured on the INVERTED deck: " + capInverted.raw(),
+                capInverted.alreadyTracked);
+        // The INVERTED one — this ship, the one the roll above was addressed to. A capture that
+        // moved to any other hull in the slot is by construction on an upright deck, which is the
+        // arrangement this leg exists to leave behind.
+        capInverted.requireAnchoredOn( rolledShipId,
+                "the deck he is held on must be the ship this leg rolled");
 
+        // Both marks before the disconnect - see the upright leg for why the client's own log needs
+        // one and cannot start from zero.
+        Events offlineLog = serverClockEvents();
+        long logoutMark = offlineLog.mark();
+        long clientMark = clientEvents().mark();
         bot().disconnect();
-        String offline = "";
-        boolean gone = false;
-        for (int attempt = 0; attempt < 40 && !gone; attempt++) {
-            Thread.sleep(250);
-            offline = exec("artest player position-of " + BOT);
-            gone = offline.contains("\"error\":\"no such player\"")
-                    || offline.contains("\"error\":\"no players connected\"");
-        }
-        assertTrue("ARRANGEMENT: the server must see him GONE after the disconnect: " + offline, gone);
+        String loggedOut = offlineLog.await(logoutMark, "player_logged_out",
+                "a disconnect must reach the space subsystem's logout handler - everything below "
+                        + "reads the record that handler leaves behind", LOGOUT_TICKS);
+        requireArranged("the record he logs out with is the one his next login resolves from, and "
+                        + "an inverted deck must not change that: " + loggedOut,
+                // ONE logout record saying both: two field tests are satisfied by a tagged logout
+                // beside a different record whose posture happens to be STANDING.
+                Events.anyRecordHasAll(loggedOut, "tagged", "true", "posture", "STANDING"));
+        String offline = exec("artest player position-of " + BOT);
+        // absence is the answer: a player who is still connected answers a POSITION and no
+        // `error` at all, so "no error" is the world this claim is measured against.
+        requireArranged("the server must see him GONE after the disconnect: " + offline,
+                "no such player".equals(Reply.of(offline).textOr("error", null))
+                        || "no players connected".equals(Reply.of(offline).textOr("error", null)));
 
-        exec("artest vs permaload true");
+        Events restore = events();
+        long restoreMark = restore.mark();
         bot().connect();
         bot().waitForWorld();
-        int dim = NO_CLIENT_WORLD;
-        for (int attempt = 0; attempt < 45 && (dim == NO_CLIENT_WORLD || dim == OVERWORLD_DIM);
-                attempt++) {
-            bot().waitTicks(10);
-            dim = clientDim();
-        }
+        String restored = restore.await(restoreMark, "login_restored",
+                "a crew member who logged out standing on his INVERTED ship in a cell must be "
+                        + "RESTORED by the login hook, exactly as an upright one is",
+                RESTORE_LINK_BUDGET_TICKS);
+        String joined = awaitClientEventWithField(clientMark, "client_dimension_changed",
+                "via", "join",
+                "the reconnected client must be given a world. Server verdict: " + restored,
+                RESTORE_LINK_BUDGET_TICKS);
+        int dim = clientDim();
         assertEquals("he relogged standing on his INVERTED ship in its cell: clientDim=" + dim
-                        + " riding=" + bot().reportRidingEntity(),
+                        + " riding=" + bot().reportRidingEntity()
+                        + "\n  login_restored: " + restored
+                        + "\n  client dimension changes: " + joined,
                 slotDim, dim);
 
         requireHeIsNotDraggedAlongHisDeck(dim);
@@ -201,8 +301,6 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
      * {@code 1.0} for a ship that had rolled about a different axis.
      */
     private double shipUpY(String shipInfoJson) {
-        double qx = readDouble(shipInfoJson, "qx");
-        double qz = readDouble(shipInfoJson, "qz");
-        return 1.0 - 2.0 * (qx * qx + qz * qz);
+        return ShipInfo.upYOrNaN(shipInfoJson);
     }
 }

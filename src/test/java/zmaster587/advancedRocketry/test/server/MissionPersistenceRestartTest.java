@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -9,8 +11,9 @@ import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -51,11 +54,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionPersistenceRestartTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern MISSION_ID = Pattern.compile("\"missionId\":(-?\\d+)");
-    private static final Pattern DURATION = Pattern.compile("\"duration\":(-?\\d+)");
+    private static final String MISSION_ID = "missionId";
+    private static final String DURATION = "duration";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -81,26 +81,17 @@ public class MissionPersistenceRestartTest {
     }
 
     private int buildAndAssembleRocket(RealDedicatedServerHarness boot, int baseX) throws Exception {
-        int baseY = 64;
-        int baseZ = 600;
-        ok(boot.client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        String fixture = ok(boot.client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-        ok(boot.client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
+        final FixtureSite site = FixtureSite.openAir(0, baseX, 600);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built in is EMPTY. The site stands in open air, so
+        // this ASSERTS rather than digs, and the fill inside it force-loads every chunk in the box.
+        RocketFixture.assembleAt(site, cmd -> ok(boot.client().execute(cmd)), "simple", 2, 10,
+                "the craft whose mission must survive the restart is built in this volume");
         String list = ok(boot.client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
@@ -112,10 +103,10 @@ public class MissionPersistenceRestartTest {
         int rid = buildAndAssembleRocket(firstBoot, 9500);
         String start = ok(firstBoot.client().execute(
                 "artest mission start-gas 0 " + rid + " " + expectedDuration + " oxygen 10"));
-        assertFalse("start-gas failed in boot1: " + start, start.contains("\"error\""));
-        Matcher mm = MISSION_ID.matcher(start);
-        assertTrue("missing missionId in start response: " + start, mm.find());
-        missionId = Long.parseLong(mm.group(1));
+        assertFalse("start-gas failed in boot1: " + start, Reply.of(start).has("error"));
+        Reply mmReply = Reply.of(start);
+        assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
+        missionId = Long.parseLong(mmReply.text(MISSION_ID));
 
         firstBoot.close();
         firstBoot = null;
@@ -124,21 +115,21 @@ public class MissionPersistenceRestartTest {
 
         String state = ok(secondBoot.client().execute("artest mission state " + missionId));
         assertFalse("state probe failed after reboot — mission lost: " + state,
-                state.contains("\"error\""));
+                Reply.of(state).has("error"));
         assertTrue("mission type must be gas after reboot: " + state,
-                state.contains("\"type\":\"gas\""));
-        Matcher dm = DURATION.matcher(state);
-        assertTrue("missing duration in restored state: " + state, dm.find());
+                "gas".equals(Reply.of(state).text("type")));
+        Reply dmReply = Reply.of(state);
+        assertTrue("missing duration in restored state: " + state, dmReply.has(DURATION));
         // MissionGasCollection ctor multiplies duration by gasCollectionMult
         // (config default 1.0 in test env). Pin against the value the mission
         // actually stored — pull it via state probe from boot 1 was already
         // computed; here we just assert it's nonzero and stable across reboot.
-        long restoredDuration = Long.parseLong(dm.group(1));
+        long restoredDuration = Long.parseLong(dmReply.text(DURATION));
         assertTrue("restored duration must be > 0: " + state, restoredDuration > 0);
         assertEquals("restored duration must equal configured (gasCollectionMult=1 in test env)",
                 expectedDuration, restoredDuration);
         assertTrue("mission must not be dead after reboot: " + state,
-                state.contains("\"isDead\":false"));
+                (!Reply.of(state).bool("isDead")));
     }
 
     @Test
@@ -150,10 +141,10 @@ public class MissionPersistenceRestartTest {
         int rid = buildAndAssembleRocket(firstBoot, 9600);
         String start = ok(firstBoot.client().execute(
                 "artest mission start-ore 0 " + rid + " " + expectedDuration + " 1.0"));
-        assertFalse("start-ore failed in boot1: " + start, start.contains("\"error\""));
-        Matcher mm = MISSION_ID.matcher(start);
-        assertTrue("missing missionId in start response: " + start, mm.find());
-        missionId = Long.parseLong(mm.group(1));
+        assertFalse("start-ore failed in boot1: " + start, Reply.of(start).has("error"));
+        Reply mmReply = Reply.of(start);
+        assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
+        missionId = Long.parseLong(mmReply.text(MISSION_ID));
 
         firstBoot.close();
         firstBoot = null;
@@ -162,14 +153,14 @@ public class MissionPersistenceRestartTest {
 
         String state = ok(secondBoot.client().execute("artest mission state " + missionId));
         assertFalse("state probe failed after reboot — mission lost: " + state,
-                state.contains("\"error\""));
+                Reply.of(state).has("error"));
         assertTrue("mission type must be ore after reboot: " + state,
-                state.contains("\"type\":\"ore\""));
-        Matcher dm = DURATION.matcher(state);
-        assertTrue("missing duration in restored state: " + state, dm.find());
+                "ore".equals(Reply.of(state).text("type")));
+        Reply dmReply = Reply.of(state);
+        assertTrue("missing duration in restored state: " + state, dmReply.has(DURATION));
         assertEquals("restored ore duration must equal configured",
-                expectedDuration, Long.parseLong(dm.group(1)));
+                expectedDuration, Long.parseLong(dmReply.text(DURATION)));
         assertTrue("mission must not be dead after reboot: " + state,
-                state.contains("\"isDead\":false"));
+                (!Reply.of(state).bool("isDead")));
     }
 }

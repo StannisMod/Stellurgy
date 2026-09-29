@@ -33,6 +33,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShipDeckCameraAndAttitudeHoldTest {
 
+    /** Samples the spread must cover before it is said to EXERCISE the levelling — the test's own
+     *  sample bar, under which a clean result describes the sweep. */
+    private static final int MIN_SPREAD_SAMPLES = 100;
+
     /** Angular tolerance (degrees) for camera yaw/pitch/roll round-trips. */
     private static final double ANGLE_DELTA = 1e-3;
     /** Tolerance for comparing the ACTION of two rotations on a test vector. */
@@ -122,7 +126,7 @@ public class ShipDeckCameraAndAttitudeHoldTest {
                 }
             }
         }
-        assertTrue("the spread must actually exercise the levelling", checked > 100);
+        assertTrue("the spread must actually exercise the levelling", checked > MIN_SPREAD_SAMPLES);
     }
 
     /**
@@ -242,9 +246,16 @@ public class ShipDeckCameraAndAttitudeHoldTest {
     // =====================================================================
 
     /**
-     * THE attitude-hold fix: with zero orientation error but a real residual spin, the controller
-     * commands an angular acceleration OPPOSING the spin (a negative dot with omega) - "no pilot
-     * input" brakes the turn instead of coasting on angular momentum.
+     * The attitude HOLD's own law: with zero orientation error but a real residual spin, it commands
+     * an angular acceleration OPPOSING the spin (a negative dot with omega). A hold that is engaged
+     * brakes the turn rather than coasting on angular momentum, and that is what makes it a hold.
+     *
+     * <p><b>What this test does NOT say, and used to.</b> Its previous wording read *"'no pilot
+     * input' brakes the turn"* — a claim about the CRAFT, not about this function, and MOTION-2
+     * forbids it: a hold is a mode, never the law, so with no mode engaged centred controls command
+     * no torque at all. This function is the law OF THE HOLD and is unchanged by that; what changes
+     * is who may call it and when. The gate belongs at the caller, which publishes an attitude
+     * target on every manned tick regardless of any mode.</p>
      */
     @Test
     public void zeroErrorWithResidualSpinCommandsAccelerationOpposingTheSpin() {
@@ -253,7 +264,7 @@ public class ShipDeckCameraAndAttitudeHoldTest {
                 0, 0, 1, /*errAngle*/0.0,
                 omega[0], omega[1], omega[2],
                 /*dt*/0.05, /*pGain*/4.0, /*maxAngSpeed*/2.0, /*maxAngAccel*/10.0);
-        assertNotNull("a spinning ship must be actively braked, not coasted", a);
+        assertNotNull("an ENGAGED hold must actively brake a spinning ship rather than coast it", a);
         assertTrue("acceleration opposes the residual spin", dot(a, omega) < 0.0);
     }
 

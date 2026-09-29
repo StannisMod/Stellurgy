@@ -1,14 +1,20 @@
 package zmaster587.advancedRocketry.test.server;
 
-import org.junit.Assume;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.TransitSetup;
+import zmaster587.advancedRocketry.test.ShipReadiness;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * <b>A jump carries what is lying on the deck, not only who is sitting on it.</b> The half of JUMP-11
@@ -28,84 +34,103 @@ import static org.junit.Assert.assertTrue;
  * an item that moved was moved by something. It is also the body a player is most likely to have
  * lying about — the thing he dropped while building.
  *
- * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
 
     /** How close to the ship the body must land to count as aboard it rather than merely in the cell. */
     private static final double ABOARD_RADIUS = 8.0;
 
+    /**
+     * Budgets in SERVER TICKS, none fork-scaled: 400 is the twenty seconds the old 80 x 250 ms meant
+     * on an idle box, 300 the fifteen of 60 x 250 ms for the retry-based placement, 200 the ten of
+     * 40 x 250 ms for a ship becoming loadable.
+     */
+    private static final int ARRIVAL_TICKS = 400;
+    private static final int PLACEMENT_TICKS = 300;
+
     @Test
     public void aJumpCarriesTheBodiesLyingOnItsDeck() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
-        exec("artest vs permaload true");
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("piloted transit setup failed: " + setup, setup.contains("\"ok\":true"));
-        int originDim = extractInt(setup, "originDim");
-        assertTrue("ARRANGEMENT: the origin ship never assembled/loaded (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
+        requireArranged("the origin ship never assembled/loaded (dim " + originDim + ")",
+                loadedShips(originDim) >= 1);
+
+        // The ship the setup just assembled, by the name the setup reports. Every scenario in this
+        // tier builds at the SAME anchor in the SAME pooled slot, so "the ship at (1,64,1)" is a
+        // question with several right answers and the yard lookup takes the first — measured
+        // elsewhere as seatFound:false on a craft that had just been built.
+        String shipId = setup.requireShipId();
 
         // Where the ship actually is in its cell — the deck the body is dropped onto.
-        String seat = exec("artest vs find-seat " + originDim + " 1 64 1");
-        assertTrue("ARRANGEMENT: the ship must resolve a world position: " + seat,
-                seat.contains("\"shipWorldX\""));
-        double shipX = extractDouble(seat, "shipWorldX");
-        double shipY = extractDouble(seat, "shipWorldY");
-        double shipZ = extractDouble(seat, "shipWorldZ");
+        PilotSeat seat = PilotSeat.byId(this::exec, originDim, shipId)
+                .requireFound("the ship must resolve a world position for the body to be dropped at");
+        double shipX = seat.shipWorldX;
+        double shipY = seat.shipWorldY;
+        double shipZ = seat.shipWorldZ;
 
         // Dropped AT the hull, not above it. A body spawned over a deck is a body falling, and this
         // fixture sits in a void cell: by the time the cut runs it can be well past the ship, which
         // makes "it was not carried" indistinguishable from "it was not there". The ship's own
         // identity is handed in so the probe can answer production's question rather than a proxy.
-        String shipId = extractString(exec("artest vs ship-info " + originDim + " " + (int) shipX + " "
-                + (int) shipY + " " + (int) shipZ), "id");
         String dropped = exec("artest space loose-body " + originDim + " " + shipX + " " + shipY + " "
                 + shipZ + " " + shipId);
-        assertTrue("ARRANGEMENT: the body must be dropped: " + dropped, dropped.contains("\"ok\":true"));
+        requireArranged("the body must be dropped: " + dropped, Reply.of(dropped).ok());
 
         // CONTROL, and it is production's OWN aboard test rather than a proximity proxy: the body has
         // to be inside the ship's stay region — the same volume the crossing enumerates by, and the
         // same one the hyperspace void judges a crew member by. A green here means a later red is
         // about the carry.
-        assertTrue("ARRANGEMENT: the dropped body must be ABOARD by the definition the crossing uses,"
-                + " not merely near the ship: " + dropped, dropped.contains("\"aboard\":true"));
+        requireArranged("the dropped body must be ABOARD by the definition the crossing uses,"
+                + " not merely near the ship: " + dropped, Reply.of(dropped).bool("aboard"));
 
+        // Marked BEFORE the command whose effect is awaited.
+        long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("the transit must begin: " + begin, begin.contains("\"began\":true"));
+        assertTrue("the transit must begin: " + begin, Reply.of(begin).bool("began"));
 
-        int targetDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 80 && targetDim < 0; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (extractInt(lastTick, "inTransit") == 0) {
-                targetDim = extractInt(lastTick, "targetDim");
-                break;
-            }
-            Thread.sleep(250);
-        }
-        assertTrue("the jump never completed; last tick=" + lastTick, targetDim >= 0);
+        // No pump: the server advances the jump. Waited for as the arrival production announces.
+        String arrivedRecord = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
+                "the jump never completed; the transit now reads "
+                        + exec("artest space transit-status"),
+                ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
+        int targetDim = extractInt(arrivedRecord, "dim");
+        assertTrue("the arrival was announced but names no dimension: " + arrivedRecord,
+                targetDim >= 0);
 
-        // The placement is retry-based like the crew's, so drive the same retries the crew leg drives.
-        String arrived = "";
-        boolean carried = false;
-        for (int i = 0; i < 60 && !carried; i++) {
-            exec("artest space transit-tick 10");
-            arrived = exec("artest vs ship-info " + targetDim + " 0 200 0");
-            if (arrived.contains("\"posX\"")) {
-                double px = extractDouble(arrived, "posX");
-                double py = extractDouble(arrived, "posY");
-                double pz = extractDouble(arrived, "posZ");
-                carried = extractInt(exec("artest space loose-body-count " + targetDim + " " + px + " "
-                        + py + " " + pz + " " + ABOARD_RADIUS), "count") >= 1;
-            }
-            Thread.sleep(250);
-        }
+        // NOT a converging state after all, and the comment that stood here said it was. The
+        // placement IS announced: `AboardBodies.release` is the one place a stowed body re-enters a
+        // world, and `aboard_bodies_released` is written at its return — on every attempt, so the
+        // retries it makes while the arriving hull is still being rebuilt are visible too. The wait
+        // ends on an attempt that actually PLACED something in this dimension.
+        //
+        // The poll it replaces read four things per step — a count, a name, a pose and a body census
+        // around that pose — and any of them being momentarily unready simply meant "not yet", so a
+        // carry that placed its cargo and a carry that never did produced the same expiry.
+        events.awaitMatching(transitMark, "aboard_bodies_released",
+                reply -> Events.recordsWhere(reply, "dim", String.valueOf(targetDim)).stream()
+                        .anyMatch(record -> Events.number(record, "placed") >= 1),
+                "placing at least one body in dim " + targetDim,
+                "the carry never put its cargo down in the arrival dimension", PLACEMENT_TICKS);
+
+        // The identity and the pose are READ once, after production has said the bodies are down —
+        // the same readings the poll took, now taken at a moment that means something.
+        String counted = exec("artest vs ship-count " + targetDim);
+        String[] named = Reply.of("artest vs ship-count", counted).textArray("ships");
+        assertEquals("the arrival dimension must hold exactly this jump's hull: " + counted,
+                1, named.length);
+        String arrivedInfo = exec("artest vs ship-info " + targetDim + " id " + named[0]);
+        assertTrue("the substrate announced the cargo down, so the hull it was placed on must be"
+                + " resolvable here: " + arrivedInfo, ShipInfo.isLoaded(arrivedInfo));
+        ShipInfo ship = ShipInfo.of(arrivedInfo);
+        String census = exec("artest space loose-body-count " + targetDim + " " + ship.x + " "
+                + ship.y + " " + ship.z + " " + ABOARD_RADIUS);
 
         assertTrue("a body lying on the deck must arrive WITH the ship — the crew is not the only "
-                + "thing aboard a jump. Ship report at the destination: " + arrived, carried);
+                + "thing aboard a jump. Ship report at the destination: " + arrivedInfo
+                + " body census: " + census, extractInt(census, "count") >= 1);
 
         // ...and it is not still lying in the cell it left, which is the failure this replaces: a body
         // left behind is also "somewhere", and only asking both ends tells the two apart.
@@ -117,46 +142,42 @@ public class VSJumpCarriesLooseBodiesE2ETest extends AbstractSharedServerTest {
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
     }
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
-    private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                if (extractInt(exec("artest vs ship-count " + dim), "count") >= 1) {
-                    return 1;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).integerOr(key, -1);
     }
 
     private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        assertTrue("expected string \"" + key + "\" in: " + json, m.find());
-        return m.group(1);
+        assertTrue("expected string \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 
     private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9.eE+\\-]+)").matcher(json);
-        assertTrue("expected number \"" + key + "\" in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("expected number \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).numberOr(key, Double.NaN);
     }
 }

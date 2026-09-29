@@ -77,12 +77,40 @@ import java.util.*;
 public class PlanetEventHandler {
 
     private static final ItemStack component = new ItemStack(AdvancedRocketryItems.itemUpgrade, 1, 4);
+    /**
+     * Server ticks this handler has seen. OWNER: the SERVER; LIFETIME: one server, released by
+     * {@link #onServerStopped()}.
+     *
+     * <p>It exists to be READ from outside — it is the cheapest evidence that the
+     * {@code ServerTickEvent} subscription is alive, since a lost subscription leaves it frozen
+     * where the last tick put it. That is only true of a counter that STARTS somewhere known: until
+     * the release below, a second world in the same launch inherited the first world's total, so
+     * "frozen at N" and "counting from N" were the same reading.</p>
+     */
     public static long time = 0;
+    /** The warp-transition flash. OWNER: the CLIENT — {@code runBurst} is client-only and the read
+     *  at the bottom of this file goes through {@code Minecraft}; LIFETIME: one connection, released
+     *  in {@link #disconnected}. NOT released by the server hook below, which is a different owner. */
     private static long endTime, duration;
-    private static List<TransitionEntity> transitionMap = new LinkedList<>();
+    /** Entity moves this server owes at a future world time. OWNER: the SERVER; LIFETIME: one
+     *  server. Holds live {@code Entity} references, so it is emptied by the release below rather
+     *  than carried into the next world. */
+    private static final List<TransitionEntity> transitionMap = new LinkedList<>();
 
     public static void addDelayedTransition(TransitionEntity entity) {
         transitionMap.add(entity);
+    }
+
+    /**
+     * Released here, by the owner: both of these belonged to the server that has just stopped.
+     *
+     * <p>The queue is emptied rather than left to be overwritten — its entries hold entities of a
+     * world that no longer exists, and a transition scheduled against the old world's total time
+     * would fire against the new one's.</p>
+     */
+    public static void onServerStopped() {
+        time = 0;
+        transitionMap.clear();
     }
 
     /**
@@ -200,31 +228,58 @@ public class PlanetEventHandler {
             }
         }
 
-        if (event.getEntity() instanceof EntityPlayer && event.getEntity().world.provider.getDimension() == ARConfiguration.getCurrentConfig().spaceDimId && SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(event.getEntity().getPosition()) == null && !(event.getEntity().getRidingEntity() instanceof EntityRocket)) {
-            double distance = 0;
-            HashedBlockPosition teleportPosition = null;
-            for (ISpaceObject spaceObject : SpaceObjectManager.getSpaceManager().getSpaceObjects()) {
-                if (spaceObject instanceof SpaceStationObject) {
-                    SpaceStationObject station = ((SpaceStationObject) spaceObject);
-                    double distanceTo = event.getEntity().getPosition().getDistance(station.getSpawnLocation().x, station.getSpawnLocation().y, station.getSpawnLocation().z);
-                    if (distanceTo > distance) {
-                        distance = distanceTo;
-                        teleportPosition = station.getSpawnLocation();
-                    }
+        //GravityHandler.applyGravity(event.getEntity());
+    }
+
+    /**
+     * The space-dimension guard: a player in the space dimension who stands in no station's slot and
+     * is not riding a rocket is put on a station's spawn, or sent to the overworld when there is no
+     * station at all.
+     *
+     * <p>At the END of the space world's own tick, never from a living update. On the server a
+     * player's living update runs inside {@code NetHandlerPlayServer.update}, whose very next
+     * statement writes the pre-tick position back; a teleport made there does not hold until the
+     * client confirms it, so the guard fired again on every tick in between, each time re-sending its
+     * chat lines. The world tick runs before the network tick, so the handler's own capture of the
+     * position already sees the move.</p>
+     */
+    @SubscribeEvent
+    public void spaceDimensionGuard(TickEvent.WorldTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || event.world.isRemote
+                || event.world.provider.getDimension() != ARConfiguration.getCurrentConfig().spaceDimId) {
+            return;
+        }
+        // A copy: the no-station branch moves the player out of this world's list.
+        for (EntityPlayer player : new ArrayList<>(event.world.playerEntities)) {
+            evictIfOffStation(player);
+        }
+    }
+
+    private void evictIfOffStation(EntityPlayer player) {
+        if (SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(player.getPosition()) != null
+                || player.getRidingEntity() instanceof EntityRocket) {
+            return;
+        }
+        double distance = 0;
+        HashedBlockPosition teleportPosition = null;
+        for (ISpaceObject spaceObject : SpaceObjectManager.getSpaceManager().getSpaceObjects()) {
+            if (spaceObject instanceof SpaceStationObject) {
+                SpaceStationObject station = ((SpaceStationObject) spaceObject);
+                double distanceTo = player.getPosition().getDistance(station.getSpawnLocation().x, station.getSpawnLocation().y, station.getSpawnLocation().z);
+                if (distanceTo > distance) {
+                    distance = distanceTo;
+                    teleportPosition = station.getSpawnLocation();
                 }
             }
-            if (teleportPosition != null) {
-                event.getEntity().sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation1")));
-                event.getEntity().sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation2")));
-                event.getEntity().setPositionAndUpdate(teleportPosition.x, teleportPosition.y, teleportPosition.z);
-            } else {
-                event.getEntity().sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation3")));
-                event.getEntity().changeDimension(0, new BasicTeleporter(event.getEntity().getPosition()));
-            }
-
         }
-
-        //GravityHandler.applyGravity(event.getEntity());
+        if (teleportPosition != null) {
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation1")));
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation2")));
+            player.setPositionAndUpdate(teleportPosition.x, teleportPosition.y, teleportPosition.z);
+        } else {
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation3")));
+            player.changeDimension(0, new BasicTeleporter(player.getPosition()));
+        }
     }
 
     @SubscribeEvent
@@ -307,6 +362,14 @@ public class PlanetEventHandler {
         if (net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance() == null) {
             DimensionManager.getInstance().unregisterAllDimensions();
         }
+        // Released here, by the owner: the warp flash is this CLIENT's, and its end time is a moment
+        // on the world it was started in. Carried across the gap it is compared against the NEXT
+        // world's clock, which knows nothing about it — so the overlay either draws for no reason or
+        // is already expired, and which one you get depends on where that world's day count happens
+        // to stand. Unconditional, unlike the dimension sweep above: nothing but this client writes
+        // these two, so there is no integrated server whose shutdown could be raced.
+        endTime = 0;
+        duration = 0;
     }
 
     //Tick dimensions, needed for satellites, and GUIs
@@ -337,12 +400,8 @@ public class PlanetEventHandler {
                         );
 
                         // Grace on the post-transfer entity instance
-                        if (moved != null) {
-                            moved.getEntityData().setLong(
-                                    "arRocketTransferGrace",
-                                    newWorld.getTotalWorldTime() + 100L
-                            );
-                        }
+                        zmaster587.advancedRocketry.atmosphere.RocketTransferGrace.stamp(
+                                moved, newWorld.getTotalWorldTime());
 
                         Entity rocket = newWorld.getEntityFromUuid(ent.entity2.getPersistentID());
                         if (rocket != null && moved != null) {
@@ -541,8 +600,10 @@ public class PlanetEventHandler {
             }
 
             //Check environment
-            if (AtmosphereHandler.currentPressure != -1) {
-                atmosphere = Math.min(AtmosphereHandler.currentPressure, 200);
+            if (zmaster587.advancedRocketry.client.ClientAtmosphere.pressure()
+                    != zmaster587.advancedRocketry.client.ClientAtmosphere.NO_READING) {
+                atmosphere = Math.min(
+                        zmaster587.advancedRocketry.client.ClientAtmosphere.pressure(), 200);
             }
 
             if (atmosphere > 100) {

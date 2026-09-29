@@ -1,12 +1,12 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
-import static org.junit.Assert.assertNotNull;
+import zmaster587.advancedRocketry.test.Events;
+
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -19,10 +19,10 @@ import static org.junit.Assert.assertTrue;
  * {@code world.playSound} call the production sites use (rocket engine,
  * railgun, machine loops). Vanilla encodes the event's registry id into
  * {@code SPacketSoundEffect}; the client decodes it and asks its
- * {@code SoundManager} to play. The client-side {@code PlaySoundEvent}
- * recorder ({@code report_sounds}, forge-test-framework) observes exactly
- * that hand-off on the real client — the honest "did it reach the player's
- * speakers" surface.</p>
+ * {@code SoundManager} to play. The harness records that hand-off as the
+ * client event {@code client_sound_played} — the honest "did it reach the
+ * player's speakers" surface, and a LINK rather than a value, which is why it
+ * is awaited from a mark rather than sampled.</p>
  *
  * <p>An UNREGISTERED SoundEvent encodes as registry id -1, decodes to
  * {@code null}, and the client's scheduled-task executor swallows the
@@ -44,56 +44,81 @@ public class AudioRegistrySoundReachesClientE2ETest extends AbstractClientE2ETes
      *  mixed-case sounds.json key. */
     private static final String COMBUSTION = "advancedrocketry:combustionrocket";
 
+    /** A deadline for a discrete hand-off, not a guess at how long a value takes to settle: the
+     *  packet leaves on the tick the probe runs and is decoded on one of the next few the client
+     *  reads. */
+    private static final int SOUND_BUDGET_TICKS = 100;
+
+    /**
+     * A sound AR plays on the server reaches the real client's sound manager.
+     *
+     * <p>red-witnessed: with {@code combustionRocket} left out of {@code AudioRegistry}'s registration
+     * ({@code AudioRegistry:43}): "combustionRocket must be present in ForgeRegistries at send time:
+     * … \"registered\":false", 2026-09-28. The line the wait rewrite touched is the probe's own reply,
+     * which answers {@code ok} whenever the {@code AudioRegistry} field resolves — a check on the
+     * instrument, which the same inversion passes; the registration verdict right after it is the
+     * one that decides.</p>
+     */
     @Test
     public void serverPlayedArSoundReachesClientSoundManager() throws Exception {
-        // Pin the player at a known spot so the 16-block sound broadcast
+        // ARRANGEMENT: pin the player at a known spot so the 16-block sound broadcast
         // radius trivially covers the play position.
+        // No advance: the broadcast radius is measured against the SERVER's copy of him, which `tp`
+        // has moved before it answers.
         serverClient().execute("tp @a 8.5 79 8.5");
-        bot().waitTicks(5);
-        bot().clearSounds();
 
-        // Precondition: PlaySoundEvent only fires when the client sound system
-        // initialised (SoundManager.loaded). Without an audio device NOTHING is
-        // ever recorded — skip instead of misdiagnosing that as a registration
-        // regression.
+        // ARRANGEMENT GATE, and it is about the HOST, not about the subject: PlaySoundEvent only
+        // fires once the client sound system initialised (SoundManager.loaded). Without an audio
+        // device the recorder's seam is never reached at all, so the silence below would be the
+        // host's and not the registry's — skip instead of misdiagnosing it as a regression.
         org.junit.Assume.assumeTrue(
                 "client sound system not loaded (no audio device?) — PlaySoundEvent "
                         + "cannot be observed on this host",
                 bot().reportSounds().get("managerLoaded").getAsBoolean());
 
+        // The mark is taken BEFORE the stimulus. A play request is over between two samples: the
+        // ring this used to poll could only ever answer "is it in the last 256 sounds now", which
+        // cannot tell "it already happened" from "it never happened".
+        long soundMark = clientMark();
+
         String played = String.join("\n", serverClient().execute(
                 "artest sound play 0 8 79 8 combustionRocket"));
-        assertTrue("sound play probe failed: " + played, played.contains("\"ok\":true"));
+        assertTrue("sound play probe failed: " + played, Reply.of(played).ok());
         assertTrue("combustionRocket must be present in ForgeRegistries at send time: "
-                + played, played.contains("\"registered\":true"));
+                + played, Reply.of(played).bool("registered"));
 
-        // Contract: the sound reaches the real client's SoundManager — the
-        // client-side PlaySoundEvent recorder observes the play request.
-        boolean seen = false;
-        for (int waited = 0; waited < 100 && !seen; waited += 20) {
-            bot().waitTicks(20);
-            seen = soundsContain(bot().reportSounds(), COMBUSTION);
-        }
-        assertTrue("server-played " + COMBUSTION + " never reached the client "
-                + "SoundManager (PlaySoundEvent recorder saw: "
-                + bot().reportSounds() + ")", seen);
+        // Contract: the sound reaches the real client's SoundManager — the client records the play
+        // request it was handed, and a failure prints everything the client DID play since the mark
+        // (and which observation points ran) instead of one stale ring read.
+        clientEvents().awaitField(soundMark, "client_sound_played","location", COMBUSTION,
+                "a registered AR sound played by the server must reach the real client's"
+                        + " SoundManager (this type also carries vanilla ambience and music, so a"
+                        + " non-zero droppedByType entry for it means the ring turned over)",
+                SOUND_BUDGET_TICKS);
 
-        // And the round-trip must leave the client healthy.
+        // And the round-trip must leave the client in the world: the pre-fix symptom of an
+        // unresolvable sound was an NPE on the packet thread, and a client that has left the world
+        // is the loud half of that. (This used to assert the bridge reply was non-null, which it
+        // cannot be — ClientBot.reportState throws on a failed reply rather than returning null.)
         JsonObject state = bot().reportState();
-        assertNotNull("client bridge should still respond after the sound packet",
-                state);
+        assertTrue("the client must still be in-world after the sound packet: " + state,
+                state.get("worldReady").getAsBoolean());
     }
 
-    private static boolean soundsContain(JsonObject reportSounds, String location) {
-        JsonArray sounds = reportSounds.getAsJsonArray("sounds");
-        if (sounds == null) {
-            return false;
-        }
-        for (JsonElement element : sounds) {
-            if (location.equals(element.getAsString())) {
-                return true;
-            }
-        }
-        return false;
+    // ---- the client event log ------------------------------------------------------------------
+    //
+    // This class extends the harness base rather than an AR shared one, so it reaches the adapter
+    // directly instead of through the shared base's clientEvents().
+
+    private Events clientEvents() {
+        return ClientEvents.of(bot());
     }
+
+    /** The client log's sequence, taken BEFORE the action under test — {@link Events#mark} refuses
+     *  it unless a recorder is subscribed, so an empty log afterwards cannot read as "it never
+     *  happened" when the truth is "nobody was listening". */
+    private long clientMark() throws Exception {
+        return clientEvents().mark();
+    }
+
 }

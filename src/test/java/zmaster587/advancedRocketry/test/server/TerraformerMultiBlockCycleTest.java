@@ -1,7 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -37,36 +41,36 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
 
     @Test
     public void terraformerControllerSurvivesTickWithoutStructure() throws Exception {
-        int x = 2000, y = 64, z = 2000;
+        int x = 2000, y = FixtureSite.OPEN_AIR_Y, z = 2000;
 
         String place = String.join("\n", client().execute(
                 "artest place 0 " + x + " " + y + " " + z + " advancedrocketry:terraformer"));
         assertTrue("terraformer place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         String info = String.join("\n", client().execute(
                 "artest machine info 0 " + x + " " + y + " " + z));
-        assertTrue("expected terraformer tile: " + info,
-                info.contains("TileAtmosphereTerraformer"));
+        assertEquals("expected terraformer tile: " + info,
+                "TileAtmosphereTerraformer", MachineInfo.of(info).tileSimpleName());
 
         // Try-complete on incomplete structure must report isComplete=false.
         String tryComplete = String.join("\n", client().execute(
                 "artest machine try-complete 0 " + x + " " + y + " " + z));
         assertTrue("incomplete terraformer should report isComplete=false: " + tryComplete,
-                tryComplete.contains("\"isComplete\":false"));
+                (!Reply.of(tryComplete).bool("isComplete")));
 
         // Force-tick — must not crash even with incomplete structure.
         String tick = String.join("\n", client().execute(
                 "artest tile force-tick 0 " + x + " " + y + " " + z + " 60"));
-        assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
         assertEquals("must tick all 60 iterations",
-                "60", extract(tick, "\"ticked\":(\\d+)"));
+                60, extractInt(tick, "ticked"));
 
         // Tile must still resolve.
         String postInfo = String.join("\n", client().execute(
                 "artest machine info 0 " + x + " " + y + " " + z));
-        assertTrue("tile must survive tick burst: " + postInfo,
-                postInfo.contains("TileAtmosphereTerraformer"));
+        assertEquals("tile must survive tick burst: " + postInfo,
+                "TileAtmosphereTerraformer", MachineInfo.of(postInfo).tileSimpleName());
 
         // Terraforming info must keep reporting proxyInitialized — the
         // cross-cutting field every gameplay path depends on. (Production:
@@ -75,11 +79,10 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
         String terraInfo = String.join("\n", client().execute(
                 "artest terraforming info 0"));
         assertTrue("terraforming info missing proxyInitialized: " + terraInfo,
-                terraInfo.contains("\"proxyInitialized\""));
+                Reply.of(terraInfo).has("proxyInitialized"));
     }
 
-    private static String extract(String s, String regex) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(s);
-        return m.find() ? m.group(1) : "";
+    private static int extractInt(String s, String field) {
+        return zmaster587.advancedRocketry.test.Reply.of(s).integer(field);
     }
 }

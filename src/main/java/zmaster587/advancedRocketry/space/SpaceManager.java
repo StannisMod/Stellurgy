@@ -108,8 +108,27 @@ public final class SpaceManager {
     private final Config config;
     private final EvictionListener evictionListener;
 
-    /** cellKey &rarr; the slot dim id it is currently materialized in. */
-    private final Map<String, Integer> loadedCellToSlot = new HashMap<>();
+    /**
+     * A materialized cell: which slot holds it, and WHICH CELL IT IS.
+     *
+     * <p>The coordinate is kept beside the slot because the map's key cannot carry it. A key names a
+     * cell; a zoned lattice's width is {@code ZoneScale.cellBlocks(body, primary, tick)} — a property
+     * of the zone AT A TICK — so a reader handed only the key cannot put the width back, and any that
+     * tries attaches the width of a different moment. Everything that renders or reports per-cell
+     * content reads {@link #loadedCells()}, and all of it does arithmetic.</p>
+     */
+    private static final class Bound {
+        final int slot;
+        final GalacticCoord coord;
+
+        Bound(int slot, GalacticCoord coord) {
+            this.slot = slot;
+            this.coord = coord;
+        }
+    }
+
+    /** cellKey &rarr; the slot it is materialized in, and the cell itself. */
+    private final Map<String, Bound> loadedCellToSlot = new HashMap<>();
     /** cellKey &rarr; number of occupants keeping it live. 0 = evict-eligible, still loaded (lazy). */
     private final Map<String, Integer> refCount = new HashMap<>();
     /** cellKey &rarr; persistent metadata. Present for any cell seen since startup. */
@@ -142,7 +161,8 @@ public final class SpaceManager {
         CellMeta m = metaOf(cellKey);
         m.lastVisitTick = clock.getAsLong();
 
-        Integer slot = loadedCellToSlot.get(cellKey);
+        Bound already = loadedCellToSlot.get(cellKey);
+        Integer slot = already == null ? null : already.slot;
         if (slot != null) {
             // A binding this controller still holds is not a promise that a world is behind it: Forge
             // removes a player-less, chunk-less dimension at tick end without going through the binder,
@@ -151,15 +171,18 @@ public final class SpaceManager {
             // with nothing behind it — every consumer resolves a ship's world through this binding, and
             // a dead one reads downstream as "the ship is not there".
             if (!binder.isLive(slot)) {
-                binder.load(slot, cellKey);
+                binder.load(slot, coord);
             }
             refCount.merge(cellKey, 1, Integer::sum);
             return slot;
         }
 
         int dimId = acquireSlot(cellKey);
-        binder.load(dimId, cellKey);
-        loadedCellToSlot.put(cellKey, dimId);
+        // THE COORDINATE, not the key this method derived from it. The key is this controller's own
+        // map identity and stays one; the slot needs the cell itself, because a zoned lattice's width
+        // is not recoverable from a name (see SlotBinder.load).
+        binder.load(dimId, coord);
+        loadedCellToSlot.put(cellKey, new Bound(dimId, coord));
         refCount.put(cellKey, 1);
         return dimId;
     }
@@ -249,8 +272,8 @@ public final class SpaceManager {
         if (coord == null) {
             return UNBOUND_SLOT;
         }
-        Integer slot = loadedCellToSlot.get(coord.cellKey());
-        return slot == null ? UNBOUND_SLOT : slot;
+        Bound bound = loadedCellToSlot.get(coord.cellKey());
+        return bound == null ? UNBOUND_SLOT : bound.slot;
     }
 
     /**
@@ -263,8 +286,17 @@ public final class SpaceManager {
      * ledger &mdash; a ship's lifecycle state says where the SHIP is in its journey, not whether the
      * world it is sitting in exists.</p>
      */
-    public Map<String, Integer> loadedCells() {
-        return new HashMap<>(loadedCellToSlot);
+    public Map<GalacticCoord, Integer> loadedCells() {
+        // Keyed by the CELL, not by its name. Every consumer of this snapshot goes on to do
+        // arithmetic — an observer position, a body bearing, a nebula direction — and a cell rebuilt
+        // from a key carries no lattice width, so the old `Map<String,Integer>` handed each of them a
+        // coordinate that refuses to answer. The coordinate's own `equals` ignores the width
+        // deliberately, so this map behaves exactly as the key-ed one did for lookup and identity.
+        Map<GalacticCoord, Integer> out = new HashMap<>();
+        for (Bound bound : loadedCellToSlot.values()) {
+            out.put(bound.coord, bound.slot);
+        }
+        return out;
     }
 
     /** Pick a free slot, else LRU-evict a refcount-0 loaded cell to free one. */
@@ -293,7 +325,10 @@ public final class SpaceManager {
 
     /** A slot dim id not currently bound to any cell, or {@code -1} if the pool is full. */
     private int firstFreeSlot() {
-        List<Integer> boundSlots = new ArrayList<>(loadedCellToSlot.values());
+        List<Integer> boundSlots = new ArrayList<>();
+        for (Bound bound : loadedCellToSlot.values()) {
+            boundSlots.add(bound.slot);
+        }
         for (int dimId : binder.slotDims()) {
             if (!boundSlots.contains(dimId)) {
                 return dimId;
@@ -318,7 +353,7 @@ public final class SpaceManager {
             if (e.getValue() != 0 || !loadedCellToSlot.containsKey(e.getKey())) {
                 continue;
             }
-            if (binder.hasOccupants(loadedCellToSlot.get(e.getKey()))) {
+            if (binder.hasOccupants(loadedCellToSlot.get(e.getKey()).slot)) {
                 continue; // somebody is in there; a zero refcount is not permission
             }
             long visit = metaOf(e.getKey()).lastVisitTick;
@@ -332,7 +367,7 @@ public final class SpaceManager {
 
     /** Unbind a loaded cell: dirty &rarr; flush to store; clean &rarr; discard its scratch world. */
     private void evict(String cellKey) {
-        int dimId = loadedCellToSlot.get(cellKey);
+        int dimId = loadedCellToSlot.get(cellKey).slot;
         CellMeta m = metaOf(cellKey);
         if (m.dirty) {
             binder.unload(dimId);   // saves chunks to the cell's store folder
@@ -367,6 +402,10 @@ public final class SpaceManager {
                 }
             }
             for (String key : aged) {
+                if (vetoed(key, zmaster587.advancedRocketry.api.event.SpaceCellEvent.Reason.AGE,
+                        now - metaOf(key).lastVisitTick)) {
+                    continue;
+                }
                 deleteFromStore(key);
                 deleted.add(key);
             }
@@ -379,15 +418,39 @@ public final class SpaceManager {
             // main thread, i.e. a hung server. Each victim therefore gets exactly one attempt.
             java.util.Set<String> attempted = new java.util.HashSet<>();
             while (storedCellCount() > config.maxStoredCells) {
-                String victim = oldestGcCandidate();
-                if (victim == null || !attempted.add(victim)) {
-                    break; // nothing collectable left, or the store is refusing to shrink
+                String victim = oldestGcCandidate(attempted);
+                if (victim == null) {
+                    break; // nothing collectable left that this pass has not already tried
+                }
+                attempted.add(victim);
+                if (vetoed(victim, zmaster587.advancedRocketry.api.event.SpaceCellEvent.Reason.COUNT,
+                        Long.MIN_VALUE)) {
+                    // Marked attempted above, so the next turn of the loop picks the NEXT oldest
+                    // rather than offering this one again forever. A listener that vetoes every
+                    // candidate holds the store over its ceiling, which is its choice to make.
+                    continue;
                 }
                 deleteFromStore(victim);
                 deleted.add(victim);
             }
         }
         return deleted;
+    }
+
+
+    /**
+     * Offer a cell to anything that would rather keep it, and answer whether it was kept.
+     *
+     * <p>The collector refuses loaded and claimed cells before it gets here, so what it is about to
+     * delete is a cell it believes nobody is using. This is where something that knows better says
+     * so.</p>
+     */
+    private static boolean vetoed(String cellKey,
+                                  zmaster587.advancedRocketry.api.event.SpaceCellEvent.Reason reason,
+                                  long ticksSinceVisit) {
+        return net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new zmaster587.advancedRocketry.api.event.SpaceCellEvent.CollectPre(
+                        cellKey, reason, ticksSinceVisit));
     }
 
     /**
@@ -414,10 +477,14 @@ public final class SpaceManager {
         return isStored(cellKey) && !isClaimed(cellKey) && !loadedCellToSlot.containsKey(cellKey);
     }
 
-    private String oldestGcCandidate() {
+    /** The least recently visited collectable cell that is not in {@code skip}, or {@code null}. */
+    private String oldestGcCandidate(java.util.Set<String> skip) {
         String victim = null;
         long oldest = Long.MAX_VALUE;
         for (String key : gcKnownCells()) {
+            if (skip.contains(key)) {
+                continue;
+            }
             long visit = metaOf(key).lastVisitTick;
             if (isGcCandidate(key) && visit < oldest) {
                 oldest = visit;

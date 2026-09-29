@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -34,14 +36,18 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
 
+    /** The reserve the accumulator must have built before throughput can be read — the test's own
+     *  arrangement bar, in power units. */
+    private static final long CHARGED_RESERVE = 150_000L;
+
     private static final int DIM = 0;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
-    private static final Pattern STORED = Pattern.compile("\"shieldStored\":(-?\\d+)");
-    private static final Pattern SHIELD_MAX = Pattern.compile("\"shieldMax\":(-?\\d+)");
-    private static final Pattern THROUGHPUT = Pattern.compile("\"throughput\":(-?\\d+)");
-    private static final Pattern REQUESTED = Pattern.compile("\"requested\":(-?\\d+)");
-    private static final Pattern TIER = Pattern.compile("\"tier\":(-?\\d+)");
+    private static final String STORED = "shieldStored";
+    private static final String SHIELD_MAX = "shieldMax";
+    private static final String THROUGHPUT = "throughput";
+    private static final String REQUESTED = "requested";
+    private static final String TIER = "tier";
 
     @Test
     public void throughputIsTierScaled() throws Exception {
@@ -51,13 +57,13 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
         placeMeta("affs:field_generator", t0x, z, 0);
         placeMeta("affs:field_generator", t1x, z, 1);
 
-        String tier0 = read(t0x, z);
-        String tier1 = read(t1x, z);
-        assertEquals("Tier 0 emitter did not report tier 0:\n" + tier0, 0, readInt(TIER, tier0));
-        assertEquals("Tier 1 emitter did not report tier 1:\n" + tier1, 1, readInt(TIER, tier1));
+        ShieldTile tier0 = read(t0x, z);
+        ShieldTile tier1 = read(t1x, z);
+        assertEquals("Tier 0 emitter did not report tier 0:\n" + tier0.raw(), 0, tier0.tier());
+        assertEquals("Tier 1 emitter did not report tier 1:\n" + tier1.raw(), 1, tier1.tier());
 
-        long tp0 = readInt(THROUGHPUT, tier0);
-        long tp1 = readInt(THROUGHPUT, tier1);
+        long tp0 = tier0.rechargeThroughput();
+        long tp1 = tier1.rechargeThroughput();
         assertTrue("a higher-tier emitter must have strictly greater recharge throughput (tier0=" + tp0
                 + " tier1=" + tp1 + "): the tier progression does not scale throughput", tp1 > tp0);
     }
@@ -83,20 +89,20 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
         for (int i = 0; i < 80; i++) {
             chargeIteration(gx, gz);
         }
-        long reserveBefore = readInt(STORED, read(ax, gz));
+        long reserveBefore = read(ax, gz).shieldStored();
         assertTrue("precondition: accumulator did not build a bulk reserve (stored=" + reserveBefore + ")",
-                reserveBefore > 150_000L);
+                reserveBefore > CHARGED_RESERVE);
 
         place("affs:field_generator", ax, ez);
         // Ensure the coil has ample free space (drain a little via self-drain, no refill needed), so the
         // throughput cap — not the coil being nearly full — is what bounds the demand.
         exec("artest tile force-tick " + DIM + " " + ax + " " + Y + " " + ez + " 3");
 
-        String emitter = read(ax, ez);
-        long throughput = readInt(THROUGHPUT, emitter);
-        long requested = readInt(REQUESTED, emitter);
-        long stored = readInt(STORED, emitter);
-        long free = readInt(SHIELD_MAX, emitter) - stored;
+        ShieldTile emitter = read(ax, ez);
+        long throughput = emitter.rechargeThroughput();
+        long requested = emitter.requested();
+        long stored = emitter.shieldStored();
+        long free = emitter.shieldMax() - stored;
 
         assertTrue("precondition: the reserve must dwarf one tick's throughput to prove the source is not "
                 + "the limiter (reserve=" + reserveBefore + " throughput=" + throughput + ")",
@@ -128,21 +134,21 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
         }
 
         assertTrue("precondition: emitter A did not power up:\n" + read(aEx, z),
-                read(aEx, z).contains("\"powered\":true"));
+                read(aEx, z).powered());
         assertTrue("precondition: emitter B did not power up:\n" + read(bEx, z),
-                read(bEx, z).contains("\"powered\":true"));
+                read(bEx, z).powered());
 
         // Starve B: advance ITS emitter (self-drain only, no solve → no refill) far enough to empty a full
         // coil. A is untouched (no solve drains it), so A holds its charge.
         exec("artest tile force-tick " + DIM + " " + bEx + " " + Y + " " + z + " 90");
 
-        String starved = read(bEx, z);
-        String held = read(aEx, z);
+        ShieldTile starved = read(bEx, z);
+        ShieldTile held = read(aEx, z);
         assertTrue("the starved emitter's zone did not collapse — it is still powered after draining its "
-                + "coil with no refill:\n" + starved, starved.contains("\"powered\":false"));
+                + "coil with no refill:\n" + starved.raw(), !starved.powered());
         assertTrue("the separately-charged emitter's zone must hold when a different zone collapses — "
-                + "there is no cross-zone rescue, but this one lost power too:\n" + held,
-                held.contains("\"powered\":true"));
+                + "there is no cross-zone rescue, but this one lost power too:\n" + held.raw(),
+                held.powered());
     }
 
     @Test
@@ -159,17 +165,17 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
             chargeIteration(bGx, z);
         }
         assertTrue("precondition: emitter A not powered:\n" + read(aEx, z),
-                read(aEx, z).contains("\"powered\":true"));
+                read(aEx, z).powered());
         assertTrue("precondition: emitter B not powered:\n" + read(bEx, z),
-                read(bEx, z).contains("\"powered\":true"));
+                read(bEx, z).powered());
 
         // A point two blocks from A (and eight from B) is owned by A; the mirror point by B.
         String nearA = zone(aEx + 2, z);
         String nearB = zone(bEx - 2, z);
         assertTrue("a point nearest emitter A must be owned by A (ownerX=" + aEx + "):\n" + nearA,
-                nearA.contains("\"owned\":true") && nearA.contains("\"ownerX\":" + aEx));
+                Reply.of(nearA).bool("owned") && String.valueOf(aEx).equals(Reply.of(nearA).text("ownerX")));
         assertTrue("a point nearest emitter B must be owned by B (ownerX=" + bEx + "):\n" + nearB,
-                nearB.contains("\"owned\":true") && nearB.contains("\"ownerX\":" + bEx));
+                Reply.of(nearB).bool("owned") && String.valueOf(bEx).equals(Reply.of(nearB).text("ownerX")));
     }
 
     // helpers -----------------------------------------------------------------
@@ -180,8 +186,8 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
         exec("artest shield tick " + DIM);
     }
 
-    private String read(int x, int z) throws Exception {
-        return exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
     }
 
     private String zone(int x, int z) throws Exception {
@@ -191,19 +197,19 @@ public class ShieldZoneThroughputTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed"));
     }
 
     private void placeMeta(String block, int x, int z, int meta) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block + " " + meta);
         assertTrue("failed to place " + block + " (meta " + meta + ") at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed"));
     }
 
-    private static long readInt(Pattern pattern, String json) {
-        Matcher m = pattern.matcher(json);
-        assertTrue("no " + pattern.pattern() + " field in probe response: " + json, m.find());
-        return Long.parseLong(m.group(1));
+    private static long readInt(String field, String json) {
+        Reply reply = Reply.of(json);
+        assertTrue("field `" + field + "` not found in: " + json, reply.has(field));
+        return (long) reply.number(field);
     }
 
     private static String exec(String command) throws Exception {

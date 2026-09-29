@@ -150,7 +150,14 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     private transient Map<String, GalacticCoord> anchorsBySuper = null;
     private transient int anchorsBySuperSpacing = -1;
 
-    // ─── JVM-global seams / staging ───────────────────────────────────────────
+    // ─── The SERVER's model state, and the seams that carry it ───────────────
+    //
+    // These were labelled "JVM-global seams" and behaved like it: every one of them belongs to the
+    // running server - the schema is the SAVE's, the seed is the SAVE's, the staged config is the
+    // pack this world loaded with - and none was ever released, so the load path compensated by
+    // overwriting them (the comment at the DimensionManager install site says so in as many words).
+    // They are released in onServerStopped now, so the next world starts from the ship default
+    // rather than from the last one's leftovers.
     private static volatile IGalaxyGenerator generator = new EmptyGalaxyGenerator();
     // How a stored star-id resolves to its content object. Defaults to the legacy catalogue; overridable so
     // the forward coord->system path is unit-testable without booting DimensionManager, and so an addon can
@@ -241,7 +248,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * sub-decision d): authored/pinned anchors win over the procedural generator inside one super-cell.
      */
     public Optional<GalacticCoord> anchorForCell(GalacticCoord coord) {
-        GalacticCoord cell = coord.cellCentre();
+        // Attribution is a GALACTIC question: which system's clear space this sits in. A zoned cell —
+        // a moon's, or anything named inside a zone's lattice — asks it through the galactic cell its
+        // zone is in, because its own triple counts cells thousands of times smaller and would land
+        // the query in an unrelated part of the sky while looking perfectly well-formed.
+        GalacticCoord cell = coord.galacticCell().cellCentre();
         if (byCell.containsKey(cell.cellKey())) {
             return Optional.of(cell);
         }
@@ -862,24 +873,52 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * Which body of its cell {@code body} is - its {@code variant} - or empty if the cell does not
      * hold it.
      *
-     * <p>Matched by ADDRESS, KIND and ORBIT rather than by object identity: a caller holds a body it
-     * got from a derived list, while the pinned snapshot holds another instance of the same body,
-     * and a realized one differs from both by carrying a dimension.</p>
+     * <p>Matched by ADDRESS, KIND, ORBIT and the body's own OFFSET LAW rather than by object identity:
+     * a caller holds a body it got from a derived list, while the pinned snapshot holds another
+     * instance of the same body, and a realized one differs from both by carrying a dimension.</p>
+     *
+     * <p><b>Why the two LAWS are part of the identity.</b> Address, kind and orbit do not separate
+     * SIBLINGS: two moons of one parent carry the PARENT's distance from the star as their orbital
+     * distance - that number is what their climate is derived from, so it is shared on purpose - and
+     * they can land in the same cell of their parent's zone lattice. What makes a sibling a sibling
+     * is its own orbit around the parent: radius, angle and period.
+     *
+     * <p>That orbit lives in the body's FRAME now, not in its offset law. A moon's cell rides the
+     * moon, so its {@link SystemBody#offsetLaw()} is {@code STATIC} exactly as a planet's is, and a
+     * match on the offset law alone would answer "the first moon" for every moon of a family again -
+     * the identical collapse this separator was added to fix, arriving through a change that made the
+     * two moons more distinct rather than less. Both are compared: the offset law still separates
+     * POIs standing in one cell, and the frame separates bodies that ARE their cells. Both compare by
+     * value and round-trip through NBT, so they survive the pin.</p>
+     *
+     * <p><b>An ambiguous match is refused, never guessed.</b> If two bodies of the family answer to
+     * the same identity, that identity has collapsed again and the caller must not be handed one of
+     * them at random: picking the first is how a descent lands on the wrong world, silently. Empty
+     * fails the descent loudly instead, and says so in the log.</p>
      */
     public OptionalInt variantOf(SystemBody body) {
         if (body == null) {
             return OptionalInt.empty();
         }
         List<SystemBody> family = realizableBodiesAt(body.name());
+        int found = -1;
         for (int i = 0; i < family.size(); i++) {
             SystemBody candidate = family.get(i);
             if (candidate.kind() == body.kind()
                     && candidate.orbitalDistance() == body.orbitalDistance()
+                    && candidate.offsetLaw().equals(body.offsetLaw())
+                    && candidate.frame().equals(body.frame())
                     && candidate.name().sameCell(body.name())) {
-                return OptionalInt.of(i);
+                if (found >= 0) {
+                    LOGGER.warn("[UNIVERSE] {} at {} answers to two bodies of its cell (variants {} "
+                            + "and {}): the identity does not separate them, refusing to guess",
+                            body.kind(), body.name().cellKey(), found, i);
+                    return OptionalInt.empty();
+                }
+                found = i;
             }
         }
-        return OptionalInt.empty();
+        return found < 0 ? OptionalInt.empty() : OptionalInt.of(found);
     }
 
     /**
@@ -927,9 +966,9 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
 
     /**
      * The galactic coordinate of a planet/moon/star-proxy dimension. This is the planet&rarr;coord seam the
-     * tier-2 entry/descent handlers use. Per A#1a this is the body's OWN cell — a planet resolves to its
-     * zone cell (NOT the system anchor), a moon to its parent planet's cell (moons are local), a star-proxy
-     * dim to the system's anchor. Falls back to the anchor when the body is not derivable.
+     * tier-2 entry/descent handlers use. This is the body's OWN cell — a planet resolves to its cell
+     * (NOT the system anchor), a moon to its own cell inside its parent's zone, a star-proxy dim to the
+     * system's anchor. EMPTY when the body is not derivable from its system's content.
      */
     public Optional<GalacticCoord> coordForPlanet(DimensionProperties props) {
         if (props == null) {
@@ -950,10 +989,24 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         }
         for (SystemBody body : allSystemBodies(anchor.get())) {
             if (body.dimId() == props.getId()) {
-                return Optional.of(body.name()); // the body's OWN cell (moon: the parent's)
+                return Optional.of(body.name()); // the body's OWN cell (moon: its zone cell)
             }
         }
-        return anchor; // body not derivable from content — lenient anchor fallback
+        // A body its own system cannot account for has NO address, and saying so is the only honest
+        // answer. This used to return the system anchor, which is a valid-looking coordinate a caller
+        // cannot tell from a real one — and it denotes the STAR. A first memory crystal seeded from it
+        // carries a planet's name at its star's cell, and a jump aimed at that entry flies to the
+        // star; the entry path resolves launch coordinates through here too. Every production caller
+        // already handles absence (`isPresent`, `orElse(null)`), so the empty is not a new burden.
+        if (SystemContent.reportOnce("unaddressable:" + props.getStarId() + ':' + props.getId())) {
+            LOGGER.error("dimension {} names star {} but that system's content does not account for "
+                    + "it, so it has no cell to be addressed by. Answering EMPTY. Anything that needs "
+                    + "to reach this body — the navigation crystal, a jump, an entry placement — must "
+                    + "treat it as unreachable rather than aim at the system's anchor, which denotes "
+                    + "the star and not this world.",
+                    props.getId(), props.getStarId());
+        }
+        return Optional.empty();
     }
 
     /**
@@ -963,13 +1016,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * <p>This is what a jump AIMS at, and it is deliberately not {@link #coordForPlanet}. That answers
      * "which cell is this body in", snapped to the cell centre, which is the right answer for
      * attribution, for the home-cell skip and for anything that compares cell keys. It is the wrong
-     * answer for flying: a moon shares its parent's cell but sits tens of thousands of blocks off its
-     * centre, so a ship aimed at the cell arrives at the PARENT and is left short of the moon by ~50
-     * descent radii — it can never put down on the body the pilot actually chose. A body target aims
-     * at the body.</p>
+     * answer for flying at any body that does not sit at its cell's centre: a ship aimed at the cell
+     * arrives at the centre and is left short of the body the pilot actually chose. A body target
+     * aims at the body.</p>
      *
-     * <p>Empty rather than the lenient anchor fallback {@link #coordForPlanet} makes: aiming a ship at
-     * a system's star because its planet could not be resolved is exactly the silent
+     * <p>Empty, like {@link #coordForPlanet}, when the body cannot be resolved: aiming a ship at a
+     * system's star because its planet could not be resolved is exactly the silent
      * flown-somewhere-else failure this exists to prevent. The caller surfaces it instead.</p>
      */
     public Optional<GalacticCoord> addressForPlanet(DimensionProperties props, long atTick) {
@@ -1435,7 +1487,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         // wrong model would be placed wrongly and then persisted.
         UniverseSchema schema = reg.reconcileSchema(packGalaxyConfig);
         activeSchema = schema;
-        setGenerator(schema.generator(packGalaxyConfig));
+        attachSchemaGenerator(schema.generator(packGalaxyConfig));
         LOGGER.info("Universe schema {} ({}) in force, configuration {}", schema.version(),
                 schema.label(), reg.configFingerprint());
         if (!schema.isStable()) {
@@ -1459,8 +1511,68 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         return generator;
     }
 
-    public static void setGenerator(IGalaxyGenerator g) {
-        generator = (g == null) ? new EmptyGalaxyGenerator() : g;
+    /**
+     * Put a generator in force for the running server.
+     *
+     * <p>Replacing is legitimate and happens up to three times per load — a provisional install while
+     * dimensions load, the save's own schema at {@link #populate}, and an upgrade command — so this is
+     * deliberately NOT a once-only install. What it refuses is {@code null}: that used to substitute
+     * {@link EmptyGalaxyGenerator} silently, which made "no generator could be resolved" and "this
+     * galaxy really is empty" the same answer to every caller. No production path ever passed null;
+     * only tests and the probe's reset verb did, and they say {@link #detachGenerator()} now.</p>
+     */
+    public static void attachGenerator(IGalaxyGenerator g) {
+        if (g == null) {
+            throw new IllegalArgumentException(
+                    "a generator must be supplied; use detachGenerator() to return to the ship default");
+        }
+        generator = g;
+    }
+
+    /**
+     * As {@link #attachGenerator}, and additionally refuses to run before the world model is
+     * resolved.
+     *
+     * <p>The two sanctioned installs both know their schema: {@link #populate} puts one in force and
+     * installs its generator on the next line, and the upgrade command adopts one first. Anything
+     * installing before either has happened is deriving a universe from a model this save has not
+     * been shown to be owed — which is exactly what the deleted provisional install did, in the
+     * window between {@code serverAboutToStart} and {@code serverStarting}.</p>
+     */
+    public static void attachSchemaGenerator(IGalaxyGenerator g) {
+        if (activeSchema == null) {
+            throw new IllegalStateException("no world model is in force yet; a generator installed now"
+                    + " would not be the one this save is owed");
+        }
+        attachGenerator(g);
+    }
+
+    /**
+     * Release the running server's generator, leaving the shipped default: void space between
+     * authored anchors.
+     *
+     * <p>That default is a DESIGNED answer, not a fallback — it is what a pack with no
+     * {@code <galaxyGen>} is owed — which is why returning to it is spelled out here rather than
+     * reached by passing null to the setter.</p>
+     */
+    public static void detachGenerator() {
+        generator = new EmptyGalaxyGenerator();
+    }
+
+    /**
+     * Release everything in this section that belonged to the server that has just stopped.
+     *
+     * <p>Called from the mod's {@code serverStopped}, beside the other subsystems that do the same.
+     * Without it the next world inherits the previous one's schema, staged pack configuration and
+     * generator until something happens to overwrite each — which is what the load path has been
+     * quietly relying on.</p>
+     */
+    public static void onServerStopped() {
+        detachGenerator();
+        activeSchema = null;
+        packGalaxyConfig = null;
+        pendingAnchors = new HashMap<>();
+        pendingReset = false;
     }
 
     /**

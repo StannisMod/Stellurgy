@@ -1,7 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -33,7 +39,12 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
     // tiles placed by separate tests don't interact.
     private static final int BASE_X = 200;
     private static final int BASE_Z = 200;
-    private static final int Y = 80; // above terrain to avoid stone overwrite quirks
+    private static final int Y = FixtureSite.OPEN_AIR_Y; // above terrain to avoid stone overwrite quirks
+
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int z) throws Exception {
+        return EnergyStore.at(cmd -> ok(client().execute(cmd)), DIM, x, Y, z);
+    }
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -51,7 +62,7 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         String r = ok(client().execute(
                 "artest place " + DIM + " " + x + " " + y + " " + z + " " + blockId));
         assertTrue("place(" + blockId + ") at " + x + "," + y + "," + z + " failed: " + r,
-                r.contains("\"placed\":true"));
+                Reply.of(r).bool("placed"));
     }
 
     @Test
@@ -63,19 +74,18 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         int x = BASE_X, z = BASE_Z;
         place("advancedrocketry:solarGenerator", x, Y, z);
 
-        String stored = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("solar generator must expose CapabilityEnergy: " + stored,
-                stored.contains("\"hasEnergy\":true"));
-        assertTrue("tileClass must mention TileSolarPanel: " + stored,
-                stored.contains("TileSolarPanel"));
+        EnergyStore stored = energy(x, z);
+        assertTrue("solar generator must expose CapabilityEnergy: " + stored.raw(),
+                stored.hasEnergy);
+        assertEquals("the tile standing there must be the solar panel: " + stored.raw(),
+                "TileSolarPanel", stored.tileSimpleName());
 
         // Force-tick — should not crash, even with no daylight on dim 0
         // at world spawn (production handles "no sky" gracefully).
         String tickResp = ok(client().execute(
                 "artest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 5"));
         assertTrue("solar generator force-tick must not error: " + tickResp,
-                tickResp.contains("\"ok\":true"));
+                Reply.of(tickResp).ok());
     }
 
     @Test
@@ -89,18 +99,22 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         // strongest evidence the tank actually exposes IFluidHandler.
         String tankResp = ok(client().execute(
                 "artest fluid stored " + DIM + " " + x + " " + Y + " " + z));
-        // Probe returns either {"ok":true,...} or {"error":...} —
-        // contract: error must NOT be "no tile entity" (that would
-        // mean place silently dropped the tile).
-        assertTrue("fluid tank place silently dropped tile: " + tankResp,
-                !tankResp.contains("\"no tile entity\""));
+        // Probe returns either {"ok":true,...} or {"error":…}. The claim is that the tile is
+        // THERE, so it is made against the refusal itself rather than against the rendering: a
+        // substring test for `no tile entity` was also satisfied by every OTHER refusal, so a
+        // probe that said `world not loaded` read as a tile standing where none was.
+        assertFalse("fluid tank place silently dropped tile: " + tankResp,
+                Reply.of(tankResp).refused());
         // The tile should be TileFluidTank (or its TileFluidHatch parent).
         // tileClass is only emitted by the energy probe, so reuse that
         // to verify the tile lives.
-        String storedResp = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("liquidTank must be a TileFluidTank-family class: " + storedResp,
-                storedResp.contains("FluidTank") || storedResp.contains("FluidHatch"));
+        EnergyStore storedResp = energy(x, z);
+        // The family is named by its MEMBERS rather than by a fragment of their spelling: the
+        // substring form accepted any class whose name happened to carry those letters, in any
+        // package, including one belonging to another mod entirely.
+        String tile = storedResp.tileSimpleName();
+        assertTrue("liquidTank must be a TileFluidTank-family class: " + storedResp.raw(),
+                "TileFluidTank".equals(tile) || "TileFluidHatch".equals(tile));
     }
 
     @Test
@@ -114,12 +128,14 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
 
         String hatchResp = ok(client().execute(
                 "artest hatch read " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("guidance computer must accept hatch-read probe: " + hatchResp,
-                !hatchResp.contains("not an IInventory") && !hatchResp.contains("no tile entity"));
+        Reply hatch = Reply.of("artest hatch read", hatchResp);
+        assertFalse("guidance computer must accept hatch-read probe: " + hatchResp,
+                hatch.refused());
         // The hatch probe reports either {"slots":[...]} or {"size":N}; both
-        // imply the inventory was discoverable.
+        // imply the inventory was discoverable. Asked of the fields, so a `size` belonging to
+        // some nested member cannot answer for the inventory's own.
         assertTrue("guidance computer hatch-read should yield slot info: " + hatchResp,
-                hatchResp.contains("\"slots\"") || hatchResp.contains("\"size\""));
+                hatch.has("slots") || hatch.has("size"));
     }
 
     @Test
@@ -131,18 +147,17 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         int x = BASE_X + 12, z = BASE_Z;
         place("advancedrocketry:oxygenVent", x, Y, z);
 
-        String storedResp = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
+        EnergyStore storedResp = energy(x, z);
         assertTrue("oxygenVent must expose CapabilityEnergy (RF consumer): "
-                        + storedResp,
-                storedResp.contains("\"hasEnergy\":true"));
-        assertTrue("tileClass should mention OxygenVent: " + storedResp,
-                storedResp.contains("OxygenVent"));
+                        + storedResp.raw(),
+                storedResp.hasEnergy);
+        assertTrue("tileClass should mention OxygenVent: " + storedResp.raw(),
+                "TileOxygenVent".equals(storedResp.tileSimpleName()));
 
         String tickResp = ok(client().execute(
                 "artest tile force-tick " + DIM + " " + x + " " + Y + " " + z + " 2"));
         assertTrue("oxygenVent force-tick must not error: " + tickResp,
-                !tickResp.contains("\"error\""));
+                !Reply.of(tickResp).has("error"));
     }
 
     @Test
@@ -152,9 +167,10 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
 
         String fluidResp = ok(client().execute(
                 "artest fluid stored " + DIM + " " + x + " " + Y + " " + z));
-        // Pump implements IFluidHandler — the probe must reach it.
-        assertTrue("pump place silently dropped tile: " + fluidResp,
-                !fluidResp.contains("\"no tile entity\""));
+        // Pump implements IFluidHandler — the probe must reach it. Against the refusal itself,
+        // as above: any other refusal used to read as success here.
+        assertFalse("pump place silently dropped tile: " + fluidResp,
+                Reply.of(fluidResp).refused());
     }
 
     @Test
@@ -165,12 +181,10 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         // The builder is a heavy machine (RF consumer + assembly slots).
         // Pin its tileClass via the energy probe so a rename surfaces here
         // before any GUI test fails.
-        String storedResp = ok(client().execute(
-                "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("satellite builder tile not found: " + storedResp,
-                !storedResp.contains("\"no tile entity\""));
-        assertTrue("tileClass should mention SatelliteBuilder: " + storedResp,
-                storedResp.contains("SatelliteBuilder"));
+        // The reader refuses the `no tile entity` reply, which is what the not-found check stood for.
+        EnergyStore storedResp = energy(x, z);
+        assertTrue("tileClass should mention SatelliteBuilder: " + storedResp.raw(),
+                "TileSatelliteBuilder".equals(storedResp.tileSimpleName()));
     }
 
     @Test
@@ -182,9 +196,15 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         // false, which would trip the helper's placed=true assertion;
         // here we just want to assert the *initial* state.
         int x = BASE_X + 100, z = BASE_Z + 100;
+        // LEFT RAW, and this is the one site that must be: the subject here IS the error shape.
+        // `EnergyStore` refuses that reply — correctly, since every other site in this tier would
+        // otherwise read it as a machine with no capability — so a reading of it cannot be the
+        // thing being asserted.
         String stored = ok(client().execute(
                 "artest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        assertTrue("virgin position must not have a tile entity: " + stored,
-                stored.contains("\"no tile entity\""));
+        // THIS refusal and not merely some refusal: the claim is that the block is empty, and a
+        // probe answering `world not loaded` satisfied the substring form just as well.
+        assertEquals("virgin position must not have a tile entity: " + stored,
+                "no tile entity", Reply.of(stored).error());
     }
 }

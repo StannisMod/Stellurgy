@@ -1,13 +1,21 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.SeatMount;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.ShipReadiness;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
+
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import zmaster587.advancedRocketry.api.FreeFlightPhysics;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -30,13 +38,32 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    /**
+     * How far the ship — and its mount with it — must have turned from the assembled heading, in
+     * degrees.
+     *
+     * <p>The TEST'S OWN sensitivity bar: below a right angle the assertion below could pass on a
+     * mount whose rotation never moved, which is the defect it exists for.</p>
+     */
+    private static final double TURNED_WELL_AWAY_DEG = 45.0;
 
-    private static final int SRC_X = 8800, SRC_Y = 80, SRC_Z = 8800;
+
+    private static final int SRC_X = 8800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 8800;
 
     /** Quaternion for a ~90-degree yaw about world +Y: far from the fixture's own axis-aligned heading. */
     private static final double TURN_QW = 0.70711, TURN_QY = 0.70711;
+
+    /**
+     * The OBSERVATION WINDOW the ship is given to turn, in SERVER TICKS and not fork-scaled — and it
+     * is spent in full, because what it measures is a converging value rather than an event.
+     *
+     * <p>Its size is the ten seconds the old {@code 40 x 250 ms} meant on an idle box, and it is in
+     * ticks for the reason the whole sweep is: the slew advances by a fixed amount per tick of the
+     * attitude controller, so a window measured in that controller's own clock turns the ship the
+     * same distance on any machine, while one measured in seconds covers fewer of its ticks on a
+     * busy box and turns it less.</p>
+     */
+    private static final int SLEW_TICKS = 200;
 
     /** Degrees. Generous: what is under test is that the mount TURNS WITH the ship, not the controller's
      *  settling error, and a hovering attitude hold parks within a couple of degrees. */
@@ -44,52 +71,52 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void theSeatMountTurnsWithItsShip() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
 
-        exec("artest vs permaload true");
-        clearArea(SRC_X, SRC_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
+        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("the pilot-seat build must route to a ship, not a rocket: " + asm,
-                asm.contains("\"rocketCount\":0"));
-        assertTrue("the source ship never assembled/loaded", waitForLoadedShip(0) >= 1);
+                (Reply.of(asm).integer("rocketCount") == 0));
+        assertTrue("the source ship never assembled/loaded", loadedShips(0) >= 1);
 
-        String seat = exec("artest vs find-seat 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
-        assertTrue("the pilot seat must be found in the assembled ship (else nothing below is measured): "
-                + seat, seat.contains("\"seatFound\":true"));
-        int seatX = extractInt(seat, "seatX"), seatY = extractInt(seat, "seatY"), seatZ = extractInt(seat, "seatZ");
+        // The craft this scenario built, by the name its assembler minted, and the physics id that
+        // name maps to. The build site is in a world every server-tier class shares.
+        String durableId = ShipIdentity.nameFromAssembly(asm);
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+
+        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
+                .requireFound("the pilot seat must be found in the assembled ship, or nothing below is measured");
+        int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
 
         String mountAt = exec("artest vs seat-mount-at 0 " + seatX + " " + seatY + " " + seatZ);
-        assertTrue("the seat's mount dummy must spawn: " + mountAt, mountAt.contains("\"ok\":true"));
+        assertTrue("the seat's mount dummy must spawn: " + mountAt, Reply.of(mountAt).ok());
 
-        // Where the ship points BEFORE the turn, and where its mount thinks it points.
-        // The one positional lookup this scenario can defend — the ship is freshly assembled here and
-        // has not moved. It yields the ship's IDENTITY, and the turn command plus every yaw sample
-        // below name THAT ship: the craft is about to slew, and the harness server is shared.
-        String infoBefore = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
-        assertTrue("the ship must be managed for its attitude to be readable: " + infoBefore,
-                infoBefore.contains("\"managed\":true"));
-        String shipId = extractString(infoBefore, "id");
-        assertTrue("ship-info must name WHICH ship answered: " + infoBefore,
-                shipId != null && !shipId.isEmpty());
-        double shipYawBefore = shipYawOf(infoBefore);
+        // Where the ship points BEFORE the turn, and where its mount thinks it points. Asked by the
+        // id resolved above: a lookup at the build site was defended as "the one positional lookup
+        // this scenario can defend — the ship has not moved", but not having moved is a fact about
+        // THIS craft and says nothing about how many others are standing there.
+        double shipYawBefore = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
         double mountYawBefore = mountYaw(seatX, seatY, seatZ);
 
         // ── TURN THE SHIP ───────────────────────────────────────────────────────────────────────
         // Commanded on an UNMANNED ship: a seated pilot's own input would overwrite the attitude
         // target every tick. The ship hovers while the controller slews it round.
         assertTrue("the attitude hold must accept the yaw command",
-                exec("artest vs point-by-id 0 " + shipId
-                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0").contains("\"commanded\":true"));
+                Reply.of(exec("artest vs point-by-id 0 " + shipId
+                        + " " + TURN_QW + " 0.0 " + TURN_QY + " 0.0")).bool("commanded"));
 
-        double shipYawAfter = shipYawBefore;
-        for (int i = 0; i < 40; i++) {
-            Thread.sleep(250);
-            shipYawAfter = shipYawOf(exec("artest vs ship-info 0 id " + shipId));
-            if (Math.abs(wrapDegrees(shipYawAfter - shipYawBefore)) > 45.0) {
-                break;
-            }
-        }
+        // WINDOW: not a wait, and the difference is what this line is for. A yaw slewing round is a
+        // converging VALUE — nothing announces it and there is no edge to link on — so the shape it
+        // owes is two reads with a stretch of the subject's own clock between them, and an assertion
+        // that names both. The poll it replaces asked the same question the assertion below asks
+        // (`> 45 degrees`) and exited the moment it was satisfied, which makes the budget a disguised
+        // claim about how fast the box is: a slow one expires and reds, a fast one leaves early and
+        // the assertion is a formality. The slew is driven by the attitude controller's own tick at a
+        // fixed rate per tick, so a fixed stretch of that controller's world turns the ship the same
+        // amount on every machine, and the window is spent on purpose. Overshoot eases the
+        // lower-bound gate below, but only up to the commanded heading, where the hold parks; the
+        // verdict itself is the mount-vs-ship agreement, which extra ticks cannot loosen.
+        GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);
+        double shipYawAfter = shipYawOf(ShipInfo.byId(this::exec, 0, shipId));
 
         // The gate: unless the SHIP really turned, "the mount agrees with the ship" is a comparison
         // of two zeroes and would be green on a build where nothing writes the mount at all.
@@ -97,7 +124,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         assertTrue("the ship itself must have turned well away from its assembled heading, or the "
                         + "assertion below cannot fail (ship yaw " + shipYawBefore + " -> " + shipYawAfter
                         + ", turned " + shipTurned + " deg)",
-                shipTurned > 45.0);
+                shipTurned > TURNED_WELL_AWAY_DEG);
 
         // ── THE SUBJECT ─────────────────────────────────────────────────────────────────────────
         double mountYawAfter = mountYaw(seatX, seatY, seatZ);
@@ -105,7 +132,7 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
                         + "a mount that reports the wrong heading to everything that asks it (mount yaw "
                         + mountYawBefore + " -> " + mountYawAfter + " while the ship turned " + shipTurned
                         + " deg)",
-                Math.abs(wrapDegrees(mountYawAfter - mountYawBefore)) > 45.0);
+                Math.abs(wrapDegrees(mountYawAfter - mountYawBefore)) > TURNED_WELL_AWAY_DEG);
         assertTrue("the mount must face where its ship faces (mount yaw " + mountYawAfter
                         + " vs ship yaw " + shipYawAfter + ")",
                 Math.abs(wrapDegrees(mountYawAfter - shipYawAfter)) <= YAW_TOLERANCE_DEG);
@@ -113,9 +140,6 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
     }
 
     // --- observation --------------------------------------------------------------------------------
@@ -124,15 +148,13 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
     private double mountYaw(int seatX, int seatY, int seatZ) throws Exception {
         String status = exec("artest vs seat-status 0 " + seatX + " " + seatY + " " + seatZ);
         assertTrue("the seat's bound mount must be found for its rotation to be read: " + status,
-                status.contains("\"dummyFound\":true"));
+                Reply.of(status).bool("dummyFound"));
         return extractDouble(status, "dummyYaw");
     }
 
     /** The ship's own heading, out of the attitude quaternion VS reports for it. */
-    private double shipYawOf(String shipInfo) {
-        FreeFlightPhysics.Quat q = new FreeFlightPhysics.Quat(
-                extractDouble(shipInfo, "qw"), extractDouble(shipInfo, "qx"),
-                extractDouble(shipInfo, "qy"), extractDouble(shipInfo, "qz"));
+    private double shipYawOf(ShipInfo ship) {
+        FreeFlightPhysics.Quat q = new FreeFlightPhysics.Quat(ship.qw, ship.qx, ship.qy, ship.qz);
         return FreeFlightPhysics.eulerFromQuat(q)[0];
     }
 
@@ -153,53 +175,50 @@ public class VSSeatDummyFacesTheShipE2ETest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                if (extractInt(exec("artest vs ship-count " + dim), "count") >= 1) {
-                    return 1;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
-    }
 
-    private void clearArea(int baseX, int baseZ) throws Exception {
-        int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
-        int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air")
-                .contains("\"ok\":true"));
-    }
-
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair: a {@code clearArea} that ran a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
+     * rather than asked, and threw away its own answer — {@code placed}, the count of blocks that
+     * were standing in the volume. The shared builder asks instead, and on an open-air site
+     * anything found is an arrangement failure that names itself. The warmup went with it: the
+     * fill force-loads every chunk in its own box, so the first link was already doing that job.</p>
+     *
+     * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
+     * they are what this scenario's green runs were taken over.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft this scenario builds stands in this volume");
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+(?:\\.\\d+)?(?:[eE]-?\\d+)?)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : 0.0;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).numberOr(key, 0.0);
     }
 }

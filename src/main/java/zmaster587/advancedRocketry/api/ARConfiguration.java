@@ -52,7 +52,10 @@ public class ARConfiguration {
     private final static String PERFORMANCE = "Performance";
     private final static String CLIENT = "Client";
     private final static String COMPAT = "Compatibility";
-    public static Logger logger = LogManager.getLogger(Constants.modId);
+    /** OWNER: the LOADER — log4j hands out one object per name for the launch, and this class asks
+     *  for it by name like every other class here does. Nothing releases it because nothing may.
+     *  Not to be confused with the configuration below, which is the SERVER's while one is joined. */
+    private static final Logger logger = LogManager.getLogger(Constants.modId);
 
     private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, harvestableGasses, spawnableGasses, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
     private static ARConfiguration currentConfig = new ARConfiguration();
@@ -80,7 +83,8 @@ public class ARConfiguration {
     @ConfigProperty(needsSync = true)
     public int spaceDimId = -2;
     // Movable-ship space subsystem (server-authoritative; loaded in loadPreInit, never network-synced).
-    public boolean enableSpaceSubsystem = true;
+    // There is deliberately NO enable flag here: space is the mod's subject rather than one of its
+    // features, and it registers wherever the mod runs. See SpaceSubsystem.shouldRegister.
     public int spaceCellPoolSize = 10;
     public String spaceCellGcPolicy = "both";
     public int spaceCellMaxAgeTicks = 1728000;
@@ -112,6 +116,12 @@ public class ARConfiguration {
     public boolean nuclearRocketsRequireArtifactForGatedStations = false;
     @ConfigProperty
     public boolean enableNausea = true;
+    /** Damage taken per second in a vacuum. A configured NUMBER, so it lives with the other
+     *  configured numbers: it used to be a public static on {@code AtmosphereVacuum} that the config
+     *  loader reached over and wrote, which put a value the server owns in a class that only spends
+     *  it. */
+    @ConfigProperty
+    public int vacuumDamage = 1;
     @ConfigProperty
     public boolean enableOxygen = true;
     @ConfigProperty(needsSync = true)
@@ -410,6 +420,13 @@ public class ARConfiguration {
     public double wearWarnProbability = 0.05;
     @ConfigProperty(needsSync = true)
     public boolean wearCriticalBlocksLaunch = false;
+    /**
+     * Whether two craft refuse to pass through one another. Until this existed they simply
+     * overlapped and nothing happened; what it does is crude on purpose — both stop while their
+     * boxes overlap, nothing is conserved — so it is a switch a server can turn off whole.
+     */
+    @ConfigProperty(needsSync = true)
+    public boolean shipsCollide = true;
     @ConfigProperty(needsSync = true)
     public double serviceStationStandaloneRepairMultiplier = 3.0;
     @ConfigProperty(needsSync = true)
@@ -529,7 +546,7 @@ public class ARConfiguration {
 
         //Oxygen
         arConfig.enableOxygen = config.get(OXYGEN, "EnableAtmosphericEffects", true, "Enable damage from lack of oxygen and effects from non-standard atmospheres.").getBoolean();
-        AtmosphereVacuum.damageValue = config.get(OXYGEN, "vacuumDamage", 1, "Damage taken per second in a vacuum.").getInt();
+        arConfig.vacuumDamage = config.get(OXYGEN, "vacuumDamage", 1, "Damage taken per second in a vacuum.").getInt();
         arConfig.overrideGCAir = config.get(OXYGEN, "OverrideGCAir", true, "Disable Galacticraft air and use AR oxygen on GC planets.").getBoolean();
         arConfig.oxygenVentConsumptionMult = config.get(OXYGEN, "oxygenVentConsumptionMultiplier", 1f, "Multiplier for oxygen vent O2 use per tick.").getDouble();
         arConfig.oxygenVentPowerMultiplier = config.get(OXYGEN, "OxygenVentPowerMultiplier", 1.0f, "Multiplier for oxygen vent power use.", 0, Float.MAX_VALUE).getDouble();
@@ -583,7 +600,7 @@ public class ARConfiguration {
         arConfig.telescopeSurveyDataPerStep = config.get(PLANET, "telescopeSurveyDataPerStep", 0, "Distance data one step of a survey consumes, drawn from the observatory's data buses the same way its asteroid scan draws. A step with too little data waits rather than resolving, so an unfed instrument stalls instead of working for free. Zero (the default) means a survey costs nothing - what it should cost is a balance question, not a mechanic one.", 0, Integer.MAX_VALUE).getInt();
         arConfig.telescopeObscuredAtMagnitudes = config.get(PLANET, "telescopeObscuredAtMagnitudes", 5d, "How much dust a survey can see THROUGH, in magnitudes of visual extinction - the unit astronomy measures interstellar dust in. A nebula between the instrument and what it is looking at dims it; past this much, the survey can still tell that a system is there but can no longer make out its bodies, and writes the bare coordinate instead. The default is the real boundary at which faint objects behind a cloud disappear: ~1 magnitude is noticeable dimming, ~5 is where things start vanishing, ~10 is an opaque dark cloud. Raise it to see through thicker clouds; set it to 0 to turn concealment off entirely.", 0d, Double.MAX_VALUE).getDouble();
         arConfig.telescopePassiveRadiusSteps = config.get(PLANET, "telescopePassiveRadiusSteps", 1, "How far, in STAR TERRITORIES, the passive local radar reaches around the observatory's own. 0 is the system you are standing in and nothing else; 1 (the default) adds the twenty-six territories around it. Territories and not cells: one look already yields every body of the system that owns it, so a radius counted in cells never reached a neighbour at all - two cells was a fifth of the way to the innermost planet of the system the instrument was already standing in. Passive costs nothing; the pointing is what looks far away.", 0, Integer.MAX_VALUE).getInt();
-        DimensionManager.dimOffset = config.getInt("minDimension", PLANET, 2, -127, 8000, "Lowest dimension ID that can be used for planets.");
+        DimensionManager.getInstance().setDimOffset(config.getInt("minDimension", PLANET, 2, -127, 8000, "Lowest dimension ID that can be used for planets."));
         arConfig.canPlayerRespawnInSpace = config.get(PLANET, "allowPlanetRespawn", false, "Allow bed respawn on planets with breathable air.").getBoolean();
         arConfig.forcePlayerRespawnInSpace = config.get(PLANET, "forcePlanetRespawn", false, "Allow bed respawn on planets even without breathable air. Requires 'allowPlanetRespawn=true'.").getBoolean();
         arConfig.perDimWorldInfo = config.get(PLANET, Constants.CONFIG_KEY_PER_DIM_WORLD_INFO, true, "Master switch for AR's per-dimension WorldInfo overrides on planets: per-planet weather AND per-planet time-of-day / working beds. When false, planets use the vanilla shared-overworld WorldInfo and NONE of the weather/time mixins are woven — fully classic behaviour. The sub-toggles below (enableCustomPlanetWeather) only take effect when this is true.").getBoolean();
@@ -615,7 +632,9 @@ public class ARConfiguration {
 
         //Movable-ship space subsystem (tier-2 ships). The pool size is the direct perf knob: only this
         //many space "bubble" worlds ever tick at once. GC trims the on-disk store of modified cells.
-        arConfig.enableSpaceSubsystem = config.getBoolean("enableSpaceSubsystem", PERFORMANCE, true, "Enable the movable-ship (Valkyrien Skies) space subsystem: the pool of 'bubble' dimensions, the shared hyperspace world, and tier-2 ship transit. When false, NO space dimensions are registered at server start - set this on servers that do not use tier-2 ships. Has no effect without Valkyrien Skies installed (the subsystem is skipped either way).");
+        //There is NO enableSpaceSubsystem flag: it was removed on 2026-09-18 because space is the
+        //mod's subject and not one of its features. An existing config file that still carries the
+        //key is harmless - Forge leaves unread keys alone, so nothing has to be migrated.
         arConfig.spaceCellPoolSize = config.getInt("spaceCellPoolSize", PERFORMANCE, 10, 1, 64, "Number of pre-registered space 'bubble' worlds that can be live (ticking) at once. The direct performance knob for the movable-ship space subsystem.");
         arConfig.spaceCellGcPolicy = config.getString("spaceCellGcPolicy", PERFORMANCE, "both", "Garbage-collection policy for the on-disk store of modified space cells: age | count | both | never.", new String[]{"age", "count", "both", "never"});
         arConfig.spaceCellMaxAgeTicks = config.getInt("spaceCellMaxAgeTicks", PERFORMANCE, 1728000, 0, Integer.MAX_VALUE, "Ticks since last visit before an age/both GC deletes a stored space cell (1728000 = 24h at 20 tps).");
@@ -653,6 +672,7 @@ public class ARConfiguration {
         arConfig.wearThrustPenaltyMax = config.get(ROCKET, "wearThrustPenaltyMax", 0.5, "Fraction of thrust a fully-worn rocket motor loses (partsWearSystem). 0.5 means a motor at max wear produces half thrust; 0 disables the thrust penalty (wear then only affects explosion chance)").getDouble();
         arConfig.wearWarnProbability = config.get(ROCKET, "wearWarnProbability", 0.05, "Failure probability (0..1) at or above which the pilot is warned before launch that the rocket is worn. Also the threshold that blocks launch when wearCriticalBlocksLaunch is true").getDouble();
         arConfig.wearCriticalBlocksLaunch = config.get(ROCKET, "wearCriticalBlocksLaunch", false, "If true, a rocket whose failure probability is at/above wearWarnProbability is refused launch (no explosion). If false, the pilot is warned but may still launch and risk the stochastic explosion").getBoolean();
+        arConfig.shipsCollide = config.get(ROCKET, "shipsCollide", true, "If true, two ships whose bounding boxes overlap are both held at rest while they overlap, and a collision event naming both is posted. Crude by design: nothing is conserved, no momentum is transferred and the hulls are compared as boxes rather than blocks. Set false to restore the old behaviour, in which two ships pass through each other").getBoolean();
         arConfig.serviceStationStandaloneRepairMultiplier = config.get(ROCKET, "serviceStationStandaloneRepairMultiplier", 3.0, "Resource cost multiplier when the service station repairs a worn part WITHOUT a linked PrecisionAssembler (consumes the repair recipe's non-part ingredients times this factor). The assembler-backed path stays at 1x").getDouble();
         arConfig.wearTankLeakChanceMax = config.get(ROCKET, "wearTankLeakChanceMax", 0.5, "Chance (0..1) that a fully-worn fuel tank carrying fuel/oxidizer leaks at launch. Scaled by the tank's wear stage. A leak both bleeds fuel and adds to the launch failure (explosion) probability").getDouble();
         arConfig.wearTankLeakFuelLoss = config.get(ROCKET, "wearTankLeakFuelLoss", 0.25, "Fraction of a fuel type's loaded fuel lost when a worn tank of that type leaks at launch").getDouble();

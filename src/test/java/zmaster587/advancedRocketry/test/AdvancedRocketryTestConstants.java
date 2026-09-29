@@ -52,6 +52,33 @@ public final class AdvancedRocketryTestConstants {
      */
     public static final long DIRECT_JUMP_SPEED = FIXTURE_CELL_SPACING_BLOCKS;
 
+    /**
+     * The CLOSEST two ship fixtures are ever built in this suite, in blocks.
+     *
+     * <p>An arrangement fact, not a product one: the two-ship classes park their craft 64 blocks
+     * apart (near enough that neither is obviously "the" nearest to anything, far enough to be two
+     * registered ships), and the shared-world ship tier spaces its fixtures 100. 64 is therefore the
+     * tightest packing any scenario presents, and the bound below is sized against it.</p>
+     */
+    public static final int CLOSEST_FIXTURE_SPACING_BLOCKS = 64;
+
+    /**
+     * How far from a freshly assembled craft's own build site a {@code vs ship-info} answer may be
+     * and still be that craft, in blocks.
+     *
+     * <p>{@code ship-info <dim> <x> <y> <z>} is a NEAREST-ship lookup, so it answers with a NEIGHBOUR
+     * the moment the intended ship unloads or flies off, in the same shape as a correct reply. This
+     * bound is what a scenario spends ONCE, at the only moment it is defensible — its own ship
+     * freshly assembled at its own base, before anything has moved — to learn the ship's IDENTITY.
+     * Everything afterwards asks by id, which has no distance term to be wrong about.</p>
+     *
+     * <p><b>It is not, and cannot be, an identity.</b> The distance compared is the full 3-D one, and
+     * these scenarios climb, roll and cross on purpose. Derived from
+     * {@link #CLOSEST_FIXTURE_SPACING_BLOCKS} rather than written down, so that a suite which packs
+     * its fixtures tighter tightens this with it instead of silently outgrowing it.</p>
+     */
+    public static final int SHIP_CAPTURE_RADIUS_BLOCKS = CLOSEST_FIXTURE_SPACING_BLOCKS * 3 / 4;
+
     /** Stable dimension ids the test fixtures assume. */
     public static final int TEST_PLANET_EARTHLIKE_DIM = 9001;
     public static final int TEST_PLANET_VACUUM_DIM = 9002;

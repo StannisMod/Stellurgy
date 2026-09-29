@@ -18,6 +18,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class WeightEngineUnitTest {
 
+    /** Materials the default table must hold before it counts as POPULATED — the test's own bar,
+     *  far under what the mod ships. */
+    private static final int MIN_MATERIALS = 10;
+
     private static Fluid testFluid() {
         ResourceLocation tex = new ResourceLocation("advancedrocketry", "blocks/unit_fluid");
         return new Fluid("ar_unit_fluid", tex, tex);
@@ -63,7 +67,7 @@ public class WeightEngineUnitTest {
     public void seedDefaultsPopulatesMaterialTable() {
         WeightEngine we = WeightEngine.INSTANCE;
         we.resetTables();
-        assertTrue("default material table must be populated", we.materialCount() > 10);
+        assertTrue("default material table must be populated", we.materialCount() > MIN_MATERIALS);
     }
 
     @Test

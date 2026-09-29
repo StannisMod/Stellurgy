@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.FluidStored;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -9,8 +11,7 @@ import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -34,12 +35,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class FluidTankNBTRoundTripsAcrossRestartTest {
 
-    private static final Pattern FLUID_NAME = Pattern.compile("\"fluid\":\"([^\"]+)\"");
-    private static final Pattern FLUID_AMOUNT = Pattern.compile("\"amount\":(\\d+)");
 
     /** Tank position — far enough from spawn that no other tile collides. */
     private static final int TX = 2400;
-    private static final int TY = 64;
+    private static final int TY = FixtureSite.OPEN_AIR_Y;
     private static final int TZ = 2400;
     /** Amount injected; below libVulpes' default tank capacity (16 000 mB)
      *  so {@code fluid inject} doesn't clamp and we can read it back exactly. */
@@ -73,23 +72,22 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         String place = String.join("\n", firstBoot.client().execute(
                 "artest place 0 " + TX + " " + TY + " " + TZ + " advancedrocketry:liquidTank"));
         assertTrue("liquidTank place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         String preInject = String.join("\n", firstBoot.client().execute(
                 "artest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must expose IFluidHandler capability: " + preInject,
-                preInject.contains("\"hasFluid\":true"));
+                Reply.of(preInject).bool("hasFluid"));
 
         String inject = String.join("\n", firstBoot.client().execute(
                 "artest fluid inject 0 " + TX + " " + TY + " " + TZ + " oxygen " + INJECT_AMOUNT));
-        assertTrue("fluid inject failed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("fluid inject failed: " + inject, Reply.of(inject).ok());
 
         // Verify the inject landed in-memory before we save the world.
         String storedBefore = String.join("\n", firstBoot.client().execute(
                 "artest fluid stored 0 " + TX + " " + TY + " " + TZ));
-        String fluidBefore = matchOrFail(FLUID_NAME, storedBefore, "fluidName (boot 1)");
-        int amountBefore = Integer.parseInt(
-                matchOrFail(FLUID_AMOUNT, storedBefore, "amount (boot 1)"));
+        String fluidBefore = fluidOrFail(storedBefore, "fluidName (boot 1)");
+        int amountBefore = theTank(storedBefore, "amount (boot 1)").amount(0);
         assertTrue("expected non-empty oxygen tank after inject — fluid=" + fluidBefore
                         + " amount=" + amountBefore + " response=" + storedBefore,
                 fluidBefore.toLowerCase().contains("oxygen") && amountBefore > 0);
@@ -109,11 +107,10 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
         String storedAfter = String.join("\n", secondBoot.client().execute(
                 "artest fluid stored 0 " + TX + " " + TY + " " + TZ));
         assertTrue("liquidTank must still expose IFluidHandler after restart: " + storedAfter,
-                storedAfter.contains("\"hasFluid\":true"));
+                Reply.of(storedAfter).bool("hasFluid"));
 
-        String fluidAfter = matchOrFail(FLUID_NAME, storedAfter, "fluidName (boot 2)");
-        int amountAfter = Integer.parseInt(
-                matchOrFail(FLUID_AMOUNT, storedAfter, "amount (boot 2)"));
+        String fluidAfter = fluidOrFail(storedAfter, "fluidName (boot 2)");
+        int amountAfter = theTank(storedAfter, "amount (boot 2)").amount(0);
 
         // Exact-match: NBT format must round-trip lossless.
         assertEquals("fluid name lost across restart (was " + fluidBefore + "): " + storedAfter,
@@ -122,9 +119,20 @@ public class FluidTankNBTRoundTripsAcrossRestartTest {
                 amountBefore, amountAfter);
     }
 
-    private static String matchOrFail(Pattern p, String s, String label) {
-        Matcher m = p.matcher(s);
-        assertTrue("could not parse " + label + " from response: " + s, m.find());
-        return m.group(1);
+    /**
+     * The tile's ONE tank — a liquidTank block reports exactly one, and the fluid fields live on
+     * the tank rather than on the reply.
+     */
+    private static FluidStored theTank(String s, String label) {
+        FluidStored stored = FluidStored.of(s);
+        assertTrue("could not read " + label + " — no tank in the response: " + s,
+                stored.count() >= 1);
+        return stored;
+    }
+
+    private static String fluidOrFail(String s, String label) {
+        String value = theTank(s, label).fluid(0);
+        assertTrue("could not parse " + label + " from response: " + s, value != null);
+        return value;
     }
 }

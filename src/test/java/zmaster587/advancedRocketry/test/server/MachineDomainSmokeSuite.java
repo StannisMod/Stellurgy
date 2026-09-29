@@ -1,12 +1,15 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -52,18 +55,26 @@ import static org.junit.Assert.assertTrue;
  */
 public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
+    /** The cells a 3x3x3 fill covers. Not a threshold: the arrangement's own geometry. */
+    private static final int FILL_3X3X3_VOLUME = 27;
+
+    /**
+     * The smallest blob a sealed interior may report.
+     *
+     * <p>The TEST'S OWN: the sealed room's own interior is this many cells, so a blob below it has
+     * leaked out of the volume the test built.</p>
+     */
+    private static final int SEALED_INTERIOR_CELLS = 18;
+
     // ── Shared regex patterns ─────────────────────────────────────────────
 
-    private static final Pattern ENERGY_STORED = Pattern.compile("\"energyStored\":(\\d+)");
-    private static final Pattern ENERGY_MAX = Pattern.compile("\"energyMax\":(\\d+)");
-    private static final Pattern TICKED = Pattern.compile("\"ticked\":(\\d+)");
-    private static final Pattern MULTIBLOCK_SAWBLADE_POS =
-            Pattern.compile("\"sawBladePos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern VENT_SEALED = Pattern.compile("\"isSealed\":(true|false)");
-    private static final Pattern VENT_BLOB_SIZE = Pattern.compile("\"blobSize\":(-?\\d+)");
-    private static final Pattern VENT_FLUID_AMT = Pattern.compile("\"fluidAmount\":(\\d+)");
-    private static final Pattern VENT_BREATHABLE = Pattern.compile("\"breathable\":(true|false)");
-    private static final Pattern PLANET_DENSITY = Pattern.compile("\"atmosphereDensity\":(-?\\d+)");
+    private static final String TICKED = "ticked";
+    private static final String MULTIBLOCK_SAWBLADE_POS = "sawBladePos";
+    private static final String VENT_SEALED = "isSealed";
+    private static final String VENT_BLOB_SIZE = "blobSize";
+    private static final String VENT_FLUID_AMT = "fluidAmount";
+    private static final String VENT_BREATHABLE = "breathable";
+    private static final String PLANET_DENSITY = "atmosphereDensity";
 
     // ── Machine block-id -> expected Tile* short class name ─
 
@@ -96,10 +107,13 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         // recipes-summary baseline.
         String summary = join(client().execute("artest machine recipes-summary"));
         assertTrue("recipes-summary errored: " + summary,
-                !summary.contains("\"error\""));
+                !Reply.of(summary).has("error"));
 
-        // Layout: row of machines on flat stone at y=64, x=2100..2140 step 5.
-        int y = 64;
+        // Layout: a row of machines in the open-air band, x=2100..2140 step 5. The Y was a
+        // hard-coded 64 until 2026-09-14, described here as "flat stone" — which is a claim about
+        // the pinned seed that nothing checked, and every machine below is placed, ticked and read
+        // back without ever asking what is under it.
+        int y = FixtureSite.OPEN_AIR_Y;
         int z = 2100;
         int xOff = 2100;
 
@@ -113,14 +127,20 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
             String place = join(client().execute(
                     "artest place 0 " + x + " " + y + " " + z + " " + blockId));
-            if (!place.contains("\"placed\":true")) {
+            // absence is the answer: this suite RECORDS a verdict per block rather
+            // than ending on the first one, so a probe that answered nothing is one
+            // failed row and not a dead run.
+            if (!Reply.of(place).boolOr("placed", false)) {
                 failures.append(blockId).append("=PLACE_FAILED(").append(place).append(");\n");
                 continue;
             }
 
-            String info = join(client().execute(
-                    "artest machine info 0 " + x + " " + y + " " + z));
-            if (!info.contains(tileClass)) {
+            // The table above holds SIMPLE names and the probe reports QUALIFIED ones, so this
+            // used to be a substring test — satisfied by `TileBeaconAdvanced` where `TileBeacon`
+            // was meant, and by the name appearing in an error message about something else.
+            MachineInfo info = MachineInfo.of(join(client().execute(
+                    "artest machine info 0 " + x + " " + y + " " + z)));
+            if (!info.isTile(tileClass)) {
                 failures.append(blockId).append("=WRONG_TILE_CLASS(expected ")
                         .append(tileClass).append("; got: ").append(info).append(");\n");
                 continue;
@@ -128,7 +148,10 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
             String tryComplete = join(client().execute(
                     "artest machine try-complete 0 " + x + " " + y + " " + z));
-            if (!tryComplete.contains("\"isComplete\":false")) {
+            // absence is the answer: this suite RECORDS a verdict per block rather
+            // than ending on the first one, so a probe that answered nothing is one
+            // failed row and not a dead run.
+            if (!(!Reply.of(tryComplete).boolOr("isComplete", true))) {
                 failures.append(blockId).append("=BARE_TRY_COMPLETE_NOT_FALSE(")
                         .append(tryComplete).append(");\n");
                 continue;
@@ -136,26 +159,25 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
             String tick = join(client().execute(
                     "artest tile force-tick 0 " + x + " " + y + " " + z + " 20"));
-            if (!tick.contains("\"ok\":true")) {
+            if (!Reply.of(tick).ok()) {
                 failures.append(blockId).append("=TICK_FAILED(").append(tick).append(");\n");
                 continue;
             }
-            Matcher tm = TICKED.matcher(tick);
-            if (!tm.find() || Integer.parseInt(tm.group(1)) != 20) {
+            Reply tmReply = Reply.of(tick);
+            if (!tmReply.has(TICKED) || Integer.parseInt(tmReply.text(TICKED)) != 20) {
                 failures.append(blockId).append("=INCOMPLETE_TICK(").append(tick).append(");\n");
                 continue;
             }
 
-            String postInfo = join(client().execute(
-                    "artest machine info 0 " + x + " " + y + " " + z));
-            if (!postInfo.contains(tileClass)) {
+            MachineInfo postInfo = MachineInfo.of(join(client().execute(
+                    "artest machine info 0 " + x + " " + y + " " + z)));
+            if (!postInfo.isTile(tileClass)) {
                 failures.append(blockId).append("=POST_TICK_TILE_LOST(")
                         .append(postInfo).append(");\n");
                 continue;
             }
 
-            Pattern p = Pattern.compile("\"" + tileClass + "\":(-?\\d+|\"[^\"]+\")");
-            if (!p.matcher(summary).find()) {
+            if (!Reply.of("artest machine recipes-summary", summary).has(tileClass)) {
                 failures.append(blockId).append("=NOT_IN_RECIPE_SUMMARY;\n");
                 continue;
             }
@@ -165,122 +187,136 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From MultiblockValidationSmokeTest
-    // Position patch: cutting fixture at (300,64,300); probe sanity at (200..212, 100..102, 200..212)
+    // Position patch: cutting fixture at x/z 300; probe sanity at x/z 200..212. Every Y here is the
+    // open-air band — nothing in this method stands on ground, and until 2026-09-14 they were the
+    // hard-coded 64 and 100 that put them wherever the seed's landscape happened to be.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void cuttingMachineMultiblockValidatesAndInvalidates() throws Exception {
+        final int probeY = FixtureSite.OPEN_AIR_Y;
         // Step 0 — fixture-builder primitives still healthy.
-        String emptyInfo = join(client().execute("artest machine info 0 200 100 200"));
+        String emptyInfo = join(client().execute("artest machine info 0 200 " + probeY + " 200"));
         assertTrue("empty position machine info wrong: " + emptyInfo,
-                emptyInfo.contains("\"error\":\"no tile entity\""));
+                "no tile entity".equals(Reply.of(emptyInfo).text("error")));
         String fill = join(client().execute(
-                "artest fill 0 210 100 210 212 102 212 minecraft:stone"));
+                "artest fill 0 210 " + probeY + " 210 212 " + (probeY + 2) + " 212 minecraft:stone"));
         assertTrue("fill 3x3x3 stone failed: " + fill,
-                fill.contains("\"ok\":true") && fill.contains("\"volume\":27"));
+                Reply.of(fill).ok() && (Reply.of(fill).integer("volume") == FILL_3X3X3_VOLUME));
 
-        // Step 1 — build the multiblock fixture.
-        int cx = 300, cy = 64, cz = 300;
+        // Step 1 — build the multiblock fixture. Its Y is the band: a cutting multiblock is
+        // validated by its own STRUCTURE, so it wants nothing under it.
+        final FixtureSite site = FixtureSite.openAir(0, 300, 300);
+        int cx = site.x, cy = site.y, cz = site.z;
         String fixture = join(client().execute(
                 "artest fixture machine cutting 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine cutting failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
-        Matcher m = MULTIBLOCK_SAWBLADE_POS.matcher(fixture);
-        assertTrue("could not parse sawBladePos: " + fixture, m.find());
-        int sx = Integer.parseInt(m.group(1)),
-                sy = Integer.parseInt(m.group(2)),
-                sz = Integer.parseInt(m.group(3));
+        int[] sawBlade = Reply.of("artest fixture multiblock", fixture)
+                .blockPos(MULTIBLOCK_SAWBLADE_POS);
+        assertTrue("could not parse sawBladePos: " + fixture, sawBlade != null);
+        int sx = sawBlade[0], sy = sawBlade[1], sz = sawBlade[2];
 
         // Step 2 — try-complete on the controller -> isComplete=true.
         String complete = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-        assertTrue("try-complete errored: " + complete, complete.contains("\"ok\":true"));
+        assertTrue("try-complete errored: " + complete, Reply.of(complete).ok());
         assertTrue("structure didn't validate (isComplete=false): " + complete,
-                complete.contains("\"isComplete\":true"));
+                Reply.of(complete).bool("isComplete"));
 
         // Step 3 — break the sawblade -> re-validate -> isComplete=false.
         String breakBlock = join(client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " minecraft:air"));
         assertTrue("could not replace sawBlade with air: " + breakBlock,
-                breakBlock.contains("\"ok\":true"));
+                Reply.of(breakBlock).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-        assertTrue("try-complete errored after break: " + broken, broken.contains("\"ok\":true"));
+        assertTrue("try-complete errored after break: " + broken, Reply.of(broken).ok());
         assertTrue("structure stayed complete after sawBlade removal — validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
 
         // Step 4 — restore the sawblade -> re-validate -> isComplete=true again.
         String restore = join(client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:sawBlade"));
         assertTrue("could not restore sawBlade: " + restore,
-                restore.contains("\"placed\":true"));
+                Reply.of(restore).bool("placed"));
 
         String recomplete = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("validator failed to re-detect a restored structure: " + recomplete,
-                recomplete.contains("\"isComplete\":true"));
+                Reply.of(recomplete).bool("isComplete"));
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // From EnergySystemsSmokeTest
-    // Position patch: battery at (1000,64,1000), solar panel at (1100,100,1100).
+    // Position patch: battery at x/z 1000, solar panel at x/z 1100, both in the open-air band.
     // Friendly globals: time=day, weather=clear. Not restored (no test in this
     // suite depends on natural time/weather).
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void solarPanelAccumulatesEnergyOverTicks() throws Exception {
-        // 1. Empty-pos NPE guard.
-        String empty = join(client().execute("artest energy stored 0 1000 64 1000"));
-        assertTrue("expected 'no tile entity' on empty pos: " + empty,
-                empty.contains("\"no tile entity\""));
+        // The band, not terrain. Both Ys were hard-coded (64 and 100) until 2026-09-14, and the
+        // SOLAR one is the reason this is not cosmetic: a panel's generation branch asks whether it
+        // can see the sky, and a fixed Y over generated terrain answers that question with the seed.
+        // The battery's Y never mattered and moves with it so the two stay one decision.
+        final int siteY = FixtureSite.OPEN_AIR_Y;
+        // 1. Empty-pos NPE guard. LEFT RAW: the subject of this line IS the error shape, which
+        // `EnergyStore` refuses — and refuses precisely so the readings below cannot be satisfied
+        // by a block that is not there.
+        String empty = join(client().execute("artest energy stored 0 1000 " + siteY + " 1000"));
+        assertEquals("expected 'no tile entity' on empty pos: " + empty,
+                "no tile entity", Reply.of(empty).error());
 
         // 2. libVulpes creative battery — Forge-energy capability presence (optional).
         String placeBattery = join(client().execute(
-                "artest place 0 1000 64 1000 libvulpes:creativepowerbattery"));
-        if (placeBattery.contains("\"placed\":true")) {
-            String bat = join(client().execute("artest energy stored 0 1000 64 1000"));
-            assertTrue("creative battery missing IEnergyStorage: " + bat,
-                    bat.contains("\"hasEnergy\":true"));
-            assertTrue("creative battery has zero capacity: " + bat,
-                    parseLong(ENERGY_MAX, bat) > 0L);
+                "artest place 0 1000 " + siteY + " 1000 libvulpes:creativepowerbattery"));
+        // absence is the answer: this suite RECORDS a verdict per block rather
+        // than ending on the first one, so a probe that answered nothing is one
+        // failed row and not a dead run.
+        if (Reply.of(placeBattery).boolOr("placed", false)) {
+            EnergyStore bat = energy(1000, siteY, 1000)
+                    .requireEnergy("creative battery missing IEnergyStorage");
+            assertTrue("creative battery has zero capacity: " + bat.raw(), bat.capacity() > 0L);
         }
 
         // 3. Solar panel real generation.
         client().execute("time set day");
         client().execute("weather clear 100000");
         String placeSolar = join(client().execute(
-                "artest place 0 1100 100 1100 advancedrocketry:solarGenerator"));
+                "artest place 0 1100 " + siteY + " 1100 advancedrocketry:solarGenerator"));
         assertTrue("could not place solarGenerator: " + placeSolar,
-                placeSolar.contains("\"placed\":true"));
+                Reply.of(placeSolar).bool("placed"));
 
-        String s0 = join(client().execute("artest energy stored 0 1100 100 1100"));
-        assertTrue("solarGenerator missing IEnergyStorage: " + s0,
-                s0.contains("\"hasEnergy\":true"));
-        long initial = parseLong(ENERGY_STORED, s0);
-        assertTrue("could not read initial energyStored: " + s0, initial >= 0L);
+        EnergyStore s0 = energy(1100, siteY, 1100)
+                .requireEnergy("solarGenerator missing IEnergyStorage");
+        long initial = s0.stored();
 
         String tick = join(client().execute(
-                "artest tile force-tick 0 1100 100 1100 100"));
-        assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
+                "artest tile force-tick 0 1100 " + siteY + " 1100 100"));
+        assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
 
-        String s1 = join(client().execute("artest energy stored 0 1100 100 1100"));
-        long after = parseLong(ENERGY_STORED, s1);
+        EnergyStore s1 = energy(1100, siteY, 1100);
+        long after = s1.stored();
         assertTrue("solarGenerator did not accumulate energy: initial=" + initial
-                        + " after-100-ticks=" + after + " response=" + s1,
+                        + " after-100-ticks=" + after + " response=" + s1.raw(),
                 after > initial);
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // From SealedRoomOxygenVentTest
-    // Position patch: 5×5×4 room centred at (1500,64,1500). Vent at floor.
+    // Position patch: 5×5×4 room centred at x/z 1500, in the open-air band. Vent at floor.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void sealedRoomBecomesBreathableThenLeaks() throws Exception {
-        int bx = 1500, by = 64, bz = 1500;
+        // The room is BUILT here, floor walls and roof, so it needs no ground — and standing it in
+        // the band is what makes "sealed" a property of what this scenario built rather than of
+        // whatever the seed left touching it. The Y was a hard-coded 64 until 2026-09-14.
+        final FixtureSite site = FixtureSite.openAir(0, 1500, 1500);
+        int bx = site.x, by = site.y, bz = site.z;
 
         ok(client().execute("artest fill 0 " + (bx - 2) + " " + (by - 1) + " " + (bz - 2)
                 + " " + (bx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone"));
@@ -297,25 +333,25 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
         String place = join(client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:oxygenVent"));
-        assertTrue("vent did not place: " + place, place.contains("\"placed\":true"));
+        assertTrue("vent did not place: " + place, Reply.of(place).bool("placed"));
 
         String preTick = join(client().execute(
                 "artest vent info 0 " + bx + " " + by + " " + bz));
         assertTrue("probe must recognise the vent tile: " + preTick,
-                preTick.contains("\"isVent\":true"));
+                Reply.of(preTick).bool("isVent"));
 
         String fluidFill = join(client().execute(
                 "artest fluid inject 0 " + bx + " " + by + " " + bz + " oxygen 16000"));
-        assertTrue("oxygen fill failed: " + fluidFill, fluidFill.contains("\"ok\":true"));
+        assertTrue("oxygen fill failed: " + fluidFill, Reply.of(fluidFill).ok());
 
         String energyFill = join(client().execute(
                 "artest energy inject 0 " + bx + " " + by + " " + bz + " 1000000"));
-        assertTrue("energy fill failed: " + energyFill, energyFill.contains("\"ok\":true"));
+        assertTrue("energy fill failed: " + energyFill, Reply.of(energyFill).ok());
 
         String fueled = join(client().execute(
                 "artest vent info 0 " + bx + " " + by + " " + bz));
         assertTrue("vent should report fluid after inject: " + fueled,
-                VENT_FLUID_AMT.matcher(fueled).find()
+                Reply.of(fueled).has(VENT_FLUID_AMT)
                         && Integer.parseInt(matchOrFail(VENT_FLUID_AMT, fueled)) > 0);
 
         client().execute("artest tile force-tick 0 " + bx + " " + by + " " + bz + " 1");
@@ -323,7 +359,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String reseal = join(client().execute(
                 "artest vent reseal 0 " + bx + " " + by + " " + bz));
         assertTrue("vent reseal probe failed: " + reseal,
-                reseal.contains("\"ok\":true"));
+                Reply.of(reseal).ok());
 
         client().execute("artest tile force-tick 0 " + bx + " " + by + " " + bz + " 5");
 
@@ -333,7 +369,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "true", matchOrFail(VENT_SEALED, sealed));
         int sealedBlobSize = Integer.parseInt(matchOrFail(VENT_BLOB_SIZE, sealed));
         assertTrue("vent blob must include the interior (>=18): " + sealed,
-                sealedBlobSize >= 18);
+                sealedBlobSize >= SEALED_INTERIOR_CELLS);
 
         String atm = join(client().execute(
                 "artest atmosphere get 0 " + bx + " " + (by + 1) + " " + bz));
@@ -347,7 +383,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
         String reseal2 = join(client().execute(
                 "artest vent reseal 0 " + bx + " " + by + " " + bz));
         assertTrue("second reseal probe failed: " + reseal2,
-                reseal2.contains("\"ok\":true"));
+                Reply.of(reseal2).ok());
 
         String leaked = join(client().execute(
                 "artest vent info 0 " + bx + " " + by + " " + bz));
@@ -377,33 +413,33 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             String resp = join(client().execute(
                     "artest item check " + id + " protective-armor"));
             assertTrue(id + " not registered: " + resp,
-                    resp.contains("\"registered\":true"));
+                    Reply.of(resp).bool("registered"));
             assertTrue(id + " missing IProtectiveArmor capability: " + resp,
-                    resp.contains("\"hasCapability\":true"));
+                    Reply.of(resp).bool("hasCapability"));
         }
 
         // 2. SpaceBreathing enchantment registered.
         String ench = join(client().execute(
                 "artest enchant check advancedrocketry:spacebreathing"));
         assertTrue("spacebreathing enchant missing: " + ench,
-                ench.contains("\"registered\":true"));
+                Reply.of(ench).bool("registered"));
 
         // 3. Vacuum precondition: Earth -> density 0 -> non-breathable.
         // Snapshot original so we restore it after.
         String planet = join(client().execute("artest planet info 0"));
-        Matcher dm = PLANET_DENSITY.matcher(planet);
-        int originalDensity = dm.find() ? Integer.parseInt(dm.group(1)) : 100;
+        Reply dmReply = Reply.of(planet);
+        int originalDensity = dmReply.has(PLANET_DENSITY) ? Integer.parseInt(dmReply.text(PLANET_DENSITY)) : 100;
 
         try {
             String setVac = join(client().execute(
                     "artest atmosphere set-density 0 0"));
             assertTrue("set-density 0 failed: " + setVac,
-                    setVac.contains("\"ok\":true"));
+                    Reply.of(setVac).ok());
 
             String atm = join(client().execute(
                     "artest atmosphere get 0 0 70 0"));
             assertTrue("density=0 must yield non-breathable atmosphere: " + atm,
-                    atm.contains("\"breathable\":false"));
+                    (!Reply.of(atm).bool("breathable")));
         } finally {
             client().execute("artest atmosphere set-density 0 " + originalDensity);
         }
@@ -411,12 +447,14 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From SpecialInfrastructureSmokeTest
-    // Position patch: 4 devices at x=700,710,730,740, y=64, z=700.
+    // Position patch: 4 devices at x=700,710,730,740, z=700, in the open-air band.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void allSpecialBlocksPlaceAndTickWithoutException() throws Exception {
-        int y = 64;
+        // The band, not terrain. Each device is placed, force-ticked and read back; none of them
+        // asks what is beneath it. The Y was a hard-coded 64 until 2026-09-14.
+        int y = FixtureSite.OPEN_AIR_Y;
         int baseX = 700, baseZ = 700;
 
         Map<String, Integer> devices = new LinkedHashMap<>();
@@ -432,23 +470,31 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             int x = baseX + e.getValue();
             String place = join(client().execute(
                     "artest place 0 " + x + " " + y + " " + baseZ + " " + blockId));
-            if (!place.contains("\"placed\":true")) {
+            // absence is the answer: this suite RECORDS a verdict per block rather
+            // than ending on the first one, so a probe that answered nothing is one
+            // failed row and not a dead run.
+            if (!Reply.of(place).boolOr("placed", false)) {
                 failures.append(blockId).append("=PLACE_FAILED;");
                 errors++;
                 continue;
             }
-            String info = join(client().execute(
-                    "artest machine info 0 " + x + " " + y + " " + baseZ));
-            if (info.contains("Exception")
-                    || (!info.contains("\"tileClass\"") && !info.contains("\"no tile entity\""))) {
+            // "the probe answered SOMETHING I understand" — either a tile stands there, or it
+            // told me none does. Any third shape is the probe failing, and that used to be
+            // detected by looking for the word "Exception" anywhere in the rendering, which is
+            // also satisfied by a tile whose own class name carries it.
+            MachineInfo info = MachineInfo.of(join(client().execute(
+                    "artest machine info 0 " + x + " " + y + " " + baseZ)));
+            if (!info.hasTile() && !info.reportsNoTile()) {
                 failures.append(blockId).append("=INFO_BAD;");
                 errors++;
                 continue;
             }
-            if (info.contains("\"tileClass\"")) {
-                String tick = join(client().execute(
-                        "artest tile force-tick 0 " + x + " " + y + " " + baseZ + " 5"));
-                if (tick.contains("Exception") || tick.contains("\"error\":\"tile.update")) {
+            if (info.hasTile()) {
+                Reply tick = Reply.of(join(client().execute(
+                        "artest tile force-tick 0 " + x + " " + y + " " + baseZ + " 5")));
+                // The producer builds this one around a count — "tile.update() threw after N
+                // ticks: …" — so a prefix is the reading, and it is a reading OF THE FIELD.
+                if (tick.refused() && tick.error().startsWith("tile.update")) {
                     failures.append(blockId).append("=TICK_THREW(").append(tick).append(");");
                     errors++;
                 }
@@ -460,19 +506,23 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
     // ─────────────────────────────────────────────────────────────────────
     // From MicrowaveReceiverSmokeTest
-    // Position patch: 5×5 multiblock at (1700..1704, 64, 1700..1704). Controller (xC,yC,zC)=(1702,64,1702).
+    // Position patch: 5×5 multiblock at x/z 1700..1704 in the open-air band. Controller at +2,+2.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void multiblockValidatesAndTicksWithoutCrash() throws Exception {
-        int x0 = 1700, y = 64, z0 = 1700;
+        // The whole 5x5 is laid by this method, so nothing here wants ground. The Y was a
+        // hard-coded 64 until 2026-09-14, which put a sky-facing receiver under whatever the seed
+        // had grown over it.
+        final FixtureSite site = FixtureSite.openAir(0, 1700, 1700);
+        int x0 = site.x, y = site.y, z0 = site.z;
         int xC = x0 + 2, zC = z0 + 2;
 
         String fill = join(client().execute(
                 "artest fill 0 " + x0 + " " + y + " " + z0 + " "
                         + (x0 + 4) + " " + y + " " + (z0 + 4)
                         + " advancedrocketry:solarPanel"));
-        assertTrue("solar fill failed: " + fill, fill.contains("\"ok\":true"));
+        assertTrue("solar fill failed: " + fill, Reply.of(fill).ok());
 
         int[][] airPositions = new int[][]{
                 {x0, z0},     {x0 + 4, z0},     {x0, z0 + 4},     {x0 + 4, z0 + 4},
@@ -489,55 +539,57 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "artest place 0 " + xC + " " + y + " " + zC
                         + " advancedrocketry:microwaveReciever"));
         assertTrue("controller place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
-        String info = join(client().execute(
-                "artest machine info 0 " + xC + " " + y + " " + zC));
-        assertTrue("expected microwave-receiver tile: " + info,
-                info.contains("TileMicrowaveReciever"));
+        MachineInfo info = MachineInfo.of(join(client().execute(
+                "artest machine info 0 " + xC + " " + y + " " + zC)));
+        assertEquals("expected microwave-receiver tile: " + info,
+                "TileMicrowaveReciever", info.tileSimpleName());
 
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + xC + " " + y + " " + zC + " 40"));
-        assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
         assertEquals("must tick all 40 iterations",
-                "40", extract(tick, "\"ticked\":(\\d+)"));
+                40, extractInt(tick, "ticked"));
 
-        String postInfo = join(client().execute(
-                "artest machine info 0 " + xC + " " + y + " " + zC));
-        assertTrue("tile must survive tick burst: " + postInfo,
-                postInfo.contains("TileMicrowaveReciever"));
+        MachineInfo postInfo = MachineInfo.of(join(client().execute(
+                "artest machine info 0 " + xC + " " + y + " " + zC)));
+        assertEquals("tile must survive tick burst: " + postInfo,
+                "TileMicrowaveReciever", postInfo.tileSimpleName());
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // From BlackHoleGeneratorSmokeTest
-    // Position patch: controller at (1800,64,1800), no multiblock structure.
+    // Position patch: controller at x/z 1800 in the open-air band, no multiblock structure.
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
     public void controllerWithoutStructureTicksWithoutCrash() throws Exception {
-        int x = 1800, y = 64, z = 1800;
+        // The band, not terrain: a controller that is ticked without its structure has no interest
+        // in what is under it, and the Y was a hard-coded 64 until 2026-09-14.
+        int x = 1800, y = FixtureSite.OPEN_AIR_Y, z = 1800;
 
         String place = join(client().execute(
                 "artest place 0 " + x + " " + y + " " + z
                         + " advancedrocketry:blackholegenerator"));
         assertTrue("controller place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
-        String info = join(client().execute(
-                "artest machine info 0 " + x + " " + y + " " + z));
-        assertTrue("expected black-hole-generator tile: " + info,
-                info.contains("TileBlackHoleGenerator"));
+        MachineInfo info = MachineInfo.of(join(client().execute(
+                "artest machine info 0 " + x + " " + y + " " + z)));
+        assertEquals("expected black-hole-generator tile: " + info,
+                "TileBlackHoleGenerator", info.tileSimpleName());
 
         String tick = join(client().execute(
                 "artest tile force-tick 0 " + x + " " + y + " " + z + " 50"));
-        assertTrue("force-tick errored: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
         assertEquals("must tick all 50 iterations",
-                "50", extract(tick, "\"ticked\":(\\d+)"));
+                50, extractInt(tick, "ticked"));
 
-        String postInfo = join(client().execute(
-                "artest machine info 0 " + x + " " + y + " " + z));
-        assertTrue("tile must survive tick burst: " + postInfo,
-                postInfo.contains("TileBlackHoleGenerator"));
+        MachineInfo postInfo = MachineInfo.of(join(client().execute(
+                "artest machine info 0 " + x + " " + y + " " + z)));
+        assertEquals("tile must survive tick burst: " + postInfo,
+                "TileBlackHoleGenerator", postInfo.tileSimpleName());
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -549,22 +601,20 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     /** Asserts the probe response contains {@code "ok":true} and returns nothing. */
     private static void ok(List<String> response) {
         String joined = join(response);
-        assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
+        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
     }
 
-    private static long parseLong(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int x, int y, int z) throws Exception {
+        return EnergyStore.at(cmd -> join(client().execute(cmd)), 0, x, y, z);
     }
 
-    private static String matchOrFail(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " did not match in: " + s, m.find());
-        return m.group(1);
+    private static String matchOrFail(String field, String s) {
+        String value = Reply.of(s).text(field);
+        return value;
     }
 
-    private static String extract(String s, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(s);
-        return m.find() ? m.group(1) : "";
+    private static int extractInt(String s, String field) {
+        return Reply.of(s).integer(field);
     }
 }

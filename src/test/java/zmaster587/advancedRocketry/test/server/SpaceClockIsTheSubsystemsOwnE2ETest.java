@@ -2,8 +2,6 @@ package zmaster587.advancedRocketry.test.server;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -11,10 +9,15 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * The space subsystem's clock is <b>its own</b>: it advances by itself and at the tick rate, no
@@ -40,6 +43,13 @@ import static org.junit.Assert.assertTrue;
  * elapsed-time slack can cover, and asserts the split it created before concluding anything from it.
  */
 public class SpaceClockIsTheSubsystemsOwnE2ETest {
+
+    /**
+     * Ticks of the SERVER's own counter the space clock is watched across - the old 3 000 ms said in
+     * the units of the thing being watched. The two clocks are deliberately different: the wait is on
+     * one, the assertion is about the other.
+     */
+    private static final int OBSERVED_TICKS = 60;
 
     /**
      * How far a clock is driven in a leg: twenty million ticks, ~11.6 real days at 20 tps. Six orders
@@ -129,8 +139,8 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         long spaceBefore = spaceClock(exec("artest space clock"));
         String worldMoved = exec("artest space set-world-clock " + (worldClock(exec("artest space clock"))
                 + JUMP_TICKS));
-        assertTrue("the world clock must move: " + worldMoved, worldMoved.contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: the overworld's counter must really have jumped, or nothing below is"
+        assertTrue("the world clock must move: " + worldMoved, Reply.of(worldMoved).ok());
+        requireArranged("the overworld's counter must really have jumped, or nothing below is"
                         + " a measurement: " + worldMoved,
                 worldClock(worldMoved) - jsonLong(worldMoved, "before") >= JUMP_TICKS / 2L);
 
@@ -144,8 +154,8 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         // ---- DIRECTION 2: move the SPACE clock. No world may follow it. ----
         long worldBefore = worldClock(exec("artest space clock"));
         String spaceMoved = exec("artest space set-clock " + (spaceAfterWorldMove + JUMP_TICKS));
-        assertTrue("the space clock must move: " + spaceMoved, spaceMoved.contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: the space clock must really have jumped: " + spaceMoved,
+        assertTrue("the space clock must move: " + spaceMoved, Reply.of(spaceMoved).ok());
+        requireArranged("the space clock must really have jumped: " + spaceMoved,
                 spaceClock(spaceMoved) - spaceAfterWorldMove >= JUMP_TICKS / 2L);
 
         long worldAfterSpaceMove = worldClock(exec("artest space clock"));
@@ -178,7 +188,11 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
         harness = RealDedicatedServerHarness.startWith(root, false);
 
         String first = exec("artest space clock");
-        Thread.sleep(3_000L);
+        // WINDOW: both clocks are read on either side of a stretch of the SERVER's counter, and every
+        // assertion below is over the two deltas, naming both reads. Not circular: the stretch is
+        // measured on one counter and the claims are about two others. The rate check compares the
+        // two deltas over the SAME stretch, so its length — overshoot included — cancels out.
+        GameTicks.advance(harness.client(), GameTicks.server(), OBSERVED_TICKS);
         String second = exec("artest space clock");
 
         long spaceMoved = spaceClock(second) - spaceClock(first);
@@ -188,7 +202,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
                         + " last set to is not a clock, and a clock frozen at zero is the defect this"
                         + " one replaced. moved=" + spaceMoved + " (" + first + " -> " + second + ")",
                 spaceMoved > 0L);
-        assertTrue("ARRANGEMENT: the reference clock must have moved too, or the rate check below"
+        requireArranged("the reference clock must have moved too, or the rate check below"
                         + " compares against a stopped server. overworld moved=" + worldMoved,
                 worldMoved > 0L);
         assertTrue("...and it must advance ONCE per server tick, not twice: a second writer on the"
@@ -218,23 +232,21 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
     public void theClockComesBackWhereItWasAfterAReboot() throws Exception {
         // --- boot 1 --------------------------------------------------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
-        String vs = exec("artest vs available");
-        Assume.assumeTrue("Valkyrien Skies absent — the production space subsystem declines to "
-                + "register without it, and its save point is what writes the clock; run with "
-                + "-PwithVS: " + vs, vs.contains("\"available\":true"));
-
-        String status = exec("artest space subsystem-status");
+        // A third copy of the same defect stood here: the probe was called and its answer assigned
+        // to a local nothing read. Both the verb and the question are gone; the assertion below is
+        // what actually decided anything.
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 — its world-save hook is "
                         + "what persists the clock, so without it this test would assert nothing: "
-                        + status, status.contains("\"registered\":true"));
+                        + status.raw(), status.registered);
 
         long fresh = spaceClock(exec("artest space clock"));
-        assertTrue("ARRANGEMENT: a fresh boot's clock must be far below the value set below, or "
+        requireArranged("a fresh boot's clock must be far below the value set below, or "
                         + "reading that value back afterwards would prove nothing. fresh=" + fresh,
                 fresh < JUMP_TICKS / 2L);
 
         String moved = exec("artest space set-clock " + JUMP_TICKS);
-        assertTrue("the clock must be set: " + moved, moved.contains("\"ok\":true"));
+        assertTrue("the clock must be set: " + moved, Reply.of(moved).ok());
         assertEquals("and it must hold the value it was set to: " + moved, JUMP_TICKS,
                 spaceClock(moved));
 
@@ -244,9 +256,9 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
 
         // --- boot 2: a brand new JVM, same world directory -----------------------------------------
         harness = RealDedicatedServerHarness.startWith(root, false);
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter,
-                statusAfter.contains("\"registered\":true"));
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        assertTrue("the production subsystem must come up again on boot 2: " + statusAfter.raw(),
+                statusAfter.registered);
 
         long restored = spaceClock(exec("artest space clock"));
         assertTrue("the subsystem's clock must resume where the last save left it, not restart at"
@@ -258,77 +270,33 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
                 restored - JUMP_TICKS <= ELAPSED_SLACK_TICKS);
     }
 
-    /**
-     * The counter is durable on a server where the space subsystem never came up at all.
-     *
-     * <p><b>This is not a corner: it is the configuration most servers run.</b> The clock is read by
-     * code that has no idea whether space registered — {@code CrystalSeeding} stamps the freshness of
-     * every address a memory crystal is seeded with, on any world, with or without Valkyrien Skies —
-     * and that stamp is written into the ITEM, where it outlives the session in storage the space
-     * subsystem does not own. A counter that restarted at zero on every boot would leave every such
-     * stamp permanently in the future, so the freshest observation could never win a merge again.</p>
-     *
-     * <p>The subsystem is turned off by config rather than by the absence of Valkyrien Skies, so this
-     * leg runs and means the same thing in EVERY configuration of the gate — including {@code
-     * -PwithVS}, where the neighbouring reboot test covers the subsystem-up path instead. That the
-     * subsystem really is down is asserted, not assumed: with it up, this would be a second copy of
-     * the test above rather than the one that covers the other path.</p>
-     */
-    @Test
-    public void theClockComesBackWithTheSubsystemTurnedOff() throws Exception {
-        java.nio.file.Path arConfigDir = root.resolve("config").resolve("advRocketry");
-        Files.createDirectories(arConfigDir);
-        Files.write(arConfigDir.resolve("advancedRocketry.cfg"),
-                ("# seeded by SpaceClockIsTheSubsystemsOwnE2ETest\n"
-                        + "performance {\n"
-                        + "    B:enableSpaceSubsystem=false\n"
-                        + "}\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    // ---- THE DOWN-SUBSYSTEM LEG IS GONE, AND ITS COVERAGE WITH IT -------------------------------
+    //
+    // `theClockComesBackWithTheSubsystemTurnedOff` stood here until 2026-09-18. It booted a server
+    // with `enableSpaceSubsystem=false` and pinned the one thing only a stood-down server can show:
+    // that the clock ADVANCES and SURVIVES A REBOOT on a session where the controller was never
+    // built -- the reason `SpaceSubsystem.advanceClock()` sits ABOVE the `live == null` return in
+    // `SpaceSubsystemEvents`, and the reason the clock restore in `onServerStarted` sits above the
+    // same check.
+    //
+    // The flag was removed that day (maintainer: "давай вообще уберём условие регистрации космоса,
+    // он слишком централен"), and with it the only way to ARRANGE a server whose space subsystem is
+    // down: the sole remaining condition is Valkyrien Skies missing from the classpath, and VS is
+    // vendored into this jar, so no test can produce it.
+    //
+    // WHAT STILL COVERS WHAT:
+    //   * clock persistence across a reboot -- the neighbouring test above, on a server with the
+    //     subsystem UP. That is now every server.
+    //   * the ORDER of the two statements (advance/restore before the null return) -- NOTHING.
+    //     It is unarranged, and moving the increment below the return would go green everywhere.
+    //     It is not a weakened assertion, it is an absent one, which is why it is written down here
+    //     instead of being quietly dropped.
+    //
+    // Recovering it needs a seam rather than a flag: `advanceClock()` and `onServerStarted(live)`
+    // both already take the subsystem as a PARAMETER (they are static-free by design), so a unit
+    // test calling them with `null` would pin the order without any server and without giving an
+    // operator a switch for the mod's own subject.
 
-        // --- boot 1 --------------------------------------------------------------------------------
-        harness = RealDedicatedServerHarness.startWith(root, false);
-        String status = exec("artest space subsystem-status");
-        assertTrue("ARRANGEMENT: the space subsystem must be DOWN on this server, or this leg is a "
-                + "duplicate of the one above and covers nothing: " + status,
-                status.contains("\"registered\":false"));
-
-        // THE ADVANCE SITE, pinned where it can only be pinned. The increment sits ahead of the
-        // controller-null return precisely so a stood-down session still gets a moving number; move
-        // it below that return and this is the one assertion in the suite that goes red.
-        long tickA = spaceClock(exec("artest space clock"));
-        Thread.sleep(3_000L);
-        long tickB = spaceClock(exec("artest space clock"));
-        assertTrue("the clock must advance on a server where the space controller was never built —"
-                        + " that is what the advance site sitting ahead of the controller check buys,"
-                        + " and a clock frozen at zero for such a session is the defect the owned"
-                        + " counter replaced. " + tickA + " -> " + tickB, tickB > tickA);
-
-        long fresh = spaceClock(exec("artest space clock"));
-        assertTrue("ARRANGEMENT: a fresh boot's clock must be far below the value set below. fresh="
-                + fresh, fresh < JUMP_TICKS / 2L);
-
-        String moved = exec("artest space set-clock " + JUMP_TICKS);
-        assertTrue("the clock must be set even with the subsystem down — it advances on every server "
-                + "regardless: " + moved, moved.contains("\"ok\":true"));
-        assertEquals("and hold the value it was set to: " + moved, JUMP_TICKS, spaceClock(moved));
-
-        // --- the reboot ----------------------------------------------------------------------------
-        harness.close();
-        harness = null;
-        harness = RealDedicatedServerHarness.startWith(root, false);
-
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("the subsystem must still be down on boot 2: " + statusAfter,
-                statusAfter.contains("\"registered\":false"));
-
-        long restored = spaceClock(exec("artest space clock"));
-        assertTrue("the clock must survive a reboot on a server with no space subsystem at all. Its"
-                        + " readers do not know the subsystem exists, and their stamps outlive the"
-                        + " session: a counter that restarts at zero puts every stored stamp in the"
-                        + " future for good. set=" + JUMP_TICKS + " restored=" + restored,
-                restored >= JUMP_TICKS);
-        assertTrue("...and it must be the SAVED value it resumed from: restored=" + restored,
-                restored - JUMP_TICKS <= ELAPSED_SLACK_TICKS);
-    }
 
     // --- helpers -----------------------------------------------------------------------------------
 
@@ -341,8 +309,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
     }
 
     private static long jsonLong(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(-?\\d+)").matcher(json);
-        assertTrue("probe response carries no numeric \"" + field + "\": " + json, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).integer(field);
     }
 }

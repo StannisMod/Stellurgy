@@ -1,10 +1,15 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -34,15 +39,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern UUID_FIELD =
-            Pattern.compile("\"uuid\":\"([0-9a-fA-F-]+)\"");
-    private static final Pattern FUEL_AMOUNT =
-            Pattern.compile("\"amount\":(-?\\d+)");
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
+    /** The craft's fuels, keyed by the registry's own type names: {@code "fuels":{"ION":{…}, …}}. */
+    private static final String FUELS = "fuels";
+    private static final String FUEL_AMOUNT = "amount";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -51,38 +52,30 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue("Only overworld is an AR planet", false);
         return -1;
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-        ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
@@ -90,14 +83,14 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // Production EntityRocket.explode() (line 1720) sets the entity
         // dead. After dead it's no longer in the world.loadedEntityList
         // and findRocket(id) returns null.
-        int id = buildAndAssemble(7000, 64, 500);
-        String infoBefore = ok(client().execute("artest rocket info " + id));
-        Matcher um = UUID_FIELD.matcher(infoBefore);
-        assertTrue("no uuid in info: " + infoBefore, um.find());
+        int id = buildAndAssemble(FixtureSite.openAir(0, 7000, 500));
+        // The reader refuses an absent uuid, which is what "no uuid in info" asserted.
+        RocketInfo infoBefore = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        assertFalse("no uuid in info: " + infoBefore.raw(), infoBefore.requireUuid().isEmpty());
 
         String explodeResp = ok(client().execute("artest rocket explode " + id));
         assertTrue("explode probe must succeed: " + explodeResp,
-                explodeResp.contains("\"ok\":true"));
+                Reply.of(explodeResp).ok());
         // The atomic probe-response contract is the reliable assertion:
         // production EntityRocket.explode() calls setDead, which flips
         // the rocket's isDead flag synchronously inside the probe call.
@@ -106,7 +99,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // list until the next worldTick's collect-dead pass, so that
         // observation is racy in a shared headless harness.
         assertTrue("explode probe response must report isDead=true: " + explodeResp,
-                explodeResp.contains("\"isDead\":true"));
+                Reply.of(explodeResp).bool("isDead"));
     }
 
     @Test
@@ -119,7 +112,7 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         //
         // If a future PR adds an out-of-fuel explode path, this test
         // fails — flip the assertion + delete the documents-bug note.
-        int id = buildAndAssemble(7100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 7100, 500));
 
         // Put the rocket in mid-flight (orbit=true so descent gate is
         // active, flight=true so the isInFlight branch is taken).
@@ -129,21 +122,30 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
 
         // Verify fuel is actually zero.
         String fuelResp = ok(client().execute("artest rocket fuel " + id));
-        Matcher fm = FUEL_AMOUNT.matcher(fuelResp);
-        while (fm.find()) {
-            assertEquals("all fuel types must be drained", 0, Integer.parseInt(fm.group(1)));
+        // Every fuel type the probe reports. The types are the registry's, so they are asked for as
+        // "every entry" of the reply's `fuels` object rather than by name; the old form walked the
+        // rendered reply with a regex and would have passed silently on a reply that named none.
+        Reply fuels = Reply.of("artest rocket fuel", fuelResp);
+        assertTrue("the fuel probe must report the craft's fuel types at all: " + fuelResp,
+                fuels.has(FUELS));
+        for (String perType : fuels.objectValues(FUELS)) {
+            assertEquals("all fuel types must be drained: " + fuelResp, 0.0,
+                    Reply.of("one fuel entry", perType).number(FUEL_AMOUNT), 0.0);
         }
 
         // Tick a few times — production must NOT explode.
         ok(client().execute("artest rocket tick " + id + " 5"));
 
+        // Asked as `notFound` and not through the reader: a craft that HAS vanished is this test's
+        // failure — the product killed it — and the reader would call that an arrangement failure,
+        // which is a claim about the setup instead. `notFound` also refuses a reply that is neither
+        // shape, so the false below means "the server answered about a craft" and nothing weaker —
+        // which is what the second assertion here used to say separately.
         String info = ok(client().execute("artest rocket info " + id));
         assertFalse("out-of-fuel mid-flight must NOT auto-mark rocket dead "
                         + "(documents current contract; no production explode-on-empty path): "
                         + info,
-                info.contains("\"error\":\"rocket not found\""));
-        assertTrue("rocket should still be in-flight or descending — not vanished: " + info,
-                info.contains("\"entityId\":"));
+                RocketInfo.notFound(info));
     }
 
     @Test
@@ -153,29 +155,29 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // and never enters flight. Pin that gate: zero fuel + valid destination
         // must NOT transition to in-flight.
         int destDim = firstNonOverworldArDimOrSkip();
-        int id = buildAndAssemble(7200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 7200, 500));
         ok(client().execute("artest rocket set-destination " + id + " " + destDim));
         ok(client().execute("artest rocket drain-fuel " + id));
         // launch with fillFuel=false to keep tanks empty.
         ok(client().execute("artest rocket launch " + id + " false instant"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("zero-fuel launch must be refused by the fuel gate "
-                        + "(isInFlight stays false): " + info,
-                info.contains("\"isInFlight\":false"));
+        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        assertFalse("zero-fuel launch must be refused by the fuel gate "
+                        + "(isInFlight stays false): " + info.raw(),
+                info.inFlight);
     }
 
     @Test
     public void explodeOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket explode 9999999"));
         assertTrue("unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
     @Test
     public void drainFuelOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket drain-fuel 9999999"));
         assertTrue("unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 }

@@ -48,6 +48,15 @@ import java.util.UUID;
 @MethodsReturnNonnullByDefault
 @ParametersAreNonnullByDefault
 public final class ValkyrienUtils {
+
+    /**
+     * How far from a hull a body may be and still count as at it, in blocks. Not chosen here: it is
+     * the expansion {@code EntityCollisionInjector.getCollidingPolygonsAndDoBlockCols} already puts
+     * on an entity's box before asking which ships it might touch, which is the query that decides
+     * an entity is aboard in the first place.
+     */
+    public static final double SHIP_DRAG_REACH_BLOCKS = 1.0d;
+
     /**
      * The liver of this mod. Returns the PhysicsObject that managed the given pos in the given
      * world.
@@ -264,6 +273,57 @@ public final class ValkyrienUtils {
     @Nullable
     public static TileEntity getTileEntitySafe(World world, BlockPos pos) {
         return world.getChunkFromBlockCoords(pos).getTileEntity(pos, Chunk.EnumCreateEntityType.CHECK);
+    }
+
+    /**
+     * Whether {@code entity} is still at the hull of {@code ship} — the question a drag path must
+     * ask before treating a body as CARRIED by that ship.
+     *
+     * <p>The association between a body and the last ship it touched is a TIMER, and a timer cannot
+     * tell that the body has since been moved somewhere else: a teleport writes a position without
+     * routing through {@code Entity.move}, which is the only place the association is re-evaluated.
+     * That matters because the drag transforms the body by the hull's rigid between-tick motion, and
+     * a rigid motion's displacement at a point grows with that point's distance from the hull — a
+     * hull turning a degree per tick writes a block per tick at sixty blocks away and eighty blocks
+     * per tick at four and a half thousand. So the timer alone is not a sufficient licence to move a
+     * body, and the bound that IS sufficient belongs to the ship: its own extent.
+     *
+     * <p><b>The reach is not a new number.</b> It is the one the substrate already uses to decide
+     * which ships matter to an entity at all — {@code EntityCollisionInjector
+     * .getCollidingPolygonsAndDoBlockCols} grows the entity's box by {@code expand(1, 1, 1)} before
+     * asking {@code getPhysObjectsInAABB} — and that query is what CREATES the association this
+     * predicate re-checks. Applied to the ship's box instead of the entity's, and symmetrically,
+     * because the question here is proximity rather than a swept movement.
+     *
+     * <p><b>What this deliberately does NOT keep carrying.</b> A body further than that from the
+     * hull — past the apex of a jump off a level deck, say — stops being offered a new delta and
+     * falls to the same treatment as one whose timer ran out: it keeps the velocity it already had,
+     * decaying. For a ship in steady motion that is the same landing spot; the difference shows only
+     * on a hull accelerating or turning under a body that is no longer on it, which is momentum the
+     * body has no contact to receive.
+     */
+    public static boolean isEntityWithinShipBounds(final Entity entity, final ShipData ship) {
+        if (entity == null || ship == null) {
+            return false;
+        }
+        final AxisAlignedBB shipBB = ship.getShipBB();
+        return shipBB != null && isWithinShipBounds(entity.getEntityBoundingBox(), shipBB);
+    }
+
+    /**
+     * The geometry behind {@link #isEntityWithinShipBounds(Entity, ShipData)}, split out so the one
+     * thing that can silently go wrong here — the boundary — is checkable without a world, a ship or
+     * an entity.
+     *
+     * <p>That boundary is not academic. A ship's box is built from integer block coordinates grown
+     * only on its max side ({@code makeAABB().expand(1, 1, 1)}), so its top face lands exactly on the
+     * block grid, and a body STANDING on the topmost deck block has its own minimum on that same
+     * line. {@link AxisAlignedBB#intersects} is strict on every axis and answers "not overlapping"
+     * for boxes that meet exactly — which would refuse the one posture the drag exists to serve. The
+     * reach carries the comparison clear of that line instead of leaving it to a tie.
+     */
+    public static boolean isWithinShipBounds(final AxisAlignedBB body, final AxisAlignedBB shipBB) {
+        return body.intersects(shipBB.grow(SHIP_DRAG_REACH_BLOCKS));
     }
 
     @Nullable

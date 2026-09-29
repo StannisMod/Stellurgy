@@ -1,0 +1,7 @@
+# Mixin configurations the harness coremod queues on behalf of this project.
+# Read by com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod at the early-loader point,
+# which is the only moment the mixin environment still accepts configurations.
+#
+# Everything named here lives in the TEST source set and is absent from a released jar: a test-only
+# observation reaches from the tests INTO the product and costs a shipped game nothing.
+mixins.advancedrocketry.test.json

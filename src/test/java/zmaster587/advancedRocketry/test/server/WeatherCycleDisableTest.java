@@ -1,5 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimList;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.DimWeather;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -10,7 +13,6 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -83,62 +85,61 @@ public class WeatherCycleDisableTest {
         return String.join("\n", harness.client().execute(c));
     }
 
-    private boolean isRaining(int dim) throws Exception {
-        return cmd("artest weather get " + dim).contains("\"isRaining\":true");
+    /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(this::cmd, dim).requireDim(dim);
     }
 
     @Test
     public void customWeatherCycleRunsOnlyWhenConfigEnabled() throws Exception {
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        String dimList = cmd("artest dim list");
-        assertTrue("fixture dim not registered: " + dimList,
-                dimList.contains(String.valueOf(FIXTURE_DIM)));
+        DimList dimList = DimList.of(cmd("artest dim list"));
+        assertTrue("fixture dim not registered: " + dimList, dimList.holds(FIXTURE_DIM));
 
         // Load the planet while custom weather is still ENABLED (boot default) so it
         // wraps with its own ARDimensionWorldInfo. Wrapping is sticky for the dim's
         // lifetime, so the later config-off sub-case operates on the same wrapped,
         // overworld-isolated WorldInfo — isolating the updateWeather() gate from the
         // separate (already-tested) wrapping gate.
-        assertTrue(cmd("artest config set enableCustomPlanetWeather true").contains("\"ok\":true"));
-        String wrapped = cmd("artest weather get " + FIXTURE_DIM);
+        assertTrue(Reply.of(cmd("artest config set enableCustomPlanetWeather true")).ok());
+        DimWeather wrapped = weather(FIXTURE_DIM);
         // Anchor on the probe's named worldInfoClass field, not a bare substring
         // of the whole response.
-        assertTrue("planet must be wrapped while custom weather is on: " + wrapped,
-                Pattern.compile("\"worldInfoClass\":\"[^\"]*ARDimensionWorldInfo\"")
-                        .matcher(wrapped).find());
+        assertTrue("planet must be wrapped while custom weather is on: " + wrapped.raw(),
+                wrapped.usesARWorldInfo());
 
         // Forced-clear marker (rain=-1, thunder=-1): the custom cycle, when it runs,
         // drives this planet to clear regardless of what we set.
         String marker = cmd("artest weather set-marker " + FIXTURE_DIM + " -1 -1");
-        assertTrue("set-marker failed: " + marker, marker.contains("\"usesCustomWorldInfo\":true"));
+        assertTrue("set-marker failed: " + marker, Reply.of(marker).bool("usesCustomWorldInfo"));
 
         // --- config ON: the forced-clear cycle runs and suppresses the rain ---
         // (No intermediate "is raining" assert — with the cycle active the natural
         // server tick clears it before we could observe it; the post-tick state is
         // the deterministic contract.)
         assertTrue("weather set rain failed",
-                cmd("artest weather set " + FIXTURE_DIM + " rain 12000").contains("\"ok\":true"));
+                Reply.of(cmd("artest weather set " + FIXTURE_DIM + " rain 12000")).ok());
         assertTrue("tick-provider failed",
-                cmd("artest weather tick-provider " + FIXTURE_DIM + " 3").contains("\"ok\":true"));
-        String onAfterTick = cmd("artest weather get " + FIXTURE_DIM);
+                Reply.of(cmd("artest weather tick-provider " + FIXTURE_DIM + " 3")).ok());
+        DimWeather onAfterTick = weather(FIXTURE_DIM);
         assertFalse("with custom planet weather ON, the forced-clear cycle must suppress the "
-                + "rain — got " + onAfterTick, onAfterTick.contains("\"isRaining\":true"));
+                + "rain — got " + onAfterTick.raw(), onAfterTick.raining);
 
         // --- config OFF (the fix): updateWeather delegates to vanilla; the custom
         // forced-clear cycle does NOT run, so rain we set takes and survives ticks.
         // This fails if the fix is reverted (the marker cycle would clear it).
-        assertTrue(cmd("artest config set enableCustomPlanetWeather false").contains("\"ok\":true"));
+        assertTrue(Reply.of(cmd("artest config set enableCustomPlanetWeather false")).ok());
         assertTrue("weather set rain failed",
-                cmd("artest weather set " + FIXTURE_DIM + " rain 12000").contains("\"ok\":true"));
-        String offAfterSet = cmd("artest weather get " + FIXTURE_DIM);
+                Reply.of(cmd("artest weather set " + FIXTURE_DIM + " rain 12000")).ok());
+        DimWeather offAfterSet = weather(FIXTURE_DIM);
         assertTrue("with custom planet weather OFF, set rain must take (no custom cycle to "
-                + "suppress it) — got " + offAfterSet, offAfterSet.contains("\"isRaining\":true"));
+                + "suppress it) — got " + offAfterSet.raw(), offAfterSet.raining);
         assertTrue("tick-provider failed",
-                cmd("artest weather tick-provider " + FIXTURE_DIM + " 3").contains("\"ok\":true"));
-        String offAfterTick = cmd("artest weather get " + FIXTURE_DIM);
+                Reply.of(cmd("artest weather tick-provider " + FIXTURE_DIM + " 3")).ok());
+        DimWeather offAfterTick = weather(FIXTURE_DIM);
         assertTrue("with custom planet weather OFF, the rain must survive weather ticks "
-                + "(vanilla delegation, marker ignored) — got " + offAfterTick,
-                offAfterTick.contains("\"isRaining\":true"));
+                + "(vanilla delegation, marker ignored) — got " + offAfterTick.raw(),
+                offAfterTick.raining);
     }
 }

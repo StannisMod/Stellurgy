@@ -6,11 +6,13 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
+
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -37,10 +39,13 @@ import static org.junit.Assert.assertTrue;
  *
  * <ul>
  *   <li><b>Chat is both the stimulus channel and the observation channel here.</b> Four scenarios
- *       prove "the command answered the player" by reading the last N lines, and the harness writes
- *       a {@code FORGE_TEST_DONE} marker into that same channel on every server command. Each of
- *       them therefore arms the channel immediately before typing, and nothing between the arm and
- *       the {@code sendChat} is a server command.</li>
+ *       prove "the command answered the player" by reading the last N lines of a channel a SHARED
+ *       client leaves dirty. They used
+ *       to drain that backlog and prove it empty before typing ({@code armChatObservation}), because
+ *       searching the last N lines searches a window the test does not control. They now take a MARK
+ *       on the client's event log instead and await a {@code client_chat_received} carrying the
+ *       reply: everything before the mark is invisible by construction, so a marker line can no
+ *       longer be mistaken for an answer and no drain is needed.</li>
  *   <li><b>Two scenarios leave the player in another dimension.</b> That is the shared base's job
  *       now: the reset returns him to his plot's world and asserts the world the client renders,
  *       rather than trusting a teleport that would have moved him to the right coordinates in the
@@ -57,10 +62,8 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    private static final String STATION_ID = "id";
+    private static final String POS_X = "posX";
 
     /** The space dim, where {@code /ar goto station} lands the player. */
     private static final int SPACE_DIM = -2;
@@ -79,40 +82,69 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
      *  that reads nothing like the contract under test. */
     private void opTheBot() throws Exception {
         String op = exec("artest player op-self");
-        scenario().requireArranged("op-self must succeed: " + op, op.contains("\"opped\":true"));
+        scenario().requireArranged("op-self must succeed: " + op, Reply.of(op).bool("opped"));
     }
 
     private String botName() throws Exception {
-        String health = exec("artest player health");
-        Matcher m = PLAYER_NAME.matcher(health);
-        scenario().requireArranged("player health must echo the player name: " + health, m.find());
-        return m.group(1);
+        return PlayerState.botName(this::exec);
     }
 
+    /**
+     * The one dimension present in {@code after} and not in {@code before}, or {@code -1}.
+     *
+     * <p>Both are {@code artest dim list} replies now, not {@code ar planet list} renderings. The
+     * scenario's subject is the dimension a generate ADDED, never the caption a planet line carries,
+     * and the two lists come from the same place — {@code PlanetListCommand:28} iterates the very
+     * registry {@code arDimensions} reports.</p>
+     *
+     * <p>The {@code -1} stays and is checked by both callers: "no new dimension appeared" is a real
+     * outcome of the command under test, not a reader that failed.</p>
+     */
     private static int newDimFromDiff(String before, String after) {
         Set<Integer> beforeIds = new HashSet<>();
-        Matcher m = DIM_LINE.matcher(before);
-        while (m.find()) beforeIds.add(Integer.parseInt(m.group(1)));
-        Matcher m2 = DIM_LINE.matcher(after);
-        while (m2.find()) {
-            int id = Integer.parseInt(m2.group(1));
-            if (!beforeIds.contains(id)) return id;
+        for (int dim : Reply.of("artest dim list", before).intArray("arDimensions")) {
+            beforeIds.add(dim);
+        }
+        for (int dim : Reply.of("artest dim list", after).intArray("arDimensions")) {
+            if (!beforeIds.contains(dim)) {
+                return dim;
+            }
         }
         return -1;
     }
 
-    /** Polls until the CLIENT world reports the expected dimension (~10 s cap). */
-    private void waitForClientDim(int expectedDim) throws Exception {
-        JsonObject last = null;
-        for (int waited = 0; waited < 200; waited += 10) {
-            bot().waitTicks(10);
-            last = bot().reportWeather();
-            if (last != null && last.has("dim") && last.get("dim").getAsInt() == expectedDim) {
-                return;
-            }
-        }
-        throw new AssertionError("client never reached dim " + expectedDim
-                + " (last client report: " + last + ")");
+    // ── the CLIENT's own event log ────────────────────────────────────────────
+    //
+    // Every scenario here types a command and then waits for its outcome to reach the CLIENT — a
+    // reply on the chat overlay, a slot in the inventory it draws, a world it is respawned into — so
+    // they read the base's {@link #clientEvents()}, not {@link #events()}, which is the server's log.
+
+    /**
+     * How long the far side of a typed command may take to reach the client — a deadline for a
+     * discrete event, in the same ballpark as the 100/200-tick polls it replaces.
+     */
+    private static final int REPLY_BUDGET_TICKS = 200;
+
+    /**
+     * Wait for a chat line carrying {@code needle} to reach the client's HUD, from a mark taken
+     * before the command was typed.
+     *
+     * <p>This is what makes {@code armChatObservation} unnecessary for these scenarios. The old form
+     * searched the last N lines of the overlay, a window it did not control — this tier shares one
+     * client, and the harness used to add a broadcast completion sentinel per server command on top
+     * of that, so the backlog had to be drained and proved empty before the stimulus. The sentinel
+     * is gone with the server's control socket; a mark handles the rest by construction, since
+     * everything before it is invisible.</p>
+     */
+    private void awaitChatContaining(Events events, long mark, String needle) throws Exception {
+        String lowered = needle.toLowerCase(Locale.ROOT);
+        // A chat line is PROSE, so the match stays a substring — there is no field here whose value
+        // is the sentence. What the link buys over the loop it replaces is the failure: the four
+        // causes of an empty log are told apart, which a bare "nothing arrived" cannot do.
+        events.awaitMatching(mark, "client_chat_received",
+                reply -> reply.toLowerCase(Locale.ROOT).contains(lowered),
+                "carrying \"" + needle + "\"",
+                "the command's reply must reach the player's chat", REPLY_BUDGET_TICKS);
     }
 
     /** Counts stacks of {@code itemId} in the CLIENT-rendered main inventory. */
@@ -128,25 +160,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         return count;
     }
 
-    /** Polls the CLIENT chat overlay until a line contains {@code needle}. */
-    private boolean waitForChatContaining(String needle, int maxTicks) throws Exception {
-        for (int waited = 0; waited < maxTicks; waited += 10) {
-            bot().waitTicks(10);
-            JsonArray lines = bot().reportChat(10).getAsJsonArray("lines");
-            for (int i = 0; i < lines.size(); i++) {
-                if (lines.get(i).getAsString().toLowerCase(Locale.ROOT)
-                        .contains(needle.toLowerCase(Locale.ROOT))) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static double extractDouble(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double extractDouble(String src, String field) {
+        double value = Reply.of(src).number(field);
+        return value;
     }
 
     // ── /ar addSealant ────────────────────────────────────────────────────────
@@ -158,15 +174,15 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().arranging("op the bot and put dirt in its hand");
         opTheBot();
         String give = exec("artest player give-held minecraft:dirt");
-        scenario().requireArranged("give-held must succeed: " + give, give.contains("\"ok\":true"));
+        scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
 
-        scenario().measuring("arm the chat channel immediately before typing");
-        armChatObservation();
+        scenario().measuring("mark the client's chat log immediately before typing");
+        Events clientLog = clientEvents();
+        long mark = clientLog.mark();
 
         scenario().asserting("the sealed-block-list reply reaches the player's chat");
         bot().sendChat("/ar addSealant");
-        assertTrue("client chat must show the sealed-block-list reply",
-                waitForChatContaining("sealed block list", 100));
+        awaitChatContaining(clientLog, mark, "sealed block list");
     }
 
     // ── /ar addTorch ──────────────────────────────────────────────────────────
@@ -182,15 +198,15 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().arranging("op the bot and put cobblestone in its hand");
         opTheBot();
         String give = exec("artest player give-held minecraft:cobblestone");
-        scenario().requireArranged("give-held must succeed: " + give, give.contains("\"ok\":true"));
+        scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
 
-        scenario().measuring("arm the chat channel immediately before typing");
-        armChatObservation();
+        scenario().measuring("mark the client's chat log immediately before typing");
+        Events clientLog = clientEvents();
+        long mark = clientLog.mark();
 
         scenario().asserting("the torch-list reply reaches the player's chat");
         bot().sendChat("/ar addTorch");
-        assertTrue("client chat must show the torch-list reply",
-                waitForChatContaining("torch list", 100));
+        awaitChatContaining(clientLog, mark, "torch list");
     }
 
     // ── /ar station give ──────────────────────────────────────────────────────
@@ -202,9 +218,10 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().arranging("op the bot and create a station for the chip to bind to");
         opTheBot();
         String create = exec("artest station create " + plot().dim);
-        Matcher idM = STATION_ID.matcher(create);
-        scenario().requireArranged("station create response must include id: " + create, idM.find());
-        int stationId = Integer.parseInt(idM.group(1));
+        Reply created = Reply.of("artest station create", create);
+        scenario().requireArranged("station create response must include id: " + create,
+                created.has(STATION_ID));
+        int stationId = created.integer(STATION_ID);
         scenario().record("stationId", stationId);
 
         // The shared reset clears the inventory, so this is a control rather than a hope: a chip
@@ -216,20 +233,27 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
                 baseline == 0);
 
         scenario().asserting("the chip appears in the inventory the client draws");
+        Events clientLog = clientEvents();
+        long mark = clientLog.mark();
         bot().sendChat("/ar station give " + stationId);
 
-        int count = -1;
-        for (int waited = 0; waited < 100; waited += 10) {
-            bot().waitTicks(10);
-            count = countClientItems("advancedrocketry:spacestationchip");
-            if (count >= 1) break;
-        }
+        // THE LINK: the server wrote the chip into a slot and the client APPLIED that write. The old
+        // form re-counted the rendered inventory on a tick budget and reported "client count=0" for
+        // a command that was refused, a slot packet that never came and a slow round trip alike.
+        String slotWrites = clientLog.awaitField(mark, "client_slot_set",
+                "item", "advancedrocketry:spacestationchip",
+                "/ar station give must put a station chip into a slot the client draws",
+                REPLY_BUDGET_TICKS);
+        scenario().record("slotWrite", slotWrites);
+
+        int count = countClientItems("advancedrocketry:spacestationchip");
         assertTrue("/ar station give must add a station chip to the bot's client-rendered "
-                + "inventory; client count=" + count, count >= 1);
+                + "inventory; client count=" + count + " (the slot write was recorded: "
+                + slotWrites + ")", count >= 1);
 
         String post = exec("artest player inventory-contains advancedrocketry:spacestationchip");
         assertTrue("server inventory must also contain the chip: " + post,
-                !post.contains("\"count\":0"));
+                !(Reply.of(post).integer("count") == 0));
     }
 
     // ── /ar goto dimension ────────────────────────────────────────────────────
@@ -240,9 +264,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
     public void arGotoTransfersPlayerToTargetDim() throws Exception {
         scenario().arranging("op the bot and generate a planet to travel to");
         opTheBot();
-        String before = exec("ar planet list");
+        String before = exec("artest dim list");
         exec("ar planet generate 0 GotoTarget");
-        String after = exec("ar planet list");
+        String after = exec("artest dim list");
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
@@ -251,12 +275,16 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
             exec("artest dim load " + targetDim);
 
             scenario().asserting("the client renders the target dim after the command");
+            Events clientLog = clientEvents();
+            long mark = clientLog.mark();
             bot().sendChat("/ar goto dimension " + targetDim);
-            waitForClientDim(targetDim);
+            awaitClientDim(mark, targetDim,
+                    "the server half is read below and would agree about a world the client never"
+                            + " reached");
 
             String health = exec("artest player health");
             assertTrue("server must agree the player is in dim " + targetDim + ": " + health,
-                    health.contains("\"dim\":" + targetDim));
+                    String.valueOf(targetDim).equals(Reply.of(health).text("dim")));
         } finally {
             // The dimension itself must go: a generated planet outlives the scenario and the next
             // one's `ar planet list` diff would see it. The player's own return is the reset's.
@@ -283,9 +311,9 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().requireArranged("the client must name the world type it starts in, else the"
                 + " comparison below has nothing to change FROM; got '" + home + "'", !home.isEmpty());
 
-        String before = exec("ar planet list");
+        String before = exec("artest dim list");
         exec("ar planet generate 0 WorldTypeTarget");
-        String after = exec("ar planet list");
+        String after = exec("artest dim list");
         int targetDim = newDimFromDiff(before, after);
         scenario().record("targetDim", targetDim);
         scenario().requireArranged("planet generate must yield a new dim id; before=" + before
@@ -294,8 +322,12 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
             exec("artest dim load " + targetDim);
 
             scenario().asserting("the client renders the planet's own world type after arriving");
+            Events clientLog = clientEvents();
+            long mark = clientLog.mark();
             bot().sendChat("/ar goto dimension " + targetDim);
-            waitForClientDim(targetDim);
+            awaitClientDim(mark, targetDim,
+                    "the world type read next is the CLIENT's, so until he has arrived it is the"
+                            + " world he LEFT");
 
             String onPlanet = clientWorldType();
             scenario().record("planetWorldType", onPlanet);
@@ -324,16 +356,20 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().arranging("op the bot and create a station to travel to");
         opTheBot();
         String create = exec("artest station create " + plot().dim);
-        Matcher idM = STATION_ID.matcher(create);
-        scenario().requireArranged("station create must succeed: " + create, idM.find());
-        int stationId = Integer.parseInt(idM.group(1));
+        Reply created = Reply.of("artest station create", create);
+        scenario().requireArranged("station create must succeed: " + create,
+                created.has(STATION_ID));
+        int stationId = created.integer(STATION_ID);
         scenario().record("stationId", stationId);
 
         exec("artest dim load " + SPACE_DIM);
 
         scenario().asserting("the client renders the space dim after the command");
+        Events clientLog = clientEvents();
+        long mark = clientLog.mark();
         bot().sendChat("/ar goto station " + stationId);
-        waitForClientDim(SPACE_DIM);
+        awaitClientDim(mark, SPACE_DIM,
+                "the command's whole claim is that it renders the station's world for him");
     }
 
     // ── /ar fetch ─────────────────────────────────────────────────────────────
@@ -349,21 +385,23 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         opTheBot();
         String bogus = "_no_such_player_xyz_";
 
-        scenario().measuring("arm the chat channel immediately before typing");
-        armChatObservation();
+        scenario().measuring("mark the client's chat log immediately before typing");
+        Events clientLog = clientEvents();
+        long mark = clientLog.mark();
 
         scenario().asserting("the player-not-found error reaches the player's chat");
         bot().sendChat("/ar fetch " + bogus);
-        assertTrue("client chat must show the vanilla player-not-found error for an unknown "
-                + "fetch target", waitForChatContaining("cannot be found", 100));
+        awaitChatContaining(clientLog, mark, "cannot be found");
     }
 
     /**
-     * From {@code WorldCommandFetchTest}. Self-fetch: with sender == target the dim transfer is a
-     * same-dim no-op and the setPosition copies the bot's coords onto itself, so the verb must
-     * complete and leave the player where he was. Positive coverage of the whole resolve &rarr;
-     * transfer &rarr; setPosition path without a second bot (the harness is single-client; fetching
-     * a DIFFERENT connected player stays out of scope).
+     * From {@code WorldCommandFetchTest}. Self-fetch: with sender == target the command still runs
+     * the WHOLE transfer — {@code changeDimension} with a {@code BasicTeleporter} bound for the
+     * dimension the player is already in — and the teleporter puts him on the centre of his own
+     * block, so the verb must complete and leave him where he was to within that half-block. (It is
+     * not the "same-dim no-op" this javadoc used to claim; the recorded placement below says so.)
+     * Positive coverage of the whole resolve &rarr; transfer &rarr; placement path without a second
+     * bot (the harness is single-client; fetching a DIFFERENT connected player stays out of scope).
      */
     @Test
     public void selfFetchCompletesAndPreservesPosition() throws Exception {
@@ -380,16 +418,37 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         scenario().record("beforeXZ", preX + "," + preZ);
 
         scenario().asserting("a self-fetch leaves the client where it was");
+        // A self-fetch is NOT a no-op, whatever the method javadoc above says: the command calls
+        // changeDimension with a BasicTeleporter even when the destination is the dimension the
+        // player is already in, so the whole transfer runs — a teleporter placement on the server
+        // and a respawn on the client. Both marks go before the command; the twenty ticks that used
+        // to stand here were budgeting exactly that round trip.
+        Events serverLog = events();
+        long serverMark = serverLog.markInstrumented();
+        Events clientLog = clientEvents();
+        long clientMark = clientLog.mark();
         bot().sendChat("/ar fetch " + botName);
-        bot().waitTicks(20);
+
+        String placed = serverLog.awaitField(serverMark, "teleporter_placed", "who", botName,
+                "a self-fetch must still run the transfer: the teleporter places the body",
+                REPLY_BUDGET_TICKS);
+        scenario().record("selfFetchPlacement", placed);
+        awaitClientDim(clientMark, plot().dim,
+                "the rendered position read below belongs to the world he ends in");
 
         JsonObject post = bot().reportState();
         double postX = post.get("playerX").getAsDouble();
         double postZ = post.get("playerZ").getAsDouble();
-        assertTrue("self-fetch must leave bot within 1 block of its prior position: "
-                        + "preX=" + preX + " postX=" + postX, Math.abs(postX - preX) < 1.0);
-        assertTrue("self-fetch must leave bot within 1 block of its prior position: "
-                        + "preZ=" + preZ + " postZ=" + postZ, Math.abs(postZ - preZ) < 1.0);
+        // The placement record carries the teleporter's own `from` and `target`, which is what
+        // separates "the command aimed somewhere else" from "it aimed here and something moved him
+        // afterwards" — the two stories this assertion could not tell apart while `placed` sat in
+        // the scenario journal and not in the message.
+        String where = " preX=" + preX + " preZ=" + preZ + " postX=" + postX + " postZ=" + postZ
+                + "\n  teleporter_placed: " + placed;
+        assertTrue("self-fetch must leave bot within 1 block of its prior position:" + where,
+                Math.abs(postX - preX) < 1.0);
+        assertTrue("self-fetch must leave bot within 1 block of its prior position:" + where,
+                Math.abs(postZ - preZ) < 1.0);
 
         String postServer = exec("artest player health");
         assertTrue("server-side X must agree with the client view: " + postServer,

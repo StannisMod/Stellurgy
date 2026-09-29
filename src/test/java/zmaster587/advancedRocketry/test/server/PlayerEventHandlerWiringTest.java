@@ -1,12 +1,15 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -44,40 +47,43 @@ import static org.junit.Assert.assertTrue;
  */
 public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
 
-    private static final Pattern TIME_PATTERN = Pattern.compile("\"time\":(\\d+)");
-    private static final Pattern WORLD_TIME_PATTERN =
-            Pattern.compile("\"worldTotalTime\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY = Pattern.compile("\"arDimensions\":\\[([^]]*)]");
+    /**
+     * Ticks the counters are watched across. The old 400 ms was "~4 ticks with headroom of 2"; asked
+     * for as ticks it is the same intent without the hope.
+     */
+    private static final int OBSERVED_TICKS = 10;
+
+    private static final String TIME_PATTERN = "time";
+    private static final String WORLD_TIME_PATTERN = "worldTotalTime";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static long parseGroup(Pattern pattern, String resp, String label) {
-        Matcher m = pattern.matcher(resp);
-        if (!m.find()) {
-            throw new AssertionError("could not parse " + label + " from response: " + resp);
-        }
-        return Long.parseLong(m.group(1));
+    private static long parseGroup(String field, String resp, String label) {
+        Reply reply = Reply.of(resp);
+        assertTrue("could not parse " + label + ": " + resp, reply.has(field));
+        return (long) reply.integer(field);
     }
 
     private int firstArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue(
                 "Only overworld is an AR planet — skipping", false);
         return -1;
     }
+
+    /** The class the dimension's WorldInfo actually is, as the probe reports it. */
+    private static final String WORLD_INFO_CLASS = "worldInfoClass";
 
     @Test
     public void planetEventHandlerTickCounterAdvancesUnderServerTicks() throws Exception {
@@ -89,9 +95,11 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         long t1 = parseGroup(TIME_PATTERN, first, "time");
         long w1 = parseGroup(WORLD_TIME_PATTERN, first, "worldTotalTime");
 
-        // The headless server ticks at ~20 Hz. 200ms wall = ~4 ticks; we
-        // ask for headroom of 2 to absorb scheduler jitter and CI noise.
-        Thread.sleep(400);
+        // WINDOW: both counters are read on each side of this stretch and each assertion below is
+        // over the difference, naming both reads. Not circular: the stretch is measured on
+        // MinecraftServer's tick counter, the assertions on vanilla's worldTotalTime and AR's own
+        // handler time. "It moved at all" is the bar, so overshoot cannot let a frozen counter pass.
+        GameTicks.advance(client(), GameTicks.server(), OBSERVED_TICKS);
 
         String second = ok(client().execute("artest event tick-counter"));
         long t2 = parseGroup(TIME_PATTERN, second, "time");
@@ -102,7 +110,8 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         //     (so any failure to see t advance is the handler's fault,
         //     not "the server was paused").
         //   - t advancing proves the handler subscription is live.
-        assertTrue("vanilla world totalTime must advance over 400ms: w1=" + w1 + " w2=" + w2,
+        assertTrue("vanilla world totalTime must advance over " + OBSERVED_TICKS
+                        + " server ticks: w1=" + w1 + " w2=" + w2,
                 w2 > w1);
         assertTrue("PlanetEventHandler.time must advance under server ticks: "
                         + "t1=" + t1 + " t2=" + t2 + " (server ticking? w1=" + w1 + " w2=" + w2 + ")",
@@ -117,20 +126,20 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // strip), the field-/Class-lookup in the probe surfaces it.
         String resp = ok(client().execute("artest event handlers"));
         assertTrue("PlanetEventHandler must be class-loaded: " + resp,
-                resp.contains("\"planetEventHandler\":\"loaded\""));
+                "loaded".equals(Reply.of(resp).text("planetEventHandler")));
         // RocketEventHandler is reported as "shipped" via classfile-resource
         // lookup — a static class reference would NoClassDefFoundError on
         // dedicated server because the class imports LWJGL / FontRenderer
         // (client-only). Resource presence is the strongest server-safe
         // proof that the @Mod packaging didn't drop the class.
         assertTrue("RocketEventHandler .class resource must be shipped: " + resp,
-                resp.contains("\"rocketEventHandler\":\"shipped\""));
+                "shipped".equals(Reply.of(resp).text("rocketEventHandler")));
         // PlanetWeatherEventHandler IS server-safe (no client imports), so
         // a direct static reference verifies + reports its FQN.
         assertTrue("PlanetWeatherEventHandler must be class-loaded (probe "
                         + "should report its FQN): " + resp,
-                resp.contains(
-                        "zmaster587.advancedRocketry.world.weather.PlanetWeatherEventHandler"));
+                "zmaster587.advancedRocketry.world.weather.PlanetWeatherEventHandler".equals(
+                        Reply.of(resp).text("planetWeatherEventHandler")));
     }
 
     @Test
@@ -148,19 +157,22 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         String resp = ok(client().execute("artest event dim-side-effects " + dim));
 
         assertTrue("AR dim must be loaded for side-effect probing: " + resp,
-                resp.contains("\"loaded\":true"));
-        assertTrue("AR dim WorldInfo must be wrapped by ARDimensionWorldInfo: " + resp,
-                resp.contains("ARDimensionWorldInfo"));
+                Reply.of(resp).bool("loaded"));
+        // The CLASS the world info actually is, read off the field that names it and compared
+        // as a name. The substring was satisfied by the word appearing anywhere in the reply —
+        // including in a neighbouring field naming the wrapper it did NOT install.
+        assertEquals("AR dim WorldInfo must be wrapped by ARDimensionWorldInfo: " + resp,
+                "ARDimensionWorldInfo", Reply.of(resp).simpleClassName(WORLD_INFO_CLASS));
         assertTrue("AR dim must have an AtmosphereHandler registered: " + resp,
-                resp.contains("\"hasAtmosphereHandler\":true"));
+                Reply.of(resp).bool("hasAtmosphereHandler"));
         assertTrue("dim must be classified as AR planet: " + resp,
-                resp.contains("\"isARPlanet\":true"));
+                Reply.of(resp).bool("isARPlanet"));
         // hasSkyColor=true means props.skyColor is non-null/non-empty.
         // (A future fixture planet with the default vanilla colour would
         // still pass — float[] is allocated by DimensionProperties; this
         // assertion just guards against a regression that drops the field.)
         assertTrue("AR dim must have a sky-color array configured: " + resp,
-                resp.contains("\"hasSkyColor\":true"));
+                Reply.of(resp).bool("hasSkyColor"));
     }
 
     @Test
@@ -173,12 +185,11 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // fixture set, so we can't use dim 0 here; pick the first non-AR
         // forge dim that's NOT in the arDimensions array.
         String dimList = ok(client().execute("artest dim list"));
-        Matcher arM = AR_DIMS_ARRAY.matcher(dimList);
-        Assume.assumeTrue("dim list missing arDimensions array", arM.find());
+        Reply listed = Reply.of("artest dim list", dimList);
+        Assume.assumeTrue("dim list missing arDimensions array", listed.has(AR_DIMS_ARRAY));
         java.util.Set<Integer> arDims = new java.util.HashSet<>();
-        for (String part : arM.group(1).split(",")) {
-            String t = part.trim();
-            if (!t.isEmpty()) arDims.add(Integer.parseInt(t));
+        for (int d : listed.intArray(AR_DIMS_ARRAY)) {
+            arDims.add(d);
         }
         // Try nether (-1) then end (1). Skip if both happen to be AR (the
         // fixture doesn't currently register them, but be defensive).
@@ -188,13 +199,13 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
 
         String resp = ok(client().execute("artest event dim-side-effects " + nonArDim));
         assertTrue("non-AR dim " + nonArDim + " must be loaded: " + resp,
-                resp.contains("\"loaded\":true"));
+                Reply.of(resp).bool("loaded"));
         assertTrue("non-AR dim " + nonArDim + " must NOT be classified as AR planet: " + resp,
-                resp.contains("\"isARPlanet\":false"));
+                (!Reply.of(resp).bool("isARPlanet")));
         // ARDimensionWorldInfo wrapping is the per-AR-dim B1 isolation chain;
         // a non-AR dim must stay vanilla so weather doesn't bleed in/out.
-        assertTrue("non-AR dim " + nonArDim + " WorldInfo must NOT be wrapped: " + resp,
-                !resp.contains("ARDimensionWorldInfo"));
+        assertNotEquals("non-AR dim " + nonArDim + " WorldInfo must NOT be wrapped: " + resp,
+                "ARDimensionWorldInfo", Reply.of(resp).simpleClassName(WORLD_INFO_CLASS));
     }
 
     @Test
@@ -209,8 +220,8 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // launches' destination dim.
         String resp = ok(client().execute("artest event transitions"));
         assertTrue("transition map probe must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         assertTrue("transition map must be empty at rest in a no-rocket test: " + resp,
-                resp.contains("\"size\":0"));
+                (Reply.of(resp).integer("size") == 0));
     }
 }

@@ -1,18 +1,16 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -29,10 +27,10 @@ import static org.junit.Assert.assertTrue;
 public class LowGravFallDamageTest {
 
     private static final int DIM_LOW_GRAV = 9701;
-    private static final Pattern IS_PLANETARY = Pattern.compile("\"isPlanetaryProvider\":(true|false)");
-    private static final Pattern INPUT_DIST = Pattern.compile("\"inputDistance\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
-    private static final Pattern RESULT_DIST = Pattern.compile("\"resultDistance\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
-    private static final Pattern GRAVITY = Pattern.compile("\"gravityMultiplier\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    private static final String IS_PLANETARY = "isPlanetaryProvider";
+    private static final String INPUT_DIST = "inputDistance";
+    private static final String RESULT_DIST = "resultDistance";
+    private static final String GRAVITY = "gravityMultiplier";
 
     private Path workDir;
     private RealDedicatedServerHarness harness;
@@ -81,12 +79,15 @@ public class LowGravFallDamageTest {
         return String.join("\n", harness.client().execute(cmd));
     }
 
+    /**
+     * Stations the fake player in {@code dim}. Nothing is waited for after it: {@code ensure-fake}
+     * initialises the dimension and moves the player into it on the server thread before it
+     * replies, and {@code try-fall} posts its event synchronously against that same player — the
+     * next command reads the write itself.
+     */
     private void stationFake(int dim) throws Exception {
         String fake = exec("artest player ensure-fake " + dim + " 8.5 120 8.5");
-        assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
-        // Off-thread settle: the wait runs in the test jvm, because a command handler runs on the
-        // server thread and would block the clock it is waiting for.
-        ServerTicks.await(harness.client(), dim, 20);
+        assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
     }
 
     /** Overworld: not an IPlanetaryProvider &rarr; distance untouched. */
@@ -117,15 +118,14 @@ public class LowGravFallDamageTest {
                 + " result=" + result, result < input);
     }
 
-    private static boolean boolField(Pattern p, String src) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + p.pattern() + " missing in: " + src, m.find());
-        return Boolean.parseBoolean(m.group(1));
+    private static boolean boolField(String field, String src) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.bool(field);
     }
 
-    private static double doubleField(Pattern p, String src) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + p.pattern() + " missing in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double doubleField(String field, String src) {
+        double value = Reply.of(src).number(field);
+        return value;
     }
 }

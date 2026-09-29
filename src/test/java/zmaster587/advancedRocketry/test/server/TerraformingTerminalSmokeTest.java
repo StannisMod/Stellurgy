@@ -1,7 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
@@ -44,7 +49,7 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 9500;
     private static final int CX_BASIC    = 9500;
     private static final int CX_REDSTONE = 9700;
@@ -54,11 +59,11 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + CX_BASIC + " " + CY + " " + CZ
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terminal must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         String info = exec("artest machine info 0 " + CX_BASIC + " " + CY + " " + CZ);
-        assertTrue("block must produce TileTerraformingTerminal: " + info,
-                info.contains("TileTerraformingTerminal"));
+        assertEquals("block must produce TileTerraformingTerminal: " + info,
+                "TileTerraformingTerminal", MachineInfo.of(info).tileSimpleName());
 
         // 40 force-ticks — drives the natural update() loop through
         // hasValidBiomeChanger=false branch repeatedly. No NPE if the
@@ -66,13 +71,13 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         String tick = exec("artest tile force-tick 0 " + CX_BASIC + " " + CY + " "
                 + CZ + " 40");
         assertTrue("force-tick on empty terminal must succeed: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         String postInfo = exec("artest machine info 0 " + CX_BASIC + " " + CY + " "
                 + CZ);
-        assertTrue("tile must remain TileTerraformingTerminal after ticking: "
+        assertEquals("tile must remain TileTerraformingTerminal after ticking: "
                         + postInfo,
-                postInfo.contains("TileTerraformingTerminal"));
+                "TileTerraformingTerminal", MachineInfo.of(postInfo).tileSimpleName());
     }
 
     @Test
@@ -80,7 +85,7 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + CX_REDSTONE + " " + CY + " " + CZ
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terminal must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         // Place a redstone block adjacent so isBlockIndirectlyGettingPowered
         // returns true. This pushes the terminal into the
@@ -93,11 +98,11 @@ public class TerraformingTerminalSmokeTest extends AbstractSharedServerTest {
                 + CZ + " 40");
         assertTrue("force-tick on redstone-powered empty terminal must succeed: "
                         + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         String postInfo = exec("artest machine info 0 " + CX_REDSTONE + " " + CY + " "
                 + CZ);
-        assertTrue("tile must survive redstone-powered tick burst: " + postInfo,
-                postInfo.contains("TileTerraformingTerminal"));
+        assertEquals("tile must survive redstone-powered tick burst: " + postInfo,
+                "TileTerraformingTerminal", MachineInfo.of(postInfo).tileSimpleName());
     }
 }

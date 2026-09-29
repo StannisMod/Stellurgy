@@ -1,9 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -33,36 +35,33 @@ import static org.junit.Assert.assertTrue;
  */
 public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern THREW = Pattern.compile("\"threw\":\"([^\"]*)\"");
-    private static final Pattern PEER_STATUS = Pattern.compile("\"peerStatus\":\"([^\"]*)\"");
+    private static final String THREW = "threw";
+    private static final String PEER_STATUS = "peerStatus";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
     private int[] placeAssembler(int baseX) throws Exception {
-        int baseY = 64;
-        int baseZ = 740;
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
+        final FixtureSite site = FixtureSite.openAir(0, baseX, 740);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        int[] bp = RocketFixture.placeAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
         return new int[]{
-                Integer.parseInt(bp.group(1)),
-                Integer.parseInt(bp.group(2)),
-                Integer.parseInt(bp.group(3))};
+                bp[0],
+                bp[1],
+                bp[2]};
     }
 
-    private static String field(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue(name + " missing in: " + src, m.find());
-        return m.group(1);
+    private static String field(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("could not parse " + name + ": " + src, reply.has(field));
+        return reply.text(field);
     }
 
     /** A save with no persisted status must load the neutral idle verdict
@@ -72,7 +71,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
         int[] pos = placeAssembler(9600);
         String resp = ok(client().execute("artest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2] + " dropStatus"));
-        assertTrue("nbt-roundtrip failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 
         assertTrue("no throw expected for a missing status key: " + resp,
                 "null".equals(field(THREW, resp, "threw")));
@@ -89,7 +88,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
         int[] pos = placeAssembler(9700);
         String resp = ok(client().execute("artest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2] + " setStatus=999"));
-        assertTrue("nbt-roundtrip failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 
         assertTrue("an out-of-range status ordinal must not throw on load "
                         + "(no ArrayIndexOutOfBoundsException) (C033): " + resp,
@@ -107,7 +106,7 @@ public class AssemblerStatusNbtRoundtripTest extends AbstractSharedServerTest {
         int[] pos = placeAssembler(9800);
         String resp = ok(client().execute("artest assembler nbt-roundtrip 0 "
                 + pos[0] + " " + pos[1] + " " + pos[2]));
-        assertTrue("nbt-roundtrip failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("nbt-roundtrip failed: " + resp, Reply.of(resp).ok());
 
         assertTrue("plain round-trip must not throw: " + resp,
                 "null".equals(field(THREW, resp, "threw")));

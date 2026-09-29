@@ -274,8 +274,31 @@ public class PhysicsCalculations {
         getAngularVelocity().add(angularVelocityDif);
     }
 
+    /**
+     * Bleed momentum into the surrounding AIR — and only where there is air.
+     *
+     * <p>This used to apply {@link #getDragForPhysTick()} unconditionally, which took 1 % of both the
+     * linear and the angular velocity every game tick in a space cell, in hyperspace and on an
+     * airless moon exactly as it did at sea level: a spin imparted by a collision was gone inside a
+     * few seconds and a craft told to coast quietly stopped. The retention now scales with the
+     * world's atmospheric density and is EXACTLY 1.0 in vacuum.</p>
+     *
+     * <p><b>Why this file calls into Advanced Rocketry.</b> The decision — how much a medium of a
+     * given density keeps — lives on the AR side in {@code FreeFlightPhysics.ambientDragFactor},
+     * because it is shared with the rocket tier and is unit-tested there without a server. The
+     * alternatives were worse: a mixin against a tree we compile ourselves, or a registration seam,
+     * which would be mutable static state something else depends on. The cost is one call to
+     * re-apply if this engine is ever swapped, and it is deliberately a single call so that cost is
+     * one line.</p>
+     */
     private void applyAirDrag() {
-        double drag = getDragForPhysTick();
+        double density = zmaster587.advancedRocketry.api.AtmosphereDensity
+                .inAtmospheres(getParent().getWorld());
+        double drag = zmaster587.advancedRocketry.api.FreeFlightPhysics
+                .ambientDragFactor(density, getPhysicsTimeDeltaPerPhysTick());
+        if (drag >= 1.0) {
+            return; // vacuum: nothing to take, and no float noise introduced by multiplying by 1
+        }
         getLinearVelocity().mul(drag);
         getAngularVelocity().mul(drag);
     }

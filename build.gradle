@@ -161,6 +161,10 @@ if (propertyBool('enable_junit_testing')) {
     // its clone-sibling + publishToMavenLocal setup step. The external repo
     // (github.com/StannisMod/ForgeTestFramework) lives on for other consumers.
     sourceSets.test.java.srcDir 'testframework/src/main/java'
+    // The harness's own mixin config + class. They live in the TEST source set, so they are
+    // absent from the shipped jar entirely: a test-only mixin reaches from the harness INTO the
+    // product, never from production into itself, and a released game pays nothing for it.
+    sourceSets.test.resources.srcDir 'testframework/src/main/resources'
 }
 
 // Valkyrien Skies physics engine — vendored as a git subtree under valkyrienskies/
@@ -332,6 +336,11 @@ def configureHeadlessTest = { Test t, String packageGlob ->
 
 tasks.register('testUnit', Test) {
     configureHeadlessTest(it, 'zmaster587/advancedRocketry/test/unit/**')
+    // The vendored harness compiles into this source set but sat in no tier's include rules, so
+    // its own unit tests could not be run by anything. They belong in the fast tier: they need no
+    // Minecraft and no bridge, and they cover seams (a package-private constructor, a timeout
+    // diagnosis) that a real-client tier can only reach by starting a client.
+    include 'com/github/stannismod/forge/testing/**'
 }
 
 tasks.register('testIntegration', Test) {
@@ -421,6 +430,21 @@ def configureHarnessTest = { Test t, boolean enableClient ->
         if (project.hasProperty('clientFbo')) {
             t.systemProperty 'forge.test.client.fbo', project.property('clientFbo').toString()
         }
+        // -PmixinDebug turns on Mixin's own apply log in BOTH child JVMs (the harness forwards every
+        // `mixin.*` property it is given). Off by default because it is loud; reach for it the moment
+        // a test-only mixin returns an empty observation, since "queued" and "woven" are different
+        // claims and only this distinguishes them.
+        // -PplotOffset=N starts this class's plot allocator at N instead of 0, so a scenario can be
+        // run on a LATER plot without a predecessor in front of it. It exists to separate two things
+        // that every ordinary run changes together — what ran before this scenario, and where its
+        // fixture stands — and which therefore cannot be told apart by comparing a solo run against
+        // a class run. An experiment lever: it belongs in no gate and no default.
+        if (project.hasProperty('plotOffset')) {
+            t.systemProperty 'artest.plot.offset', project.property('plotOffset').toString()
+        }
+        if (project.hasProperty('mixinDebug')) {
+            t.systemProperty 'mixin.debug', project.property('mixinDebug').toString()
+        }
         // -PclientWindowState=normal keeps the client's game window visible (default: the harness
         // suppresses it off-screen/minimized for the whole client lifetime). The visible mode is
         // both the debugging escape hatch and the control leg that proves the suppressor is the
@@ -446,17 +470,29 @@ def configureHarnessTest = { Test t, boolean enableClient ->
     t.forkEvery 1L
     t.minHeapSize = '256m'
     t.maxHeapSize = '512m'
-    // One wall-clock multiplier for every hard harness ceiling (boot, handshake, waitTicks,
-    // command round-trips): N concurrent MC pairs stretch the effective tick rate, and fixed
-    // ceilings would turn that contention into spurious reds. See TestTimeouts.
-    t.systemProperty 'forge.test.timeout.factor', String.valueOf(1.0d + harnessForks / 4.0d)
-
     // Harness worlds are generated from a FIXED seed so terrain under a fixture's coordinates is
     // the same every run (an unpinned seed made every fixed-coordinate fixture a coin flip).
     // -PlevelSeed=<value> re-rolls it deliberately; -PlevelSeed=random restores vanilla's
     // per-run random landscape, which is how you check a fixture is not seed-dependent.
     if (project.hasProperty('levelSeed')) {
         t.systemProperty 'forge.test.level.seed', project.property('levelSeed').toString()
+    }
+
+    // Harness worlds are FLAT by default (surface at y=64 everywhere), so a fixture at a fixed Y
+    // stands on the ground by construction instead of betting on the landscape. -PlevelType=DEFAULT
+    // puts every world back on generated terrain — the one-run answer to "is the flat world the
+    // reason this broke?". A test whose SUBJECT is generated terrain asks for it per-test instead
+    // (AbstractHeadlessServerTest#requiresGeneratedTerrain).
+    if (project.hasProperty('levelType')) {
+        t.systemProperty 'forge.test.level.type', project.property('levelType').toString()
+    }
+
+    // Heap for each harness SERVER child. The framework's 1g default was calibrated on generated
+    // terrain, where most chunk sections above the surface are empty and cost nothing; a flat world
+    // carries solid layers in every column, and a VS ship claims 15x15 chunks around itself.
+    // -PserverXmx=2g is how you ask whether a red is that floor rather than the code.
+    if (project.hasProperty('serverXmx')) {
+        t.systemProperty 'forge.test.server.xmx', project.property('serverXmx').toString()
     }
 
     t.testLogging {

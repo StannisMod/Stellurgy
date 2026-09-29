@@ -1,13 +1,15 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.DimInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -41,22 +43,19 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerTest {
 
-    private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
-    private static final Pattern CURRENT_ATMOS =
-            Pattern.compile("\"currentAtmosphere\":(-?\\d+)");
-    private static final Pattern POWER_POS =
-            Pattern.compile("\"powerPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern LIQUID_INPUT_POS =
-            Pattern.compile("\"liquidInputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    /** Captures each {@code [x,y,z]} triple inside
-     *  {@code "liquidInputPositions":[...]}. Iterating `find()` enumerates
-     *  all four 'L' hatches in the terraformer structure. */
-    private static final Pattern LIQUID_TRIPLE =
-            Pattern.compile("\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    /** The terraformer's own ceiling, in atmosphere-density units: the planet must start below it
+     *  or the cycle has nothing to do. */
+    private static final int TERRAFORMER_CEILING = 1600;
+
+    private static final String CURRENT_ATMOS = "currentAtmosphere";
+    private static final String POWER_POS = "powerPos";
+    private static final String LIQUID_INPUT_POS = "liquidInputPos";
+    /** All four 'L' hatches of the terraformer structure, as {@code [[x,y,z], …]}. */
+    private static final String LIQUID_INPUT_POSITIONS = "liquidInputPositions";
 
     /** Each method picks distinct controller coords so per-method planets
      *  don't collide if a future refactor moves to class-scope. */
-    private static final int CY = 128;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CX_POSITIVE = 200;
     private static final int CX_NO_FUEL  = 400;
     private static final int CX_NO_POWER = 600;
@@ -82,7 +81,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         // can find a live WorldServer for it.
         String load = exec("artest dim load " + newDim);
         assertTrue("dim load did not report loaded:true — " + load,
-                load.contains("\"loaded\":true") || load.contains("\"ok\":true"));
+                Reply.of(load).bool("loaded"));
     }
 
     @After
@@ -124,7 +123,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         String preState = exec("artest machine controller-state "
                 + newDim + " " + CX_POSITIVE + " " + CY + " " + CZ);
         assertTrue("controller-state probe missing batteries readout — " + preState,
-                preState.contains("\"batteriesPresent\":true"));
+                Reply.of(preState).bool("batteriesPresent"));
 
         // ARRANGE the starting density instead of taking whatever the world hands over. The
         // terraformer only steps UP while density is below its ceiling of 1600, and a planet's
@@ -136,7 +135,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         exec("ar planet set " + newDim + " atmosphereDensity 100");
         int densityBefore = readDensity();
         assertTrue("arrangement: the planet must start below the terraformer's ceiling, got "
-                + densityBefore, densityBefore < 1600);
+                + densityBefore, densityBefore < TERRAFORMER_CEILING);
         // Refill loop: terraformer needs BOTH N2 and O2 each tick.
         // TileFluidHatch holds one fluid per tank — so split: hatch 0+1
         // are N2 sources, hatch 2+3 are O2 sources. The controller's
@@ -206,7 +205,7 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         String drain = exec("artest machine clear-batteries " + newDim
                 + " " + CX_NO_POWER + " " + CY + " " + CZ);
         assertTrue("clear-batteries probe failed: " + drain,
-                drain.contains("\"cleared\":true"));
+                Reply.of(drain).bool("cleared"));
 
         // Top up fluid each iteration so OOF can't be the cause of any
         // non-progression observed below — power-absence must be the
@@ -232,23 +231,23 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
         String fixture = exec("artest fixture multiblock terraformer "
                 + newDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("terraformer fixture build failed: " + fixture,
-                fixture.contains("\"ok\":true") && fixture.contains("\"unresolved\":0"));
+                Reply.of(fixture).ok() && (Reply.of(fixture).integer("unresolved") == 0));
         String tryComplete = exec("artest machine try-complete "
                 + newDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("terraformer structure failed to complete: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
         return fixture;
     }
 
     private void injectPower(String fixture, int amount) throws Exception {
-        Matcher m = POWER_POS.matcher(fixture);
-        assertTrue("no powerPos in fixture response: " + fixture, m.find());
-        int px = Integer.parseInt(m.group(1));
-        int py = Integer.parseInt(m.group(2));
-        int pz = Integer.parseInt(m.group(3));
+        int[] m = Reply.of(fixture).blockPos(POWER_POS);
+        assertTrue("no powerPos in fixture response: " + fixture, m != null);
+        int px = m[0];
+        int py = m[1];
+        int pz = m[2];
         String resp = exec("artest energy inject "
                 + newDim + " " + px + " " + py + " " + pz + " " + amount);
-        assertTrue("energy inject failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("energy inject failed: " + resp, Reply.of(resp).ok());
     }
 
     /** Precondition guard: a freshly-generated AR planet must report as
@@ -257,13 +256,13 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
      *  dim-load handshake has regressed and the powered-cycle assertions
      *  below would fail for an irrelevant reason. */
     private void assertDimIsNativeArPlanet() throws Exception {
-        String info = exec("artest dim info " + newDim);
-        assertTrue("dim info missing isARPlanet:true — " + info,
-                info.contains("\"isARPlanet\":true"));
-        // The terraformer gate also needs WorldProviderPlanet; the dim
-        // info verb reports providerClass.
-        assertTrue("dim provider is not WorldProviderPlanet — " + info,
-                info.contains("WorldProviderPlanet"));
+        DimInfo info = DimInfo.forDim(WorldCommandFixtures::exec, newDim);
+        assertTrue("dim info missing isARPlanet:true — " + info.raw(), info.arPlanet);
+        // The terraformer gate also needs WorldProviderPlanet, asked of the field that names the
+        // provider: the `contains` this replaces would have been answered by the save folder or by
+        // the chunk generator's own class name.
+        assertTrue("dim provider is not WorldProviderPlanet — " + info.raw(),
+                info.providerClass().endsWith("WorldProviderPlanet"));
     }
 
     /** Injects {@code amount} mB of {@code fluidName} into the
@@ -280,54 +279,51 @@ public class TerraformerPoweredCycleOnArPlanetTest extends AbstractSharedServerT
                 + newDim + " " + pos[0] + " " + pos[1] + " " + pos[2]
                 + " " + fluidName + " " + amount);
         assertTrue(fluidName + " inject failed at hatch " + hatchIndex + ": " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
     /** Scans the fixture response's {@code liquidInputPositions} array
      *  for the n-th triple. */
     private static int[] nthLiquidInputPos(String fixture, int n) {
-        // Slice the substring starting at "liquidInputPositions" so we
-        // don't accidentally pick up the back-compat single
-        // "liquidInputPos" or unrelated position lists.
-        int sectionStart = fixture.indexOf("\"liquidInputPositions\"");
-        assertTrue("no liquidInputPositions in fixture response: " + fixture,
-                sectionStart >= 0);
-        Matcher m = LIQUID_TRIPLE.matcher(fixture);
-        m.region(sectionStart, fixture.length());
-        for (int i = 0; i <= n; i++) {
-            assertTrue("liquidInputPositions has fewer than " + (n + 1)
-                    + " hatches: " + fixture, m.find());
-        }
-        return new int[]{
-                Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+        // Asked for by NAME, which is also what keeps it clear of the back-compat single
+        // `liquidInputPos` and of every other position list in the same reply — the slice-then-scan
+        // this replaces had to know where the section started to get that right.
+        int[][] hatches = Reply.of("artest fixture machine", fixture)
+                .blockPosArray(LIQUID_INPUT_POSITIONS);
+        assertTrue("liquidInputPositions has fewer than " + (n + 1) + " hatches: " + fixture,
+                n < hatches.length);
+        return hatches[n];
     }
 
     private void enableMachine(int cx) throws Exception {
         String resp = exec("artest machine set-enabled "
                 + newDim + " " + cx + " " + CY + " " + CZ + " true");
-        assertTrue("machine set-enabled failed: " + resp, resp.contains("\"enabled\":true"));
+        assertTrue("machine set-enabled failed: " + resp, Reply.of(resp).bool("enabled"));
     }
 
     private void forceTick(int cx, int ticks) throws Exception {
         String resp = exec("artest tile force-tick "
                 + newDim + " " + cx + " " + CY + " " + CZ + " " + ticks);
-        assertTrue("force-tick errored: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + resp, Reply.of(resp).ok());
     }
 
     private int readDensity() throws Exception {
         String info = exec("artest terraforming info " + newDim);
-        Matcher m = CURRENT_ATMOS.matcher(info);
-        assertTrue("no currentAtmosphere in terraforming info: " + info, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(info);
+        assertTrue("no currentAtmosphere in terraforming info: " + info, mReply.has(CURRENT_ATMOS));
+        return Integer.parseInt(mReply.text(CURRENT_ATMOS));
     }
 
+    /**
+     * The AR dimensions registered right now, asked of the probe rather than scraped out of
+     * {@code ar planet list}. Nothing here claims anything about that command's output; both read
+     * {@code DimensionManager.getInstance().getRegisteredDimensions()}.
+     */
     private static Set<Integer> arDims() throws Exception {
-        String list = exec("ar planet list");
         Set<Integer> ids = new HashSet<>();
-        Matcher m = DIM_LINE.matcher(list);
-        while (m.find()) ids.add(Integer.parseInt(m.group(1)));
+        for (int dim : Reply.of("artest dim list", exec("artest dim list")).intArray("arDimensions")) {
+            ids.add(dim);
+        }
         return ids;
     }
 }

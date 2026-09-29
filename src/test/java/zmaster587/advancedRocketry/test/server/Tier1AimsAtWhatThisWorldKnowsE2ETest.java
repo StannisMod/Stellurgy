@@ -5,6 +5,11 @@ import java.util.List;
 
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.RealizedBody;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.TelescopeReading;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -27,7 +32,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTest {
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4900;
     private static final int X = 4900;
 
@@ -42,8 +47,8 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
     /** Whether the gate a rocket standing in {@code standing} asks says {@code target} is known. */
     private boolean known(int standing, int target) throws Exception {
         String reply = exec("artest planet knowledge " + standing + " " + target);
-        assertTrue("the knowledge probe failed: " + reply, reply.contains("\"known\":"));
-        return reply.contains("\"known\":true");
+        assertTrue("the knowledge probe failed: " + reply, Reply.of(reply).has("known"));
+        return Reply.of(reply).bool("known");
     }
 
     /** The same reply's two halves, so a red test says WHICH source moved. */
@@ -53,28 +58,22 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
 
     /** A numeric field of a probe reply. */
     private static int intField(String json, String name) {
-        String key = "\"" + name + "\":";
-        int at = json.indexOf(key);
-        assertTrue("probe reply has no field " + name + ": " + json, at >= 0);
-        int from = at + key.length();
-        int to = from;
-        while (to < json.length() && "-0123456789".indexOf(json.charAt(to)) >= 0) {
-            to++;
-        }
-        return Integer.parseInt(json.substring(from, to));
+        Reply reply = Reply.of("this probe reply", json);
+        assertTrue("probe reply has no field " + name + ": " + json, reply.has(name));
+        return reply.integer(name);
     }
 
+    /**
+     * An integer array field, by name. The hand-rolled version this replaces located the key, sliced
+     * to the first {@code ]} and split the text on commas — which carried its own opinion about
+     * spaces, signs and an empty list, and answered a slice of a document to a parser.
+     */
     private static List<Integer> ints(String json, String field) {
-        String key = "\"" + field + "\":[";
-        int at = json.indexOf(key);
-        assertTrue("probe reply has no array " + field + ": " + json, at >= 0);
-        int end = json.indexOf(']', at);
-        String body = json.substring(at + key.length(), end).trim();
+        Reply reply = Reply.of("this probe reply", json);
+        assertTrue("probe reply has no array " + field + ": " + json, reply.has(field));
         List<Integer> out = new ArrayList<>();
-        if (!body.isEmpty()) {
-            for (String piece : body.split(",")) {
-                out.add(Integer.parseInt(piece.trim()));
-            }
+        for (int value : reply.intArray(field)) {
+            out.add(value);
         }
         return out;
     }
@@ -92,22 +91,19 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
         try {
             String installed = exec("artest space gen-install 0.9 2000000 987654321");
             assertTrue("the procedural generator must install: " + installed,
-                    installed.contains("\"ok\":true"));
+                    Reply.of(installed).ok());
             String found = exec("artest space find-procedural 4");
             assertTrue("a dense procedural galaxy must offer a landable body: " + found,
-                    found.contains("\"ok\":true"));
+                    Reply.of(found).ok());
             String cell = intField(found, "sx") + " " + intField(found, "sy") + " "
                     + intField(found, "sz");
-            String realized = exec("artest space realize " + cell);
-            assertTrue("realization must mint a world to ask about: " + realized,
-                    realized.contains("\"ok\":true"));
-            int fresh = intField(realized, "dim");
+            int fresh = RealizedBody.at(this::exec, cell).dim;
 
             String reply = halves(0, fresh);
             assertTrue("a freshly minted world must be in nobody's global set: " + reply,
-                    reply.contains("\"global\":false"));
+                    (!Reply.of(reply).bool("global")));
             assertTrue("nor known on the world we are standing on: " + reply,
-                    reply.contains("\"local\":false"));
+                    (!Reply.of(reply).bool("local")));
             assertFalse("and a pad here must therefore not be offered it: " + reply,
                     known(0, fresh));
         } finally {
@@ -125,20 +121,17 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
         try {
             String installed = exec("artest space gen-install 0.9 2000000 987654321");
             assertTrue("the procedural generator must install: " + installed,
-                    installed.contains("\"ok\":true"));
+                    Reply.of(installed).ok());
             String found = exec("artest space find-procedural 4");
             assertTrue("a dense procedural galaxy must offer a landable body: " + found,
-                    found.contains("\"ok\":true"));
-            String realized = exec("artest space realize " + intField(found, "sx") + " "
-                    + intField(found, "sy") + " " + intField(found, "sz"));
-            assertTrue("realization must mint a world to ask about: " + realized,
-                    realized.contains("\"ok\":true"));
-            int fresh = intField(realized, "dim");
+                    Reply.of(found).ok());
+            int fresh = RealizedBody.atSectorLocal(this::exec, intField(found, "sx"),
+                    intField(found, "sy"), intField(found, "sz")).dim;
 
             String reply = halves(0, fresh);
             assertTrue("arrangement: nobody may have taught this world globally: " + reply,
-                    reply.contains("\"global\":false"));
-            assertTrue("arrangement: nor locally: " + reply, reply.contains("\"local\":false"));
+                    (!Reply.of(reply).bool("global")));
+            assertTrue("arrangement: nor locally: " + reply, (!Reply.of(reply).bool("local")));
             assertTrue("with research off a pad must still be offered it - the place-bound set is"
                     + " additive over a gate that is not there: " + reply, known(0, fresh));
         } finally {
@@ -158,17 +151,18 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
         exec("artest config set telescopePassiveRadiusSteps 1");
 
         String placed = exec("artest telescope place " + where());
-        assertTrue("could not place an observatory: " + placed, placed.contains("\"ok\":true"));
+        assertTrue("could not place an observatory: " + placed, Reply.of(placed).ok());
         String crystal = exec("artest telescope crystal " + where());
-        assertTrue("the crystal must start blank: " + crystal, crystal.contains("\"addresses\":0"));
+        assertEquals("the crystal must start blank: " + crystal,
+                0, Reply.of("artest telescope crystal", crystal).integer("addresses"));
 
         // The instrument watching its own neighbourhood: what it resolves are the bodies of the
         // system this observatory is standing in, which are the ones that have worlds to fly to.
-        String swept = exec("artest telescope passive " + where());
-        assertTrue("the passive sweep did not start: " + swept, swept.contains("\"ok\":true"));
-        String afterSweep = exec("artest telescope info " + where());
-        assertFalse("the sweep must be finished with research off: " + afterSweep,
-                afterSweep.contains("\"scanning\":true"));
+        TelescopeReading.of(exec("artest telescope passive " + where()))
+                .requireOk("the passive sweep did not start");
+        TelescopeReading afterSweep = TelescopeReading.at(this::exec, where());
+        assertFalse("the sweep must be finished with research off: " + afterSweep.raw(),
+                afterSweep.scanning);
         exec("artest config set planetsMustBeDiscovered true");
 
         String deposited = exec("artest telescope deposit " + where());
@@ -179,9 +173,9 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
         for (int dim : landed) {
             String reply = halves(0, dim);
             assertTrue("a deposited address must be known to a pad standing here: " + reply,
-                    reply.contains("\"known\":true"));
+                    Reply.of(reply).bool("known"));
             assertTrue("and it must be known LOCALLY - the deposit may not touch the global floor: "
-                    + reply, reply.contains("\"local\":true"));
+                    + reply, Reply.of(reply).bool("local"));
         }
 
         String depositedAgain = exec("artest telescope deposit " + where());

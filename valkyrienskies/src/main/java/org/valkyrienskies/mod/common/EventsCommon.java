@@ -39,6 +39,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.valkyrienskies.mod.common.entity.EntityMountable;
 import org.valkyrienskies.mod.common.network.ShipTransformUpdateMessage;
+import org.valkyrienskies.mod.common.ships.physics_data.ShipPhysicsData;
 import org.valkyrienskies.mod.common.ships.entity_interaction.EntityDraggable;
 import org.valkyrienskies.mod.common.ships.entity_interaction.IDraggable;
 import org.valkyrienskies.mod.common.ships.ship_transform.CoordinateSpaceType;
@@ -157,9 +158,12 @@ public class EventsCommon {
     public static void sendShipTransformUpdates(World world, IPhysObjectWorld physObjectWorld) {
         LAST_POSE_SEND_NANOS.put(world.provider.getDimension(), System.nanoTime());
         try {
-            final ShipTransformUpdateMessage message = new ShipTransformUpdateMessage();
-            message.setDimensionID(world.provider.getDimension());
-            boolean any = false;
+            // ONE MESSAGE PER PLAYER, carrying the craft THAT player watches. The poses used to go
+            // to the whole dimension, which means a client is told about craft it cannot see and
+            // pays for them every tick — and now that motion rides along, it would pay six more
+            // numbers per craft. The watcher set is not new machinery: the ship index packet already
+            // maintains it (watch/unwatch distance), and this reads the same answer.
+            final Map<EntityPlayerMP, ShipTransformUpdateMessage> perPlayer = new HashMap<>();
             for (final PhysicsObject physicsObject : physObjectWorld.getAllLoadedThreadSafe()) {
                 final ShipTransform shipTransform =
                         physicsObject.getShipTransformationManager().getCurrentPhysicsTransform();
@@ -167,12 +171,32 @@ public class EventsCommon {
                 if (shipTransform == null || shipBB == null) {
                     continue; // a ship whose pose or extent is not ready yet says nothing this tick
                 }
-                message.addData(physicsObject.getUuid(), shipTransform, shipBB);
-                any = true;
+                // The craft's MOTION, read where its pose is read. Both are published by the same
+                // physics step — `PhysicsCalculations` writes the two velocities into ShipData
+                // immediately after setting the current physics transform — so taken here they are
+                // one statement about one instant, which is what the receiving side needs to apply
+                // a velocity AT a point. Until this was sent, a client's copy of these stayed at the
+                // zero it was constructed with: the ship index packet updates transform, inertia and
+                // the physics flag, never ShipPhysicsData.
+                final ShipPhysicsData physicsData = physicsObject.getShipData().getPhysicsData();
+                for (final EntityPlayerMP watcher : physicsObject.getWatchingPlayers()) {
+                    if (watcher == null || watcher.hasDisconnected()) {
+                        continue;
+                    }
+                    ShipTransformUpdateMessage message = perPlayer.get(watcher);
+                    if (message == null) {
+                        message = new ShipTransformUpdateMessage();
+                        message.setDimensionID(world.provider.getDimension());
+                        perPlayer.put(watcher, message);
+                    }
+                    message.addData(physicsObject.getUuid(), shipTransform, shipBB,
+                            physicsData == null ? null : physicsData.getLinearVelocity(),
+                            physicsData == null ? null : physicsData.getAngularVelocity());
+                }
             }
-            if (any) {
+            for (final Map.Entry<EntityPlayerMP, ShipTransformUpdateMessage> addressed : perPlayer.entrySet()) {
                 ValkyrienSkiesMod.physWrapperTransformUpdateNetwork
-                        .sendToDimension(message, message.getDimensionID());
+                        .sendTo(addressed.getValue(), addressed.getKey());
             }
         } catch (Exception e) {
             e.printStackTrace();

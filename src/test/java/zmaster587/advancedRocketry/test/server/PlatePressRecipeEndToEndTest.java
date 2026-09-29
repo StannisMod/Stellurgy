@@ -3,6 +3,10 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.server.TestClient;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.Reply;
+
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -30,51 +34,54 @@ import static org.junit.Assert.assertTrue;
 public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
 
     private static final String FIXTURE_KEY = "plate-press";
+    /** What the fixture resolved the first recipe to — the ids this scenario is about. */
+    private static final String OUTPUT_ITEM = "outputItem";
+    private static final String INGREDIENT_BLOCK = "ingredientBlock";
     private static final String PRESS_FQN   = "zmaster587.advancedRocketry.block.BlockSmallPlatePress";
 
     @Test
     public void platePressFixtureBuildsExpectedStack() throws Exception {
-        int x = 400, y = 70, z = 400;
+        int x = 400, y = FixtureSite.OPEN_AIR_Y, z = 400;
         TestClient c = client();
         String resp = String.join("\n",
                 c.execute("artest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
         assertTrue("fixture machine " + FIXTURE_KEY + " failed: " + resp,
-                resp.contains("\"ok\":true"));
-        assertTrue("response missing pressPos: " + resp,
-                resp.contains("\"pressPos\":[" + x + "," + y + "," + z + "]"));
+                Reply.of(resp).ok());
+        // The position, read as three numbers and compared. Built as a needle it depended on how
+        // the producer renders a coordinate — a space after a comma, or a double instead of an
+        // int, and the fixture reads as having reported no position at all.
+        assertArrayEquals("response missing pressPos: " + resp,
+                new int[]{x, y, z}, Reply.of("artest fixture machine", resp).blockPos("pressPos"));
 
         // Read each cell of the 3-stack and verify the correct block sits there.
         String obsRead = String.join("\n", c.execute(
                 "artest block at 0 " + x + " " + (y - 2) + " " + z));
         assertTrue("obsidian missing at " + x + "," + (y - 2) + "," + z + ": " + obsRead,
-                obsRead.contains("\"block\":\"minecraft:obsidian\""));
+                "minecraft:obsidian".equals(Reply.of(obsRead).text("block")));
 
         String pressRead = String.join("\n", c.execute(
                 "artest block at 0 " + x + " " + y + " " + z));
         assertTrue("press missing at " + x + "," + y + "," + z + ": " + pressRead,
-                pressRead.contains("\"block\":\"advancedrocketry:platepress\""));
+                "advancedrocketry:platepress".equals(Reply.of(pressRead).text("block")));
     }
 
     @Test
     public void platePressRedstoneActivationDropsRecipeOutput() throws Exception {
-        int x = 500, y = 70, z = 400;
+        int x = 500, y = FixtureSite.OPEN_AIR_Y, z = 400;
         TestClient c = client();
         // Build fixture + capture the resolved output id.
         String fixture = String.join("\n",
                 c.execute("artest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Extract the resolved output item + ingredient block ids.
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                "\"outputItem\":\"([^\"]+)\"").matcher(fixture);
-        assertTrue("response missing outputItem: " + fixture, m.find());
-        String expectedOutputId = m.group(1);
+        Reply built = Reply.of("artest fixture machine", fixture);
+        assertTrue("response missing outputItem: " + fixture, built.has(OUTPUT_ITEM));
+        String expectedOutputId = built.text(OUTPUT_ITEM);
         assertTrue("first recipe has no output — can't end-to-end test",
                 !"null".equals(expectedOutputId));
-        java.util.regex.Matcher mb = java.util.regex.Pattern.compile(
-                "\"ingredientBlock\":\"([^\"]+)\"").matcher(fixture);
-        assertTrue("response missing ingredientBlock: " + fixture, mb.find());
-        String ingredientBlockId = mb.group(1);
+        assertTrue("response missing ingredientBlock: " + fixture, built.has(INGREDIENT_BLOCK));
+        String ingredientBlockId = built.text(INGREDIENT_BLOCK);
 
         // Activate: place a redstone block on top of the press. The press's
         // neighborChanged handler fires synchronously on setBlockState, runs
@@ -85,16 +92,19 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         String activate = String.join("\n", c.execute(
                 "artest place 0 " + x + " " + (y + 1) + " " + z + " minecraft:redstone_block"));
         assertTrue("redstone block placement failed: " + activate,
-                activate.contains("\"placed\":true"));
+                Reply.of(activate).bool("placed"));
 
         // Scan for EntityItem within 2 blocks of (x+0.5, y-0.5, z+0.5) —
         // the spawn position from BlockSmallPlatePress.checkForMove.
         String scan = String.join("\n", c.execute(
                 "artest entity scan-items 0 " + (x + 0.5) + " " + (y - 0.5) + " " + (z + 0.5) + " 2"));
-        assertTrue("entity scan-items failed: " + scan, scan.contains("\"ok\":true"));
-        assertTrue("expected output item " + expectedOutputId
-                        + " not in scan response — recipe did not produce its EntityItem: " + scan,
-                scan.contains("\"item\":\"" + expectedOutputId + "\""));
+        assertTrue("entity scan-items failed: " + scan, Reply.of(scan).ok());
+        // The scan is addressed by its own box — this press, radius 2 — so what it holds is an
+        // existence question; the press drops the output where it likes, and a second stack of it
+        // would be a press that ran twice, not an ambiguous reading.
+        assertTrue("the press must have dropped " + expectedOutputId + ": " + scan,
+                Reply.of("artest entity scan-items", scan)
+                        .holdsElement("items", "item", String.valueOf(expectedOutputId)));
 
         // Ingredient block must be gone (consumed by the press). After
         // activation the cell ends up either as AIR (setBlockToAir from
@@ -106,6 +116,6 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
         assertTrue("ingredient block " + ingredientBlockId + " still present at "
                         + x + "," + (y - 1) + "," + z + " — press did not consume it: "
                         + ingredientRead,
-                !ingredientRead.contains("\"block\":\"" + ingredientBlockId + "\""));
+                !String.valueOf(ingredientBlockId).equals(Reply.of(ingredientRead).text("block")));
     }
 }

@@ -45,17 +45,33 @@ public final class DeckLook {
 
     private DeckLook() {}
 
-    static {
-        // The movement half of the one-transform rule: the walk basis consumes the SAME deck
-        // heading the mouse turns, instead of re-deriving it from the world-yaw projection
-        // (which skews on a rolled ship and degenerates when the deck goes vertical). Installed
-        // here so a dedicated server, which never loads this client class, keeps the fallback.
-        ShipFrameTravel.clientDeckLookYaw = DeckLook::heldDeckYawFor;
-        // The flying-aboard vertical intent: read at CALL time (during the local player's own
-        // travel) so it is EXACTLY the movementInput state vanilla's world-frame fly impulse
-        // consumed this tick - the resolution subtracts that impulse and re-applies it on deck
-        // axes, and an off-by-one-tick sample would leave a world-frame residual.
-        ShipFrameTravel.clientFlyIntent = DeckLook::flyIntentFor;
+    /**
+     * The client half of the aboard-movement port: what the deck look can tell the movement
+     * resolution about a body this client owns.
+     *
+     * <p>Installed from the client's own init ({@code ClientProxy.preinit}), which runs once before
+     * any world exists. Deliberately NOT from a static initialiser of this class: the port would
+     * then appear only once something happened to class-load {@code DeckLook}, and until then the
+     * movement would fall back to the world-yaw projection with nothing saying so.</p>
+     */
+    public static final class Port implements ShipFrameTravel.ClientLookSource {
+
+        /** The movement half of the one-transform rule: the walk basis consumes the SAME deck
+         *  heading the mouse turns, instead of re-deriving it from the world-yaw projection
+         *  (which skews on a rolled ship and degenerates when the deck goes vertical). */
+        @Override
+        public Float deckYaw(net.minecraft.entity.EntityLivingBase entity) {
+            return heldDeckYawFor(entity);
+        }
+
+        /** The flying-aboard vertical intent: read at CALL time (during the local player's own
+         *  travel) so it is EXACTLY the movementInput state vanilla's world-frame fly impulse
+         *  consumed this tick - the resolution subtracts that impulse and re-applies it on deck
+         *  axes, and an off-by-one-tick sample would leave a world-frame residual. */
+        @Override
+        public Integer flyIntent(net.minecraft.entity.EntityLivingBase entity) {
+            return flyIntentFor(entity);
+        }
     }
 
     /** The held deck heading for {@code entity}, or {@code null} when this client does not own
@@ -77,21 +93,18 @@ public final class DeckLook {
         return (player.movementInput.jump ? 1 : 0) - (player.movementInput.sneak ? 1 : 0);
     }
 
-    // ---- Client-observable state (read by the deck-look e2e through readStaticField). NOT
-    // test-gated: harness child JVMs run without test mode, so a gated static is invisible to
-    // the tests that pin this contract. ----
+    // ---- Client-observable state. PRIVATE; this class is the sole writer. ----
 
     /** Whether the deck-frame look currently owns the local player's aim. */
-    public static volatile boolean active = false;
+    private static volatile boolean active = false;
     /** The held look, in the DECK frame (degrees; pitch clamped to +/-90 like vanilla). */
-    public static volatile double deckYawDeg = 0.0;
-    public static volatile double deckPitchDeg = 0.0;
-    /** The world yaw/pitch last derived from the deck look (what the fields were set to). */
-    public static volatile double lastDerivedYawDeg = 0.0;
-    public static volatile double lastDerivedPitchDeg = 0.0;
-    /** How many times an EXTERNAL world-rotation write (teleport / PosLook) re-seeded the deck
-     *  look. A steadily climbing count with no teleports names a writer fighting this class. */
-    public static volatile long reseeds = 0;
+    private static volatile double deckYawDeg = 0.0;
+    private static volatile double deckPitchDeg = 0.0;
+
+    /** @see #active */
+    public static boolean isActive() {
+        return active;
+    }
 
     /** What this class last wrote into the player's world rotation. A mismatch on the next sync
      *  means someone else wrote the fields and the deck look must re-seed from them. NaN = never
@@ -248,9 +261,6 @@ public final class DeckLook {
             active = false; // ship transform unavailable this instant; vanilla owns the turn
             return false;
         }
-        if (active) {
-            reseeds++;
-        }
         // Along the deck normal the yaw is degenerate; keep the previous heading rather than
         // snapping it to an arbitrary one (vanilla keeps yaw at pitch +/-90 the same way).
         if (Math.sqrt(deck[0] * deck[0] + deck[2] * deck[2]) >= 1.0E-4) {
@@ -295,8 +305,6 @@ public final class DeckLook {
         player.rotationPitch = pitch;
         lastWrittenYaw = yaw;
         lastWrittenPitch = pitch;
-        lastDerivedYawDeg = yaw;
-        lastDerivedPitchDeg = pitch;
     }
 
     /** Minecraft's look vector for a yaw/pitch pair (degrees). */

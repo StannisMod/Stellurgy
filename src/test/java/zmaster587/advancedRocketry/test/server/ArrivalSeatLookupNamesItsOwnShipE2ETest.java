@@ -1,8 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.After;
-import org.junit.Assume;
+
 import org.junit.Test;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -30,40 +35,53 @@ import static org.junit.Assert.assertTrue;
  */
 public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServerTest {
 
+    /**
+     * How many ships must be loaded for a lookup to be able to pick the WRONG one.
+     *
+     * <p>The TEST'S OWN, and it is the whole arrangement: with one ship in the world every lookup
+     * is right by accident, so this leg cannot exhibit the defect it exists for.</p>
+     */
+    private static final int SHIPS_FOR_AMBIGUITY = 2;
+
+    /** World a ship is given to become loadable - the old 40 x 250 ms. */
+
     /** The craft that HAS a pilot seat — the one an arrival would be asking about. */
-    private static final int SEATED_X = 5800, SEATED_Y = 80, SEATED_Z = 5800;
+    private static final int SEATED_X = 5800, SEATED_Y = FixtureSite.OPEN_AIR_Y, SEATED_Z = 5800;
     /** A second craft with a flight computer but NO pilot seat, parked far enough to be a separate
      *  ship and near enough to win every position lookup made at its own position. */
-    private static final int SEATLESS_X = 5864, SEATLESS_Y = 80, SEATLESS_Z = 5800;
+    private static final int SEATLESS_X = 5864, SEATLESS_Y = FixtureSite.OPEN_AIR_Y, SEATLESS_Z = 5800;
 
     @Test
     public void theSeatLookupFindsItsOwnShipsSeatWithAnotherCraftNearer() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
 
         // Headless: nobody is near a ship to hold it loaded, and an unloaded ship reads as a missing
         // one. Reset in @After (shared-harness contract).
-        exec("artest vs permaload true");
 
-        clearArea(SEATED_X, SEATED_Z);
-        clearArea(SEATLESS_X, SEATLESS_Z);
 
         String seatedAsm = exec("artest rocket assemble 0 "
-                + placeFixture(SEATED_X, SEATED_Y, SEATED_Z, "with-pilot-seat"));
+                + placeFixture(FixtureSite.openAir(0, SEATED_X, SEATED_Z), "with-pilot-seat"));
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + seatedAsm,
-                seatedAsm.contains("\"rocketCount\":0"));
+                (Reply.of(seatedAsm).integer("rocketCount") == 0));
         String seatlessAsm = exec("artest rocket assemble 0 "
-                + placeFixture(SEATLESS_X, SEATLESS_Y, SEATLESS_Z, "with-nav-computer"));
+                + placeFixture(FixtureSite.openAir(0, SEATLESS_X, SEATLESS_Z), "with-nav-computer"));
         assertTrue("the seatless craft did not become a ship either: " + seatlessAsm,
-                seatlessAsm.contains("\"rocketCount\":0"));
-        assertTrue("the ships never loaded", waitForLoadedShip(0) >= 2);
+                (Reply.of(seatlessAsm).integer("rocketCount") == 0));
+        assertTrue("the ships never loaded", loadedShips(0) >= SHIPS_FOR_AMBIGUITY);
 
         // ARRANGEMENT CHECK, before either leg: the two crafts must be two REGISTERED ships, or the
         // whole question ("which one does the lookup answer for") does not exist in this world.
         String all = exec("artest vs ship-count-all 0");
         assertTrue("fewer than two ships are registered, so no lookup can pick the wrong one: " + all,
-                extractInt(all, "count") >= 2);
+                extractInt(all, "count") >= SHIPS_FOR_AMBIGUITY);
 
-        String seatedShip = shipUuidAt(SEATED_X, SEATED_Y + 2, SEATED_Z);
+        // THE IDENTITY COMES FROM THE ASSEMBLY THAT MINTED IT, not from a lookup at a position.
+        //
+        // It was read out of `seat-yard`'s `nearest` field until 2026-09-14, and that field is now
+        // GONE along with the positional lookup behind it: a ship's blocks live in its subspace, so
+        // in the world it has a pose and no extent for a distance to be measured to. This class is
+        // ABOUT that defect — its subject leg proves an arrival asks by identity — and it was
+        // getting the identity it asks with from the very lookup under test.
+        String seatedShip = zmaster587.advancedRocketry.test.ShipIdentity.nameFromAssembly(seatedAsm);
         assertNotNull("could not read the seated craft's ship identity — without it the subject leg "
                 + "cannot ask about that ship at all", seatedShip);
 
@@ -84,26 +102,8 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
                 extractInt(byIdentity, "seats") >= 1);
     }
 
-    /**
-     * The uuid of the ship a POSITION lookup resolves at {@code (x,y,z)} — read off the same
-     * diagnostic an arrival prints, which leads with the resolved ship's identity.
-     */
-    private String shipUuidAt(int x, int y, int z) throws Exception {
-        String nearest = extractString(
-                exec("artest vs seat-yard 0 " + x + " " + y + " " + z), "nearest");
-        if (nearest == null || nearest.startsWith("none") || nearest.startsWith("vs-absent")) {
-            return null;
-        }
-        int space = nearest.indexOf(' ');
-        return space < 0 ? nearest : nearest.substring(0, space);
-    }
-
     @After
     public void restoreSharedServerState() throws Exception {
-        if (!serverHasVs()) {
-            return;
-        }
-        exec("artest vs permaload false");
     }
 
     // --- helpers (mirror VSShipEntryE2ETest) --------------------------------------------------
@@ -112,53 +112,33 @@ public class ArrivalSeatLookupNamesItsOwnShipE2ETest extends AbstractSharedServe
         return String.join("\n", client().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
-    }
 
-    private void clearArea(int baseX, int baseZ) throws Exception {
-        int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
-        int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed", exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " "
-                + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SEATED_Y - 2)
-                + " " + (baseZ - 4) + " " + (baseX + 20) + " " + (SEATED_Y + 12) + " " + (baseZ + 20)
-                + " minecraft:air").contains("\"ok\":true"));
-    }
-
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        java.util.regex.Matcher bp = java.util.regex.Pattern
-                .compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]").matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair: a {@code clearArea} that ran a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
+     * rather than asked, and threw away its own answer — {@code placed}, the count of blocks that
+     * were standing in the volume. The shared builder asks instead, and on an open-air site
+     * anything found is an arrangement failure that names itself. The warmup went with it: the
+     * fill force-loads every chunk in its own box, so the first link was already doing that job.</p>
+     *
+     * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
+     * they are what this scenario's green runs were taken over.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft this scenario builds stands in this volume");
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
-    }
-
-    private static String extractString(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        return Reply.of(json).integer(key);
     }
 }

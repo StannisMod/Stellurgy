@@ -1102,14 +1102,14 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         // This is what bounds a craft's speed now that the law does not: the ceiling is a property of
         // where you are, and in vacuum there is none.
         //
-        // The STRICT lookup, deliberately: getDimensionProperties answers an unknown id with the
-        // OVERWORLD's properties, which carry a full atmosphere - so a space cell, a slot world or
-        // hyperspace would read as one-atmosphere air and quietly brake every ship flying through
-        // vacuum. A dimension that is not a registered body has no air here, which is also the
-        // physically right answer.
-        DimensionProperties atmProps = DimensionManager.getInstance()
-                .getDimensionPropertiesOrNull(this.world.provider.getDimension());
-        double atmDensity = atmProps == null ? 0.0 : atmProps.getAtmosphereDensity() / 100.0;
+        // Asked through the shared helper so the two flight tiers cannot disagree about how much air
+        // a world has. The STRICT lookup it performs is deliberate: getDimensionProperties answers an
+        // unknown id with the OVERWORLD's properties, which carry a full atmosphere - so a space
+        // cell, a slot world or hyperspace would read as one-atmosphere air and quietly brake every
+        // craft flying through vacuum. A dimension that is not a registered body has no air here,
+        // which is also the physically right answer.
+        double atmDensity = zmaster587.advancedRocketry.api.AtmosphereDensity
+                .inAtmospheres(this.world);
         if (atmDensity > 0.0) {
             double[] dragged = FreeFlightPhysics.atmosphericDrag(
                     result.motionX, result.motionY, result.motionZ, atmDensity);
@@ -2481,11 +2481,11 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                     for (Entity player : this.getPassengers()) {
                         if (player instanceof EntityPlayer) {
                             ARAdvancements.MOON_LANDING.trigger((EntityPlayerMP) player);
-                            if (!DimensionManager.hasReachedMoon)
+                            if (!DimensionManager.getInstance().hasReachedMoon())
                                 ARAdvancements.ONE_SMALL_STEP.trigger((EntityPlayerMP) player);
                         }
                     }
-                    DimensionManager.hasReachedMoon = true;
+                    DimensionManager.getInstance().setReachedMoon(true);
                 }
             }
             destPos.y = (float) getEntryHeight(destinationDimId);
@@ -2995,7 +2995,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
             int timeOffset = 1;
             for (Entity e : passengers) {
-                e.getEntityData().setLong("arRocketTransferGrace", worldserver.getTotalWorldTime() + 100L);
+                zmaster587.advancedRocketry.atmosphere.RocketTransferGrace.stamp(
+                        e, worldserver.getTotalWorldTime());
                 PlanetEventHandler.addDelayedTransition(new TransitionEntity(
                         worldserver.getTotalWorldTime() + ++timeOffset,
                         e,

@@ -1,9 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -24,63 +27,51 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightLaunchGateTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-
-        String assemble = ok(client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+                "simple", 2, 10,
+                "the craft is built and flown in this volume");
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
     public void fuellessFreeFlightRocketStaysGroundedOnPrepareLaunch() throws Exception {
-        int id = buildAndAssemble(3380, 64, 700);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3380, 700));
 
         String mode = ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        assertTrue("set FREE_FLIGHT failed: " + mode, mode.contains("\"flightMode\":\"FREE_FLIGHT\""));
+        assertTrue("set FREE_FLIGHT failed: " + mode, "FREE_FLIGHT".equals(Reply.of(mode).text("flightMode")));
 
         // Remove all fuel so canStartFreeFlight() must reject (rocketRequireFuel
         // defaults true).
         String drain = ok(client().execute("artest rocket drain-fuel " + id));
-        assertTrue("drain-fuel failed: " + drain, drain.contains("\"ok\":true"));
+        assertTrue("drain-fuel failed: " + drain, Reply.of(drain).ok());
 
         // Drive prepareLaunch through the redstone-equivalent server entry.
         String resp = ok(client().execute("artest rocket ff-prepare-launch " + id));
-        assertTrue("ff-prepare-launch probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("ff-prepare-launch probe failed: " + resp, Reply.of(resp).ok());
         assertTrue("rocket must be in FREE_FLIGHT mode for this pin: " + resp,
-                resp.contains("\"isFreeFlight\":true"));
+                Reply.of(resp).bool("isFreeFlight"));
 
         // The gate: no fuel => must NOT enter flight (no on-pad dead-state).
         assertTrue("fuel-less FF rocket must stay grounded after prepareLaunch "
                         + "(gate regression — it entered flight): " + resp,
-                resp.contains("\"isInFlight\":false"));
+                (!Reply.of(resp).bool("isInFlight")));
     }
 }

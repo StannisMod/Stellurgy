@@ -51,6 +51,9 @@ import static org.junit.Assert.fail;
  */
 public class XMLPlanetLoaderTest {
 
+    /** The first dimension id an auto-allocation may take: vanilla reserves 0, -1 and 1. */
+    private static final int FIRST_FREE_DIM = 2;
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
@@ -116,7 +119,7 @@ public class XMLPlanetLoaderTest {
                 zmaster587.advancedRocketry.api.Constants.INVALID_PLANET, props.getId());
         // Vanilla dims 0/-1/1 are reserved; allocator skips them.
         assertTrue("auto-allocated dim should be ≥ 2 (vanilla reserved 0/-1/1), got " + props.getId(),
-                props.getId() >= 2);
+                props.getId() >= FIRST_FREE_DIM);
     }
 
     @Test
@@ -596,7 +599,7 @@ public class XMLPlanetLoaderTest {
                         + " weight=\"11\"/>\n"
                         + "</galaxyGen>\n")).galaxyGenConfig;
         try {
-            UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(parsed));
+            UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(parsed));
             String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance());
             File f = tempFolder.newFile();
             Files.write(f.toPath(), written.getBytes(StandardCharsets.UTF_8));
@@ -611,7 +614,7 @@ public class XMLPlanetLoaderTest {
             assertEquals(GalaxyGenConfig.GalaxyProfile.SPHEROID, round.galaxyTypes.get(1).profile);
             assertEquals(11, round.galaxyTypes.get(1).weight);
         } finally {
-            UniverseRegistry.setGenerator(null);
+            UniverseRegistry.detachGenerator();
         }
     }
 
@@ -676,7 +679,7 @@ public class XMLPlanetLoaderTest {
                         + "</galaxyGen>\n")).galaxyGenConfig;
 
         try {
-            UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(parsed));
+            UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(parsed));
             String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance());
 
             File f = tempFolder.newFile();
@@ -693,7 +696,7 @@ public class XMLPlanetLoaderTest {
             assertEquals(60, round.starTypes.get(0).temperature);
             assertEquals(9, round.starTypes.get(0).weight);
         } finally {
-            UniverseRegistry.setGenerator(null); // restore the authored-only default
+            UniverseRegistry.detachGenerator(); // restore the authored-only default
         }
     }
 

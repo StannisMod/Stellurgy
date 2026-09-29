@@ -3,10 +3,13 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import zmaster587.advancedRocketry.test.Reply;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -19,27 +22,43 @@ import static org.junit.Assert.assertTrue;
  */
 public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
 
+    /**
+     * The Y every block in this class is placed at: the open-air band, not terrain.
+     *
+     * <p>It was a hard-coded 70 until 2026-09-14, and nothing in this class ever wanted the ground.
+     * What 70 actually bought was whatever the pinned seed rolled at each plot — the surface on this
+     * seed runs y=64..99 across the sites in use, so a block at 70 stood in the open at one and
+     * inside rock at the next, and the per-scenario clears below turned the second into a pocket.
+     * A pocket happens to satisfy every assertion here, which is exactly why it could sit unnoticed:
+     * the landscape was never in the story. In the band there is nothing to be inside of.</p>
+     *
+     * <p>The small clears each scenario still does are NOT this; they are about a block's own
+     * neighbours — air on the detector's sample faces, a solid support under the torch — and they
+     * stay.</p>
+     */
+    private static final int SITE_Y = FixtureSite.OPEN_AIR_Y;
+
     @Test
     public void earthDensityZeroFlipsAtmosphereToVacuum() throws Exception {
         String baseline = String.join("\n", client().execute("artest atmosphere get 0 0 70 0"));
         assertTrue("baseline atmosphere probe errored: " + baseline,
-                !baseline.contains("\"error\""));
+                !Reply.of(baseline).has("error"));
         assertTrue("baseline Earth not breathable — env contamination? " + baseline,
-                baseline.contains("\"breathable\":true"));
+                Reply.of(baseline).bool("breathable"));
 
         String planet = String.join("\n", client().execute("artest planet info 0"));
-        int originalDensity = extractInt(planet, "\"atmosphereDensity\":(-?\\d+)");
+        int originalDensity = extractInt(planet, "atmosphereDensity");
         assertTrue("could not read Earth atmosphereDensity: " + planet, originalDensity >= 0);
 
         try {
             String setResp = String.join("\n", client().execute("artest atmosphere set-density 0 0"));
-            assertTrue("set-density failed: " + setResp, setResp.contains("\"ok\":true"));
+            assertTrue("set-density failed: " + setResp, Reply.of(setResp).ok());
             assertTrue("set-density did not stick: " + setResp,
-                    setResp.contains("\"newDensity\":0"));
+                    (Reply.of(setResp).integer("newDensity") == 0));
 
             String vacResp = String.join("\n", client().execute("artest atmosphere get 0 0 70 0"));
             assertTrue("density=0 should yield non-breathable, got: " + vacResp,
-                    vacResp.contains("\"breathable\":false"));
+                    (!Reply.of(vacResp).bool("breathable")));
         } finally {
             client().execute("artest atmosphere set-density 0 " + originalDensity);
         }
@@ -56,7 +75,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void atmosphereDetectorReportsCurrentAtmosphereOnRedstone() throws Exception {
-        int bx = 1700, by = 70, bz = 1500;
+        int bx = 1700, by = SITE_Y, bz = 1500;
 
         // Clear neighbours so the detector's sample loop sees AIR (any opaque
         // block on any face would suppress the AIR branch). 3×3×3 air around
@@ -66,14 +85,14 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
 
         String place = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:oxygenDetection"));
-        assertTrue("detector did not place: " + place, place.contains("\"placed\":true"));
+        assertTrue("detector did not place: " + place, Reply.of(place).bool("placed"));
 
         // Snapshot pre-tick — defaults to unpowered.
         String pre = String.join("\n", client().execute(
                 "artest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
-        assertTrue("pre-tick probe failed: " + pre, pre.contains("\"isDetector\":true"));
+        assertTrue("pre-tick probe failed: " + pre, Reply.of(pre).bool("isDetector"));
         assertEquals("detector should default to AIR mode: " + pre,
-                "air", matchOrFail(Pattern.compile("\"detectorMode\":\"([^\"]+)\""), pre));
+                "air", matchOrFail("detectorMode", pre));
 
         // Drive the sample loop directly via probe — TileAtmosphereDetector.update()
         // is gated by world.getWorldTime() % 10 == 0, which force-tick doesn't
@@ -81,36 +100,36 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         // dedicated detector-force-sample probe.
         String sample1 = String.join("\n", client().execute(
                 "artest atmosphere detector-force-sample 0 " + bx + " " + by + " " + bz));
-        assertTrue("force-sample failed: " + sample1, sample1.contains("\"ok\":true"));
+        assertTrue("force-sample failed: " + sample1, Reply.of(sample1).ok());
         assertTrue("AIR target on overworld must report detected=true: " + sample1,
-                sample1.contains("\"detected\":true"));
+                Reply.of(sample1).bool("detected"));
 
         String postAir = String.join("\n", client().execute(
                 "artest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
         assertTrue("detector should be POWERED after detecting AIR: " + postAir,
-                postAir.contains("\"powered\":true"));
+                Reply.of(postAir).bool("powered"));
         assertEquals("strongPower should be 15 when POWERED: " + postAir,
-                "15", matchOrFail(Pattern.compile("\"strongPower\":(\\d+)"), postAir));
+                "15", matchOrFail("strongPower", postAir));
 
         // Re-target detector to vacuum — there's no vacuum near here, so the
         // sample loop should report non-detect and the block should unpower.
         String setMode = String.join("\n", client().execute(
                 "artest atmosphere detector-set-mode 0 " + bx + " " + by + " " + bz + " vacuum"));
-        assertTrue("detector-set-mode failed: " + setMode, setMode.contains("\"ok\":true"));
+        assertTrue("detector-set-mode failed: " + setMode, Reply.of(setMode).ok());
 
         String sample2 = String.join("\n", client().execute(
                 "artest atmosphere detector-force-sample 0 " + bx + " " + by + " " + bz));
         assertTrue("force-sample (vacuum target) failed: " + sample2,
-                sample2.contains("\"ok\":true"));
+                Reply.of(sample2).ok());
         assertTrue("vacuum target on overworld must report detected=false: " + sample2,
-                sample2.contains("\"detected\":false"));
+                (!Reply.of(sample2).bool("detected")));
 
         String postVacuum = String.join("\n", client().execute(
                 "artest atmosphere detector-output 0 " + bx + " " + by + " " + bz));
         assertTrue("detector should be UNPOWERED when looking for vacuum on Earth: "
-                + postVacuum, postVacuum.contains("\"powered\":false"));
+                + postVacuum, (!Reply.of(postVacuum).bool("powered")));
         assertEquals("strongPower should be 0 when UNPOWERED: " + postVacuum,
-                "0", matchOrFail(Pattern.compile("\"strongPower\":(\\d+)"), postVacuum));
+                "0", matchOrFail("strongPower", postVacuum));
     }
 
     /**
@@ -123,7 +142,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void co2ScrubberRemovesCo2InSealedRoom() throws Exception {
-        int bx = 1700, by = 70, bz = 1600;
+        int bx = 1700, by = SITE_Y, bz = 1600;
 
         // Clear neighbours so the place doesn't replace an arbitrary block.
         ok(client().execute("artest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
@@ -131,27 +150,27 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
 
         String place = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:oxygenScrubber"));
-        assertTrue("scrubber did not place: " + place, place.contains("\"placed\":true"));
+        assertTrue("scrubber did not place: " + place, Reply.of(place).bool("placed"));
 
         // Empty scrubber — useCharge must report consumed=false.
         String emptyConsume = String.join("\n", client().execute(
                 "artest scrubber consume 0 " + bx + " " + by + " " + bz));
         assertTrue("empty scrubber must reject useCharge: " + emptyConsume,
-                emptyConsume.contains("\"consumed\":false"));
+                (!Reply.of(emptyConsume).bool("consumed")));
 
         // Load a fresh cartridge into slot 0.
         String fill = String.join("\n", client().execute(
                 "artest hatch fill 0 " + bx + " " + by + " " + bz
                         + " 0 advancedrocketry:carbonScrubberCartridge 1 0"));
-        assertTrue("hatch fill failed: " + fill, fill.contains("\"ok\":true"));
+        assertTrue("hatch fill failed: " + fill, Reply.of(fill).ok());
 
         // First consume — should succeed, damage goes 0 -> 1.
         String firstConsume = String.join("\n", client().execute(
                 "artest scrubber consume 0 " + bx + " " + by + " " + bz));
         assertTrue("first consume should succeed: " + firstConsume,
-                firstConsume.contains("\"consumed\":true"));
-        int damageBefore = extractInt(firstConsume, "\"damageBefore\":(-?\\d+)");
-        int damageAfter = extractInt(firstConsume, "\"damageAfter\":(-?\\d+)");
+                Reply.of(firstConsume).bool("consumed"));
+        int damageBefore = extractInt(firstConsume, "damageBefore");
+        int damageAfter = extractInt(firstConsume, "damageAfter");
         assertEquals("damage must increment by exactly 1 per consume — got "
                 + damageBefore + " -> " + damageAfter,
                 damageBefore + 1, damageAfter);
@@ -159,13 +178,13 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         // Second consume — same contract, damage 1 -> 2.
         String secondConsume = String.join("\n", client().execute(
                 "artest scrubber consume 0 " + bx + " " + by + " " + bz));
-        int secondAfter = extractInt(secondConsume, "\"damageAfter\":(-?\\d+)");
+        int secondAfter = extractInt(secondConsume, "damageAfter");
         assertEquals("repeated consume must continue to increment by 1",
                 damageAfter + 1, secondAfter);
 
         // Comparator override drops in 2185-damage brackets — verify the
         // probe surfaces a non-negative override for an in-use cartridge.
-        int comp = extractInt(secondConsume, "\"comparatorOverride\":(\\d+)");
+        int comp = extractInt(secondConsume, "comparatorOverride");
         assertTrue("comparator override must be >= 0 when cartridge loaded: " + comp,
                 comp >= 0);
     }
@@ -181,14 +200,14 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void gasChargePadFillsSuitTank() throws Exception {
-        int bx = 1700, by = 70, bz = 1700;
+        int bx = 1700, by = SITE_Y, bz = 1700;
 
         ok(client().execute("artest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
 
         String place = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " advancedrocketry:oxygenCharger"));
-        assertTrue("charge pad did not place: " + place, place.contains("\"placed\":true"));
+        assertTrue("charge pad did not place: " + place, Reply.of(place).bool("placed"));
 
         // Pad's tank caps at 16 000 mB; 4 000 leaves headroom for the test
         // either way. We deliberately use less than the chestplate's max-air
@@ -197,18 +216,18 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String inject = String.join("\n", client().execute(
                 "artest fluid inject 0 " + bx + " " + by + " " + bz + " oxygen 4000"));
         assertTrue("oxygen inject into pad failed: " + inject,
-                inject.contains("\"ok\":true"));
-        int injected = extractInt(inject, "\"filled\":(\\d+)");
+                Reply.of(inject).ok());
+        int injected = extractInt(inject, "filled");
         assertTrue("tank should accept some oxygen: " + inject, injected > 0);
 
         String resp = String.join("\n", client().execute(
                 "artest gascharge fill-suit 0 " + bx + " " + by + " " + bz));
-        assertTrue("gascharge fill-suit failed: " + resp, resp.contains("\"ok\":true"));
-        int filled = extractInt(resp, "\"filled\":(\\d+)");
-        int airBefore = extractInt(resp, "\"airBefore\":(\\d+)");
-        int airAfter = extractInt(resp, "\"airAfter\":(\\d+)");
-        int tankBefore = extractInt(resp, "\"tankBefore\":(\\d+)");
-        int tankAfter = extractInt(resp, "\"tankAfter\":(\\d+)");
+        assertTrue("gascharge fill-suit failed: " + resp, Reply.of(resp).ok());
+        int filled = extractInt(resp, "filled");
+        int airBefore = extractInt(resp, "airBefore");
+        int airAfter = extractInt(resp, "airAfter");
+        int tankBefore = extractInt(resp, "tankBefore");
+        int tankAfter = extractInt(resp, "tankAfter");
 
         assertEquals("airBefore must be 0 — probe starts with empty suit", 0, airBefore);
         assertTrue("filled must be > 0 when tank has oxygen and suit is empty: " + resp,
@@ -233,17 +252,17 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         // Baseline: vanilla armor must NOT register as an air container.
         String bare = String.join("\n", client().execute(
                 "artest enchant validates-as-airsuit minecraft:diamond_chestplate false"));
-        assertTrue("baseline probe failed: " + bare, bare.contains("\"registered\":true"));
+        assertTrue("baseline probe failed: " + bare, Reply.of(bare).bool("registered"));
         assertTrue("vanilla diamond chestplate must NOT be an air container: " + bare,
-                bare.contains("\"isAirContainer\":false"));
+                (!Reply.of(bare).bool("isAirContainer")));
 
         // With the spacebreathing enchant: same stack now passes the gate.
         String enchanted = String.join("\n", client().execute(
                 "artest enchant validates-as-airsuit minecraft:diamond_chestplate true"));
         assertTrue("enchanted probe failed: " + enchanted,
-                enchanted.contains("\"registered\":true"));
+                Reply.of(enchanted).bool("registered"));
         assertTrue("spacebreathing-enchanted armor must register as air container: "
-                + enchanted, enchanted.contains("\"isAirContainer\":true"));
+                + enchanted, Reply.of(enchanted).bool("isAirContainer"));
 
         // Sanity: the enchant itself is registered (defence in depth — if the
         // registration broke, the probe would still synthesise an enchant
@@ -251,7 +270,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String reg = String.join("\n", client().execute(
                 "artest enchant check advancedrocketry:spacebreathing"));
         assertTrue("spacebreathing enchant missing: " + reg,
-                reg.contains("\"registered\":true"));
+                Reply.of(reg).bool("registered"));
     }
 
     /**
@@ -267,7 +286,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void torchExtinguishesInLowOxygenConfig() throws Exception {
-        int bx = 1700, by = 70, bz = 1800;
+        int bx = 1700, by = SITE_Y, bz = 1800;
 
         // Clear neighbourhood so torch placement isn't refused for lack of a
         // valid floor block.
@@ -282,24 +301,24 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String placeTorch = String.join("\n", client().execute(
                 "artest place 0 " + bx + " " + by + " " + bz + " minecraft:torch"));
         assertTrue("torch did not place: " + placeTorch,
-                placeTorch.contains("\"placed\":true"));
+                Reply.of(placeTorch).bool("placed"));
         String preTorch = String.join("\n", client().execute(
                 "artest block at 0 " + bx + " " + by + " " + bz));
         assertTrue("pre-extinguish must be minecraft:torch: " + preTorch,
-                preTorch.contains("\"block\":\"minecraft:torch\""));
+                "minecraft:torch".equals(Reply.of(preTorch).text("block")));
 
         String exTorch = String.join("\n", client().execute(
                 "artest atmosphere extinguish-at 0 " + bx + " " + by + " " + bz));
         assertTrue("extinguish-at failed for torch: " + exTorch,
-                exTorch.contains("\"ok\":true"));
+                Reply.of(exTorch).ok());
         assertTrue("torch must extinguish to unlitTorch — action: " + exTorch,
-                exTorch.contains("\"action\":\"extinguished\""));
+                "extinguished".equals(Reply.of(exTorch).text("action")));
 
         String postTorch = String.join("\n", client().execute(
                 "artest block at 0 " + bx + " " + by + " " + bz));
         // Forge normalises registry names to lower-case ("unlitTorch" -> "unlittorch").
         assertTrue("post-extinguish must be advancedrocketry:unlittorch: " + postTorch,
-                postTorch.contains("\"block\":\"advancedrocketry:unlittorch\""));
+                "advancedrocketry:unlittorch".equals(Reply.of(postTorch).text("block")));
 
         // ----- Branch 2: config-listed block -> dropped as item -------------
         // Use stone — already on the floor, but we add it to torchBlocks then
@@ -313,17 +332,17 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         String addList = String.join("\n", client().execute(
                 "artest atmosphere torch-block-add minecraft:stone"));
         assertTrue("torch-block-add failed: " + addList,
-                addList.contains("\"ok\":true"));
+                Reply.of(addList).ok());
 
         String exStone = String.join("\n", client().execute(
                 "artest atmosphere extinguish-at 0 " + sx + " " + by + " " + bz));
         assertTrue("extinguish-at on torchBlocks-listed block must drop — "
-                + exStone, exStone.contains("\"action\":\"dropped\""));
+                + exStone, "dropped".equals(Reply.of(exStone).text("action")));
 
         String postStone = String.join("\n", client().execute(
                 "artest block at 0 " + sx + " " + by + " " + bz));
         assertTrue("post-drop position must be air: " + postStone,
-                postStone.contains("\"isAir\":true"));
+                Reply.of(postStone).bool("isAir"));
 
         // Clean up the torchBlocks list so other tests don't see polluted
         // config state.
@@ -332,17 +351,16 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
 
     private void ok(java.util.List<String> response) {
         String joined = String.join("\n", response);
-        assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
+        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
     }
 
-    private static String matchOrFail(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " did not match in: " + s, m.find());
-        return m.group(1);
+    private static String matchOrFail(String field, String s) {
+        String value = Reply.of(s).text(field);
+        assertNotNull("field `" + field + "` not found in: " + s, value);
+        return value;
     }
 
-    private static int extractInt(String haystack, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    private static int extractInt(String haystack, String field) {
+        return Reply.of(haystack).integer(field);
     }
 }

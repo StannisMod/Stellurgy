@@ -1,8 +1,10 @@
 package com.github.stannismod.forge.testing.server;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -20,14 +22,22 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
     private final TestClient client;
     private final Thread readerThread;
     private final boolean cleanupOnClose;
+    /**
+     * The listening socket the server child's control bridge dials back on. Held for the life of
+     * the harness rather than closed after the accept, so a child whose bridge starts late (a mod
+     * whose server-starting handler runs after the ready marker) still finds the port open instead
+     * of failing its connect with a stack trace nobody reads.
+     */
+    private final java.net.ServerSocket controlSocket;
 
     private RealDedicatedServerHarness(Path root, int port, TestClient client, Thread readerThread,
-                                       boolean cleanupOnClose) {
+                                       boolean cleanupOnClose, java.net.ServerSocket controlSocket) {
         this.root = root;
         this.port = port;
         this.client = client;
         this.readerThread = readerThread;
         this.cleanupOnClose = cleanupOnClose;
+        this.controlSocket = controlSocket;
     }
 
     /**
@@ -37,7 +47,23 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      */
     public static RealDedicatedServerHarness start() throws IOException, InterruptedException {
         Path root = Files.createTempDirectory("forge-dedicated-server-");
-        return startInternal(root, /*bootstrap=*/true, /*cleanupOnClose=*/true);
+        return startInternal(root, /*bootstrap=*/true, /*cleanupOnClose=*/true,
+                /*flatTerrain=*/false);
+    }
+
+    /**
+     * The same, on a FLAT world whose surface is exactly y=64 everywhere ({@link #FLAT_PRESET}).
+     *
+     * <p>Opt-in, and it was tried as the default on 2026-08-14 — see the preset's own javadoc for
+     * what that measured. Short version: it removes the landscape variable, and it costs a bigger
+     * server heap, ~15 % more wall clock at that heap, and three reds nobody has explained. Reach
+     * for it when a test genuinely wants a world with no landscape in it, not as a general cure.</p>
+     */
+    public static RealDedicatedServerHarness startWithFlatTerrain()
+            throws IOException, InterruptedException {
+        Path root = Files.createTempDirectory("forge-dedicated-server-");
+        return startInternal(root, /*bootstrap=*/true, /*cleanupOnClose=*/true,
+                /*flatTerrain=*/true);
     }
 
     /**
@@ -59,13 +85,21 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      */
     public static RealDedicatedServerHarness startWith(Path root, boolean cleanupOnClose)
             throws IOException, InterruptedException {
+        return startWith(root, cleanupOnClose, /*flatTerrain=*/false);
+    }
+
+    /** @see #startWith(Path, boolean) and {@link #startWithFlatTerrain()} */
+    public static RealDedicatedServerHarness startWith(Path root, boolean cleanupOnClose,
+                                                       boolean flatTerrain)
+            throws IOException, InterruptedException {
         Files.createDirectories(root);
         boolean bootstrap = !Files.exists(root.resolve("eula.txt"));
-        return startInternal(root, bootstrap, cleanupOnClose);
+        return startInternal(root, bootstrap, cleanupOnClose, flatTerrain);
     }
 
     private static RealDedicatedServerHarness startInternal(Path root, boolean bootstrap,
-                                                            boolean cleanupOnClose)
+                                                            boolean cleanupOnClose,
+                                                            boolean flatTerrain)
             throws IOException, InterruptedException {
         if (bootstrap) {
             writeEula(root);
@@ -77,24 +111,39 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
             // attempt — needed both for the first iteration and for retries
             // after a child JVM lost the TOCTOU race to bind it.
             Files.write(root.resolve("server.properties"),
-                    buildServerProperties(port).getBytes(StandardCharsets.UTF_8));
-            Process process = launchServer(root, port);
+                    buildServerProperties(port, flatTerrain).getBytes(StandardCharsets.UTF_8));
+            // Bind the control port and KEEP the socket, exactly as the client harness does: the
+            // bound port is read off it, so nothing can steal the port between a probe and a rebind.
+            java.net.ServerSocket controlSocket = openControlSocket();
+            Process process = launchServer(root, port, controlSocket.getLocalPort());
             List<String> transcript = new ArrayList<>();
             Thread readerThread = startReader(process, transcript);
             TestClient client = new TestClient(process, TestClient.newWriter(process), transcript);
+            startBridgeAcceptor(controlSocket, client);
             BootOutcome outcome;
             try {
-                // Load-scaled: N concurrent modded boots contend on disk + CPU.
-                outcome = awaitReadyOrBindFailure(process, transcript,
-                        com.github.stannismod.forge.testing.TestTimeouts.scaled(Duration.ofMinutes(3)));
+                outcome = awaitReadyOrBindFailure(process, transcript, Duration.ofMinutes(3));
             } catch (RuntimeException | InterruptedException failure) {
                 destroyAndJoin(process, readerThread);
+                closeQuietly(controlSocket);
                 throw failure;
             }
             if (outcome == BootOutcome.READY) {
-                return new RealDedicatedServerHarness(root, port, client, readerThread, cleanupOnClose);
+                try {
+                    awaitBridge(client);
+                } catch (IOException | RuntimeException | InterruptedException bridgeFailure) {
+                    // The server booted; only its control channel did not. Tear the child down here
+                    // rather than letting the throw leak a live server process and a bound port —
+                    // an orphaned dedicated server outlives the fork and holds the world directory.
+                    destroyAndJoin(process, readerThread);
+                    closeQuietly(controlSocket);
+                    throw bridgeFailure;
+                }
+                return new RealDedicatedServerHarness(root, port, client, readerThread, cleanupOnClose,
+                        controlSocket);
             }
             destroyAndJoin(process, readerThread);
+            closeQuietly(controlSocket);
             lastFailure = new IOException("BindException on port " + port
                     + " (attempt " + attempt + " of " + MAX_PORT_BIND_ATTEMPTS + ")");
         }
@@ -193,8 +242,10 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
     @Override
     public void close() throws IOException {
         try {
+            // Closes the bridge connection too; the control port itself is ours to release.
             client.close();
         } finally {
+            closeQuietly(controlSocket);
             try {
                 readerThread.join(TimeUnit.SECONDS.toMillis(5));
             } catch (InterruptedException interruptedException) {
@@ -266,7 +317,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      */
     public static final String PROP_LEGACY_ARGS = "forge.test.launcher.legacyArgs";
 
-    private static Process launchServer(Path root, int port) throws IOException {
+    private static Process launchServer(Path root, int port, int bridgePort) throws IOException {
         String javaExe = System.getProperty("java.home");
         boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
         String javaName = windows ? "java.exe" : "java";
@@ -279,13 +330,26 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         List<String> command = new ArrayList<>();
         command.add(javaBinary.toString());
         // Cap the child heap: without an explicit -Xmx, Java 8 ergonomics grant EACH server child
-        // ~1/4 of physical RAM, which is what makes concurrent forks memory-infeasible. 1g fits a
-        // modded 1.12 dedicated server; override per machine via the property.
+        // ~1/4 of physical RAM, which is what makes concurrent forks memory-infeasible.
+        //
+        // 1g fits a modded 1.12 dedicated server on generated terrain, which is what this harness
+        // hands out. A FLAT world does not fit in it — measured 2026-08-14, one class, terrain and
+        // heap the only variables: flat@1g 12 of 13 failed with OutOfMemoryError, generated@1g 1 of
+        // 12, flat@2g 1 of 12. Why is unexplained (a flat chunk holds FEWER non-empty sections, so
+        // the storage argument is backwards); if you turn the flat world on, raise this with
+        // -PserverXmx=2g and expect the tier to get slower, not faster.
         command.add("-Xmx" + System.getProperty("forge.test.server.xmx", "1g"));
         command.add("-Djava.awt.headless=true");
         command.add("-Dforge.test.server=true");
-        command.add("-D" + com.github.stannismod.forge.testing.TestTimeouts.PROP_FACTOR + "="
-                + com.github.stannismod.forge.testing.TestTimeouts.factor());
+        // The control port for the child's in-JVM bridge, mirroring -Dforge.test.client.port on the
+        // client side. A child with no bridge-starting mod simply ignores it.
+        command.add("-D" + PROP_BRIDGE_PORT + "=" + bridgePort);
+        // The harness's OWN coremod, so test-only mixin configurations are queued while mixin still
+        // accepts them — the same arrangement the client child already uses. This is what lets an
+        // observation a test needs live in the harness instead of in production code: a test mixin
+        // reaches from the test source set INTO the product, and a shipped game, which never sets
+        // this property and never carries the class, pays nothing for it.
+        command.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
         command.add("-cp");
         command.add(Objects.requireNonNull(System.getProperty("java.class.path"), "java.class.path"));
         command.add(launcherClass);
@@ -339,10 +403,152 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         return Paths.get(System.getProperty("user.home"), ".gradle");
     }
 
+    /**
+     * System property naming the control port handed to the server child. The child's in-JVM half
+     * ({@code ForgeTestServerBootstrap}) reads exactly this, and does nothing when it is absent.
+     */
+    public static final String PROP_BRIDGE_PORT = "forge.test.server.port";
+
+    /**
+     * System property (milliseconds) bounding how long {@code start} waits after the ready marker
+     * for the child's bridge to dial back. Default 15 s.
+     *
+     * <p>It bounds the wait; it cannot WAIVE it. There is no server this harness starts that has no
+     * bridge — the child opens it from its own test-mode registration — so an escape hatch here
+     * would only ever be used to keep running on a channel that no longer exists.</p>
+     */
+    public static final String PROP_BRIDGE_WAIT_MILLIS = "forge.test.server.bridge.waitMillis";
+
+    /**
+     * Bind an ephemeral control port on loopback and keep it — mirrors the client harness's
+     * {@code openControlSocket}, and for the same reason: reserving a port and rebinding it later
+     * leaves a window in which another process (a sibling fork churning ephemeral ports) takes it.
+     */
+    private static java.net.ServerSocket openControlSocket() throws IOException {
+        java.net.ServerSocket socket = new java.net.ServerSocket();
+        socket.setReuseAddress(true);
+        socket.bind(new java.net.InetSocketAddress("127.0.0.1", 0));
+        return socket;
+    }
+
+    /**
+     * Accept the child's control connection in the background and hand it to {@code client}.
+     *
+     * <p>Background rather than inline because the connection is made from the mod's
+     * {@code FMLServerStartingEvent} handler, which on a dedicated server runs AFTER the
+     * {@code For help, type "help"} line this harness boots on — and because a server carrying no
+     * bridge at all must not stall the boot. The {@code READY} line the child writes first is
+     * consumed here, so the socket handed over is idle.</p>
+     */
+    private static void startBridgeAcceptor(java.net.ServerSocket controlSocket, TestClient client) {
+        Thread acceptor = new Thread(() -> {
+            try {
+                controlSocket.setSoTimeout((int) TimeUnit.MINUTES.toMillis(2));
+                java.net.Socket socket = controlSocket.accept();
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                BufferedWriter writer = new BufferedWriter(
+                        new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+                String ready = reader.readLine();
+                if (!"READY".equals(ready)) {
+                    System.out.println("[forge-test] server bridge said '" + ready
+                            + "' instead of READY — ignoring it and staying on the console channel");
+                    socket.close();
+                    return;
+                }
+                client.attachBridge(socket, reader, writer);
+                System.out.println("[forge-test] server bridge connected");
+            } catch (IOException ignored) {
+                // No bridge in this child (or the harness closed the port on shutdown). The
+                // console channel is the documented fallback; awaitBridge says so out loud.
+            }
+        }, "forge-dedicated-server-bridge-acceptor");
+        acceptor.setDaemon(true);
+        acceptor.start();
+    }
+
+    /**
+     * Give the child's bridge a bounded chance to connect before the first command is issued, so a
+     * suite does not silently send its first few commands down the console channel (each of which
+     * broadcasts a {@code say} sentinel into every player's chat) and the rest down the bridge.
+     *
+     * <p>Announces the outcome either way: a channel this different is not something a reader of a
+     * failing log should have to infer.</p>
+     */
+    /**
+     * Wait for the child's bridge, and FAIL if it does not come.
+     *
+     * <p>This used to print a warning and carry on over the console. That is the shape of a silent
+     * degradation: the console channel works, so a bridge that never attached produced green runs
+     * on a channel whose replies are log slices, whose concurrent callers can take each other's
+     * lines, and whose completion sentinel is broadcast into every player's chat — the four defects
+     * the bridge exists to remove. A warning in a thirty-thousand-line build log is not an
+     * announcement; nobody reads it, and every measurement taken afterwards is about the fallback.
+     *
+     * <p>There is no opt-out. A "server with no bridge" was the justification for keeping the
+     * console channel, and no such server exists in this tree: every child this harness launches
+     * carries the mod that opens one. A branch no caller reaches is not a fallback.
+     */
+    private static void awaitBridge(TestClient client) throws InterruptedException, IOException {
+        long budgetMillis = Math.max(1_000L,
+                Long.getLong(PROP_BRIDGE_WAIT_MILLIS, 15_000L).longValue());
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budgetMillis);
+        while (System.nanoTime() < deadline) {
+            if (client.hasBridge()) {
+                return;
+            }
+            Thread.sleep(50L);
+        }
+        throw new IOException("the server control bridge never dialled back within " + budgetMillis
+                + " ms. The console channel would still work, which is why this is thrown rather"
+                + " than warned about: it is the only command channel, so a run without it is not a"
+                + " degraded run, it is no run at all. The child opens the bridge from its own"
+                + " test-mode registration - check that the child reached that point.");
+    }
+
+    private static void closeQuietly(java.net.ServerSocket socket) {
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+            // Nothing left to do.
+        }
+    }
+
     private static int reservePort() throws IOException {
         try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
             socket.setReuseAddress(true);
             return socket.getLocalPort();
+        }
+    }
+
+    /**
+     * Substrings of a child line that mean "this JVM is already broken, and every failure you are
+     * about to read is a consequence rather than a cause".
+     *
+     * <p>A mixin that cannot be applied is FATAL and names itself — but only in the CHILD's log,
+     * which nothing forwards. From the test's side its target class then fails to load and the
+     * scenario reds somewhere far away, looking exactly like an arrangement problem. Measured
+     * 2026-08-21: four runs were spent on a re-seat scenario that failed with "could not read the
+     * seated craft's ship identity" while the child had already printed
+     * {@code Critical injection failure: LVT … has incompatible changes}. The loudness existed the
+     * whole time; nobody could hear it.
+     */
+    private static final String[] FATAL_MARKERS = {
+        "Critical injection failure",
+        "InvalidMixinException",
+        "InvalidInjectionException",
+        "Mixin apply for mod",
+        "MixinTransformerError",
+    };
+
+    /** Put a child-side fatal on the TEST runner's own stdout, where a failure report can see it. */
+    private static void echoIfFatal(String line) {
+        for (String marker : FATAL_MARKERS) {
+            if (line.contains(marker)) {
+                System.out.println("[forge-test] CHILD FATAL — every later failure in this run is "
+                        + "probably a consequence of this: " + line);
+                return;
+            }
         }
     }
 
@@ -351,6 +557,7 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
             try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = bufferedReader.readLine()) != null) {
+                    echoIfFatal(line);
                     synchronized (transcript) {
                         transcript.add(line);
                         transcript.notifyAll();
@@ -396,10 +603,51 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         return "random".equalsIgnoreCase(seed.trim()) ? "" : seed;
     }
 
-    private static String buildServerProperties(int port) {
+    /**
+     * A superflat preset whose surface is exactly {@code y=64}: bedrock + 62 stone + grass is 64
+     * blocks, so the topmost solid block is y=63 and the first air is y=64 — the height fixtures
+     * across this suite build at, because on a generated world that is roughly sea level.
+     *
+     * <p><b>Tried as the harness default on 2026-08-14 and rejected on the numbers.</b> The appeal
+     * is real — it removes the landscape variable that had four client fixtures assembling ships
+     * inside a mountain — but the bill is: a dedicated server that OOMs at the 1g heap this harness
+     * had used for years (12 of 13 methods of one class against 1 of 12 on generated terrain);
+     * ~15 % MORE wall clock once the heap is raised enough to survive (server tier 29m14s against
+     * 25m24s, client 25m46s against 22m19s — the apparent speed-up at 1g was measured on runs that
+     * were dying); and three client reds that generated terrain does not produce and nobody has
+     * explained. WHY a flat world needs more heap is itself unexplained: a flat chunk holds FEWER
+     * non-empty sections than a generated one, so the obvious storage argument is backwards. The
+     * leading unmeasured hypothesis is CONTACT — every hull rests on a continuous solid plane and
+     * the per-tick collision set is allocation churn — and a heap histogram would settle it.</p>
+     *
+     * <p>Format is vanilla's 1.12 superflat preset: {@code version;layers-bottom-up;biomeId}.
+     * Biome 1 is plains.</p>
+     */
+    private static final String FLAT_PRESET = "3;minecraft:bedrock,62*minecraft:stone,minecraft:grass;1";
+
+    /**
+     * Global switch: {@code -PlevelType=FLAT} gives every harness world the flat preset above. It
+     * is the one-run way to ask "is the landscape the reason this test fails?", and it is how the
+     * OOM above was attributed — the answer took one run because the knob existed.
+     */
+    private static boolean flatTerrainForced() {
+        return "FLAT".equalsIgnoreCase(System.getProperty("forge.test.level.type", ""));
+    }
+
+    private static String buildServerProperties(int port, boolean flatTerrain) {
         String newline = System.lineSeparator();
         StringBuilder builder = new StringBuilder();
         builder.append("enable-command-block=true").append(newline);
+        // Vanilla's anti-cheat kicks a player whose RIDDEN ENTITY has had no block under it for 80
+        // ticks — `vehicleFloating` in NetHandlerPlayServer, reason `multiplayer.disconnect.flying`,
+        // and the same flag guards the on-foot form. A body aboard a flying craft never has a world
+        // block beneath it, because the deck it stands on lives in the craft's own subspace, so any
+        // scenario that keeps a pilot seated on a hovering craft for more than four seconds is on a
+        // timer. Measured 2026-09-11: a seated pilot vanished mid-scenario and the only surviving
+        // witness was a server-side dismount whose caller trail read `PlayerList.playerLoggedOut`.
+        // Left at vanilla's default this turns an ordinary flight into a disconnect, and a test
+        // cannot tell that from the product losing the player.
+        builder.append("allow-flight=true").append(newline);
         builder.append("allow-nether=true").append(newline);
         builder.append("difficulty=1").append(newline);
         builder.append("gamemode=1").append(newline);
@@ -407,7 +655,9 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         builder.append("hardcore=false").append(newline);
         builder.append("level-name=world").append(newline);
         builder.append("level-seed=").append(levelSeed()).append(newline);
-        builder.append("level-type=DEFAULT").append(newline);
+        boolean flat = flatTerrain || flatTerrainForced();
+        builder.append("level-type=").append(flat ? "FLAT" : "DEFAULT").append(newline);
+        builder.append("generator-settings=").append(flat ? FLAT_PRESET : "").append(newline);
         builder.append("max-tick-time=-1").append(newline);
         builder.append("motd=Forge Test").append(newline);
         builder.append("network-compression-threshold=256").append(newline);

@@ -16,6 +16,11 @@ import java.util.Map.Entry;
 public class IngameTestOrchestrator {
 
     static final Map<Long, PlayerMapping> eventScheduler = new HashMap<>();
+    /** The player who started the in-game test run, so a scheduled step can find him again in
+     *  whichever world he is standing in by then. OWNER: the SERVER; LIFETIME: one run of
+     *  {@code /ar dev runtests}, and the next run overwrites it. Not released on server stop: this
+     *  is a developer command whose steps all execute within the run that set it, and a stale name
+     *  resolves to no player rather than to the wrong one. */
     public static String name;
     public static boolean registered = false;
     public static IngameTestOrchestrator instance = new IngameTestOrchestrator();

@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -38,14 +39,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
 
+    /** The cargo this scenario sends, and therefore what the destination must hold. */
+    private static final int SENT_CARGO_COUNT = 16;
+
     private static final int CX = 4700;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4700;
 
-    private static final Pattern MATCHED_COUNT =
-            Pattern.compile("\"matchedCount\":(\\d+)");
-    private static final Pattern OUT_PORT_COUNT =
-            Pattern.compile("\"outPortCount\":(\\d+)");
+    private static final String MATCHED_COUNT = "matchedCount";
+    private static final String OUT_PORT_COUNT = "outPortCount";
 
     /**
      * assembled railgun's {@code onReceiveCargo} deposits
@@ -65,7 +67,7 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture multiblock railgun 0 "
                 + CX + " " + CY + " " + CZ);
         assertTrue("fixture multiblock railgun failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         // Validate structure so libVulpes' integrateTile populates
         // itemOutPorts (the field the probe reads via reflection).
@@ -73,16 +75,16 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
                 + CX + " " + CY + " " + CZ);
         assertTrue("railgun must validate (precondition for itemOutPorts "
                         + "to be populated): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
 
         // Probe call: receive 16 cobblestone on the controller-side tile.
         String receive = exec("artest infra railgun-receive-cargo 0 "
                 + CX + " " + CY + " " + CZ + " minecraft:cobblestone 16");
         assertTrue("railgun-receive-cargo probe must succeed: " + receive,
-                receive.contains("\"ok\":true"));
+                Reply.of(receive).ok());
         assertTrue("canReceiveCargo must be true on freshly-assembled "
                         + "railgun (output port has empty slots): " + receive,
-                receive.contains("\"canReceive\":true"));
+                Reply.of(receive).bool("canReceive"));
 
         int outPortCount = extract(receive, OUT_PORT_COUNT);
         assertTrue("railgun must have >= 1 output port after assembly: "
@@ -94,7 +96,7 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
                         + "onReceiveCargo (the player-visible 'cargo "
                         + "arrives at destination' contract); matched="
                         + matched + " receive=" + receive,
-                matched >= 16);
+                matched >= SENT_CARGO_COUNT);
     }
 
     // -- helpers ----------------------------------------------------------
@@ -103,9 +105,9 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
         return String.join("\n", client().execute(cmd));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

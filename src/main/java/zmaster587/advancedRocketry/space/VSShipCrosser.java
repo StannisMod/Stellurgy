@@ -18,7 +18,7 @@ import zmaster587.advancedRocketry.integration.vs.VSIntegration;
  * decisions out against live worlds, using the proven per-ship crossing ({@link VSIntegration#crossShip})
  * plus {@link VSIntegration#parkShipAt}/{@link VSIntegration#unparkShipAt}. Both crossings paste into a
  * clear void column so the flood-fill re-assembly grabs only the ship. A safe no-op
- * (returns {@code null} - the transit aborts cleanly) when VS is absent or a world is missing.
+ * (returns {@code null} - the transit aborts cleanly) when a world is missing.
  */
 public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
@@ -27,8 +27,40 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
     /** Clear-sky Y the target-cell arrival pastes at (cells are void; a high column avoids any floor). */
     private static final int ARRIVAL_Y = 200;
-    /** Per-lane X offset for arrivals, so ships arriving into one cell from different lanes never overlap. */
+    /**
+     * Per-lane X offset for arrivals, so ships arriving into one cell from different lanes never
+     * overlap. Live and restored arrivals interleave on it — live lanes take the even multiples,
+     * restored the odd — so the two bands are disjoint by construction while BOTH walk away from the
+     * cell, into the clearance {@link #ARRIVAL_STAGING_X} describes, rather than one of them walking
+     * back toward it.
+     */
     private static final int ARRIVAL_LANE_STRIDE = 64;
+
+    /**
+     * Where an arrival's blocks are STAGED: beyond the cell's own local range, so no craft can ever
+     * be flying where a paste lands.
+     *
+     * <p><b>Why it is outside the cell.</b> A paste is a block operation and nothing else — no
+     * entity, no player, no pose is ever at these coordinates; the ship is moved onto its real pose
+     * by the settle step a moment later. So the staging area does not have to be anywhere a ship
+     * could legitimately be, and it should not be: every local coordinate inside a cell is somewhere
+     * a pilot may park.</p>
+     *
+     * <p><b>Why it needs saying at all.</b> The staging used to sit at world X near 0, Y 200, which
+     * was far from everything only because the cell's pose band was SHIFTED sixteen million blocks
+     * up on Y — X and Z already coincided with the cell's centre. Centring the band on 2026-09-11
+     * removed the separation Y had been carrying alone, and an arrival would have been pasted beside
+     * anything parked at its cell's origin.</p>
+     *
+     * <p><b>The window.</b> Block coordinates beyond the cell face but below the physics mod's
+     * reserved shipyard, which begins at block X 19 174 416
+     * ({@code ShipChunkAllocator.CHUNK_X_START}) and silently cancels a teleport into it. One
+     * {@link CellSeam#CARRY_MARGIN} past the face keeps it clear of a craft that overshot the seam
+     * and has not yet been carried. {@code CellWorldMapperTest} pins the band inside that window, so
+     * a cell that grows toward the shipyard fails a test instead of pasting into VS's own claims.</p>
+     */
+    public static final int ARRIVAL_STAGING_X =
+            (int) (GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN);
 
     /** The shared crossing primitives (readiness-gated pose teleport, rider carry, unpark) the entry
      *  on-ramp and the descent already settle through. Stateless. */
@@ -138,17 +170,24 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      * while the arrival cut whatever the anchor reached — and hyperspace is a shared parking world by
      * construction, so the leg that resolved by position is the one that could deliver a stranger.</p>
      *
-     * <p><b>It may never turn a leg that would have worked into a failure.</b> Only a POSITIVE
-     * mismatch refuses — the craft at the anchor carries a durable id and it is somebody else's. Every
-     * other outcome (no flight computer resolvable there, no durable id minted on it, the physics mod
-     * not naming the craft) proceeds exactly as before and SAYS that it could not verify. The
-     * defect being closed is "the anchor silently selected a stranger's craft"; a check that also
-     * blocks the cases it cannot judge trades one silent failure for a loud one and is not an
-     * improvement.</p>
+     * <p><b>A leg is resolved by identity or it is refused. There is no third answer</b>, and the
+     * positional fallback that used to be one is gone entirely. Every crossing is anchored on a craft
+     * that has a flight computer — that is what mints the durable name in the first place — and every
+     * craft the substrate holds has a uuid, so "this jump cannot find its ship" is a defect to
+     * surface, not a case to accommodate. Accommodating it meant cutting whatever craft the anchor
+     * reached, and the anchor reaches by DISTANCE with no bound ({@code nearestQueryableShip}), in a
+     * hyperspace world built to hold every ship in flight at once.</p>
      *
-     * <p>Requiring the flight computer here was tried and reverted: the capture path has warned
-     * "found no flight computer at anchor" on these departures for as long as it has existed, without
-     * stopping them, because the crossing needs only a shipyard box.</p>
+     * <p>A fallback for a non-uuid {@code shipId} survived one revision of this rule and was removed:
+     * the only caller that produces one is a test probe driving a transit for a fixture that
+     * assembled no ship. Such a leg has no hull of its own, so the branch was not "a weaker caller
+     * getting a weaker answer" — it was the one case guaranteed to cut a neighbour. Production has a
+     * single caller ({@code JumpTrigger}) and it passes a uuid.</p>
+     *
+     * <p><b>{@code afcNames} is a tripwire and may not be promoted to an answer.</b> It is read by
+     * scanning the shipyard box that the SAME positional lookup produced, so on a wrong pick it is
+     * the stranger's flight computer talking. It can therefore convict (the craft at the anchor
+     * positively names someone else) but it can never aim.</p>
      */
     public static java.util.UUID identifyShipToCut(String leg, BlockPos anchor, String shipId,
                                                    int dim, java.util.UUID byDurableId,
@@ -180,7 +219,15 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
                     leg, anchor, dim, afcNames, shipId);
             return REFUSED;
         }
-        return byPosition;
+        // Nothing here can aim. The only remaining candidate is the anchor, which picks by distance
+        // with no bound, so cutting it is how a jump delivers a stranger. The leg stops and the
+        // transit retries: a jump that cannot find its own hull must not move a different one.
+        LOGGER.error("[SPACE] {} REFUSED: ship {} could not be resolved in dim {} by identity, so "
+                        + "nothing at anchor {} can be cut. The anchor reaches by distance and would "
+                        + "hand back whichever craft is nearest. Nothing is cut. byPosition would "
+                        + "have been {}, afcNames {}.",
+                leg, shipId, dim, anchor, byPosition, afcNames);
+        return REFUSED;
     }
 
     /** What the flight computer at {@code anchor} calls its ship, or {@code null} if there is no
@@ -255,8 +302,17 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
                     srcSlotDim, srcAnchor);
             return null;
         }
-        // Park the just-assembled ship so it holds its lane while ShipTransit advances its coord logically.
-        VSIntegration.parkShipAt(hyper, res.anchor.getX() + 0.5, res.anchor.getY() + 0.5, res.anchor.getZ() + 0.5);
+        // Park the just-assembled ship so it holds its lane while ShipTransit advances its coord
+        // logically. BY NAME: the crossing hands back the identity it created, and a lane is not
+        // provably empty — the census above exists because it can hold a second registered craft —
+        // so parking "the ship at the anchor" can freeze a stranger and leave this one flying.
+        if (res.shipUuid == null || !VSIntegration.parkShip(hyper, res.shipUuid)) {
+            LOGGER.warn("[SPACE] the depart crossing produced no identity for ship {}, so its hull is "
+                    + "parked by position in lane {} - if that lane holds a second craft this parks "
+                    + "the wrong one", shipId, tile.index);
+            VSIntegration.parkShipAt(hyper, res.anchor.getX() + 0.5, res.anchor.getY() + 0.5,
+                    res.anchor.getZ() + 0.5);
+        }
         // The crossing kept the ship's identity, so this uuid is the one it had in its origin cell and
         // the one it will still have at the far end - one name for the whole jump.
         return new ShipCrossingService.Crossed(res.anchor, res.shipUuid);
@@ -284,8 +340,12 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // The SECOND cut of the jump, so the second stow: whatever is loose on the deck in hyperspace
         // has to come out before the blocks under it do. The departure's stow was released here when
         // the crew boarded, so this is the same bodies, one leg on.
-        BlockPos hyperAfc = VSIntegration.flightComputerAt(hyper, hyperAnchor.getX() + 0.5,
-                hyperAnchor.getY() + 0.5, hyperAnchor.getZ() + 0.5);
+        // BY NAME. A lane can hold more than one registered craft (see the census below), and the
+        // computer nearest the anchor is then a stranger's — whose deck this would empty into this
+        // jump's stash, and whose cargo would be pasted onto our ship at the far end.
+        BlockPos hyperAfc = VSIntegration.flightComputerOfNamedShip(hyper,
+                VSIntegration.shipUuidOfDurableId(hyper, shipId), toUuid(shipId),
+                hyperAnchor.getX() + 0.5, hyperAnchor.getY() + 0.5, hyperAnchor.getZ() + 0.5);
         if (hyperAfc != null) {
             List<AboardBodies.Stowed> bodies = AboardBodies.capture(hyper, hyperAfc);
             if (!bodies.isEmpty()) {
@@ -386,7 +446,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
                     + "DIFFERENT ship, so cutting it would deliver a stranger into the target cell");
             return null;
         }
-        int dstX = tile.index * ARRIVAL_LANE_STRIDE;
+        int dstX = ARRIVAL_STAGING_X + 2 * tile.index * ARRIVAL_LANE_STRIDE;
         VSIntegration.CrossResult res = VSIntegration.crossShip(
                 hyper, hyperAnchor.getX() + 0.5, hyperAnchor.getY() + 0.5, hyperAnchor.getZ() + 0.5,
                 arriving, dst, dstX, ARRIVAL_Y, 0);
@@ -419,26 +479,49 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
     }
 
     @Override
-    public net.minecraft.nbt.NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile, BlockPos hyperAnchor) {
+    public net.minecraft.nbt.NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile,
+                                                          BlockPos hyperAnchor, String shipId) {
         WorldServer hyper = HyperspaceWorld.getOrCreate();
         if (hyper == null || hyperAnchor == null) {
             return null;
         }
-        // Non-destructive re-cut of the parked ship from its subspace shipyard (the ship stays in flight).
-        return VSIntegration.snapshotShipAt(hyper,
-                hyperAnchor.getX() + 0.5, hyperAnchor.getY() + 0.5, hyperAnchor.getZ() + 0.5);
+        // Non-destructive re-cut of the parked ship from its subspace shipyard (the ship stays in
+        // flight), BY NAME.
+        return snapshotOfNamedShip(hyper, shipId, hyperAnchor, "the hyperspace re-cut");
     }
 
     @Override
-    public net.minecraft.nbt.NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor) {
+    public net.minecraft.nbt.NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor,
+                                                          String shipId) {
         WorldServer src = DimensionManager.getWorld(srcSlotDim);
         if (src == null || srcAnchor == null) {
             return null;
         }
         // The depart-time floor: snapshot the ship in its origin cell, non-destructively, BEFORE the depart
         // crossing cuts it. Same subspace-shipyard cut as snapshotParked, just against the source world.
-        return VSIntegration.snapshotShipAt(src,
-                srcAnchor.getX() + 0.5, srcAnchor.getY() + 0.5, srcAnchor.getZ() + 0.5);
+        return snapshotOfNamedShip(src, shipId, srcAnchor, "the depart-time floor");
+    }
+
+    /**
+     * A snapshot of the ship NAMED by {@code shipId} in {@code world}, falling back to the craft at
+     * {@code anchor} only when nothing there carries that name — and saying so when it does.
+     *
+     * <p>The fallback is kept because refusing would be worse: a jump with no floor snapshot is one a
+     * restart strands and deletes. But it is a DEGRADATION and it announces itself, because the thing
+     * it can produce silently is this jump's record holding a stranger's blocks.</p>
+     */
+    private static net.minecraft.nbt.NBTTagCompound snapshotOfNamedShip(WorldServer world,
+            String shipId, BlockPos anchor, String what) {
+        UUID named = VSIntegration.shipUuidOfDurableId(world, shipId);
+        if (named != null) {
+            return VSIntegration.snapshotShipOf(world, named);
+        }
+        LOGGER.warn("[SPACE] {} for ship {} in dim {} could not resolve that ship by name, so it cuts "
+                        + "whatever craft anchor {} reaches - if this world holds a second one, this "
+                        + "snapshot is of the wrong hull",
+                what, shipId, world.provider.getDimension(), anchor);
+        return VSIntegration.snapshotShipAt(world,
+                anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5);
     }
 
     @Override
@@ -458,13 +541,16 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         arrivalGuardWarned.remove(targetSlotDim);
         // Same local hold, same reason, as the live arrival above.
         DimensionManager.keepDimensionLoaded(targetSlotDim, true);
-        // A restored transit holds no hyperspace lane. Paste it in the NEGATIVE-X band, DISJOINT from live
-        // arrivals (which use tile.index*STRIDE, always >= 0), so a restored ship can never collide with a
-        // live-crossing ship pasting into the same cell. Monotonic per boot (restored transits are imported
-        // only at server start, a small set) so restored ships never overlap each other either - no wrap.
+        // A restored transit holds no hyperspace lane. Paste it on the ODD lane multiples, DISJOINT from
+        // live arrivals (which take the even ones), so a restored ship can never collide with a
+        // live-crossing ship pasting into the same cell. Monotonic per boot (restored transits are
+        // imported only at server start, a small set) so restored ships never overlap each other either -
+        // no wrap. Both bands walk AWAY from the cell into the staging clearance; the negative-X band this
+        // replaces walked back across the cell the arrival is for, which was harmless only while the cell
+        // was sixteen million blocks away on Y.
         // The snapshot source is always present (no async wait), so this pastes exactly once - a non-null
         // anchor on the first call, no retry - never a duplicate paste.
-        int dstX = -ARRIVAL_LANE_STRIDE * (restoredLane++ + 1);
+        int dstX = ARRIVAL_STAGING_X + (2 * restoredLane++ + 1) * ARRIVAL_LANE_STRIDE;
         VSIntegration.CrossResult res = VSIntegration.pasteAndAssemble(dst, snapshot, dstX, ARRIVAL_Y, 0);
         // A restored arrival is the one that CANNOT keep the ship's identity: the ship it names died
         // with the hyperspace world on the restart this transit survived, and what lands here is a
@@ -483,7 +569,10 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // also makes CrewTransfer.capture's per-seat getTileEntity(seatPos) resolve (the aboard pilot only
         // chunk-loaded the ship's RENDER region, not its subspace shipyard). The AFC block is what capture
         // filters the ship's seats against.
-        BlockPos afcPos = VSIntegration.flightComputerAt(src,
+        // BY NAME, like the identify-what-to-cut check a few lines on: a cell can hold a second
+        // craft, and capturing against a stranger's computer takes HIS crew and HIS cargo on our jump.
+        BlockPos afcPos = VSIntegration.flightComputerOfNamedShip(src,
+                VSIntegration.shipUuidOfDurableId(src, shipId), toUuid(shipId),
                 srcAnchor.getX() + 0.5, srcAnchor.getY() + 0.5, srcAnchor.getZ() + 0.5);
         if (afcPos == null) {
             // A departure that carries NOTHING — no crew, no loose body — because it could not find
@@ -536,7 +625,8 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         }
         // The stowed bodies are placed on the same retry loop and reported through the same verdict:
         // a jump is not finished while a mob that was standing on the deck is still in a map here.
-        boolean bodiesPlaced = !anyBodies || releaseStowed(dst, arrivalAnchor, shipId, bodies);
+        boolean bodiesPlaced = !anyBodies
+                || releaseStowed(dst, arrivalAnchor, shipId, vsShipUuid, bodies);
         if (!anyCrew) {
             return bodiesPlaced;
         }
@@ -564,9 +654,11 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      * so a retry cannot duplicate anything.
      */
     private boolean releaseStowed(WorldServer world, BlockPos anchor, String shipId,
-                                  List<AboardBodies.Stowed> bodies) {
-        BlockPos afcPos = VSIntegration.flightComputerAt(world, anchor.getX() + 0.5,
-                anchor.getY() + 0.5, anchor.getZ() + 0.5);
+                                  UUID vsShipUuid, List<AboardBodies.Stowed> bodies) {
+        // NAMED, not "whatever is at the anchor" — the same reason the shared crossing ops does it:
+        // a destination that has been arrived into before is holding a craft at exactly this pose.
+        BlockPos afcPos = VSIntegration.flightComputerOfNamedShip(world, vsShipUuid, toUuid(shipId),
+                anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5);
         if (afcPos == null || AboardBodies.release(world, afcPos, bodies) == 0) {
             return false;
         }
@@ -658,7 +750,8 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // The stowed bodies come back out here, onto the parked hull, and the ARRIVAL cut stows them
         // again — the same two-leg shape the crew has, for the same reason: the far side is a fresh
         // re-assembly and nothing that was written down against the old one survives it.
-        boolean bodiesPlaced = !anyBodies || releaseStowed(dst, anchor, shipId, bodies);
+        boolean bodiesPlaced = !anyBodies
+                || releaseStowed(dst, anchor, shipId, vsShipUuid, bodies);
         if (!anyCrew) {
             return bodiesPlaced;
         }

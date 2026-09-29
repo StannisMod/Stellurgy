@@ -34,6 +34,11 @@ public final class SpaceClockSync {
     /** No baseline has been received. Distinguishable from a legitimate tick 0. */
     private static final long NO_SYNC = Long.MIN_VALUE;
 
+    // OWNER: the CLIENT; LIFETIME: one connection to one server. Nothing here outlives that, and
+    // {@link #reset()} is the release — called on disconnect, so the next server's counter starts
+    // from "not told yet" rather than from this one's baseline. Static because a client's connection
+    // is what the class describes and there is exactly one of it while these fields mean anything;
+    // a second one would be a second client in this JVM, which cannot exist.
     private static long baseTick = NO_SYNC;
     private static long baseLocal;
     private static long localTicks;

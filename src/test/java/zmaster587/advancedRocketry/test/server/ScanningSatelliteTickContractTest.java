@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -35,14 +34,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern PRE_STORED = Pattern.compile("\"preStored\":(-?\\d+)");
-    private static final Pattern POST_STORED = Pattern.compile("\"postStored\":(-?\\d+)");
-    private static final Pattern PRE_DATA = Pattern.compile("\"preData\":(-?\\d+)");
-    private static final Pattern POST_DATA = Pattern.compile("\"postData\":(-?\\d+)");
-    private static final Pattern DATA_TYPE = Pattern.compile("\"dataType\":\"([^\"]*)\"");
-    private static final Pattern IS_SAT_DATA = Pattern.compile("\"isSatelliteData\":(true|false)");
-    private static final Pattern CAN_TICK = Pattern.compile("\"canTick\":(true|false)");
+    private static final String ID = "id";
+    private static final String PRE_STORED = "preStored";
+    private static final String POST_STORED = "postStored";
+    private static final String PRE_DATA = "preData";
+    private static final String POST_DATA = "postData";
+    private static final String DATA_TYPE = "dataType";
+    private static final String IS_SAT_DATA = "isSatelliteData";
+    private static final String CAN_TICK = "canTick";
 
     /**
      * Pin: optical scanner emits DISTANCE-type data on powered tick.
@@ -60,7 +59,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
         long postData = longField(POST_DATA, tickResp, "postData");
         assertTrue("optical with powerGen=1000 must accumulate ≥1 data point "
@@ -90,7 +89,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
         long postData = longField(POST_DATA, tickResp, "postData");
         assertTrue("density with powerGen=1000 must accumulate ≥1 data point "
@@ -119,7 +118,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
         long postData = longField(POST_DATA, tickResp, "postData");
         assertTrue("mass with powerGen=1000 must accumulate ≥1 data point "
@@ -151,7 +150,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 100"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preData = longField(PRE_DATA, tickResp, "preData");
         long postData = longField(POST_DATA, tickResp, "postData");
         assertTrue("composition with powerGen=1000 must accumulate ≥1 data point "
@@ -204,14 +203,16 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
 
         String dataResp = String.join("\n", client().execute(
                 "artest satellite data 0 " + satId));
+        // absence is the answer: a reply with NO `error` is the success shape, and "the
+        // verb refused, with this reason" is exactly what this claim measures.
         assertTrue("oreScanner has no DataStorage surface — `satellite data` "
                         + "probe must report it is not a SatelliteData subclass; "
                         + dataResp,
-                dataResp.contains("\"error\":\"not a SatelliteData subclass\""));
+                "not a SatelliteData subclass".equals(Reply.of(dataResp).textOr("error", null)));
 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + satId + " 10"));
-        assertTrue("tick probe failed: " + tickResp, tickResp.contains("\"ok\":true"));
+        assertTrue("tick probe failed: " + tickResp, Reply.of(tickResp).ok());
         long preStored = longField(PRE_STORED, tickResp, "preStored");
         long postStored = longField(POST_STORED, tickResp, "postStored");
         assertTrue("oreScanner tick must still accrue battery (inherited "
@@ -240,11 +241,11 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
         String createResp = String.join("\n", client().execute(
                 "artest satellite create-spy-telescope 0"));
         assertTrue("create-spy-telescope failed: " + createResp,
-                createResp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(createResp);
+                Reply.of(createResp).ok());
+        Reply mReply = Reply.of(createResp);
         assertTrue("could not extract id from create response: " + createResp,
-                m.find());
-        long spyId = Long.parseLong(m.group(1));
+                mReply.has(ID));
+        long spyId = Long.parseLong(mReply.text(ID));
         assertEquals("spyTelescope MUST report canTick=false; " + createResp,
                 "false", stringField(CAN_TICK, createResp, "canTick"));
 
@@ -256,7 +257,7 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
         String tickResp = String.join("\n", client().execute(
                 "artest satellite tick 0 " + spyId + " 10"));
         assertTrue("tick probe failed: " + tickResp,
-                tickResp.contains("\"ok\":true"));
+                Reply.of(tickResp).ok());
         long preStored = longField(PRE_STORED, tickResp, "preStored");
         long postStored = longField(POST_STORED, tickResp, "postStored");
         assertEquals("spyTelescope tickEntity is an empty body — even when "
@@ -274,21 +275,21 @@ public class ScanningSatelliteTickContractTest extends AbstractSharedServerTest 
                 "artest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
-                resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("could not extract id from create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+                Reply.of(resp).ok());
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
-    private long longField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+    private long longField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return (long) reply.integer(field);
     }
 
-    private String stringField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return m.group(1);
+    private String stringField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return reply.text(field);
     }
 }

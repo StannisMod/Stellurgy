@@ -1,11 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -35,23 +34,23 @@ import static org.junit.Assert.assertTrue;
  */
 public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest {
 
-    private static final Pattern AR_DIMS_ARRAY_PATTERN =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern TOP_Y_PATTERN = Pattern.compile("\"topY\":(-?\\d+)");
-    private static final Pattern BIOME_PATTERN = Pattern.compile("\"biome\":\"([^\"]+)\"");
-    private static final Pattern TOP_BLOCK_PATTERN = Pattern.compile("\"topBlock\":\"([^\"]+)\"");
+    /** The world's build ceiling, in blocks — vanilla's own, cited so the range check reads as the
+     *  world bound it is. */
+    private static final int WORLD_CEILING_Y = 256;
+
+    private static final String AR_DIMS_ARRAY_PATTERN = "arDimensions";
+    private static final String TOP_Y_PATTERN = "topY";
+    private static final String BIOME_PATTERN = "biome";
+    private static final String TOP_BLOCK_PATTERN = "topBlock";
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY_PATTERN.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY_PATTERN));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY_PATTERN)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue(
@@ -60,10 +59,10 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         return -1;
     }
 
-    private static String group(Pattern p, String resp, String label) {
-        Matcher m = p.matcher(resp);
-        assertTrue("could not parse " + label + " from response: " + resp, m.find());
-        return m.group(1);
+    private static String group(String field, String resp, String label) {
+        Reply reply = Reply.of(resp);
+        assertTrue("could not parse " + label + ": " + resp, reply.has(field));
+        return reply.text(field);
     }
 
     @Test
@@ -79,7 +78,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         String biome = group(BIOME_PATTERN, sample, "biome");
         String topBlock = group(TOP_BLOCK_PATTERN, sample, "topBlock");
 
-        assertTrue("topY out of valid range [0,256]: " + topY, topY >= 0 && topY <= 256);
+        assertTrue("topY out of valid range [0,256]: " + topY, topY >= 0 && topY <= WORLD_CEILING_Y);
         assertNotNull(biome);
         assertNotNull(topBlock);
         // topBlock has a registry-style id; "minecraft:air" can happen if the
@@ -170,12 +169,12 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         // count parsed as zero, that's still acceptable (vacuum moon),
         // but the field MUST be present and parse as a non-negative integer.
         assertTrue("ore-stats reply missing 'count' field: " + stats,
-                stats.contains("\"count\":"));
+                Reply.of(stats).has("count"));
         assertTrue("ore-stats reply missing 'chunksScanned' field: " + stats,
-                stats.contains("\"chunksScanned\":"));
+                Reply.of(stats).has("chunksScanned"));
         // radius=1 -> 3×3 = 9 chunks
         assertTrue("ore-stats with radius=1 must have scanned >=1 chunk: " + stats,
-                !stats.contains("\"chunksScanned\":0"));
+                !(Reply.of(stats).integer("chunksScanned") == 0));
     }
 
     @Test
@@ -187,7 +186,7 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
                 client().execute("artest worldgen ore-stats " + dim + " 0 0 5 minecraft:stone"));
         // Cap is 4; 5 should error out fast rather than start scanning ~6.5M blocks.
         assertTrue("ore-stats with radius=5 should error (cap=4): " + stats,
-                stats.contains("\"error\":\"radius too large\""));
+                "radius too large".equals(Reply.of(stats).text("error")));
     }
 
     @Test
@@ -198,6 +197,6 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
         String stats = String.join("\n",
                 client().execute("artest worldgen ore-stats " + dim + " 0 0 1 advancedrocketry:nonsense_block"));
         assertTrue("ore-stats with unknown block must error: " + stats,
-                stats.contains("\"error\":\"unknown block id\""));
+                "unknown block id".equals(Reply.of(stats).text("error")));
     }
 }

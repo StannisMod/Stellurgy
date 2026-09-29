@@ -49,7 +49,13 @@ public final class DescentController {
      *  in-air pose it arrives at, or {@code null} when the destination cannot be resolved (world
      *  missing / VS lost the ship). Production wires the VS ship-geometry read; fakeable in tests. */
     public interface PasteResolver {
-        Landing resolve(int slotDim, double[] shipWorldPos, int destPlanetDim, int laneIndex);
+        /**
+         * {@code shipId} is the DURABLE id of the craft descending. The resolver measures that ship —
+         * its height and its shipyard footprint decide where the paste can go — and a cell holding a
+         * second craft would otherwise have it measured instead, sizing this landing to a stranger.
+         */
+        Landing resolve(int slotDim, double[] shipWorldPos, int destPlanetDim, int laneIndex,
+                        java.util.UUID shipId);
     }
 
     /** A resolved descent target: the block paste corner (clear sky inside the destination's block
@@ -145,7 +151,7 @@ public final class DescentController {
         crossing.ops().pinDim(targetPlanetDim);
 
         int laneIndex = (laneCounter++ % DESCENT_LANE_COUNT);
-        Landing landing = pasteResolver.resolve(slotDim, shipPos, targetPlanetDim, laneIndex);
+        Landing landing = pasteResolver.resolve(slotDim, shipPos, targetPlanetDim, laneIndex, shipId);
         if (landing == null) {
             // The arrival could not be resolved at all — the destination world is not loaded, or VS
             // no longer has the ship. (Terrain cannot cause this: the ship arrives in the air, so
@@ -172,7 +178,7 @@ public final class DescentController {
 
         // Capture only now, with the landing RESOLVED — the last refusal is behind — and still
         // before the cut: the crossing cuts the seat blocks, and a post-cut capture finds nothing.
-        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(slotDim, afcPos, shipPos);
+        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(slotDim, afcPos, shipPos, shipId);
 
         final List<CrewTransfer.Crew> settledCrew = crew;
         BlockPos anchor = crossing.begin(shipId, slotDim, shipPos, targetPlanetDim,
@@ -182,6 +188,21 @@ public final class DescentController {
                     public void settled(UUID id) {
                         crossing.ops().messageCrew(settledCrew, "msg.shipdescent.arrived");
                         LOGGER.info("[SPACE] descent settled: ship {} on dim {}", id, targetPlanetDim);
+                        // ENTERED, not landed: the craft is in the planet's world at its arrival
+                        // pose. Whether it ever touches down is a later question this moment does
+                        // not witness, and the event is named for what it saw.
+                        net.minecraft.world.World arrivedIn = net.minecraftforge.common
+                                .DimensionManager.getWorld(targetPlanetDim);
+                        if (arrivedIn == null) {
+                            LOGGER.warn("[SPACE] descent of ship {} not announced: dim {} is not"
+                                    + " loaded", id, targetPlanetDim);
+                            return;
+                        }
+                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                                new zmaster587.advancedRocketry.api.event.ShipCrossingEvent
+                                        .EnteredPlanet(arrivedIn, id == null ? null : id.toString(),
+                                        CellCrossingController.playersOf(settledCrew),
+                                        targetPlanetDim, slotDim, sourceCell));
                     }
 
                     @Override

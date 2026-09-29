@@ -1,7 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -40,7 +45,7 @@ import static org.junit.Assert.assertTrue;
 public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTest {
 
     private static final int CX = 6580;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 6500;
 
     @Test
@@ -49,12 +54,12 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
         String fixture = join(client().execute(
                 "artest fixture multiblock space-elevator 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock space-elevator failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileSpaceElevator tile at controller pos: " + info,
-                info.contains("TileSpaceElevator"));
+        assertEquals("expected TileSpaceElevator tile at controller pos: " + info,
+                "TileSpaceElevator", MachineInfo.of(info).tileSimpleName());
 
         String deconstruct = join(client().execute(
                 "artest machine deconstruct 0 " + CX + " " + CY + " " + CZ));
@@ -62,9 +67,9 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
         // Contract: tearing down an elevator with no tether link must not
         // crash — the link teardown is a safe no-op when dimBlockPos is null.
         assertTrue("deconstruct probe errored: " + deconstruct,
-                deconstruct.contains("\"ok\":true"));
+                Reply.of(deconstruct).ok());
         assertTrue("deconstructing an unlinked elevator must not throw, got: "
-                + deconstruct, deconstruct.contains("\"threw\":false"));
+                + deconstruct, (!Reply.of(deconstruct).bool("threw")));
     }
 
     private static String join(java.util.List<String> resp) {
@@ -81,6 +86,6 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
         int cz2 = (blockZ + 16) >> 4;
         String resp = join(client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + resp, Reply.of(resp).ok());
     }
 }

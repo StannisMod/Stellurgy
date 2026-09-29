@@ -45,9 +45,9 @@ import static org.junit.Assert.assertTrue;
 public class SystemBodiesProducerTest {
 
     /** The cell&rarr;slot bindings {@link SpaceManager#loadedCells} hands the producer. */
-    private static Map<String, Integer> live(GalacticCoord cell, int dim) {
-        Map<String, Integer> bound = new LinkedHashMap<>();
-        bound.put(cell.cellKey(), dim);
+    private static Map<GalacticCoord, Integer> live(GalacticCoord cell, int dim) {
+        Map<GalacticCoord, Integer> bound = new LinkedHashMap<>();
+        bound.put(cell, dim);
         return bound;
     }
 
@@ -170,7 +170,7 @@ public class SystemBodiesProducerTest {
         };
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
-                new HashMap<String, Integer>(), ledger.snapshot(), always);
+                new HashMap<GalacticCoord, Integer>(), ledger.snapshot(), always);
         assertTrue("with no cell live there is no sky to key", byDim.isEmpty());
     }
 
@@ -258,9 +258,9 @@ public class SystemBodiesProducerTest {
             }
         };
 
-        Map<String, Integer> bound = new LinkedHashMap<>();
-        bound.put(shipA.cellKey(), 100);
-        bound.put(shipB.cellKey(), 200);
+        Map<GalacticCoord, Integer> bound = new LinkedHashMap<>();
+        bound.put(shipA, 100);
+        bound.put(shipB, 200);
 
         Map<Integer, List<RenderBody>> byDim =
                 SystemBodiesProducer.buildByDim(bound, ledger.snapshot(), lookup);
@@ -287,7 +287,7 @@ public class SystemBodiesProducerTest {
                         lookupIn(ship, planet)).size());
 
         Map<Integer, List<RenderBody>> byDim = SystemBodiesProducer.buildByDim(
-                new HashMap<String, Integer>(), ledger.snapshot(), lookupIn(ship, planet));
+                new HashMap<GalacticCoord, Integer>(), ledger.snapshot(), lookupIn(ship, planet));
         assertTrue("a ship whose cell is in no slot keys no dimension at all", byDim.isEmpty());
     }
 
@@ -298,11 +298,14 @@ public class SystemBodiesProducerTest {
         GalacticCoord cell = GalacticCoord.ofSectorLocal(1L, 1L, 1L, 0L, 0L, 0L);
         SystemBody planet = SystemBody.fixedAt(cell, SystemBodyKind.PLANET, 3, 7);
 
-        Map<String, Integer> hostile = new LinkedHashMap<>();
-        hostile.put(cell.cellKey(), SpaceManager.UNBOUND_SLOT);
-        hostile.put("not-a-cell-key", 77);
+        // The "unparseable cell key" half of this case is GONE, and deliberately: the snapshot
+        // hands over coordinates now, so a name that is not a cell cannot be expressed here at all.
+        // What remains representable is an ABSENT cell, which the producer must still skip.
+        Map<GalacticCoord, Integer> hostile = new LinkedHashMap<>();
+        hostile.put(cell, SpaceManager.UNBOUND_SLOT);
+        hostile.put(null, 77);
 
-        assertTrue("neither an unbound nor an unparseable cell keys anything",
+        assertTrue("neither an unbound nor an absent cell keys anything",
                 SystemBodiesProducer.buildByDim(hostile, new ShipLedger().snapshot(),
                         lookupIn(cell, planet)).isEmpty());
     }
@@ -384,7 +387,7 @@ public class SystemBodiesProducerTest {
     }
 
     /**
-     * Ledger #151's half that lives on the server. A star has no dimension of its own and carried
+     * The server-side half of a recorded defect. A star has no dimension of its own and carried
      * {@code INVALID_PLANET}, which the client's lenient lookup answers with the OVERWORLD — so the
      * star was drawn wearing Earth's texture and would be captioned with Earth's name. An AUTHORED
      * star has a proxy dimension; a procedural one (negative star id) does not, and inventing an id

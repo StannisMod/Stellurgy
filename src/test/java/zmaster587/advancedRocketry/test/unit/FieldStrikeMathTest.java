@@ -18,6 +18,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class FieldStrikeMathTest {
 
+    /** What counts as EXACT for a crossing solved in closed form: float noise, not a tolerance. */
+    private static final double EXACT = 1.0E-3D;
+
     private static final double EPS = 1.0E-6D;
 
     /** A ray aimed at the centre from outside crosses the shell at (centreDistance - radius). */
@@ -75,7 +78,7 @@ public class FieldStrikeMathTest {
         double t = FieldSurfaceMath.rayShellEntry(source,
                 new Vec3d(0.5D, 64.5D, 10.5D), new Vec3d(0, 0, -1), 20.0D);
         // Source centre is the block centre (0.5, 64.5, 0.5); origin is 10 blocks out on +Z, radius 4.
-        assertTrue("expected an inward crossing near distance 6, got " + t, Math.abs(t - 6.0D) < 1.0E-3D);
+        assertTrue("expected an inward crossing near distance 6, got " + t, Math.abs(t - 6.0D) < EXACT);
     }
 
     private static FieldSource emitter(final int x, final int y, final int z, final int radius) {

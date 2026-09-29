@@ -1,10 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -29,28 +29,25 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceStationCentreCellNoFalseStationTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern SPAWN_X = Pattern.compile("\"spawnX\":(-?\\d+)");
-    private static final Pattern SPAWN_Y = Pattern.compile("\"spawnY\":(-?\\d+)");
-    private static final Pattern SPAWN_Z = Pattern.compile("\"spawnZ\":(-?\\d+)");
+    private static final String ID = "id";
 
     @Test
     public void centreGridCellResolvesToNoStationNotFalselyStationOne() throws Exception {
         String create = exec("artest station create 0");
-        assertTrue("station must create: " + create, create.contains("\"ok\":true"));
+        assertTrue("station must create: " + create, Reply.of(create).ok());
         int stationId = extract(ID, create);
 
-        String info = exec("artest station info " + stationId);
-        int spawnX = extract(SPAWN_X, info);
-        int spawnY = extract(SPAWN_Y, info);
-        int spawnZ = extract(SPAWN_Z, info);
+        StationInfo info = StationInfo.byId(this::exec, stationId);
+        int spawnX = info.spawnX();
+        int spawnY = info.spawnY();
+        int spawnZ = info.spawnZ();
 
         // Control: the station's own spawn must resolve back to it — proves the
         // reverse map still finds real on-station positions after the radius-0 fix.
         String atSpawn = exec("artest station at " + spawnX + " " + spawnY + " " + spawnZ);
         assertTrue("control: the station spawn must resolve to its own station id " + stationId
                         + " (spawn=" + spawnX + "," + spawnZ + "): " + atSpawn,
-                atSpawn.contains("\"stationAtPos\":" + stationId));
+                String.valueOf(stationId).equals(Reply.of(atSpawn).text("stationAtPos")));
 
         // L5: a position in the central grid cell (0,0) — station id 0 is never
         // allocated, so it must resolve to NO station (was falsely station 1 before
@@ -59,16 +56,20 @@ public class SpaceStationCentreCellNoFalseStationTest extends AbstractHeadlessSe
         String atCentre = exec("artest station at 100 64 100");
         assertTrue("PIN L5: the central grid cell must resolve to no station (radius-0 index fix) — it "
                         + "collided with grid (-1,-1) on index 1 = station 1 via (2*0-1)^2. Got: " + atCentre,
-                atCentre.contains("\"stationAtPos\":null"));
+                // `has` answers false for an ABSENT field and for one whose value is JSON null,
+                // which is the whole claim. The needle it replaces was one rendering of that —
+                // it would have missed `"stationAtPos": null` with a space, and matched the
+                // string appearing inside any other field.
+                !Reply.of("artest station at", atCentre).has("stationAtPos"));
     }
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
 
-    private static int extract(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " not found in: " + s, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String field, String s) {
+        Reply reply = Reply.of(s);
+        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
+        return reply.integer(field);
     }
 }

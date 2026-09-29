@@ -31,7 +31,6 @@ public class GalacticCoordTest {
         assertTrue("localZ in [-HALF, HALF)", c.localZ() >= -HALF && c.localZ() < HALF);
     }
 
-
     // The sector+local identity, read through the type that can hold it. GalacticCoord no longer
     // materialises a whole-block absolute of its own: the product overflows a long seven orders
     // before the sector index does, so the coordinate could name positions it could not express.

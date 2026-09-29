@@ -2,11 +2,12 @@ package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
 import org.junit.Assume;
+
+import zmaster587.advancedRocketry.test.DimWeather;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -37,20 +38,16 @@ import static org.junit.Assert.assertTrue;
  */
 public class EventHandlerWiringTest extends AbstractSharedServerTest {
 
-    private static final Pattern AR_DIMS_ARRAY_PATTERN =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
+    private static final String AR_DIMS_ARRAY_PATTERN = "arDimensions";
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY_PATTERN.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY_PATTERN));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY_PATTERN)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue(
@@ -68,12 +65,12 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         // setRain path that follows it.
         String loaded = String.join("\n", client().execute("artest dim load " + dim));
         assertTrue("dim load probe did not report loaded=true: " + loaded,
-                loaded.contains("\"loaded\":true"));
+                Reply.of(loaded).bool("loaded"));
 
-        String weather = String.join("\n", client().execute("artest weather get " + dim));
+        DimWeather weather = weather(dim);
         assertTrue("WeatherEventHandler did not install the B1 wrapper on AR dim load: "
-                        + weather,
-                weather.contains("ARDimensionWorldInfo"));
+                        + weather.raw(),
+                weather.usesARWorldInfo());
     }
 
     @Test
@@ -82,10 +79,16 @@ public class EventHandlerWiringTest extends AbstractSharedServerTest {
         // (The wrapping decision lives in PlanetWeatherManager.shouldWrap,
         // and this fixes the polarity of that gate.)
         client().execute("artest dim load 0");
-        String weather = String.join("\n", client().execute("artest weather get 0"));
+        DimWeather weather = weather(0);
         // Vanilla overworld WorldInfo class — neither ARDimensionWorldInfo
         // nor anything that contains "ARWeather".
-        assertTrue("overworld was incorrectly wrapped — wrapping gate broken: " + weather,
-                !weather.contains("ARDimensionWorldInfo"));
+        assertFalse("overworld was incorrectly wrapped — wrapping gate broken: " + weather.raw(),
+                weather.usesARWorldInfo());
+    }
+
+    /** One world's sky, refusing a world the probe could not bring up. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 }

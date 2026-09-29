@@ -1,13 +1,14 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
-import org.junit.Assume;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import zmaster587.advancedRocketry.test.Reply;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -33,88 +34,122 @@ import static org.junit.Assert.fail;
  * riding report is its own control — {@code riding=true} means the mount did reach the client, so
  * a wrong class cannot be explained away as "the client never saw it".
  *
- * <p>Gated on real Valkyrien Skies being on the server.
  */
-public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSChairMountArrivesAsItselfE2ETest extends AbstractSharedVsClientE2ETest {
 
-    private static final Pattern SERVER_ENTITY =
-            Pattern.compile("\\{\"id\":(-?\\d+),\"class\":\"([^\"]+)\"");
+    /**
+     * How far below the platform's own surface the player may settle and still be ON it, in blocks.
+     *
+     * <p>The TEST'S OWN: a body that fell off is out of reach of the chair, which is what the leg
+     * needs; 0.6 is under a body's step height.</p>
+     */
+    private static final double ON_THE_PLATFORM_BLOCKS = 0.6;
+
+    @Override
+    protected String subsystem() {
+        return "vs-chair-mount-identity";
+    }
+
+    /** The block this scenario is about, spelled as the registry spells it: the
+     *  substring `passenger_chair` also matches any id merely ending in it. */
+    private static final String CHAIR_BLOCK = "advancedrocketry:passenger_chair";
+
+    /** How long either side's {@code mount} record may take to follow the click. A link's budget:
+     *  its expiry is "the seating never happened", never "not yet". */
+    private static final int SIT_LINK_BUDGET_TICKS = 200;
+
+    /** The server's own entity report: {@code "entities":[{"id":…,"class":…,"x":…}, …]}. */
+    private static final String ENTITIES = "entities";
+    private static final String ENTITY_ID = "id";
+    private static final String ENTITY_CLASS = "class";
 
     /** Far from every other fixture's build site, and high enough to be clear of any terrain. */
-    private static final int FX = 7700, FY = 90, FZ = 7700;
+    private static final int FX = 7700, FY = FixtureSite.OPEN_AIR_Y, FZ = 7700;
     /** The chair block, one step from where the player stands — inside interaction reach. */
     private static final int CX = FX + 1, CY = FY + 1, CZ = FZ;
 
     private static final String CHAIR_ENTITY =
             "org.valkyrienskies.mod.common.entity.EntityMountableChair";
 
+    /**
+     * <p>red-witnessed: with {@code EntityNetworkIds:92} answering the mount dummy's id for the chair
+     * — the collision this pins: red at the server's {@code mount} link with "Connection reset", the
+     * client having died on the chair it built as the other class, 2026-09-28. Earlier than the
+     * named failure in {@code ridingOrDie}: the server-log wait paces on the client's ticks, so a
+     * dead client ends it first, and the socket error does not name the cause.</p>
+     */
     @Test
     public void aChairMountArrivesAtTheClientAsItself() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server", serverHasVs());
 
         // ---- ARRANGE: a floor, a chair on it, and the player standing next to the chair. --------
-        assertTrue("ARRANGEMENT: chunk warmup failed",
-                exec("artest chunk warmup 0 " + (FX >> 4) + " " + (FZ >> 4) + " "
-                        + ((FX + 1) >> 4) + " " + ((FZ + 1) >> 4)).contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: floor fill failed",
-                exec("artest fill 0 " + (FX - 2) + " " + FY + " " + (FZ - 2) + " "
+        scenario().requireArranged("chunk warmup failed",
+                Reply.of(exec("artest chunk warmup 0 " + (FX >> 4) + " " + (FZ >> 4) + " "
+                        + ((FX + 1) >> 4) + " " + ((FZ + 1) >> 4))).ok());
+        scenario().requireArranged("floor fill failed",
+                Reply.of(exec("artest fill 0 " + (FX - 2) + " " + FY + " " + (FZ - 2) + " "
                         + (FX + 2) + " " + FY + " " + (FZ + 2) + " minecraft:stone")
-                        .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: clearing the space above the floor failed",
-                exec("artest fill 0 " + (FX - 2) + " " + (FY + 1) + " " + (FZ - 2) + " "
+                        ).ok());
+        scenario().requireArranged("clearing the space above the floor failed",
+                Reply.of(exec("artest fill 0 " + (FX - 2) + " " + (FY + 1) + " " + (FZ - 2) + " "
                         + (FX + 2) + " " + (FY + 3) + " " + (FZ + 2) + " minecraft:air")
-                        .contains("\"ok\":true"));
+                        ).ok());
         // The chair block carries the HOST mod's domain, not the physics engine's: vendored code
         // registers under the container it is loaded in. An unknown block id fills air here and
         // still reports success, which is why the placement is read back below.
         String chair = exec("artest fill 0 " + CX + " " + CY + " " + CZ + " "
                 + CX + " " + CY + " " + CZ + " advancedrocketry:passenger_chair");
-        assertTrue("ARRANGEMENT: the chair block must be placeable: " + chair,
-                chair.contains("\"ok\":true"));
+        scenario().requireArranged("the chair block must be placeable: " + chair,
+                Reply.of(chair).ok());
         String rightAfter = exec("artest block at 0 " + CX + " " + CY + " " + CZ);
-        assertTrue("ARRANGEMENT: the chair must actually be in the world once the fill reports"
-                + " success: " + rightAfter, rightAfter.contains("passenger_chair"));
-        // The platform is built into a chunk the client may not hold yet, so the first teleport can
-        // land the player on nothing and he falls out of reach of the chair. Re-place him until his
-        // own client agrees he is standing on it.
-        JsonObject stood = null;
-        double standY = Double.NaN;
-        for (int attempt = 0; attempt < 6 && !(Math.abs(standY - (FY + 1)) < 0.6); attempt++) {
-            exec("tp @a " + (FX + 0.5) + " " + (FY + 1) + " " + (FZ + 0.5) + " 90 0");
-            bot().waitTicks(15);
-            stood = bot().reportState();
-            standY = stood.get("playerY").getAsDouble();
-        }
-        assertEquals("ARRANGEMENT: the player must end up standing ON the platform - one that fell"
-                        + " off it is out of reach of the chair: " + stood,
-                FY + 1, standY, 0.6);
+        scenario().requireArranged("the chair must actually be in the world once the fill reports"
+                + " success: " + rightAfter, CHAIR_BLOCK.equals(
+                        Reply.of("artest block at", rightAfter).text("block")));
+        // The platform is built into a chunk the client may not hold yet, and a teleport onto a floor
+        // the client does not have lands him on nothing — so he is stood on it only once his client
+        // holds it (both cases named in the helper), and his position is then read ONCE.
+        standOnFloorTheClientHolds(FX + 0.5, FY + 1, FZ + 0.5, 90f, 0f,
+                "the player must be stood on the chair's platform");
+        JsonObject stood = bot().reportState();
+        double standY = stood.get("playerY").getAsDouble();
+        scenario().requireArranged("the player must end up standing ON the platform - one that fell"
+                        + " off it is out of reach of the chair (expected y~" + (FY + 1)
+                        + ", measured " + standY + "): " + stood,
+                Math.abs(standY - (FY + 1)) <= ON_THE_PLATFORM_BLOCKS);
         String placed = exec("artest block at 0 " + CX + " " + CY + " " + CZ);
-        assertTrue("ARRANGEMENT: the chair block must still be there when the player reaches for"
-                + " it: " + placed, placed.contains("passenger_chair"));
+        scenario().requireArranged("the chair block must still be there when the player reaches for"
+                + " it: " + placed, CHAIR_BLOCK.equals(
+                        Reply.of("artest block at", placed).text("block")));
 
         // ---- ACT: the player sits down, through a real right-click on his own client. -----------
+        long sitMark = events().markInstrumented();
+        long sitOnClient = clientEvents().mark();
         JsonObject click = bot().interactBlock(CX, CY, CZ);
-        assertTrue("ARRANGEMENT: the right-click must be accepted by the client: " + click,
+        scenario().requireArranged("the right-click must be accepted by the client: " + click,
                 click != null);
-        bot().waitTicks(20);
+        events().await(sitMark, "mount", "the right-click on the chair must seat the player on the"
+                + " SERVER - without that there is no mount entity to compare", SIT_LINK_BUDGET_TICKS);
 
         // ---- The server's view: the truth the client is supposed to reproduce. Read FIRST, so
         // that a client already dead to this very defect still leaves the arrangement on record. --
         String serverSide = exec("artest entity near 0 " + CX + " " + CY + " " + CZ + " 8");
         int chairEntityId = -1;
         String chairEntityClass = null;
-        Matcher m = SERVER_ENTITY.matcher(serverSide);
-        while (m.find()) {
-            if (m.group(2).equals(CHAIR_ENTITY)) {
-                chairEntityId = Integer.parseInt(m.group(1));
-                chairEntityClass = m.group(2);
+        for (String near : Reply.of("artest entity near", serverSide).objectArray(ENTITIES)) {
+            Reply entity = Reply.of("one nearby entity", near);
+            // the producer always writes `class` on every element of this list — id, class and
+            // the three coordinates are appended together — so an element without it is a broken
+            // probe rather than an entity that is not the chair.
+            if (CHAIR_ENTITY.equals(entity.text(ENTITY_CLASS))) {
+                chairEntityId = entity.integer(ENTITY_ID);
+                chairEntityClass = entity.text(ENTITY_CLASS);
             }
         }
-        assertTrue("ARRANGEMENT: sitting on the chair must give the server a mount entity -"
+        scenario().requireArranged("sitting on the chair must give the server a mount entity -"
                 + " without one this test has no subject: " + serverSide, chairEntityClass != null);
 
         // ---- ASSERT: the client is riding THAT entity, and it is the same class. ----------------
-        JsonObject riding = ridingOrDie();
+        JsonObject riding = ridingOrDie(sitOnClient);
         assertTrue("CONTROL: the client must report itself riding - if the mount never reached it,"
                 + " nothing below is evidence about class identity: " + riding,
                 riding.get("riding").getAsBoolean());
@@ -131,13 +166,17 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
     // ---- helpers -----------------------------------------------------------------------------
 
     /**
-     * The client's riding report. A client that has already died to a mis-built entity answers
-     * nothing at all — the bot sees only a dropped connection — so that case is named here rather
-     * than surfacing as a bare socket error with no cause in it.
+     * The client's riding report, once its own {@code mount} record since {@code clientMark} says it
+     * performed the seating. A client that has already died to a mis-built entity answers nothing
+     * at all — the bot sees only a dropped connection — so that case is named here rather than
+     * surfacing as a bare socket error with no cause in it. A client that is alive and never
+     * mounted fails the link itself, with its own mount chain in the message.
      */
-    private JsonObject ridingOrDie() throws Exception {
+    private JsonObject ridingOrDie(long clientMark) throws Exception {
         try {
-            return bot().reportRidingEntity();
+            return awaitClientMount(clientMark, "CONTROL: the client must perform the seating the"
+                    + " server did - if the mount never reached it, nothing below is evidence about"
+                    + " class identity", SIT_LINK_BUDGET_TICKS, "");
         } catch (Exception dead) {
             fail("the client stopped answering after it was seated on a mount entity - the symptom"
                     + " of having rebuilt it as another class and then read one of its synced"
@@ -147,11 +186,4 @@ public class VSChairMountArrivesAsItselfE2ETest extends AbstractClientE2ETest {
         }
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
 }

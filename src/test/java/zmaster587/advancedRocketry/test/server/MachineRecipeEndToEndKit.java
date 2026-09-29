@@ -1,12 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.server.TestClient;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -42,21 +40,6 @@ import static org.junit.Assert.assertTrue;
  */
 final class MachineRecipeEndToEndKit {
 
-    private static final Pattern INPUT_POS         = Pattern.compile("\"inputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern OUTPUT_POS        = Pattern.compile("\"outputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POWER_POS         = Pattern.compile("\"powerPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern LIQUID_INPUT_POS  = Pattern.compile("\"liquidInputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern LIQUID_OUTPUT_POS = Pattern.compile("\"liquidOutputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-
-    /** Captures every ingredient slot — slot index, item id, count, meta. */
-    private static final Pattern ANY_INGREDIENT =
-            Pattern.compile("\\{\"slot\":(\\d+),\"item\":\"([^\"]+)\",\"count\":(\\d+),\"meta\":(\\d+)");
-    /** Captures every output slot — slot index, item id (meta optional). */
-    private static final Pattern ANY_OUTPUT =
-            Pattern.compile("\\{\"slot\":(\\d+),\"item\":\"([^\"]+)\"");
-    private static final Pattern FLUID_INGREDIENT =
-            Pattern.compile("\\{\"fluid\":\"([^\"]+)\",\"amount\":(\\d+)\\}");
-
     private MachineRecipeEndToEndKit() {}
 
     // ---- Position discovery -------------------------------------------------
@@ -90,7 +73,7 @@ final class MachineRecipeEndToEndKit {
         String resp = String.join("\n", c.execute(
                 "artest fixture machine " + fixtureKey + " 0 " + cx + " " + cy + " " + cz));
         assertTrue("fixture machine " + fixtureKey + " failed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         List<String> in   = matchAllPos(resp, "inputPositions");
         List<String> out  = matchAllPos(resp, "outputPositions");
         List<String> pwr  = matchAllPos(resp, "powerPositions");
@@ -103,71 +86,51 @@ final class MachineRecipeEndToEndKit {
     }
 
     /** Extract a list of "x y z" strings from a JSON field like
-     *  {@code "<key>":[[x,y,z],[x,y,z]]}. Returns empty if key absent. */
+     *  {@code "<key>":[[x,y,z],[x,y,z]]}. */
     private static List<String> matchAllPos(String resp, String key) {
-        String marker = "\"" + key + "\":[";
-        int idx = resp.indexOf(marker);
-        if (idx < 0) return Collections.emptyList();
-        int start = idx + marker.length();
-        // Find matching ']' — scan until first ']' at the same nesting level.
-        // The contents are pure "[a,b,c],[d,e,f]" with no nested objects.
-        int depth = 1, end = -1;
-        for (int i = start; i < resp.length(); i++) {
-            char ch = resp.charAt(i);
-            if (ch == '[') depth++;
-            else if (ch == ']') { depth--; if (depth == 0) { end = i; break; } }
-        }
-        if (end < 0) return Collections.emptyList();
-        String section = resp.substring(start, end);
-        Pattern triple = Pattern.compile("\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-        Matcher m = triple.matcher(section);
         List<String> all = new ArrayList<>();
-        while (m.find()) all.add(m.group(1) + " " + m.group(2) + " " + m.group(3));
+        // absence is the answer, and it is the PRODUCER's doing: the fixture reply writes a hatch
+        // list only for a kind of hatch the machine actually has — `appendHatchPositions` returns
+        // before writing anything for an empty one — so a machine with no liquid hatches carries no
+        // `liquidInputPositions` key at all. Measured over a green server tier, this is the only
+        // site in it where an array field is genuinely absent: 24 times, across the four optional
+        // kinds. The one list that must always be there is `powerPositions`, and `placeFixture`
+        // asserts on it directly rather than leaving that claim to this reader.
+        for (int[] at : Reply.of("a machine probe reply", resp).blockPosArrayOrEmpty(key)) {
+            all.add(at[0] + " " + at[1] + " " + at[2]);
+        }
         return all;
     }
 
     /**
-     * Drives {@code /artest machine try-complete} with a retry
-     * shim. Returns the response from the last attempt that produced
-     * {@code attempted:true}, or the response from the final retry on
-     * timeout. Callers must assert their own {@code isComplete} expectation
-     * — this helper only guarantees that the validator actually ran.
+     * Asks production ONCE to validate the multiblock whose controller is at the given position —
+     * {@code /artest machine try-complete}, which calls libVulpes' {@code attemptCompleteStructure}
+     * on the controller — and returns the reply. Callers assert their own {@code isComplete}
+     * expectation, positive or negative.
      *
-     * <p>The race: {@code attemptCompleteStructure} occasionally returns
-     * {@code false} on the immediate first call after the fixture is built
-     * (chunk-load + finalization race). Re-invoking it across the natural
-     * tick gap between two probe round-trips lets the finalization settle.
-     * Budget: 8 attempts × 500 ms gap (~4 s ceiling on the non-happy path;
-     * ~0 ms cost when the first call succeeds — which is the common case).
-     * Earlier 5×200ms budget proved insufficient under parallel-3-fork
-     * pressure on multiple multiblocks
-     * (ArcFurnace, PrecisionLaserEtcher, Beacon).</p>
+     * <p><b>Once, because the answer does not change with time.</b> {@code attemptCompleteStructure}
+     * is a synchronous walk over the structure's blocks inside the probe call: it refuses on a block
+     * that is wrong or a phantom, and on a chunk that is not loaded — which on the server it loads
+     * as it asks. Nothing ticking in between can turn a refusal into a success. An eight-ask retry
+     * stood here for a "chunk-load + finalization race" under parallel forks; measured 2026-09-28
+     * with every ask logged, all 27 positive validations across the thirteen classes that build a
+     * multiblock succeeded on the FIRST ask, and the retry did its only work in the five negative
+     * scenarios — asking a structure that must refuse seven more times. A first-ask refusal now
+     * fails its caller with the reply, which is where a structure that needs asking twice belongs.</p>
      */
-    static String tryCompleteWithRetry(TestClient c, int dim, int cx, int cy, int cz) throws Exception {
-        String resp = null;
-        for (int attempt = 0; attempt < 8; attempt++) {
-            resp = String.join("\n",
-                    c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
-            if (resp.contains("\"attempted\":true")) return resp;
-            Thread.sleep(500);
-        }
-        return resp;
+    static String tryComplete(TestClient c, int dim, int cx, int cy, int cz) throws Exception {
+        return String.join("\n",
+                c.execute("artest machine try-complete " + dim + " " + cx + " " + cy + " " + cz));
     }
 
     static void assertFixtureValidates(TestClient c, int cx, int cy, int cz,
                                        String tag, String fixtureResp) throws Exception {
-        // Retry mitigation — see tryCompleteWithRetry above.
-        StringBuilder attempts = new StringBuilder();
-        String resp = null;
-        for (int attempt = 0; attempt < 8; attempt++) {
-            resp = String.join("\n",
-                    c.execute("artest machine try-complete 0 " + cx + " " + cy + " " + cz));
-            if (resp.contains("\"isComplete\":true")) return;
-            attempts.append("\n  attempt ").append(attempt + 1).append(": ").append(resp);
-            Thread.sleep(500);
+        String resp = tryComplete(c, 0, cx, cy, cz);
+        if (!Reply.of(resp).boolOr("isComplete", false)) {
+            throw new AssertionError(tag + " — the multiblock built by the fixture must validate on"
+                    + " the first ask (see tryComplete); reply: " + resp + "\n  fixture: "
+                    + fixtureResp);
         }
-        throw new AssertionError(tag + " — multiblock not complete after 8 attempts"
-                + attempts + "\n  fixture: " + fixtureResp);
     }
 
     // ---- Recipe discovery --------------------------------------------------
@@ -188,38 +151,44 @@ final class MachineRecipeEndToEndKit {
         }
     }
 
-    private static final Pattern TIME_FIELD = Pattern.compile("\"time\":(\\d+)");
+    private static final String TIME_FIELD = "time";
 
     static FirstRecipe resolveFirstRecipe(TestClient c, String tileShortName) throws Exception {
         String resp = String.join("\n",
                 c.execute("artest machine recipe-info " + tileShortName + " 0"));
         assertTrue("recipe-info errored for " + tileShortName + ": " + resp,
-                !resp.contains("\"error\""));
+                !Reply.of(resp).has("error"));
         int time = 0;
-        Matcher tm = TIME_FIELD.matcher(resp);
-        if (tm.find()) time = Integer.parseInt(tm.group(1));
+        Reply tmReply = Reply.of(resp);
+        if (tmReply.has(TIME_FIELD)) time = Integer.parseInt(tmReply.text(TIME_FIELD));
         return new FirstRecipe(
-                parseSection(resp, "\"ingredients\":[", ANY_INGREDIENT, 4),
-                parseSection(resp, "\"outputs\":[",     ANY_OUTPUT,     2),
-                parseSection(resp, "\"fluidIngredients\":[", FLUID_INGREDIENT, 2),
-                parseSection(resp, "\"fluidOutputs\":[",     FLUID_INGREDIENT, 2),
+                parseSection(resp, "ingredients", "slot", "item", "count", "meta"),
+                parseSection(resp, "outputs", "slot", "item"),
+                parseSection(resp, "fluidIngredients", "fluid", "amount"),
+                parseSection(resp, "fluidOutputs", "fluid", "amount"),
                 time, resp);
     }
 
-    private static List<String[]> parseSection(String resp, String key,
-                                               Pattern pattern, int groupCount) {
-        int idx = resp.indexOf(key);
-        if (idx < 0) return Collections.emptyList();
-        int start = idx + key.length();
-        int end = resp.indexOf(']', start);
-        if (end < 0) return Collections.emptyList();
-        String section = resp.substring(start, end);
-        Matcher m = pattern.matcher(section);
+    /**
+     * One array of the recipe reply, projected onto {@code fields} in order.
+     *
+     * <p>It used to find the key's text, cut the substring up to the next {@code ]}, and run a regex
+     * with one capture group per field over it — so a recipe whose item id contained a bracket, or a
+     * producer that reordered two fields, silently yielded an EMPTY recipe and every assertion below
+     * then described a machine that had been fed nothing.</p>
+     */
+    private static List<String[]> parseSection(String resp, String field, String... fields) {
         List<String[]> out = new ArrayList<>();
-        while (m.find()) {
-            String[] groups = new String[groupCount];
-            for (int i = 0; i < groupCount; i++) groups[i] = m.group(i + 1);
-            out.add(groups);
+        for (String element : Reply.of("artest machine recipe-info", resp).objectArray(field)) {
+            Reply one = Reply.of(element);
+            String[] values = new String[fields.length];
+            for (int i = 0; i < fields.length; i++) {
+                // absence is the answer: the caller asks for a SET of fields over a
+                // heterogeneous list, and an element that carries none of one of them is a
+                // fact about that element rather than about the reply.
+                values[i] = one.textOr(fields[i], null);
+            }
+            out.add(values);
         }
         return out;
     }
@@ -252,15 +221,15 @@ final class MachineRecipeEndToEndKit {
         fillFluidIngredients(c, fixtureKey, p, r.fluidIngredients);
         String inject = String.join("\n", c.execute(
                 "artest energy inject 0 " + p.firstPower() + " 10000000"));
-        assertTrue("power inject failed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("power inject failed: " + inject, Reply.of(inject).ok());
         String enable = String.join("\n", c.execute(
                 "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed: " + enable,
-                enable.contains("\"ok\":true") && enable.contains("\"enabled\":true"));
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
         int tickBudget = Math.max(2000, r.time + 1000);
         String tick = String.join("\n", c.execute(
                 "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
-        assertTrue("force-tick failed: " + tick, tick.contains("\"ok\":true"));
+        assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
         return String.join("\n", c.execute("artest hatch read 0 " + p.firstOutput()));
     }
 
@@ -280,12 +249,12 @@ final class MachineRecipeEndToEndKit {
         String inject = String.join("\n", c.execute(
                 "artest energy inject 0 " + p.firstPower() + " 10000000"));
         assertTrue("power inject failed for " + fixtureKey + ": " + inject,
-                inject.contains("\"ok\":true"));
+                Reply.of(inject).ok());
 
         String enable = String.join("\n", c.execute(
                 "artest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
         assertTrue("machine set-enabled failed for " + fixtureKey + ": " + enable,
-                enable.contains("\"ok\":true") && enable.contains("\"enabled\":true"));
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
 
         // Force-tick budget adapts to the recipe's declared completion time.
         // Most AR machine recipes are <500 ticks; the wildcard-structure
@@ -296,7 +265,7 @@ final class MachineRecipeEndToEndKit {
         String tick = String.join("\n", c.execute(
                 "artest tile force-tick 0 " + cx + " " + cy + " " + cz + " " + tickBudget));
         assertTrue("force-tick failed for " + fixtureKey + ": " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // Input-drain check — pins the "recipe consumed its ingredients"
         // contract. Without this, a regression where the machine generates
@@ -311,10 +280,21 @@ final class MachineRecipeEndToEndKit {
         if (!r.itemIngredients.isEmpty()) {
             String inputRead = String.join("\n", c.execute("artest hatch read 0 " + p.firstInput()));
             boolean anyDrained = false;
+            // ASKED of the list, not addressed in it: an element carrying all three of slot,
+            // item and count is the slot still holding its initial stack, and NO such element is
+            // exactly what "it drained" looks like — a consumed slot leaves the array entirely
+            // (`{"size":4,"slots":[]}`). Addressing it would refuse on the one state this check
+            // exists to detect.
+            //
+            // As one needle the three fields had to be adjacent and in the producer's order — a
+            // field inserted between them makes every slot look drained and the whole claim
+            // vacuous — and the count was matched as a PREFIX, so a slot still holding 16
+            // answered for one holding 1 whenever the expected count was 1.
+            Reply slots = Reply.of("artest hatch read", inputRead);
             for (String[] ing : r.itemIngredients) {
-                String stillUntouched = "\"slot\":" + ing[0] + ",\"item\":\""
-                        + ing[1] + "\",\"count\":" + ing[2];
-                if (!inputRead.contains(stillUntouched)) { anyDrained = true; break; }
+                boolean untouched = slots.holdsElementWithAll("slots",
+                        "slot", ing[0], "item", ing[1], "count", ing[2]);
+                if (!untouched) { anyDrained = true; break; }
             }
             assertTrue("no input items consumed for " + fixtureKey
                             + " — recipe appears to run but every ingredient slot still "
@@ -331,13 +311,13 @@ final class MachineRecipeEndToEndKit {
                     p.firstOutput() != null);
             String read = String.join("\n", c.execute("artest hatch read 0 " + p.firstOutput()));
             assertTrue("hatch read errored for " + fixtureKey + ": " + read,
-                    !read.contains("\"error\""));
-            assertTrue("expected output " + expectedItem
-                            + " not in output hatch — recipe did not complete for "
-                            + fixtureKey + " (item-inputs=" + r.itemIngredients.size()
-                            + ", fluid-inputs=" + r.fluidIngredients.size()
-                            + ", response=" + read + ")",
-                    read.contains("\"item\":\"" + expectedItem + "\""));
+                    !Reply.of(read).has("error"));
+            // Addressed by the FETCH — the machine's own output hatch at `firstOutput()` — so the
+            // slot the recipe filled is the machine's choice and not the test's to name.
+            assertTrue("expected output " + expectedItem + " not in the output hatch for "
+                            + fixtureKey + ": " + read,
+                    Reply.of("artest hatch read", read)
+                            .holdsElement("slots", "item", String.valueOf(expectedItem)));
         }
         if (!r.fluidOutputs.isEmpty()) {
             String expectedFluid = r.fluidOutputs.get(0)[0];
@@ -351,7 +331,12 @@ final class MachineRecipeEndToEndKit {
             for (String pos : p.liquidOutputPositions) {
                 String read = String.join("\n", c.execute("artest fluid stored 0 " + pos));
                 seen.append(pos).append(" -> ").append(read).append('\n');
-                if (read.contains("\"fluid\":\"" + expectedFluid + "\"")) {
+                // A SEARCH over candidate positions: this position may legitimately hold nothing,
+                // so the question is existence and `element`'s refusal would end the loop.
+                // absence is the answer: the claim is whether the tank holds that fluid AT ALL,
+            // and a list with no such element is the "not yet" this loop waits out.
+            if (Reply.of("artest fluid stored", read)
+                        .holdsElement("tanks", "fluid", String.valueOf(expectedFluid))) {
                     found = true; break;
                 }
             }
@@ -366,7 +351,7 @@ final class MachineRecipeEndToEndKit {
 
     // ---- helpers -----------------------------------------------------------
 
-    private static final Pattern INV_SIZE = Pattern.compile("\"size\":(\\d+)");
+    private static final String INV_SIZE = "size";
 
     private static void fillItemIngredients(TestClient c, String fixtureKey,
                                             FixturePositions p,
@@ -398,7 +383,7 @@ final class MachineRecipeEndToEndKit {
             assertTrue("hatch fill (hatch " + hatchIdx + " slot " + localSlot + " " + ing[1]
                             + ":" + ing[3] + " ×" + ing[2] + ") failed for "
                             + fixtureKey + ": " + fill,
-                    fill.contains("\"ok\":true"));
+                    Reply.of(fill).ok());
             globalSlot++;
         }
     }
@@ -406,9 +391,9 @@ final class MachineRecipeEndToEndKit {
     /** Reads an input hatch's inventory size from a {@code hatch read}. */
     private static int readInventorySize(TestClient c, String pos) throws Exception {
         String resp = String.join("\n", c.execute("artest hatch read 0 " + pos));
-        Matcher m = INV_SIZE.matcher(resp);
-        assertTrue("could not read input-hatch size at " + pos + ": " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not read input-hatch size at " + pos + ": " + resp, mReply.has(INV_SIZE));
+        return Integer.parseInt(mReply.text(INV_SIZE));
     }
 
     private static void fillFluidIngredients(TestClient c, String fixtureKey,
@@ -431,7 +416,7 @@ final class MachineRecipeEndToEndKit {
                     "artest fluid inject 0 " + pos + " " + f[0] + " " + amount));
             assertTrue("fluid inject (" + f[0] + " ×" + amount + " into "
                             + pos + ") failed for " + fixtureKey + ": " + fluidResp,
-                    fluidResp.contains("\"ok\":true"));
+                    Reply.of(fluidResp).ok());
         }
     }
 }

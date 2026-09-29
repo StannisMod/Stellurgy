@@ -5,8 +5,11 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.EntityState;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.Plot;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -55,6 +58,27 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
 
+    /**
+     * How far a throttled hovercraft must travel laterally over the window, in blocks.
+     *
+     * <p>The TEST'S OWN sensitivity bar: what it refuses is a craft that did not move at all.</p>
+     */
+    private static final double THROTTLED_MOVED_BLOCKS = 0.1;
+
+    /**
+     * How far the SERVER's craft X may sit from the CLIENT's view of it, in blocks — the test's own
+     * replication tolerance, about the craft's own width.
+     */
+    private static final double CLIENT_SERVER_X_BLOCKS = 4.0;
+
+    /**
+     * How far an UNMOUNTED hovercraft may drift laterally, in blocks.
+     *
+     * <p>The TEST'S OWN: it hovers in place, so the honest statement is zero; half a block is the
+     * settle of a body with no input.</p>
+     */
+    private static final double HOVERS_IN_PLACE_BLOCKS = 0.5;
+
     /** LWJGL key codes for the vanilla default binds. */
     private static final int KEY_W = 17;
     private static final int KEY_LSHIFT = 42;
@@ -70,10 +94,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     private static final int STAND_DZ = PAD_DZ + 4;
     private static final int VEHICLE_DZ = STAND_DZ + 2;
 
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern RIDING_ID = Pattern.compile("\"ridingEntityId(?:Now)?\":(-?\\d+)");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    private static final String ENTITY_ID = "entityId";
+    /**
+     * Which entity the player is riding, as {@code artest player riding-entity} reports it.
+     *
+     * <p>The regex this replaces was {@code "ridingEntityId(?:Now)?"} — it matched EITHER this field
+     * or the {@code ridingEntityIdNow} that a different verb writes, so on a reply carrying both it
+     * read whichever came first in the text. Every call site here reads the one verb, and now says
+     * which field it means.</p>
+     */
+    private static final String RIDING_ID = "ridingEntityId";
 
     @Override
     protected String subsystem() {
@@ -93,9 +123,12 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String fill = exec("artest fill " + dim + " " + plot().x(PAD_DX) + " " + PAD_Y + " "
                 + plot().z(PAD_DZ) + " " + plot().x(PAD_DX + PAD_EDGE - 1) + " " + PAD_Y + " "
                 + plot().z(PAD_DZ + PAD_EDGE - 1) + " minecraft:stone");
-        scenario().requireArranged("platform fill must succeed: " + fill, fill.contains("\"ok\":true"));
+        scenario().requireArranged("platform fill must succeed: " + fill, Reply.of(fill).ok());
+        long standMark = clientEvents().mark();
         exec("tp @a " + (standX() + 0.5) + " " + (PAD_Y + 1) + " " + (standZ() + 0.5));
-        bot().waitTicks(5);
+        awaitClientPlacedNear(standMark, standX() + 0.5, standZ() + 0.5,
+                "every scenario here places a vehicle at the player and mounts him from where he"
+                        + " stands, which is a fact about the client");
     }
 
     private int standX() {
@@ -113,48 +146,81 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         String resp = exec("artest entity spawn " + plot().dim + " " + vx + " " + (PAD_Y + 1)
                 + " " + vz + " " + entityId);
         scenario().requireArranged(entityId + " spawn must succeed: " + resp,
-                resp.contains("\"ok\":true") && resp.contains("\"spawned\":true"));
-        Matcher m = ENTITY_ID.matcher(resp);
-        scenario().requireArranged("spawn response must include entityId: " + resp, m.find());
-        int id = Integer.parseInt(m.group(1));
+                Reply.of(resp).ok() && Reply.of(resp).bool("spawned"));
+        Reply spawn = Reply.of("artest entity spawn", resp);
+        scenario().requireArranged("spawn response must include entityId: " + resp,
+                spawn.has(ENTITY_ID));
+        int id = spawn.integer(ENTITY_ID);
         scenario().record("vehicleEntityId", id)
                 .describeOnFailureWith("artest entity info " + plot().dim + " " + id,
                         "artest player riding-entity");
         return id;
     }
 
-    private void mount(int vehicleId) throws Exception {
+    /** Mounts through the probe and answers a CLIENT mark taken BEFORE it, for the link below. */
+    private long mount(int vehicleId) throws Exception {
+        long clientMark = clientEvents().mark();
         String mount = exec("artest player mount-entity " + vehicleId);
         scenario().requireArranged("mount-entity probe must succeed: " + mount,
-                mount.contains("\"ok\":true"));
+                Reply.of(mount).ok());
         scenario().requireArranged("mount-entity must report mounted:true: " + mount,
-                mount.contains("\"mounted\":true"));
+                Reply.of(mount).bool("mounted"));
+        return clientMark;
     }
 
-    /** Polls until the CLIENT reports riding == expected (~10 s cap). */
-    private JsonObject waitForClientRiding(boolean expected) throws Exception {
-        JsonObject last = null;
-        for (int waited = 0; waited < 200; waited += 5) {
-            bot().waitTicks(5);
-            last = bot().reportRidingEntity();
-            if (last.get("riding").getAsBoolean() == expected) {
-                return last;
+    /**
+     * The CLIENT's own mount chain reached {@code expected}, then the state read ONCE.
+     *
+     * <p>This replaced a poll of {@code report_riding_entity}, which could only ever sample the
+     * state these records announce — and whose {@code false} was equally produced by a client that
+     * had not been told anything yet. {@code MixinEntityPositionWriters} is in the COMMON mixin
+     * list, so the client's own {@code mount} / {@code dismount} have been recorded all along; this
+     * class sits on the shared client base rather than the VS one, which is the only reason it
+     * carried its own loop.</p>
+     *
+     * @param clientMark a mark on the CLIENT log, taken BEFORE whatever seats or unseats him
+     */
+    private JsonObject waitForClientRiding(boolean expected, long clientMark) throws Exception {
+        if (expected) {
+            // ENDS mounted, not "a mount happened": a window that can hold a later dismount would
+            // satisfy the weaker claim while the caller asserts the stronger one.
+            ClientEvents.awaitMounted(clientEvents(), clientMark,
+                    "the client must follow the server's seating", RIDING_LINK_BUDGET_TICKS);
+        } else {
+            try {
+                clientEvents().await(clientMark, "dismount",
+                        "the client must follow the server's dismount", RIDING_LINK_BUDGET_TICKS);
+            } catch (AssertionError never) {
+                Events.assertInstrumentRan(clientEvents().since(clientMark, "dismount"),
+                        "entity_mount_writes", "the client's own dismounts must be observed at all"
+                                + " before an absent one can be read as a client that kept him"
+                                + " seated");
+                throw new AssertionError(never.getMessage() + " clientRiding="
+                        + bot().reportRidingEntity(), never);
             }
         }
-        throw new AssertionError("client never reached riding=" + expected
-                + "; last report: " + last);
+        return bot().reportRidingEntity();
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    /** How long the client is given to follow a seating or a dismount, in ticks. */
+    private static final int RIDING_LINK_BUDGET_TICKS = 200;
+
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static double extractDouble(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Double.parseDouble(m.group(1));
+    /**
+     * What the SERVER says about the craft, refusing one the world no longer holds.
+     *
+     * <p>The reader is why the {@code isNaN} check the position reads used to carry is gone: a
+     * vehicle that despawned answers no position at all, and {@code NaN} in a distance then reads
+     * as a craft that did not move.</p>
+     */
+    private EntityState craft(int craftId) throws Exception {
+        return EntityState.byId(this::exec, plot().dim, craftId)
+                .requireAlive("the craft must still exist to be measured");
     }
 
     // ── hovercraft ────────────────────────────────────────────────────────────
@@ -167,9 +233,9 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         int craftId = spawnVehicle("advancedrocketry:ARHoverCraft");
 
         scenario().asserting("the client renders itself riding the craft it was mounted on");
-        mount(craftId);
+        long mountMark = mount(craftId);
 
-        JsonObject clientRiding = waitForClientRiding(true);
+        JsonObject clientRiding = waitForClientRiding(true, mountMark);
         assertTrue("client must report riding=true after mount: " + clientRiding,
                 clientRiding.get("riding").getAsBoolean());
         assertEquals("client-side ridden entity id must be the craft's id",
@@ -191,15 +257,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     public void playerDismountClearsRidingEntity() throws Exception {
         buildPadAndStand();
         int craftId = spawnVehicle("advancedrocketry:ARHoverCraft");
-        mount(craftId);
-        JsonObject mounted = waitForClientRiding(true);
+        long mountMark = mount(craftId);
+        JsonObject mounted = waitForClientRiding(true, mountMark);
         scenario().requireArranged("arrange: client must be riding the craft first; got " + mounted,
                 craftId == mounted.get("entityId").getAsInt());
 
         scenario().asserting("a held sneak key dismounts the rider, on both sides");
+        long sneakMark = clientEvents().mark();
         bot().setKey(KEY_LSHIFT, true);
         try {
-            JsonObject clientRiding = waitForClientRiding(false);
+            JsonObject clientRiding = waitForClientRiding(false, sneakMark);
             assertTrue("client must report riding=false after sneak-dismount: " + clientRiding,
                     !clientRiding.get("riding").getAsBoolean());
         } finally {
@@ -218,8 +285,7 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     public void forwardThrottleMovesHovercraftLaterally() throws Exception {
         buildPadAndStand();
         int craftId = spawnVehicle("advancedrocketry:ARHoverCraft");
-        mount(craftId);
-        waitForClientRiding(true);
+        waitForClientRiding(true, mount(craftId));
 
         scenario().measuring("the craft's lateral position as the CLIENT renders it, before input");
         JsonObject pre = bot().reportRidingEntity();
@@ -230,6 +296,8 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         scenario().asserting("a held forward key drives the craft laterally");
         bot().setKey(KEY_W, true);
         try {
+            // STIMULUS: forty client ticks of held W, measured as the difference of the pre/post
+            // reads on either side of it.
             bot().waitTicks(40);
         } finally {
             bot().setKey(KEY_W, false);
@@ -247,11 +315,11 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("throttled hovercraft must move at least 0.1 blocks laterally over 40 ticks "
                         + "(got " + lateralDist + "): before=(" + xBefore + "," + zBefore + ")"
                         + " after=(" + xAfter + "," + zAfter + ")",
-                lateralDist > 0.1);
+                lateralDist > THROTTLED_MOVED_BLOCKS);
 
-        String postInfo = exec("artest entity info " + plot().dim + " " + craftId);
-        assertTrue("server craft X must agree with the client view: " + postInfo,
-                Math.abs(extractDouble(postInfo, POS_X) - xAfter) < 4.0);
+        EntityState postInfo = craft(craftId);
+        assertTrue("server craft X must agree with the client view: " + postInfo.raw(),
+                Math.abs(postInfo.posX() - xAfter) < CLIENT_SERVER_X_BLOCKS);
 
         exec("artest player dismount");
     }
@@ -268,16 +336,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertNotEquals("baseline: player must NOT be riding the craft (spawn doesn't auto-mount)",
                 craftId, extract(riding, RIDING_ID));
 
-        String preInfo = exec("artest entity info " + plot().dim + " " + craftId);
-        double xBefore = extractDouble(preInfo, POS_X);
-        double zBefore = extractDouble(preInfo, POS_Z);
+        EntityState preInfo = craft(craftId);
+        double xBefore = preInfo.posX();
+        double zBefore = preInfo.posZ();
 
         scenario().asserting("40 ticks with no passenger move it nowhere laterally");
         exec("artest entity tick " + plot().dim + " " + craftId + " 40");
 
-        String postInfo = exec("artest entity info " + plot().dim + " " + craftId);
-        double xAfter = extractDouble(postInfo, POS_X);
-        double zAfter = extractDouble(postInfo, POS_Z);
+        EntityState postInfo = craft(craftId);
+        double xAfter = postInfo.posX();
+        double zAfter = postInfo.posZ();
         double lateralDrift = Math.sqrt(Math.pow(xAfter - xBefore, 2) + Math.pow(zAfter - zBefore, 2));
         scenario().record("lateralDrift", lateralDrift);
         // Tolerance: the craft's motion damping (x0.9 per tick) lets any latent motion bleed off
@@ -285,7 +353,7 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         assertTrue("unmounted hovercraft must hover in place laterally; drift=" + lateralDrift
                         + " before=(" + xBefore + "," + zBefore + ") after=(" + xAfter + ","
                         + zAfter + ")",
-                lateralDrift < 0.5);
+                lateralDrift < HOVERS_IN_PLACE_BLOCKS);
     }
 
     // ── elevator capsule ──────────────────────────────────────────────────────
@@ -308,9 +376,9 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         int capsuleId = spawnVehicle("advancedrocketry:ARSpaceElevatorCapsule");
 
         scenario().asserting("the client renders itself riding the capsule");
-        mount(capsuleId);
+        long mountMark = mount(capsuleId);
 
-        JsonObject clientRiding = waitForClientRiding(true);
+        JsonObject clientRiding = waitForClientRiding(true, mountMark);
         assertEquals("client-side ridden entity id must be the capsule's id",
                 capsuleId, clientRiding.get("entityId").getAsInt());
         assertTrue("client-side ridden entity class must be EntityElevatorCapsule: " + clientRiding,
@@ -329,15 +397,16 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
     public void playerDismountClearsRidingEntityOnTheCapsule() throws Exception {
         buildPadAndStand();
         int capsuleId = spawnVehicle("advancedrocketry:ARSpaceElevatorCapsule");
-        mount(capsuleId);
-        JsonObject mounted = waitForClientRiding(true);
+        long mountMark = mount(capsuleId);
+        JsonObject mounted = waitForClientRiding(true, mountMark);
         scenario().requireArranged("arrange: client must be riding the capsule first; got " + mounted,
                 capsuleId == mounted.get("entityId").getAsInt());
 
         scenario().asserting("a held sneak key dismounts the rider, on both sides");
+        long sneakMark = clientEvents().mark();
         bot().setKey(KEY_LSHIFT, true);
         try {
-            JsonObject clientRiding = waitForClientRiding(false);
+            JsonObject clientRiding = waitForClientRiding(false, sneakMark);
             assertTrue("client must report riding=false after sneak-dismount: " + clientRiding,
                     !clientRiding.get("riding").getAsBoolean());
         } finally {

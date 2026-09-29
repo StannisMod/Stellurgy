@@ -1,8 +1,12 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Test;
+
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -33,7 +37,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class BiomeScannerGetModulesOffStationE2ETest extends AbstractClientE2ETest {
 
-    private static final int X = 8, Y = 64, Z = 8;
+    private static final int X = 8, Y = FixtureSite.OPEN_AIR_Y, Z = 8;
+
+    /** How long the client is given to APPLY the server's placement, in ticks — a ceiling on one
+     *  round trip, not a guess at how long a teleport takes. */
+    private static final int PLACEMENT_LINK_BUDGET_TICKS = 200;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", serverClient().execute(cmd));
@@ -46,14 +54,34 @@ public class BiomeScannerGetModulesOffStationE2ETest extends AbstractClientE2ETe
         // Overworld (dim 0) has no space stations, so getSpaceStationFromBlockCoords
         // is null there — the off-station case.
         String place = exec("artest place 0 " + X + " " + Y + " " + Z + " advancedrocketry:biomeScanner");
-        assertTrue("scanner must place: " + place, place.contains("\"placed\":true"));
+        assertTrue("scanner must place: " + place, Reply.of(place).bool("placed"));
 
         // Clear the column below the scanner so getModules' `suitable` gate is true;
         // that is the branch that reaches the null deref.
         exec("fill " + X + " 1 " + Z + " " + X + " " + (Y - 1) + " " + Z + " minecraft:air");
-        // Stand the player on the scanner so its chunk is client-tracked.
+        // Stand the player on the scanner so its chunk is client-tracked. The tracking follows the
+        // CLIENT's own position, so the placement is waited for as the packet that applies it —
+        // thirty ticks were a bet on a round trip, and the read below is a client read.
+        Events clientLog = ClientEvents.of(bot());
+        long standMark = clientLog.mark();
         exec("tp @a " + (X + 0.5) + " " + (Y + 1) + " " + (Z + 0.5) + " 0 60");
-        bot().waitTicks(30);
+        ClientEvents.awaitPlacedNear(clientLog, standMark, X + 0.5, Z + 0.5,
+                "the scanner's chunk is sent because the CLIENT is standing on it",
+                PLACEMENT_LINK_BUDGET_TICKS);
+        // AND THE CHUNK ITSELF, which is a different fact and the one the read below needs. The
+        // player arriving is what makes the server send it; `chunk_data_applied` is where the client
+        // finishes applying it. The thirty ticks this replaces stood for BOTH facts at once, and
+        // that is why one link was not enough: measured 2026-09-15, the placement link alone left
+        // the read answering "no tile at pos" — the honest answer to a question asked of a client
+        // that did not have the blocks yet.
+        // BOTH coordinates, on ONE record: `cx` alone is satisfied by any chunk in that column, and
+        // two separate field waits would be satisfied by two different records.
+        clientLog.awaitMatching(standMark, "chunk_data_applied",
+                reply -> Events.anyRecordHasAll(reply,
+                        "cx", String.valueOf(X >> 4), "cz", String.valueOf(Z >> 4)),
+                "carrying cx = " + (X >> 4) + " and cz = " + (Z >> 4),
+                "the client must hold the scanner's own chunk before its tile is asked for a GUI",
+                PLACEMENT_LINK_BUDGET_TICKS);
 
         JsonObject res = bot().tileModulesThrows(X, Y, Z);
         assertFalse("building the biome-scanner GUI off-station must not throw on the "

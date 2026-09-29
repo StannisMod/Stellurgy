@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -17,6 +18,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * MED batch pack 4 — C130 reproduction + regression guard.
@@ -38,7 +40,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class DimensionRandomPlanetReloadTest {
 
-    private static final Pattern AR_DIMS = Pattern.compile("\"arDimensions\":\\[([^\\]]*)]");
+    private static final String AR_DIMS = "arDimensions";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -65,19 +67,16 @@ public class DimensionRandomPlanetReloadTest {
 
     private static int arDimCount(RealDedicatedServerHarness h) throws Exception {
         String list = ok(h.client().execute("artest dim list"));
-        Matcher m = AR_DIMS.matcher(list);
-        assertTrue("dim list missing arDimensions: " + list, m.find());
-        String body = m.group(1).trim();
-        if (body.isEmpty()) return 0;
-        return body.split(",").length;
+        Reply listed = Reply.of("artest dim list", list);
+        assertTrue("dim list missing arDimensions: " + list, listed.has(AR_DIMS));
+        return listed.intArray(AR_DIMS).length;
     }
 
     private static Path planetDefsPath(RealDedicatedServerHarness h) throws Exception {
         String save = ok(h.client().execute("artest server save-dimensions"));
-        assertTrue("save-dimensions failed: " + save, save.contains("\"xmlExists\":true"));
-        Matcher m = Pattern.compile("\"xmlPath\":\"([^\"]*)\"").matcher(save);
-        assertTrue("save-dimensions missing xmlPath: " + save, m.find());
-        return Paths.get(m.group(1).replace("\\\\", "\\"));
+        assertTrue("save-dimensions failed: " + save, Reply.of(save).bool("xmlExists"));
+        String xmlPath = Reply.of("artest server save-dimensions", save).text("xmlPath");
+        return Paths.get(xmlPath.replace("\\\\", "\\"));
     }
 
     @Test
@@ -88,12 +87,22 @@ public class DimensionRandomPlanetReloadTest {
         firstBoot.close();
         firstBoot = null;
 
-        // writeXML always emits numPlanets="0"; bump the first star so a reload
-        // would (buggily) regenerate random planets for it.
+        // Ask the first star for MORE planets than the world holds, so a reload would (buggily)
+        // regenerate random ones for it.
+        //
+        // WHATEVER value is there, not a particular one. This used to require the literal
+        // numPlanets="0", on the comment "writeXML always emits numPlanets=\"0\"" — which was true
+        // only while writeXML ignored the star's real retinue size. That was a bug; when it was
+        // fixed to write star.getMaxRetinueBodies(), this ARRANGEMENT failed and took a healthy
+        // subject down with it. Nothing about the contract cares what number is written, only that
+        // a number asking for more than exists regenerates nothing.
         String content = new String(Files.readAllBytes(xmlPath), StandardCharsets.UTF_8);
-        assertTrue("saved world XML must contain numPlanets=\"0\": " + xmlPath,
-                content.contains("numPlanets=\"0\""));
-        String edited = content.replaceFirst("numPlanets=\"0\"", "numPlanets=\"3\"");
+        Matcher want = Pattern.compile("numPlanets=\"(\\d+)\"").matcher(content);
+        requireArranged("the saved world XML must record a planet count to bump: " + xmlPath,
+                want.find());
+        String edited = content.substring(0, want.start())
+                + "numPlanets=\"" + (Integer.parseInt(want.group(1)) + 3) + "\""
+                + content.substring(want.end());
         assertNotEquals("edit must change the XML", content, edited);
         Files.write(xmlPath, edited.getBytes(StandardCharsets.UTF_8));
 

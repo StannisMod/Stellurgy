@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -46,13 +47,16 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern LINKED_ID = Pattern.compile("\"linkedRocketId\":(-?\\d+)");
-    private static final Pattern PARTS_COUNT = Pattern.compile("\"partsToRepairCount\":(-?\\d+)");
+    private static final String ENTITY_ID = "entityId";
+    private static final String LINKED_ID = "linkedRocketId";
+    private static final String PARTS_COUNT = "partsToRepairCount";
 
-    private static final int CY_PAD       = 64;
+    /**
+     * The one anchor every Y in this class is derived from — the craft's base and the service
+     * station standing ten blocks from it. A hard-coded 64 until 2026-09-21; the class moves as
+     * a unit, because the link it asserts is between two things that must stay level.
+     */
+    private static final int CY_PAD       = FixtureSite.OPEN_AIR_Y;
     private static final int CZ_PAD       = 7000;
     private static final int CX_NO_LINK   = 7000;
     private static final int CX_WITH_LINK = 7400;
@@ -68,14 +72,14 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         // Tick. Production performFunction guards on `linkedRocket instanceof
         // EntityRocket` before doing any work — null branch must be a no-op.
         String tick = exec("artest tile force-tick 0 " + sx + " " + sy + " " + sz
                 + " 40");
         assertTrue("force-tick on unlinked service station must succeed: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // State probe must succeed and report linkedRocketId = -1.
         String state = exec("artest infra service-state 0 " + sx + " " + sy + " " + sz);
@@ -98,26 +102,16 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
     public void linkedFreshRocketAppearsInServiceStationStateWithZeroWornParts()
             throws Exception {
         // Build + assemble a standard rocket fixture far from any other patch.
-        int cx1 = (CX_WITH_LINK - 2) >> 4, cz1 = (CZ_PAD - 2) >> 4;
-        int cx2 = (CX_WITH_LINK + 7) >> 4, cz2 = (CZ_PAD + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (CX_WITH_LINK - 2) + " " + (CY_PAD + 1) + " "
-                + (CZ_PAD - 2) + " " + (CX_WITH_LINK + 7) + " " + (CY_PAD + 10)
-                + " " + (CZ_PAD + 7) + " minecraft:air");
-
-        String fixture = exec("artest fixture rocket 0 " + CX_WITH_LINK + " "
-                + CY_PAD + " " + CZ_PAD + " simple");
-        assertTrue("fixture must build: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-
-        String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away.
+        String assemble = RocketFixture.assembleAt(
+                FixtureSite.openAir(0, CX_WITH_LINK, CZ_PAD),
+                cmd -> exec(cmd), "simple", 2, 10,
+                "the fresh craft the service station is linked to stands in this volume");
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId in assemble: " + assemble, eim.find());
-        int rocketId = Integer.parseInt(eim.group(1));
+                Reply.of(assemble).ok());
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId in assemble: " + assemble, eimReply.has(ENTITY_ID));
+        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
 
         // Place service station near the launchpad (not on it — the pad
         // is occupied). Position-isolated from CX_NO_LINK.
@@ -125,13 +119,13 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         // Link.
         String link = exec("artest infra link 0 " + sx + " " + sy + " " + sz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"ok\":true"));
+                Reply.of(link).ok());
 
         // Verify the service station now reports the rocket's entityId.
         String state = exec("artest infra service-state 0 " + sx + " " + sy + " " + sz);
@@ -147,9 +141,9 @@ public class RocketServiceStationLinkAndStateTest extends AbstractSharedServerTe
                 0, extract(state, PARTS_COUNT));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

@@ -1,10 +1,9 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -28,40 +27,44 @@ import static org.junit.Assert.assertTrue;
  */
 public class WarpArrivalConcurrentModificationTest extends AbstractHeadlessServerTest {
 
+    /** The stations this scenario warps — the arrangement's own count, and the proof that the
+     *  loop processed EVERY one rather than aborting part-way. */
+    private static final int WARPED_STATIONS = 3;
+
     private static final int SPACE_DIM = -2;
-    private static final Pattern THREW = Pattern.compile("\"threw\":(true|false)");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(\\d+)");
-    private static final Pattern ARRIVED = Pattern.compile("\"arrived\":(\\d+)");
+    private static final String THREW = "threw";
+    private static final String COUNT = "count";
+    private static final String ARRIVED = "arrived";
 
     @Test
     public void threeStationsArrivingSameTickDoNotThrowConcurrentModification() throws Exception {
         exec("artest dim load " + SPACE_DIM);
 
         String r = exec("artest station warp-collision 0 3");
-        assertTrue("probe must run: " + r, r.contains("\"ok\":true"));
+        assertTrue("probe must run: " + r, Reply.of(r).ok());
 
-        Matcher threw = THREW.matcher(r);
-        assertTrue("no threw field in: " + r, threw.find());
+        Reply warped = Reply.of("artest warp tick-all", r);
+        assertTrue("no threw field in: " + r, warped.has(THREW));
         assertTrue("C066: three stations completing warp on the same tick must NOT throw — the fix "
                         + "iterates a snapshot copy; the buggy live for-each threw "
                         + "ConcurrentModificationException. Got: " + r,
-                "false".equals(threw.group(1)));
+                "false".equals(warped.text(THREW)));
 
         int count = extract(COUNT, r);
         int arrived = extract(ARRIVED, r);
         assertTrue("all warped stations must arrive at the destination orbit (dim 0), proving the "
                         + "loop processed EVERY station (the buggy loop aborted / dropped after the "
                         + "first): arrived=" + arrived + " count=" + count + " in " + r,
-                count == 3 && arrived == count);
+                count == WARPED_STATIONS && arrived == count);
     }
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
 
-    private static int extract(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " not found in: " + s, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String field, String s) {
+        Reply reply = Reply.of(s);
+        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
+        return reply.integer(field);
     }
 }

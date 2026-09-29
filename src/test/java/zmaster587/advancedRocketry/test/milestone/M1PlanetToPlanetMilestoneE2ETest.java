@@ -4,10 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
@@ -22,8 +19,27 @@ import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.space.TerrainHeightFinder;
+import zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
+import zmaster587.advancedRocketry.test.Chains;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.LedgerEntry;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.CellInfo;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
+import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.client.ClientEvents;
+import zmaster587.advancedRocketry.test.client.SeatDelivery;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import zmaster587.advancedRocketry.test.ArrangementFailure;
+
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * The first milestone loop, walked the way a player walks it: build a jump-capable craft, turn it
@@ -63,32 +79,67 @@ import static org.junit.Assert.assertTrue;
  * for a reason that has nothing to do with the loop.</p>
  *
  * <p>Manual server + client lifecycle: the config has to be written into the game directory before
- * the server boots. Gated on real Valkyrien Skies — run with {@code -PwithVS}.</p>
+ * the server boots.</p>
  */
 public class M1PlanetToPlanetMilestoneE2ETest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern LEDGER = Pattern.compile("\"ledger\":(-?\\d+)");
-    private static final Pattern SLOT_DIMS = Pattern.compile("\"slotDims\":\\[([0-9,\\-]*)]");
-    private static final Pattern SEAT_SUB = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern AFC_SUB = Pattern.compile(
-            "\"afcX\":(-?\\d+),\"afcY\":(-?\\d+),\"afcZ\":(-?\\d+)");
-    private static final Pattern SHIP_WORLD = Pattern.compile(
-            "\"shipWorldX\":(-?[0-9.E\\-]+),\"shipWorldY\":(-?[0-9.E\\-]+),\"shipWorldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern TO_WORLD = Pattern.compile(
-            "\"worldX\":(-?[0-9.E\\-]+),\"worldY\":(-?[0-9.E\\-]+),\"worldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern SHIP_ID = Pattern.compile("\"shipId\":\"([^\"]+)\"");
-    private static final Pattern CELL = Pattern.compile("\"cell\":\"([^\"]*)\"");
-    private static final Pattern NAV_TARGET = Pattern.compile("\"target\":(null|\"[^\"]*\")");
-    private static final Pattern NAV_ARMED = Pattern.compile("\"armed\":(true|false)");
-    private static final Pattern NAV_SHIP_ADDRESSES = Pattern.compile("\"ship\":(-?\\d+)");
-    /** One body of a {@code space bodies} ship entry, in the order the probe writes its keys. */
-    private static final Pattern BODY = Pattern.compile(
-            "\\{\"dim\":(-?\\d+),\"kind\":\"([A-Z_]+)\",\"descendTarget\":(true|false),"
-                    + "\"bearing\":\\[(-?\\d+),(-?\\d+),(-?\\d+)],\"distance\":(\\d+)}");
+    /**
+     * How many addresses the console must list for the pilot to have SOMEWHERE to fly.
+     *
+     * <p>The TEST'S OWN: one address is a list with no choice in it, so two is the smallest number
+     * at which the screen is doing its job.</p>
+     */
+    private static final int MIN_DESTINATIONS_LISTED = 2;
+
+    /**
+     * How near the body a pilot must get by flying at it, in blocks of remaining offset.
+     *
+     * <p>The TEST'S OWN: six blocks is inside the craft's own length, which is what "he arrived"
+     * means for a body he then has to descend onto.</p>
+     */
+    private static final double ARRIVED_BESIDE_IT_BLOCKS = 6;
+
+    /**
+     * How far above the pad's surface the client may report the body and still be STANDING on it.
+     *
+     * <p>The TEST'S OWN: still falling here means the descent has not finished, which is a
+     * different finding from having landed badly.</p>
+     */
+    private static final double STANDING_ON_THE_PAD_BLOCKS = 1.5;
+
+    /**
+     * How long the jump trigger's verdict may take to appear after the key goes down, in ticks.
+     *
+     * <p>A deadline for a discrete decision, not a settle: the press is answered on the tick the
+     * server handles it, and the whole budget is there so a loaded box cannot turn a decision that
+     * happened into one that did not. An expiry means the press never reached the ship.</p>
+     */
+    private static final int JUMP_PRESS_BUDGET_TICKS = 200;
+
+    /**
+     * How long a container slot click is given to have been APPLIED, in client ticks.
+     *
+     * <p>A bound on a round trip, not a settle and not a poll budget: the click goes to the server,
+     * the container applies it, the inventory comes back. Two seconds is generous for one exchange
+     * on any box this suite runs on, and a click that has not landed in that time has not landed.
+     * A server-side {@code give} is the second half of the same exchange alone — the slot write
+     * coming back — so it is bounded by the same number.</p>
+     */
+    private static final int SLOT_APPLIED_TICKS = 40;
+
+    private static final String COUNT = "count";
+    private static final String LEDGER = "ledger";
+    private static final String SLOT_DIMS = "slotDims";
+    private static final String SHIP_ID = "shipId";
+    private static final String NAV_TARGET = "target";
+    private static final String NAV_ARMED = "armed";
+    private static final String NAV_SHIP_ADDRESSES = "ship";
+    /** One body of a {@code space bodies} ship entry, by the names the probe writes. */
+    private static final String SHIPS = "ships";
+    private static final String BODY_DIM = "dim";
+    private static final String BODY_DESCEND_TARGET = "descendTarget";
+    private static final String BODY_BEARING = "bearing";
+    private static final String BODY_DISTANCE = "distance";
     /**
      * The console is aimed at somewhere a ship can put down: the BODY it names may be descended to,
      * and its dimension is a real world rather than one of the space subsystem's own slot worlds.
@@ -99,22 +150,51 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * that body will be when the ship arrives, so the cell is empty right now and will be empty
      * again later; the body is what the pilot picked and what he expects to find.</p>
      */
-    private static final Pattern LANDABLE = Pattern.compile(
-            "\"targetDescendTarget\":true,\"targetSlotWorld\":false");
+    private static final String NAV_TARGET_DESCEND_TARGET = "targetDescendTarget";
+    private static final String NAV_TARGET_SLOT_WORLD = "targetSlotWorld";
+
+    /** Whether {@code nav status} is aimed at a body a ship can actually put down on. */
+    private static boolean isLandable(String navStatus) {
+        Reply aim = Reply.of("artest nav status", navStatus);
+        return aim.bool(NAV_TARGET_DESCEND_TARGET)
+                && !aim.bool(NAV_TARGET_SLOT_WORLD);
+    }
 
     /** The body the console is aimed at, from {@code nav status}. */
-    private static final Pattern NAV_TARGET_DIM = Pattern.compile("\"targetDim\":(-?\\d+)");
+    private static final String NAV_TARGET_DIM = "targetDim";
     /** The bodies of ONE cell, from {@code space cell-info} (not the whole system's list). */
-    private static final Pattern CELL_BODIES = Pattern.compile("\"cellBodies\":\\[(.*?)]");
+    private static final String CELL_BODIES = "cellBodies";
     /** Slot dimension ids that Advanced Rocketry also holds a body for — always empty. */
-    private static final Pattern SLOT_DIMS_ALSO_BODIES =
-            Pattern.compile("\"slotDimsAlsoBodies\":\\[([0-9,\\-]*)]");
+    private static final String SLOT_DIMS_ALSO_BODIES = "slotDimsAlsoBodies";
 
     /** A jump-capable craft with a walkable deck: the ship this milestone is about. */
     private static final String VARIANT = "with-jump-drive";
 
-    /** Far from every other fixture site, so a stray ship from another run can never be read here. */
-    private static final int BX = 8400, BY = 64, BZ = 8400;
+    /**
+     * This milestone's own patch of world.
+     *
+     * <p><b>The lane keeps the coordinates this test's green runs were taken on</b> — 8400/8400,
+     * chosen to be far from every other fixture site so a stray ship from another run can never be
+     * read here — while the SITE inside it is allocated rather than typed. What that buys is the
+     * pair of refusals the plot carries: the volume this fixture clears is asserted to lie inside
+     * the plot, and a second structure on it could not reach into the first. This class boots its
+     * own server and runs one scenario, so index 0 is the whole allocation it will ever need.</p>
+     *
+     * <p>Not static: a plot records the ground its scenario has cleared, and that record belongs to
+     * the test instance that made it, not to the JVM.</p>
+     *
+     * <p><b>The lane origin is the proven coordinate MINUS the inset, and the subtraction is the
+     * point.</b> A lane names a plot's corner; a site stands {@link Plot#FIXTURE_INSET} blocks
+     * inside it, so writing the proven number as the ORIGIN would build the craft twenty blocks
+     * away from where every green run put it, silently.</p>
+     */
+    private static final int PROVEN_X = 8400, PROVEN_Z = 8400;
+    /** @see #plot */
+    private final Plot plot = Plot.forScenario(0, "the milestone's craft", 0,
+            new Plot.Lane(PROVEN_X - Plot.FIXTURE_INSET, PROVEN_Z - Plot.FIXTURE_INSET, Plot.SIZE));
+    private final FixtureSite site = plot.site();
+    /** The site owns the coordinates; these aliases keep the body below unchanged. */
+    private final int bx = site.x, by = site.y, bz = site.z;
 
     /**
      * The seeded atmosphere ceiling: the config key's own minimum. The ONE arrangement knob in this
@@ -122,14 +202,6 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * which asks whether the ship is above the line, not where the line is.
      */
     private static final int ORBIT_LINE = 255;
-
-    /**
-     * How many 10-tick samples the post-descent leg watches for a bounce back into space. The entry
-     * on-ramp is evaluated on every flight-computer tick, so an unheld trigger fires within a tick
-     * or two of the ship being above the line under power — this is many times the window it needs,
-     * so a green means "it did not happen", not "we did not look long enough".
-     */
-    private static final int LATCH_WATCH_SAMPLES = 40;
 
     /** Seat and standing square, as offsets from the ship's FLIGHT COMPUTER (the deck layout). */
     private static final int[] OFF_SEAT = {1, 0, 0};
@@ -155,6 +227,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private static final int KEY_USE_ITEM = -99;
 
     /** Button ids the assembler assigns its own controls: 0 = Scan, 1 = Build. */
+    /**
+     * The DEADLINE for one of the rocket assembler's timed passes to end, in server ticks — not how
+     * long a pass is expected to take, which is production's function of the fixture's volume. This
+     * is the 90 x 40 the Build-re-pressing loop it replaced was given for the scan and the build
+     * together, now given to each, so it binds only on a pass that never ends.
+     */
+    private static final int PASS_TICKS = 3600;
+
     private static final int BUTTON_SCAN = 0;
     private static final int BUTTON_BUILD = 1;
 
@@ -209,7 +289,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             serverHarness = null;
             throw startFailed;
         }
+        // The loop's pilot-input delivery chain, both halves, for the failure messages below: a
+        // window opened with the pair, so its counts are this run's.
+        seatDelivery = SeatDelivery.open(this::exec, bot(),
+                new Events(this::exec, bot()::waitTicks), clientEvents());
     }
+
+    /** This run's pilot-input delivery windows — see {@link SeatDelivery}. */
+    private SeatDelivery seatDelivery;
 
     @After
     public void stopBoth() throws Exception {
@@ -239,45 +326,81 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         }
     }
 
+    /**
+     * The whole tier-2 loop a player drives: build at the assembler, board, fly up into space, aim at
+     * the console, arm, jump, and descend onto the target planet.
+     *
+     * <p>red-witnessed: one inversion per rung, each red at its own rung with the earlier ones green.
+     * THE BUILD (2026-09-28) — the assembler's {@code VSIntegration.assembleTier2Ship} call
+     * ({@code TileRocketAssemblingMachine:814}) skipped: the rung's helper link fails first, "the BUILD
+     * pass must add a ship to the registry — no `ship_spawned` was recorded within 3600 ticks"; the
+     * rung's own ship count restates that link. THE CRYSTAL'S ADDRESSES —
+     * {@code TileNavigationComputer.shipCrystal} reading an empty stack: "putting a memory crystal into
+     * the console's SHIP slot must give the pilot a list of places he can fly to … listed=0"; the wait
+     * before it is the server's receipt of the click, a barrier. THE PICK — the {@code NET_PICK} branch
+     * of {@code TileNavigationComputer.useNetworkData} not calling {@code setTargetBody}: "a click on a
+     * listed address must reach the navigation computer … no `nav_target_picked`". THE ARM — the
+     * {@code NET_ARM} branch never calling {@code arm()}: "pressing ARM must reach the navigation
+     * computer and be ANSWERED … no `nav_arm_decided`". THE JUMP KEY —
+     * {@code TileAdvancedFlightComputer.onJumpKey} returning at once: "the jump key, pressed by a
+     * seated pilot of an ARMED ship, must be ANSWERED … no `jump_press_decided`". THE LATCH
+     * (2026-09-24) — {@code TileAdvancedFlightComputer:642}'s {@code entryLatched = false} removed: leg
+     * 9 fails with "no `entry_latch_released` carrying ship = …" after the pilot has flown down through
+     * the line. Leg 9's stay-put verdict after it and its {@code STARTED} control have no witness at
+     * their own lines: without the latch the ship bounces on arrival and leg 8 fails first, and
+     * without the on-ramp the client-world wait fails before the {@code STARTED} read.</p>
+     */
     @Test
     public void aPlayerBuildsHisShipAtTheAssemblerBoardsItAndFliesItOffThePlanet() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
-        int budget = (int) (40 * TestTimeouts.factor());
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
+        int budget = 40;
+        // The server's ordered log, opened at the top of the loop rather than at leg 4. Every leg
+        // from the boarding onward reads it now — the seat's verdict, the console's, the crossings'
+        // — and a reader that only exists from halfway down is one more reason for the early legs to
+        // keep polling values.
+        Events events = new Events(this::exec, bot()::waitTicks);
         long tLeg = System.currentTimeMillis();
+
+        // Leg 4 says why, and it holds for the whole loop: an observer is aboard the whole way, so
+        // keeping the ship loaded is production's job here — a harness affordance doing it would
+        // hide the failure to.
+        zmaster587.advancedRocketry.test.ShipReadiness.letShipsUnload(this::exec,
+                "this milestone walks a player's own loop with an observer aboard, and production is"
+                + " what must keep the ship loaded across the crossing");
 
         // ---- LEG 0: the world this loop is walked in is the one the test asked for. -------------
         String fuelCfg = exec("artest config get rocketRequireFuel");
-        assertTrue("ARRANGEMENT: the seeded config file must have been PARSED. This reads the live "
+        requireArranged("the seeded config file must have been PARSED. This reads the live "
                         + "field back through the same config object production uses, so a stale "
                         + "`true` here means the file was written in a syntax the config reader "
                         + "skipped and every later leg would be running against defaults: " + fuelCfg,
-                fuelCfg.contains("\"value\":false"));
+                (!Reply.of(fuelCfg).bool("value")));
 
-        String status = exec("artest space subsystem-status");
-        assertTrue("ARRANGEMENT: the production space subsystem must be REGISTERED — it owns the "
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        requireArranged("the production space subsystem must be REGISTERED — it owns the "
                         + "cells a ship arrives in, and without it the climb leg has nowhere to go: "
-                        + status,
-                status.contains("\"registered\":true"));
+                        + status.raw(),
+                status.registered);
         // No dimension id may be owned twice. A space slot is a void world the subsystem rebinds at
         // will; a body is a place the universe registry describes, a crystal can name and a ship can
         // be flown to. One id doing both makes the registry's description a lie — it advertises a
         // planet whose world is empty space — and the descent that follows lands the ship nowhere.
-        Matcher collided = SLOT_DIMS_ALSO_BODIES.matcher(status);
-        assertTrue("ARRANGEMENT: subsystem-status must report the slot/body id overlap: " + status,
-                collided.find());
+        int[] collided = status.slotDimsAlsoBodies();
         assertTrue("no space-slot dimension may also be an Advanced Rocketry body. Forge's free-id "
                         + "scan cannot see AR's own body ids (a surface-less body is never registered "
                         + "with Forge), so the pool can take one unless it asks AR too. "
-                        + "slotDimsAlsoBodies=[" + collided.group(1) + "] status=" + status,
-                collided.group(1).isEmpty());
-        System.out.println("[M1] leg 0 (config + subsystem) " + elapsed(tLeg) + " status=" + status);
+                        + "slotDimsAlsoBodies=" + java.util.Arrays.toString(collided)
+                        + " status=" + status.raw(),
+                collided.length == 0);
+        System.out.println("[M1] leg 0 (config + subsystem) " + elapsed(tLeg) + " status=" + status.raw());
 
         // ---- LEG 1: stand the craft up on a pad. Blocks only — no interaction happens here. -----
         tLeg = System.currentTimeMillis();
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
-        bot().waitTicks(10);
+        // No settle: the server moved him before `tp` answered, and the fixture is placed server-side.
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
         int[] builderPos = placeFixture();
         System.out.println("[M1] leg 1 (fixture placed) " + elapsed(tLeg)
                 + " builder=" + describe(builderPos));
@@ -297,18 +420,29 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // ---- LEG 3: the CLIENT sits down in the seat of the ship he just built. -----------------
         tLeg = System.currentTimeMillis();
-        String found = findSeat();
-        int[] seatSub = readTriple(found, SEAT_SUB);
-        int[] afcSub = readTriple(found, AFC_SUB);
-        assertTrue("ARRANGEMENT: the assembled ship must expose a pilot seat AND the flight computer "
+        PilotSeat found = findSeat();
+        requireArranged("the assembled ship must expose a pilot seat AND the flight computer "
                         + "it was linked to — the deck square the pilot works from is addressed from "
-                        + "that computer: " + found,
-                seatSub != null && afcSub != null);
+                        + "that computer; searched yard " + found.describeYard() + ": " + found.raw(),
+                found.found && found.hasAfc);
+        int[] seatSub = {found.seatX, found.seatY, found.seatZ};
+        int[] afcSub = {found.afcX, found.afcY, found.afcZ};
+
+        // The craft's DURABLE name, read off its own flight computer while that computer is still
+        // here to ask. The physics id captured at assembly dies at the first crossing, and this run
+        // crosses three times; the durable name rides in the tile's NBT through every one of them,
+        // so it is what leg 6 and the arrival-side seat lookups are keyed on. Without it those two
+        // fell back to "the first settled row in the cell" and "whatever is nearest the pilot".
+        String nameReply = exec("artest vs ship-name 0 " + describeArgs(afcSub));
+        requireArranged("the built ship's flight computer must carry a durable name, or nothing"
+                + " after the first crossing can be addressed to this craft: " + nameReply,
+                Reply.of(nameReply).bool("found"));
+        builtShipName = readString(nameReply, SHIP_ID);
 
         // The subspace copy is a RIGID relocation of the pad build, so the seat must sit at exactly
         // the offset it was built at. Without this control the deck square the pilot is placed on
         // below is a guess, and a failed press could just as easily be a bot standing nowhere.
-        assertTrue("ARRANGEMENT CONTROL: the ship's subspace copy must preserve the build's own "
+        requireArranged("CONTROL: the ship's subspace copy must preserve the build's own "
                         + "geometry — seat minus flight computer should be " + describe(OFF_SEAT)
                         + " but is " + describe(new int[]{seatSub[0] - afcSub[0],
                                 seatSub[1] - afcSub[1], seatSub[2] - afcSub[2]}) + ": " + found,
@@ -322,12 +456,33 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         Aim seatAim = aimAt(afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
         assertAimed(seatAim, seatSub, "pilot seat", "pilotseat");
 
+        // THE PRESS, THE SEAT'S VERDICT, AND THE MOUNT — three links that a single "is he riding yet"
+        // poll reports as one sentence. A press that never reached the block, a seat that refused
+        // because it does not consider itself part of a ship, and a mount that happened but never
+        // replicated to the client are three different faults with three different owners, and the
+        // old loop timed out identically on all of them.
+        long seatMark = events.mark();
+        long seatClientMark = clientEvents().mark();
         pressUse();
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-        }
+        String sitDecision = events.await(seatMark, "pilot_seat_sit_decided",
+                "a real use-key press aimed at the ship's PILOT SEAT must REACH that seat — the "
+                        + "crosshair was proven to be on that very block above, so a silence here is "
+                        + "the interaction never arriving rather than a missed aim" + seatAim.diagnosis,
+                budget * 5);
+        // The RECORD, not the reply: `await` answers with the whole `events since` envelope, whose
+        // top level carries no `managed` at all. Read as a reply this field resolved to null, and
+        // `parseBoolean(null)` is false — so the assertion could not pass, whatever the seat decided.
+        assertEquals("…and the seat must know it belongs to a SHIP. An unmanaged seat is a chair: it "
+                        + "seats him and carries no flight input at all, which is a green boarding "
+                        + "followed by a craft that will not answer its controls. decision="
+                        + sitDecision,
+                "true", Events.text(Events.lastRecord(sitDecision), "managed"));
+
+        JsonObject riding = awaitClientMount(seatClientMark,
+                "a real use-key press aimed at the ship's PILOT SEAT must seat the pilot, as the "
+                        + "CLIENT itself performs it — the crosshair was proven to be on that block "
+                        + "and the seat agreed it belongs to a ship, so a silence here is the mount "
+                        + "never happening on his side", budget, seatAim.diagnosis);
         String serverRiding = exec("artest player riding-entity");
         assertTrue("a real use-key press aimed at the ship's PILOT SEAT must seat the pilot, as the "
                         + "CLIENT itself renders him. The crosshair was proven to be on that very "
@@ -350,77 +505,58 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // harness affordance that kept the ship loaded would hide a production failure to keep its
         // own ship loaded during the crossing.
         tLeg = System.currentTimeMillis();
-        int ledger = 0;
-        int climbBudget = (int) (800 * TestTimeouts.factor());
+        // The entry as the server's own chain of events, awaited while the key is held: the hull is
+        // cut into the cell, the gate records STARTED, the pose is written, the crew is put back, the
+        // ledger is told. The old form polled the ledger's SIZE and reported "ledger=0" for a
+        // refusal, a failed cut, a stalled re-seat and a slow climb alike.
+        // THE MULTIPLIER STAYS: a held key is sampled and re-sent per CLIENT TICK (on change, plus a
+        // re-assert every PilotInputCadence.REPEAT_TICKS), so a loaded box stretches the climb through
+        // the client's TICK rate. NOT per rendered frame - that reading was refuted 2026-08-21.
+        // 4 000 ticks is the old 800 polls of 5.
+        long entryMark = events.markInstrumented();
+        long entryClientMark = clientEvents().mark();
+        int climbBudget = 4000;
         bot().holdKey(Keyboard.KEY_R);
         try {
-            for (int attempt = 0; attempt < climbBudget && ledger < 1; attempt++) {
-                bot().waitTicks(5);
-                // While the crossing runs the origin-world ship vanishes (the cut), so the ledger —
-                // not a position read — is the single source of arrival truth.
-                if ((attempt & 1) == 1) {
-                    Matcher lm = LEDGER.matcher(exec("artest space subsystem-status"));
-                    if (lm.find()) {
-                        ledger = Integer.parseInt(lm.group(1));
-                    }
-                }
-            }
+            events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
+                    + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a space cell —"
+                    + " that is the on-ramp a real player flies, and holding one key is the whole of"
+                    + " his input", climbBudget, Chains.GRANTED_ENTRY);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        String statusAfter = exec("artest space subsystem-status");
-        assertTrue("a ship climbing under its own power past the orbit line (" + ORBIT_LINE + ") must "
-                        + "be taken by the entry crossing and SETTLE in a space cell — that is the "
-                        + "on-ramp a real player flies, and holding one key is the whole of his input. "
-                        + "ledger=" + ledger + " status=" + statusAfter
-                        + " clientRiding=" + bot().reportRidingEntity()
-                        + " delivery=" + exec("artest vs seat-delivery"),
-                ledger >= 1);
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
+        String entryDecisions = events.since(entryMark, "entry_decided");
+        // The RECORD again: `decision` is a field of an entry_decided record, and asking the reply
+        // for it reads the envelope's top level, where it is not. The subject here is the window —
+        // marked immediately before the climb, and this scenario flies one ship — so the last
+        // record in it is this climb's decision and no other's.
+        assertEquals("the entry gate must have GRANTED this entry (STARTED): " + entryDecisions
+                        + " status=" + statusAfter.raw(),
+                "STARTED", Events.text(Events.lastRecord(entryDecisions), "decision"));
         System.out.println("[M1] leg 4 (powered climb to the cell) " + elapsed(tLeg)
-                + " status=" + statusAfter);
+                + " status=" + statusAfter.raw());
 
         // ---- LEG 5: the arrival, measured from the CLIENT. --------------------------------------
         tLeg = System.currentTimeMillis();
-        Matcher sd = SLOT_DIMS.matcher(statusAfter);
-        assertTrue("ARRANGEMENT: subsystem-status must list its slot dims: " + statusAfter, sd.find());
-        String slotDims = "," + sd.group(1) + ",";
+                String slotDims = "," + joinInts(statusAfter.slotDims()) + ",";
 
-        // (1) The client's OWN world is a space cell. report_state carries no dimension, so this is
-        // read from the client's world info — the pilot followed his ship through the seam or he
-        // did not, and nothing server-side can answer that for him.
-        int clientDim = Integer.MIN_VALUE;
-        for (int attempt = 0; attempt < budget; attempt++) {
-            bot().waitTicks(5);
-            JsonObject weather = bot().reportWeather();
-            if (weather.has("dim")) {
-                clientDim = weather.get("dim").getAsInt();
-                if (slotDims.contains("," + clientDim + ",")) {
-                    break;
-                }
-            }
-        }
-        assertTrue("after the crossing the CLIENT itself must be in a space-cell dimension — a pilot "
-                        + "whose ship left without him is the exact failure this leg exists to catch. "
-                        + "clientDim=" + clientDim + " slotDims=[" + sd.group(1) + "] status="
-                        + statusAfter,
-                slotDims.contains("," + clientDim + ","));
+        // (1) The client's OWN world is a space cell — the pilot followed his ship through the seam
+        // or he did not, and nothing server-side can answer that for him. Read off the client's own
+        // record of its dimension changes since the climb began, in order: a world rebuilt twice
+        // between two samples shows one change or none, and the records show both.
+        int clientDim = awaitClientWorld(entryClientMark, slotDims,
+                "after the crossing the CLIENT itself must be in a space-cell dimension — a pilot "
+                        + "whose ship left without him is the exact failure this leg exists to catch."
+                        + " slotDims=[" + slotDims + "] status=" + statusAfter.raw(),
+                budget * 5);
 
-        // (2) Still seated, sampled TWICE with a wait between: a seat lost in the crossing can read
-        // riding=true for one packet-lag frame, but never twice in a row.
-        JsonObject arrivalRiding = bot().reportRidingEntity();
-        boolean prev = isRiding(arrivalRiding);
-        boolean seatedTwice = false;
-        for (int attempt = 0; attempt < budget && !seatedTwice; attempt++) {
-            bot().waitTicks(5);
-            arrivalRiding = bot().reportRidingEntity();
-            seatedTwice = prev && isRiding(arrivalRiding);
-            prev = isRiding(arrivalRiding);
-        }
-        assertTrue("the pilot who FLEW his own ship into space must still be in his seat on arrival — "
-                        + "a crossing must never stand him up. riding=" + arrivalRiding
-                        + " clientDim=" + clientDim
-                        + " delivery=" + exec("artest vs seat-delivery"),
-                seatedTwice);
+        // (2) Still seated — and the crossing's own seat chain says how.
+        JsonObject arrivalRiding = assertStillSeated(events, entryMark, entryClientMark,
+                "the pilot who FLEW his own ship into space must still be in his seat on arrival — a "
+                        + "crossing must never stand him up. clientDim=" + clientDim
+                        + " delivery=" + seatDelivery.reading(),
+                budget);
         System.out.println("[M1] leg 5 (arrival, client-observed) " + elapsed(tLeg)
                 + " clientDim=" + clientDim + " riding=" + arrivalRiding);
 
@@ -431,23 +567,29 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The ship as the ledger knows it, and the cell it is about to leave. The default galaxy is
         // generated from a wall-clock seed, so NOTHING about the destination may be assumed: every
         // cell and dimension this leg and the next work with is READ from the world the pilot is in.
-        String afcProbe = exec("artest space find-afc " + slotDim);
-        assertTrue("ARRANGEMENT: the ship the pilot flew up must be findable in the space cell he "
+        // NAMED. Without the id this asked for "the first settled row bound to this slot", which is
+        // an iteration order over every ship the ledger holds — and the answer to a question about
+        // somebody else's craft is indistinguishable from the answer to this one.
+        String afcProbe = exec("artest space find-afc " + slotDim + " " + builtShipName);
+        requireArranged("the ship the pilot flew up must be findable in the space cell he "
                         + "arrived in — the ledger says he is here, so a ship that cannot be located "
                         + "means the arrival left no body behind: " + afcProbe,
-                afcProbe.contains("\"found\":true"));
+                Reply.of(afcProbe).bool("found"));
         String shipId = readString(afcProbe, SHIP_ID);
-        String launchCell = readString(exec("artest space ledger-get " + shipId), CELL);
-        assertTrue("ARRANGEMENT: the ledger must name the cell the jump departs FROM — without it "
-                        + "the arrival assertion below cannot tell a jump from a no-op. shipId="
-                        + shipId + " ledger=" + exec("artest space ledger-get " + shipId),
-                launchCell != null && !launchCell.isEmpty());
+        // The reader refuses a ship the ledger has no entry for, and refuses to answer a cell for
+        // one — which is what this arrangement check stood for, and it no longer has to ask the
+        // probe a second time to say so.
+        String launchCell = LedgerEntry.forShip(this::exec, shipId)
+                .requireFound("the ledger must name the cell the jump departs FROM — without it the"
+                        + " arrival assertion below cannot tell a jump from a no-op. shipId="
+                        + shipId)
+                .cellKey();
 
         // Read while he is still SEATED, so the ship's own world point is on record before the one
         // moment in this loop when the pilot is not a reliable pointer to his craft.
         String seatProbe = findSeatAboard(slotDim, budget);
-        int[] navAfcSub = readTriple(seatProbe, AFC_SUB);
-        assertTrue("ARRANGEMENT: the arrived ship must still expose the seat and the flight computer "
+        int[] navAfcSub = readTriple(seatProbe, "afcX", "afcY", "afcZ");
+        requireArranged("the arrived ship must still expose the seat and the flight computer "
                         + "it is linked to — the console the pilot reaches for is addressed from that "
                         + "computer: " + seatProbe,
                 navAfcSub != null);
@@ -465,14 +607,29 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // level and cannot be put on anything — the console included. Navigation is therefore deck
         // work, which is what the one clear square between the seat and the console is for. Standing
         // up is an ACT, so it is a real key: sneak, the way anyone leaves a vehicle.
-        standUp(budget);
+        standUp(events, budget);
 
         // The crystal is handed over the way any item is handed to a player; putting it IN the console
         // is the act, and it is the act that seeds the addresses (nothing else in the game does).
+        // Linked, because the hand is read next: the server picks the crystal's slot when it runs the
+        // command, and a hand read before that slot write reaches the client could call a hand empty
+        // that the crystal is about to fill. The registry path arrives lower-cased.
+        // An ARRANGEMENT, typed as one: a vanilla `/give` that never lands says nothing about this mod.
+        long giveMark = clientEvents().mark();
         exec("give @a " + CRYSTAL_ITEM + " 1");
+        try {
+            clientEvents().awaitMatching(giveMark, "client_slot_set",
+                    reply -> Events.records(reply).stream().anyMatch(record ->
+                            CRYSTAL_ITEM.equalsIgnoreCase(String.valueOf(Events.text(record, "item")))),
+                    "the crystal arriving in a slot",
+                    "the navigation crystal handed to the pilot must reach his client's inventory",
+                    SLOT_APPLIED_TICKS);
+        } catch (AssertionError neverLanded) {
+            requireArranged(neverLanded.getMessage(), false);
+        }
         // Hold nothing: the console is opened with a bare hand, so nothing can eat the use press, and
         // the crystal is then moved by real slot clicks rather than by being used from the hand.
-        holdNothing(budget);
+        holdNothing();
 
         String consoleScreen = openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget);
         assertTrue("a real use-key press aimed at the NAVIGATION CONSOLE must open its screen on the "
@@ -486,35 +643,49 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // silently, with no error — so the two clicks are what a player actually performs here.
         JsonObject slots = bot().reportSlots();
         int crystalSlot = slotHolding(slots, CRYSTAL_ITEM);
-        assertTrue("ARRANGEMENT: the crystal handed to the pilot must be reachable from the console's "
+        requireArranged("the crystal handed to the pilot must be reachable from the console's "
                         + "own window — the console shows the hotbar and nothing else, so a crystal "
                         + "anywhere but the hotbar could never be inserted. slots=" + slots,
                 crystalSlot >= 0);
+        // No advance between the two clicks: both travel on one connection and the server applies
+        // them in the order sent, each against the client's prediction of the one before.
         bot().clickSlot(crystalSlot, 0, "PICKUP");
-        bot().waitTicks(5);
+        long insertMark = clientEvents().mark();
         bot().clickSlot(CONSOLE_SLOT_SHIP, 0, "PICKUP");
 
-        int listed = 0;
-        String navStatus = "";
-        for (int attempt = 0; attempt < budget && listed < 2; attempt++) {
-            bot().waitTicks(5);
-            navStatus = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
-            listed = readInt(navStatus, NAV_SHIP_ADDRESSES, 0);
-        }
+        // A WINDOW, then ONE READ — and NOT a wait for `crystal_copied`, which is a different
+        // mechanic entirely. Measured 2026-09-12, by getting this wrong: the console's copy
+        // (`copySourceIntoShipCrystal`) has exactly ONE caller in production, the COPY button
+        // (`useNetworkData`, `NET_COPY`), and it merges the SOURCE slot into the ship's crystal. It
+        // is not what an insertion triggers, and nothing triggers it here. The ship's address list
+        // is not the product of any action at all: `shipCrystal()` reads
+        // `memoryOf(getStackInSlot(SLOT_SHIP))`, so once the click has been applied the list simply
+        // IS what the crystal in that slot knows.
+        //
+        // So nothing in the CONSOLE records the insertion — but the click itself has a receipt:
+        // the server answers every container click it handles, after its own slotClick ran. That
+        // is the barrier, and only that: its `accepted` compares the stacks the click RETURNED,
+        // which for a pickup into an empty slot are empty on both sides whatever happened. What
+        // the insertion did is the list the server reads next.
+        clientEvents().await(insertMark, "client_click_confirmed",
+                "the server must handle the click that puts the crystal into the console's SHIP slot",
+                SLOT_APPLIED_TICKS);
+        String navStatus = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
+        int listed = readIntOr(navStatus, NAV_SHIP_ADDRESSES, 0);
         assertTrue("putting a memory crystal into the console's SHIP slot must give the pilot a list "
-                        + "of places he can fly to — that insertion is the only thing in the game that "
-                        + "writes a starter crystal's addresses, so an empty list here leaves a "
-                        + "jump-capable ship with nowhere to go, and a list of ONE leaves him only the "
-                        + "cell he is already in. listed=" + listed
-                        + " nav=" + navStatus + " slots=" + bot().reportSlots(),
-                listed >= 2);
+                        + "of places he can fly to — the ship's addresses ARE that crystal's, so an "
+                        + "empty list here means the insertion never landed, and a list of ONE leaves "
+                        + "him only the cell he is already in. listed=" + listed
+                        + " nav=" + navStatus + " slots=" + bot().reportSlots()
+                        + " | screen=" + screenOf(bot().reportState()),
+                listed >= MIN_DESTINATIONS_LISTED);
 
         // Reopen the window: its buttons are built when the screen is, so the list the pilot clicks
         // on is the one he sees after the crystal is in. Closing and looking again is what he does.
+        // No settle: the close and the right-click that reopens travel in order on one connection.
         bot().closeScreen();
-        bot().waitTicks(10);
         consoleScreen = openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget);
-        assertTrue("ARRANGEMENT: the console must reopen once the crystal is in it: " + consoleScreen,
+        requireArranged("the console must reopen once the crystal is in it: " + consoleScreen,
                 consoleScreen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
 
         // He picks where to go. Not blind: he clicks an address, sees what the console says is at it,
@@ -528,8 +699,17 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String targetInfo = "";
         StringBuilder considered = new StringBuilder();
         for (int candidate = 1; candidate < LISTED_ADDRESSES && pickIndex < 0; candidate++) {
+            // The CLICK IS AWAITED, not slept off. Ten ticks was a guess that has to cover a button
+            // press travelling to the server and the computer answering it; when it did not, the
+            // reading below was of the PREVIOUS candidate's target and the search silently
+            // considered the same address twice.
+            long pickMark = events.mark();
             bot().clickButtonById(BUTTON_PICK_FIRST + candidate);
-            bot().waitTicks(10);
+            events.await(pickMark, "nav_target_picked",
+                    "a click on a listed address must reach the navigation computer — the console's "
+                            + "buttons are the only way a pilot chooses where to go, and a press that "
+                            + "is swallowed leaves him reading the target he picked last time",
+                    budget * 5);
             String picked = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
             String cell = unquote(readString(picked, NAV_TARGET));
             considered.append(' ').append(candidate).append("->").append(cell)
@@ -537,10 +717,10 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             if (cell.isEmpty() || "null".equals(cell) || cell.equals(launchCell)) {
                 continue;
             }
-            if (LANDABLE.matcher(picked).find()) {
+            if (isLandable(picked)) {
                 pickIndex = candidate;
                 targetCell = cell;
-                targetDim = readInt(picked, NAV_TARGET_DIM, Integer.MIN_VALUE);
+                targetDim = readIntOr(picked, NAV_TARGET_DIM, Integer.MIN_VALUE);
                 targetInfo = picked;
             }
         }
@@ -554,27 +734,36 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "without it the console is handing him a coordinate the destination has "
                         + "already left. nav=" + targetInfo,
                 targetDim != Integer.MIN_VALUE && targetDim >= 0);
-        bot().waitTicks(10);
+        // No settle before ARM: the pick it depends on was already read back from the server above.
+        long armMark = events.mark();
         bot().clickButtonById(BUTTON_ARM);
-        bot().waitTicks(10);
 
-        String armedStatus = "";
-        boolean armed = false;
-        for (int attempt = 0; attempt < budget && !armed; attempt++) {
-            bot().waitTicks(5);
-            armedStatus = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
-            armed = "true".equals(readString(armedStatus, NAV_ARMED));
-        }
-        String armChat = chatText(30);
-        assertTrue("picking a listed address and pressing ARM must leave the ship ARMED at that "
-                        + "address — those two clicks are the whole of how a player commits to a "
-                        + "destination, and an unarmed ship refuses the jump key outright. armed="
-                        + armed + " nav=" + armedStatus + " chat=" + armChat,
-                armed);
-        assertTrue("…and the pilot must be TOLD, in his own chat, that the ship is armed. A silent "
-                        + "arming leaves him with no way to know the ship will move when he presses "
-                        + "the key. chat=" + armChat + " nav=" + armedStatus,
-                armChat.contains("jump armed") || armChat.contains("msg.jump.armed"));
+        // The console's OWN VERDICT on the press, not a poll of the flag it sets. `arm()` answers
+        // ARMED or REFUSED_NO_TARGET, and the difference is the whole diagnosis: a poll that spends
+        // its budget reports "armed=false" for a press that never arrived, for a press that arrived
+        // and was refused, and for a console that armed a tick after the last sample — three
+        // different faults behind one sentence.
+        String armDecision = events.await(armMark, "nav_arm_decided",
+                "pressing ARM must reach the navigation computer and be ANSWERED — that press is how "
+                        + "a player commits to a destination, and an unarmed ship refuses the jump "
+                        + "key outright", budget * 5);
+        String armedStatus = exec("artest nav status " + slotDim + " " + describeArgs(navSub));
+        // Two claims, so two asserts. `armDecision` is the console's answer to the press, read off
+        // the event window; `armedStatus` is a live status fetched afterwards. Conjoined, a red said
+        // only that one of the two was false and handed the reader two rendered replies to diff —
+        // and the two are not even the same kind of fault: a press that was REFUSED and a press that
+        // was accepted onto a computer that then forgot it are different bugs.
+        assertEquals("pressing ARM must be ANSWERED with ARMED — that press is the whole of how a "
+                        + "player commits to a destination, and a refusal here is the console "
+                        + "declining the commit. The console's own verdict: " + armDecision,
+                "ARMED", Events.text(Events.lastRecord(armDecision), "outcome"));
+        assertEquals("...and the arming the console reported must be the state the ship is actually "
+                        + "in — a computer that answers ARMED and does not hold it refuses the jump "
+                        + "key with nothing to show the pilot why. nav=" + armedStatus,
+                "true", readString(armedStatus, NAV_ARMED));
+        // A second clause stood here: that the pilot is TOLD, in his own chat, that the ship is
+        // armed. It is gone — the chat line is a rendering of the arming, and the arming itself is
+        // what the line above reads, off the navigation computer's own state.
 
         // Judged on the BODY, not on the aim cell. The aim is the computer's prediction of where that
         // body will be when the ship arrives, so it legitimately moves between the pick and the arm —
@@ -582,11 +771,11 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         assertTrue("…and the destination it is armed at must still be the BODY he picked — an ARM that "
                         + "quietly re-aimed the ship would send him somewhere he never chose. "
                         + "pickedDim=" + targetDim + " nav=" + armedStatus,
-                targetDim == readInt(armedStatus, NAV_TARGET_DIM, Integer.MIN_VALUE));
+                targetDim == readIntOr(armedStatus, NAV_TARGET_DIM, Integer.MIN_VALUE));
         assertTrue("…and the ship must still be able to say WHERE that body is: an armed jump whose "
                         + "target cannot be located is a burst about to be spent on nothing. nav="
                         + armedStatus,
-                armedStatus.contains("\"targetResolved\":true"));
+                Reply.of(armedStatus).bool("targetResolved"));
         System.out.println("[M1] leg 6 (target picked + armed at the console) " + elapsed(tLeg)
                 + " launchCell=" + launchCell + " pick=" + pickIndex + " targetDim=" + targetDim
                 + " target=" + targetCell
@@ -596,53 +785,77 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // ---- LEG 7: he fires the jump with the real jump key. -----------------------------------
         tLeg = System.currentTimeMillis();
         // The key handler bails outright while any screen is up, so the console is shut first — the
-        // same thing a player does before reaching for the controls.
+        // same thing a player does before reaching for the controls. `closeScreen` clears it on the
+        // client thread before it answers, which is where the key handler looks.
         bot().closeScreen();
-        bot().waitTicks(10);
 
         // And he sits back down: the jump key is the PILOT's, routed through the seat he occupies, so
         // a player standing on his own deck cannot fire the drive he just armed.
-        JsonObject reboarded = sitBackDown(slotDim, navAfcSub, budget);
-        assertTrue("ARRANGEMENT: the pilot must be able to take his seat again after navigating — the "
+        JsonObject reboarded = sitBackDown(events, slotDim, navAfcSub, budget);
+        requireArranged("the pilot must be able to take his seat again after navigating — the "
                         + "jump he armed is fired from the controls, not from the deck. riding="
                         + reboarded + " serverRiding=" + exec("artest player riding-entity"),
                 isRiding(reboarded));
 
+        // The mark BEFORE the key: the arrival's ledger write is awaited from here.
+        long jumpMark = events.markInstrumented();
+        // ...and the CLIENT's own, for the same instant. The pilot's side of a jump is a world he is
+        // carried into, and that is a record on his log, not a value to sample afterwards.
+        long jumpClientMark = clientEvents().mark();
         pressJumpKey();
-        String pressChat = chatText(30);
         // Two legitimate branches, both real player paths: a clean ship spools straight up, and a
-        // ship the gate has only an ADVISORY about asks for a second press to confirm. Which one this
-        // run took is printed below and reported with the result.
+        // ship the gate has only an ADVISORY about asks for a second press to confirm. WHICH one
+        // this run took is read off the trigger's own verdict — the press is answered with one of
+        // eight named outcomes, and `jump_press_decided` carries the name.
+        //
+        // This used to be decided by looking for the words "spooling" and "confirm" in the client's
+        // chat. That is a rendering of this verdict: it moves with the language file, it cannot see
+        // a line the ring has dropped, and it made the milestone's own control flow depend on prose.
+        String pressed = events.awaitField(jumpMark, "jump_press_decided","phase", "press",
+                "the jump key, pressed by a seated pilot of an ARMED ship, must be ANSWERED — the"
+                        + " trigger decides something for every press, and a silence here means the"
+                        + " press never reached the ship at all",
+                JUMP_PRESS_BUDGET_TICKS);
+        String outcome = Events.text(Events.lastRecord(pressed), "outcome");
         String jumpBranch = "spooling";
-        if (!pressChat.contains("spooling") && !pressChat.contains("msg.jump.spooling")) {
-            assertTrue("the jump key, pressed by a seated pilot of an ARMED ship, must be ANSWERED — "
-                            + "either the drive spools or the gate asks him to confirm an advisory. "
-                            + "Silence means the press never reached the ship at all. chat="
-                            + pressChat + " delivery=" + exec("artest vs seat-delivery")
+        if (!"SPOOLING".equals(outcome)) {
+            assertEquals("a press that did not spool must be the gate's ADVISORY, which is an 'are"
+                            + " you sure' rather than a refusal — anything else is the jump being"
+                            + " turned down. presses=" + pressed
+                            + " delivery=" + seatDelivery.reading()
                             + " riding=" + bot().reportRidingEntity()
                             + " drive=" + exec("artest drive info " + slotDim + " "
                             + describeArgs(navAfcSub)),
-                    pressChat.contains("confirm") || pressChat.contains("msg.jump.confirm"));
+                    "WARNED", outcome);
             jumpBranch = "confirm-then-commit";
+            long confirmMark = events.mark();
             pressJumpKey();
-            pressChat = chatText(30);
-            assertTrue("…and the CONFIRMING press must spool the drive: the gate's advisory is an "
-                            + "'are you sure', not a refusal, so a second press has to carry the ship. "
-                            + "chat=" + pressChat + " drive=" + exec("artest drive info " + slotDim
-                            + " " + describeArgs(navAfcSub)),
-                    pressChat.contains("spooling") || pressChat.contains("msg.jump.spooling"));
+            String confirmed = events.awaitField(confirmMark, "jump_press_decided","phase", "press",
+                    "the CONFIRMING press must reach the trigger too", JUMP_PRESS_BUDGET_TICKS);
+            assertEquals("…and the CONFIRMING press must spool the drive: the gate's advisory is an"
+                            + " 'are you sure', not a refusal, so a second press has to carry the"
+                            + " ship. presses=" + confirmed + " drive="
+                            + exec("artest drive info " + slotDim + " " + describeArgs(navAfcSub)),
+                    "SPOOLING", Events.text(Events.lastRecord(confirmed), "outcome"));
         }
-        System.out.println("[M1] jump branch: " + jumpBranch + " chat=" + pressChat);
+        System.out.println("[M1] jump branch: " + jumpBranch + " firstPress=" + pressed);
 
-        // The flight is short but the wind-up is not instant; poll the ledger, which is the only
-        // place that answers "where is the ship" while it has no body anywhere.
+        // The flight is short but the wind-up is not instant. The arrival is the ledger's own WRITE:
+        // `ledger_settled` for this ship, since the mark taken before the fire button — whichever
+        // mechanism the drive chose (a hyperspace flight, or the direct crossing a short hop is
+        // performed as), it ends by telling the ledger where the ship now is. The record names the
+        // cell; a poll of the ledger's row could only see the row once it had changed.
+        // No fork multiplier: a jump's duration is distance over speed, which is a number of
+        // server TICKS fixed by the game. Scaling it by how many forks share this box granted the
+        // flight extra world on a busy machine and made two runs different experiments. 2 000 ticks
+        // is the old 400 polls of 5.
         String arrivedCell = launchCell;
-        int jumpBudget = (int) (400 * TestTimeouts.factor());
-        for (int attempt = 0; attempt < jumpBudget && arrivedCell.equals(launchCell); attempt++) {
-            bot().waitTicks(5);
-            String entry = exec("artest space ledger-get " + shipId);
-            String cell = readString(entry, CELL);
-            if (cell != null && !cell.isEmpty() && entry.contains("\"state\":\"SETTLED\"")) {
+        String settled = events.await(jumpMark, "ledger_settled", "a jump the pilot armed and fired"
+                + " must end with the ledger told where the ship now is — the arrival's own commit",
+                2000);
+        for (String record : Events.recordsWhere(settled, "ship", shipId)) {
+            String cell = Events.text(record, "cell");
+            if (cell != null && !cell.isEmpty()) {
                 arrivedCell = cell;
             }
         }
@@ -659,8 +872,16 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // planet moves while the ship flies — that is precisely why the computer aims ahead of it.
         // A ship aimed at where the body WAS lands in a cell the body has left, which reads here as
         // an arrived cell whose own body list does not contain the destination.
-        String arrivedCellInfo = exec("artest space cell-info " + cellArgs(arrivedCell));
-        String arrivedBodies = readString(arrivedCellInfo, CELL_BODIES);
+        CellInfo arrivedCellInfo = CellInfo.atKey(this::exec, arrivedCell);
+        // The AT-CELL list, read as a list. What stood here took the field's rendered text, stripped
+        // its brackets, and asked whether `"dim":N,` appeared in what was left — a substring of a
+        // rendering of an array, pinning that `dim` is written first in each body and followed by a
+        // comma. Neither is part of any contract.
+        boolean destinationIsHere = false;
+        for (CellInfo.Body body : arrivedCellInfo.cellBodies) {
+            destinationIsHere |= body.dim == targetDim;
+        }
+        String arrivedBodies = String.valueOf(arrivedCellInfo.cellBodies);
         assertTrue("…and the cell it arrives in must be the one the destination BODY is in when it "
                         + "gets there — a destination the pilot chose at the console is a promise the "
                         + "drive has to keep, and it is only kept if the planet is there on arrival. "
@@ -669,48 +890,27 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "with where the body actually is now. targetDim=" + targetDim
                         + " armedCell=" + targetCell + " arrivedCell=" + arrivedCell
                         + " arrived=" + arrivedCellInfo + " ledger=" + ledgerAfterJump,
-                arrivedBodies != null && arrivedBodies.contains("\"dim\":" + targetDim + ","));
+                destinationIsHere);
 
         // The pilot, observed from the CLIENT: same two questions leg 5 asks, because a jump is the
         // second world transition of the loop and a seat lost in it is lost just as silently.
-        String statusAfterJump = exec("artest space subsystem-status");
-        Matcher sdj = SLOT_DIMS.matcher(statusAfterJump);
-        assertTrue("ARRANGEMENT: subsystem-status must list its slot dims: " + statusAfterJump,
-                sdj.find());
-        String jumpSlotDims = "," + sdj.group(1) + ",";
-        int jumpDim = Integer.MIN_VALUE;
-        for (int attempt = 0; attempt < budget; attempt++) {
-            bot().waitTicks(5);
-            JsonObject weather = bot().reportWeather();
-            if (weather.has("dim")) {
-                jumpDim = weather.get("dim").getAsInt();
-                if (jumpSlotDims.contains("," + jumpDim + ",")) {
-                    break;
-                }
-            }
-        }
-        assertTrue("the pilot who fired the jump must come out of it in a space cell too — a drive "
+        SubsystemStatus statusAfterJump = SubsystemStatus.read(this::exec);
+                String jumpSlotDims = "," + joinInts(statusAfterJump.slotDims()) + ",";
+        int jumpDim = awaitClientWorld(jumpClientMark, jumpSlotDims,
+                "the pilot who fired the jump must come out of it in a space cell too — a drive "
                         + "that carries the hull and leaves the crew behind has not moved the SHIP. "
-                        + "clientDim=" + jumpDim + " slotDims=[" + sdj.group(1) + "] ledger="
-                        + ledgerAfterJump + " status=" + statusAfterJump,
-                jumpSlotDims.contains("," + jumpDim + ","));
+                        + "slotDims=[" + jumpSlotDims + "] ledger=" + ledgerAfterJump
+                        + " status=" + statusAfterJump.raw(),
+                budget * 5);
 
-        JsonObject jumpRiding = bot().reportRidingEntity();
-        boolean prevJump = isRiding(jumpRiding);
-        boolean seatedThroughJump = false;
-        for (int attempt = 0; attempt < budget && !seatedThroughJump; attempt++) {
-            bot().waitTicks(5);
-            jumpRiding = bot().reportRidingEntity();
-            seatedThroughJump = prevJump && isRiding(jumpRiding);
-            prevJump = isRiding(jumpRiding);
-        }
-        assertTrue("the pilot who FIRED the jump must still be in his seat when it ends — he never "
+        JsonObject jumpRiding = assertStillSeated(events, jumpMark, jumpClientMark,
+                "the pilot who FIRED the jump must still be in his seat when it ends — he never "
                         + "stood up, so nothing about crossing a cell may stand him up. A red here is "
-                        + "the crew capture, the re-seat, or the dimension hand-off, in that order: "
-                        + "riding=" + jumpRiding + " serverRiding=" + exec("artest player riding-entity")
-                        + " clientDim=" + jumpDim + " delivery=" + exec("artest vs seat-delivery")
+                        + "the crew capture, the re-seat, or the dimension hand-off, in that order — "
+                        + "and the mount chain below says which. clientDim=" + jumpDim
+                        + " delivery=" + seatDelivery.reading()
                         + " ledger=" + ledgerAfterJump,
-                seatedThroughJump);
+                budget);
         System.out.println("[M1] leg 7 (jump fired on the key) " + elapsed(tLeg)
                 + " branch=" + jumpBranch + " " + launchCell + " -> " + arrivedCell
                 + " clientDim=" + jumpDim + " riding=" + jumpRiding);
@@ -738,16 +938,25 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "destination's dimension occupies now. arrivedCell=" + arrivedCell
                         + " arrived=" + arrivedInfo
                         + " launchCell(control)=" + launchCell + " launch=" + launchInfo
-                        + " bodies=" + bodies,
+                        + " bodies=" + bodies
+                        // The ship section of `space bodies` is built from the LEDGER, so an empty
+                        // one means this craft has no row — and the loudest way a row disappears
+                        // between the arrival and here is a descent having ALREADY fired. That is not
+                        // a failure of this leg's subject, it is this leg's subject having happened
+                        // without it; the two read identically off `shipCount:0` alone.
+                        + " | descents requested since the jump: "
+                        + events.since(jumpMark, "descent_requested")
+                        + " | ledger removals since the jump: "
+                        + events.since(jumpMark, "ledger_removed"),
                 nearestDim != Integer.MIN_VALUE);
 
         // Pin the destination world. The descent resolver asks Forge for it and refuses in silence if
         // it is not loaded — a reading/arrangement probe, not an act: in a live game the world is
         // already up because somebody lives there.
         String loaded = exec("artest dim load " + nearestDim);
-        assertTrue("ARRANGEMENT: the destination world must be loaded before the descent is attempted, "
+        requireArranged("the destination world must be loaded before the descent is attempted, "
                         + "or the resolver refuses quietly and the leg measures nothing: " + loaded,
-                loaded.contains("\"loaded\":true"));
+                Reply.of(loaded).bool("loaded"));
 
         // He CLOSES THE RANGE, then descends. A jump does not end on top of its destination: it ends
         // on a standoff ring around it, outside the descent trigger on purpose, because arriving in a
@@ -795,10 +1004,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // moves is simply a body whose bearing has changed, and the chase converges for the same
         // reason the foot race does.
         //
-        // The burst is a count of GAME ticks, sized from the component it is flying. {@code
-        // TestTimeouts.factor()} stretches WALL-CLOCK ceilings so concurrent forks do not time out; a
-        // tick count is not one. Scaling the burst by it made each step three times LONGER on an
-        // 8-fork box than on a 1-fork box — it made this leg's geometry a function of machine load.
+        // The burst is a count of GAME ticks, sized from the component it is flying, and it is the
+        // same count on every box.
         //
         // What that does NOT remove: the ship is integrated on the physics mod's own wall-clock
         // thread while the body's position advances on server ticks, so how far a burst of N client
@@ -807,7 +1014,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // fell short is simply a larger component next time round.
         String feed = bodies;
         long[] aim = nearestDescendTargetVector(feed);
-        assertTrue("ARRANGEMENT: the arrived cell must report WHERE its descend-target body is, not "
+        requireArranged("the arrived cell must report WHERE its descend-target body is, not "
                         + "only how far — the pilot's own sky draws it along that direction: " + feed,
                 aim != null);
         long rangeAtArrival = aim[3];
@@ -835,6 +1042,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The whole approach, burst by burst, so a red says which component was left standing.
         StringBuilder flown = new StringBuilder();
 
+        // Taken before the first burst: the descent fires from inside this loop, and the pilot's
+        // side of it is a world he is carried into — a record, not a value to sample once the
+        // carrying is over. The SERVER's mark is taken for the same instant, so the seat chain the
+        // arrival is judged on covers the crossing that produced it and nothing earlier.
+        long descentClientMark = clientEvents().mark();
+        long descentMark = events.mark();
+
         while (bursts < burstBudget && descentDim == jumpDim) {
             aim = nearestDescendTargetVector(feed);
             if (aim == null) {
@@ -842,10 +1056,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 // leg SUCCEEDING — but the crossing settles over several ticks and the CLIENT is
                 // carried at the end of it, so wait for him. Breaking on the dimension he was in
                 // when the trigger fired reads a completed descent as a failed approach.
-                for (int settle = 0; settle < budget && descentDim == jumpDim; settle++) {
-                    bot().waitTicks(5);
-                    descentDim = clientDim(descentDim);
-                }
+                descentDim = awaitClientWorldMatching(descentClientMark, dim -> dim != jumpDim,
+                        "a change out of the cell " + jumpDim,
+                        "the descent cut the ship out of its cell, so the PILOT has to be carried "
+                                + "out of it too — a hull that lands without its crew has not "
+                                + "completed the crossing, and the approach below would then read a "
+                                + "finished descent as a chase that never converged",
+                        budget * 5);
                 break;
             }
             range = aim[3];
@@ -866,7 +1083,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                             + " flown=" + flown
                             + " ledger=" + exec("artest space ledger-get " + shipId)
                             + " bodies=" + feed,
-                    stalled < 6);
+                    stalled < ARRIVED_BESIDE_IT_BLOCKS);
 
             int comp = 0;
             for (int i = 1; i < 3; i++) {
@@ -898,13 +1115,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + " nearestBodyDim=" + nearestDim + " dimLoad=" + loaded
                         + " descentStatus=" + exec("artest space descent-status")
                         + " ledger=" + exec("artest space ledger-get " + shipId)
-                        + " bodies=" + bodies + " delivery=" + exec("artest vs seat-delivery"),
+                        + " bodies=" + bodies + " delivery=" + seatDelivery.reading(),
                 descentDim != jumpDim);
         assertTrue("…and where it puts him down must be a real WORLD, with ground under it. The space "
                         + "subsystem's own slot worlds are empty voids that exist to hold a cell; a "
                         + "descent that ends in one has landed the ship nowhere, and the pilot who flew "
                         + "across a system to reach a planet steps out into nothing. clientDim="
-                        + descentDim + " slotDims=[" + sdj.group(1) + "] nearestBodyDim=" + nearestDim
+                        + descentDim + " slotDims=[" + jumpSlotDims + "] nearestBodyDim=" + nearestDim
                         + " dimLoad=" + loaded + " bodies=" + bodies,
                 !jumpSlotDims.contains("," + descentDim + ","));
         assertTrue("…and the world he steps out onto must be the PLANET HE PICKED at the console. "
@@ -912,24 +1129,19 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "something else in the neighbourhood means the aim, the arrival or the "
                         + "trigger's choice of body disagreed with the pilot. pickedDim=" + targetDim
                         + " landedDim=" + descentDim + " nearestBodyDim=" + nearestDim
+                        // The client's own dimension changes since the descent mark: a landedDim
+                        // that reads as no dimension at all has to be told from a real wrong one.
+                        + " clientDimensionChanges="
+                        + clientEvents().since(descentClientMark, "client_dimension_changed")
                         + " bodies=" + bodies,
                 descentDim == targetDim);
 
-        JsonObject landedRiding = bot().reportRidingEntity();
-        boolean prevLanded = isRiding(landedRiding);
-        boolean seatedThroughDescent = false;
-        for (int attempt = 0; attempt < budget && !seatedThroughDescent; attempt++) {
-            bot().waitTicks(5);
-            landedRiding = bot().reportRidingEntity();
-            seatedThroughDescent = prevLanded && isRiding(landedRiding);
-            prevLanded = isRiding(landedRiding);
-        }
-        assertTrue("and the pilot must still be flying his ship when it comes out over the planet he "
+        JsonObject landedRiding = assertStillSeated(events, descentMark, descentClientMark,
+                "and the pilot must still be flying his ship when it comes out over the planet he "
                         + "set out for — the loop is only closed if the man who took off is the man "
-                        + "who arrives. riding=" + landedRiding + " clientDim=" + descentDim
-                        + " serverRiding=" + exec("artest player riding-entity")
-                        + " delivery=" + exec("artest vs seat-delivery"),
-                seatedThroughDescent);
+                        + "who arrives. clientDim=" + descentDim
+                        + " delivery=" + seatDelivery.reading(),
+                budget);
 
         // CONTRACT (changed): a descent no longer hunts for a clear pad and sets the ship down. It
         // brings the ship out HIGH IN THE AIR over the destination and hands it back to the pilot to
@@ -937,15 +1149,19 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // is asserted where it now happens: the CLIENT's own altitude, above everything the world is
         // able to build. This is a strictly stronger reading than the old leg made (which never
         // checked altitude at all), not a relaxed one.
-        double arrivalY = Double.NEGATIVE_INFINITY;
-        for (int attempt = 0; attempt < budget
-                && arrivalY <= TerrainHeightFinder.MAX_BUILD_Y; attempt++) {
-            bot().waitTicks(5);
-            JsonObject state = bot().reportState();
-            if (state.has("playerY")) {
-                arrivalY = state.get("playerY").getAsDouble();
-            }
-        }
+        // READ ONCE, because the thing this was waiting for has already been waited for. The
+        // altitude is a physical value and a value is measured, not polled — but the old loop was
+        // not measuring it either: it was waiting for the CROSSING that puts the ship there, and
+        // re-reading a number until it liked it is what that looked like from inside. The crossing's
+        // own pose write is a record, and the re-seat above already required the client to have
+        // followed the whole arrival, so by here the pose is settled and one read is the measurement.
+        String posed = events.await(descentMark, "crossing_pose_settled",
+                "the descent must WRITE the arrived ship's pose — until it does there is no altitude "
+                        + "to read, and a number sampled before it is the paste band's, not the "
+                        + "arrival's", budget * 5);
+        JsonObject arrivalState = bot().reportState();
+        double arrivalY = arrivalState.has("playerY")
+                ? arrivalState.get("playerY").getAsDouble() : Double.NEGATIVE_INFINITY;
         assertTrue("…and he must come out IN THE SKY over it, not on the ground and never inside it. "
                         + "The arrival pose is placed above the whole vanilla block band on purpose: "
                         + "a ship's blocks cannot exist above the build height, so an arrival that "
@@ -954,7 +1170,8 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "he was supposed to fly down to. clientY=" + arrivalY
                         + " buildHeight=" + TerrainHeightFinder.MAX_BUILD_Y
                         + " clientDim=" + descentDim + " riding=" + landedRiding
-                        + " serverRiding=" + exec("artest player riding-entity"),
+                        + " serverRiding=" + exec("artest player riding-entity")
+                        + " | the pose the descent actually wrote: " + posed,
                 arrivalY > TerrainHeightFinder.MAX_BUILD_Y);
 
         System.out.println("[M1] leg 8 (descent onto the planet) " + elapsed(tLeg)
@@ -962,84 +1179,85 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                 + " arrivalY=" + arrivalY + " riding=" + landedRiding);
 
         // ---- LEG 9: he stays put, and can still leave later. ------------------------------------
-        // The descent puts the ship down IN THE AIR, and that can be above this body's own orbit
-        // line (this run seeds the line to the config minimum, so it certainly is). The entry
-        // on-ramp fires on "a piloted ship is above the orbit line" — the arrival matches it
-        // exactly. Without a hysteresis the ship is taken straight back to space on the tick it
-        // arrives and the body can never be reached at all.
+        // The descent puts the ship down IN THE AIR, above this body's own orbit line (this run
+        // seeds the line to the config minimum, so it certainly is). The entry on-ramp fires on
+        // "the ship is above the line", whoever is at the controls — the arrival matches it exactly,
+        // and without a hold the ship is taken straight back to space on the tick it arrives. The
+        // hold is a latch the descent sets and only being at or below the line releases.
         //
-        // The key stays DOWN for this whole leg: `flying` is what arms the entry trigger, so a leg
-        // that let go of it would prove nothing — the trigger it is watching for would be switched
-        // off. Leg 8 released the key, which is exactly why leg 8's green was never evidence here.
+        // NO WINDOW in this leg: both halves are bounded by production's own records. The pilot
+        // flies DOWN, and the whole way down the ship is above the line under power — the on-ramp's
+        // exact condition, held off only by the latch. The release is a record; the bounce is an
+        // absence between the descent and that record, which is the entire span the ship stood
+        // above the line held.
         tLeg = System.currentTimeMillis();
-        int bounceDim = descentDim;
-        bot().holdKey(Keyboard.KEY_R);          // vertical-up: still flying, still climbing
-        try {
-            for (int attempt = 0; attempt < LATCH_WATCH_SAMPLES && bounceDim == descentDim; attempt++) {
-                bot().waitTicks(10);
-                JsonObject weather = bot().reportWeather();
-                if (weather.has("dim")) {
-                    bounceDim = weather.get("dim").getAsInt();
-                }
-            }
-        } finally {
-            bot().releaseKey(Keyboard.KEY_R);
-        }
-        assertTrue("a ship that has just been PUT somewhere by a descent must stay there while its "
-                        + "pilot flies, even though the arrival is above this body's orbit line. The "
-                        + "on-ramp reads altitude alone, so the arrival looks exactly like a climb to "
-                        + "orbit unless the descent holds it off until the ship has been below the "
-                        + "line once. A dim that flipped to a space cell here is that bounce: the "
-                        + "pilot crossed a system to reach this body and was thrown back off it "
-                        + "without touching anything. dimAfterArrival=" + bounceDim
-                        + " arrivedDim=" + descentDim + " slotDims=[" + sdj.group(1) + "]"
-                        + " arrivalY=" + arrivalY + " orbitLine=" + ORBIT_LINE,
-                bounceDim == descentDim);
-
-        // …and the hold must RELEASE. A latch that never clears turns "bounces off instantly" into
-        // "can never leave this planet again", which is strictly worse. Fly down through the line,
-        // which is the release condition, then climb back through it and entry must fire normally.
-        double downY = arrivalY;
+        long latchMark = events.markInstrumented();
+        long latchClientMark = clientEvents().mark();
+        // A link's ceiling, from the ship's own numbers: straight down from the arrival at
+        // SHIP_MAX_SPEED (m/s, a twentieth of it per tick) after its 60-tick ramp from rest. Four
+        // times that, so the ceiling is never a claim about how fast the box is.
+        double blocksPerTick = TileAdvancedFlightComputer.SHIP_MAX_SPEED / 20.0;
+        int descentTicks = 60 + (int) Math.ceil((arrivalY - ORBIT_LINE) / blocksPerTick);
+        String released;
+        String entriesWhileHeld;
+        String bounceChanges;
         bot().holdKey(Keyboard.KEY_F);          // vertical-down
         try {
-            for (int attempt = 0; attempt < budget && downY > ORBIT_LINE; attempt++) {
-                bot().waitTicks(10);
-                JsonObject state = bot().reportState();
-                if (state.has("playerY")) {
-                    downY = state.get("playerY").getAsDouble();
-                }
-            }
+            released = events.awaitRecordWithField(latchMark, "entry_latch_released", "ship", shipId,
+                    "…and the hold must RELEASE once he has flown down through the orbit line. A "
+                            + "latch that never clears turns \"bounces off instantly\" into \"can never "
+                            + "leave this planet again\", which is strictly worse. No release means he "
+                            + "never got below the line (read the pilot inputs and cruise setpoints "
+                            + "below) or the latch ignored it. arrivalY=" + arrivalY
+                            + " orbitLine=" + ORBIT_LINE,
+                    4 * descentTicks);
+            // Read at the release, before the key is let go: from here on the ship is below the
+            // line, so nothing later can land in this span.
+            entriesWhileHeld = events.since(descentMark, "entry_decided");
+            bounceChanges = clientEvents().since(latchClientMark, "client_dimension_changed");
         } finally {
             bot().releaseKey(Keyboard.KEY_F);
         }
-        assertTrue("ARRANGEMENT: the pilot must actually get the ship back below the orbit line, or "
-                        + "the release half of this leg never gets its stimulus. downY=" + downY
-                        + " orbitLine=" + ORBIT_LINE,
-                downY <= ORBIT_LINE);
+        assertEquals("a ship that has just been PUT somewhere by a descent must stay there while its "
+                        + "pilot flies, even though the arrival is above this body's orbit line. The "
+                        + "on-ramp reads altitude alone, so between the descent and the latch's release "
+                        + "— the whole time this ship stood above the line under power — it must not "
+                        + "have been asked to enter even once. An entry here is the bounce: the pilot "
+                        + "crossed a system to reach this body and was thrown back off it. arrivalY="
+                        + arrivalY + " orbitLine=" + ORBIT_LINE + " release=" + released
+                        + " entry decisions since the descent: " + entriesWhileHeld,
+                0, Events.countRecords(entriesWhileHeld, "ship", shipId));
+        assertEquals("…and the CLIENT was never carried off the planet in that span either — a "
+                        + "bounce and return would leave the entry log above clean only if a second "
+                        + "path moved him. arrivedDim=" + descentDim + " slotDims=[" + jumpSlotDims
+                        + "] client world changes since leg 9 began: " + bounceChanges,
+                0, Events.records(bounceChanges).size());
 
-        int releasedDim = descentDim;
+        // THE SENSITIVITY CONTROL for both absences above, as well as this leg's own subject: the
+        // same two record types over the same logs — and here each is REQUIRED. A recorder that had
+        // died would pass the absences and fail here.
+        long releaseMark = events.mark();
+        long releaseClientMark = clientEvents().mark();
+        int releasedDim;
         bot().holdKey(Keyboard.KEY_R);          // climb back through the line under power
         try {
-            for (int attempt = 0; attempt < budget && releasedDim == descentDim; attempt++) {
-                bot().waitTicks(10);
-                JsonObject weather = bot().reportWeather();
-                if (weather.has("dim")) {
-                    releasedDim = weather.get("dim").getAsInt();
-                }
-            }
+            releasedDim = awaitClientWorld(releaseClientMark, jumpSlotDims,
+                    "…and once he HAS been below the line, the on-ramp must work again — a ship that "
+                            + "landed on a planet has to be able to leave it. If this stays on the "
+                            + "planet the hold never released and the descent has stranded him "
+                            + "instead of bouncing him. arrivedDim=" + descentDim + " slotDims=["
+                            + jumpSlotDims + "] release=" + released + " orbitLine=" + ORBIT_LINE,
+                    budget * 10);
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
-        assertTrue("…and once he HAS been below the line, the on-ramp must work again — a ship that "
-                        + "landed on a planet has to be able to leave it. If this stays on the planet "
-                        + "the hold never released and the descent has stranded him instead of "
-                        + "bouncing him. dimAfterSecondClimb=" + releasedDim
-                        + " arrivedDim=" + descentDim + " slotDims=[" + sdj.group(1) + "]"
-                        + " downY=" + downY + " orbitLine=" + ORBIT_LINE,
-                jumpSlotDims.contains("," + releasedDim + ","));
+        String entriesAfterRelease = events.since(releaseMark, "entry_decided");
+        assertTrue("…and it left through the ENTRY ramp, the one the latch held off — the record whose "
+                        + "absence above is the bounce verdict. entry decisions since the release: "
+                        + entriesAfterRelease,
+                Events.anyRecordHasAll(entriesAfterRelease, "ship", shipId, "decision", "STARTED"));
         System.out.println("[M1] leg 9 (stays put, then can leave) " + elapsed(tLeg)
-                + " dimAfterArrival=" + bounceDim + " downY=" + downY
-                + " dimAfterSecondClimb=" + releasedDim);
+                + " release=" + released + " dimAfterSecondClimb=" + releasedDim);
     }
 
     // ---- legs 6-8: the console, the jump key and the descent ------------------------------------
@@ -1049,38 +1267,64 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * his feet: the deck hold that keeps a standing pilot aboard runs on the server, so "he stood up"
      * has to be read where he is rendered.
      */
-    private void standUp(int budget) throws Exception {
-        JsonObject riding = bot().reportRidingEntity();
+    private void standUp(Events log, int budget) throws Exception {
+        // The DISMOUNT is the link, and the server records it with the caller that performed it. The
+        // old form watched the client's riding flag go false, which is the same reading for "the key
+        // reached the server and he got up" and for "something else threw him off" — and on this deck
+        // the second is a real failure mode, since a standing pilot is held aboard by the server.
+        long standMark = log.mark();
+        // The CLIENT's own mark too: the claim below is about where he is RENDERED, and the
+        // client records its dismounts as the server records its own.
+        long standClientMark = clientEvents().mark();
         bot().holdKey(Keyboard.KEY_LSHIFT);
         try {
-            for (int attempt = 0; attempt < budget && isRiding(riding); attempt++) {
-                bot().waitTicks(5);
-                riding = bot().reportRidingEntity();
-            }
+            log.await(standMark, "dismount",
+                    "a pilot must be able to LEAVE his seat on the dismount key — the navigation "
+                            + "console is deck work, and a seat he cannot get out of would end the "
+                            + "loop here", budget * 5);
         } finally {
             bot().releaseKey(Keyboard.KEY_LSHIFT);
         }
-        bot().waitTicks(10);
-        assertTrue("a pilot must be able to LEAVE his seat on the dismount key — the navigation "
-                        + "console is deck work, and a seat he cannot get out of would end the loop "
-                        + "here. riding=" + riding + " serverRiding="
-                        + exec("artest player riding-entity"),
+        // WAS `waitTicks(10)`. A budget between the server's dismount and the client's
+        // render asserts how fast this box replicates; the client's own dismount record
+        // says the thing itself, and cannot be sampled past.
+        clientEvents().await(standClientMark, "dismount",
+                "the client must APPLY the dismount the server recorded, or the read below is"
+                        + " about a client that never got the message", budget * 5);
+        assertTrue("…and the CLIENT must render him on his feet: the deck hold that keeps a standing "
+                        + "pilot aboard runs on the server, so a dismount the client never applied "
+                        + "leaves him riding a seat the server says he left. riding="
+                        + bot().reportRidingEntity() + " serverRiding="
+                        + exec("artest player riding-entity")
+                        + " | dismounts since the key went down: "
+                        + log.since(standMark, "dismount"),
                 !isRiding(bot().reportRidingEntity()));
     }
 
     /** He takes the seat again, exactly the way he took it the first time: aim at it and press use. */
-    private JsonObject sitBackDown(int dim, int[] afcSub, int budget) throws Exception {
+    private JsonObject sitBackDown(Events log, int dim, int[] afcSub, int budget) throws Exception {
         int[] seatSub = add(afcSub, OFF_SEAT);
-        holdNothing(budget);
+        holdNothing();
         Aim aim = aimAt(dim, afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
         assertAimed(aim, seatSub, "pilot seat", "pilotseat");
+        long sitMark = log.mark();
+        long sitClientMark = clientEvents().mark();
         pressUse();
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-        }
-        return riding;
+        // Same three links as the first boarding, in the same order: the press reaches the seat, the
+        // seat knows it belongs to a ship, the mount reaches the client.
+        String decision = log.await(sitMark, "pilot_seat_sit_decided",
+                "the use press must REACH the seat when the pilot takes it again — the crosshair was "
+                        + "confirmed on the block, so a silence is the interaction and not the aim",
+                budget * 5);
+        // The RECORD, not the reply — same reading as the first boarding above.
+        assertEquals("…and the seat must still know it belongs to a ship: an unmanaged seat carries no "
+                        + "flight input, so the jump he is about to fire would go nowhere. decision="
+                        + decision,
+                "true", Events.text(Events.lastRecord(decision), "managed"));
+        return awaitClientMount(sitClientMark,
+                "the pilot must be back in his seat on the CLIENT before he fires the drive — the "
+                        + "jump key is routed through the seat he occupies, and a seating that only "
+                        + "the server performed carries no input", budget, aim.diagnosis);
     }
 
     /**
@@ -1090,42 +1334,61 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      */
     private String openConsoleFromTheDeck(int dim, int[] afcSub, int[] navSub, int budget)
             throws Exception {
-        Aim aim = new Aim();
-        for (int attempt = 0; attempt < 6; attempt++) {
-            String already = screenOf(bot().reportState());
-            if (!already.isEmpty()) {
-                return already;
-            }
-            aim = aimAt(dim, afcSub, navSub, OFF_STAND, 0.5, 0.5, 0.5, budget);
-            assertAimed(aim, navSub, "navigation console", "navigationcomputer");
-            pressUse();
-            for (int waited = 0; waited < 6; waited++) {
-                bot().waitTicks(10);
-                String screen = screenOf(bot().reportState());
-                if (!screen.isEmpty()) {
-                    return screen;
-                }
-            }
+        String already = screenOf(bot().reportState());
+        if (!already.isEmpty()) {
+            return already;
         }
-        return "ARRANGEMENT: console never opened;" + aim.diagnosis;
+        // The aim-and-press is the STIMULUS and `client_gui_opened` is the link. The crosshair is
+        // re-derived before every press because a freshly settled craft moves under it, and the
+        // press is re-issued every 60 ticks while the log is read every 5 — a press that never
+        // registered is not recoverable by reading longer, which is what makes this a stimulus.
+        Aim[] aim = {new Aim()};
+        long mark = clientEvents().mark();
+        try {
+            clientEvents().awaitMatching(mark, "client_gui_opened",
+                    reply -> Events.records(reply).size()
+                            > Events.recordsWhere(reply, "gui", "none").size(),
+                    "opening any screen", "the navigation console must open", 360,
+                    () -> {
+                        aim[0] = aimAt(dim, afcSub, navSub, OFF_STAND, 0.5, 0.5, 0.5, budget);
+                        assertAimed(aim[0], navSub, "navigation console", "navigationcomputer");
+                        pressUse();
+                    }, 60);
+        } catch (ArrangementFailure alreadyTyped) {
+            // The aim ran inside the stimulus and its premises are arrangement READS: a ship with no
+            // pose or a client with no world is a failure of the arrangement, and it is TYPED as one.
+            // `ArrangementFailure` is an `AssertionError`, so the catch below would swallow it and
+            // turn it into "the console never opened" — a premise refusal read as a broken mechanic.
+            throw alreadyTyped;
+        } catch (AssertionError neverOpened) {
+            return "ARRANGEMENT: console never opened;" + aim[0].diagnosis + " | "
+                    + neverOpened.getMessage();
+        }
+        return screenOf(bot().reportState());
     }
 
-    /** An empty main hand, without wiping the inventory the pilot is carrying his crystal in. */
-    private void holdNothing(int budget) throws Exception {
+    /**
+     * An empty main hand, without wiping the inventory the pilot is carrying his crystal in.
+     *
+     * <p><b>One read, because there is nothing to wait for.</b> The harness's {@code select_hotbar}
+     * sets the held index ON THE CLIENT THREAD and answers only once it has run, so when the call
+     * returns the hand already holds slot 1's contents. Those change only when the SERVER sets the
+     * slot ({@code client_slot_set}), and nothing between here and the use press does — so a slot 1
+     * that is not empty now stays not empty however long anyone waits. The server learns the index
+     * from {@code CPacketHeldItemChange}, which leaves on the same connection ahead of the press.</p>
+     *
+     * <p>A world that is not ready here is a failure of whatever link brought the pilot here, not a
+     * state to sit through, and the refusal says which of the two it met.</p>
+     */
+    private void holdNothing() throws Exception {
         bot().selectHotbar(1);
-        String heldId = null;
-        for (int attempt = 0; attempt < budget; attempt++) {
-            bot().waitTicks(5);
-            JsonObject items = bot().reportPlayerItems();
-            if (isWorldReady(items) && items.has("held")) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    return;
-                }
-            }
-        }
-        assertTrue("ARRANGEMENT: the pilot's main hand must be EMPTY so the use press reaches the "
-                + "block rather than being consumed by a held item; held=" + heldId,
+        JsonObject items = bot().reportPlayerItems();
+        boolean ready = isWorldReady(items);
+        String heldId = ready && items.has("held")
+                ? items.getAsJsonObject("held").get("id").getAsString() : null;
+        requireArranged("the pilot's main hand must be EMPTY so the use press reaches the block"
+                        + " rather than being consumed by a held item; worldReady=" + ready
+                        + " held=" + heldId + " items=" + items,
                 heldId != null && heldId.isEmpty());
     }
 
@@ -1140,37 +1403,47 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** The last find-seat answer, verbatim, so a failed aim can name the probe that went quiet. */
     private String lastSeatProbe = "";
 
-    /** The ship the client is aboard, found from his own position, or from where it last was. */
-    private String findSeatAboard(int dim, int budget) throws Exception {
-        for (int attempt = 0; attempt < budget; attempt++) {
-            JsonObject state = bot().reportState();
-            if (isWorldReady(state)) {
-                lastSeatProbe = findSeatFrom(dim, state.get("playerX").getAsDouble(),
-                        state.get("playerY").getAsDouble(), state.get("playerZ").getAsDouble());
-                if (rememberAnchor(lastSeatProbe)) {
-                    return lastSeatProbe;
-                }
-            }
-            if (shipAnchorHint != null) {
-                lastSeatProbe = findSeatFrom(dim, shipAnchorHint[0], shipAnchorHint[1],
-                        shipAnchorHint[2]);
-                if (rememberAnchor(lastSeatProbe)) {
-                    return lastSeatProbe;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        return lastSeatProbe;
-    }
+    /** The PHYSICS id of the craft this run assembled, from the registry record of its own spawn. */
+    private String builtShipVsId;
 
-    private String findSeatFrom(int dim, double x, double y, double z) throws Exception {
-        return exec("artest vs find-seat " + dim + " " + (int) Math.floor(x)
-                + " " + (int) Math.floor(y) + " " + (int) Math.floor(z));
+    /**
+     * The DURABLE name of that same craft, read off its flight computer's NBT on the pad. Every
+     * crossing re-mints the physics id and carries this one through verbatim, so this is the handle
+     * that still works three crossings later.
+     */
+    private String builtShipName;
+
+    /**
+     * The seat of the ship the client is aboard — resolved from that ship's NAME, in whichever world
+     * it is now in.
+     *
+     * <p>This used to probe from the pilot's own position and then, failing that, from {@link
+     * #shipAnchorHint} — a REMEMBERED earlier pose. That second probe asks "what craft is nearest a
+     * place this one has left", which the yard lookup always answers with something; and the aim loop
+     * re-ran it every attempt, so the ship under the crosshair could change identity mid-aim. What is
+     * still waited for is the crossing finishing — on production's own record of the named hull
+     * becoming usable in that world.</p>
+     */
+    // NOT on PilotSeat, and deliberately: this returns a `find-seat` reply on the happy path and a
+    // `vs ship-uuid` reply when the hull cannot be named, through one variable — two producers with
+    // one type, which is its own defect and not one to be rewritten blind while converting another.
+    private String findSeatAboard(int dim, int budget) throws Exception {
+        assertNotNull("the build must have named its ship before the arrival side can ask about it",
+                builtShipName);
+        // A LINK: the hull carrying that name becoming USABLE in THIS cell is `ship_usable`, which
+        // carries the dimension (it was `ship_spawned`, which does not, that made this a loop) —
+        // awaited over the chain, so a load undone by an unload does not answer. A usable hull is one
+        // whose blocks are in its subspace, which is what the seat search needs. Then ONE search.
+        String hullId = ShipIdentity.awaitPhysicsIdOf(this::exec,
+                new Events(this::exec, bot()::waitTicks), dim, builtShipName, budget * 5);
+        lastSeatProbe = exec("artest vs find-seat " + dim + " id " + hullId);
+        rememberAnchor(lastSeatProbe);
+        return lastSeatProbe;
     }
 
     /** Keep the ship's live world position from a successful probe; false when it found nothing. */
     private boolean rememberAnchor(String probe) {
-        double[] anchor = readTripleD(probe, SHIP_WORLD);
+        double[] anchor = readTripleD(probe, "shipWorldX", "shipWorldY", "shipWorldZ");
         if (anchor == null) {
             return false;
         }
@@ -1181,22 +1454,20 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** One press of the jump key, edge-triggered the way the real keyboard delivers it. */
     private void pressJumpKey() throws Exception {
         bot().setKey(Keyboard.KEY_J, true);
+        // STIMULUS: down across client ticks, then up across client ticks — so that a second press
+        // right after this one is a new edge and not a continuation of this one.
         bot().waitTicks(5);
         bot().setKey(Keyboard.KEY_J, false);
+        // STIMULUS: the key-up half of the edge.
         bot().waitTicks(20);
     }
 
-    /** The chat the player can actually read, flattened and lower-cased for substring checks. */
-    private String chatText(int limit) throws Exception {
-        JsonObject chat = bot().reportChat(limit);
-        StringBuilder sb = new StringBuilder();
-        if (chat != null && chat.has("lines")) {
-            for (int i = 0; i < chat.getAsJsonArray("lines").size(); i++) {
-                sb.append(chat.getAsJsonArray("lines").get(i).getAsString()).append(" | ");
-            }
-        }
-        return sb.toString().toLowerCase(Locale.ROOT);
-    }
+    // `chatText` lived here: the client's last N chat lines flattened and lower-cased, for substring
+    // checks. Its two callers are gone — one asserted that the pilot is TOLD the ship is armed (the
+    // arming itself is read off the navigation computer), and one decided which JUMP BRANCH the run
+    // took by looking for the words "spooling" and "confirm" (the trigger names its own outcome, and
+    // `jump_press_decided` carries it). A milestone whose control flow turned on prose turned on the
+    // language file.
 
     /**
      * The dimension of the NEAREST body in this cell the ship may descend onto, or MIN_VALUE.
@@ -1210,20 +1481,40 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * be descended into another.</p>
      */
     private static int nearestDescendTargetDim(String bodies) {
-        Matcher m = BODY.matcher(bodies);
         int best = Integer.MIN_VALUE;
         long bestDistance = Long.MAX_VALUE;
-        while (m.find()) {
-            if (!"true".equals(m.group(3))) {
-                continue;
-            }
-            long distance = Long.parseLong(m.group(7));
+        for (String body : descendTargets(bodies)) {
+            Reply b = Reply.of("one cell body", body);
+            long distance = (long) b.number(BODY_DISTANCE);
             if (distance < bestDistance) {
                 bestDistance = distance;
-                best = Integer.parseInt(m.group(1));
+                best = b.integer(BODY_DIM);
             }
         }
         return best;
+    }
+
+    /**
+     * Every descend-target body of every ship's cell in a {@code space bodies} reply.
+     *
+     * <p>The nesting is walked rather than flattened by one expression over the whole reply: bodies
+     * belong to a CELL and the reply carries them per ship, so a scan of the raw text pools one
+     * ship's cell with another's the moment two are ledgered.</p>
+     */
+    private static java.util.List<String> descendTargets(String bodies) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String ship : Reply.of("artest space bodies", bodies).objectArray(SHIPS)) {
+            for (String body : Reply.of("one ship's cell", ship).objectArray(CELL_BODIES)) {
+                // the producer always writes this flag on every body element — it is appended
+                // beside the name in the same builder — so an element without it is a broken
+                // probe, not a body that is no descend target. A default here would answer "this
+                // cell offers nothing to descend to" for a reply that never said so.
+                if (Reply.of("one cell body", body).bool(BODY_DESCEND_TARGET)) {
+                    out.add(body);
+                }
+            }
+        }
+        return out;
     }
 
     /**
@@ -1237,16 +1528,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * scalar is the one thing he cannot do.</p>
      */
     private static long[] nearestDescendTargetVector(String bodies) {
-        Matcher m = BODY.matcher(bodies);
         long[] best = null;
-        while (m.find()) {
-            if (!"true".equals(m.group(3))) {
-                continue;
-            }
-            long distance = Long.parseLong(m.group(7));
+        for (String body : descendTargets(bodies)) {
+            Reply b = Reply.of("one cell body", body);
+            long distance = (long) b.number(BODY_DISTANCE);
             if (best == null || distance < best[3]) {
-                best = new long[]{Long.parseLong(m.group(4)), Long.parseLong(m.group(5)),
-                        Long.parseLong(m.group(6)), distance};
+                best = new long[]{(long) b.arrayNumber(BODY_BEARING, 0),
+                        (long) b.arrayNumber(BODY_BEARING, 1),
+                        (long) b.arrayNumber(BODY_BEARING, 2), distance};
             }
         }
         return best;
@@ -1260,6 +1549,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private String flyBurst(int key, int burstTicks, int cutTicks) throws Exception {
         bot().holdKey(key);
         try {
+            // STIMULUS: the burst.
             bot().waitTicks(burstTicks);
         } finally {
             bot().releaseKey(key);
@@ -1277,6 +1567,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private String cutThrottle(int cutTicks) throws Exception {
         bot().holdKey(Keyboard.KEY_X);
         try {
+            // STIMULUS: the throttle cut, held for the caller's cutTicks.
             bot().waitTicks(cutTicks);
         } finally {
             bot().releaseKey(Keyboard.KEY_X);
@@ -1327,8 +1618,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // Walk up to the machine: two blocks south of it on the pad, face-on, well inside the
         // server's interaction reach.
         double standX = builderPos[0] + 0.5, standZ = builderPos[2] + 2.5;
-        exec("tp @a " + standX + " " + (BY + 1) + " " + standZ + " 0 0");
-        bot().waitTicks(20);
+        standOnThePad(standX, standZ, builderPos);
         emptyTheHand();
 
         // The builder's own stored energy, read before a single button is pressed. The fixture
@@ -1347,25 +1637,49 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "all. screen=\"" + screen + "\"",
                 screen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
 
+        // Marked BEFORE the Scan click: the first thing awaited below is the scan pass ENDING, and
+        // that pass starts on this click.
+        Events spawnEvents = new Events(this::exec, bot()::waitTicks);
+        long spawnMark = spawnEvents.markInstrumented();
         bot().clickButtonById(BUTTON_SCAN);
 
-        int ships = 0;
-        int assembleBudget = (int) (90 * TestTimeouts.factor());
-        for (int attempt = 0; attempt < assembleBudget && ships < 1; attempt++) {
-            // The screen can be knocked shut (a chunk reload, a stray escape); re-open it rather
-            // than clicking into nothing, so a red names the machine and not a lost window.
-            if (screenOf(bot().reportState()).isEmpty()) {
-                screen = openBuilderScreenByRealKeyPress(builderPos, budget);
-                if (!screen.startsWith("zmaster587.libVulpes.inventory.GuiModular")) {
-                    continue;
-                }
-            }
-            bot().clickButtonById(BUTTON_BUILD);
-            bot().waitTicks(40);
-            Matcher m = COUNT.matcher(exec("artest vs ship-count-all 0"));
-            if (m.find()) {
-                ships = Integer.parseInt(m.group(1));
-            }
+        // TWO PASSES, each waited for on the machine's own record. Scan and Build each start a TIMED
+        // pass that the assembler counts down one tick at a time, and production IGNORES a Build
+        // press made while a pass is still running — it returns on `isScanning()` with nothing said.
+        // The loop that stood here pressed Build every forty ticks for up to 3 600, so the press that
+        // "took" was simply the first to land after the scan had happened to end, and each press
+        // before it was thrown away unseen. `assembler_pass_finished` IS that end, so Build is
+        // pressed once, after it.
+        //
+        // The loop defended itself with "VS builds the ship on its OWN thread, off the game loop,
+        // so a busy box needs more ticks". That is false of this tree: the physics mod's spawn queue
+        // is drained on the game thread inside a world tick. The defence was a claim, and it hid
+        // that the wait had never been for the ship at all — it was for the scan.
+        String machinePos = builderPos[0] + "," + builderPos[1] + "," + builderPos[2];
+        spawnEvents.awaitRecordWithFields(spawnMark, "assembler_pass_finished",
+                "the SCAN pass must end before Build can take - production discards a Build press"
+                        + " made during it", PASS_TICKS,
+                "pos", machinePos, "building", "false");
+        // The screen is READ, not re-opened: the loop re-opened it when "something knocked it shut",
+        // which turned a closed screen — a player who could no longer press Build — into a retry.
+        String openScreen = screenOf(bot().reportState());
+        assertTrue("the assembler's screen must still be open for the Build press; a screen that"
+                        + " closed on its own between Scan and Build leaves the player unable to"
+                        + " build at all. screen=\"" + openScreen + "\"",
+                openScreen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
+        bot().clickButtonById(BUTTON_BUILD);
+
+        // The registry's own record of the ship being added — not a count of ships in dim 0, which
+        // could not say WHICH ship, while the record names it.
+        String spawned = spawnEvents.await(spawnMark, "ship_spawned",
+                "the BUILD pass must add a ship to the registry", PASS_TICKS);
+        int ships = Events.countRecordsWithField(spawned, "vsShip");
+        // WHICH ship. The record names it, and a count that threw the name away sent every later
+        // question about "the ship" back to a position or to "the first settled row in the cell".
+        // It is kept from the moment of creation.
+        String namedShip = Events.lastField(spawned, "vsShip");
+        if (namedShip != null && !namedShip.isEmpty()) {
+            builtShipVsId = namedShip;
         }
         bot().closeScreen();
         return ships;
@@ -1377,24 +1691,33 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * press, so a red names the hop that failed rather than merely the outcome.
      */
     private String openBuilderScreenByRealKeyPress(int[] builderPos, int budget) throws Exception {
-        Aim aim = new Aim();
-        for (int attempt = 0; attempt < 6; attempt++) {
-            String already = screenOf(bot().reportState());
-            if (!already.isEmpty()) {
-                return already;
-            }
-            aim = aimAtWorldBlock(builderPos, 0.5, 0.5, 0.5, budget);
-            assertAimed(aim, builderPos, "rocket assembler", "rocketbuilder");
-            pressUse();
-            for (int waited = 0; waited < 6; waited++) {
-                bot().waitTicks(10);
-                String screen = screenOf(bot().reportState());
-                if (!screen.isEmpty()) {
-                    return screen;
-                }
-            }
+        String already = screenOf(bot().reportState());
+        if (!already.isEmpty()) {
+            return already;
         }
-        return "";
+        // Same pair as openConsoleFromTheDeck: aim-and-press is the stimulus, `client_gui_opened`
+        // is the link, and the crosshair is re-derived every press because the machine's world
+        // position is read fresh.
+        Aim[] aim = {new Aim()};
+        long mark = clientEvents().mark();
+        try {
+            clientEvents().awaitMatching(mark, "client_gui_opened",
+                    reply -> Events.records(reply).size()
+                            > Events.recordsWhere(reply, "gui", "none").size(),
+                    "opening any screen", "the rocket assembler must open", 360,
+                    () -> {
+                        aim[0] = aimAtWorldBlock(builderPos, 0.5, 0.5, 0.5, budget);
+                        assertAimed(aim[0], builderPos, "rocket assembler", "rocketbuilder");
+                        pressUse();
+                    }, 60);
+        } catch (ArrangementFailure alreadyTyped) {
+            // As above: the aim's premises are arrangement READS, and this catch must not turn a
+            // client with no world into "a machine that swallows the press" three frames up.
+            throw alreadyTyped;
+        } catch (AssertionError neverOpened) {
+            return "";
+        }
+        return screenOf(bot().reportState());
     }
 
     // ---- aiming ---------------------------------------------------------------------------------
@@ -1406,23 +1729,42 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         String diagnosis = "";
     }
 
-    /** Aim at a block that stands in the world (the assembler), from wherever the bot is standing. */
+    /**
+     * Aim at a block that stands in the world (the assembler), from wherever the bot is standing.
+     *
+     * <p>CLASSIFIED, and it stays a loop: the loop IS the stimulus, not an observation of one. Each
+     * pass aims the client and then reads back what the crosshair actually hit — a feedback
+     * controller terminating on its own goal state. Delete it and the aiming stops HAPPENING, not
+     * merely stop being watched. No link could replace it either: nothing in production DECIDES
+     * that a crosshair is on a block, the pick is re-derived every frame from where the player
+     * stands, and where he stands is still settling.</p>
+     */
     private Aim aimAtWorldBlock(int[] target, double tx, double ty, double tz, int budget)
             throws Exception {
         double[] targetWorld = {target[0] + tx, target[1] + ty, target[2] + tz};
         Aim aim = new Aim();
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
+        // STIMULUS: each pass aims and reads back the pick, ending on the goal state — the argument
+        // is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
             JsonObject state = bot().reportState();
-            if (!isWorldReady(state)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            // A READ, not a wait: this used to sleep five ticks and retry when the client reported
+            // no world. The player is already standing in this world when the aim starts, so a
+            // client without one is a finding about the arrangement, not a reason to keep aiming.
+            requireArranged("the client must have its world while it aims at the assembler: " + state,
+                    isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
             aim.distSq = look(targetWorld, px, py, pz);
-            bot().waitTicks(5);
+            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
+            // pick. MEASURED that one is not enough (2026-09-23: a one-tick step turned all three aim
+            // controllers red, deterministically, the pick read back from a look tens of degrees off
+            // the aim; five, alone, green). The mechanism is NOT established — Minecraft.runTick does
+            // call getMouseOver inside the tick the harness counts, so the lag is somewhere after
+            // it (the deck look, the physics mod's ship pick, the render frame). An open question,
+            // not a settled number.
+            bot().waitTicks(AIM_STEP_TICKS);
             aim.mouseOver = bot().reportMouseOver();
             if (isUnderCrosshair(aim.mouseOver, target)) {
                 break;
@@ -1446,6 +1788,19 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return aimAt(0, afcSub, targetSub, standOffset, tx, ty, tz, budget);
     }
 
+    /**
+     * The aboard form: stand on the ship's own deck, then aim at a block of it.
+     *
+     * <p>CLASSIFIED for the same reason as {@link #aimAtWorldBlock}, plus one of its own — every
+     * pass re-derives the stand AND the target from the ship's LIVE pose, because a freshly
+     * assembled craft is still settling and a position computed once against a stale pose puts the
+     * bot in mid-air beside a ship that has moved. So each iteration performs two stimuli (a
+     * teleport and an aim) and reads the result back; it is a chase, not a wait.</p>
+     *
+     * <p>Note the order INSIDE the iteration, which is load-bearing: the teleport comes first and
+     * the aim last. A server teleport arrives as a pos-look packet and vanilla applies it with
+     * {@code setPositionAndRotation}, so an aim set before it would be overwritten by it.</p>
+     */
     private Aim aimAt(int dim, int[] afcSub, int[] targetSub, int[] standOffset,
                       double tx, double ty, double tz, int budget) throws Exception {
         Aim aim = new Aim();
@@ -1454,36 +1809,49 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         double[] targetWorld = null;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
 
+        // STIMULUS: each pass stands and aims against the ship's live pose, ending on the goal
+        // state — the argument is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
+            // READS, not waits — all three checks below used to sleep five ticks and retry. The ship
+            // was resolved before this method was called (its computer's subspace address is an
+            // argument), so a ship that then reports no world pose, or whose points will not map to
+            // world coordinates, went away mid-arrangement; and a same-world teleport cannot cost the
+            // client its world. Each is news about the arrangement, not a pause.
             double[] shipAnchor = readTripleD(
-                    dim == 0 ? findSeat() : findSeatAboard(dim, budget), SHIP_WORLD);
-            if (shipAnchor == null) {
-                bot().waitTicks(5);
-                continue;
-            }
+                    dim == 0 ? findSeat().raw() : findSeatAboard(dim, budget),
+                    "shipWorldX", "shipWorldY", "shipWorldZ");
+            requireArranged("the ship was resolved before aiming began, so it must still report a"
+                    + " world pose in dim " + dim + " on attempt " + attempt, shipAnchor != null);
             // The floor of the stand cell is the deck's top surface, so the feet go at its y with a
             // sliver of clearance rather than at its centre.
             standWorld = toWorld(dim, shipAnchor, standSub, 0.5, 0.05, 0.5);
             targetWorld = toWorld(dim, shipAnchor, targetSub, tx, ty, tz);
-            if (standWorld == null || targetWorld == null) {
-                bot().waitTicks(5);
-                continue;
-            }
+            requireArranged("the ship's stand and target points must map to world coordinates off"
+                    + " its reported pose " + java.util.Arrays.toString(shipAnchor),
+                    standWorld != null && targetWorld != null);
+            // The stand REACHING the client is a link: the reading below is of where he was put, and
+            // twenty ticks stood here as a guess at the trip.
+            long standMark = clientEvents().mark();
             exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
-            bot().waitTicks(20);
+            ClientEvents.awaitPlacedNear(clientEvents(), standMark, standWorld[0], standWorld[2],
+                    "the stand on the deck square must reach the client before he aims from it",
+                    CLIENT_FLOOR_BUDGET_TICKS);
 
             JsonObject state = bot().reportState();
-            if (!isWorldReady(state)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            requireArranged("a same-world teleport must leave the client's world ready: " + state,
+                    isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
             aim.distSq = look(targetWorld, px, py, pz);
-            // The raytrace is refreshed once per client tick (Minecraft.runTick), so the new
-            // rotation needs at least one tick before objectMouseOver can reflect it.
-            bot().waitTicks(5);
+            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
+            // pick. MEASURED that one is not enough (2026-09-23: a one-tick step turned all three aim
+            // controllers red, deterministically, the pick read back from a look tens of degrees off
+            // the aim; five, alone, green). The mechanism is NOT established — Minecraft.runTick does
+            // call getMouseOver inside the tick the harness counts, so the lag is somewhere after
+            // it (the deck look, the physics mod's ship pick, the render frame). An open question,
+            // not a settled number.
+            bot().waitTicks(AIM_STEP_TICKS);
 
             aim.mouseOver = bot().reportMouseOver();
             if (isUnderCrosshair(aim.mouseOver, targetSub)) {
@@ -1517,7 +1885,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     /** Every hop of the aim, asserted separately, so a red says which one broke. */
     private void assertAimed(Aim aim, int[] target, String what, String blockNeedle) {
-        assertTrue("ARRANGEMENT: the bot must OBSERVABLY stand within the server's interaction reach "
+        requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "
                 + "of the " + what + ", or the press is discarded before the block ever sees it."
                 + aim.diagnosis, aim.distSq < MAX_INTERACT_DIST_SQ);
         assertTrue("HOP 1 (aim at the " + what + "): the client's crosshair must resolve to a BLOCK. "
@@ -1546,6 +1914,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     /** One real use-key press, the way the mouse handler writes it. */
     private void pressUse() throws Exception {
         bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
     }
@@ -1554,40 +1923,146 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     /** Warm the chunks, clear the site and stand the craft up; returns the assembler's position. */
     private int[] placeFixture() throws Exception {
-        int cx1 = (BX - 2) >> 4, cz1 = (BZ - 2) >> 4;
-        int cx2 = (BX + 7) >> 4, cz2 = (BZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
-                exec("artest fill 0 " + (BX - 2) + " " + (BY + 1) + " " + (BZ - 2)
-                        + " " + (BX + 7) + " " + (BY + 12) + " " + (BZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
-        String fixture = exec("artest fixture rocket 0 " + BX + " " + BY + " " + BZ + " " + VARIANT);
-        assertTrue("ARRANGEMENT: fixture (" + VARIANT + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
-        return new int[]{Integer.parseInt(bp.group(1)), Integer.parseInt(bp.group(2)),
-                Integer.parseInt(bp.group(3))};
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. The site stands in the open-air band, so the
+        // craft rests on the launchpad the fixture lays at its own Y and this ASSERTS rather than
+        // digging a shaft. The height covers the tallest variant in the catalogue plus the deck the
+        // player walks to reach its console; the climb to the orbit line is production's business
+        // and no pre-clear could cover it.
+        int[] bp = RocketFixture.placeAt(site, this::exec, VARIANT, 2, 20,
+                "the jump-capable craft, and the deck the player boards and works it from");
+        return new int[]{bp[0], bp[1],
+                bp[2]};
+    }
+
+    /**
+     * How long the client is given to receive the pad it is standing on, in ticks.
+     *
+     * <p>A bounded poll and not a link, because what is being waited for is not a decision this game
+     * publishes: it is a chunk arriving over a socket. The blind spot is named at the failure — a
+     * budget that runs out cannot tell a slow client from a client that will never be sent the
+     * chunk, and the reply printed there is what distinguishes them.</p>
+     */
+    private static final int CLIENT_FLOOR_BUDGET_TICKS = 200;
+
+    /** The aim controllers' step between an aim and the read of the pick — measured, see its use. */
+    private static final int AIM_STEP_TICKS = 5;
+
+    /**
+     * Put the player on the launchpad AND ESTABLISH THAT HE IS ON IT — measured through the CLIENT,
+     * which is the side that decides whether he falls.
+     *
+     * <p><b>Why this is not a teleport and a wait.</b> Vanilla player movement is client
+     * authoritative: the server takes the position the client sends. After a long teleport the
+     * client has no blocks at the destination for some number of ticks, and a client with no blocks
+     * under it is falling — so the server is handed a fall and accepts it. The pad's chunk is
+     * force-loaded on the SERVER by {@code requireClear}; nothing in that says the client has it.</p>
+     *
+     * <p><b>This was invisible until the fixtures left the landscape.</b> At the old {@code y = 64}
+     * the pad rested ON the terrain, so a player who never received the pad came to rest at the same
+     * height anyway and every assertion downstream was satisfied. Lifting the site into the open-air
+     * band removed the floor that was doing the work, and the leg failed with the player 87 blocks
+     * below a machine the test's own prints show standing there with full energy. The arrangement
+     * was never right; it was being propped up by ground nobody had named.</p>
+     *
+     * <p>The FIRST read is taken before the teleport and is a control: the client is 600 blocks away
+     * at that point, so it must NOT have the pad. Without it, a green here could mean "the wait
+     * works" or "the client had the chunk all along", and those are different worlds.</p>
+     */
+    private void standOnThePad(double standX, double standZ, int[] builderPos) throws Exception {
+        final int floorX = builderPos[0], floorY = by, floorZ = builderPos[2] + 2;
+
+        JsonObject before = bot().blockState(floorX, floorY, floorZ);
+        System.out.println("[M1] client's view of the pad BEFORE the teleport (600 blocks away): "
+                + before);
+
+        long floorMark = clientEvents().mark();
+        exec("tp @a " + standX + " " + (by + 1) + " " + standZ + " 0 0");
+
+        // The client receiving the pad's CHUNK is a record — `chunk_data_applied`, carrying the
+        // chunk it applied — so this waits for that instead of asking the block how it looks. The
+        // poll it replaces could not tell "the chunk has not arrived" from "it arrived and the
+        // block is something else", and both were reported as the pad never coming.
+        JsonObject floor = bot().blockState(floorX, floorY, floorZ);
+        boolean alreadyThere = floor.has("block")
+                && floor.get("block").getAsString().contains("launchpad");
+        if (!alreadyThere) {
+            try {
+                clientEvents().awaitRecordWithFields(floorMark, "chunk_data_applied",
+                        "the client must be sent the chunk holding the pad it is stood on",
+                        CLIENT_FLOOR_BUDGET_TICKS,
+                        "cx", String.valueOf(floorX >> 4), "cz", String.valueOf(floorZ >> 4));
+            } catch (AssertionError neverApplied) {
+                // Not a verdict here: the arrangement check below owns the failure and prints what
+                // the client actually holds, which is the part that says WHICH fault this is.
+                System.out.println("[M1] no chunk_data_applied for the pad's chunk: "
+                        + neverApplied.getMessage());
+            }
+            floor = bot().blockState(floorX, floorY, floorZ);
+        }
+        requireArranged("the CLIENT must receive the launchpad it is being stood on before anything"
+                        + " is measured at the machine. Until it arrives the client sees air under"
+                        + " itself, falls, and the server takes the fall — the pad being present on"
+                        + " the SERVER is not the question. Asked at (" + floorX + "," + floorY + ","
+                        + floorZ + ") for " + CLIENT_FLOOR_BUDGET_TICKS + " ticks; last reply "
+                        + floor + ". A reply with \"loaded\":false is a chunk that never arrived,"
+                        + " which is a different failure from a block that arrived as something else",
+                floor != null && floor.has("block")
+                        && floor.get("block").getAsString().contains("launchpad"));
+        System.out.println("[M1] client has the pad: " + floor);
+
+        // Put him back on it. The first teleport happened while the client had nothing to stand on,
+        // so wherever he has fallen to is where he is; this is the one that lands on a floor both
+        // sides agree exists.
+        long backOnThePad = clientEvents().mark();
+        exec("tp @a " + standX + " " + (by + 1) + " " + standZ + " 0 0");
+        ClientEvents.awaitPlacedNear(clientEvents(), backOnThePad, standX, standZ,
+                "the client must apply the teleport back onto the pad it now has",
+                CLIENT_FLOOR_BUDGET_TICKS);
+
+        JsonObject state = bot().reportState();
+        // `playerY`, checked against the harness rather than assumed: a `y` that is absent reads as
+        // NaN, every comparison against NaN is false, and the assertion would then fail for the
+        // wrong reason — or, written the other way round, pass on a field nobody ever sent.
+        double y = state.has("playerY") ? state.get("playerY").getAsDouble() : Double.NaN;
+        requireArranged("and he must STAY on it: the client reports y=" + y + " where the pad's"
+                        + " surface is " + (by + 1) + ". Still falling here means the floor arrived"
+                        + " and something else is taking him off it. state=" + state,
+                Math.abs(y - (by + 1)) < STANDING_ON_THE_PAD_BLOCKS);
     }
 
     /** Server-side clear plus a client-observed empty hand (a held stack eats the use press). */
     private void emptyTheHand() throws Exception {
-        exec("clear @a");
+        // The clear is recorded: handleSetSlot writes `client_slot_set` with item = "empty". The
+        // link says the clear REACHED the client; the read below says the HAND is the slot meant,
+        // which the record does not distinguish in the burst `clear` produces. Neither is a poll.
+        // (This class cannot use the shared base's emptyTheHandOnClient — it extends the harness's
+        // own AbstractClientE2ETest, not the tier's shared base.)
+        // SELECT FIRST, then READ, and only then clear — a `clear` on an already-empty hand changes
+        // no slot, so the change-gated recorder writes nothing and a link on it would wait out its
+        // budget for a record that was never owed. (Measured 2026-09-21 on the tier's own copy of
+        // this helper, which reddened six classes before the read was put first.)
         bot().selectHotbar(0);
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            JsonObject items = bot().reportPlayerItems();
-            if (isWorldReady(items) && items.has("held")) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    return;
-                }
-            }
-            bot().waitTicks(5);
+        JsonObject beforeClear = bot().reportPlayerItems();
+        if (beforeClear.has("held") && beforeClear.getAsJsonObject("held").has("id")
+                && beforeClear.getAsJsonObject("held").get("id").getAsString().isEmpty()) {
+            return;
         }
-        assertTrue("ARRANGEMENT: the bot's main hand must be EMPTY so the use press reaches the "
+        long clearMark = clientEvents().mark();
+        exec("clear @a");
+        try {
+            clientEvents().awaitField(clearMark, "client_slot_set", "item", "empty",
+                    "the clear must reach the client before the hand can be read as empty", 200);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clearMark, "client_slot_set"),
+                    "client_slot_set", "the client's own slot writes must be observed at all before"
+                            + " an absent one can be read as a clear that never landed");
+            requireArranged("the clear never reached the client: " + never.getMessage(), false);
+        }
+        JsonObject items = bot().reportPlayerItems();
+        String heldId = isWorldReady(items) && items.has("held")
+                ? items.getAsJsonObject("held").get("id").getAsString() : null;
+        requireArranged("the bot's main hand must be EMPTY so the use press reaches the "
                 + "block rather than being consumed by a held item; held=" + heldId,
                 heldId != null && heldId.isEmpty());
     }
@@ -1598,6 +2073,177 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return clientHarness.bot();
     }
 
+    /** The CLIENT's own ordered event log, behind the same verbs the server's is read through.
+     *  {@link Events#mark} refuses a sequence unless a recorder is subscribed, which is what keeps
+     *  an empty log later from reading as "it never happened". */
+    private Events clientEvents() {
+        return ClientEvents.of(bot());
+    }
+
+    /**
+     * Wait until the CLIENT's own world is one of {@code dimList}, and answer which — read off the
+     * client's record of the worlds its connection has built, never off a sample of where it is now.
+     *
+     * <p><b>Why one helper and not the four this class had.</b> "Which world is the pilot in" was
+     * asked four different ways here: the entry leg read {@code client_dimension_changed} records,
+     * the jump and latch legs sampled {@code reportWeather().dim}, the descent leg went through
+     * {@code clientDim()}, and each carried its own retry loop. Three of those are a SAMPLE of a
+     * value, and a sample cannot see a world that was built and left between two reads — which is
+     * precisely what a bounce, a refused arrival or a double hand-off looks like. The records can,
+     * and every other client class in this suite already reads them.</p>
+     *
+     * <p>The LAST record is the answer: a crossing can legitimately build more than one world on the
+     * way (the pilot is carried through), and where he ended up is the newest one that matches.</p>
+     *
+     * @param dimList the accepted dimensions, comma-delimited AND comma-terminated at both ends
+     *                ({@code ",4,5,"}), which is how this file already carries a slot-dim set
+     */
+    private int awaitClientWorld(long clientMark, String dimList, String what, int budget)
+            throws Exception {
+        return awaitClientWorldMatching(clientMark, dim -> dimList.contains("," + dim + ","),
+                "a change into one of " + dimList, what, budget);
+    }
+
+    /**
+     * The same, for the legs whose question is not a LIST but a relation — "out of the cell he
+     * jumped into", "off the planet he landed on". Those cannot name their destination in advance:
+     * a descent's target world may not have existed when the leg began.
+     */
+    private int awaitClientWorldMatching(long clientMark, java.util.function.IntPredicate wanted,
+                                         String matching, String what, int budget) throws Exception {
+        // An EMPTY window is NOT YET, whatever the caller's predicate says about a missing number: it
+        // used to read no record as MIN_VALUE and hand that to the predicate, so "a change OUT of
+        // cell N" was satisfied before the client had changed at all — and returned MIN_VALUE as the
+        // world it landed in.
+        String reply = clientEvents().awaitMatching(clientMark, "client_dimension_changed",
+                records -> Events.lastField(records, "dim") != null
+                        && wanted.test(readIntOr(Events.lastField(records, "dim"),
+                                Integer.MIN_VALUE)),
+                matching, what, budget);
+        return readIntOr(Events.lastField(reply, "dim"), Integer.MIN_VALUE);
+    }
+
+    /**
+     * The pilot is STILL IN HIS SEAT after a world transition — read from the client, and explained
+     * by the server's own record of who was put on what and who was taken off it.
+     *
+     * <p><b>What this replaces, and why the replacement is stronger.</b> Three legs each sampled
+     * {@code reportRidingEntity} twice with a wait between, on the reasoning that a seat lost in a
+     * crossing "can read riding=true for one packet-lag frame, but never twice in a row". That
+     * catches a flicker; it cannot catch the thing a crossing actually does wrong. A crossing
+     * LEGITIMATELY takes the crew off and puts them back — so two trues in a row are equally
+     * satisfied by a pilot who was dismounted and re-seated correctly, by one who was dismounted and
+     * re-seated onto the WRONG mount, and by one whose dismount simply happened between the two
+     * samples and was answered after them. The mount chain distinguishes all three, and its
+     * {@code by} field names the caller that un-seated him.</p>
+     *
+     * <p>The verdict is "he is riding now, AND no dismount since the mark is left unanswered by a
+     * later mount". An untouched pilot — no records at all — passes, because never having been moved
+     * is the strongest form of still being seated.</p>
+     */
+    private JsonObject assertStillSeated(Events log, long serverMark, long clientMark, String what,
+                                         int budget) throws Exception {
+        // WAIT FOR THE CHAIN TO END SEATED, not for its first link. A crossing takes the crew off and
+        // puts them back, so the client's own records across one arrival read
+        // dismount -> mount -> dismount -> mount; a wait that returns on the first `mount` reads the
+        // world in the MIDDLE of that, and the read after it can honestly say riding:false.
+        // *Measured 2026-09-13, by writing it the short way first*: the jump leg failed with the
+        // server holding the pilot on the arrived hull (`ridingEntityId:2299`) and the client
+        // rendering `riding:false` — which is not the defect it looks like, it is a question asked
+        // one link too early. The old two-samples-in-a-row poll covered this by accident.
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> endsSeated(clientEvents(), clientMark),
+                    "the client's own mount chain ENDING in a mount", what
+                            + " — and the CLIENT has to perform the re-seat, not merely be told about"
+                            + " it", budget * 5);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed AT ALL before an"
+                            + " absent one can be read as a re-seat the client never performed");
+            throw new AssertionError(never.getMessage()
+                    + " | the client's own chain: mounts=" + clientEvents().since(clientMark, "mount")
+                    + " ||| dismounts=" + clientEvents().since(clientMark, "dismount"), never);
+        }
+        JsonObject riding = bot().reportRidingEntity();
+        assertTrue(what + " clientRiding=" + riding
+                        + " serverRiding=" + exec("artest player riding-entity")
+                        + " | he was taken off a mount and not put back. The SERVER's chain —"
+                        + " dismounts=" + log.since(serverMark, "dismount")
+                        + " ||| mounts=" + log.since(serverMark, "mount"),
+                isRiding(riding) && endsSeated(log, serverMark));
+        return riding;
+    }
+
+    /**
+     * Whether {@code log}'s mount chain since {@code mark} ENDS seated: either nothing touched him,
+     * or every dismount was answered by a LATER mount.
+     *
+     * <p>Compared by sequence, which is the only thing that carries order once the rings are per
+     * type. "Nothing touched him" passes on purpose: never having been moved is the strongest form of
+     * still being seated, and the caller established he was seated when it took the mark.</p>
+     */
+    private static boolean endsSeated(Events log, long mark) throws Exception {
+        long lastMount = readLongOr(Events.lastField(log.since(mark, "mount"), "seq"),
+                Long.MIN_VALUE);
+        long lastDismount = readLongOr(Events.lastField(log.since(mark, "dismount"), "seq"),
+                Long.MIN_VALUE);
+        return lastDismount == Long.MIN_VALUE || lastMount > lastDismount;
+    }
+
+    /**
+     * Wait for THE CLIENT to have seated the bot itself, and hand back what it renders.
+     *
+     * <p><b>The client's own mount HAS a record</b>, and this file said otherwise for a while.
+     * {@code MixinEntityPositionWriters} sits in the COMMON mixin list, and {@code TestTrace.record}
+     * routes by the entity's own {@code world.isRemote} — so a {@code startRiding} performed on the
+     * client is written to the CLIENT's log, carrying the verdict its caller got back
+     * ({@code ok:true} for a mount that took). Polling {@code reportRidingEntity} instead watches the
+     * SHADOW of that act: it cannot say when the mount happened, cannot distinguish a refusal from a
+     * mount that has not replicated, and on expiry reports the last sample as though it were the
+     * finding.</p>
+     *
+     * <p>An absent record is separated from a dead recorder before it is allowed to mean anything —
+     * a silence here is read as "the client never seated him", and that reading is only available
+     * once the roster says somebody was listening.</p>
+     */
+    private JsonObject awaitClientMount(long clientMark, String what, int budget, String diagnosis)
+            throws Exception {
+        try {
+            clientEvents().awaitMatching(clientMark, "mount",
+                    seen -> Events.countRecords(seen, "ok", "true") > 0,
+                    "a mount the client's own startRiding accepted (ok:true)", what, budget * 5);
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(clientMark, "mount"),
+                    "entity_mount_writes", "the client's own mounts must be observed AT ALL before an"
+                            + " absent one can be read as a seating the client never performed");
+            throw new AssertionError(never.getMessage()
+                    + " | the client renders: " + bot().reportRidingEntity()
+                    + " | every mount the SERVER has recorded this boot: "
+                    + new Events(this::exec, bot()::waitTicks).since(0L, "mount") + diagnosis, never);
+        }
+        // Read ONCE, now that the link says the mount happened: a settled state, not a wait.
+        return bot().reportRidingEntity();
+    }
+
+    /** A record's numeric field as a sequence, or {@code fallback} when it is absent. */
+    private static long readLongOr(String value, long fallback) {
+        try {
+            return value == null ? fallback : Long.parseLong(value.trim());
+        } catch (NumberFormatException notANumber) {
+            return fallback;
+        }
+    }
+
+    /** A record's numeric field, or {@code fallback} when it is absent — {@code null} is not 0. */
+    private static int readIntOr(String value, int fallback) {
+        try {
+            return value == null ? fallback : Integer.parseInt(value.trim());
+        } catch (NumberFormatException notANumber) {
+            return fallback;
+        }
+    }
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", serverHarness.client().execute(cmd));
     }
@@ -1606,24 +2252,46 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return exec("artest energy stored 0 " + pos[0] + " " + pos[1] + " " + pos[2]);
     }
 
-    /** The seat's subspace address, its flight computer's, and the ship's live world position. */
-    private String findSeat() throws Exception {
-        return exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
+    /**
+     * The seat's subspace address, its flight computer's, and the ship's live world position — of
+     * the craft this run BUILT, named by the registry record its assembly wrote.
+     */
+    private PilotSeat findSeat() throws Exception {
+        assertNotNull("the build must have named its ship before anything asks about that ship's"
+                + " seat", builtShipVsId);
+        return PilotSeat.byId(this::exec, 0, builtShipVsId);
     }
 
     /**
-     * A subspace point mapped into the world through the ship's own transform. {@code shipAnchor} is
-     * any world point aboard that ship — the seat's live position serves.
+     * A subspace point mapped into the world through the ship's own transform.
+     *
+     * <p>Mapped through the craft this run BUILT, translated into {@code dim}'s physics id from the
+     * durable name — every crossing re-mints that id, and this method is called on both sides of
+     * three of them. {@code shipAnchor} no longer selects the ship: it is kept as the proof that the
+     * craft's live pose was resolved at all, since mapping points for a ship nobody could find would
+     * answer with numbers about nothing.</p>
      */
     private double[] toWorld(int dim, double[] shipAnchor, int[] sub, double dx, double dy, double dz)
             throws Exception {
         if (shipAnchor == null) {
             return null;
         }
-        lastToWorldProbe = exec("artest vs to-world " + dim + " " + shipAnchor[0] + " "
-                + shipAnchor[1] + " " + shipAnchor[2] + " " + (sub[0] + dx) + " " + (sub[1] + dy)
-                + " " + (sub[2] + dz));
-        return readTripleD(lastToWorldProbe, TO_WORLD);
+        String hull = exec("artest vs ship-uuid " + dim + " " + builtShipName);
+        // absence is the answer, as in the seat probe above: the loop waits for a hull to
+        // carry the name.
+        String namedHull = Reply.of("artest vs ship-uuid", hull).textOr("id", null);
+        // absence is the answer for `found` too, and for a shape the line above does not reach:
+        // the verb answers `{"error":"world not loaded"}` — with no `found` at all — for a cell
+        // whose world is not up, which is one of the states this mapping is asked in. Both arms
+        // here are non-failing (the caller reads a null as "could not map"), so a refusal would
+        // be the only thing able to end the run, and it would end it about the instrument.
+        if (!Reply.of(hull).boolOr("found", false) || namedHull == null) {
+            lastToWorldProbe = hull;
+            return null;
+        }
+        lastToWorldProbe = exec("artest vs to-world " + dim + " id " + namedHull
+                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
+        return readTripleD(lastToWorldProbe, "worldX", "worldY", "worldZ");
     }
 
     /** The last subspace-to-world mapping answer, so a null world point can name what refused it. */
@@ -1659,13 +2327,22 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     }
 
     /** A {@code sx_sy_sz} cell key as the three sector arguments a probe takes. */
+    /**
+     * The cell key as the probe's {@code cell-info} takes it: VERBATIM. The probe reads a key form
+     * whenever the argument carries a level separator, and a nested key such as
+     * {@code 19_0_0.213_0_0} (a moon's own cell inside its planet's zone) has no numeric form at all —
+     * splitting it on underscores handed the probe {@code 19 0 0.213 0 0}, which it read as the
+     * PARENT cell and answered about the planet instead of the moon.
+     */
     private static String cellArgs(String cellKey) {
-        return cellKey.replace('_', ' ');
+        return cellKey;
     }
 
-    private static String readString(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        return m.find() ? m.group(1) : null;
+    private static String readString(String json, String field) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(field, null);
     }
 
     /** A probe field that may come back quoted or as a bare {@code null}, as a plain string. */
@@ -1673,26 +2350,57 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         return raw == null ? "" : raw.replace("\"", "");
     }
 
-    private static int readInt(String json, Pattern p, int fallback) {
-        Matcher m = p.matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : fallback;
+    private static int readIntOr(String json, String field, int fallback) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
+        return Reply.of(json).integerOr(field, fallback);
     }
 
-    private static int[] readTriple(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        if (!m.find()) {
+    /**
+     * Three coordinate fields of one reply, read by NAME.
+     *
+     * <p>The regex this replaces matched all three in one expression — {@code
+     * "seatX":…,"seatY":…,"seatZ":…} — so it held only while the producer kept them adjacent and in
+     * that order, and answered "no seat" the moment anything was written between them.</p>
+     */
+    private static int[] readTriple(String json, String xField, String yField, String zField) {
+        Reply reply = Reply.of(json);
+        if (!reply.has(xField) || !reply.has(yField) || !reply.has(zField)) {
             return null;
         }
-        return new int[]{Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+        return new int[]{reply.integer(xField), reply.integer(yField), reply.integer(zField)};
     }
 
-    private static double[] readTripleD(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        if (!m.find()) {
+    /** A slot-dim list as the comma-joined text the membership checks here are written against. */
+    private static String joinInts(int[] values) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) {
+                out.append(',');
+            }
+            out.append(values[i]);
+        }
+        return out.toString();
+    }
+
+    /** @see #readTriple */
+    private static double[] readTripleD(String json, String xField, String yField, String zField) {
+        Reply reply = Reply.of(json);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double x = reply.numberOr(xField, Double.NaN);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double y = reply.numberOr(yField, Double.NaN);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        double z = reply.numberOr(zField, Double.NaN);
+        if (Double.isNaN(x) || Double.isNaN(y) || Double.isNaN(z)) {
             return null;
         }
-        return new double[]{Double.parseDouble(m.group(1)), Double.parseDouble(m.group(2)),
-                Double.parseDouble(m.group(3))};
+        return new double[]{x, y, z};
     }
 }

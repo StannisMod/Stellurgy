@@ -1,10 +1,9 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -19,38 +18,39 @@ import static org.junit.Assert.assertTrue;
  */
 public class TerraformingSmokeTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern ORIG = Pattern.compile("\"originalAtmosphere\":(-?\\d+)");
-    private static final Pattern CURRENT = Pattern.compile("\"currentAtmosphere\":(-?\\d+)");
+    private static final String ORIG = "originalAtmosphere";
+    private static final String CURRENT = "currentAtmosphere";
 
     @Test
     public void mutationKeepsOriginalDensityIntact() throws Exception {
         String before = String.join("\n", client().execute("artest terraforming info 0"));
         assertTrue("baseline terraforming info errored: " + before,
-                !before.contains("\"error\""));
+                !Reply.of(before).has("error"));
 
-        Matcher om = ORIG.matcher(before), cm = CURRENT.matcher(before);
-        assertTrue("could not extract original/current from: " + before, om.find() && cm.find());
-        int original = Integer.parseInt(om.group(1));
-        int currentBefore = Integer.parseInt(cm.group(1));
+        Reply baseline = Reply.of("artest terraforming info", before);
+        assertTrue("could not extract original/current from: " + before,
+                baseline.has(ORIG) && baseline.has(CURRENT));
+        int original = baseline.integer(ORIG);
+        int currentBefore = baseline.integer(CURRENT);
 
         int target = currentBefore == 25 ? 75 : 25;
         try {
             String set = String.join("\n",
                     client().execute("artest terraforming set-density 0 " + target));
             assertTrue("set-density did not stick: " + set,
-                    set.contains("\"ok\":true") && set.contains("\"newDensity\":" + target));
+                    Reply.of(set).ok() && String.valueOf(target).equals(Reply.of(set).text("newDensity")));
 
             String after = String.join("\n", client().execute("artest terraforming info 0"));
-            Matcher om2 = ORIG.matcher(after), cm2 = CURRENT.matcher(after);
+            Reply mutated = Reply.of("artest terraforming info", after);
             assertTrue("could not extract from post-mutation: " + after,
-                    om2.find() && cm2.find());
+                    mutated.has(ORIG) && mutated.has(CURRENT));
 
             assertEquals("currentAtmosphere did not move to " + target + ": " + after,
-                    target, Integer.parseInt(cm2.group(1)));
+                    target, mutated.integer(CURRENT));
             assertEquals("originalAtmosphere unexpectedly mutated: " + after,
-                    original, Integer.parseInt(om2.group(1)));
+                    original, mutated.integer(ORIG));
             assertTrue("proxylists not reported: " + after,
-                    after.contains("\"proxyInitialized\""));
+                    Reply.of(after).has("proxyInitialized"));
         } finally {
             client().execute("artest terraforming set-density 0 " + currentBefore);
         }

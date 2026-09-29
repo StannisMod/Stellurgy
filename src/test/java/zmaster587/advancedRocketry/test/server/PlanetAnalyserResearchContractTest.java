@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -39,11 +40,10 @@ import static org.junit.Assert.assertTrue;
 public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest {
 
     private static final int CX = 6200;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 6200;
 
-    private static final Pattern COMPOSITION_PAT =
-            Pattern.compile("\"composition\":(\\d+)");
+    private static final String COMPOSITION_PAT = "composition";
 
     /**
      * assembled analyser increments the chip's COMPOSITION
@@ -55,7 +55,7 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         // 1) Assemble the analyser via fixture.
         String fixture = exec("artest fixture multiblock planet-analyser 0 "
                 + CX + " " + CY + " " + CZ);
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Validate structure — required so libVulpes' integrateTile populates
         // dataCables[] (the field the analyser reads from).
@@ -63,7 +63,7 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
                 + CX + " " + CY + " " + CZ);
         assertTrue("analyser must validate (precondition for dataCables[] "
                         + "to be populated): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
 
         // 2) Pre-fill all 3 data hatches with COMPOSITION data via the
         // databus-set-data probe. Which physical hatch maps to
@@ -75,7 +75,7 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
                     + " COMPOSITION 30");
             assertTrue("databus-set-data must succeed at dx=" + dx
                             + ": " + seed,
-                    seed.contains("\"ok\":true"));
+                    Reply.of(seed).ok());
         }
 
         // 3) Inject 100k RF into the power-input plug at (cx+1, cy-1, cz).
@@ -84,19 +84,19 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         String energy = exec("artest energy inject 0 "
                 + (CX + 1) + " " + (CY - 1) + " " + CZ + " 100000");
         assertTrue("energy inject must succeed: " + energy,
-                energy.contains("\"ok\":true"));
+                Reply.of(energy).ok());
 
         // 4) Drop an AsteroidChip with UUID=1L into slot 0 of the controller.
         String load = exec("artest infra astrobody-load-chip 0 "
                 + CX + " " + CY + " " + CZ);
         assertTrue("astrobody-load-chip must succeed: " + load,
-                load.contains("\"ok\":true"));
+                Reply.of(load).ok());
 
         // Baseline: chip should report composition=0 before research.
         String pre = exec("artest infra astrobody-chip-data 0 "
                 + CX + " " + CY + " " + CZ);
         assertTrue("chip-data must succeed pre-research: " + pre,
-                pre.contains("\"ok\":true"));
+                Reply.of(pre).ok());
         int compositionBefore = extract(pre, COMPOSITION_PAT);
         assertTrue("chip must start at composition=0 (fresh chip): "
                         + " before=" + compositionBefore + " pre=" + pre,
@@ -108,7 +108,7 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         String setR = exec("artest infra astrobody-set-research 0 "
                 + CX + " " + CY + " " + CZ + " 1");
         assertTrue("astrobody-set-research must succeed: " + setR,
-                setR.contains("\"ok\":true"));
+                Reply.of(setR).ok());
 
         // 6) Force-tick the controller 30 times. Per maxResearchTime=10
         // each research cycle is 10 ticks of ramp + 1 increment;
@@ -116,13 +116,13 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         String tick = exec("artest tile force-tick 0 "
                 + CX + " " + CY + " " + CZ + " 30");
         assertTrue("force-tick must succeed: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // 7) Read chip data, assert composition grew by >= 1.
         String post = exec("artest infra astrobody-chip-data 0 "
                 + CX + " " + CY + " " + CZ);
         assertTrue("chip-data must succeed post-research: " + post,
-                post.contains("\"ok\":true"));
+                Reply.of(post).ok());
         int compositionAfter = extract(post, COMPOSITION_PAT);
         assertTrue("chip composition must have incremented from 0 after "
                         + "30 ticks of analyser research (the player-visible "
@@ -138,9 +138,9 @@ public class PlanetAnalyserResearchContractTest extends AbstractSharedServerTest
         return String.join("\n", client().execute(cmd));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

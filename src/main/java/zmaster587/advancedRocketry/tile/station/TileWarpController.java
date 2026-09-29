@@ -497,11 +497,11 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
 
                 for (EntityPlayer player2 : world.getPlayers(EntityPlayer.class, input -> SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(input.getPosition()) == station)) {
                     ARAdvancements.ALL_SHE_GOT.trigger((EntityPlayerMP) player2);
-                    if (!DimensionManager.hasReachedWarp)
+                    if (!DimensionManager.getInstance().hasReachedWarp())
                         ARAdvancements.FLIGHT_OF_PHOENIX.trigger((EntityPlayerMP) player2);
                 }
 
-                DimensionManager.hasReachedWarp = true;
+                DimensionManager.getInstance().setReachedWarp(true);
             }
         } else if (id == TAB_SWITCH && !world.isRemote) {
             tabModule.setTab(nbt.getShort("tab"));

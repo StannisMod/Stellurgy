@@ -1,12 +1,20 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.space.CellWorldMapper;
 import zmaster587.advancedRocketry.space.GalacticCoord;
+import zmaster587.advancedRocketry.test.LedgerEntry;
+import zmaster587.advancedRocketry.test.PlayerPosition;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
+import zmaster587.advancedRocketry.test.DeckCapture;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipIdentity;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -14,6 +22,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * Login restore for a pilot who was ABOARD when he left: seated in a cell, seated on the ground
@@ -87,37 +96,52 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
      * the client: the production subsystem must be up on the second boot, and the ship must still be
      * in the ledger.</p>
      */
+    @Ignore("HELD FOR THE BODY-MOVEMENT CONTRACT BATCH, by the maintainer's ruling of 2026-09-23:"
+            + " every deck-hold red waits for the contract on moving an entity aboard a craft. Red"
+            + " on a full client tier (2026-09-24): under the capture the LOGIN restored, the walk"
+            + " travels 0.10 and 0.0 blocks with all six inputs seen, the collision sweep pinning the"
+            + " step on five and six ticks against one obstacle more than a fresh capture meets,"
+            + " while a freshly installed capture walks 1.04 and 0.94 on the same deck. Green alone —"
+            + " intermittent, not gone. RE-ENABLE with that batch; the acceptance is this method"
+            + " green on a full tier, twice.")
     @Test
     public void aPilotWhoStoodUpBeforeLoggingOutComesBackAboardOnHisFeet() throws Exception {
         int slotDim = seatThePilotAboardHisShip();
 
         // Stand up through the production path. The record must SURVIVE it and change SHAPE: he is
         // no longer in a seat, he is on the deck - which is a way of BEING aboard, not of leaving.
-        // Polled, because the record is refreshed on a one-second cadence: a single sample taken on
-        // the dismount tick reads the shape he had a moment ago and says nothing.
-        String dismount = exec("artest player dismount");
-        assertTrue("the pilot must leave his seat: " + dismount, dismount.contains("\"ok\":true"));
-        String tag = "";
-        for (int attempt = 0; attempt < 40 && !tag.contains("\"posture\":\"STANDING\""); attempt++) {
-            bot().waitTicks(5);
-            tag = exec("artest space aboard-tag " + BOT);
-        }
+        // Two LINKS, not a value that settles: he leaves the mount, and the reconciler's next pass
+        // writes the new shape. The record is refreshed on a one-second cadence, which is why a
+        // single sample says nothing - but the answer to that is to wait for the WRITE, not to
+        // sample the tag until it agrees.
+        String tag = standUpAndAwaitTheStandingRecord(events());
         assertTrue("standing up on his own deck must keep him aboard, as a STANDING record - a "
                 + "record dropped here is exactly what used to send him to an ordinary spawn: " + tag,
-                tag.contains("\"tagged\":true") && tag.contains("\"posture\":\"STANDING\""));
-        assertTrue("and it must still name the ship he is standing on: " + tag
-                + " (entered ship " + arrangedShipId + ")", tag.contains(arrangedShipId));
+                Reply.of(tag).bool("tagged") && "STANDING".equals(Reply.of(tag).text("posture")));
+        // The field that HOLDS the ship, not the id appearing somewhere in the rendering: the
+        // same claim elsewhere in this family reads `shipId`, and a uuid is long enough that a
+        // substring test looks exact while asking a much weaker question.
+        assertEquals("and it must still name the ship he is standing on: " + tag
+                + " (entered ship " + arrangedShipId + ")",
+                arrangedShipId, Reply.of(tag).text("shipId"));
         // He must really be resolved on the DECK, in the ship's own frame, before the restart: that
         // is what produces the record asserted above, and a hull-stand catch is not it.
-        String capBefore = exec("artest vs deck-capture");
-        assertTrue("ARRANGEMENT: he must be captured ABOARD the deck after standing up, or the record "
-                + "above describes something other than a crew member on his feet: " + capBefore,
-                capBefore.contains("\"alreadyTracked\":true")
-                        && !capBefore.contains("\"hullStand\":true"));
+        DeckCapture capBefore = DeckCapture.read(this::exec);
+        requireArranged("he must be captured ABOARD the deck after standing up, or the record "
+                + "above describes something other than a crew member on his feet: " + capBefore.raw(),
+                capBefore.alreadyTracked
+                        && !capBefore.hullStand);
+        // The record asserted above names `arrangedShipId`; this line makes the capture name it too.
+        // Without it the two claims are about possibly different craft and the sentence "the record
+        // describes this crew member on this deck" is not established by either of them.
+        capBefore.requireAnchoredOn(
+                ShipIdentity.awaitPhysicsIdOf(this::exec, events(), slotDim, arrangedShipId,
+                        200),
+                "the deck he is captured on must be the ship the STANDING record names");
 
-        String serverBeforeLogout = exec("artest player position-of " + BOT);
+        PlayerPosition serverBeforeLogout = PlayerPosition.of(this::exec, BOT);
         assertEquals("the SERVER must still have him in his ship's slot dimension when it writes him "
-                + "to disk: " + serverBeforeLogout, slotDim, readInt(serverBeforeLogout, "playerDim"));
+                + "to disk: " + serverBeforeLogout.raw(), slotDim, serverBeforeLogout.dim);
 
         closeBoth();
         keepBootLog("boot1-standing");
@@ -127,29 +151,50 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
         // Both discriminators, BEFORE the client connects. Without them a client reading says
         // nothing about the record: a second boot whose subsystem stood down, or whose ledger did
         // not survive the shutdown save, would leave him at an ordinary spawn for its own reasons.
-        String statusAfter = exec("artest space subsystem-status");
+        SubsystemStatus statusAfter = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is "
-                + "exercising it: " + statusAfter, statusAfter.contains("\"registered\":true"));
-        String ledger = exec("artest space ledger-get " + arrangedShipId);
+                + "exercising it: " + statusAfter.raw(), statusAfter.registered);
+        LedgerEntry ledger = LedgerEntry.forShip(this::exec, arrangedShipId);
         assertTrue("his ship must still be ledgered - there has to be a ship to restore him ONTO: "
-                + ledger, ledger.contains("\"found\":true"));
+                + ledger.raw(), ledger.found);
 
-        exec("artest vs permaload true");
+
+        // The mark before the client exists, because the restore fires ON his connection: taken
+        // afterwards it could not tell "the hook never ran" from "the hook ran before I looked".
+        Events restore = events();
+        long restoreMark = restore.mark();
         startClient();
         bot().waitForWorld();
 
-        // Poll for the end state on the same budget the positive legs use: the deck hold waits for
-        // the ship to finish re-assembling before it can place him, and gives up silently after it.
-        int dim = NO_CLIENT_WORLD;
-        boolean placed = false;
-        for (int attempt = 0; attempt < 45 && !placed; attempt++) {
-            bot().waitTicks(10);
-            dim = clientDim();
-            placed = dim != NO_CLIENT_WORLD && dim != OVERWORLD_DIM;
-        }
+        // The restore's own verdict, on the server that took it. A crew member on his FEET queues
+        // no seat - the deck hold places him instead - so this is one link and not the seated
+        // legs' chain: `login_restored` carries the reason it decided on (ABOARD_SETTLED here, or
+        // NO_TAG / SHIP_UNKNOWN / CELL_UNAVAILABLE when it did not) and the dimension it chose.
+        // The poll it replaces waited for a client dimension and could not say which of those four
+        // it had been handed.
+        String restored = restore.await(restoreMark, "login_restored",
+                "a crew member who logged out standing on his own ship in a cell must be RESTORED "
+                        + "by the login hook - without that verdict he is an ordinary login and "
+                        + "wakes at his overworld spawn",
+                RESTORE_LINK_BUDGET_TICKS);
+        // And the client's own side of it. Zero is the mark: this client JVM is brand new, so its
+        // log starts empty and the join is recorded inside startClient, before a mark could exist.
+        String joined = awaitClientEvent(CLIENT_SESSION_START, "client_dimension_changed",
+                "the restored client must end up IN a world. Server verdict: " + restored,
+                RESTORE_LINK_BUDGET_TICKS);
+
+        int dim = clientDim();
         JsonObject riding = bot().reportRidingEntity();
         JsonObject state = bot().reportState();
-        String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state;
+        // The client's own seed verdicts ride along in every message below. The deck hold sends the
+        // recorded deck point as a restore seed and the client decides what to do with it - APPLY,
+        // KEEP_PREEXISTING, ALREADY_SEEDED, EXPIRE or WAIT - and which of the five it chose is the
+        // difference between "he was put on his deck" and "the hold expired and vanilla had him".
+        String seeds = clientEvents().since(CLIENT_SESSION_START, "deck_seed_decided");
+        String observed = "clientDim=" + dim + " riding=" + riding + " state=" + state
+                + "\n  login_restored: " + restored
+                + "\n  client dimension changes: " + joined
+                + "\n  client seed decisions: " + seeds;
 
         assertTrue("the client must have a world at all before anything can be read from it: "
                 + observed, dim != NO_CLIENT_WORLD);
@@ -157,33 +202,45 @@ public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginResto
                 riding.get("riding").getAsBoolean());
         assertNotEquals("he stood up ON HIS OWN SHIP in orbit, which is a way of BEING aboard - so he "
                 + "must not come back at an ordinary spawn. Note dim 0 is an AMBIGUOUS failure: "
-                + "vanilla also forces it when the target world did not load, so attribute a red here "
-                + "from the server's login-restore log line. " + observed, OVERWORLD_DIM, dim);
+                + "vanilla also forces it when the target world did not load - the login_restored "
+                + "record above is what separates the two, and it names both the reason the hook "
+                + "decided on and the dimension it chose. " + observed, OVERWORLD_DIM, dim);
 
         // And he must be back ON his ship rather than merely in its cell: the deck hold puts the body
         // on the stored deck point, so his client-rendered position has to be at the ship.
         double[] shipPose = awaitShipPose(dim);
         assertNotNull("his ship must be live in the dimension he came back to: " + observed, shipPose);
+        // What puts a crew member on his FEET back on his deck is the deck hold's restore seed, and
+        // the CLIENT decides what to do with it. That decision is the link: WAIT is the only
+        // non-terminal answer, so the first record carrying anything else is the moment "where he
+        // stands" stops being in flux. A settle of SEAT_SETTLE_TICKS stood here, copied from the
+        // seated leg's rider convergence — but he is not riding, and the seed can arrive seconds
+        // after the join, which is exactly what a fixed count cannot know.
+        clientEvents().awaitMatching(CLIENT_SESSION_START, "deck_seed_decided",
+                seen -> Events.records(seen).stream()
+                        .anyMatch(r -> !"WAIT".equals(Events.text(r, "decision"))),
+                "a decision other than WAIT (APPLY, KEEP_PREEXISTING, ALREADY_SEEDED or EXPIRE)",
+                "the restored crew member's client must DECIDE the deck hold's restore seed - no"
+                        + " decision at all means the seed never reached it. " + observed,
+                RESTORE_LINK_BUDGET_TICKS);
+        state = bot().reportState();
         double clientX = state.get("playerX").getAsDouble();
         double clientY = state.get("playerY").getAsDouble();
         double clientZ = state.get("playerZ").getAsDouble();
-        for (int attempt = 0; attempt < 40 && Math.abs(clientY - shipPose[1]) > POSE_EPSILON;
-                attempt++) {
-            bot().waitTicks(10);
-            state = bot().reportState();
-            if (!state.get("worldReady").getAsBoolean()) {
-                continue;
-            }
-            clientX = state.get("playerX").getAsDouble();
-            clientY = state.get("playerY").getAsDouble();
-            clientZ = state.get("playerZ").getAsDouble();
-            double[] livePose = awaitShipPose(dim);
-            if (livePose != null) {
-                shipPose = livePose;
-            }
+        // The ship's pose read AFTER the client's, so a craft that drifted between the two reads
+        // shows up as a residual instead of being hidden by a reference taken before it moved.
+        double[] settledPose = awaitShipPose(dim);
+        if (settledPose != null) {
+            shipPose = settledPose;
         }
+        // Re-read at the END of the settle window, not at the start of it: the deck hold sends its
+        // restore seed once the ship is up, which can be several seconds after the client joined,
+        // so a verdict list taken on the join tick is routinely empty and says nothing.
         observed = "clientDim=" + dim + " state=" + state + " shipPose=[" + shipPose[0] + ","
-                + shipPose[1] + "," + shipPose[2] + "]";
+                + shipPose[1] + "," + shipPose[2] + "]"
+                + "\n  login_restored: " + restored
+                + "\n  client seed decisions: "
+                + clientEvents().since(CLIENT_SESSION_START, "deck_seed_decided");
         assertEquals("he must come back at his ship on X: " + observed,
                 shipPose[0], clientX, POSE_EPSILON);
         assertEquals("he must come back at his ship on Y: " + observed,

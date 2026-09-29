@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -58,13 +59,13 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServerTest {
 
-    private static final Pattern WAS_ENABLED = Pattern.compile("\"wasEnabledLastTick\":(true|false)");
-    private static final Pattern BLOCK_ON = Pattern.compile("\"blockStateOn\":(true|false)");
-    private static final Pattern HAS_VALID = Pattern.compile("\"hasValidBiomeChanger\":(true|false)");
-    private static final Pattern REDSTONE = Pattern.compile("\"redstonePower\":(true|false)");
-    private static final Pattern SAT_ID = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String WAS_ENABLED = "wasEnabledLastTick";
+    private static final String BLOCK_ON = "blockStateOn";
+    private static final String HAS_VALID = "hasValidBiomeChanger";
+    private static final String REDSTONE = "redstonePower";
+    private static final String SAT_ID = "id";
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 11000;
     private static final int CX_VALID = 11500;
     private static final int CX_NO_RS = 12000;
@@ -82,7 +83,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String redstone = exec("artest place 0 " + (x + 1) + " " + y + " " + z
                 + " minecraft:redstone_block");
         assertTrue("redstone_block place failed: " + redstone,
-                redstone.contains("\"placed\":true"));
+                Reply.of(redstone).bool("placed"));
 
         // One force-tick is enough — update() reads redstone + slot 0
         // then mutates was_enabled_last_tick and the block state in the
@@ -132,7 +133,7 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terraformingTerminal place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
         // Apply redstone — proves the gate is on the chip side, not on
         // power side.
         exec("artest place 0 " + (x + 1) + " " + y + " " + z + " minecraft:redstone_block");
@@ -158,27 +159,26 @@ public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServe
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:terraformingTerminal");
         assertTrue("terraformingTerminal place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         // Build + register a SatelliteBiomeChanger on dim 0.
         String build = exec("artest satellite-builder build 0 biomeChanger");
         assertTrue("biomeChanger satellite build failed: " + build,
-                build.contains("\"ok\":true"));
-        Matcher m = SAT_ID.matcher(build);
-        if (!m.find()) {
+                Reply.of(build).ok());
+        Reply mReply = Reply.of(build);
+        if (!mReply.has(SAT_ID)) {
             return -1L;
         }
-        long satId = Long.parseLong(m.group(1));
+        long satId = Long.parseLong(mReply.text(SAT_ID));
 
         String load = exec("artest terraforming terminal-load-chip 0 " + x + " " + y + " " + z
                 + " " + satId);
-        assertTrue("terminal-load-chip failed: " + load, load.contains("\"ok\":true"));
+        assertTrue("terminal-load-chip failed: " + load, Reply.of(load).ok());
         return satId;
     }
 
-    private static String extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return m.group(1);
+    private static String extract(String src, String field) {
+        String value = Reply.of(src).text(field);
+        return value;
     }
 }

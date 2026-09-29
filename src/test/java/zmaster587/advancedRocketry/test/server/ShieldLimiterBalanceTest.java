@@ -3,8 +3,10 @@ package zmaster587.advancedRocketry.test.server;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.ShieldTile;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -23,7 +25,7 @@ import static org.junit.Assert.assertTrue;
 public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
 
     @Test
     public void cableCarriesMoreThanASingleEmitterAbsorbs() throws Exception {
@@ -31,15 +33,15 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
         place("affs:shield_cable", x, z);
         place("affs:field_generator", x + 1, z);
 
-        String cable = exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
-        String emitter = exec("artest shield read " + DIM + " " + (x + 1) + " " + Y + " " + z);
-        assertTrue("expected a cable at the probed position:\n" + cable, cable.contains("\"kind\":\"cable\""));
-        assertTrue("expected an emitter at the probed position:\n" + emitter,
-                emitter.contains("\"kind\":\"emitter\""));
+        ShieldTile cable = ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
+        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, x + 1, Y, z);
+        assertTrue("expected a cable at the probed position:\n" + cable.raw(), cable.is(ShieldTile.CABLE));
+        assertTrue("expected an emitter at the probed position:\n" + emitter.raw(),
+                emitter.is(ShieldTile.EMITTER));
 
-        long cableThroughput = readLong(cable, "throughput");
-        long emitterThroughput = readLong(emitter, "throughput");
-        assertTrue("emitter throughput not reported:\n" + emitter, emitterThroughput > 0);
+        long cableThroughput = cable.cableThroughput();
+        long emitterThroughput = emitter.rechargeThroughput();
+        assertTrue("emitter throughput not reported:\n" + emitter.raw(), emitterThroughput > 0);
 
         assertTrue("a single cable (" + cableThroughput + ") does not carry more than one emitter absorbs ("
                         + emitterThroughput + "): pipe-sizing binds before emitter placement does, which "
@@ -49,13 +51,12 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
 
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
-        assertTrue("failed to place " + block + ": " + resp, resp.contains("\"placed\":true"));
+        assertTrue("failed to place " + block + ": " + resp, Reply.of(resp).bool("placed"));
     }
 
     private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     private static String exec(String command) throws Exception {

@@ -1,9 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MissionCompletion;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -44,45 +48,35 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern MISSION_ID = Pattern.compile("\"missionId\":(-?\\d+)");
+    private static final String MISSION_ID = "missionId";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
     private int buildAndAssembleRocket(int baseX) throws Exception {
-        int baseY = 64;
-        int baseZ = 600;
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-        ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
+        final FixtureSite site = FixtureSite.openAir(0, baseX, 600);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     private long startGasMission(int rocketId, long duration) throws Exception {
         String start = ok(client().execute(
                 "artest mission start-gas 0 " + rocketId + " " + duration + " oxygen 10"));
-        assertFalse("start-gas must not error: " + start, start.contains("\"error\""));
-        Matcher mm = MISSION_ID.matcher(start);
-        assertTrue("missing missionId: " + start, mm.find());
-        return Long.parseLong(mm.group(1));
+        assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
+        Reply mmReply = Reply.of(start);
+        assertTrue("missing missionId: " + start, mmReply.has(MISSION_ID));
+        return Long.parseLong(mmReply.text(MISSION_ID));
     }
 
     /** Places a monitoringStation block in the SAME chunk as the rocket
@@ -95,7 +89,7 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
      *  baseZ) — chunk (baseX>>4, baseZ>>4) is the rocket's chunk. */
     private int[] placeMonitoringStation(int baseX, int baseZ) throws Exception {
         int ix = baseX;
-        int iy = 66;
+        int iy = FixtureSite.OPEN_AIR_Y;
         int iz = baseZ;
         ok(client().execute("artest place 0 " + ix + " " + iy + " " + iz
                 + " advancedrocketry:monitoringStation"));
@@ -112,17 +106,17 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int[] ipos = placeMonitoringStation(baseX, 600);
         String link = ok(client().execute("artest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertFalse("link-infra must not error: " + link, link.contains("\"error\""));
+        assertFalse("link-infra must not error: " + link, Reply.of(link).has("error"));
         assertTrue("link-infra must report linked=true: " + link,
-                link.contains("\"linked\":true"));
+                Reply.of(link).bool("linked"));
 
         String state = ok(client().execute("artest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertFalse("infra-state must not error: " + state, state.contains("\"error\""));
+        assertFalse("infra-state must not error: " + state, Reply.of(state).has("error"));
         assertTrue("infra must report hasMission=true after link: " + state,
-                state.contains("\"hasMission\":true"));
+                Reply.of(state).bool("hasMission"));
         assertTrue("infra must report this mission's id: " + state,
-                state.contains("\"missionId\":" + mid));
+                String.valueOf(mid).equals(Reply.of(state).text("missionId")));
     }
 
     /** After complete-now the production loop in MissionGasCollection
@@ -144,25 +138,25 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int[] ipos = placeMonitoringStation(baseX, 600);
         String link = ok(client().execute("artest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertTrue("setup link-infra must succeed: " + link, link.contains("\"linked\":true"));
+        assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked"));
 
         // Sanity: pre-completion tile reports the mission.
         String preState = ok(client().execute("artest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertTrue("pre-completion infra must report hasMission=true: " + preState,
-                preState.contains("\"hasMission\":true"));
+                Reply.of(preState).bool("hasMission"));
 
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
-        assertTrue("completion must fire: " + cargo, cargo.contains("\"completed\":true"));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
 
         // Post-completion tile.mission cleared by production's unlinkMission().
         String postState = ok(client().execute("artest mission infra-state 0 "
                 + ipos[0] + " " + ipos[1] + " " + ipos[2]));
         assertFalse("infra-state must not error: " + postState,
-                postState.contains("\"error\""));
+                Reply.of(postState).has("error"));
         assertTrue("infra must report hasMission=false after completion: " + postState,
-                postState.contains("\"hasMission\":false"));
+                (!Reply.of(postState).bool("hasMission")));
     }
 
     /** Rocket-side half of the lifecycle (MissionGasCollection.java:80-86):
@@ -191,26 +185,37 @@ public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest
         int[] ipos = placeMonitoringStation(baseX, 600);
         String link = ok(client().execute("artest mission link-infra " + mid
                 + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
-        assertTrue("setup link-infra must succeed: " + link, link.contains("\"linked\":true"));
+        assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked"));
 
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertTrue("completion must fire: " + cargo, cargo.contains("\"completed\":true"));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
 
         String relink = ok(client().execute("artest mission rocket-relink-state 0"));
         assertFalse("rocket-relink-state must not error: " + relink,
-                relink.contains("\"error\""));
+                Reply.of(relink).has("error"));
         // At least one EntityStationDeployedRocket exists in launch dim
         // post-completion — production's onMissionComplete spawned it.
         assertFalse("deployedCount must be > 0 after gas completion: " + relink,
-                relink.contains("\"deployedCount\":0"));
+                (Reply.of(relink).integer("deployedCount") == 0));
         // Production looped infrastructureCoords and called
         // rocket.linkInfrastructure for each entry. The placed monitoring
         // station coord must appear in some StationDeployedRocket's
         // infrastructureCoords list. Test for the exact triple as JSON
         // array to avoid matching a coincidental coord-with-shared-axis.
-        String expected = "[" + ipos[0] + "," + ipos[1] + "," + ipos[2] + "]";
-        assertTrue("rocket infrastructureCoords must contain "
-                        + expected + ": " + relink,
-                relink.contains(expected));
+        // Walked as the structure it is: the reply holds a rocket per element, each with its own
+        // `infrastructure` array of [x,y,z]. Built as a needle it depended on the producer's
+        // rendering of a coordinate — a space after a comma, or a double for a whole number, and
+        // the claim reads as the link never having been made.
+        boolean linked = false;
+        for (String rocket : Reply.of("artest mission rocket-relink-state", relink)
+                .objectArray("rockets")) {
+            for (int[] coord : Reply.of("one deployed rocket", rocket)
+                    .blockPosArray("infrastructure")) {
+                linked |= coord[0] == ipos[0] && coord[1] == ipos[1] && coord[2] == ipos[2];
+            }
+        }
+        assertTrue("rocket infrastructureCoords must contain ["
+                        + ipos[0] + "," + ipos[1] + "," + ipos[2] + "]: " + relink, linked);
     }
 }

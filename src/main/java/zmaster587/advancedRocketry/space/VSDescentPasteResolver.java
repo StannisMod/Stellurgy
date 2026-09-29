@@ -78,7 +78,7 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
 
     @Override
     public DescentController.Landing resolve(int slotDim, double[] shipWorldPos, int destPlanetDim,
-                                             int laneIndex) {
+                                             int laneIndex, java.util.UUID shipId) {
         WorldServer src = DimensionManager.getWorld(slotDim);
         WorldServer dst = DimensionManager.getWorld(destPlanetDim);
         if (src == null || dst == null || shipWorldPos == null) {
@@ -87,15 +87,40 @@ public final class VSDescentPasteResolver implements DescentController.PasteReso
                     shipWorldPos == null ? "null" : "present");
             return null;
         }
-        int shipHeight = VSIntegration.shipBlockHeight(
-                src, shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
-        AxisAlignedBB yard = VSIntegration.shipyardBoundsAt(
-                src, shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
+        // MEASURED BY NAME, or not measured at all. Both readings size the landing to the craft they
+        // are taken of, and the position-keyed form answers for whatever craft is NEAREST — no
+        // containment test, no distance bound — so a cell holding a second one sizes this ship's
+        // descent to a stranger's hull, and the descent then lands this craft on a clearance
+        // computed for another. A descent is anchored on a craft that has a flight computer, which
+        // is what mints the durable name, so a name that resolves nothing is a defect to surface
+        // rather than a case to approximate.
+        // There is no such thing as a descent without a ship name. `DescentController.requestDescent`
+        // returns on a null id before it ever reaches here, and the id it passes came out of the
+        // ship ledger — so a null at this point is a programming error, not a weaker caller, and it
+        // is reported as one rather than answered with a measurement of the nearest hull.
+        if (shipId == null) {
+            LOGGER.error("[SPACE] descent REFUSED in dim {}: no ship name was given. The caller is "
+                            + "expected to have refused this before now; measuring whatever craft is "
+                            + "nearest {},{},{} would size this descent to a hull nobody asked about.",
+                    slotDim, shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
+            return null;
+        }
+        java.util.UUID named = VSIntegration.shipUuidOfDurableId(src, shipId.toString());
+        AxisAlignedBB yard = named == null ? null : VSIntegration.shipyardBoundsOf(src, named);
+        if (yard == null) {
+            LOGGER.error("[SPACE] descent REFUSED: ship {} is not registered in dim {} under its own "
+                            + "durable name, so its hull cannot be measured BY IDENTITY. Measuring "
+                            + "the craft nearest {},{},{} would size this descent to whichever hull "
+                            + "that is. Nothing descends; the controller retries.",
+                    shipId, slotDim, shipWorldPos[0], shipWorldPos[1], shipWorldPos[2]);
+            return null;
+        }
+        int shipHeight = VSIntegration.shipBlockHeightIn(src, yard);
         if (shipHeight <= 0 || yard == null) {
             LOGGER.warn("[SPACE] descent unresolved: no physics ship at {},{},{} in dim {} "
                             + "(shipHeight={}, shipyard={})", shipWorldPos[0], shipWorldPos[1],
                     shipWorldPos[2], slotDim, shipHeight, yard);
-            return null; // VS absent / no ship there
+            return null; // no ship there
         }
         int width = (int) (yard.maxX - yard.minX);
         int depth = (int) (yard.maxZ - yard.minZ);

@@ -19,11 +19,15 @@ import zmaster587.advancedRocketry.entity.IFlightBackend;
  *
  * <p><b>Boundary rule — do not break:</b> this class MUST NOT import or reference
  * any {@code org.valkyrienskies.*} type, so it is always safe for the JVM to
- * load. Every VS-touching call goes through {@link VSBridge}, which is reached
- * only behind {@link #isAvailable()} — so a VS-importing class is never loaded on
- * an AR install without VS, and there is no {@code NoClassDefFoundError}. The
- * unit test {@code VSIntegrationTest} pins this contract. AR compiles against VS
- * but never requires it (a soft, optional dependency).</p>
+ * load. Every VS-touching call goes through {@link VSBridge}. The unit test
+ * {@code VSIntegrationTest} pins this contract.</p>
+ *
+ * <p><b>What that rule no longer buys, said plainly.</b> It used to end "…so a VS-importing class
+ * is never loaded on an AR install without VS", and the bridge was reached only behind an
+ * availability probe. There is no such install: the substrate is compiled into this jar and AR does
+ * not treat it as an optional dependency. The probe is gone. The separation is kept because it is a
+ * clean seam and the test pins it — not because anything downstream depends on the bridge staying
+ * unloaded.</p>
  */
 public final class VSIntegration {
 
@@ -32,84 +36,246 @@ public final class VSIntegration {
 
     private static final Logger LOGGER = LogManager.getLogger("advancedrocketry/vs");
 
-    private static Boolean available;
-
     private VSIntegration() {}
 
-    /**
-     * Whether Valkyrien Skies is present. VS is vendored into Advanced Rocketry — compiled into
-     * this jar rather than loaded as a separate mod — so its presence is a classpath fact, not a
-     * modid registration ({@code Loader.isModLoaded("valkyrienskies")} would now be false). Probe a
-     * VS core class instead; any failure (e.g. a stripped classpath) is treated as "VS absent"
-     * rather than propagating. Cached after the first query.
-     */
-    public static boolean isAvailable() {
-        Boolean cached = available;
-        if (cached == null) {
-            try {
-                Class.forName("org.valkyrienskies.mod.common.ValkyrienSkiesMod", false,
-                        VSIntegration.class.getClassLoader());
-                cached = Boolean.TRUE;
-            } catch (Throwable t) {
-                cached = Boolean.FALSE;
-            }
-            available = cached;
-        }
-        return cached;
-    }
+    // THERE IS NO `isAvailable()` HERE ANY MORE, and a new one is a defect, not an omission.
+    //
+    // It was a `Class.forName` probe for a class compiled into this very jar, so it answered yes in
+    // every build this repository produces. Eighty-six call sites branched on it and each returned a
+    // well-formed substitute — null, -1, false, an empty map — so no caller could tell "the
+    // substrate is absent" from a real answer, and had one of those branches ever fired nothing
+    // would have said so. The last of them, a smoke test and a diagnostic field, went with the
+    // method itself: a build somebody removed the substrate from is broken, not configured, and it
+    // now fails at class load where the cause is legible. Removed 2026-09-22.
 
     /**
-     * Initialise the VS integration. A safe no-op when VS is absent. Call once
-     * during AR init.
+     * Initialise the VS integration. Call once during AR init.
+     *
+     * <p>It used to open with a "not present — features disabled" branch. The substrate is compiled
+     * into this jar, so that branch could only be reached by a jar somebody had taken it out of:
+     * a broken build, which no early return makes correct.</p>
      */
     public static void init() {
-        if (!isAvailable()) {
-            LOGGER.info("Valkyrien Skies not present — true-spaceship features disabled.");
-            return;
-        }
-        // Only here, behind the gate, do we touch a VS-importing class.
         VSBridge.onValkyrienSkiesPresent(LOGGER);
+        // Put the crew back on the deck after the substrate has moved its ships (see
+        // DeckFollowsItsShip). The client's counterpart is registered by the client proxy, because
+        // Forge fires no world tick event on that side; both are pure AR types, so this line loads
+        // nothing VS-importing of its own.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new DeckFollowsItsShip());
+        // Publish "a ship became usable" on the bus. Registered here for the same reason as the line
+        // above: it is a pure AR type and only runs where a substrate exists to have ships at all.
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new ShipLoadedAnnouncer());
+        // Two craft stop when they meet. Its own module, deletable in one piece — see its javadoc
+        // for what it deliberately does not do.
+        ShipMeetingStop.register();
     }
 
     /**
-     * Assemble the structure anchored at {@code anchorPos} into a movable ship.
-     * A safe no-op when Valkyrien Skies is absent. Only vanilla/AR types appear in
-     * this signature — every VS-importing call stays inside {@link VSBridge}, which
-     * is reached only past the {@link #isAvailable()} gate, so no VS class is
-     * loaded on an AR install without VS.
+     * Every LOADED ship in {@code world} as identity → world bounding box; empty when it holds none.
      */
-    public static java.util.UUID assembleTier2Ship(World world, BlockPos anchorPos) {
-        return assembleTier2Ship(world, anchorPos, null);
+    public static java.util.Map<String, net.minecraft.util.math.AxisAlignedBB> loadedShipBoxes(
+            World world) {
+        return VSBridge.loadedShipBoxes(world);
     }
 
     /**
-     * The same, KEEPING the identity {@code keepUuid} the caller already holds for this ship, so a
-     * craft that is cut out of one world and re-assembled in another stays the same ship to every
-     * lookup instead of becoming a stranger that has to be found by position. {@code null} mints a
-     * fresh identity, which is what a new build wants.
+     * Bring the ship named by {@code shipId} to rest — both velocities zeroed. A WRITE the substrate
+     * overwrites on its next physics step, so a caller that means "stay stopped" says it every tick;
+     * {@code VSBridge.haltShipById} carries the measurement.
+     */
+    public static boolean haltShip(World world, String shipId) {
+        return VSBridge.haltShipById(world, shipId);
+    }
+
+    /**
+     * Mark every registered ship in {@code world} as finished, so the substrate collects them on its
+     * next tick; answers how many were marked.
      *
-     * <p>The identity is kept only when nothing live holds it in {@code world}; this ship's own
-     * blockless remnant is adopted, a live ship is refused with a loud log and the assembly falls
-     * back to a fresh identity. The returned uuid is the one the ship actually got, which is not
-     * necessarily the one that was asked for.</p>
+     * <p>For a scenario clearing up after itself. It is irreversible by design — the substrate never
+     * revives a craft declared finished — so nothing in gameplay should reach for it.</p>
      */
-    public static java.util.UUID assembleTier2Ship(World world, BlockPos anchorPos,
-                                                   java.util.UUID keepUuid) {
-        return assembleTier2Ship(world, anchorPos, keepUuid, null);
+    public static int markAllShipsDead(World world) {
+        return VSBridge.markAllShipsDead(world);
     }
 
     /**
-     * The same, also carrying the craft's DURABLE name onto the record it creates. See
-     * {@link #shipUuidOfDurableId} for what that name is for; {@code null} leaves the ship unnamed,
-     * which is what a genuinely new build wants until its flight computer names it.
+     * Every ship in {@code world} that is LOADED and past its settling delay, as
+     * {@code substrate uuid -> AR durable id}. Empty when the world holds none — never null, so a
+     * caller on a world without ships and a caller who asked too early write the same
+     * loop.
+     *
+     * <p>A stronger fact than "registered" or "constructed" and a weaker one than "being flown":
+     * see {@link ShipLoadedAnnouncer}, which is the reason this exists.</p>
      */
-    public static java.util.UUID assembleTier2Ship(World world, BlockPos anchorPos,
-                                                   java.util.UUID keepUuid,
-                                                   java.util.UUID keepDurableId) {
-        if (!isAvailable()) {
+    public static java.util.Map<String, java.util.UUID> shipsReadyForPhysics(World world) {
+        if (world == null) {
+            return java.util.Collections.emptyMap();
+        }
+        return VSBridge.shipsReadyForPhysics(world);
+    }
+
+    /**
+     * Assemble the craft standing in the given block footprint into a movable ship, under the
+     * identity its own flight computer carries.
+     *
+     * <h2>ONE SHIP, ONE IDENTITY — and this signature is how that is enforced</h2>
+     *
+     * <p>The substrate's uuid IS the craft's durable name, so nothing has to translate between two
+     * values and no lookup can be answered about the wrong craft. The name lives in exactly one
+     * place — the flight computer's own NBT — and <b>this method finds it</b>: the footprint is
+     * scanned for the computer, the computer is the assembly anchor, and its name is the identity.</p>
+     *
+     * <p><b>There is no anchor parameter and no identity parameter, deliberately.</b> Both existed
+     * and both were how the rule got broken: a caller passed a block that was not the computer (and
+     * silently got a substrate-minted id), or handed an identity in (and could hand in the wrong
+     * one, or forget). Measured 2026-09-11: a test fixture anchored on a deck block with its
+     * computer two blocks away, took a substrate-only id, and then handed its tests BOTH values with
+     * a note explaining which question takes which — a divergence dressed up as an API. A rule a
+     * caller cannot see it has broken is not enforceable by convention, so the convention is gone
+     * and the search is in here.</p>
+     *
+     * <p>{@code null} when the footprint holds no flight computer — blocks with no computer are not
+     * a tier-2 craft, and assembling them would produce a ship nothing in the game can name. Only
+     * vanilla/AR types appear in this signature: every VS-importing call stays inside
+     * {@link VSBridge}, which is a seam, not a gate.</p>
+     */
+    public static java.util.UUID assembleTier2Ship(
+            World world, zmaster587.advancedRocketry.util.StorageChunk pasted,
+            int x0, int y0, int z0) {
+        if (pasted == null) {
             return null;
         }
-        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, keepUuid, keepDurableId);
+        // The EXTENT IS DERIVED, never passed. Every caller has just pasted this snapshot at this
+        // origin, so its own sizes ARE the footprint — and a caller that computed them could get
+        // them wrong, which one promptly did: deriving the width from the assembler's scan box
+        // instead of from the snapshot reded all five ground-flight scenarios, because the scan
+        // missed the layer the flight computer stood in. There is no arithmetic left to get wrong.
+        int width = pasted.getSizeX(), height = pasted.getSizeY(), depth = pasted.getSizeZ();
+        BlockPos afcPos = flightComputerInFootprint(world, x0, y0, z0, width, height, depth);
+        if (afcPos == null) {
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship from the blocks pasted at"
+                            + " ({},{},{}) {}x{}x{} in dim {}: no flight computer stands in that"
+                            + " footprint, so the craft would have no name and would take a"
+                            + " substrate-minted id that nothing else in the game knows.",
+                    x0, y0, z0, width, height, depth,
+                    world == null ? "null" : world.provider.getDimension());
+            return null;
+        }
+        return assembleTier2ShipAt(world, afcPos);
+    }
+
+    /**
+     * The durable name a craft about to be assembled at {@code anchorPos} already carries, read off
+     * the flight computer standing there, or {@code null} when that block is not one.
+     *
+     * <p>A NEW build is anchored on its own flight computer, so its name never has to be handed in:
+     * the ship is asked what it is called. That the caller had to supply it is how the name went
+     * unbound for every craft that had not yet crossed — the assembler minted the id, dropped the
+     * value, and passed the two-argument form.</p>
+     */
+    private static java.util.UUID durableNameAtAnchor(World world, BlockPos anchorPos) {
+        net.minecraft.tileentity.TileEntity te =
+                world == null || anchorPos == null ? null : world.getTileEntity(anchorPos);
+        return te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
+                ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te).getOrCreateShipId()
+                : null;
+    }
+
+    /**
+     * The flight computer inside a just-pasted footprint, for a caller that has blocks in a world and
+     * needs the ANCHOR to be the craft's own computer.
+     *
+     * <p>Every assembly is anchored on the flight computer, because that is where the craft's name
+     * lives (see {@link #assembleTier2Ship}). A new build has that for free — the assembler stands on
+     * it. A paste does not: it lands a box of blocks, and the computer is somewhere inside. So the
+     * box is scanned, once, for the one tile that names the ship.</p>
+     *
+     * <p>Scanned rather than remembered on purpose: a snapshot's block layout is the snapshot's
+     * business, and a caller that carried an offset would be a second place for the layout to be
+     * wrong. Returns {@code null} when the footprint holds no flight computer, which means the blocks
+     * are not a tier-2 craft and nothing should be assembled from them.</p>
+     */
+    private static BlockPos flightComputerInFootprint(World world, int x0, int y0, int z0,
+                                                     int width, int height, int depth) {
+        if (world == null) {
+            return null;
+        }
+        for (int ey = 0; ey < height; ey++) {
+            for (int ex = 0; ex < width; ex++) {
+                for (int ez = 0; ez < depth; ez++) {
+                    BlockPos p = new BlockPos(x0 + ex, y0 + ey, z0 + ez);
+                    if (world.getTileEntity(p)
+                            instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) {
+                        return p;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The assembly itself, once the craft's own flight computer has been FOUND. Private: the only
+     * way in is the footprint form above, which is what keeps "the anchor is the computer" true.
+     */
+    private static java.util.UUID assembleTier2ShipAt(World world, BlockPos anchorPos) {
+        java.util.UUID durable = durableNameAtAnchor(world, anchorPos);
+        // ONE SHIP, ONE IDENTITY. The substrate's uuid IS the craft's durable name, so nothing has to
+        // translate between two values and no lookup can be answered about the wrong craft. Before
+        // this, the substrate minted its own uuid per assembly — which is exactly why AR had to keep
+        // a second id at all (the assembler says so where it mints: "the physics mod's own UUID is
+        // re-minted per re-assembly and must never key durable state"). Handing the durable name down
+        // as the identity removes the re-minting instead of compensating for it.
+        //
+        // The one case where the name is not free is a DUPLICATED flight computer: a cloned tile
+        // carries the original's id, and the duplicate is a different craft with a name it has no
+        // claim to. It is re-minted here rather than assembled under a borrowed identity — the
+        // substrate would otherwise throw when the spawn is drained, and the alternative (letting it
+        // mint a fresh uuid of its own) is precisely the silent divergence this change abolishes.
+        if (durable != null && VSBridge.identityHeldByLiveShip(world, durable)) {
+            net.minecraft.tileentity.TileEntity te = world.getTileEntity(anchorPos);
+            if (te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) {
+                java.util.UUID fresh = ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te)
+                        .mintNewShipId();
+                LOGGER.warn("[SPACE] the durable name {} is held by a LIVE ship in dim {}; this craft's"
+                                + " flight computer was duplicated, so it is re-minted as {} and"
+                                + " assembles as its own ship.",
+                        durable, world.provider.getDimension(), fresh);
+                durable = fresh;
+            } else {
+                LOGGER.error("[SPACE] the durable name {} is held by a LIVE ship in dim {} and this"
+                                + " anchor is not a flight computer, so it cannot be re-minted; the"
+                                + " assembly falls back to a substrate-minted identity and this craft's"
+                                + " two ids will DIFFER.", durable, world.provider.getDimension());
+                durable = null;
+            }
+        }
+        // REFUSED rather than assembled under a substrate-minted identity. One ship, one identity is
+        // the rule above; the only way to break it is to reach here with no name from either source,
+        // and then the substrate mints its own and the craft leaves with two ids nothing reconciles.
+        // That used to be a silent fallback, and it cost a session: a test fixture anchored its
+        // assembly on a deck block instead of on the flight computer standing two blocks away, got a
+        // substrate-only id, and then handed its tests BOTH values with a note about which question
+        // takes which. The rule is not enforceable by convention — a caller cannot see that it broke
+        // it — so it is enforced here.
+        //
+        // Every legitimate caller already satisfies this. A new build anchors on its own flight
+        // computer (`TileRocketAssemblingMachine`), so the name is read off the anchor; a crossing
+        // anchors on the first pasted block and HANDS THE NAME IN, because it is carrying the same
+        // ship across. A caller that can do neither is not assembling a ship whose identity anyone
+        // can ask about.
+        if (durable == null) {
+            // Unreachable through the footprint form, which only calls this with a computer's own
+            // position. Kept as a refusal rather than a fallback: if a future path reaches here
+            // without a name, the craft must not be assembled under a substrate-minted id.
+            LOGGER.error("[SPACE] refusing to assemble a tier-2 ship at {} in dim {}: that block is"
+                            + " not a flight computer, so the craft has no name to be assembled"
+                            + " under.",
+                    anchorPos, world == null ? "null" : world.provider.getDimension());
+            return null;
+        }
+        // The identity IS the durable name. There is no second value and no caller-supplied one.
+        return VSBridge.assembleTier2Ship(world, anchorPos, LOGGER, durable);
     }
 
     /**
@@ -122,10 +288,22 @@ public final class VSIntegration {
      * built on that box then searches the wrong craft.</p>
      */
     public static AxisAlignedBB shipyardBoundsOf(World world, java.util.UUID shipUuid) {
-        if (!isAvailable()) {
+        return VSBridge.shipyardBoundsOf(world, shipUuid);
+    }
+
+    /**
+     * The WORLD-frame bounding box of the ship named by {@code shipUuid}, or {@code null} when the
+     * physics mod is absent or this world's registry does not know that ship.
+     *
+     * <p>The hull's extent where it is RENDERED and collided, as against {@link #shipyardBoundsOf},
+     * which is the far-off subspace region its blocks are stored in. A caller asking "what is aboard
+     * this craft" wants this one: an entity stands in the world, not in the shipyard.</p>
+     */
+    public static AxisAlignedBB shipWorldBoundsOf(World world, java.util.UUID shipUuid) {
+        if (shipUuid == null) {
             return null;
         }
-        return VSBridge.shipyardBoundsOf(world, shipUuid);
+        return VSBridge.shipWorldBoundsOf(world, shipUuid);
     }
 
     /**
@@ -135,32 +313,33 @@ public final class VSIntegration {
      */
     public static boolean teleportShipToByUuid(World world, java.util.UUID shipUuid,
                                                double x, double y, double z) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.teleportShipToByUuid(world, shipUuid, x, y, z);
+    }
+
+    /**
+     * PARK (disable physics on, so it holds position) the ship NAMED by {@code shipUuid}.
+     *
+     * <p>Prefer this over {@link #parkShipAt} wherever the caller knows which ship it means — which
+     * is every caller that has just crossed one, since a crossing hands back the identity it created.
+     * The position-keyed form parks whatever craft is nearest, and a hyperspace lane or an arrival
+     * point that has been used before is exactly where a second one is standing.</p>
+     */
+    public static boolean parkShip(World world, java.util.UUID shipUuid) {
+        return VSBridge.parkShip(world, shipUuid);
     }
 
     /** UNPARK (re-enable physics on) the ship NAMED by {@code shipUuid}. */
     public static boolean unparkShip(World world, java.util.UUID shipUuid) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.unparkShip(world, shipUuid);
     }
 
-    /**
-     * One line naming the ship a POSITION lookup resolves to at {@code (x,y,z)} — uuid, name, its
-     * pose and its shipyard — or {@code "none"}. Diagnostics only: a give-up report that prints a
-     * shipyard box without saying WHOSE it is cannot distinguish "the ship is broken" from "we asked
-     * about the wrong ship", and that distinction is the whole finding.
-     */
-    public static String describeShipAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return "vs-absent";
-        }
-        return VSBridge.describeNearestShip(world, x, y, z);
-    }
+    // `describeShipAt` IS GONE, removed 2026-09-14 with the rest of the positional resolves. It
+    // named the ship a POSITION lookup resolves to, and its two callers printed that beside the ship
+    // they MEANT so a reader could see the two diverge. That is a real thing to want and it was the
+    // wrong way to get it: the answer came from a nearest lookup, which is a distance to a hull that
+    // has no extent in the world, so on the day the two differed the line could not be trusted
+    // either. A give-up report says which ship it was asking about by NAMING it — the id is in hand
+    // at every one of these sites — not by asking the world who happens to be around.
 
     /**
      * The physics mod's hard ceiling for ship altitude (world Y), or
@@ -170,56 +349,47 @@ public final class VSIntegration {
      * above it is physically unreachable and the gate silently never fires.
      */
     public static double shipYPositionMaximum() {
-        if (!isAvailable()) {
-            return Double.POSITIVE_INFINITY;
-        }
         return VSBridge.shipYPositionMaximum();
     }
 
     /**
-     * Raise the physics mod's ship altitude ceiling to at least {@code required} (no-op when the
-     * physics mod is absent, or when the configured/current value is already higher). Called once
-     * at space-subsystem registration so every slot cell's pose band is flyable from the first
-     * tick - see {@link VSBridge#raiseShipCeilingTo} for why this must be deterministic rather
-     * than teleport-ratcheted.
+     * Widen the physics mod's ship altitude range so it covers at least {@code [floor, ceiling]}
+     * (no-op when the physics mod is absent, and each end moves only if the current value is
+     * narrower). Called once at space-subsystem registration so every slot cell's pose band is
+     * flyable from the first tick - see {@link VSBridge#widenShipAltitudeRange} for why this must be
+     * deterministic rather than teleport-ratcheted.
+     *
+     * <p>Both ends, not just the top: the cell's pose band is centred on the world origin, so half
+     * of it is at negative Y. A ceiling-only call leaves the substrate's stock floor sitting under
+     * the lower half of every cell, where it does not refuse anything — it CLAMPS, on the next
+     * physics step, which is the shape a reader cannot tell from a ship that simply stopped
+     * descending.</p>
      */
-    public static void raiseShipCeilingTo(double required) {
-        if (!isAvailable()) {
-            return;
-        }
-        VSBridge.raiseShipCeilingTo(required, LOGGER);
+    public static void widenShipAltitudeRange(double floor, double ceiling) {
+        VSBridge.widenShipAltitudeRange(floor, ceiling, LOGGER);
     }
 
     /**
      * The subspace shipyard bounding box (world coordinates) of the loaded VS ship whose world BB
-     * contains {@code (x,y,z)}, or {@code null} when VS is absent or no ship is there. A ship's blocks
+     * contains {@code (x,y,z)}, or {@code null} when no ship is there. A ship's blocks
      * live in this far-off shipyard region, not at the rendered position — the per-ship "crossing"
      * snapshots THIS box. Only vanilla/AR types appear in the signature.
      */
     public static AxisAlignedBB shipyardBoundsAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipyardBoundsAt(world, x, y, z);
     }
 
     /**
      * PARK the VS ship whose world BB contains {@code (x,y,z)}: disable its physics so it holds position
      * (used while a ship is in transit — {@code ShipTransit} advances its coordinate logically, not by
-     * physically flying). Returns false when VS is absent or no ship is there. A safe no-op when VS absent.
+     * physically flying). Returns false when no ship is there.
      */
     public static boolean parkShipAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.parkShipAt(world, x, y, z);
     }
 
     /** UNPARK (re-enable physics on) the VS ship at {@code (x,y,z)}. See {@link #parkShipAt}. */
     public static boolean unparkShipAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.unparkShipAt(world, x, y, z);
     }
 
@@ -228,13 +398,10 @@ public final class VSIntegration {
      * pose moves (rotation kept, VS Y-limits widened as needed), the subspace blocks stay put. Entities
      * are not capped by the 256 build height, so extreme-Y poses are legal — this is the realization
      * lever for honest galactic local-Y and the arrange step of the extreme-coordinate spikes. Park the
-     * ship first ({@link #parkShipAt}), teleport, then unpark. Safe no-op (false) when VS is absent.
+     * ship first ({@link #parkShipAt}), teleport, then unpark.
      */
     public static boolean teleportShipTo(World world, double x, double y, double z,
                                          double dstX, double dstY, double dstZ) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.teleportShipTo(world, x, y, z, dstX, dstY, dstZ);
     }
 
@@ -287,7 +454,7 @@ public final class VSIntegration {
      * Riders are NOT moved here (they differ per caller: same-world reposition vs. cross-world transfer);
      * the caller enumerates and moves them around this call. Returns a {@link CrossResult}; a failed
      * crossing leaves {@code anchor == null}. Requires the destination sky at {@code (dstX,dstY,dstZ)} to
-     * be clear. A safe no-op ({@code anchor == null}) when VS is absent.
+     * be clear.
      */
     public static CrossResult crossShip(World srcWorld, double sx, double sy, double sz,
                                         World dstWorld, int dstX, int dstY, int dstZ) {
@@ -314,14 +481,10 @@ public final class VSIntegration {
     public static CrossResult crossShip(World srcWorld, double sx, double sy, double sz,
                                         java.util.UUID srcShipUuid,
                                         World dstWorld, int dstX, int dstY, int dstZ) {
-        // Four different ways this returns "no ship", each with its own cause and its own cost. They
-        // used to be one silent null, so a caller could only report that a crossing failed - never
-        // which half of it, and never that the ship had already been cut.
-        if (!isAvailable()) {
-            LOGGER.warn("[SPACE] crossShip: Valkyrien Skies absent - nothing crossed (src dim {})",
-                    srcWorld == null ? "null" : srcWorld.provider.getDimension());
-            return new CrossResult(null, null, 0, 0);
-        }
+        // Three different ways this returns "no ship", each with its own cause and its own cost.
+        // They used to be one silent null, so a caller could only report that a crossing failed -
+        // never which half of it, and never that the ship had already been cut. (A fourth, "the
+        // substrate is absent", is gone: it is compiled into this jar.)
         AxisAlignedBB yard = srcShipUuid != null
                 ? shipyardBoundsOf(srcWorld, srcShipUuid) : shipyardBoundsAt(srcWorld, sx, sy, sz);
         if (yard == null) {
@@ -356,10 +519,14 @@ public final class VSIntegration {
         // pass collects it on the next world tick and performs the deregistration itself. Its
         // copy-blocks-back step is guarded on the block set being non-empty, so nothing is resurrected.
         //
-        // That pass walks the LOADED ships, though, so it never runs for a source nothing was holding
-        // loaded - a crewless or offline departure. Name the ship before the cut and release it by hand
-        // afterwards in exactly that case (below); after the cut it is registered but blockless, and a
-        // position lookup can no longer tell it from any other ship in the world.
+        // A source nothing was holding loaded - a crewless or offline departure - is registered but
+        // blockless after the cut, and a position lookup can no longer tell it from any other ship.
+        // It is collected by more than one hand: the substrate's world-tick pass walks the whole
+        // REGISTRY and takes any record that is dead or owns no blocks (WorldServerShipManager.tick),
+        // the spawn drain drops this identity's own blockless remnant (dropOwnBlocklessRemnant), a
+        // same-world arrival adopts it (VSBridge.adoptOwnRemnant), and it is marked dead by name below.
+        // Measured 2026-09-28 on a same-world crossing: removing the mark alone, or the mark and the
+        // adoption, still left no entry behind; with all four removed one stayed.
         //
         // This name is also the ship's IDENTITY, and the re-assembly at the destination keeps it (see
         // the assemble call below): the craft that lands is the same ship it was before the cut, so
@@ -380,14 +547,29 @@ public final class VSIntegration {
         // nearest" in a world that may hold several. Null propagates as null: a craft that was never
         // named crosses exactly as it did before.
         java.util.UUID srcDurableName = VSBridge.durableIdOf(srcWorld, srcShipId);
+        // DECLARE the departure before cutting. The cut is what makes this world's registry drop the
+        // craft, and that drop is indistinguishable from a destruction to anything merely watching -
+        // so the classification is made HERE, by the code that knows where the ship is going, and the
+        // announcer publishes "left for dim N" rather than "gone". Without this a crossing tells
+        // every consumer that the craft it is carrying, crew aboard, has ceased to exist.
+        ShipLoadedAnnouncer.declareDeparture(srcShipId,
+                dstWorld == null ? srcWorld.provider.getDimension()
+                        : dstWorld.provider.getDimension());
         // Cut a TIGHT box (not the 256-tall column) and paste into clear sky at dstY (above the
         // destination terrain), so FIND_ALL_BLOCKS grabs only the ship.
         AxisAlignedBB tight = new AxisAlignedBB(yMinX, minShipY, yMinZ, yMaxX, maxShipY + 1, yMaxZ);
         zmaster587.advancedRocketry.util.StorageChunk snap =
                 zmaster587.advancedRocketry.util.StorageChunk.cutWorldBB(srcWorld, tight);
-        // No-op whenever a physics object is still loaded for the source - there VS's destroy pass owns
-        // the collection and taking the ship out of the registry here would be the very bug this order
-        // exists to avoid.
+        if (snap == null) {
+            // Nothing was cut, so nothing will leave the registry on account of this crossing. Take
+            // the mark back, or a genuine later destruction of this craft would be reported as a
+            // departure to a cell it never reached.
+            ShipLoadedAnnouncer.abandonDeparture(srcShipId);
+        }
+        // Declare the source FINISHED. It is collected on the next tick of this world whether or not
+        // anything had it loaded — which is the case that used to have no collector at all and left a
+        // blockless record answering position lookups for the life of the world. Nothing here decides
+        // WHEN or in what order; that stays the substrate's, which is the only place it is understood.
         VSBridge.releaseShipIfNothingLoaded(srcWorld, srcShipId);
         // The cut took the seat BLOCKS; the dummies bound to them are entities and survive it. On a
         // crossing they must not: the ship is re-assembled in ANOTHER world and its riders are re-seated
@@ -438,7 +620,11 @@ public final class VSIntegration {
             // Re-assemble under the identity the ship crossed with. Same world as the source on a
             // same-world reposition, where this ship's own blockless remnant is what holds the
             // identity - it is adopted rather than collided with.
-            shipUuid = assembleTier2Ship(dstWorld, anchor, srcShipId, srcDurableName);
+            // The paste footprint. The identity is no longer carried across by hand: the craft's
+            // flight computer crossed WITH its blocks and still holds the name, so the assembly
+            // reads it there — which is the same value `srcDurableName` used to carry, from the
+            // same tile, with no call site able to forget it.
+            shipUuid = assembleTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
         } else {
             // The only DESTRUCTIVE failure of the four: the source has already been cut by this point,
             // so the ship exists as loose blocks at the paste site and nowhere else. Logged at ERROR
@@ -459,13 +645,28 @@ public final class VSIntegration {
      * {@code StorageChunk} NBT: the same subspace shipyard + Y-band scan {@link #crossShip} cuts, but via a
      * non-destructive {@code copyWorldBB} (the ship stays parked, unlike the {@code cutWorldBB} in a
      * crossing). The transit persistence re-cuts a parked hyperspace ship this way at each save point so an
-     * in-flight jump survives a restart. Returns {@code null} when VS is absent or the shipyard is empty.
+     * in-flight jump survives a restart. Returns {@code null} when the shipyard is empty.
      */
     public static net.minecraft.nbt.NBTTagCompound snapshotShipAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return null;
-        }
-        AxisAlignedBB yard = shipyardBoundsAt(world, x, y, z);
+        return snapshotOfYard(world, shipyardBoundsAt(world, x, y, z));
+    }
+
+    /**
+     * The same snapshot, of the ship NAMED by {@code shipUuid} — and the one to reach for whenever the
+     * caller knows which ship it means.
+     *
+     * <p>What the position-keyed form snapshots is whatever craft is nearest the point, with no
+     * distance bound. A transit re-cuts its parked hull at every save point, and hyperspace lanes are
+     * reused: snapshotting by position there stores one ship's blocks against another ship's jump,
+     * and the restart that reads it back pastes the wrong craft into the destination.</p>
+     */
+    public static net.minecraft.nbt.NBTTagCompound snapshotShipOf(World world,
+            java.util.UUID shipUuid) {
+        return snapshotOfYard(world, shipyardBoundsOf(world, shipUuid));
+    }
+
+    /** The snapshot both forms share, over an already-chosen subspace shipyard box. */
+    private static net.minecraft.nbt.NBTTagCompound snapshotOfYard(World world, AxisAlignedBB yard) {
         if (yard == null) {
             return null;
         }
@@ -491,7 +692,7 @@ public final class VSIntegration {
      * RESTORED transit's arrival, which has no live source ship to {@link #crossShip}. Mirrors crossShip's
      * paste tail (force-load the footprint, paste, anchor on the first non-air block, assemble); keep the
      * two in step. Returns the ship's anchor and the identity it was assembled under, or {@code null}
-     * when VS is absent or the snapshot is empty.
+     * when the snapshot is empty.
      *
      * <p>Unlike {@link #crossShip} this one has no ship to take an identity FROM - it builds a ship out
      * of stored blocks - so the identity it returns is always a fresh one, and its caller must adopt it
@@ -499,7 +700,7 @@ public final class VSIntegration {
      */
     public static CrossResult pasteAndAssemble(World dstWorld, net.minecraft.nbt.NBTTagCompound snapshot,
                                                int dstX, int dstY, int dstZ) {
-        if (!isAvailable() || snapshot == null) {
+        if (snapshot == null) {
             return new CrossResult(null, null, 0, 0);
         }
         zmaster587.advancedRocketry.util.StorageChunk snap =
@@ -533,22 +734,35 @@ public final class VSIntegration {
                 }
             }
         }
-        java.util.UUID shipUuid = anchor == null ? null : assembleTier2Ship(dstWorld, anchor);
+        // The footprint, and this one CHANGES BEHAVIOUR: a restored ship now comes back as
+        // ITSELF. This path used to anchor on the first non-air block and document the result as
+        // "the identity it returns is always a fresh one, and its caller must adopt it" — on the
+        // reasoning that the ship it names died with the hyperspace world. The substrate's object
+        // did; the NAME did not. It is in the flight computer's own NBT (`shipId`) and the snapshot
+        // carries tile entities, so the name was sitting in the pasted blocks the whole time and
+        // the ledger row keyed on it now resolves again.
+        java.util.UUID shipUuid = assembleTier2Ship(dstWorld, snap, dstX, dstY, dstZ);
         return new CrossResult(anchor, shipUuid, dstY, dstY + snap.getSizeY());
     }
 
     /**
      * The block-space height (Y span, in blocks) of the VS ship whose world BB contains {@code (x,y,z)},
-     * or {@code -1} when VS is absent, no ship is there, or its shipyard is empty. A descent paste-height
+     * or {@code -1} when no ship is there, or its shipyard is empty. A descent paste-height
      * finder needs this BEFORE the crossing to keep the pasted ship under the destination build height
      * (a paste that clips at Y=256 breaks the {@code FIND_ALL_BLOCKS} flood-fill). Same subspace scan
-     * {@link #crossShip} runs internally. A safe no-op ({@code -1}) when VS is absent.
+     * {@link #crossShip} runs internally.
      */
     public static int shipBlockHeight(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return -1;
-        }
-        AxisAlignedBB yard = shipyardBoundsAt(world, x, y, z);
+        return shipBlockHeightIn(world, shipyardBoundsAt(world, x, y, z));
+    }
+
+    /**
+     * The same height, of an ALREADY-CHOSEN shipyard box — the form a caller uses when it has resolved
+     * the yard of the ship it means (via {@link #shipyardBoundsOf}) and must not have a second reading
+     * silently taken of a different craft. Two measurements of "the ship" that resolve it separately
+     * are two chances to disagree.
+     */
+    public static int shipBlockHeightIn(World world, AxisAlignedBB yard) {
         if (yard == null) {
             return -1;
         }
@@ -565,7 +779,7 @@ public final class VSIntegration {
      */
     /**
      * The identity (VS ship uuid, as a string) of the ship that OWNS a subspace block position, or
-     * {@code null} when VS is absent or the position belongs to no loaded ship.
+     * {@code null} when the position belongs to no loaded ship.
      *
      * <p>Answered from the ship's chunk claim — which contains the block or does not — so it is an
      * identity and not a proximity. A caller holding one block of a ship (a pilot seat, a hatch) uses
@@ -573,23 +787,37 @@ public final class VSIntegration {
      * and their subspace yards are neighbours.</p>
      */
     public static String shipIdOwningBlock(World world, net.minecraft.util.math.BlockPos pos) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipIdOwningBlock(world, pos);
     }
 
     /**
      * A single subspace block position of the VS ship whose world BB contains {@code (x,y,z)}, or
-     * {@code null} when VS is absent / no ship is there / its shipyard is empty. Located through the
+     * {@code null} when no ship is there / its shipyard is empty. Located through the
      * queryable ship registry (headless-reliable, unlike a loaded-TE scan), so a test harness can hand
      * a ship-managing block to a controller that addresses a ship by one of its blocks.
      */
     public static net.minecraft.util.math.BlockPos shipBlockAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
+        return shipBlockInYard(world, shipyardBoundsAt(world, x, y, z));
+    }
+
+    /**
+     * A single subspace block position of the ship NAMED by {@code shipUuid} — the identity-keyed twin
+     * of {@link #shipBlockAt}, and the one to reach for whenever the caller knows which ship it means.
+     *
+     * <p>{@link #shipBlockAt} resolves its shipyard through {@link #shipyardBoundsAt}, which answers
+     * for whatever craft is nearest with no distance bound; the block it then returns is a real block
+     * of a real ship, and nothing in it says the ship is the caller's. A controller handed that block
+     * addresses a stranger's craft and reports success.</p>
+     */
+    public static net.minecraft.util.math.BlockPos shipBlockOf(World world, java.util.UUID shipUuid) {
+        if (shipUuid == null) {
             return null;
         }
-        AxisAlignedBB yard = shipyardBoundsAt(world, x, y, z);
+        return shipBlockInYard(world, shipyardBoundsOf(world, shipUuid));
+    }
+
+    /** The first non-air block inside {@code yard}, force-loading its subspace chunks first. */
+    private static net.minecraft.util.math.BlockPos shipBlockInYard(World world, AxisAlignedBB yard) {
         if (yard == null) {
             return null;
         }
@@ -620,7 +848,7 @@ public final class VSIntegration {
 
     /**
      * The SUBSPACE {@link BlockPos} of the {@code TileAdvancedFlightComputer} on the VS ship whose world BB
-     * contains {@code (x,y,z)}, or {@code null} when VS is absent / no ship is there / it carries no flight
+     * contains {@code (x,y,z)}, or {@code null} when no ship is there / it carries no flight
      * computer. Same queryable, force-loaded subspace scan as {@link #shipBlockAt}, but matched by tile type
      * instead of "first non-air". The transit depart path holds only a world-frame ship anchor (unlike entry
      * and descent, which run from the AFC tile itself and get its position for free), so it must recover the
@@ -631,9 +859,6 @@ public final class VSIntegration {
      */
     public static BlockPos flightComputerAt(net.minecraft.world.WorldServer world,
             double x, double y, double z) {
-        if (!isAvailable()) {
-            return null;
-        }
         return flightComputerInYard(world, shipyardBoundsAt(world, x, y, z));
     }
 
@@ -650,10 +875,66 @@ public final class VSIntegration {
      */
     public static BlockPos flightComputerOf(net.minecraft.world.WorldServer world,
             java.util.UUID shipUuid) {
-        if (!isAvailable() || shipUuid == null) {
+        if (shipUuid == null) {
             return null;
         }
         return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid));
+    }
+
+    /**
+     * The flight computer of the ship a caller NAMES, by whichever identity it holds — and never a
+     * stranger's.
+     *
+     * <p>Tries the physics id first ({@link #flightComputerOf}), which is an identity outright. Where
+     * there is none — a crossing whose destination hull the physics mod minted no id for — it falls
+     * back to the positional scan at {@code (x,y,z)} and then <b>verifies</b>: the computer it found
+     * has to call itself {@code durableShipId} in its own NBT, which is the one thing about a craft
+     * that survives every re-assembly. A mismatch answers {@code null} and says so, because the
+     * alternative is a real, wrong flight computer that every caller downstream treats as success.</p>
+     *
+     * <p><b>Why this exists.</b> Arrival points are DETERMINISTIC — a cell-seam carry always lands the
+     * same depth inside the face it came in by — so every craft that ever crosses into a cell arrives
+     * where the last one did, and "the flight computer at the arrival anchor" names the resident
+     * rather than the newcomer as soon as a cell has been visited twice. The crew re-seat learned this
+     * already and keys on identity; the paths that put back what was ABOARD did not, and handed one
+     * ship's cargo to another.</p>
+     *
+     * @param vsShipUuid    the physics mod's id for the ship, or {@code null} if the caller has none
+     * @param durableShipId the ship's durable AR id — what the fallback is checked against; a
+     *                      {@code null} here disables the fallback entirely rather than accepting
+     *                      whatever the scan reaches
+     */
+    public static BlockPos flightComputerOfNamedShip(net.minecraft.world.WorldServer world,
+            java.util.UUID vsShipUuid, java.util.UUID durableShipId, double x, double y, double z) {
+        if (world == null) {
+            return null;
+        }
+        if (vsShipUuid != null) {
+            BlockPos byIdentity = flightComputerOf(world, vsShipUuid);
+            if (byIdentity != null) {
+                return byIdentity;
+            }
+        }
+        if (durableShipId == null) {
+            return null;
+        }
+        BlockPos byPosition = flightComputerAt(world, x, y, z);
+        net.minecraft.tileentity.TileEntity te =
+                byPosition == null ? null : world.getTileEntity(byPosition);
+        java.util.UUID found = te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
+                ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te).shipIdOrNull()
+                : null;
+        if (durableShipId.equals(found)) {
+            return byPosition;
+        }
+        if (byPosition != null) {
+            // Loud, and it names both: a scan that reached a real computer belonging to somebody else
+            // is the failure this method exists to stop, and it is invisible from the caller's side.
+            LOGGER.warn("[VS] the flight computer at ({},{},{}) in dim {} belongs to ship {}, not to "
+                    + "{} - refusing to answer with a stranger's craft", x, y, z,
+                    world.provider.getDimension(), found, durableShipId);
+        }
+        return null;
     }
 
     /** The flight-computer scan both resolvers share, over an already-chosen subspace shipyard box. */
@@ -714,12 +995,9 @@ public final class VSIntegration {
     /**
      * TEST/HEADLESS: keep VS ships permanently loaded (the {@code permanentlyLoaded} loading setting) so
      * a player-less server test can observe a freshly assembled ship across probe calls instead of it
-     * auto-unloading. A safe no-op when VS is absent.
+     * auto-unloading.
      */
     public static void setShipsPermanentlyLoaded(boolean value) {
-        if (!isAvailable()) {
-            return;
-        }
         VSBridge.setShipsPermanentlyLoaded(value);
     }
 
@@ -731,22 +1009,16 @@ public final class VSIntegration {
      * the VS-importing {@code VSFlightBackend} is loaded only past this gate.
      */
     public static IFlightBackend createShipFlightBackend(World world, BlockPos anchorPos) {
-        if (!isAvailable()) {
-            return null;
-        }
         return new VSFlightBackend(world, anchorPos);
     }
 
     /**
      * The body&rarr;world attitude of the Valkyrien Skies ship managing the block at
-     * {@code pos}, or {@code null} when VS is absent or no ship manages it. Returns
+     * {@code pos}, or {@code null} when no ship manages it. Returns
      * the AR-core {@link FreeFlightPhysics.Quat} so a caller in AR core never sees a
      * VS type. Free Flight integrates the pilot's body rates over this each tick.
      */
     public static FreeFlightPhysics.Quat getShipAttitude(World world, BlockPos pos) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.getShipAttitude(world, pos);
     }
 
@@ -754,37 +1026,37 @@ public final class VSIntegration {
      * Move a point or a direction between the world frame and the frame of the ship {@code entity}
      * is aboard. In the ship's own frame the deck is axis-aligned and "down" is plain {@code -Y}, so
      * an aboard entity's movement can be resolved there with ordinary rules and mapped back. Each
-     * returns {@code null} when VS is absent or the entity is aboard no loaded ship, so callers fall
+     * returns {@code null} when the entity is aboard no loaded ship, so callers fall
      * back to vanilla movement. Only AR-core/MC types cross the gate.
      */
     public static double[] toShipFrame(net.minecraft.entity.Entity e, double x, double y, double z) {
-        return (!isAvailable() || e == null) ? null : VSBridge.toShipFrame(e, x, y, z);
+        return (e == null) ? null : VSBridge.toShipFrame(e, x, y, z);
     }
 
     /** Ship-frame point to world point. See {@link #toShipFrame}. */
     public static double[] toWorldFrame(net.minecraft.entity.Entity e, double x, double y, double z) {
-        return (!isAvailable() || e == null) ? null : VSBridge.toWorldFrame(e, x, y, z);
+        return (e == null) ? null : VSBridge.toWorldFrame(e, x, y, z);
     }
 
     /** World direction to ship-frame direction (rotation only). See {@link #toShipFrame}. */
     public static double[] rotateToShipFrame(net.minecraft.entity.Entity e, double x, double y, double z) {
-        return (!isAvailable() || e == null) ? null : VSBridge.rotateToShipFrame(e, x, y, z);
+        return (e == null) ? null : VSBridge.rotateToShipFrame(e, x, y, z);
     }
 
     /** Ship-frame direction to world direction (rotation only). See {@link #toShipFrame}. */
     public static double[] rotateToWorldFrame(net.minecraft.entity.Entity e, double x, double y, double z) {
-        return (!isAvailable() || e == null) ? null : VSBridge.rotateToWorldFrame(e, x, y, z);
+        return (e == null) ? null : VSBridge.rotateToWorldFrame(e, x, y, z);
     }
 
     // ---- Anchored (by-ship-id) frame access. A capture episode resolves every transform through
     // the ship it was captured on (its ShipData UUID string), never by re-picking a ship from
-    // world-AABB containment mid-episode. Each returns null when VS is absent or THAT ship is not
+    // world-AABB containment mid-episode. Each returns null when THAT ship is not
     // loaded, so callers release/fall back to vanilla. Only AR-core/MC types cross the gate.
 
     /** UUID string of the ship whose SUBSPACE claim manages {@code pos} (unambiguous — claims of
      *  distinct ships never overlap), or {@code null}. The anchor resolver for a seat-based seed. */
     public static String shipIdManagingBlock(World world, BlockPos pos) {
-        return (!isAvailable() || world == null || pos == null)
+        return (world == null || pos == null)
                 ? null : VSBridge.shipIdManagingBlock(world, pos);
     }
 
@@ -793,74 +1065,82 @@ public final class VSIntegration {
      *  ship's IDENTITY; {@link #shipIdManagingBlock} answers about its live physics and is null for
      *  every ship nobody is standing near. */
     public static String registeredShipIdManagingBlock(World world, BlockPos pos) {
-        return (!isAvailable() || world == null || pos == null)
+        return (world == null || pos == null)
                 ? null : VSBridge.registeredShipIdManagingBlock(world, pos);
     }
 
     /** UUID strings of every loaded ship whose grown world AABB contains {@code (x,y,z)} — the
      *  first-contact candidate list (possibly empty; never null). */
     public static java.util.List<String> shipIdsAt(World world, double x, double y, double z) {
-        return (!isAvailable() || world == null)
+        return (world == null)
                 ? java.util.Collections.<String>emptyList() : VSBridge.shipIdsAt(world, x, y, z);
     }
 
     /** World point to ship-frame point, for the anchored ship. See the anchored-access note. */
     public static double[] toShipFrameFor(World world, String shipId, double x, double y, double z) {
-        return (!isAvailable() || world == null) ? null : VSBridge.toShipFrameFor(world, shipId, x, y, z);
+        return (world == null) ? null : VSBridge.toShipFrameFor(world, shipId, x, y, z);
     }
 
     /** Ship-frame point to world point, for the anchored ship. */
     public static double[] toWorldFrameFor(World world, String shipId, double x, double y, double z) {
-        return (!isAvailable() || world == null) ? null : VSBridge.toWorldFrameFor(world, shipId, x, y, z);
+        return (world == null) ? null : VSBridge.toWorldFrameFor(world, shipId, x, y, z);
     }
 
     /** Ship-frame point to world point through the ship's RENDER pose — where the renderer draws
      *  that point this frame, as opposed to where the game-tick transform places it. Client-side
      *  observable (null on a dedicated server or when the ship is not loaded). */
     public static double[] renderToWorldFrameFor(World world, String shipId, double x, double y, double z) {
-        return (!isAvailable() || world == null)
+        return (world == null)
                 ? null : VSBridge.renderToWorldFrameFor(world, shipId, x, y, z);
     }
 
     /** World direction to ship-frame direction (rotation only), for the anchored ship. */
     public static double[] rotateToShipFrameFor(World world, String shipId, double x, double y, double z) {
-        return (!isAvailable() || world == null) ? null : VSBridge.rotateToShipFrameFor(world, shipId, x, y, z);
+        return (world == null) ? null : VSBridge.rotateToShipFrameFor(world, shipId, x, y, z);
     }
 
     /** Ship-frame direction to world direction (rotation only), for the anchored ship. */
     public static double[] rotateToWorldFrameFor(World world, String shipId, double x, double y, double z) {
-        return (!isAvailable() || world == null) ? null : VSBridge.rotateToWorldFrameFor(world, shipId, x, y, z);
+        return (world == null) ? null : VSBridge.rotateToWorldFrameFor(world, shipId, x, y, z);
     }
 
     /** {@link #shipVelocityAtPoint} for the anchored ship — the deck-carry widening of an anchored
      *  capture's external-move guard must come from ITS ship. */
     public static double[] shipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
-        return (!isAvailable() || world == null)
+        return (world == null)
                 ? null : VSBridge.shipVelocityAtPointFor(world, shipId, x, y, z);
+    }
+
+    /** What the craft DECLARES it is doing at that point, as opposed to what the pose on this side
+     *  just did — for a TOLERANCE, never for a body's carry. See the bridge method for why a guard
+     *  must not be built from the tighter of two known readings. */
+    public static double[] declaredVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
+        return (world == null)
+                ? null : VSBridge.declaredVelocityAtPointFor(world, shipId, x, y, z);
     }
 
     /** Clear the physics mod's own entity-to-ship association (its {@code EntityDraggable} drag
      *  anchor) for a body AR resolves ship-locally — the drag is a second mover that fights the
      *  ship-frame resolution from a stale anchor the suppressed collision injector can never
-     *  refresh. Called every resolved tick; a no-op (false) when VS is absent, the entity is not
+     *  refresh. Called every resolved tick; a no-op (false) when the entity is not
      *  draggable, or the association is already clear. */
     public static boolean suppressShipDrag(net.minecraft.entity.Entity entity) {
-        return isAvailable() && entity != null && VSBridge.clearEntityShipAssociation(entity);
+        return entity != null && VSBridge.clearEntityShipAssociation(entity);
     }
 
     /** The anchored ship's stay region in SUBSPACE, grown by {@code margin} — the release-hysteresis
      *  bound for an aboard body (attitude-invariant; boundary at least {@code margin} from every hull
-     *  block). Null when VS is absent or the ship is not loaded. */
+     *  block). Null when the ship is not loaded. */
     public static net.minecraft.util.math.AxisAlignedBB subspaceStayRegion(World world, String shipId, double margin) {
-        return (!isAvailable() || world == null)
+        return (world == null)
                 ? null : VSBridge.subspaceStayRegion(world, shipId, margin);
     }
 
     /** How many blocks the ship's own data says it owns ({@code ShipData.blockPositions}), or -1
-     *  when VS is absent / the ship is not loaded on this side. The authoritative assembled-block
+     *  when the ship is not loaded on this side. The authoritative assembled-block
      *  count — a fixture that should have N blocks but reports fewer lost them at assembly. */
     public static int shipBlockCount(World world, String shipId) {
-        return (!isAvailable() || world == null) ? -1 : VSBridge.shipBlockCount(world, shipId);
+        return (world == null) ? -1 : VSBridge.shipBlockCount(world, shipId);
     }
 
     /**
@@ -872,7 +1152,7 @@ public final class VSIntegration {
      * already supplies before AR builds its own. Only AR-core/MC types cross the gate.
      */
     public static java.util.Map<String, Object> getEntityShipMovementData(net.minecraft.entity.Entity entity) {
-        if (!isAvailable() || entity == null) {
+        if (entity == null) {
             return null;
         }
         return VSBridge.entityShipMovementData(entity);
@@ -881,11 +1161,10 @@ public final class VSIntegration {
     /**
      * Read-only transform-consistency diagnostic for the ship {@code entity} is aboard: whether the VS
      * vector rotate (the MOVEMENT frame) and the attitude quaternion (the CAMERA/gravity frame) agree,
-     * plus the position/rotation round-trip errors. A plain JDK map, or {@code null} when VS is absent or
-     * the entity is aboard no loaded ship. Only AR-core/MC types cross the gate.
+     * plus the position/rotation round-trip errors. A plain JDK map, or {@code null} when the entity is aboard no loaded ship. Only AR-core/MC types cross the gate.
      */
     public static java.util.Map<String, Object> transformConsistency(net.minecraft.entity.Entity entity) {
-        if (!isAvailable() || entity == null) {
+        if (entity == null) {
             return null;
         }
         return VSBridge.transformConsistency(entity);
@@ -893,27 +1172,21 @@ public final class VSIntegration {
 
     /**
      * The world-frame position {@code [x,y,z]} of the ship managing the block at {@code pos} (its
-     * transform position), or {@code null} when VS is absent or no ship manages it. Managed-block
+     * transform position), or {@code null} when no ship manages it. Managed-block
      * keyed like {@link #getShipAttitude} — on a shared server each flight computer reads its OWN
      * ship, never a neighbour's. The tier-2 entry ceiling check reads this each pilot tick. Only
      * AR-core/MC types cross the gate.
      */
     public static double[] getShipWorldPosition(World world, BlockPos pos) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipWorldPosition(world, pos);
     }
 
     /**
      * The world-frame linear velocity {@code [x,y,z]} (blocks/second) of the ship managing the block
-     * at {@code pos}, or {@code null} when VS is absent or no ship manages it. Used to capture the
+     * at {@code pos}, or {@code null} when no ship manages it. Used to capture the
      * live velocity as a Flight-Assist setpoint on re-enable. Only AR-core/MC types cross the gate.
      */
     public static double[] getShipVelocity(World world, BlockPos pos) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipLinearVelocity(world, pos);
     }
 
@@ -925,48 +1198,38 @@ public final class VSIntegration {
      * teleport. Only AR-core/MC types cross the gate.
      */
     public static double[] shipVelocityAtPoint(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipVelocityAtPoint(world, x, y, z);
     }
 
     /**
      * The unit world-frame direction toward the floor of the loaded ship the point {@code (x,y,z)}
-     * is aboard, or {@code null} when VS is absent or the point is aboard no ship. Lets AR apply
+     * is aboard, or {@code null} when the point is aboard no ship. Lets AR apply
      * gravity toward a ship's deck (the ship's local down, rotated by its attitude) for entities
      * standing on it; on an upright ship this is {@code (0,-1,0)}, so gravity is unchanged. Only
      * AR-core/MC types cross the gate.
      */
     public static double[] shipDownDirectionFor(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipDownDirection(world, x, y, z);
     }
 
     /**
      * The body&rarr;world attitude of the loaded ship the point {@code (x,y,z)} is aboard, or
-     * {@code null} when VS is absent or the point is aboard no ship. Located by containment, so it
+     * {@code null} when the point is aboard no ship. Located by containment, so it
      * answers for a crew member standing anywhere on the deck, not only for a block on the ship.
      * Resolves on both sides. Only AR-core/MC types cross the gate.
      */
     public static FreeFlightPhysics.Quat shipAttitudeAt(World world, double x, double y, double z) {
-        if (!isAvailable()) {
-            return null;
-        }
         double[] q = VSBridge.shipAttitudeAt(world, x, y, z);
         return q == null ? null : new FreeFlightPhysics.Quat(q[0], q[1], q[2], q[3]);
     }
 
     /**
-     * The body&rarr;world attitude of the ship {@code shipId}, or {@code null} when VS is absent or
-     * that ship is not loaded on this side. Use this - not {@link #shipAttitudeAt} - whenever the
+     * The body&rarr;world attitude of the ship {@code shipId}, or {@code null} when that ship is not loaded on this side. Use this - not {@link #shipAttitudeAt} - whenever the
      * ship is already known by id: containment answers for whatever box a point falls inside, which
      * is a different question and a large air volume around the hull.
      */
     public static FreeFlightPhysics.Quat shipAttitudeForId(World world, String shipId) {
-        if (!isAvailable() || shipId == null) {
+        if (shipId == null) {
             return null;
         }
         double[] q = VSBridge.shipAttitudeForId(world, shipId);
@@ -981,56 +1244,45 @@ public final class VSIntegration {
         return shipAttitudeAt(entity.world, entity.posX, entity.posY, entity.posZ);
     }
 
-    /**
-     * The world-frame angular velocity {@code [x,y,z]} (rad/s) of the loaded ship nearest to
-     * {@code (x,y,z)}, or {@code null} when VS is absent or no ship is loaded. Only AR-core/MC types
-     * cross the gate.
-     */
-    public static double[] nearestShipAngularVelocity(World world, double x, double y, double z) {
-        return nearestShipAngularVelocity(world, x, y, z, Double.POSITIVE_INFINITY);
-    }
-
-    /** Distance-bounded {@link #nearestShipAngularVelocity(World, double, double, double)}. */
-    public static double[] nearestShipAngularVelocity(World world, double x, double y, double z,
-                                                      double maxDist) {
-        if (!isAvailable()) {
-            return null;
-        }
-        return VSBridge.nearestShipAngularVelocity(world, x, y, z, maxDist);
-    }
+    // THE NEAREST-SHIP LOOKUPS ARE GONE — removed 2026-09-14 on the maintainer's ruling, and the
+    // reason is geometric rather than stylistic: a ship's blocks live in its SUBSPACE, so in the
+    // world it has a pose and no extent a distance could be measured to. "The ship nearest this
+    // point" therefore compares a number against a quantity that describes nothing, and a BOUND on
+    // it is not a mitigation — it is a threshold on the same meaningless number. Unbounded, the
+    // lookup cannot fail and so cannot warn: it once mounted a pilot onto a craft 16,000,000 blocks
+    // away and the reply was shaped exactly like success.
+    //
+    // A ship is named by its id. Where a caller has only a place, the honest question is CONTAINMENT
+    // ({@link #shipIdsAt}), and its answer is a LIST whose size the caller must look at — two hulls
+    // can occupy one space. A diagnostic of the form "did my ship end up where I put it" resolves
+    // the ship by id FIRST and then reads its pose; there is no other order that says anything.
 
     /**
      * The world position {@code [x, y, z]} of the pilot seat at ship-subspace {@code seatPos},
-     * or {@code null} when VS is absent or no ship manages the seat. Lets a seated rider be glued
+     * or {@code null} when no ship manages the seat. Lets a seated rider be glued
      * to its ship's live world location every tick (the seat block itself lives in a distant,
      * stationary shipyard subspace). Only AR-core/MC types cross the gate.
      */
     public static double[] getSeatWorldPosition(World world, BlockPos seatPos) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.seatWorldPosition(world, seatPos);
     }
 
     /**
      * The world position {@code [x, y, z]} of the pilot seat at ship-subspace {@code seatPos} on a ship the
-     * registry knows — <b>loaded or not</b> — or {@code null} when VS is absent or no registered ship owns
+     * registry knows — <b>loaded or not</b> — or {@code null} when no registered ship owns
      * that block. Use this wherever the question is "where is this seat" rather than "is this rider still
      * on a live ship": a ship's loaded state is decided by player proximity and re-decided every tick, so a
      * step that has nobody near it yet (a crew re-seat on arrival carries the crew there itself) must not
      * be gated on it. See {@link #getSeatWorldPosition} for the liveness-sensitive variant.
      */
     public static double[] getRegisteredSeatWorldPosition(World world, BlockPos seatPos) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.registeredSeatWorldPosition(world, seatPos);
     }
 
     /**
      * The world position {@code [x, y, z]} of the SUBSPACE point {@code (sx, sy, sz)} on the ship
      * that manages {@code managedBlock}, asked of the registry so it answers for an UNLOADED ship
-     * too; {@code null} when VS is absent or no registered ship owns that block.
+     * too; {@code null} when no registered ship owns that block.
      *
      * <p>The continuous counterpart of {@link #getRegisteredSeatWorldPosition}: where that one puts
      * a rider on a seat BLOCK, this one puts a crew member on his feet back at the deck point he
@@ -1039,9 +1291,6 @@ public final class VSIntegration {
      */
     public static double[] getRegisteredSubspacePointWorldPosition(World world, BlockPos managedBlock,
                                                                    double sx, double sy, double sz) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.registeredSubspacePointToWorld(world, managedBlock, sx, sy, sz);
     }
 
@@ -1049,8 +1298,23 @@ public final class VSIntegration {
      * Every ship the registry knows in {@code world}, as uuid -> world position; empty when the
      * physics mod is absent. Registry-keyed, so it answers for ships nobody is near.
      */
+    /**
+     * Every ship in {@code world}'s REGISTRY — loaded or not, with blocks or without — each as a flat
+     * map of primitives: {@code id}, {@code durableId}, {@code blocks}, {@code loaded}, {@code dead}.
+     *
+     * <p>The registry is the half no instrument could see: every other reading in the tree is about
+     * LOADED ships, so a blockless craft nothing had loaded was invisible while still answering
+     * position lookups and holding a lane. Only AR-core types cross the gate.</p>
+     */
+    public static java.util.List<java.util.Map<String, Object>> registeredShips(World world) {
+        if (world == null) {
+            return java.util.Collections.emptyList();
+        }
+        return VSBridge.registeredShips(world);
+    }
+
     public static java.util.Map<java.util.UUID, double[]> registeredShipPoses(World world) {
-        if (!isAvailable() || world == null) {
+        if (world == null) {
             return java.util.Collections.emptyMap();
         }
         return VSBridge.registeredShipPoses(world);
@@ -1066,16 +1330,27 @@ public final class VSIntegration {
      * re-assembly; everything in the physics mod is keyed by its own uuid. Indexed on that side, so
      * this costs one probe.</p>
      *
-     * <p>Answers {@code null} for a craft that was never bound — which is every craft AR does not own,
-     * and any of its own whose binding has not happened yet. A caller must treat that as "could not
-     * establish", never as "not this ship".</p>
+     * <p><b>The index is a CACHE, and a miss is answered from the source of truth.</b> The durable id
+     * lives in the flight computer's own NBT — that is the canonical copy, it rides every relocation
+     * and every crossing verbatim, and the record on the physics side is a reverse index kept beside
+     * it so this question costs one probe instead of a shipyard scan. Two copies of one fact can
+     * disagree, and one did: the assembler minted the id and never bound it, so every craft that had
+     * not yet crossed was unfindable by its own name. So a miss here does NOT answer {@code null} —
+     * it walks this world's ships, reads each one's computer, and REPAIRS the index from what it
+     * finds. A call site that forgets to bind therefore costs one scan, not a wrong answer.</p>
+     *
+     * <p>Answers {@code null} only when no craft in {@code world} carries that name — which is every
+     * craft AR does not own. A caller must treat that as "could not establish", never as "not this
+     * ship".</p>
      */
     public static java.util.UUID shipUuidOfDurableId(World world, String durableId) {
-        if (!isAvailable() || world == null || durableId == null) {
+        if (world == null || durableId == null) {
             return null;
         }
         try {
-            return VSBridge.shipUuidOfDurableId(world, java.util.UUID.fromString(durableId));
+            java.util.UUID wanted = java.util.UUID.fromString(durableId);
+            java.util.UUID indexed = VSBridge.shipUuidOfDurableId(world, wanted);
+            return indexed != null ? indexed : rebindFromFlightComputers(world, wanted);
         } catch (IllegalArgumentException notAnIdentity) {
             return null; // a synthetic id names no ship; the caller falls back as before
         }
@@ -1086,8 +1361,41 @@ public final class VSIntegration {
      * question {@link #shipUuidOfDurableId} answers from the other end, and reading both separates a
      * craft that was never bound from a binding the lookup cannot find.
      */
+    /**
+     * The index repair: find the ship in {@code world} whose FLIGHT COMPUTER carries {@code wanted},
+     * bind it, and answer. {@code null} when no craft here does.
+     *
+     * <p>Deliberately the expensive path, and deliberately only on a miss. It resolves each candidate's
+     * computer, which force-loads that ship's subspace shipyard — affordable because a slot world holds
+     * a craft or two and hyperspace a handful of lanes, and because it happens once: the binding it
+     * writes is what every later question reads.</p>
+     */
+    private static java.util.UUID rebindFromFlightComputers(World world, java.util.UUID wanted) {
+        if (!(world instanceof net.minecraft.world.WorldServer)) {
+            return null;
+        }
+        net.minecraft.world.WorldServer server = (net.minecraft.world.WorldServer) world;
+        for (java.util.UUID candidate : registeredShipPoses(world).keySet()) {
+            BlockPos afc = flightComputerOf(server, candidate);
+            net.minecraft.tileentity.TileEntity te = afc == null ? null : server.getTileEntity(afc);
+            if (!(te instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer)) {
+                continue;
+            }
+            java.util.UUID named = ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te)
+                    .shipIdOrNull();
+            if (wanted.equals(named)) {
+                LOGGER.info("[VS] ship {} in dim {} carries durable id {} on its flight computer but "
+                                + "was not indexed under it; binding it now", candidate,
+                        server.provider.getDimension(), wanted);
+                VSBridge.bindDurableId(world, candidate, wanted);
+                return candidate;
+            }
+        }
+        return null;
+    }
+
     public static java.util.UUID durableIdOfShip(World world, java.util.UUID vsShipUuid) {
-        return (!isAvailable() || world == null || vsShipUuid == null)
+        return (world == null || vsShipUuid == null)
                 ? null : VSBridge.durableIdOf(world, vsShipUuid);
     }
 
@@ -1103,7 +1411,7 @@ public final class VSIntegration {
      */
     public static boolean bindDurableShipId(World world, java.util.UUID vsShipUuid,
                                             java.util.UUID durableId) {
-        return isAvailable() && world != null && vsShipUuid != null
+        return world != null && vsShipUuid != null
                 && VSBridge.bindDurableId(world, vsShipUuid, durableId);
     }
 
@@ -1113,7 +1421,7 @@ public final class VSIntegration {
      * neighbours are a lane apart; never for a lookup where "nearest" could mean anything.
      */
     public static java.util.UUID shipUuidAt(World world, double x, double y, double z) {
-        if (!isAvailable() || world == null) {
+        if (world == null) {
             return null;
         }
         return VSBridge.shipUuidNear(world, x, y, z,
@@ -1125,7 +1433,7 @@ public final class VSIntegration {
      * no record claims. {@code false} when the physics mod is absent or that ship is loaded.
      */
     public static boolean releaseShipIfNothingLoaded(World world, java.util.UUID uuid) {
-        return isAvailable() && world != null && VSBridge.releaseShipIfNothingLoaded(world, uuid);
+        return world != null && VSBridge.releaseShipIfNothingLoaded(world, uuid);
     }
 
     /**
@@ -1135,9 +1443,6 @@ public final class VSIntegration {
      * is absent or its manager is not present. Only AR-core/MC types cross the gate.
      */
     public static boolean hasShipSupport(World world) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.hasShipSupport(world);
     }
 
@@ -1146,236 +1451,112 @@ public final class VSIntegration {
      * absent or no ship manages it). Only AR-core/MC types cross the gate.
      */
     public static void ensureShipPhysicsEnabled(World world, BlockPos pos) {
-        if (!isAvailable()) {
-            return;
-        }
         VSBridge.ensureShipPhysicsEnabled(world, pos);
     }
 
-    /** Number of Valkyrien Skies ships loaded in {@code world}, or -1 when VS is absent. */
+    /** Number of Valkyrien Skies ships loaded in {@code world}, or -1 when the world holds none. */
     public static int loadedShipCount(World world) {
-        if (!isAvailable()) {
-            return -1;
-        }
         return VSBridge.loadedShipCount(world);
     }
 
-    // ---- Spawn diagnostics (ledger #60). Ungated statics written by MixinWorldServerShipManager
-    // from inside VS's own spawnNewShips, so an e2e can read WHERE a queued+named tier-2 ship dies:
-    // never-processed vs processed-but-never-registered vs registered-then-destroyed. Harness child
-    // JVMs have no test mode, so these must be ungated (isTestMode gates log lines only). --------
-    /** Times spawnNewShips ran with a non-empty spawnQueue since the last reset. */
-    public static volatile long spawnNewShipsRuns = 0L;
-    /** Times spawnNewShips RETURNED NORMALLY since reset. runs>returns ⇒ it exited by THROW (one of
-     *  VS's pre-addShip athrows: "already loaded"@98, "Incorrect block copy!"@568/1012). */
-    public static volatile long spawnNewShipsReturns = 0L;
-    /** spawnQueue size seen at the last spawnNewShips entry (how many spawns VS tried to process). */
-    public static volatile int lastSpawnQueueSize = 0;
-    /** Max queryable-ship count observed at spawnNewShips RETURN since reset. >=1 means the ship DID
-     *  enter the registry at least momentarily (register-then-destroy); 0 with runs>0 means the
-     *  spawn was processed but addShip was never reached (gate skip or a pre-addShip throw). */
-    public static volatile int spawnDiagMaxShips = 0;
-
-    /** Reset the spawn diagnostics (call before an assembly under test). */
-    public static void resetSpawnDiag() {
-        spawnNewShipsRuns = 0L;
-        spawnNewShipsReturns = 0L;
-        lastSpawnQueueSize = 0;
-        spawnDiagMaxShips = 0;
+    /**
+     * The identities of the loaded ships {@link #loadedShipCount} counts, or an empty list when VS
+     * is absent. A caller that has established "this world holds exactly one ship" needs this to say
+     * WHICH — the count alone leaves it reaching for a positional lookup to find out.
+     */
+    public static java.util.List<String> loadedShipIds(World world) {
+        return VSBridge.loadedShipIds(world);
     }
 
-    /** Called by the mixin at spawnNewShips NORMAL return (never on a throw). */
-    public static void noteSpawnReturn() {
-        spawnNewShipsReturns++;
-    }
-
-    /** Called by the mixin at spawnNewShips entry with the current spawnQueue size. */
-    public static void noteSpawnEntry(int queueSize) {
-        if (queueSize > 0) {
-            spawnNewShipsRuns++;
-            lastSpawnQueueSize = queueSize;
-        }
-    }
-
-    /** Called by the mixin at spawnNewShips return with the current queryable-ship count. */
-    public static void noteQueryableCount(int count) {
-        if (count > spawnDiagMaxShips) {
-            spawnDiagMaxShips = count;
-        }
-    }
-
-    /** foundSet size of the flood at the last spawn attempt (the block count VS's abort gate tests
-     *  against maxDetectedShipSize=15000): ~craft size on a healthy spawn, huge if the flood escaped
-     *  into terrain. */
-    public static volatile int lastFoundSetSize = -1;
-    /** cleanHouse at the last spawn attempt: true iff the flood reached bedrock (the other abort leg). */
-    public static volatile boolean lastCleanHouse = false;
-
-    /** Size of VS's ShipSpawnDetector spawn-blacklist Set at the last flood. 21 = fully populated
-     *  (air+terrain excluded); 0/small = the blacklist was mid-rebuild (syncWithConfig clears then
-     *  repopulates non-atomically), so AIR was floodable and the flood escaped. -1 = unread. */
-    public static volatile int lastBlacklistSize = -1;
-
-    /** WHERE the flood went: bbox of the found set + the block sampled at its farthest corner from
-     *  the anchor. On an escaped flood this names the escape direction and what it floods through. */
-    public static volatile String lastFloodShape = "";
-
-    /** Called by the mixin right after the flood detector is built, with the flood result. */
-    public static void noteDetector(int foundSetSize, boolean cleanHouse, int blacklistSize) {
-        lastFoundSetSize = foundSetSize;
-        lastCleanHouse = cleanHouse;
-        lastBlacklistSize = blacklistSize;
-    }
-
-    /** Called by the mixin (huge floods only) with the found-set geometry, pre-formatted by the
-     *  bridge (which may touch VS/MC types); this class only stores the string. */
-    public static void noteFloodShape(String shape) {
-        lastFloodShape = shape;
-    }
-
-    /** Total ships in {@code world} loaded or not (queryable registry), or -1 when VS absent. */
+    /** Total ships in {@code world} loaded or not (queryable registry), or -1 when the world holds none. */
     public static int queryableShipCount(World world) {
-        if (!isAvailable()) {
-            return -1;
-        }
         return VSBridge.queryableShipCount(world);
     }
 
     /**
+     * TEST-ONLY FAULT INJECTION: register a blockless, unloaded ship record in {@code world}.
+     *
+     * <p>Answers {@code [uuid, registrySizeRightAfterTheAdd]}, or {@code null} when the add did not take —
+     * absence rather than a fabricated pair, because a caller that got {@code ["", "0"]} could not
+     * tell "no physics mod" from "the plant did nothing".</p>
+     */
+    public static String[] strandBlocklessRecord(World world, net.minecraft.util.math.BlockPos anchor) {
+        return VSBridge.strandBlocklessRecord(world, anchor);
+    }
+
+    /**
      * DIAGNOSTIC: identity of the ship registry {@code world} answers with, matching the hex the
-     * physics mod prints when it serialises that world. {@code "?"} when VS is absent.
+     * physics mod prints when it serialises that world. {@code "?"} when the world answers with no registry.
      */
     public static String queryableIdentity(World world) {
-        if (!isAvailable()) {
-            return "?";
-        }
         return VSBridge.queryableIdentity(world);
     }
 
     /**
      * DIAGNOSTIC: the transform positions of every queryable ship in {@code world}, as
      * {@code "x,y,z;x,y,z"}. Asks about no point, so a caller can find out WHERE a ship is rather than
-     * only whether one answers for a place it guessed. Empty when VS is absent or holds no ships.
+     * only whether one answers for a place it guessed. Empty when holds no ships.
      */
     public static String queryableShipPositions(World world) {
-        if (!isAvailable()) {
-            return "";
-        }
         return VSBridge.queryableShipPositions(world);
     }
 
     /**
      * Force every known ship in {@code world} loaded and physics-enabled (headless/no-observer
-     * equivalent of a nearby player loading it); returns the number requested, or -1 when VS
-     * is absent.
-     */
-    public static int loadAllShips(World world) {
-        if (!isAvailable()) {
-            return -1;
-        }
-        return VSBridge.loadAllShips(world);
-    }
-
-    /**
-     * State of the loaded ship nearest to {@code (x,y,z)} as
-     * {@code [posX,posY,posZ, qw,qx,qy,qz, velX,velY,velZ]}, or {@code null} when VS is
-     * absent or no ship is loaded. Only AR-core/MC types cross the gate.
-     */
-    public static double[] nearestShipState(World world, double x, double y, double z) {
-        return nearestShipState(world, x, y, z, Double.POSITIVE_INFINITY);
-    }
-
-    /**
-     * As {@link #nearestShipState(World, double, double, double)}, but answering {@code null} when
-     * the nearest loaded ship is farther than {@code maxDist} from the query point. A caller that
-     * means ONE ship needs this: an unbounded nearest lookup on a world holding several ships
-     * starts describing a neighbour the moment the intended ship unloads or flies off, and says
-     * nothing about having done so.
-     */
-    public static double[] nearestShipState(World world, double x, double y, double z,
-                                            double maxDist) {
-        if (!isAvailable()) {
-            return null;
-        }
-        return VSBridge.nearestShipState(world, x, y, z, maxDist);
-    }
-
-    /**
-     * The identity (VS ship uuid, as a string) of the loaded ship nearest to {@code (x,y,z)} within
-     * {@code maxDist}, or {@code null} when VS is absent or there is no such ship.
+     * equivalent of a nearby player loading it).
      *
-     * <p>Captured once, at a moment the caller can defend — its own ship freshly assembled at a
-     * spot nothing else occupies — it turns every later question into
-     * {@link #shipStateById(World, String)}, which cannot answer about a different ship however far
-     * this one travels. The distance bound is only how the FIRST answer is attributed; it is not an
-     * identity, and it is a full 3-D distance, so it says nothing about a ship that then climbs.</p>
+     * @return {@code [requested, alreadyLoaded]} — a load is queued only for a ship that has no
+     *         physics object yet, so a caller can tell "nothing needed loading" from "there was
+     *         nothing here"; {@code null} when no ship was named.
      */
-    public static String nearestShipId(World world, double x, double y, double z, double maxDist) {
-        if (!isAvailable()) {
-            return null;
-        }
-        return VSBridge.nearestShipId(world, x, y, z, maxDist);
+    public static int[] loadAllShips(World world) {
+        return VSBridge.loadAllShipsCounted(world);
     }
 
     /**
-     * State of the loaded ship named by {@code shipId}, in the layout of
-     * {@link #nearestShipState(World, double, double, double)}, or {@code null} when VS is absent or
-     * that ship is not loaded here. Position-independent.
+     * State of the loaded ship named by {@code shipId} as
+     * {@code [posX,posY,posZ, qw,qx,qy,qz, velX,velY,velZ]}, or {@code null} when that ship is not loaded here. Position-independent — which is the whole point: this is how a
+     * ship is asked about, now that the nearest-ship lookups are gone.
      */
     public static double[] shipStateById(World world, String shipId) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipStateById(world, shipId);
     }
 
     /**
      * The world-frame angular velocity {@code [x,y,z]} (rad/s) of the ship named by
-     * {@code shipId}, or {@code null} when VS is absent or that ship is not loaded here.
+     * {@code shipId}, or {@code null} when that ship is not loaded here.
      */
     public static double[] shipAngularVelocityById(World world, String shipId) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipAngularVelocityById(world, shipId);
     }
 
     /**
      * Set the linear-velocity setpoint (blocks/second, world frame) of the loaded ship named by
-     * {@code shipId}; a safe no-op returning false when VS is absent or that id names no ship
+     * {@code shipId}; a safe no-op returning false when that id names no ship
      * loaded here.
      */
     public static boolean pushShipById(World world, String shipId,
                                        double vx, double vy, double vz) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.pushShipById(world, shipId, vx, vy, vz);
     }
 
     /**
      * TEST-ONLY: directly set the angular velocity (rad/s, world frame) of the ship named by
      * {@code shipId}, bypassing the flight controller, so a test can spin a ship to a fully
-     * inverted attitude via free physics. A safe no-op returning false when VS is absent or that
+     * inverted attitude via free physics. A safe no-op returning false when that
      * id names no ship loaded here.
      */
     public static boolean spinShipById(World world, String shipId,
                                        double wx, double wy, double wz) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.spinShipById(world, shipId, wx, wy, wz);
     }
 
     /**
      * The gates VS applies before ticking a ship's physics, plus its controller count — see
-     * {@code VSBridge.shipPhysicsGatesById}. {@code null} when VS is absent or the id names no ship
+     * {@code VSBridge.shipPhysicsGatesById}. {@code null} when the id names no ship
      * loaded here.
      */
     public static int[] shipPhysicsGatesById(World world, String shipId) {
-        if (!isAvailable()) {
-            return null;
-        }
         return VSBridge.shipPhysicsGatesById(world, shipId);
     }
 
@@ -1385,9 +1566,6 @@ public final class VSIntegration {
      * absent or that id names no ship loaded here.
      */
     public static boolean enableShipPhysicsById(World world, String shipId) {
-        if (!isAvailable()) {
-            return false;
-        }
         return VSBridge.enableShipPhysicsById(world, shipId);
     }
 

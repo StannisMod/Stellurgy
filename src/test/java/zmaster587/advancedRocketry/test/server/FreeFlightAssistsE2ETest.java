@@ -1,9 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -22,89 +26,146 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern MOTION_X = Pattern.compile("\"motionX\":(-?[0-9.E\\-]+)");
-    private static final Pattern MOTION_Y = Pattern.compile("\"motionY\":(-?[0-9.E\\-]+)");
-    private static final Pattern MOTION_Z = Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern ENGINE_POWER = Pattern.compile("\"enginePower\":(-?[0-9.E\\-]+)");
+    /**
+     * The cruise speed that says a released key did NOT bleed the craft's momentum, in blocks/tick.
+     *
+     * <p>The TEST'S OWN sensitivity bar: the craft is commanded up to a cruise and the key is then
+     * let go, so what this refuses is a craft that stopped the moment the input did. The commanded
+     * cruise is several times it.</p>
+     */
+    private static final double STILL_CRUISING = 0.5;
+
+    /**
+     * What counts as STOPPED for a cruise the pilot has cut, in blocks/tick.
+     *
+     * <p>The TEST'S OWN: the contract is a halt, so the honest statement is zero and this is the
+     * residual of the ease-out. It doubles as the altitude-hold bound in the same breath, because
+     * both are "this axis is no longer moving".</p>
+     */
+    private static final double EASED_TO_A_STOP = 0.05;
+
+    /**
+     * How far the cruise must have turned onto -X after a 90-degree yaw, in blocks/tick, and how
+     * much may be left on the old axis.
+     *
+     * <p>Both are the test's own. The first is a sensitivity bar on the NEW axis; the second is the
+     * residue allowed on the old one, and it is deliberately smaller, because the claim is that the
+     * cruise TURNED rather than that it merely gained a component.</p>
+     */
+    private static final double CRUISE_TURNED_ONTO_X = -0.5;
+    /** @see #CRUISE_TURNED_ONTO_X */
+    private static final double CRUISE_LEFT_ON_OLD_AXIS = 0.35;
+
+    /**
+     * The cruise that says the craft is COASTING before an assist leg is run, in blocks/tick.
+     *
+     * <p>The TEST'S OWN precondition bar: it gates a leg whose subject is what the assist does to a
+     * coast, so all it must establish is that there was one.</p>
+     */
+    private static final double COASTING = 0.2;
+
+    /**
+     * The flight assist's own cruise ceiling, in blocks/tick, as this scenario's two legs straddle
+     * it.
+     *
+     * <p><b>This one is PRODUCTION'S number restated here rather than read.</b> It is the ceiling
+     * the assist tracks, and the two legs are defined by being under it and over it — so the
+     * constant is named once and both legs cite it, instead of the same 3.0 appearing twice as an
+     * unexplained literal. If the assist's ceiling moves, this is the line that has to move with
+     * it, and the failure will say so.</p>
+     */
+    private static final double ASSIST_CEILING = 3.0;
+
+    /**
+     * How far below the ceiling the craft may fall while the assist TRACKS it, in blocks/tick.
+     *
+     * <p>The TEST'S OWN: the claim is that the assist holds the craft at the ceiling rather than
+     * braking it to a halt, so what this refuses is an overshoot all the way down.</p>
+     */
+    private static final double TRACKS_WITHOUT_OVERSHOOT = 2.0;
+
+    /**
+     * How much the cruise may change when flight assist is RE-ENABLED, in blocks/tick.
+     *
+     * <p>The TEST'S OWN: the contract is that re-enabling captures the existing cruise rather than
+     * resetting it, so the honest statement is zero and this is the settle of one capture.</p>
+     */
+    private static final double RE_ENABLE_KEEPS_CRUISE = 0.25;
+
+    /**
+     * What counts as SILENT for an engine that is not thrusting, in production's power units.
+     *
+     * <p>The TEST'S OWN, and it is float noise rather than a tolerance: a coasting craft commands
+     * no thrust at all, so the only allowance is the last bits of a double.</p>
+     */
+    private static final double ENGINE_SILENT = 1e-3;
+
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 50) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-
-        String assemble = ok(client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
-
-        String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
     }
 
-    private static double parseDouble(String body, Pattern p, String label) {
-        Matcher m = p.matcher(body);
-        if (!m.find()) {
-            throw new AssertionError("response missing " + label + ": " + body);
-        }
-        return Double.parseDouble(m.group(1));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+                "simple", 2, 50,
+                "the craft is built and flown in this volume");
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
+
+        String list = ok(client().execute("artest rocket list 0"));
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     // -----------------------------------------------------------------
 
     @Test
     public void flightAssistDefaultsOnAndTogglesThroughProbe() throws Exception {
-        int id = buildAndAssemble(4000, 64, 500);
-        String info0 = ok(client().execute("artest rocket info " + id));
-        assertTrue("FA must default to true: " + info0,
-                info0.contains("\"flightAssistOn\":true"));
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4000, 500));
+        RocketInfo info0 = rocketInfo(id);
+        assertTrue("FA must default to true: " + info0.raw(), info0.flightAssistOn);
 
         String off = ok(client().execute("artest rocket set-flight-assist " + id + " off"));
         assertTrue("set-flight-assist off must succeed: " + off,
-                off.contains("\"ok\":true") && off.contains("\"flightAssistOn\":false"));
+                Reply.of(off).ok() && (!Reply.of(off).bool("flightAssistOn")));
 
-        String info1 = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must round-trip FA=false: " + info1,
-                info1.contains("\"flightAssistOn\":false"));
+        RocketInfo info1 = rocketInfo(id);
+        assertFalse("info must round-trip FA=false: " + info1.raw(), info1.flightAssistOn);
 
         ok(client().execute("artest rocket set-flight-assist " + id + " on"));
-        String info2 = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must round-trip FA=true after flip-back: " + info2,
-                info2.contains("\"flightAssistOn\":true"));
+        RocketInfo info2 = rocketInfo(id);
+        assertTrue("info must round-trip FA=true after flip-back: " + info2.raw(),
+                info2.flightAssistOn);
     }
 
     @Test
     public void setFlightAssistRejectsBadValue() throws Exception {
-        int id = buildAndAssemble(4050, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4050, 500));
         String resp = ok(client().execute(
                 "artest rocket set-flight-assist " + id + " wat"));
+        // Read OF THE FIELD. The producer builds this message around the value it rejected, so
+        // a prefix is the reading; the needle it replaces was matched anywhere in the rendering,
+        // including inside a field echoing the phrase back.
+        Reply refusal = Reply.of("artest rocket set-flight-assist", resp);
         assertTrue("bad value must report error: " + resp,
-                resp.contains("\"error\":\"bad value"));
+                refusal.refused() && refusal.error().startsWith("bad value"));
     }
 
     @Test
     public void cutFlagThroughInputIsStoredOnServer() throws Exception {
-        int id = buildAndAssemble(4100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4100, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -112,13 +173,13 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         String applied = ok(client().execute(
                 "artest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
         assertTrue("input must apply on FF rocket: " + applied,
-                applied.contains("\"applied\":true"));
+                Reply.of(applied).bool("applied"));
         assertTrue("probe echoes cut=true: " + applied,
-                applied.contains("\"cut\":true"));
+                Reply.of(applied).bool("cut"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("info must store ffInputCut=true: " + info,
-                info.contains("\"ffInputCut\":true"));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("info must store ffInputCut=true: " + info.raw(),
+                info.freeFlightInput().cut);
     }
 
     @Test
@@ -126,7 +187,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         // THE Flight Assist feature: holding forward RAMPS the
         // velocity setpoint; releasing the key KEEPS it — the craft cruises
         // hands-off instead of coasting down.
-        int id = buildAndAssemble(4150, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4150, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -140,19 +201,17 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 40"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        double mz = parseDouble(info, Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)"), "motionZ");
-        assertTrue("released key must NOT bleed the cruise (motionZ=" + mz
-                + ", expected to keep cruising +Z): " + info, mz > 0.5);
-        assertTrue("setpoint must persist on the server: " + info,
-                info.contains("\"faSetpointFwd\""));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("released key must NOT bleed the cruise (motionZ=" + info.motionZ
+                + ", expected to keep cruising +Z): " + info.raw(), info.motionZ > STILL_CRUISING);
+        assertTrue("setpoint must persist on the server: " + info.raw(), info.hasFaSetpoint());
     }
 
     @Test
     public void cutEasesTheCraftIntoAGravityCancelledHover() throws Exception {
         // X (cut): zero the setpoint -> FA damps motion to zero AND holds
         // altitude (gravity cancelled) — brake-to-hover, not brake-to-fall.
-        int id = buildAndAssemble(4200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4200, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -165,22 +224,19 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 60"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        double my = parseDouble(info, MOTION_Y, "motionY");
-        double mz = parseDouble(info, Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)"), "motionZ");
-        assertTrue("cut must ease the cruise to a stop (motionZ=" + mz + ")",
-                Math.abs(mz) < 0.05);
-        assertTrue("cut must HOLD ALTITUDE, not drop the craft (motionY=" + my + ")",
-                Math.abs(my) < 0.05);
-        assertTrue("hovering craft must still be in flight: " + info,
-                info.contains("\"isInFlight\":true"));
+        RocketInfo info = rocketInfo(id);
+        assertTrue("cut must ease the cruise to a stop (motionZ=" + info.motionZ + ")",
+                Math.abs(info.motionZ) < EASED_TO_A_STOP);
+        assertTrue("cut must HOLD ALTITUDE, not drop the craft (motionY=" + info.motionY + ")",
+                Math.abs(info.motionY) < EASED_TO_A_STOP);
+        assertTrue("hovering craft must still be in flight: " + info.raw(), info.inFlight);
     }
 
     @Test
     public void yawingTheCraftRotatesTheCruiseVelocity() throws Exception {
         // The setpoint is body-frame: cruise forward, then yaw ~90° — the
         // WORLD velocity must rotate with the nose (from +Z toward -X).
-        int id = buildAndAssemble(4300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4300, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -193,11 +249,11 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 40"));
 
-        String info = ok(client().execute("artest rocket info " + id));
-        double mx = parseDouble(info, Pattern.compile("\"motionX\":(-?[0-9.E\\-]+)"), "motionX");
-        double mz = parseDouble(info, Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)"), "motionZ");
-        assertTrue("after a 90° yaw the cruise must point -X (mx=" + mx + " mz=" + mz + ")",
-                mx < -0.5 && Math.abs(mz) < 0.35);
+        RocketInfo info = rocketInfo(id);
+        assertTrue("after a 90° yaw the cruise must point -X (mx=" + info.motionX
+                        + " mz=" + info.motionZ + ")",
+                info.motionX < CRUISE_TURNED_ONTO_X
+                        && Math.abs(info.motionZ) < CRUISE_LEFT_ON_OLD_AXIS);
     }
 
     @Test
@@ -212,7 +268,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         // had been failing since that change landed and nobody read it — the cruise built here is 4.0
         // against a ceiling of 3.0. The capture is still the contract; it is now tested where the
         // contract holds, and the clamp is tested beside it as its own leg.
-        int id = buildAndAssemble(4350, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4350, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -236,20 +292,18 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-tick " + id + " 4"));
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 2"));
-        double mzBefore = parseDouble(ok(client().execute("artest rocket info " + id)),
-                Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)"), "motionZ");
-        assertTrue("precondition: must be coasting (+Z), got " + mzBefore, mzBefore > 0.2);
+        double mzBefore = rocketInfo(id).motionZ;
+        assertTrue("precondition: must be coasting (+Z), got " + mzBefore, mzBefore > COASTING);
         assertTrue("precondition: this leg tests the capture, so the cruise must be UNDER the assist "
                         + "ceiling (" + mzBefore + " vs 3.0) — above it the contract is the clamp below",
-                mzBefore < 3.0);
+                mzBefore < ASSIST_CEILING);
 
         // FA back on -> setpoint captured -> cruise continues, no jerk.
         ok(client().execute("artest rocket set-flight-assist " + id + " on"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 20"));
-        double mzAfter = parseDouble(ok(client().execute("artest rocket info " + id)),
-                Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)"), "motionZ");
+        double mzAfter = rocketInfo(id).motionZ;
         assertTrue("FA re-enable must keep the cruise (was " + mzBefore + ", now "
-                + mzAfter + ")", Math.abs(mzAfter - mzBefore) < 0.25);
+                + mzAfter + ")", Math.abs(mzAfter - mzBefore) < RE_ENABLE_KEEPS_CRUISE);
     }
 
     /**
@@ -259,7 +313,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
      */
     @Test
     public void reEnablingFlightAssistAboveItsCeilingDeceleratesToTheCeiling() throws Exception {
-        int id = buildAndAssemble(4375, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4375, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -275,39 +329,35 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-tick " + id + " 8"));
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 2"));
-        double mzBefore = parseDouble(ok(client().execute("artest rocket info " + id)),
-                Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)"), "motionZ");
+        double mzBefore = rocketInfo(id).motionZ;
         assertTrue("precondition: the cruise must exceed the assist ceiling, got " + mzBefore,
-                mzBefore > 3.0);
+                mzBefore > ASSIST_CEILING);
 
         ok(client().execute("artest rocket set-flight-assist " + id + " on"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 20"));
-        double mzAfter = parseDouble(ok(client().execute("artest rocket info " + id)),
-                Pattern.compile("\"motionZ\":(-?[0-9.E\\-]+)"), "motionZ");
+        double mzAfter = rocketInfo(id).motionZ;
         assertTrue("the assist must bring an overfast craft DOWN toward its ceiling (was " + mzBefore
                 + ", now " + mzAfter + ")", mzAfter < mzBefore);
         assertTrue("and must not overshoot below it — it tracks the ceiling, it does not brake to a "
-                        + "halt (now " + mzAfter + ")", mzAfter > 2.0);
+                        + "halt (now " + mzAfter + ")", mzAfter > TRACKS_WITHOUT_OVERSHOOT);
     }
 
     @Test
     public void flightAssistOffStillAcceptsExplicitBrake() throws Exception {
         // Cross-side wiring: FA=off + brake input still attenuates motion.
-        int id = buildAndAssemble(4400, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4400, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
         ok(client().execute("artest rocket set-flight-assist " + id + " off"));
 
         ok(client().execute("artest rocket set-state " + id + " motionY=1.0"));
-        String before = ok(client().execute("artest rocket info " + id));
-        double myBefore = parseDouble(before, MOTION_Y, "motionY");
+        double myBefore = rocketInfo(id).motionY;
 
         // brake=1.0 (channel 4).
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 1 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 1"));
 
-        String after = ok(client().execute("artest rocket info " + id));
-        double myAfter = parseDouble(after, MOTION_Y, "motionY");
+        double myAfter = rocketInfo(id).motionY;
         // Brake at FA off must still pull motion down (toward gravity-altered baseline).
         assertTrue("FA off + brake must still attenuate motionY (was "
                         + myBefore + ", now " + myAfter + ")",
@@ -319,7 +369,7 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         // The client engine sound is driven by getEnginePower(); in FF that must be
         // non-zero for thrust in ANY direction — not only motionY>0 (the classic
         // areEnginesRunning gate that made the sound cut out in cruise/hover).
-        int id = buildAndAssemble(4250, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 4250, 500));
         ok(client().execute("artest rocket set-flight-mode " + id + " FREE_FLIGHT"));
         ok(client().execute("artest rocket start-free-flight " + id));
 
@@ -330,9 +380,9 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket free-flight-tick " + id + " 30"));
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0 1")); // cut -> hover
         ok(client().execute("artest rocket free-flight-tick " + id + " 25"));
-        String hover = ok(client().execute("artest rocket info " + id));
-        double myHover  = parseDouble(hover, MOTION_Y, "motionY");
-        double powHover = parseDouble(hover, ENGINE_POWER, "enginePower");
+        RocketInfo hover = rocketInfo(id);
+        double myHover  = hover.motionY;
+        double powHover = hover.enginePower;
         assertTrue("hover thrust (no climb) must still register engine power for the sound "
                 + "(motionY=" + myHover + " enginePower=" + powHover + ")", powHover > 0.0);
 
@@ -340,9 +390,8 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket set-flight-assist " + id + " off"));
         ok(client().execute("artest rocket free-flight-input " + id + " 0 0 0 0 0"));
         ok(client().execute("artest rocket free-flight-tick " + id + " 3"));
-        double powCoast = parseDouble(ok(client().execute("artest rocket info " + id)),
-                ENGINE_POWER, "enginePower");
+        double powCoast = rocketInfo(id).enginePower;
         assertTrue("coasting with no thrust must be silent (enginePower=" + powCoast + ")",
-                powCoast < 1e-3);
+                powCoast < ENGINE_SILENT);
     }
 }

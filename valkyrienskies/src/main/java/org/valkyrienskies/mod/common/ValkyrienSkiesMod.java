@@ -63,9 +63,24 @@ public class ValkyrienSkiesMod {
 	public static final List<Block> BLOCKS = new ArrayList<>();
 	public static final List<Item> ITEMS = new ArrayList<>();
 	// MOD INFO CONSTANTS
-	// MOD_ID stays "valkyrienskies": it is the registry DOMAIN for VS blocks/items/entities and the
-	// assets path, and a registry domain need not equal the owning modid. HOST_MOD_ID is the modid of
-	// the mod that actually owns VS's lifecycle and event-bus subscriptions now — Advanced Rocketry.
+	// MOD_ID is "valkyrienskies". HOST_MOD_ID is the modid of the mod that actually owns VS's
+	// lifecycle and event-bus subscriptions now — Advanced Rocketry.
+	//
+	// THIS COMMENT USED TO SAY MOD_ID WAS "the registry DOMAIN for VS blocks/items/entities and the
+	// assets path". IT IS NOT, AND MEASURING IT IS HOW A LIVE BUG WAS FOUND (2026-09-22). The domain
+	// is whatever each registration ASKS for, and the registrations here do not agree:
+	//   - TILE ENTITIES pass `new ResourceLocation(MOD_ID, …)` explicitly  -> valkyrienskies:…
+	//   - BLOCKS and ITEMS reach the registry through BaseBlock/BaseItem, which call
+	//     `setRegistryName(name)` with a BARE string -> Forge resolves it against the ACTIVE mod
+	//     container, which for a vendored mod is the HOST: advancedrocketry:…
+	//   - ASSETS sit under assets/valkyrienskies/, which is where neither of the above looks for a
+	//     block model.
+	// The client says both halves out loud on every boot: "Potentially Dangerous alternative prefix
+	// `valkyrienskies` for name `tile_captains_chair`, expected `advancedrocketry`" for the first,
+	// and "FileNotFoundException: advancedrocketry:models/item/vs_ship_tracker.json" for the second.
+	// Every block registered through BaseBlock therefore draws as the missing model. Not fixed here:
+	// the fix is an explicit domain or a moved asset root, and which one is a decision about where a
+	// vendored mod's assets live. `VendoredAssetDomainTest` pins the state until it is taken.
 	public static final String MOD_ID = "valkyrienskies";
 	public static final String HOST_MOD_ID = Constants.modId;
 	static final String MOD_FINGERPRINT = "b308676914a5e7d99459c1d2fb298744387899a7";

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -67,15 +68,15 @@ public class ItemUpgradeSlotEligibilityTest extends AbstractSharedServerTest {
             throws Exception {
         String resp = exec("artest infra item-armor-slot " + ID + " " + meta + " 1");
         assertTrue("item-armor-slot must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         assertTrue("meta=" + meta + " head expected=" + head + "; resp=" + resp,
-                resp.contains("\"head\":" + head));
+                String.valueOf(head).equals(Reply.of(resp).text("head")));
         assertTrue("meta=" + meta + " chest expected=" + chest + "; resp=" + resp,
-                resp.contains("\"chest\":" + chest));
+                String.valueOf(chest).equals(Reply.of(resp).text("chest")));
         assertTrue("meta=" + meta + " legs expected=" + legs + "; resp=" + resp,
-                resp.contains("\"legs\":" + legs));
+                String.valueOf(legs).equals(Reply.of(resp).text("legs")));
         assertTrue("meta=" + meta + " feet expected=" + feet + "; resp=" + resp,
-                resp.contains("\"feet\":" + feet));
+                String.valueOf(feet).equals(Reply.of(resp).text("feet")));
     }
 
     private String exec(String cmd) throws Exception {

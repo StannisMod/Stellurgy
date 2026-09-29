@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -35,17 +34,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern IS_TRANSMITTER =
-            Pattern.compile("\"isUniversalEnergyTransmitter\":(true|false)");
-    private static final Pattern CAN_TICK =
-            Pattern.compile("\"canTick\":(true|false)");
-    private static final Pattern LIST_SIZE =
-            Pattern.compile("\"listSize\":(\\d+)");
-    private static final Pattern BIOME_NAME =
-            Pattern.compile("\"biome\":\"([^\"]*)\"");
-    private static final Pattern BLOCK_NAME =
-            Pattern.compile("\"block\":\"([^\"]*)\"");
+    private static final String ID = "id";
+    private static final String IS_TRANSMITTER = "isUniversalEnergyTransmitter";
+    private static final String CAN_TICK = "canTick";
+    private static final String LIST_SIZE = "listSize";
+    private static final String BIOME_NAME = "biome";
+    private static final String BLOCK_NAME = "block";
 
     /** Pin: solarEnergy &rarr; SatelliteMicrowaveEnergy implements
      *  {@link zmaster587.libVulpes.api.IUniversalEnergyTransmitter} —
@@ -57,7 +51,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
         long satId = createSat("solarEnergy", 200, 4000, 1000);
         String resp = String.join("\n", client().execute(
                 "artest satellite markers 0 " + satId));
-        assertTrue("markers probe failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("markers probe failed: " + resp, Reply.of(resp).ok());
         String isTransmitter = stringField(IS_TRANSMITTER, resp, "isUniversalEnergyTransmitter");
         String canTick = stringField(CAN_TICK, resp, "canTick");
         assertEquals("solarEnergy (SatelliteMicrowaveEnergy) MUST implement "
@@ -82,7 +76,9 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
 
         // Use isolated coords far from any other test's footprint
         // (AbstractSharedServerTest contract — position-isolated).
-        int x = 5000, y = 70, z = 5000;
+        // The band. A biome belongs to the COLUMN, so this Y never mattered and a hard-coded 70
+        // only inherited whatever the seed rolled here.
+        int x = 5000, y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, z = 5000;
 
         // Ensure the chunk is loaded — fill a small region with air;
         // /artest fill also force-loads the chunk(s).
@@ -103,7 +99,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
 
         String setResp = String.join("\n", client().execute(
                 "artest satellite biome-set 0 " + satId + " " + targetBiomeId));
-        assertTrue("biome-set failed: " + setResp, setResp.contains("\"ok\":true"));
+        assertTrue("biome-set failed: " + setResp, Reply.of(setResp).ok());
 
         // Add one position to the change queue.
         client().execute("artest satellite biome-add-pos 0 " + satId + " " + x + " " + y + " " + z);
@@ -176,21 +172,21 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
                 "artest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
-                resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("could not extract id from create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+                Reply.of(resp).ok());
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
-    private long longField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+    private long longField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return (long) reply.integer(field);
     }
 
-    private String stringField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return m.group(1);
+    private String stringField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return reply.text(field);
     }
 }

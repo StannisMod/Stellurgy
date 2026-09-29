@@ -1,7 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -34,7 +39,7 @@ import static org.junit.Assert.assertTrue;
 public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 4000;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4000;
 
     @Test
@@ -42,19 +47,19 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock observatory 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock observatory failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileObservatory tile at controller pos: " + info,
-                info.contains("TileObservatory"));
+        assertEquals("expected TileObservatory tile at controller pos: " + info,
+                "TileObservatory", MachineInfo.of(info).tileSimpleName());
 
-        String tryComplete = MachineRecipeEndToEndKit.tryCompleteWithRetry(
+        String tryComplete = MachineRecipeEndToEndKit.tryComplete(
                 client(), 0, CX, CY, CZ);
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("observatory multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -62,23 +67,23 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String first = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete"));
 
         // Central lens at y=1 of the structure -> globalY = cy + 2, globalX = cx,
         // globalZ = cz + 2 (per handleFixtureObservatory). Replace it with stone.
         String breakLens = join(client().execute(
                 "artest place 0 " + cx + " " + (cy + 2) + " " + (cz + 2) + " minecraft:stone"));
         assertTrue("could not replace lens: " + breakLens,
-                breakLens.contains("\"ok\":true"));
+                Reply.of(breakLens).ok());
 
-        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String broken = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after central lens removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -86,23 +91,23 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String first = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete"));
 
         // Motor at base layer -> globalY = cy - 1, globalX = cx, globalZ = cz + 2
         // (per handleFixtureObservatory motorPos).
         String breakMotor = join(client().execute(
                 "artest place 0 " + cx + " " + (cy - 1) + " " + (cz + 2) + " minecraft:stone"));
         assertTrue("could not replace motor: " + breakMotor,
-                breakMotor.contains("\"ok\":true"));
+                Reply.of(breakMotor).ok());
 
-        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String broken = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after motor removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -110,11 +115,11 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 90, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock observatory 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
-        String first = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String first = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete"));
 
         // y=2 hollow chamber centre — must be air. Fill it with stone to break.
         // globalY = cy + 1, globalX = cx, globalZ = cz + 1 (interior air cell,
@@ -122,12 +127,12 @@ public class ObservatoryMultiblockTest extends AbstractSharedServerTest {
         String fillAir = join(client().execute(
                 "artest place 0 " + cx + " " + (cy + 1) + " " + (cz + 1) + " minecraft:stone"));
         assertTrue("could not fill air chamber: " + fillAir,
-                fillAir.contains("\"ok\":true"));
+                Reply.of(fillAir).ok());
 
-        String broken = MachineRecipeEndToEndKit.tryCompleteWithRetry(client(), 0, cx, cy, cz);
+        String broken = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
         assertTrue("structure stayed complete after air-chamber fill — "
                         + "Blocks.AIR-cell validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

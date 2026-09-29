@@ -1,10 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
-import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -23,76 +24,63 @@ import static org.junit.Assert.assertTrue;
  * </ul>
  *
  * <p>Both tests drive the REAL scan (fixture + one extra control block + {@code rocket assemble})
- * and read the scan status the builder GUI shows the player. Gated on real VS — the restriction
+ * and read the scan status the builder GUI shows the player. The restriction
  * exists for the ship path; without VS the blocks are inert cargo.</p>
  */
 public class VSShipMultiControlScanTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     @Test
     public void aSecondFlightComputerIsRejectedAtScan() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
-        int baseX = 2400, baseY = 64, baseZ = 2400;
-        String coords = placeFixture(baseX, baseY, baseZ, "with-pilot-seat");
+        final FixtureSite site = FixtureSite.openAir(0, 2400, 2400);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        String coords = placeFixture(site, "with-pilot-seat");
         // A second AFC in the free drill cell (rocketX+1, rocketY+3) — inside the scanned build.
         String fill = String.join("\n", client().execute("artest fill 0 "
                 + (baseX + 4) + " " + (baseY + 4) + " " + (baseZ + 3) + " "
                 + (baseX + 4) + " " + (baseY + 4) + " " + (baseZ + 3)
                 + " advancedrocketry:advancedFlightComputer"));
-        assertTrue("placing the second flight computer failed: " + fill, fill.contains("\"ok\":true"));
+        assertTrue("placing the second flight computer failed: " + fill, Reply.of(fill).ok());
 
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
         assertTrue("a build with TWO flight computers must be rejected at scan with its own error "
                         + "code: " + assemble,
-                assemble.contains("\"status\":\"MULTIPLEFLIGHTCOMPUTERS\""));
+                "MULTIPLEFLIGHTCOMPUTERS".equals(Reply.of(assemble).text("status")));
     }
 
     @Test
     public void aSecondPilotSeatIsRejectedAtScan() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)",
-                serverHasVs());
 
-        int baseX = 2600, baseY = 64, baseZ = 2400;
-        String coords = placeFixture(baseX, baseY, baseZ, "with-pilot-seat");
+        final FixtureSite site = FixtureSite.openAir(0, 2600, 2400);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        String coords = placeFixture(site, "with-pilot-seat");
         // A second pilot seat in the free cell beside the linked one (rocketX+1, rocketY+4).
         String fill = String.join("\n", client().execute("artest fill 0 "
                 + (baseX + 4) + " " + (baseY + 5) + " " + (baseZ + 3) + " "
                 + (baseX + 4) + " " + (baseY + 5) + " " + (baseZ + 3)
                 + " advancedrocketry:pilotSeat"));
-        assertTrue("placing the second pilot seat failed: " + fill, fill.contains("\"ok\":true"));
+        assertTrue("placing the second pilot seat failed: " + fill, Reply.of(fill).ok());
 
         String assemble = String.join("\n", client().execute("artest rocket assemble 0 " + coords));
         assertTrue("a build with TWO pilot seats must be rejected at scan with its own error code: "
                         + assemble,
-                assemble.contains("\"status\":\"MULTIPLEPILOTSEATS\""));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return String.join("\n", client().execute("artest vs available"))
-                .contains("\"available\":true");
+                "MULTIPLEPILOTSEATS".equals(Reply.of(assemble).text("status")));
     }
 
     /** Place the fixture on a pad WITHOUT assembling; returns the builder pos as "bx by bz". */
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        String warmup = String.join("\n", client().execute(
-                "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this build occupies is EMPTY. The site stands in open air, so this
+        // ASSERTS rather than digs, and its fill force-loads every chunk in the box — so the warmup
+        // it replaces lost nothing. Nothing here ever flies: the subject is the assembly SCAN, and
+        // the height covers the tower the scan reads.
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
+                "the build the assembly scan is about stands in this volume");
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 }

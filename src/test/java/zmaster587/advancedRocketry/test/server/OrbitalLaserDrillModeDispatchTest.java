@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
@@ -39,24 +40,28 @@ public class OrbitalLaserDrillModeDispatchTest extends AbstractSharedServerTest 
         String resp = exec("artest infra laserdrill-mine 0 "
                 + X + " " + Y + " " + Z + " minecraft:iron_ore");
 
-        assertTrue("probe must succeed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("probe must succeed: " + resp, Reply.of(resp).ok());
 
         // The mined iron_ore block drops itself in 1.12 (BlockOre for
         // iron/gold drops the block item, not an ingot). Contract: the drill
         // produced the block's drop.
+        // MEMBERSHIP of the drops list, asked of the list. As a substring it was also satisfied
+        // by the id the CALLER passed being echoed anywhere in the reply — which this verb does
+        // on its unknown-block refusal — so a drill that dropped nothing could still pass.
         assertTrue("mining drill must yield the mined block's drop "
                         + "(player-visible: drill produces resources from the "
                         + "column); resp=" + resp,
-                resp.contains("minecraft:iron_ore"));
+                Reply.of("artest infra laserdrill-mine", resp)
+                        .holdsText("dropItems", "minecraft:iron_ore"));
 
         // Contract: the target block was removed from the world.
         assertTrue("mining drill must remove the target block (set to air); "
                         + "resp=" + resp,
-                resp.contains("\"centerRemoved\":true"));
+                Reply.of(resp).bool("centerRemoved"));
 
         // Band-pin: strictly more than zero items produced.
         assertTrue("drop count must be > 0; resp=" + resp,
-                !resp.contains("\"dropCount\":0"));
+                !(Reply.of(resp).integer("dropCount") == 0));
     }
 
     private String exec(String cmd) throws Exception {

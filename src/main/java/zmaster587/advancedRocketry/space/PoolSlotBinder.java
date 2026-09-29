@@ -20,8 +20,8 @@ public final class PoolSlotBinder implements SlotBinder {
     }
 
     @Override
-    public void load(int dimId, String cellKey) {
-        SpaceSlotPool.load(dimId, cellKey);
+    public void load(int dimId, GalacticCoord cell) {
+        SpaceSlotPool.load(dimId, cell);
     }
 
     @Override

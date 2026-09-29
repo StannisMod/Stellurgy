@@ -40,9 +40,11 @@ public final class ShipTransitManager {
     private static final Logger LOGGER = LogManager.getLogger("advancedrocketry/space");
 
     /**
-     * Max ticks to retry a stalled arrival crossing before giving up. VS assembles a crossed ship
-     * asynchronously (physics thread), so the ship is not registered in the hyperspace world for a few
-     * ticks after departure; the arrival crossing retries until it is. ~10 s at 20 tps.
+     * Max ticks to retry a stalled arrival crossing before giving up. A crossed ship is assembled
+     * with a DELAY rather than on another thread: {@code queueShipSpawn} only adds the record to a
+     * spawn queue, which the ship manager drains inside its own tick, so the ship is not registered
+     * in the hyperspace world for a tick or more after departure and the arrival crossing retries
+     * until it is. ~10 s at 20 tps.
      */
     private static final int MAX_ARRIVAL_ATTEMPTS = 200;
 
@@ -116,10 +118,14 @@ public final class ShipTransitManager {
          * Re-cut the parked ship in hyperspace (lane {@code tile}, anchor {@code hyperAnchor}) as a
          * {@code StorageChunk} NBT snapshot, non-destructively, so an in-flight jump survives a restart
          * (the hyperspace world is ephemeral - wiped on restart). Returns {@code null} if VS is absent or
-         * the ship is gone. Called from the server tick on a cadence, never from a save handler; the
-         * default no-ops for the pure state-machine tests.
+         * the ship is gone. {@code shipId} is the jump's DURABLE id and names which hull to cut: a lane
+         * can hold more than one registered craft, and a snapshot taken of the wrong one is stored
+         * against this jump and pasted into the destination on the restart it was meant to survive.
+         * Called from the server tick on a cadence, never from a save handler; the default no-ops for
+         * the pure state-machine tests.
          */
-        default NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile, BlockPos hyperAnchor) {
+        default NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile, BlockPos hyperAnchor,
+                                              String shipId) {
             return null;
         }
 
@@ -131,7 +137,7 @@ public final class ShipTransitManager {
          * refreshes it via {@link #snapshotParked}. Returns {@code null} if VS is absent (the pure
          * state-machine tests).
          */
-        default NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor) {
+        default NBTTagCompound snapshotSource(int srcSlotDim, BlockPos srcAnchor, String shipId) {
             return null;
         }
 
@@ -457,6 +463,24 @@ public final class ShipTransitManager {
             }
         }
         HyperspaceTiles.Tile tile = tiles.allocate();
+        // THE HYPERSPACE VELOCITY DUMP. A craft keeps the cruise its pilot set across every other kind
+        // of crossing - leaving a planet, landing on one, moving from one cell to the next - and
+        // hyperspace is the single exception: speed is lost entering and leaving it, and a craft comes
+        // out at rest.
+        //
+        // Done HERE, once, and that is a decision rather than an omission. This line sits after the
+        // direct-crossing branch has already returned, so it cannot fire for a jump that is not a
+        // hyperspace flight - the call site IS the route, the same property the departure announcement
+        // below relies on. And it is done BEFORE the floor snapshot a few lines down, which is what
+        // makes one site enough: a transit RESTORED after a restart has no hyperspace ship left to
+        // read from and pastes that snapshot instead, so a dump applied only on the way out would miss
+        // exactly the arrival nobody watches. Zeroed here, every path out of hyperspace carries a
+        // zeroed setpoint, including that one.
+        //
+        // It also makes the code agree with the law the rest of the subsystem is written to: a craft's
+        // velocity INSIDE its own window is zero, so a setpoint riding through the lane was a live
+        // command for a flight that is not happening.
+        dumpCruiseForHyperspace(originSlotDim, originAnchor, shipId);
         // Capture the seated crew BEFORE the depart crossing cuts the seat blocks (a post-cut capture finds
         // nothing). captureCrew stashes the full crew inside the crosser (keyed by shipId) for the reseat at
         // arrival and returns the aboard player UUIDs for the offline-progress gate + the transit record.
@@ -465,7 +489,7 @@ public final class ShipTransitManager {
         // window before the hyperspace ship assembles (snapshotParked still empty) never persists a
         // snapshot-less record - which on restart would strand + silently delete the ship. Later saves refresh
         // it from hyperspace via snapshotParked.
-        NBTTagCompound initialSnapshot = crosser.snapshotSource(originSlotDim, originAnchor);
+        NBTTagCompound initialSnapshot = crosser.snapshotSource(originSlotDim, originAnchor, shipId);
         ShipCrossingService.Crossed departed = crosser.departToHyperspace(originSlotDim, originAnchor, shipId, tile);
         BlockPos hyperAnchor = departed == null ? null : departed.anchor;
         if (hyperAnchor == null) {
@@ -495,6 +519,13 @@ public final class ShipTransitManager {
         // was shown is the flight he gets.
         long arrivalTick = now + zmaster587.advancedRocketry.hyperdrive.JumpSpeed
                 .transitTicks(distance, speed);
+        // The jump is under way and will take a real journey. Announced here rather than beside the
+        // direct route's own announcement because THIS is where the route was chosen: the short case
+        // never reaches this line (it returned above, and the controller it was handed to announces
+        // it as a DIRECT transit). The origin world is still readable — the cut has happened, but the
+        // slot is not released until the arrival.
+        announceTransitBegan(shipId, origin, target, originSlotDim, crew);
+
         Transit t = new Transit(origin, target, tile, hyperAnchor, speed, arrivalTick, now,
                 new ShipTransit(origin, target, distanceBlocks));
         t.snapshot = initialSnapshot;
@@ -647,7 +678,7 @@ public final class ShipTransitManager {
                 freeLane(t);
                 it.remove(); // done: the ship now occupies the target cell (its refcount stays held)
                 // Record the arrival in the durable ledger (no longer amnesiac) and mark the arrived cell
-                // diverged so an eviction FLUSHES it rather than discarding the ship (closes ledger #79).
+                // diverged so an eviction FLUSHES it rather than discarding the ship.
                 // The ledger takes the PLACED coordinate, not the aimed one: the descent trigger reads
                 // the ledger (not the pose), so a ring applied to the pose alone would leave the
                 // trigger measuring from the cell centre and firing anyway.
@@ -665,6 +696,11 @@ public final class ShipTransitManager {
                 LOGGER.info("[SPACE] transit settled: ship {} at {} (slot {}, crew {})",
                         entry.getKey(), t.arrivalCoord.cellKey(), t.targetSlotDim, t.crew.size());
                 crosser.messageCrew(t.crew, "msg.shiptransit.arrived");
+                // Announced after the ledger settle above, so a subscriber that asks the ledger
+                // where this craft is gets the answer this event is about. The coordinate is the
+                // PLACED one, not the aimed one, for the same reason the ledger takes that one.
+                announceTransitEnded(entry.getKey(), t.origin, t.arrivalCoord, t.targetSlotDim,
+                        t.crew);
             } else if (++t.arrivalAttempts >= MAX_ARRIVAL_ATTEMPTS) {
                 // ── THIS BLOCK MUST NEVER RUN. ──────────────────────────────────────────────────────
                 // An arrival is a block paste into a cell; it has no right to fail, and every branch
@@ -1070,7 +1106,8 @@ public final class ShipTransitManager {
                 continue;
             }
             try {
-                NBTTagCompound fresh = crosser.snapshotParked(t.tile, t.hyperAnchor);
+                // The map key IS the ship's durable id — the cut is named, not aimed.
+                NBTTagCompound fresh = crosser.snapshotParked(t.tile, t.hyperAnchor, e.getKey());
                 if (fresh != null) {
                     t.snapshot = fresh;
                     t.snapshotFailureReported = false;
@@ -1231,5 +1268,122 @@ public final class ShipTransitManager {
         } catch (IllegalArgumentException notAUuid) {
             return null;
         }
+    }
+
+    /**
+     * Announce a hyperspace transit BEGINNING. The short route never reaches here: the transit
+     * manager decides it above and hands it to the cell controller, which announces it as a transit
+     * with {@code Route.DIRECT}. So the route is not a parameter — the call site IS the route.
+     */
+    /**
+     * Zero the departing craft's cruise setpoint, in its origin cell, while it is still whole.
+     *
+     * <p>Reached only from the hyperspace departure — see the call site for why one site covers both
+     * ends of the flight, including a restored arrival.</p>
+     *
+     * <p><b>Every way this can fail to find a computer is reported, and none of them is silently
+     * shrugged off.</b> A craft that keeps its cruise through a jump arrives already under way, which
+     * is a behaviour a player would feel and nobody could attribute afterwards — so the interesting
+     * outcome here is the one where nothing was zeroed, and it says which step gave out. A craft with
+     * no flight computer at all is not a failure: nothing can be commanding it, so there is nothing
+     * to dump, and that case is distinguished from the others rather than folded in with them.</p>
+     */
+    private static void dumpCruiseForHyperspace(int originSlotDim, BlockPos originAnchor,
+                                                String shipId) {
+        // WorldServer, not World: the ship registry this asks answers only for a server world, and
+        // the neighbouring announcement's `World` local is right for the event bus and wrong here.
+        net.minecraft.world.WorldServer world = net.minecraftforge.common.DimensionManager
+                .getWorld(originSlotDim);
+        if (world == null) {
+            LOGGER.warn("[SPACE] cruise not dumped for the jump of ship {}: origin slot {} is not "
+                    + "loaded, so it will arrive still under way", shipId, originSlotDim);
+            return;
+        }
+        String vsShipId = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                .shipIdManagingBlock(world, originAnchor);
+        if (vsShipId == null) {
+            LOGGER.warn("[SPACE] cruise not dumped for the jump of ship {}: nothing manages the "
+                    + "origin anchor {} in slot {}", shipId, originAnchor, originSlotDim);
+            return;
+        }
+        BlockPos afc = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                .flightComputerOf(world, java.util.UUID.fromString(vsShipId));
+        if (afc == null) {
+            // Not a defect: a craft without a computer has no cruise to lose. Said at debug volume
+            // because it is the ONE benign member of this family and a warn here would train the
+            // reader to skip the three above it.
+            LOGGER.debug("[SPACE] ship {} jumps with no flight computer, so it carries no cruise to "
+                    + "dump", shipId);
+            return;
+        }
+        net.minecraft.tileentity.TileEntity tile = world.getTileEntity(afc);
+        if (!(tile instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer)) {
+            LOGGER.warn("[SPACE] cruise not dumped for the jump of ship {}: the computer at {} is {}",
+                    shipId, afc, tile == null ? "absent" : tile.getClass().getSimpleName());
+            return;
+        }
+        ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) tile).commandCruise(0, 0, 0);
+    }
+
+    private static void announceTransitBegan(String shipId, GalacticCoord origin,
+                                             GalacticCoord target, int originSlotDim,
+                                             List<UUID> crew) {
+        net.minecraft.world.World world = net.minecraftforge.common.DimensionManager
+                .getWorld(originSlotDim);
+        if (world == null) {
+            LOGGER.warn("[SPACE] departure of ship {} not announced: origin slot {} is not loaded",
+                    shipId, originSlotDim);
+            return;
+        }
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitBegan(
+                        world, shipId, playersOf(crew), origin, target,
+                        zmaster587.advancedRocketry.api.event.ShipCrossingEvent.Route.HYPERSPACE));
+    }
+
+    /** Announce a hyperspace transit COMPLETING, with the coordinate the ship was actually put at. */
+    private static void announceTransitEnded(String shipId, GalacticCoord origin,
+                                             GalacticCoord placed, int targetSlotDim,
+                                             List<UUID> crew) {
+        net.minecraft.world.World world = net.minecraftforge.common.DimensionManager
+                .getWorld(targetSlotDim);
+        if (world == null) {
+            LOGGER.warn("[SPACE] arrival of ship {} not announced: target slot {} is not loaded",
+                    shipId, targetSlotDim);
+            return;
+        }
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new zmaster587.advancedRocketry.api.event.ShipCrossingEvent.TransitEnded(
+                        world, shipId, playersOf(crew), origin, placed,
+                        zmaster587.advancedRocketry.api.event.ShipCrossingEvent.Route.HYPERSPACE));
+    }
+
+    /**
+     * The crew, as the players who are actually here to be told about it.
+     *
+     * <p>A transit captures its crew as ids, and a jump is long enough that somebody can log out
+     * during it. Whoever is offline is left out rather than represented by a null: a subscriber
+     * acting on this list acts on players, and one that is not connected is not aboard anything.
+     * The list is therefore who was aboard AND is still here — which is what an event fired now can
+     * honestly claim.</p>
+     */
+    private static List<net.minecraft.entity.player.EntityPlayerMP> playersOf(List<UUID> crew) {
+        List<net.minecraft.entity.player.EntityPlayerMP> players = new ArrayList<>();
+        if (crew == null || crew.isEmpty()) {
+            return players;
+        }
+        net.minecraft.server.MinecraftServer server = net.minecraftforge.fml.common
+                .FMLCommonHandler.instance().getMinecraftServerInstance();
+        if (server == null) {
+            return players;
+        }
+        for (UUID id : crew) {
+            net.minecraft.entity.player.EntityPlayerMP p =
+                    id == null ? null : server.getPlayerList().getPlayerByUUID(id);
+            if (p != null) {
+                players.add(p);
+            }
+        }
+        return players;
     }
 }

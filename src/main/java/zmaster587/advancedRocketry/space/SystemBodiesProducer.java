@@ -68,7 +68,7 @@ public final class SystemBodiesProducer {
      * caller with no registry has, and the honest fixture for the keying contracts (which cell is
      * fed, from which observer), none of which depend on a frame moving.
      */
-    public static Map<Integer, List<RenderBody>> buildByDim(Map<String, Integer> loadedCells,
+    public static Map<Integer, List<RenderBody>> buildByDim(Map<GalacticCoord, Integer> loadedCells,
                                                            Map<UUID, ShipLedger.Entry> snapshot,
                                                            BodyLookup lookup) {
         return buildByDim(loadedCells, snapshot, lookup, CellFrames.STATIC, 0L);
@@ -94,12 +94,14 @@ public final class SystemBodiesProducer {
      * one direction set per dimension either way &mdash; the sky is camera-centred, so every viewer in
      * the cell shares it.</p>
      *
-     * @param loadedCells {@code cellKey -> slot dim} for the cells that are live right now
+     * @param loadedCells {@code cell -> slot dim} for the cells that are live right now - the CELL,
+     *                    not its key: everything below is arithmetic, and a coordinate rebuilt from a
+     *                    key carries no lattice width
      *                    ({@link SpaceManager#loadedCells})
      * @param snapshot    the ship ledger, used ONLY to refine the observer point inside a cell
      * @param frames      where each cell is at {@code worldTick}
      */
-    public static Map<Integer, List<RenderBody>> buildByDim(Map<String, Integer> loadedCells,
+    public static Map<Integer, List<RenderBody>> buildByDim(Map<GalacticCoord, Integer> loadedCells,
                                                             Map<UUID, ShipLedger.Entry> snapshot,
                                                             BodyLookup lookup,
                                                             CellFrames frames,
@@ -109,9 +111,9 @@ public final class SystemBodiesProducer {
             return byDim;
         }
         CellFrames geometry = frames == null ? CellFrames.STATIC : frames;
-        for (Map.Entry<String, Integer> bound : loadedCells.entrySet()) {
+        for (Map.Entry<GalacticCoord, Integer> bound : loadedCells.entrySet()) {
             Integer slotDim = bound.getValue();
-            GalacticCoord cell = GalacticCoord.fromCellKey(bound.getKey());
+            GalacticCoord cell = bound.getKey();
             if (slotDim == null || slotDim == SpaceManager.UNBOUND_SLOT || cell == null) {
                 continue;
             }
@@ -195,13 +197,13 @@ public final class SystemBodiesProducer {
 
     /** The live per-slot-dim render bodies from the production bindings + universe registry. */
     public static Map<Integer, List<RenderBody>> currentByDim(MinecraftServer server) {
-        ShipLedger ledger = SpaceSubsystem.ledger();
+        zmaster587.advancedRocketry.space.SpaceSubsystem stack =
+                zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
         UniverseRegistry reg = UniverseRegistry.get(server);
-        SpaceManager space = SpaceSubsystem.space();
-        if (reg == null || space == null) {
+        if (reg == null || stack == null) {
             return new LinkedHashMap<>();
         }
-        return buildByDim(space.loadedCells(), ledger == null ? null : ledger.snapshot(),
+        return buildByDim(stack.manager.loadedCells(), stack.ledger.snapshot(),
                 reg::skyBodiesAt, reg, SpaceSubsystem.spaceClock());
     }
 

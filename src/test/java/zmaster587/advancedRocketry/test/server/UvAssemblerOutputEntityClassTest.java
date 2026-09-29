@@ -1,9 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -40,44 +43,33 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern ENTITY_CLASS = Pattern.compile("\"entityClass\":\"([^\"]+)\"");
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String BUILDER_POS = "builderPos";
 
     /** Rocket-assembler fixture at x=5500; UV-assembler fixture at x=5700.
      *  Far enough apart to avoid scan-volume overlap (rocket bb ~6 wide × 8
      *  tall; UV bb 5×6×4). */
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 5500;
     private static final int CX_ROCKET = 5500;
     private static final int CX_UV     = 5700;
 
     @Test
     public void rocketAssemblerProducesEntityRocketNotStationDeployed() throws Exception {
-        // Pre-clear above the launchpad — the existing rocket fixture's
-        // buildAndAssemble helper does this; replicate inline because we
-        // don't want that helper's package coupling here.
-        exec("artest chunk warmup 0 " + ((CX_ROCKET - 2) >> 4) + " " + ((CZ - 2) >> 4)
-                + " " + ((CX_ROCKET + 7) >> 4) + " " + ((CZ + 7) >> 4));
-        exec("artest fill 0 " + (CX_ROCKET - 2) + " " + (CY + 1) + " " + (CZ - 2)
-                + " " + (CX_ROCKET + 7) + " " + (CY + 10) + " " + (CZ + 7) + " minecraft:air");
-
-        String fixture = exec("artest fixture rocket 0 " + CX_ROCKET + " " + CY + " " + CZ
-                + " simple");
-        assertTrue("rocket fixture must build: " + fixture, fixture.contains("\"ok\":true"));
-        int[] builder = parseBuilder(fixture);
-
-        String assemble = exec("artest rocket assemble 0 " + builder[0] + " "
-                + builder[1] + " " + builder[2]);
+        // FIRST link, ASSERTING where the pair it replaces DUG — and the comment that stood here
+        // said out loud what it was doing: "the existing rocket fixture's buildAndAssemble helper
+        // does this; replicate inline because we don't want that helper's package coupling". The
+        // copy came over and the reason stayed behind, which is how the pit reached two dozen
+        // files. There is a shared builder now and no package to couple to.
+        String assemble = zmaster587.advancedRocketry.test.RocketFixture.assembleAt(
+                zmaster587.advancedRocketry.test.FixtureSite.openAir(0, CX_ROCKET, CZ),
+                cmd -> exec(cmd), "simple", 2, 10,
+                "the craft whose assembled entity class this scenario reads");
         assertTrue("rocket assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         int entityId = lastRocketId();
-        String info = exec("artest rocket info " + entityId);
-        Matcher m = ENTITY_CLASS.matcher(info);
-        assertTrue("info must surface entityClass: " + info, m.find());
-        String entityClass = m.group(1);
+        // The reader REFUSES a report with no entityClass, which is what the null check asserted.
+        String entityClass = RocketInfo.byId(WorldCommandFixtures::exec, entityId).entityClass;
         assertTrue("rocket assembler must spawn EntityRocket "
                         + "(not EntityStationDeployedRocket); got " + entityClass,
                 entityClass.endsWith(".EntityRocket"));
@@ -90,19 +82,16 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     public void uvAssemblerProducesEntityStationDeployedRocket() throws Exception {
         String fixture = exec("artest fixture uv-rocket 0 " + CX_UV + " " + CY + " " + CZ);
         assertTrue("uv-rocket fixture must build: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         int[] builder = parseBuilder(fixture);
 
         String assemble = exec("artest rocket assemble 0 " + builder[0] + " "
                 + builder[1] + " " + builder[2]);
         assertTrue("UV assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         int entityId = lastRocketId();
-        String info = exec("artest rocket info " + entityId);
-        Matcher m = ENTITY_CLASS.matcher(info);
-        assertTrue("info must surface entityClass: " + info, m.find());
-        String entityClass = m.group(1);
+        String entityClass = RocketInfo.byId(WorldCommandFixtures::exec, entityId).entityClass;
         assertTrue("UV assembler must spawn EntityStationDeployedRocket; got "
                         + entityClass,
                 entityClass.endsWith(".EntityStationDeployedRocket"));
@@ -111,20 +100,18 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
     // ─── helpers ───────────────────────────────────────────────────────
 
     private static int[] parseBuilder(String fixture) {
-        Matcher m = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, m.find());
+        int[] m = Reply.of(fixture).blockPos(BUILDER_POS);
+        assertTrue("fixture missing builderPos: " + fixture, m != null);
         return new int[]{
-                Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+                m[0],
+                m[1],
+                m[2]};
     }
 
     private static int lastRocketId() throws Exception {
         String list = exec("artest rocket list 0");
-        Matcher m = ROCKET_LIST_ID.matcher(list);
-        int last = -1;
-        while (m.find()) last = Integer.parseInt(m.group(1));
-        assertTrue("no rocket ids in list: " + list, last >= 0);
-        return last;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket ids in list: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 }

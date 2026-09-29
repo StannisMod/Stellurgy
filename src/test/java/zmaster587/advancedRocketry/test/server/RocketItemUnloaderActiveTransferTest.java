@@ -1,9 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -34,13 +36,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern TOTAL_PLACED =
-            Pattern.compile("\"totalPlaced\":(\\d+)");
-    private static final Pattern TILES_WITH_CAP =
-            Pattern.compile("\"tilesWithCapability\":(\\d+)");
+    private static final String ENT_ID = "entityId";
+    private static final String TOTAL_PLACED = "totalPlaced";
+    private static final String TILES_WITH_CAP = "tilesWithCapability";
 
     /**
      * unloader pre-linked to a rocket actively drains the
@@ -56,19 +54,23 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
      */
     @Test
     public void unloaderPullsItemsFromRocketStorage() throws Exception {
-        int ux = 1450, uy = 65, uz = 1450;
+        // THE PAIR MOVES TOGETHER: the unloader sat one block above the rocket's base, a RELATIVE
+        // geometry written as two absolute numbers, so moving either alone would separate them
+        // while both lines still read plausibly.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1450 + 20, 1450);
+        int ux = 1450, uy = rocketSite.y + 1, uz = 1450;
         // Loader meta=2 -> TileRocketUnloader (item unloader).
         ok("artest place 0 " + ux + " " + uy + " " + uz
                 + " advancedrocketry:loader 2");
 
-        int rocketId = assembleFixture(ux + 20, 64, uz, "with-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-cargo");
 
         // Pre-fill rocket's storage inventory tiles (the with-cargo
         // chest) with cobblestone via the dedicated probe.
         String fillResp = exec("artest rocket storage-item-fill " + rocketId
                 + " minecraft:cobblestone 32");
         assertTrue("storage-item-fill must succeed: " + fillResp,
-                fillResp.contains("\"ok\":true"));
+                Reply.of(fillResp).ok());
         int tilesWithCap = extract(fillResp, TILES_WITH_CAP);
         int totalPlaced = extract(fillResp, TOTAL_PLACED);
         assertTrue("with-cargo fixture must produce at least one IInventory "
@@ -79,15 +81,18 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
 
         // Sanity: storage-inventory probe agrees with fill result.
         String preStorage = exec("artest rocket storage-inventory " + rocketId);
-        assertTrue("rocket storage must show the pre-filled cobblestone "
-                        + "(storage-inventory probe sanity gate): " + preStorage,
-                preStorage.contains("\"item\":\"minecraft:cobblestone\""));
+        // The CONTAINER is what this claim is about, and it is already addressed: the reply was
+        // fetched for THIS rocket. Its contents are then an existence question — the fixture chose
+        // no slot, and two stacks of one item is a stocked rocket, not an ambiguity.
+        assertTrue("the rocket's storage must hold the cobblestone the fixture put in: " + preStorage,
+                Reply.of("artest rocket storage-inventory", preStorage)
+                        .holdsElement("items", "item", "minecraft:cobblestone"));
 
         // Link rocket to unloader.
         String link = exec("artest infra link 0 " + ux + " " + uy + " " + uz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"linked\":true"));
+                Reply.of(link).bool("linked"));
 
         // Run the unloader's production update() for 60 ticks. Storage
         // chunk may contain multiple inventory tiles (engine TEs etc.)
@@ -99,10 +104,9 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
         // — that's the player-visible "drain returning rocket" contract.
         String postUnloader = exec("artest hatch read 0 " + ux + " " + uy + " " + uz);
         String postStorage = exec("artest rocket storage-inventory " + rocketId);
-        assertTrue("unloader's own inventory must contain cobblestone "
-                        + "after 60 ticks of update(); unloader read="
-                        + postUnloader + "\n storage=" + postStorage,
-                postUnloader.contains("\"item\":\"minecraft:cobblestone\""));
+        assertTrue("the unloader's own inventory must hold what it drained: " + postUnloader,
+                Reply.of("artest hatch read", postUnloader)
+                        .holdsElement("slots", "item", "minecraft:cobblestone"));
     }
 
     // -- helpers ----------------------------------------------------------
@@ -114,32 +118,27 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
-    private int assembleFixture(int baseX, int baseY, int baseZ, String variant)
+    private int assembleFixture(FixtureSite site, String variant)
             throws Exception {
-        ok("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                + " minecraft:air");
-        String fx = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " " + variant);
-        assertTrue("fixture rocket (" + variant + ") failed: " + fx,
-                fx.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fx);
-        assertTrue("could not parse builderPos: " + fx, bp.find());
-        String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digs.
+        String assemble = RocketFixture.assembleAt(site, cmd -> exec(cmd), variant, 2, 10,
+                "the craft the unloader empties stands in this volume");
         assertTrue("rocket assemble failed: " + assemble,
-                assemble.contains("\"ok\":true"));
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("rocket entityId missing: " + assemble, em.find());
-        return Integer.parseInt(em.group(1));
+                Reply.of(assemble).ok());
+        Reply emReply = Reply.of(assemble);
+        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
+        return Integer.parseInt(emReply.text(ENT_ID));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

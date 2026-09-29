@@ -20,6 +20,20 @@ import static org.junit.Assert.assertTrue;
  */
 public class AstronomicalBodyHelperTest {
 
+    /**
+     * What a close companion does to the light, as a FACTOR of the lone star's.
+     *
+     * <p>The TEST'S OWN, and the pair is the claim: a companion beside the star nearly doubles the
+     * light (so the reading must be past 1.9) while a distant one adds only a little (so it must
+     * stay under 1.1). Neither is a production constant — they are the shape the law must have.</p>
+     */
+    private static final double CLOSE_COMPANION_FACTOR = 1.9;
+    /** @see #CLOSE_COMPANION_FACTOR */
+    private static final double DISTANT_COMPANION_FACTOR = 1.1;
+
+    /** Two ordinary stars, as a factor — the brightness a DIMMED pair must never reach. */
+    private static final double TWO_ORDINARY_STARS = 2;
+
     private static StellarBody sunLikeStar() {
         StellarBody star = new StellarBody();
         // Defaults: size=1.0, blackHole=false, subStars=[]. Set temperature to a Sol-like value.
@@ -55,8 +69,16 @@ public class AstronomicalBodyHelperTest {
 
     @Test
     public void moonOrbitalPeriodAtBaselineDistanceMatchesShortMonth() {
-        // At distance 100 and planetary mass 1.0, the formula collapses to 8 MC days.
-        assertEquals(8.0, AstronomicalBodyHelper.getMoonOrbitalPeriod(100f, 1.0f), 1e-9);
+        // At its own distance from a one-Earth parent, the Moon takes the Moon's own month.
+        //
+        // This used to read "8 days at 100 units", and that value was a function of the WRONG
+        // orbit: the law measured a moon's distance against the astronomical unit (100 units = 1 AU)
+        // while the layout measures it in 200-chart-block moon-units. The two only ever agreed
+        // because the shipped Moon carried a distance 51 times too small; at its real distance the
+        // old reference answered 5 392 days.
+        assertEquals(AstronomicalBodyHelper.DAYS_PER_LUNAR_MONTH,
+                AstronomicalBodyHelper.getMoonOrbitalPeriod(
+                        AstronomicalBodyHelper.MOON_REFERENCE_UNITS, 1.0f), 1e-9);
     }
 
     @Test
@@ -127,8 +149,8 @@ public class AstronomicalBodyHelperTest {
         double closeBrightness = AstronomicalBodyHelper.getStellarBrightness(close, 100);
         double wideBrightness = AstronomicalBodyHelper.getStellarBrightness(wide, 100);
 
-        assertTrue("a close companion nearly doubles the light", closeBrightness > 1.9 * alone);
-        assertTrue("a distant one adds only a little", wideBrightness < 1.1 * alone);
+        assertTrue("a close companion nearly doubles the light", closeBrightness > CLOSE_COMPANION_FACTOR * alone);
+        assertTrue("a distant one adds only a little", wideBrightness < DISTANT_COMPANION_FACTOR * alone);
         assertTrue("but it is never nothing", wideBrightness > alone);
     }
 
@@ -174,7 +196,7 @@ public class AstronomicalBodyHelperTest {
         assertEquals("a black hole and its companion each light the world on their own terms",
                 holeAlone + sunAlone, together, 1e-9);
         assertTrue("the hole stays dimmed: the pair is never as bright as two ordinary stars",
-                together < 2 * sunAlone);
+                together < TWO_ORDINARY_STARS * sunAlone);
     }
 
     @Test
@@ -310,9 +332,15 @@ public class AstronomicalBodyHelperTest {
 
     @Test
     public void moonPeriodScalesWithParentMassAndDistanceExactly() {
-        // Four times the parent mass halves the period.
-        assertEquals(4.0, AstronomicalBodyHelper.getMoonOrbitalPeriod(100f, 4.0f), 1e-9);
-        assertEquals(22.627416997969522, AstronomicalBodyHelper.getMoonOrbitalPeriod(200f, 1.0f), 1e-9);
+        // The SCALING is what this pins, and it is unchanged by the reference the law is anchored on:
+        // four times the parent mass halves the period, and twice the distance multiplies it by
+        // 2^1.5. Only the anchor moved (see the test above for why), so these read as ratios against
+        // the reference rather than as the absolute numbers they used to be.
+        final double month = AstronomicalBodyHelper.DAYS_PER_LUNAR_MONTH;
+        final float reference = AstronomicalBodyHelper.MOON_REFERENCE_UNITS;
+        assertEquals(month / 2.0, AstronomicalBodyHelper.getMoonOrbitalPeriod(reference, 4.0f), 1e-9);
+        assertEquals(month * Math.pow(2.0, 1.5),
+                AstronomicalBodyHelper.getMoonOrbitalPeriod(reference * 2f, 1.0f), 1e-9);
     }
 
     @Test

@@ -3,8 +3,6 @@ package zmaster587.advancedRocketry.test.server;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -12,10 +10,19 @@ import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import zmaster587.advancedRocketry.test.ArrangementFailure;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.TransitStatus;
+import zmaster587.advancedRocketry.test.TransitSetup;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * <b>A restart is something a jump survives.</b> A ship parked in hyperspace is still parked in
@@ -64,6 +71,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class HyperspaceSurvivesARestartE2ETest {
 
+    /** World a ship is given to appear in VS's registry - the old 60 x 250 ms. */
+    private static final int REGISTER_TICKS = 300;
+
     /**
      * Slow enough that the ship is still parked in its lane when the server goes down AND for the
      * whole of the next boot. The cells sit a sector (4M blocks) apart, so one block per tick is
@@ -73,7 +83,6 @@ public class HyperspaceSurvivesARestartE2ETest {
      */
     private static final long PARK_SPEED = 1L;
 
-    private static final Pattern INT = Pattern.compile("\"%s\":(-?\\d+)");
 
     /**
      * A per-world ship registry holding nothing weighs this on disk. Diagnostic only — it separates
@@ -116,58 +125,92 @@ public class HyperspaceSurvivesARestartE2ETest {
     }
 
     private static int readInt(String json, String key) {
-        Matcher m = Pattern.compile(String.format(INT.pattern(), key)).matcher(json);
-        assertTrue("expected int \"" + key + "\" in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply reply = Reply.of(json);
+        assertTrue("expected int \"" + key + "\" in: " + json, reply.has(key));
+        return reply.integer(key);
     }
 
     private static int readIntOr(String json, String key, int def) {
-        Matcher m = Pattern.compile(String.format(INT.pattern(), key)).matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : def;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
+        return Reply.of(json).integerOr(key, def);
     }
 
     private static boolean readBool(String json, String key) {
-        return json.contains("\"" + key + "\":true");
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).boolOr(key, false);
     }
 
-    /** Poll for the ship the fixture assembles in its origin cell (VS assembly is asynchronous). */
-    private boolean waitForShipIn(int dim) throws Exception {
-        for (int i = 0; i < 60; i++) {
-            if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                return true;
-            }
-            Thread.sleep(250);
+    /**
+     * This boot's reader of the server's ordered event log.
+     *
+     * <p>Built per call rather than held in a field: {@code harness} is a different JVM on either
+     * side of the restart this class exists to measure, and a reader captured on boot 1 would be
+     * addressing a server that has stopped.</p>
+     */
+    private Events events() {
+        return new Events(this::exec,
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+    }
+
+    /**
+     * Wait for the substrate's registry to take THIS craft, and raise an arrangement failure if it
+     * never does.
+     *
+     * <p>{@code ship_spawned} is written from the registry's own {@code addShip} and carries the
+     * durable AR id the hull was bound with, so the wait ends on the add itself and names the craft
+     * the fixture just built. The count it replaces ({@code vs ship-count-all >= 1}) could not say
+     * WHICH ship it had found — a dimension holding somebody else's hull satisfied it — and needed
+     * a budget to say how long it would keep asking.</p>
+     *
+     * <p>The mark is the caller's and must precede {@link TransitSetup#piloted}: the registry add
+     * happens inside that call, so a mark taken after it would be waiting for a second ship.</p>
+     */
+    private void requireRegistered(long mark, TransitSetup setup, int dim) throws Exception {
+        try {
+            events().awaitField(mark, "ship_spawned", "arShip", setup.durableId,
+                    "the fixture ship never entered the registry in the origin cell (dim "
+                            + dim + ")", REGISTER_TICKS);
+        } catch (AssertionError neverBuilt) {
+            // The TYPE is what carries the distinction into the gate's XML: nothing has been
+            // measured yet at this line, so this is a fixture that did not come up rather than a
+            // product that is broken.
+            ArrangementFailure.arrangementFailed(neverBuilt.getMessage());
         }
-        return false;
     }
 
     @Test
     public void aShipParkedInHyperspaceIsStillThereAfterTheServerRestarts() throws Exception {
         // ── boot 1: put a real ship into hyperspace and shut the server down under it ────────────
         harness = RealDedicatedServerHarness.startWith(root, false);
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
-        String setup = exec("artest space transit-setup-piloted");
-        assertTrue("the piloted transit fixture must build: " + setup, readBool(setup, "ok"));
-        int originDim = readInt(setup, "originDim");
-        assertTrue("ARRANGEMENT: the fixture ship never assembled in the origin cell (dim "
-                + originDim + ")", waitForShipIn(originDim));
+        // Marked before the fixture is built: the registry add awaited below happens INSIDE
+        // `piloted`, so a mark taken after it would be waiting for a second ship.
+        long buildMark = events().mark();
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
+        requireRegistered(buildMark, setup, originDim);
 
         String begin = exec("artest space transit-begin " + originDim + " 1 64 1 " + PARK_SPEED);
         assertTrue("the departure crossing must put the ship into hyperspace: " + begin,
                 readBool(begin, "began"));
 
-        String tick = exec("artest space transit-tick 10");
-        int hyperDimBefore = readInt(tick, "hyperDim");
-        int inTransit = readInt(tick, "inTransit");
-        assertTrue("ARRANGEMENT: the jump must still be in flight when the server goes down, or"
+        // READ, not driven. This scenario needs the jump to still be IN FLIGHT when the server
+        // goes down, and the server is now advancing it on its own tick -- so a pump here would
+        // be pushing this test's own subject towards the exit for the sake of a field read.
+        String tick = exec("artest space transit-status");
+        TransitStatus parked = TransitStatus.of(tick);
+        int hyperDimBefore = parked.hyperDim;
+        int inTransit = parked.inTransit;
+        requireArranged("the jump must still be in flight when the server goes down, or"
                 + " nothing is parked to survive anything: " + tick, inTransit >= 1);
 
         // THE CONTROL, and it is not optional: if no ship reached hyperspace on this boot, "no ship
         // after the restart" would be the arrangement's own answer rather than the product's.
         int parkedBefore = readIntOr(exec("artest vs ship-count-all " + hyperDimBefore), "count", -1);
-        assertTrue("ARRANGEMENT: a ship must actually be registered in hyperspace (dim "
+        requireArranged("a ship must actually be registered in hyperspace (dim "
                 + hyperDimBefore + ") before the restart - found " + parkedBefore, parkedBefore >= 1);
 
         // Hand the jump to PRODUCTION, so what crosses the restart is a claimed jump rather than a
@@ -175,7 +218,7 @@ public class HyperspaceSurvivesARestartE2ETest {
         // transit manager: without the claim the boot reconciliation is right to collect the hull, and
         // this test would be measuring an abandoned ship rather than a jump in flight.
         String claim = exec("artest space transit-claim");
-        assertTrue("ARRANGEMENT: production must take the claim, or nothing on the far side of the"
+        requireArranged("production must take the claim, or nothing on the far side of the"
                 + " restart is restoring a jump: " + claim,
                 readBool(claim, "ok") && readIntOr(claim, "claimed", 0) >= 1);
 
@@ -193,9 +236,9 @@ public class HyperspaceSurvivesARestartE2ETest {
 
         // ── boot 2: a brand new server JVM, same world root ──────────────────────────────────────
         harness = RealDedicatedServerHarness.startWith(root, false);
-        String status = exec("artest space subsystem-status");
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production subsystem must come up again on boot 2, or nothing below is"
-                + " exercising it: " + status, status.contains("\"registered\":true"));
+                + " exercising it: " + status.raw(), status.registered);
 
         // The jump resumed as the SHIP, not as a copy of it. A restored transit that found its lane
         // empty is still "in transit" and still arrives — by pasting the block snapshot it carries —
@@ -203,17 +246,15 @@ public class HyperspaceSurvivesARestartE2ETest {
         // path is exactly what a jump degrades to when hyperspace does not come back. Asserted BEFORE
         // the ship count below, because this is the reading that says which product came back.
         assertTrue("a jump restored across the restart must still be carrying its parked hull, not"
-                        + " falling back to the block snapshot: " + status
+                        + " falling back to the block snapshot: " + status.raw()
                         + "\n  registries on disk after boot 1: " + savedRegistries,
-                readIntOr(status, "transitsParked", 0) >= 1);
+                status.transitsParked >= 1);
 
         // Re-derive hyperspace's id on THIS boot rather than reusing boot 1's: the id is minted per
         // boot by a free-id scan, and the whole point of naming the folder after the world is that
         // the content no longer depends on which id the scan lands on.
-        String setupAfter = exec("artest space transit-setup-piloted");
-        assertTrue("the transit probe stack must come up on boot 2: " + setupAfter,
-                readBool(setupAfter, "ok"));
-        int hyperDimAfter = readInt(exec("artest space transit-tick 10"), "hyperDim");
+        TransitSetup.piloted(this::exec); // the probe stack must come up on boot 2, or nothing below reads anything
+        int hyperDimAfter = TransitStatus.read(this::exec).hyperDim;
 
         int parkedAfter = readIntOr(exec("artest vs ship-count-all " + hyperDimAfter), "count", -1);
         assertEquals("a ship parked in hyperspace must still be parked in hyperspace after a real"

@@ -21,6 +21,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ServerConnectionFromClientEvent;
 
+import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.network.PacketSlotDimSync;
 import zmaster587.libVulpes.network.PacketHandler;
 
@@ -193,9 +194,21 @@ public final class SpaceEventHandler {
             // assigned until later in the login sequence, and both send paths dereference it — so the
             // notice is queued for the moment he is actually on the server.
             pendingShipLostNotices.add(player.getUniqueID());
+            // He is being put down in the plain world, so EVERYTHING that bound him to a ship or a
+            // cell has to let go — not just the aboard record cleared above. This branch undid one
+            // of six bindings for as long as it was the only code that knew the operation existed;
+            // the event is that operation, and every subsystem that binds a player answers it.
+            // Posted even though the record is already gone: the others are this handler's to ask
+            // about, not to know.
+            // No null guard on the service: it is built during mod init and this runs on a login,
+            // so a null here is a mod that failed to initialise — which must throw where it happens
+            // rather than be reported as "he was bound to nothing".
+            java.util.List<String> released = zmaster587.advancedRocketry.AdvancedRocketry
+                    .playerRelease().toTheWorld(player);
             LOGGER.warn("[SPACE] {} returned aboard ship {} but the ledger has no record of it; he is "
-                    + "being placed at his spawn point and his aboard record is cleared",
-                    player.getName(), aboard == null ? "?" : aboard.shipId);
+                    + "being placed at his spawn point and released from {}",
+                    player.getName(), aboard == null ? "?" : aboard.shipId,
+                    released.isEmpty() ? "nothing (he was bound to nothing else)" : released);
         }
         LOGGER.info("[SPACE] login restore for {}: {} -> dim {} ({})",
                 player.getName(), placement.reason, placement.dimension,
@@ -251,16 +264,62 @@ public final class SpaceEventHandler {
         }
     }
 
+    /**
+     * Let go of the claims this handler holds for {@code player}, and name what was let go.
+     *
+     * <p>Called by {@link zmaster587.advancedRocketry.player.PlayerRelease}, which owns the order
+     * and the report; this method owns only its own two stores. The aboard RECORD is released by
+     * that caller rather than here, because its owner is {@link ShipAboardTag} and this handler is
+     * merely the busiest of its writers.</p>
+     *
+     * <p>Deliberately NOT the same as {@link #onPlayerLoggedOut}, which gives the cell claim back
+     * but REFRESHES the aboard record: a logout is how a player keeps his ship across a restart.
+     * Opposite intent, so the two stay separate methods and neither calls the other.</p>
+     */
+    public boolean holdsCellClaimFor(net.minecraft.entity.player.EntityPlayer player) {
+        return heldCells.containsKey(player.getUniqueID());
+    }
+
+    /** @return whether a claim was actually given back */
+    public boolean releaseCellClaim(net.minecraft.entity.player.EntityPlayer player) {
+        UUID playerId = player.getUniqueID();
+        if (!heldCells.containsKey(playerId)) {
+            return false;
+        }
+        releaseHeldCell(playerId);
+        return true;
+    }
+
+    public boolean hasQueuedSeating(net.minecraft.entity.player.EntityPlayer player) {
+        UUID playerId = player.getUniqueID();
+        for (PendingSeat seat : pendingSeats) {
+            if (playerId.equals(seat.playerId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Drop a seating queued for this player: it is work aimed at somebody being taken out of the
+     * ship world entirely, and left in place it would put him back on a deck moments later.
+     *
+     * @return whether anything was queued
+     */
+    public boolean releaseQueuedSeating(net.minecraft.entity.player.EntityPlayer player) {
+        UUID playerId = player.getUniqueID();
+        return pendingSeats.removeIf(seat -> playerId.equals(seat.playerId));
+    }
+
     private void releaseHeldCell(UUID playerId) {
         UUID shipId = heldCells.remove(playerId);
-        SpaceManager manager = SpaceSubsystem.space();
-        ShipLedger ledger = SpaceSubsystem.ledger();
-        if (shipId == null || manager == null || ledger == null) {
+        SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+        if (shipId == null || stack == null) {
             return;
         }
-        ShipLedger.Entry entry = ledger.get(shipId);
+        ShipLedger.Entry entry = stack.ledger.get(shipId);
         if (entry != null) {
-            manager.dematerialize(entry.coord);
+            stack.manager.dematerialize(entry.coord);
         }
     }
 
@@ -369,9 +428,10 @@ public final class SpaceEventHandler {
         CrewTransfer.Crew rider = new CrewTransfer.Crew(player,
                 pending.aboard.afcDx, pending.aboard.afcDy, pending.aboard.afcDz);
         // The aboard record names the ship by its durable id — hand it to the re-seat so a
-        // neighbouring ship with the same seat offset can never claim the returning pilot.
-        // Position-keyed by nature: a login restore is driven by the record of where the player was,
-        // not by a crossing that knows which ship it just created.
+        // neighbouring ship with the same seat offset can never claim the returning pilot. The
+        // substrate uuid is null here because a login restore is driven by the player's record
+        // rather than by a crossing that just created the ship; that is NOT the same as having no
+        // identity, and reseat resolves the name to a uuid rather than scanning by position.
         return CrewTransfer.reseat(world, anchor, Collections.singletonList(rider),
                 pending.aboard.shipId, null);
     }
@@ -398,16 +458,15 @@ public final class SpaceEventHandler {
         if (world == null || world.isRemote || !(world.provider instanceof WorldProviderSpaceSlot)) {
             return;
         }
-        SpaceManager manager = SpaceSubsystem.space();
-        if (manager == null) {
+        SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+        if (stack == null) {
             return;
         }
         // An UNBOUND slot has no cell behind it - that covers the shared hyperspace world, which is
         // deliberately ephemeral and must never be flushed as though it were someone's home cell.
-        String cellKey = SpaceSlotPool.cellKeyFor(world.provider.getDimension());
-        GalacticCoord coord = GalacticCoord.fromCellKey(cellKey);
+        GalacticCoord coord = SpaceSlotPool.cellCoordFor(world.provider.getDimension());
         if (coord != null) {
-            manager.markDirty(coord);
+            stack.manager.markDirty(coord);
         }
     }
 
@@ -423,19 +482,18 @@ public final class SpaceEventHandler {
      * The cell's coordinate mapping is invertible, so the ledger's coordinate IS the ship's pose.
      */
     private static double[] shipPose(UUID shipId) {
-        ShipLedger ledger = SpaceSubsystem.ledger();
-        if (ledger == null) {
+        SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+        if (stack == null) {
             return null;
         }
-        ShipLedger.Entry entry = ledger.get(shipId);
+        ShipLedger.Entry entry = stack.ledger.get(shipId);
         if (entry == null) {
             return null;
         }
         if (entry.state == ShipLedger.State.IN_TRANSIT) {
             // Mid-jump the ledger's coordinate is the DESTINATION, which says nothing about where the
             // ship physically sits — it is parked in a hyperspace lane. Ask the transit for that.
-            ShipTransitManager transit = SpaceSubsystem.transit();
-            BlockPos parked = transit == null ? null : transit.hyperspaceAnchorOf(shipId.toString());
+            BlockPos parked = stack.transit.hyperspaceAnchorOf(shipId.toString());
             return parked == null ? null
                     : new double[] {parked.getX() + 0.5D, parked.getY() + 1.0D, parked.getZ() + 0.5D};
         }
@@ -459,18 +517,18 @@ public final class SpaceEventHandler {
 
         @Override
         public ShipLedger.Entry ledgerEntry(UUID shipId) {
-            ShipLedger ledger = SpaceSubsystem.ledger();
-            return ledger == null ? null : ledger.get(shipId);
+            SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+            return stack == null ? null : stack.ledger.get(shipId);
         }
 
         @Override
         public int materialize(GalacticCoord coord) {
-            SpaceManager manager = SpaceSubsystem.space();
-            if (manager == null) {
+            SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+            if (stack == null) {
                 return -1;
             }
             try {
-                return manager.materialize(coord);
+                return stack.manager.materialize(coord);
             } catch (SpaceManager.PoolExhaustedException exhausted) {
                 LOGGER.warn("[SPACE] cannot restore a player into {} - the slot pool is full",
                         coord.cellKey());
@@ -480,8 +538,8 @@ public final class SpaceEventHandler {
 
         @Override
         public int unpackTransit(UUID shipId) {
-            ShipTransitManager transit = SpaceSubsystem.transit();
-            return transit == null ? -1 : transit.crewDimensionOf(shipId.toString());
+            SpaceSubsystem stack = AdvancedRocketry.spaceSubsystem();
+            return stack == null ? -1 : stack.transit.crewDimensionOf(shipId.toString());
         }
 
         @Override

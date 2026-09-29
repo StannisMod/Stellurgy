@@ -1,11 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -50,15 +52,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern OBSERVED =
-            Pattern.compile("\"observed\":(\\d+)");
-    private static final Pattern WAS_POWERED =
-            Pattern.compile("\"wasPowered\":(true|false)");
-    private static final Pattern EQUIVALENT_POWER =
-            Pattern.compile("\"equivalentPower\":(true|false)");
+    private static final String ENT_ID = "entityId";
+    private static final String OBSERVED = "observed";
+    private static final String WAS_POWERED = "wasPowered";
+    private static final String EQUIVALENT_POWER = "equivalentPower";
 
     @Before
     public void armPreLaunchCanceller() throws Exception {
@@ -87,7 +84,7 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
 
     private static void ok(java.util.List<String> resp) {
         String joined = join(resp);
-        assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
+        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
     }
 
     /** Number of RocketPreLaunchEvent fires observed since
@@ -97,9 +94,9 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     private static int observedPreLaunchEvents() throws Exception {
         String resp = join(client().execute(
                 "artest rocket prelaunch-cancel-counts"));
-        Matcher m = OBSERVED.matcher(resp);
-        assertTrue("observed count must be present: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("observed count must be present: " + resp, mReply.has(OBSERVED));
+        return Integer.parseInt(mReply.text(OBSERVED));
     }
 
     /** Run a single update() tick on the monitoring station tile. */
@@ -110,17 +107,17 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     private static boolean monitorWasPowered(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "artest infra monitor-info 0 " + x + " " + y + " " + z));
-        Matcher m = WAS_POWERED.matcher(resp);
-        assertTrue("monitor-info must include wasPowered: " + resp, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("monitor-info must include wasPowered: " + resp, mReply.has(WAS_POWERED));
+        return Boolean.parseBoolean(mReply.text(WAS_POWERED));
     }
 
     private static boolean monitorEquivalentPower(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "artest infra monitor-info 0 " + x + " " + y + " " + z));
-        Matcher m = EQUIVALENT_POWER.matcher(resp);
-        assertTrue("monitor-info must include equivalentPower: " + resp, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("monitor-info must include equivalentPower: " + resp, mReply.has(EQUIVALENT_POWER));
+        return Boolean.parseBoolean(mReply.text(EQUIVALENT_POWER));
     }
 
     /** Place a redstone block adjacent (east) to the monitor — this
@@ -138,33 +135,30 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     }
 
     /** Assembles a rocket via the standard fixture; returns its entity id. */
-    private static int assembleFixture(int baseX, int baseY, int baseZ) throws Exception {
-        ok(client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1)
-                + " " + (baseZ - 2) + " " + (baseX + 7) + " " + (baseY + 10)
-                + " " + (baseZ + 7) + " minecraft:air"));
-        String fx = join(client().execute("artest fixture rocket 0 " + baseX
-                + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture rocket failed: " + fx, fx.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fx);
-        assertTrue("builderPos missing: " + fx, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-        String assemble = join(client().execute("artest rocket assemble 0 "
-                + bx + " " + by + " " + bz));
-        assertTrue("rocket assemble failed: " + assemble, assemble.contains("\"ok\":true"));
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("entityId missing: " + assemble, em.find());
-        return Integer.parseInt(em.group(1));
+    private static int assembleFixture(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`. Open air, so
+        // this ASSERTS rather than digs.
+        String assemble = RocketFixture.assembleAt(site, cmd -> join(client().execute(cmd)),
+                "simple", 2, 10,
+                "the craft whose launch the station triggers stands in this volume");
+        assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
+        Reply emReply = Reply.of(assemble);
+        assertTrue("entityId missing: " + assemble, emReply.has(ENT_ID));
+        return Integer.parseInt(emReply.text(ENT_ID));
     }
 
     @Test
     public void risingRedstoneEdgeFiresPrepareLaunchExactlyOnce_andSustainedDoesNotRefire()
             throws Exception {
-        int mx = 9500, my = 65, mz = 9500;
+        // The pair moves together: the station sits one block above the rocket's base, a RELATIVE
+        // geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 9500 + 20, 9500);
+        int mx = 9500, my = rocketSite.y + 1, mz = 9500;
         ok(client().execute("artest place 0 " + mx + " " + my + " " + mz
                 + " advancedrocketry:monitoringStation"));
-        int rocketId = assembleFixture(mx + 20, 64, mz);
+        int rocketId = assembleFixture(rocketSite);
         ok(client().execute("artest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId));
 
@@ -211,10 +205,12 @@ public class RocketMonitoringStationLaunchTriggerTest extends AbstractSharedServ
     public void fallingRedstoneEdgeResetsTheGate_andSecondRisingEdgeRefires()
             throws Exception {
         // Distinct column from the first test (position isolation).
-        int mx = 9520, my = 65, mz = 9500;
+        // The pair moves together; see the sibling scenario above.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 9520 + 20, 9500);
+        int mx = 9520, my = rocketSite.y + 1, mz = 9500;
         ok(client().execute("artest place 0 " + mx + " " + my + " " + mz
                 + " advancedrocketry:monitoringStation"));
-        int rocketId = assembleFixture(mx + 20, 64, mz);
+        int rocketId = assembleFixture(rocketSite);
         ok(client().execute("artest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId));
 

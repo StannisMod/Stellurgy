@@ -1,10 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -42,29 +42,24 @@ import static org.junit.Assert.assertTrue;
  */
 public class SolarPanelInsolationTest extends AbstractSharedServerTest {
 
-    private static final Pattern STORED = Pattern.compile("\"energyStored\":(\\d+)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
+    private static final String AR_DIMS_ARRAY = "arDimensions";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static long parseLong(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    /** What the Forge energy capability at one block reports — refusing a block that is not there. */
+    private EnergyStore energy(int dim, int x, int y, int z) throws Exception {
+        return EnergyStore.at(cmd -> ok(client().execute(cmd)), dim, x, y, z);
     }
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue("Only overworld is an AR planet — no comparison dim",
@@ -84,26 +79,25 @@ public class SolarPanelInsolationTest extends AbstractSharedServerTest {
                 "artest place " + dim + " " + x + " " + y + " " + z
                         + " advancedrocketry:solarGenerator"));
         assertTrue("could not place solar in dim " + dim + ": " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
         // Make sure it's daytime + clear for both dims.
         client().execute("time set day");
         client().execute("weather clear 100000");
 
-        String s0 = ok(client().execute(
-                "artest energy stored " + dim + " " + x + " " + y + " " + z));
-        long initial = parseLong(STORED, s0);
-        assertTrue("could not read initial energy in dim " + dim + ": " + s0,
-                initial >= 0);
+        // The reader refuses a block with no store, which is what the `initial >= 0` check stood
+        // for: the old parse answered NaN-cast-to-0 for a panel that was not there, and a delta
+        // taken from two of those is zero — indistinguishable from a panel that generated nothing.
+        long initial = energy(dim, x, y, z)
+                .requireEnergy("the placed panel must expose a store in dim " + dim)
+                .stored();
 
         String tick = ok(client().execute(
                 "artest tile force-tick " + dim + " " + x + " " + y + " " + z
                         + " " + ticks));
         assertTrue("force-tick failed in dim " + dim + ": " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
-        String s1 = ok(client().execute(
-                "artest energy stored " + dim + " " + x + " " + y + " " + z));
-        long after = parseLong(STORED, s1);
+        long after = energy(dim, x, y, z).stored();
         return after - initial;
     }
 

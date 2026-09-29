@@ -1,25 +1,42 @@
 package zmaster587.advancedRocketry.test.server;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.SubsystemStatus;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 
 import org.junit.After;
-import org.junit.Assume;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.EntryStatus;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
+
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * Does a jump to ANOTHER STAR SYSTEM fly, and how long does it take?
  *
  * <p>Every jump ever flown here has been a hop of one sector. The distance between two real systems
  * is three orders of magnitude larger — the generator partitions space into 512-cell super-cells and
- * a cell is 4M blocks — so the interstellar leg has never been exercised: not the integrator over
- * thousands of ticks, not the arrival into a cell that far out, not the ledger address it settles at.
- * Nothing in the gate refuses it; nobody had flown it.</p>
+ * a cell is {@link zmaster587.advancedRocketry.space.GalacticCoord#CELL} blocks — so the interstellar
+ * leg has never been exercised: not the integrator over thousands of ticks, not the arrival into a
+ * cell that far out, not the ledger address it settles at. Nothing in the gate refuses it; nobody
+ * had flown it.</p>
+ *
+ * <p><i>This said "a cell is 4M blocks" until 2026-09-08, by which time the constant was 32M. The
+ * number is linked rather than quoted now: a size written out in prose is one that will be wrong
+ * again, and this one had already made the test cost eight times what its own speed constant
+ * claimed.</i></p>
  *
  * <p><b>The control is in the run.</b> The same ship jumps one sector first. That leg must arrive
  * almost immediately — a hop is four ticks at the baseline speed — and it establishes that the
@@ -36,7 +53,7 @@ import static org.junit.Assert.assertTrue;
 public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
 
     /** Where the craft is built — a loaded overworld region well clear of the other space suites. */
-    private static final int SRC_X = 6800, SRC_Y = 80, SRC_Z = 6800;
+    private static final int SRC_X = 6800, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6800;
     /** A world Y comfortably above the default orbit ceiling (ARConfiguration.orbit = 1000). */
     private static final int ABOVE_CEILING_Y = 1200;
 
@@ -54,77 +71,103 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
      * while the speed a jump is flown at is supplied by the caller here, never derived, so flying
      * slowly would buy realism the probe path cannot deliver anyway.
      *
-     * <p>The duration MEASUREMENT was taken separately, at the baseline drive's own
-     * {@code 1_000_000} blocks/tick: 537 sectors took 2 167 ticks (108 s), against 2 148 predicted
-     * from distance/speed. Set this back to 1 000 000 to re-measure; at 5x it costs the suite ~20 s
-     * instead of ~2 min, which is the only reason it is not the baseline here.</p>
+     * <p><b>Re-derived 2026-09-08, because the old figure had gone stale by 8x with nothing saying
+     * so.</b> This was {@code 5_000_000} under a note promising the suite ~20 s. The leg actually
+     * cost <b>3 452 ticks (172.6 s)</b> — the largest single wait in the whole server tier. The
+     * speed was not the problem: {@link zmaster587.advancedRocketry.space.GalacticCoord#CELL} is
+     * 32 000 000 blocks and this class's own prose still said 4M, so the DISTANCE grew eightfold
+     * under a constant tuned before it did.
+     *
+     * <p>At 40 000 000 the far leg is 537 × 32M / 40M = <b>430 ticks (~21 s)</b> — what the old note
+     * promised. Two bounds keep the test meaning what it means, and both hold with room: the far leg
+     * must stay longer than {@code ShipTransitManager.DIRECT_CROSSING_MAX_TICKS} (160) or it stops
+     * being a FLIGHT and becomes a single crossing (430 clears it), and it must stay longer than the
+     * hop, which at this speed is under one tick.
+     *
+     * <p>The original MEASUREMENT was taken at the baseline drive's own {@code 1_000_000}
+     * blocks/tick, when a cell was 4M: 537 sectors took 2 167 ticks (108 s) against 2 148 predicted.
+     * <b>That prediction still holds</b> — 3 452 observed against 3 437 predicted at 5M with a 32M
+     * cell — so the arithmetic was never wrong, only the number it was being applied to. Set this
+     * back to the drive's own speed to re-measure.</p>
      */
-    private static final long FLIGHT_SPEED = 5_000_000L;
+    private static final long FLIGHT_SPEED = 40_000_000L;
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern CELL_KEY = Pattern.compile("^(-?\\d+)_(-?\\d+)_(-?\\d+)$");
 
-    /** Poll iterations for the CLIMB into space (250 ms apart), stretched by the fork factor. */
-    private static final int SETTLE_POLLS = (int) Math.ceil(120 * TestTimeouts.factor());
+    /** Server ticks the CLIMB into space is given. */
+    private static final int SETTLE_TICKS = 600;
+
+    /** The same, for a ship becoming loadable in its slot - the old 40 x 250 ms. */
     /**
      * Poll iterations for an ARRIVAL, one second apart. The far leg is thousands of ticks of real
      * server time by design, so this budget is sized from the leg itself — 537 sectors x 4M blocks
      * at 1M blocks/tick is ~2 150 ticks ~ 108 s — with room for the arrival's own retries on top.
      */
-    private static final int ARRIVAL_POLLS = (int) Math.ceil(300 * TestTimeouts.factor());
+    private static final int ARRIVAL_TICKS = 6000;
 
     @Test
     public void aJumpToAnotherStarSystemArrivesAndCostsMoreTimeThanAHop() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
 
-        exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // A ship that reached space the way a ship does: built, assembled, flown past the ceiling.
-        clearArea(SRC_X, SRC_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
+        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+                (Reply.of(asm).integer("rocketCount") == 0));
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
-        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        int sx = (int) extractDouble(srcInfo, "posX");
-        int sy = (int) extractDouble(srcInfo, "posY");
-        int sz = (int) extractDouble(srcInfo, "posZ");
-        String held = exec("artest vs ff-input-by-id 0 " + extractString(srcInfo, "id") + " 0 1 0 0 0 0");
+        // The ship's own name, from the assembler that minted it, and the physics id it maps to. Every
+        // call below is addressed to one of the two: the overworld this class builds in is shared, so
+        // "the ship near the pad" is a question with more than one true answer.
+        String durableId = ShipIdentity.nameFromAssembly(asm);
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+
+        ShipInfo src = ShipInfo.byId(this::exec, 0, shipId);
+        int sx = (int) src.x;
+        int sy = (int) src.y;
+        int sz = (int) src.z;
+        String held = exec("artest vs ff-input-by-id 0 " + shipId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + held,
-                held.contains("\"afcResolved\":true"));
-        assertTrue("climb teleport failed", exec("artest vs teleport-ship 0 " + sx + " " + sy + " " + sz
-                + " " + sx + " " + ABOVE_CEILING_Y + " " + sz).contains("\"ok\":true"));
-        exec("artest vs unpark 0 " + sx + " " + ABOVE_CEILING_Y + " " + sz);
+                Reply.of(held).bool("afcResolved"));
+        assertTrue("climb teleport failed", Reply.of(exec("artest vs teleport-ship-by-id 0 " + shipId + " "
+                + sx + " " + ABOVE_CEILING_Y + " " + sz)).ok());
+        // Marked BEFORE the unpark, because the unpark is what starts the entry and the settle is
+        // announced once.
+        long entryMark = events.mark();
+        exec("artest vs unpark-by-id 0 " + shipId);
 
-        String status = waitForState("SETTLED", null, setup, SETTLE_POLLS, 250L);
+        EntryStatus status = awaitEntered(entryMark, setup, SETTLE_TICKS, durableId);
         assertTrue("precondition: the ship never entered space, so there is nothing to jump; last="
-                + status, "SETTLED".equals(extractString(status, "state")));
-        int slotDim = extractInt(status, "slotDim");
-        String originCell = extractString(status, "cellKey");
-        Matcher origin = CELL_KEY.matcher(originCell == null ? "" : originCell);
-        assertTrue("entry-status reported no decodable origin cell key: " + status, origin.matches());
-        long osx = Long.parseLong(origin.group(1));
-        String osy = origin.group(2), osz = origin.group(3);
+                + status.raw(), status.settled());
+        int slotDim = status.slotDim;
+        String originCell = status.cellKey;
+        // Decoded by the type that WRITES the key. `GalacticCoord.fromCellKey` is the exact inverse
+        // of `cellKey()` and handles the ZONED form (`zone + '.' + sx_sy_sz`) that a cell inside a
+        // body's lattice carries; the `^(-?\d+)_(-?\d+)_(-?\d+)$` that stood here matched none of
+        // those, and would have blamed the producer for "no decodable origin cell key".
+        zmaster587.advancedRocketry.space.GalacticCoord origin =
+                zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(originCell);
+        assertNotNull("entry-status reported no decodable origin cell key: " + status.raw(), origin);
+        long osx = origin.sectorX();
+        String osy = String.valueOf(origin.sectorY()), osz = String.valueOf(origin.sectorZ());
 
         // ---- CONTROL LEG: one sector over. Four ticks of flight; it proves the arrangement. -------
-        long hopTicks = flyTo(osx + 1, osy, osz, slotDim, originCell, setup, "hop");
-        assertTrue("ARRANGEMENT: a one-sector hop must arrive, or nothing below is about distance."
+        long hopTicks = flyTo(osx + 1, osy, osz, slotDim, originCell, setup, "hop", durableId);
+        requireArranged("a one-sector hop must arrive, or nothing below is about distance."
                 + " Fix the scaffolding before reading the far leg.", hopTicks >= 0);
 
-        String afterHop = exec("artest space entry-status");
-        String hopCell = extractString(afterHop, "cellKey");
-        int hopSlot = extractInt(afterHop, "slotDim");
-        Matcher hopOrigin = CELL_KEY.matcher(hopCell == null ? "" : hopCell);
-        assertTrue("no decodable cell key after the hop: " + afterHop, hopOrigin.matches());
+        EntryStatus afterHop = EntryStatus.forShip(this::exec, durableId);
+        String hopCell = afterHop.cellKey;
+        int hopSlot = afterHop.slotDim;
+        zmaster587.advancedRocketry.space.GalacticCoord hopOrigin =
+                zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(hopCell);
+        assertNotNull("no decodable cell key after the hop: " + afterHop.raw(), hopOrigin);
 
         // ---- THE SUBJECT: the same ship, the same stack, 537 sectors instead of one. ---------------
-        long farTicks = flyTo(Long.parseLong(hopOrigin.group(1)) + INTERSTELLAR_SECTORS,
-                hopOrigin.group(2), hopOrigin.group(3), hopSlot, hopCell, setup, "interstellar");
+        long farTicks = flyTo(hopOrigin.sectorX() + INTERSTELLAR_SECTORS,
+                String.valueOf(hopOrigin.sectorY()), String.valueOf(hopOrigin.sectorZ()),
+                hopSlot, hopCell, setup, "interstellar", durableId);
 
         System.out.println("[interstellar-leg] hop=" + hopTicks + " ticks, interstellar(" + INTERSTELLAR_SECTORS
                 + " sectors)=" + farTicks + " ticks = " + (farTicks / 20.0D) + " s"
@@ -145,121 +188,157 @@ public class InterstellarJumpLegE2ETest extends AbstractSharedServerTest {
      * number the flight's own duration rather than the poll loop's.
      */
     private long flyTo(long tsx, String tsy, String tsz, int slotDim, String fromCell,
-                       String setup, String label) throws Exception {
-        String jump = exec("artest space jump " + tsx + " " + tsy + " " + tsz + " " + slotDim
-                + " " + FLIGHT_SPEED);
+                       String setup, String label, String durableId) throws Exception {
+        // Marked before the jump command: the arrival is announced once, and a mark taken after the
+        // command has already been given is a window the record can have passed through.
+        long jumpMark = events.mark();
+        String jump = exec("artest space jump id " + durableId + " "
+                + tsx + " " + tsy + " " + tsz + " " + slotDim + " " + FLIGHT_SPEED);
         assertTrue("[" + label + "] the jump probe found no settled ship to move: " + jump,
-                jump.contains("\"began\":true"));
+                Reply.of(jump).bool("began"));
+        assertEquals("[" + label + "] the jump named a different ship than this scenario's: " + jump,
+                durableId, extractString(jump, "shipId"));
         String targetCell = extractString(jump, "toCell");
         assertTrue("[" + label + "] jump reported no target cell: " + jump, targetCell != null);
         assertTrue("[" + label + "] CONTROL: target must differ from origin, else arrival proves"
                 + " nothing: " + fromCell + " -> " + targetCell, !targetCell.equals(fromCell));
 
         long departed = clock();
-        String arrived = waitForState("SETTLED", targetCell, setup, ARRIVAL_POLLS, 1000L);
-        long elapsed = clock() - departed;
-        if (!targetCell.equals(extractString(arrived, "cellKey"))) {
-            System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after " + elapsed
-                    + " ticks; last=" + arrived + " subsystem=" + exec("artest space subsystem-status"));
+        try {
+            awaitArrival(jumpMark, targetCell, setup, ARRIVAL_TICKS, durableId);
+        } catch (AssertionError neverArrived) {
+            // A leg that does not arrive is REPORTED, not failed here: which of the two legs is
+            // silent is the finding, and only this method's caller knows which one it asked for.
+            System.out.println("[interstellar-leg] " + label + " NEVER ARRIVED after "
+                    + (clock() - departed) + " ticks; " + neverArrived.getMessage()
+                    + " ledger=" + EntryStatus.forShip(this::exec, durableId).raw()
+                    + " subsystem=" + SubsystemStatus.read(this::exec).raw());
             return -1L;
         }
+        long elapsed = clock() - departed;
         assertEquals("[" + label + "] nothing may still be in transit once the ledger reports arrival",
-                0, extractInt(exec("artest space subsystem-status"), "transits"));
+                0, SubsystemStatus.read(this::exec).transits);
         return elapsed;
     }
 
     /** The space clock the transit is priced on — the same counter production integrates against. */
     private long clock() throws Exception {
-        Matcher m = Pattern.compile("\"clock\":(-?\\d+)").matcher(exec("artest space frame 0 0 0"));
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+        Reply mReply = Reply.of(exec("artest space frame 0 0 0"));
+        return mReply.has("clock") ? (long) mReply.number("clock") : -1L;
     }
 
-    /** Poll entry-status until the ledger reports {@code state} (and {@code cell}, when given). */
-    private String waitForState(String state, String cell, String setup, int polls, long sleepMs)
+    /**
+     * Wait for THIS craft to finish ENTERING space, then read its ledger row.
+     *
+     * <p>One of the two questions the single {@code waitForState} poll used to serve, and they are
+     * different questions with different records — which is why it had to be split before either
+     * could be linked. This one ends on {@code ship_left_planet}, published on the line after
+     * {@code ledger.settle}, so the record and the row the poll read are the same moment rather
+     * than two things that usually agree.</p>
+     *
+     * <p>The mark is the caller's and precedes the unpark that starts the entry.</p>
+     */
+    private EntryStatus awaitEntered(long mark, String setup, int budgetTicks, String durableId)
             throws Exception {
-        String status = "";
-        for (int i = 0; i < polls; i++) {
-            status = exec("artest space entry-status");
-            if (state.equals(extractString(status, "state"))
-                    && (cell == null || cell.equals(extractString(status, "cellKey")))) {
-                return status;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(sleepMs);
-        }
-        return status;
+        WorldCommandFixtures.awaitEnteredSpace(events, mark, durableId,
+                "the ship must finish entering space", budgetTicks,
+                () -> loadAllEntrySlots(setup));
+        return EntryStatus.forShip(this::exec, durableId);
+    }
+
+    /**
+     * Wait for THIS craft's jump to ARRIVE at {@code cell}, then read its ledger row.
+     *
+     * <p>The crossing's own {@code ship_transit_ended} carries both the craft and the destination
+     * cell, so the wait is narrowed by both: a transit that ended somewhere else is not this jump
+     * arriving, and — because one record has to carry both fields — two craft cannot satisfy the two
+     * halves between them. The poll it replaces asked the ledger the same two things, but as a
+     * SNAPSHOT: a row that reached the target and was written over by the next leg between two reads
+     * was invisible to it.</p>
+     *
+     * <p><b>What this does to the leg's measured duration, said out loud because a measurement is
+     * what the caller does with it</b>: nothing to its definition. The duration is still the space
+     * clock read before the jump subtracted from the space clock read after this returns, and this
+     * returns on the same 5-tick read granularity the poll had. What changes is only what ends the
+     * wait — production announcing the arrival instead of a reading catching the row afterwards.</p>
+     *
+     * <p>Throws when nothing arrives; the caller decides what a silence MEANS, because the hop's
+     * silence and the far leg's silence are different findings and only the caller knows which leg
+     * it is flying.</p>
+     */
+    private String awaitArrival(long mark, String cell, String setup, int budgetTicks,
+                                String durableId) throws Exception {
+        return events.awaitMatching(mark, "ship_transit_ended",
+                reply -> Events.anyRecordHasAll(reply, "ship", durableId, "destination", cell),
+                "carrying ship = " + durableId + " and destination = " + cell,
+                "the jump must arrive at the cell it was aimed at", budgetTicks,
+                () -> loadAllEntrySlots(setup));
     }
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest space entry-clear");
-            exec("artest vs permaload false");
-        }
+        exec("artest space entry-clear");
     }
 
     // --- helpers (mirror VSShipEntryE2ETest) --------------------------------------------------------
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
+    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        Matcher m = Pattern.compile("\"dims\":\\[(-?\\d+),(-?\\d+)]").matcher(setup);
-        if (m.find()) {
-            exec("artest vs load-ships " + m.group(1));
-            exec("artest vs load-ships " + m.group(2));
-        }
+        EntrySlots.loadAll(this::exec, setup);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
-    private void clearArea(int baseX, int baseZ) throws Exception {
-        int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
-        int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed", exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " "
-                + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " "
-                + (baseZ - 4) + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20)
-                + " minecraft:air").contains("\"ok\":true"));
-    }
 
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair: a {@code clearArea} that ran a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
+     * rather than asked, and threw away its own answer — {@code placed}, the count of blocks that
+     * were standing in the volume. The shared builder asks instead, and on an open-air site
+     * anything found is an arrangement failure that names itself. The warmup went with it: the
+     * fill force-loads every chunk in its own box, so the first link was already doing that job.</p>
+     *
+     * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
+     * they are what this scenario's green runs were taken over.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft this scenario builds stands in this volume");
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : 0.0;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).numberOr(key, 0.0);
     }
 
     private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 }

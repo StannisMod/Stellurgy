@@ -1,7 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -41,7 +46,7 @@ import static org.junit.Assert.assertTrue;
 public class RailgunMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 4500;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 4500;
 
     @Test
@@ -49,19 +54,19 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock railgun 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock railgun failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileRailgun tile at controller pos: " + info,
-                info.contains("TileRailgun"));
+        assertEquals("expected TileRailgun tile at controller pos: " + info,
+                "TileRailgun", MachineInfo.of(info).tileSimpleName());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("railgun multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -69,25 +74,25 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock railgun 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete"));
 
         // Top of the core column (y=0 layer struct cell at globalY = cy + 10,
         // globalX = cx, globalZ = cz + 3). Replace with stone.
         String breakCore = join(client().execute(
                 "artest place 0 " + cx + " " + (cy + 10) + " " + (cz + 3) + " minecraft:stone"));
         assertTrue("could not break core column: " + breakCore,
-                breakCore.contains("\"ok\":true"));
+                Reply.of(breakCore).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after core column removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -95,25 +100,25 @@ public class RailgunMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock railgun 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         String first = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("baseline must validate: " + first,
-                first.contains("\"isComplete\":true"));
+                Reply.of(first).bool("isComplete"));
 
         // Centre of the y=9 transition layer (titanium centre at globalY = cy+1,
         // globalX = cx, globalZ = cz + 3). Replace with stone.
         String breakTitanium = join(client().execute(
                 "artest place 0 " + cx + " " + (cy + 1) + " " + (cz + 3) + " minecraft:stone"));
         assertTrue("could not break titanium centre: " + breakTitanium,
-                breakTitanium.contains("\"ok\":true"));
+                Reply.of(breakTitanium).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure stayed complete after transition-layer titanium removal — "
                         + "validator broken: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

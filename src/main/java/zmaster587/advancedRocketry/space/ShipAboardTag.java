@@ -5,6 +5,9 @@ import java.util.UUID;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 
+import zmaster587.advancedRocketry.player.CapabilityPlayerBindings;
+import zmaster587.advancedRocketry.player.IPlayerBindings;
+
 /**
  * The per-player durable record "<i>I am aboard tier-2 ship X, at Y</i>", stored in the player's
  * persistent ForgeData compound so it survives a logout and a server restart.
@@ -39,14 +42,15 @@ import net.minecraft.nbt.NBTTagCompound;
  *
  * <p>The NBT half ({@link #write}, {@link #read}, {@link #clear(NBTTagCompound)}) touches no world,
  * server or player type, so it is exercisable against a bare compound. The player-facing wrappers
- * are thin shims over {@code getEntityData()}. Server-side in practice.</p>
+ * read and write the player's {@code IPlayerBindings} capability, whose storage calls that NBT half.
+ * Server-side in practice.</p>
  */
 public final class ShipAboardTag {
 
     /**
-     * The ForgeData sub-compound key. Everything this class writes goes UNDER this one key: the
-     * ForgeData compound is shared with every other mod on the pack, so a flat set of fields there
-     * would be a collision waiting to happen.
+     * The sub-compound key. Everything this class writes goes UNDER this one key, inside the
+     * compound it is handed - today the player bindings capability's own tag, which also carries
+     * other fields beside it.
      */
     public static final String KEY = "arShipAboard";
 
@@ -292,22 +296,38 @@ public final class ShipAboardTag {
         }
     }
 
-    /** Stamp {@code aboard} onto {@code player}'s persistent entity data (he just sat down). */
+    // ---- the player-facing shims ------------------------------------------------------------
+    //
+    // THE RECORD LIVES IN THE PLAYER'S BINDINGS CAPABILITY, not in his raw forge data, since
+    // 2026-09-14. The NBT functions above are unchanged and are still the codec — the capability
+    // serializes through them, so the shape on disk and every decision encoded in it (an absent
+    // posture key means SEATED, an absent coordinate means "in no cell") has exactly one definition.
+    //
+    // What the move bought is not tidiness. Forge copies no capability across a respawn and copies
+    // only the `PlayerPersisted` sub-tag of the entity data, and this record was written beside that
+    // sub-tag rather than inside it — so a player who died aboard his ship lost the only record of
+    // which ship it was, silently, and every promise about a returning crew member stopped holding
+    // for him. The capability is carried across death deliberately.
+
+    /** Stamp {@code aboard} onto {@code player} (he just sat down). */
     public static void stamp(EntityPlayer player, Aboard aboard) {
-        if (player != null) {
-            write(player.getEntityData(), aboard);
+        IPlayerBindings bindings = CapabilityPlayerBindings.get(player);
+        if (bindings != null) {
+            bindings.setAboard(aboard);
         }
     }
 
     /** {@code player}'s aboard record, or {@code null} if he is not aboard a tier-2 ship. */
     public static Aboard of(EntityPlayer player) {
-        return player == null ? null : read(player.getEntityData());
+        IPlayerBindings bindings = CapabilityPlayerBindings.get(player);
+        return bindings == null ? null : bindings.aboard();
     }
 
     /** Drop {@code player}'s aboard record (he stood up, or his ship is gone). */
     public static void clear(EntityPlayer player) {
-        if (player != null) {
-            clear(player.getEntityData());
+        IPlayerBindings bindings = CapabilityPlayerBindings.get(player);
+        if (bindings != null) {
+            bindings.setAboard(null);
         }
     }
 }

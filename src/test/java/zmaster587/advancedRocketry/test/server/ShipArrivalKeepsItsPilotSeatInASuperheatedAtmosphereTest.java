@@ -1,11 +1,16 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
 import org.junit.After;
-import org.junit.Assume;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
+
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -30,15 +35,15 @@ import static org.junit.Assert.assertTrue;
  * also pass on a build where nothing ever burns anything, which is exactly the shape of test that
  * cannot fail for the reason it was written.</p>
  *
- * <p>Gated on the server's real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    /** World a ship is given to become loadable - the old 40 x 250 ms. */
+
 
     /** Where the ship is built, and the clear sky it crosses into. Well clear of other fixtures. */
-    private static final int SRC_X = 5300, SRC_Y = 80, SRC_Z = 5300;
+    private static final int SRC_X = 5300, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 5300;
     private static final int DST_X = 5364, DST_Y = 150, DST_Z = 5300;
 
     /** Two lone blocks away from the ship: the instrument check, then the control proper. */
@@ -54,25 +59,37 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
 
     @Test
     public void aShipCrossingIntoASuperheatedAtmosphereKeepsItsPilotSeat() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         // A headless server has nobody near a ship to hold it loaded; pin ships so the observations
         // below are of the ship and not of VS's unload policy. Reset in @After.
-        exec("artest vs permaload true");
 
         // The craft is BUILT while the world is still temperate — a player builds at home and lands
         // elsewhere, and building in the fire is a different story than arriving in it.
-        clearArea(SRC_X, SRC_Z);
-        clearArea(DST_X, DST_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z);
+        // ONLY THE DESTINATION IS CLEARED HERE, and the source is not: the fixture's own first link
+        // ASSERTS its volume is empty, and a clear run immediately before that assertion would make
+        // it unfailable — the clear would be the thing that made it true. The destination is a
+        // different question: nothing builds there, the crossing ARRIVES there, and clearing the
+        // arrival area is an arrangement act rather than a claim about it.
+        clearArrivalArea(DST_X, DST_Z);
+        String coords = placeFixture(SRC_X, SRC_Z);
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip() >= 1);
+                (Reply.of(asm).integer("rocketCount") == 0));
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
-        String pre = exec("artest vs seat-input 0 0 0 0 0 0 0");
+        // The source ship, by the durable name its assembler minted — which is also what the ARRIVED
+        // craft is found by, since a crossing carries the name and re-mints the physics id. Both seat
+        // questions below are asked THROUGH a ship rather than of the world: an unaddressed seat
+        // probe answers about whichever pilot seat the world lists first, and this test has already
+        // been caught reading a loose control seat that never crossed anything.
+        String durableId = ShipIdentity.nameFromAssembly(asm);
+        String srcShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        assertTrue("source ship not managed by VS before the crossing; id=" + srcShipId,
+                ShipInfo.loadedIn(this::exec, 0, srcShipId));
+
+        String pre = exec("artest vs seat-input-by-id 0 " + srcShipId + " 0 0 0 0 0 0");
         assertTrue("before the crossing the ship must have a pilot seat to lose: " + pre,
-                pre.contains("\"seatFound\":true"));
+                Reply.of(pre).bool("seatFound"));
 
         // INSTRUMENT CHECK, while the world is still temperate: placing a lone pilot seat this way
         // leaves a pilot seat. Without this leg, "the seat is gone" after the heat could just as
@@ -91,8 +108,12 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         // measures nothing.
         originalTemperature = extractInt(exec("artest planet info 0"), "averageTemperature");
         String heated = exec("artest planet set-temp 0 " + SUPERHEATED_KELVIN);
+        // The atmosphere the planet ENDED UP with, read off the field that names it. Lower-casing
+        // the whole reply and searching it also matched the word in `atmosphere` belonging to a
+        // refusal, and would have matched a dimension or planet NAME carrying it.
         assertTrue("could not author a superheated atmosphere: " + heated,
-                heated.toLowerCase().contains("superheated"));
+                Reply.of("artest planet set-temp", heated).text("atmosphere")
+                        .toLowerCase(java.util.Locale.ROOT).contains("superheated"));
 
         // POSITIVE CONTROL: the same placement into that atmosphere does NOT leave a pilot seat.
         // (What it leaves is not pinned: the conversion writes fire, and fire with nothing to burn
@@ -108,25 +129,30 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         String control = placedHot;
 
         // SUBJECT: the same atmosphere, but the seat arrives as part of a crossing structure.
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
-        assertTrue("source ship not managed by VS before the crossing: " + srcInfo,
-                srcInfo.contains("\"managed\":true"));
-        String cross = exec("artest vs ship-repack 0 "
-                + (int) extractDouble(srcInfo, "posX") + " " + (int) extractDouble(srcInfo, "posY")
-                + " " + (int) extractDouble(srcInfo, "posZ")
+        ShipInfo srcLive = ShipInfo.byId(this::exec, 0, srcShipId);
+        // The crossing CUTS a ship, so it is told which one. The source pose is still passed — the
+        // riders aboard are gathered around it — but it no longer decides whose blocks are taken.
+        String cross = exec("artest vs ship-repack 0 id " + srcShipId + " "
+                + (int) srcLive.x + " " + (int) srcLive.y + " " + (int) srcLive.z
                 + " " + DST_X + " " + DST_Y + " " + DST_Z);
         assertTrue("the crossing itself failed, so the seat question was never asked: " + cross,
-                cross.contains("\"ok\":true"));
+                Reply.of(cross).ok());
         assertTrue("the crossed ship never re-loaded at the destination: " + cross,
-                waitForLoadedShip() >= 1);
+                loadedShips(0) >= 1);
 
         // The crew's own question: is there a seat on the arrived ship, still linked to its computer?
-        String post = exec("artest vs seat-input 0 0 0 0 0 0 0");
+        // Asked of the ARRIVED ship by its own id — the crossing re-assembles the craft and mints a
+        // new identity, so this deliberately is not srcShipId, and it is equally deliberately not
+        // "whatever seat the world lists first".
+        String dstShipId = ShipIdentity.physicsIdOf(this::exec, 0, durableId);
+        assertTrue("the arrived ship is not managed by VS at the destination; id=" + dstShipId,
+                ShipInfo.loadedIn(this::exec, 0, dstShipId));
+        String post = exec("artest vs seat-input-by-id 0 " + dstShipId + " 0 0 0 0 0 0");
         assertTrue("the arrived ship has NO pilot seat - it burned on the way in, and its crew has "
                         + "nowhere to sit. control=" + control + " post=" + post,
-                post.contains("\"seatFound\":true"));
+                Reply.of(post).bool("seatFound"));
         assertTrue("the arrived ship's seat no longer resolves its flight computer: " + post,
-                post.contains("\"afcResolved\":true"));
+                Reply.of(post).bool("afcResolved"));
 
         // And the block itself is a seat, not the fire that replaced it.
         String seatBlock = exec("artest space get-block 0 " + extractInt(post, "seatX")
@@ -139,13 +165,9 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
     public void restoreSharedServerState() throws Exception {
         // Shared-harness contract: a superheated overworld left behind would burn the next test's
         // fixtures, and a pinned ship set would hide the next test's unload behaviour.
-        if (!serverHasVs()) {
-            return;
-        }
         if (originalTemperature != Integer.MIN_VALUE) {
             exec("artest planet set-temp 0 " + originalTemperature);
         }
-        exec("artest vs permaload false");
     }
 
     // --- helpers ------------------------------------------------------------------------------------
@@ -154,32 +176,28 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         return String.join("\n", client().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
     /** Poll for a loaded VS ship (assembly is asynchronous). Bounded ~10 s. Returns the loaded count. */
-    private int waitForLoadedShip() throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all 0"), "count") >= 1) {
-                exec("artest vs load-ships 0");
-                int loaded = extractInt(exec("artest vs ship-count 0"), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
-    private void clearArea(int baseX, int baseZ) throws Exception {
+    /**
+     * Empty the volume the crossing ARRIVES into. This is an arrangement ACT, not a claim: nothing
+     * is built here and no assertion downstream reads this volume's prior contents, so clearing it
+     * and asserting it were never the same question. Its Y is the DESTINATION's, which used to be
+     * read off the SOURCE's constant — the two are the same number today and are different
+     * quantities, so the one this box is about is the one it now names.
+     */
+    private void clearArrivalArea(int baseX, int baseZ) throws Exception {
         int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
         int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
         assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)).ok());
+        assertTrue("the arrival area could not be cleared",
+                Reply.of(exec("artest fill 0 " + (baseX - 4) + " " + (DST_Y - 2) + " " + (baseZ - 4)
+                + " " + (baseX + 20) + " " + (DST_Y + 12) + " " + (baseZ + 20) + " minecraft:air")).ok());
     }
 
     private void clearPos(int x, int y, int z) throws Exception {
@@ -190,32 +208,45 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
     private String placeLoneSeat(int x, int y, int z) throws Exception {
         String box = x + " " + y + " " + z + " " + x + " " + y + " " + z;
         assertTrue("could not clear the position at " + box,
-                exec("artest fill 0 " + box + " minecraft:air").contains("\"ok\":true"));
+                Reply.of(exec("artest fill 0 " + box + " minecraft:air")).ok());
         assertTrue("could not place a pilot seat at " + box,
-                exec("artest fill 0 " + box + " " + PILOT_SEAT).contains("\"ok\":true"));
+                Reply.of(exec("artest fill 0 " + box + " " + PILOT_SEAT)).ok());
         return exec("artest space get-block 0 " + x + " " + y + " " + z);
     }
 
-    private String placeFixture(int baseX, int baseY, int baseZ) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " with-pilot-seat");
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+    /**
+     * WHERE the craft stands, and the first link that says its volume is empty — the clear the
+     * shared builder runs ASSERTS on an open-air site, so a block found standing here is an
+     * arrangement failure that names itself instead of a craft that quietly fails to assemble.
+     */
+    private String placeFixture(int baseX, int baseZ) throws Exception {
+        int[] bp = RocketFixture.placeAt(FixtureSite.openAir(0, baseX, baseZ), this::exec,
+                "with-pilot-seat", 2, 10,
+                "the craft whose pilot seat must survive the arrival stands in this volume");
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static String blockOf(String json) {
-        Matcher m = Pattern.compile("\"block\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : "<no block field in " + json + ">";
+        return Reply.of("artest block at", json)
+                .reported("block");
+    }
+
+    /**
+     * A string field of a probe reply. Fails loudly rather than answering with a placeholder: an id
+     * that silently came back empty would be handed to a {@code -by-id} verb and read as "that ship
+     * is not loaded", which is a different fact from "the reply carried no id".
+     */
+    private static String extractString(String json, String key) {
+        String value = Reply.of(json).text(key);
+        assertTrue("\"" + key + "\" came back empty in: " + json, !value.isEmpty());
+        return value;
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integer(key);
     }
 
     private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : 0.0;
+        return Reply.of(json).number(key);
     }
 }

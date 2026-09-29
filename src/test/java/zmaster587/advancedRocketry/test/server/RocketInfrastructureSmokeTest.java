@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -22,45 +24,55 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern CONN = Pattern.compile("\"connectedCount\":(\\d+)");
-    private static final Pattern FLUID_AMOUNT = Pattern.compile("\"totalAmount\":(\\d+)");
+    /**
+     * The largest link distance that is still a FINITE value, in blocks.
+     *
+     * <p>The TEST'S OWN: what it refuses is a sentinel or an overflow reported as a distance, not a
+     * particular reach. Ten thousand blocks is far beyond any link the mod grants.</p>
+     */
+    private static final int FINITE_LINK_DISTANCE_BLOCKS = 10_000;
+
+    private static final String ENT_ID = "entityId";
+    private static final String CONN = "connectedCount";
+    private static final String FLUID_AMOUNT = "totalAmount";
 
     @Test
     public void fuelingStationLinksToAssembledRocket() throws Exception {
-        int sx = 850, sy = 65, sz = 850;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 850 + 20, 850);
+        int sx = 850, sy = rocketSite.y + 1, sz = 850;
         String place = String.join("\n", client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:fuelingStation"));
         assertTrue("place fueling station failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         String infraInfo = String.join("\n", client().execute(
                 "artest infra info 0 " + sx + " " + sy + " " + sz));
         assertTrue("fueling station not IInfrastructure: " + infraInfo,
-                infraInfo.contains("\"isInfrastructure\":true"));
+                Reply.of(infraInfo).bool("isInfrastructure"));
         assertTrue("infra info missing maxLinkDistance: " + infraInfo,
-                infraInfo.contains("\"maxLinkDistance\""));
+                Reply.of(infraInfo).has("maxLinkDistance"));
 
         String emptyInfra = String.join("\n", client().execute("artest infra info 0 100 64 100"));
         assertTrue("infra info on empty pos didn't error: " + emptyInfra,
-                emptyInfra.contains("\"error\":\"no tile entity\""));
+                "no tile entity".equals(Reply.of(emptyInfra).text("error")));
 
-        int rocketId = assembleFixture(sx + 20, 64, sz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("infra link probe errored: " + link, link.contains("\"ok\":true"));
-        assertTrue("station didn't accept rocket link: " + link, link.contains("\"linked\":true"));
-        Matcher cm = CONN.matcher(link);
-        assertTrue("connectedCount missing", cm.find());
+        assertTrue("infra link probe errored: " + link, Reply.of(link).ok());
+        assertTrue("station didn't accept rocket link: " + link, Reply.of(link).bool("linked"));
+        Reply cmReply = Reply.of(link);
+        assertTrue("connectedCount missing", cmReply.has(CONN));
         assertTrue("connectedCount<1 after link: " + link,
-                Integer.parseInt(cm.group(1)) >= 1);
+                Integer.parseInt(cmReply.text(CONN)) >= 1);
 
         // Idempotency: re-linking same infrastructure must NOT double-add.
         String relink = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
         assertTrue("re-link unexpectedly succeeded a second time: " + relink,
-                relink.contains("\"linked\":false"));
+                (!Reply.of(relink).bool("linked")));
     }
 
     /**
@@ -81,21 +93,21 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         ok(client().execute("artest place 0 " + fx + " 65 900 advancedrocketry:fuelingStation"));
         String fueling = String.join("\n", client().execute("artest infra info 0 " + fx + " 65 900"));
         assertTrue("fueling station must surface maxLinkDistance: " + fueling,
-                fueling.contains("\"maxLinkDistance\":"));
-        int fuelingMax = extractInt(fueling, "\"maxLinkDistance\":(\\d+)");
+                Reply.of(fueling).has("maxLinkDistance"));
+        int fuelingMax = extractInt(fueling, "maxLinkDistance");
         assertTrue("fueling station maxLinkDistance must be a positive finite value: " + fueling,
-                fuelingMax > 0 && fuelingMax < 10_000);
+                fuelingMax > 0 && fuelingMax < FINITE_LINK_DISTANCE_BLOCKS);
 
         int lx = 910;
         ok(client().execute("artest place 0 " + lx + " 65 900 advancedrocketry:loader 3"));
         String loader = String.join("\n", client().execute("artest infra info 0 " + lx + " 65 900"));
-        int loaderMax = extractInt(loader, "\"maxLinkDistance\":(\\d+)");
+        int loaderMax = extractInt(loader, "maxLinkDistance");
         assertTrue("loader maxLinkDistance must be positive: " + loader, loaderMax > 0);
 
         int mx = 920;
         ok(client().execute("artest place 0 " + mx + " 65 900 advancedrocketry:monitoringStation"));
         String monitor = String.join("\n", client().execute("artest infra info 0 " + mx + " 65 900"));
-        int monitorMax = extractInt(monitor, "\"maxLinkDistance\":(\\d+)");
+        int monitorMax = extractInt(monitor, "maxLinkDistance");
         assertTrue("monitoring station maxLinkDistance must dwarf the loader's "
                 + "(loader=" + loaderMax + ", monitor=" + monitorMax + "): " + monitor,
                 monitorMax > loaderMax * 10);
@@ -109,23 +121,26 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void unlinkRemovesAssociation() throws Exception {
-        int sx = 950, sy = 65, sz = 950;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 950 + 20, 950);
+        int sx = 950, sy = rocketSite.y + 1, sz = 950;
         ok(client().execute("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:fuelingStation"));
-        int rocketId = assembleFixture(sx + 20, 64, sz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
 
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("initial link must succeed: " + link, link.contains("\"linked\":true"));
-        int linkedCount = extractInt(link, "\"connectedCount\":(\\d+)");
+        assertTrue("initial link must succeed: " + link, Reply.of(link).bool("linked"));
+        int linkedCount = extractInt(link, "connectedCount");
         assertTrue("connectedCount must be >0 after link: " + link, linkedCount >= 1);
 
         String unlink = String.join("\n", client().execute(
                 "artest infra unlink 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("unlink probe errored: " + unlink, unlink.contains("\"ok\":true"));
+        assertTrue("unlink probe errored: " + unlink, Reply.of(unlink).ok());
         assertTrue("unlink must report unlinked=true: " + unlink,
-                unlink.contains("\"unlinked\":true"));
-        int afterUnlink = extractInt(unlink, "\"connectedCount\":(\\d+)");
+                Reply.of(unlink).bool("unlinked"));
+        int afterUnlink = extractInt(unlink, "connectedCount");
         assertEquals("connectedCount must drop by 1 after unlink",
                 linkedCount - 1, afterUnlink);
 
@@ -133,7 +148,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String relink = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
         assertTrue("re-link after unlink must succeed: " + relink,
-                relink.contains("\"linked\":true"));
+                Reply.of(relink).bool("linked"));
     }
 
     /**
@@ -145,29 +160,32 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void monitoringStationReportsRocketTelemetry() throws Exception {
-        int mx = 1000, my = 65, mz = 1000;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1000 + 20, 1000);
+        int mx = 1000, my = rocketSite.y + 1, mz = 1000;
         ok(client().execute("artest place 0 " + mx + " " + my + " " + mz
                 + " advancedrocketry:monitoringStation"));
 
         String preLink = String.join("\n", client().execute(
                 "artest infra monitor-info 0 " + mx + " " + my + " " + mz));
-        assertTrue("pre-link monitor probe failed: " + preLink, preLink.contains("\"ok\":true"));
+        assertTrue("pre-link monitor probe failed: " + preLink, Reply.of(preLink).ok());
         assertTrue("monitor must report no linked rocket initially: " + preLink,
-                preLink.contains("\"linkedEntityId\":-1"));
+                (Reply.of(preLink).integer("linkedEntityId") == -1));
 
-        int rocketId = assembleFixture(mx + 20, 64, mz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + mx + " " + my + " " + mz + " " + rocketId));
         assertTrue("link to monitoring station must succeed: " + link,
-                link.contains("\"linked\":true"));
+                Reply.of(link).bool("linked"));
 
         String postLink = String.join("\n", client().execute(
                 "artest infra monitor-info 0 " + mx + " " + my + " " + mz));
         assertTrue("post-link monitor must surface the linked rocket entity id "
                 + rocketId + ": " + postLink,
-                postLink.contains("\"linkedEntityId\":" + rocketId));
+                String.valueOf(rocketId).equals(Reply.of(postLink).text("linkedEntityId")));
         assertTrue("post-link monitor must identify the entity as a rocket: " + postLink,
-                postLink.contains("\"linkedClass\":\"zmaster587.advancedRocketry.entity.EntityRocket\""));
+                "zmaster587.advancedRocketry.entity.EntityRocket".equals(Reply.of(postLink).text("linkedClass")));
     }
 
     /**
@@ -190,11 +208,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void fluidLoaderTransfersFluidAfterLanding() throws Exception {
-        int lx = 1050, ly = 65, lz = 1050;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1050 + 20, 1050);
+        int lx = 1050, ly = rocketSite.y + 1, lz = 1050;
         // Loader meta=5 -> TileRocketFluidLoader.
         ok(client().execute("artest place 0 " + lx + " " + ly + " " + lz
                 + " advancedrocketry:loader 5"));
-        int rocketId = assembleFixture(lx + 20, 64, lz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
         ok(client().execute("artest infra link 0 " + lx + " " + ly + " " + lz + " " + rocketId));
 
         // Tick — the production update() iterates getFluidTiles() and
@@ -204,7 +225,7 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String alive = String.join("\n", client().execute(
                 "artest infra info 0 " + lx + " " + ly + " " + lz));
         assertTrue("fluid loader must remain IInfrastructure after 30 ticks: " + alive,
-                alive.contains("\"isInfrastructure\":true"));
+                Reply.of(alive).bool("isInfrastructure"));
     }
 
     /**
@@ -220,11 +241,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void fluidUnloaderTransfersFluidAfterLanding() throws Exception {
-        int ux = 1100, uy = 65, uz = 1100;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1100 + 20, 1100);
+        int ux = 1100, uy = rocketSite.y + 1, uz = 1100;
         // Loader meta=4 -> TileRocketFluidUnloader.
         ok(client().execute("artest place 0 " + ux + " " + uy + " " + uz
                 + " advancedrocketry:loader 4"));
-        int rocketId = assembleFixture(ux + 20, 64, uz, "simple");
+        int rocketId = assembleFixture(rocketSite, "simple");
         ok(client().execute("artest infra link 0 " + ux + " " + uy + " " + uz + " " + rocketId));
 
         // Pre-fill the rocket's fuel tanks by injecting into the rocket's
@@ -240,14 +264,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String preLink = String.join("\n", client().execute(
                 "artest infra info 0 " + ux + " " + uy + " " + uz));
         assertTrue("unloader must be IInfrastructure: " + preLink,
-                preLink.contains("\"isInfrastructure\":true"));
+                Reply.of(preLink).bool("isInfrastructure"));
 
         // 30 ticks of unloader update — must complete without crashing.
         ok(client().execute("artest tile force-tick 0 " + ux + " " + uy + " " + uz + " 30"));
         String stillLinked = String.join("\n", client().execute(
                 "artest infra info 0 " + ux + " " + uy + " " + uz));
         assertTrue("unloader tile must still be present after 30 ticks: " + stillLinked,
-                stillLinked.contains("\"isInfrastructure\":true"));
+                Reply.of(stillLinked).bool("isInfrastructure"));
     }
 
     /**
@@ -259,11 +283,14 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void rocketLoaderTransfersItemsAfterLanding() throws Exception {
-        int lx = 1150, ly = 65, lz = 1150;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1150 + 20, 1150);
+        int lx = 1150, ly = rocketSite.y + 1, lz = 1150;
         // Loader meta=3 -> TileRocketLoader.
         ok(client().execute("artest place 0 " + lx + " " + ly + " " + lz
                 + " advancedrocketry:loader 3"));
-        int rocketId = assembleFixture(lx + 20, 64, lz, "with-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-cargo");
         ok(client().execute("artest infra link 0 " + lx + " " + ly + " " + lz + " " + rocketId));
 
         // Drop 32 cobblestone into the loader's input slot 0.
@@ -275,15 +302,18 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         // The fixture's chest starts empty — rocket inventory should have 0
         // items pre-transfer.
         assertTrue("rocket should start with empty cargo: " + preTransfer,
-                preTransfer.contains("\"items\":["));
+                (Reply.of(preTransfer).arrayLength("items") >= 0));
 
         // Force-tick the loader so update() ferries the stack across.
         ok(client().execute("artest tile force-tick 0 " + lx + " " + ly + " " + lz + " 5"));
 
         String postTransfer = String.join("\n", client().execute(
                 "artest rocket storage-inventory " + rocketId));
-        assertTrue("loader must move cobblestone into rocket cargo chest: "
-                + postTransfer, postTransfer.contains("\"item\":\"minecraft:cobblestone\""));
+        // Addressed by the FETCH — this rocket's storage — so its contents are an existence
+        // question: the loader chose the slot, and two stacks of one item is a stocked rocket.
+        assertTrue("the loader must have moved the cobblestone into the rocket: " + postTransfer,
+                Reply.of("artest rocket storage-inventory", postTransfer)
+                        .holdsElement("items", "item", "minecraft:cobblestone"));
     }
 
     /**
@@ -300,10 +330,13 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void rocketUnloaderRemovesItemsAfterLanding() throws Exception {
-        int ux = 1200, uy = 65, uz = 1200;
+        // The pair moves together: the machine sits one block above the rocket's base,
+        // a RELATIVE geometry that was written as two absolute numbers.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1200 + 20, 1200);
+        int ux = 1200, uy = rocketSite.y + 1, uz = 1200;
         ok(client().execute("artest place 0 " + ux + " " + uy + " " + uz
                 + " advancedrocketry:loader 2"));
-        int rocketId = assembleFixture(ux + 20, 64, uz, "with-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-cargo");
         ok(client().execute("artest infra link 0 " + ux + " " + uy + " " + uz + " " + rocketId));
 
         // Tick the unloader — empty cargo -> no transfer, but the loop must
@@ -313,52 +346,48 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         String infoAfter = String.join("\n", client().execute(
                 "artest infra info 0 " + ux + " " + uy + " " + uz));
         assertTrue("unloader must remain IInfrastructure after ticks: " + infoAfter,
-                infoAfter.contains("\"isInfrastructure\":true"));
+                Reply.of(infoAfter).bool("isInfrastructure"));
         // Sanity — the rocket's inventory tile (the cargo chest) is enumerable.
         String inv = String.join("\n", client().execute(
                 "artest rocket storage-inventory " + rocketId));
         assertTrue("rocket must expose an inventoryTileCount: " + inv,
-                inv.contains("\"inventoryTileCount\""));
+                Reply.of(inv).has("inventoryTileCount"));
     }
 
     /**
      * Helper: build a rocket fixture, assemble it, return its entity id.
-     * Pre-clears terrain so the scan sees only the placed components (same
-     * pattern as RocketAssemblySmokeTest).
+     *
+     * <p>The site stands in the open-air band, so the check below ASSERTS that the scan will see
+     * only the placed components rather than digging terrain away and hoping (same pattern as
+     * RocketAssemblySmokeTest).</p>
      */
-    private int assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fx = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture rocket (" + variant + ") failed: " + fx, fx.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fx);
-        assertTrue("could not parse builderPos: " + fx, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+    private int assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed`.
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
+                "the craft this infrastructure links to stands in this volume");
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("rocket assemble failed: " + assemble, assemble.contains("\"ok\":true"));
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("rocket entityId missing: " + assemble, em.find());
-        int rocketId = Integer.parseInt(em.group(1));
+        assertTrue("rocket assemble failed: " + assemble, Reply.of(assemble).ok());
+        Reply emReply = Reply.of(assemble);
+        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
+        int rocketId = Integer.parseInt(emReply.text(ENT_ID));
         assertTrue("rocket entityId<0: " + assemble, rocketId >= 0);
         return rocketId;
     }
 
     private void ok(java.util.List<String> response) {
         String joined = String.join("\n", response);
-        assertTrue("probe call failed: " + joined, joined.contains("\"ok\":true"));
+        assertTrue("probe call failed: " + joined, Reply.of(joined).ok());
     }
 
-    private static int extractInt(String haystack, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    private static int extractInt(String haystack, String field) {
+        return Reply.of(haystack).integer(field);
     }
 }

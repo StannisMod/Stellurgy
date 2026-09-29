@@ -1,9 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.FluidStored;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -42,17 +45,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENT_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern TOTAL_AMOUNT =
-            Pattern.compile("\"totalAmount\":(\\d+)");
-    private static final Pattern TILES_WITH_CAP =
-            Pattern.compile("\"tilesWithCapability\":(\\d+)");
-    private static final Pattern TOTAL_FILLED =
-            Pattern.compile("\"totalFilled\":(\\d+)");
-    private static final Pattern LOADER_TANK_AMOUNT =
-            Pattern.compile("\"fluid\":\"oxygen\",\"amount\":(\\d+)");
+    private static final String ENT_ID = "entityId";
+    private static final String TOTAL_AMOUNT = "totalAmount";
+    private static final String TILES_WITH_CAP = "tilesWithCapability";
+    private static final String TOTAL_FILLED = "totalFilled";
 
     /**
      * loader pre-loaded with oxygen actively transfers it into
@@ -70,19 +66,24 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      */
     @Test
     public void loaderTransfersOxygenIntoRocketStorageLiquidTanks() throws Exception {
-        int lx = 1300, ly = 65, lz = 1300;
+        // THE PAIR MOVES TOGETHER. The loader sat at y=65 and the rocket's base at y=64, one below
+        // it — a RELATIVE geometry written as two absolute numbers, which is why the mechanical
+        // lift could not touch this class: moving either alone would have put the loader a hundred
+        // blocks from the craft it loads while both lines still looked plausible.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1300 + 20, 1300);
+        int lx = 1300, ly = rocketSite.y + 1, lz = 1300;
         ok("artest place 0 " + lx + " " + ly + " " + lz
                 + " advancedrocketry:loader 5");
 
-        int rocketId = assembleFixture(lx + 20, 64, lz, "with-fluid-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-fluid-cargo");
 
         // Pre-load loader's tank with oxygen. The loader IS a
         // TileFluidHatch, so `fluid inject` works against its world pos.
         String inj = exec("artest fluid inject 0 " + lx + " " + ly + " " + lz
                 + " oxygen 32000");
         assertTrue("loader fluid inject must succeed: " + inj,
-                inj.contains("\"ok\":true"));
-        int loaderFilled = extract(inj, Pattern.compile("\"filled\":(\\d+)"));
+                Reply.of(inj).ok());
+        int loaderFilled = extract(inj, "filled");
         assertTrue("loader pre-fill must accept > 0 mB: " + inj,
                 loaderFilled > 0);
 
@@ -117,17 +118,14 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         // contract pin is "rocket gained the loader's fluid", not a
         // specific mB count.
         String postStorage = exec("artest rocket storage-fluid " + rocketId);
-        int storageAfter = extract(postStorage, TOTAL_AMOUNT);
-        assertTrue("rocket storage liquidTanks must contain oxygen "
-                        + "after loader ticks (the player-visible "
-                        + "'re-fuel automation' contract); storageAfter="
-                        + storageAfter + " storageJson=" + postStorage,
-                storageAfter > 0);
-        assertTrue("rocket storage post-state must contain the loader's "
-                        + "fluid type (oxygen) specifically — guards "
-                        + "against an off-target transfer; storageJson="
-                        + postStorage,
-                postStorage.contains("\"fluid\":\"oxygen\""));
+        // THE oxygen tank, and its amount read off that same tank. `totalAmount` sums every tank,
+        // so "the storage grew" and "oxygen is in there" were two questions about one subject —
+        // and a rocket holding oxygen beside anything else answers them from two different tanks.
+        Reply oxygen = Reply.of("artest rocket storage-fluid", postStorage)
+                .element("tanks", "fluid", "oxygen");
+        assertTrue("rocket storage liquidTanks must contain oxygen after loader ticks (the"
+                        + " player-visible 're-fuel automation' contract): " + postStorage,
+                oxygen.integer("amount") > 0);
     }
 
     /**
@@ -143,18 +141,20 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      */
     @Test
     public void unloaderDrainsRocketStorageLiquidTanksIntoOwnTank() throws Exception {
-        int ux = 1400, uy = 65, uz = 1400;
+        // The pair moves together; see the sibling scenario above for why this is one decision.
+        final FixtureSite rocketSite = FixtureSite.openAir(0, 1400 + 20, 1400);
+        int ux = 1400, uy = rocketSite.y + 1, uz = 1400;
         ok("artest place 0 " + ux + " " + uy + " " + uz
                 + " advancedrocketry:loader 4");
 
-        int rocketId = assembleFixture(ux + 20, 64, uz, "with-fluid-cargo");
+        int rocketId = assembleFixture(rocketSite, "with-fluid-cargo");
 
         // Pre-fill rocket's storage liquidTanks with oxygen via the
         // dedicated probe.
         String fillResp = exec("artest rocket storage-fluid-fill " + rocketId
                 + " oxygen 16000");
         assertTrue("storage-fluid-fill must succeed: " + fillResp,
-                fillResp.contains("\"ok\":true"));
+                Reply.of(fillResp).ok());
         int tilesWithCap = extract(fillResp, TILES_WITH_CAP);
         int totalFilled = extract(fillResp, TOTAL_FILLED);
         assertTrue("with-fluid-cargo fixture must produce at least one "
@@ -180,7 +180,7 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
         String link = exec("artest infra link 0 " + ux + " " + uy + " " + uz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"linked\":true"));
+                Reply.of(link).bool("linked"));
 
         // Run the unloader's production update() for 60 ticks.
         ok("artest tile force-tick 0 " + ux + " " + uy + " " + uz + " 60");
@@ -213,33 +213,28 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
-    private int assembleFixture(int baseX, int baseY, int baseZ, String variant)
+    private int assembleFixture(FixtureSite site, String variant)
             throws Exception {
-        ok("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                + " minecraft:air");
-        String fx = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " " + variant);
-        assertTrue("fixture rocket (" + variant + ") failed: " + fx,
-                fx.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fx);
-        assertTrue("could not parse builderPos: " + fx, bp.find());
-        String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
+        String assemble = RocketFixture.assembleAt(site, cmd -> exec(cmd), variant, 2, 10,
+                "the craft the loader fills stands in this volume");
         assertTrue("rocket assemble failed: " + assemble,
-                assemble.contains("\"ok\":true"));
-        Matcher em = ENT_ID.matcher(assemble);
-        assertTrue("rocket entityId missing: " + assemble, em.find());
-        return Integer.parseInt(em.group(1));
+                Reply.of(assemble).ok());
+        Reply emReply = Reply.of(assemble);
+        assertTrue("rocket entityId missing: " + assemble, emReply.has(ENT_ID));
+        return Integer.parseInt(emReply.text(ENT_ID));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
     /**
@@ -248,7 +243,8 @@ public class FluidLoaderActiveTransferTest extends AbstractSharedServerTest {
      * missing) — that's a valid drained-tank state, not a parse error.
      */
     private static int parseOxygenAmountOrZero(String src) {
-        Matcher m = LOADER_TANK_AMOUNT.matcher(src);
-        return m.find() ? Integer.parseInt(m.group(1)) : 0;
+        // Read per TANK. The regex this replaces matched `fluid` and `amount` in one expression, so
+        // a tank that wrote them in the other order read as no oxygen at all.
+        return FluidStored.of(src).amountOf("oxygen");
     }
 }

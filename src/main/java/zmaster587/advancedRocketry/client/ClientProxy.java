@@ -269,6 +269,12 @@ public class ClientProxy extends CommonProxy {
     public void preinit() {
         OBJLoader.INSTANCE.addDomain("advancedrocketry");
         registerRenderers();
+        // Hand the aboard-movement resolution this side's look/input answers. Here, and not from a
+        // static initialiser of the class that answers them: the port must exist before the first
+        // aboard tick, and a port that appears when something happens to class-load its implementor
+        // is absent exactly when nothing has needed it yet.
+        zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.installClientLookSource(
+                new zmaster587.advancedRocketry.client.DeckLook.Port());
         bootstrapTestClientBridge();
     }
 
@@ -301,13 +307,6 @@ public class ClientProxy extends CommonProxy {
      *  client), so the per-tick check stops doing any work after the first successful pass. */
     private static boolean testClientSoundHandled = false;
 
-    /**
-     * The REAL master sound level read back from {@code GameSettings} right after the test
-     * client is muted, or {@code NaN} until then. Published for the client e2e to observe
-     * (via the harness's static-field readback) that the master volume genuinely reached 0 —
-     * not merely that the mute code ran. Only ever written on a harness-spawned test client.
-     */
-    public static volatile float testClientMasterVolume = Float.NaN;
 
     /**
      * The dimension id of the world the CLIENT is currently in, or {@link Integer#MIN_VALUE} when no
@@ -349,6 +348,7 @@ public class ClientProxy extends CommonProxy {
             net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         zmaster587.advancedRocketry.space.SpaceClockSync.reset();
         zmaster587.advancedRocketry.space.HyperspaceWorld.forgetServerId();
+        ClientAtmosphere.reset();
     }
 
     /**
@@ -375,9 +375,6 @@ public class ClientProxy extends CommonProxy {
             return; // sound not initialised yet — try again next tick
         }
         mc.gameSettings.setSoundLevel(SoundCategory.MASTER, 0.0F);
-        // Publish the value actually in effect (read back from GameSettings), so a client e2e
-        // can confirm the master volume really reached 0 rather than that this code merely ran.
-        testClientMasterVolume = mc.gameSettings.getSoundLevel(SoundCategory.MASTER);
         testClientSoundHandled = true;
     }
 
@@ -412,6 +409,9 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(new DelayedParticleRenderingEventHandler());
         MinecraftForge.EVENT_BUS.register(ModuleContainerPan.class);
         MinecraftForge.EVENT_BUS.register(new RenderComponents());
+        // The client ticks its ships from the client tick event, not the world one, so the
+        // re-seat that follows them needs its own handler on this side.
+        MinecraftForge.EVENT_BUS.register(new ClientDeckFollowsItsShip());
 
         if (Loader.isModLoaded("jei")) {
             FMLCommonHandler.instance().bus().register(

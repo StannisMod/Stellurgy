@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
@@ -62,30 +63,18 @@ public class ServerBootSmokeSuite extends AbstractSharedServerTest {
         String joined = String.join("\n", output);
 
         assertTrue("registry summary missing 'blocks' key: " + joined,
-                joined.contains("\"blocks\":"));
+                Reply.of(joined).has("blocks"));
         assertTrue("registry summary missing 'items' key: " + joined,
-                joined.contains("\"items\":"));
+                Reply.of(joined).has("items"));
         assertTrue("registry summary missing 'entities' key: " + joined,
-                joined.contains("\"entities\":"));
+                Reply.of(joined).has("entities"));
         assertTrue("registry summary missing 'biomes' key: " + joined,
-                joined.contains("\"biomes\":"));
+                Reply.of(joined).has("biomes"));
 
-        int entitiesCount = parseIntKey(joined, "entities");
+        int entitiesCount = Reply.of("artest registry summary", joined).integer("entities");
         assertTrue("entity registry suspiciously small (" + entitiesCount
                         + ") — AR may not have loaded",
                 entitiesCount > 1);
     }
 
-    private static int parseIntKey(String json, String key) {
-        String needle = "\"" + key + "\":";
-        int idx = json.indexOf(needle);
-        if (idx < 0) return -1;
-        int start = idx + needle.length();
-        int end = start;
-        while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-')) {
-            end++;
-        }
-        try { return Integer.parseInt(json.substring(start, end)); }
-        catch (NumberFormatException e) { return -1; }
-    }
 }

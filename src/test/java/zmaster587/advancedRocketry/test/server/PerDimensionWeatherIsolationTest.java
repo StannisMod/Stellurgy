@@ -1,11 +1,14 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+
+import zmaster587.advancedRocketry.test.DimWeather;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -94,25 +97,23 @@ public class PerDimensionWeatherIsolationTest {
         // Rain on A only.
         String setA = String.join("\n",
                 harness.client().execute("artest weather set " + FIXTURE_DIM_A + " rain 12000"));
-        assertTrue("set rain on A failed: " + setA, setA.contains("\"ok\":true"));
+        assertTrue("set rain on A failed: " + setA, Reply.of(setA).ok());
 
-        String wA = String.join("\n", harness.client().execute("artest weather get " + FIXTURE_DIM_A));
-        String wB = String.join("\n", harness.client().execute("artest weather get " + FIXTURE_DIM_B));
-        String w0 = String.join("\n", harness.client().execute("artest weather get 0"));
+        DimWeather wA = weather(FIXTURE_DIM_A);
+        DimWeather wB = weather(FIXTURE_DIM_B);
+        DimWeather w0 = weather(0);
 
-        assertTrue("planet A should be raining after explicit set: " + wA,
-                wA.contains("\"isRaining\":true"));
-        assertFalse("planet B must NOT be raining (rain set on A only): " + wB,
-                wB.contains("\"isRaining\":true"));
-        assertFalse("overworld must NOT be raining (rain set on planet A only): " + w0,
-                w0.contains("\"isRaining\":true"));
+        assertTrue("planet A should be raining after explicit set: " + wA.raw(), wA.raining);
+        assertFalse("planet B must NOT be raining (rain set on A only): " + wB.raw(), wB.raining);
+        assertFalse("overworld must NOT be raining (rain set on planet A only): " + w0.raw(),
+                w0.raining);
         // Wrapper must actually be installed — otherwise the isolation above
         // could pass for the wrong reason (no propagation simply because we
         // changed nothing on the other dims yet).
-        assertTrue("planet A WorldInfo class should be ARDimensionWorldInfo: " + wA,
-                wA.contains("ARDimensionWorldInfo"));
-        assertTrue("planet B WorldInfo class should be ARDimensionWorldInfo: " + wB,
-                wB.contains("ARDimensionWorldInfo"));
+        assertTrue("planet A WorldInfo class should be ARDimensionWorldInfo: " + wA.raw(),
+                wA.usesARWorldInfo());
+        assertTrue("planet B WorldInfo class should be ARDimensionWorldInfo: " + wB.raw(),
+                wB.usesARWorldInfo());
     }
 
     @Test
@@ -127,16 +128,14 @@ public class PerDimensionWeatherIsolationTest {
 
         harness.client().execute("artest weather set " + FIXTURE_DIM_B + " rain 12000");
 
-        String wA = String.join("\n", harness.client().execute("artest weather get " + FIXTURE_DIM_A));
-        String wB = String.join("\n", harness.client().execute("artest weather get " + FIXTURE_DIM_B));
-        String w0 = String.join("\n", harness.client().execute("artest weather get 0"));
+        DimWeather wA = weather(FIXTURE_DIM_A);
+        DimWeather wB = weather(FIXTURE_DIM_B);
+        DimWeather w0 = weather(0);
 
-        assertTrue("planet B should be raining after explicit set: " + wB,
-                wB.contains("\"isRaining\":true"));
-        assertFalse("planet A must NOT be raining (rain set on B only): " + wA,
-                wA.contains("\"isRaining\":true"));
-        assertFalse("overworld must NOT be raining (rain set on planet B only): " + w0,
-                w0.contains("\"isRaining\":true"));
+        assertTrue("planet B should be raining after explicit set: " + wB.raw(), wB.raining);
+        assertFalse("planet A must NOT be raining (rain set on B only): " + wA.raw(), wA.raining);
+        assertFalse("overworld must NOT be raining (rain set on planet B only): " + w0.raw(),
+                w0.raining);
     }
 
     @Test
@@ -149,26 +148,26 @@ public class PerDimensionWeatherIsolationTest {
         harness.client().execute("artest weather set " + FIXTURE_DIM_A + " rain 12000");
         harness.client().execute("artest weather set " + FIXTURE_DIM_B + " rain 12000");
 
-        String beforeA = String.join("\n",
-                harness.client().execute("artest weather get " + FIXTURE_DIM_A));
-        String beforeB = String.join("\n",
-                harness.client().execute("artest weather get " + FIXTURE_DIM_B));
-        assertTrue("planet A must be raining as precondition: " + beforeA,
-                beforeA.contains("\"isRaining\":true"));
-        assertTrue("planet B must be raining as precondition: " + beforeB,
-                beforeB.contains("\"isRaining\":true"));
+        DimWeather beforeA = weather(FIXTURE_DIM_A);
+        DimWeather beforeB = weather(FIXTURE_DIM_B);
+        assertTrue("planet A must be raining as precondition: " + beforeA.raw(), beforeA.raining);
+        assertTrue("planet B must be raining as precondition: " + beforeB.raw(), beforeB.raining);
 
         // Clear only A.
         harness.client().execute("artest weather set " + FIXTURE_DIM_A + " clear 12000");
 
-        String afterA = String.join("\n",
-                harness.client().execute("artest weather get " + FIXTURE_DIM_A));
-        String afterB = String.join("\n",
-                harness.client().execute("artest weather get " + FIXTURE_DIM_B));
+        DimWeather afterA = weather(FIXTURE_DIM_A);
+        DimWeather afterB = weather(FIXTURE_DIM_B);
 
-        assertFalse("planet A should be clear after explicit clear: " + afterA,
-                afterA.contains("\"isRaining\":true"));
-        assertTrue("planet B must remain raining (clear set on A only): " + afterB,
-                afterB.contains("\"isRaining\":true"));
+        assertFalse("planet A should be clear after explicit clear: " + afterA.raw(),
+                afterA.raining);
+        assertTrue("planet B must remain raining (clear set on A only): " + afterB.raw(),
+                afterB.raining);
+    }
+
+    /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(cmd -> String.join("\n", harness.client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 }

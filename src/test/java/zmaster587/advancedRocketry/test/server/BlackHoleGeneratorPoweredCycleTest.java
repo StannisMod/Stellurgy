@@ -1,11 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EnergyStore;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -42,6 +43,9 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest {
 
+    /** A full stack — what the hatch fill asks for, read back from its reply. Not a threshold. */
+    private static final int FULL_STACK = 64;
+
     /** AR planet ID offset for star dims —
      *  {@link zmaster587.advancedRocketry.api.Constants#STAR_ID_OFFSET}. */
     private static final int STAR_ID_OFFSET = 10000;
@@ -57,17 +61,11 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     private static final int OVERWORLD_CY = 128;
     private static final int OVERWORLD_CZ = 5000;
 
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern SPAWN_X = Pattern.compile("\"spawnX\":(-?\\d+)");
-    private static final Pattern SPAWN_Z = Pattern.compile("\"spawnZ\":(-?\\d+)");
-    private static final Pattern CTRL_POS =
-            Pattern.compile("\"controllerPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POWER_OUT_POS =
-            Pattern.compile("\"powerOutPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ITEM_IN_POS =
-            Pattern.compile("\"itemInputPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENERGY_STORED = Pattern.compile("\"energyStored\":(-?\\d+)");
-    private static final Pattern STAR_BLACKHOLE = Pattern.compile("\"isBlackHole\":(true|false)");
+    private static final String STATION_ID = "id";
+    private static final String CTRL_POS = "controllerPos";
+    private static final String POWER_OUT_POS = "powerOutPos";
+    private static final String ITEM_IN_POS = "itemInputPos";
+    private static final String STAR_BLACKHOLE = "isBlackHole";
 
     private boolean originalSolBlackHole;
     private int stationId = -1;
@@ -76,15 +74,15 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     public void snapshotAndPrepare() throws Exception {
         // Snapshot Sol's black-hole flag so we can restore in @After.
         String solInfo = exec("artest star get 0");
-        Matcher m = STAR_BLACKHOLE.matcher(solInfo);
-        assertTrue("could not read Sol's black-hole flag: " + solInfo, m.find());
-        originalSolBlackHole = Boolean.parseBoolean(m.group(1));
+        Reply sol = Reply.of("artest star get", solInfo);
+        assertTrue("could not read Sol's black-hole flag: " + solInfo, sol.has(STAR_BLACKHOLE));
+        originalSolBlackHole = sol.bool(STAR_BLACKHOLE);
 
         // Load the space dim — BHG production checks
         // world.provider.getDimension() == spaceDimId.
         String load = exec("artest dim load " + SPACE_DIM);
         assertTrue("space dim load failed: " + load,
-                load.contains("\"loaded\":true") || load.contains("\"ok\":true"));
+                Reply.of(load).bool("loaded"));
     }
 
     @After
@@ -111,9 +109,9 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         feedInputHatch(SPACE_DIM, fixture);
         enableMachine(SPACE_DIM, origin[0], origin[1], origin[2]);
 
-        int outputBefore = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
+        long outputBefore = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
         forceTick(SPACE_DIM, origin[0], origin[1], origin[2], 600);
-        int outputAfter = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
+        long outputAfter = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
 
         assertTrue("BHG around black-hole produced no energy"
                         + " (outputBefore=" + outputBefore + " outputAfter=" + outputAfter + ")",
@@ -131,9 +129,9 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         feedInputHatch(SPACE_DIM, fixture);
         enableMachine(SPACE_DIM, origin[0], origin[1], origin[2]);
 
-        int outputBefore = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
+        long outputBefore = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
         forceTick(SPACE_DIM, origin[0], origin[1], origin[2], 600);
-        int outputAfter = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
+        long outputAfter = readEnergyStored(SPACE_DIM, powerOutPosFrom(fixture));
 
         assertEquals("BHG without black-hole star produced energy anyway"
                         + " (outputBefore=" + outputBefore + " outputAfter=" + outputAfter + ")",
@@ -152,9 +150,9 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         feedInputHatch(OVERWORLD_DIM, fixture);
         enableMachine(OVERWORLD_DIM, OVERWORLD_CX, OVERWORLD_CY, OVERWORLD_CZ);
 
-        int outputBefore = readEnergyStored(OVERWORLD_DIM, powerOutPosFrom(fixture));
+        long outputBefore = readEnergyStored(OVERWORLD_DIM, powerOutPosFrom(fixture));
         forceTick(OVERWORLD_DIM, OVERWORLD_CX, OVERWORLD_CY, OVERWORLD_CZ, 600);
-        int outputAfter = readEnergyStored(OVERWORLD_DIM, powerOutPosFrom(fixture));
+        long outputAfter = readEnergyStored(OVERWORLD_DIM, powerOutPosFrom(fixture));
 
         assertEquals("BHG on overworld produced energy anyway"
                         + " — spaceDim gate leaked through"
@@ -167,7 +165,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     private void flipSolBlackHole(boolean value) throws Exception {
         String resp = exec("artest star set-blackhole 0 " + value);
         assertTrue("Sol black-hole flip failed: " + resp,
-                resp.contains("\"ok\":true") && resp.contains("\"after\":" + value));
+                Reply.of(resp).ok() && String.valueOf(value).equals(Reply.of(resp).text("after")));
     }
 
     /** Creates a station orbiting Sol (dim {@link #SOL_DIM}), returns its
@@ -175,25 +173,24 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     private int[] createStationAndQuerySpawn() throws Exception {
         String create = exec("artest station create " + SOL_DIM);
         assertTrue("station create failed: " + create,
-                create.contains("\"ok\":true"));
-        Matcher idM = STATION_ID.matcher(create);
-        assertTrue("no station id in create response: " + create, idM.find());
-        stationId = Integer.parseInt(idM.group(1));
+                Reply.of(create).ok());
+        Reply created = Reply.of("artest station create", create);
+        assertTrue("no station id in create response: " + create, created.has(STATION_ID));
+        stationId = created.integer(STATION_ID);
 
-        String info = exec("artest station info " + stationId);
-        Matcher x = SPAWN_X.matcher(info);
-        Matcher z = SPAWN_Z.matcher(info);
-        assertTrue("no spawn coords in station info: " + info, x.find() && z.find());
-        return new int[]{Integer.parseInt(x.group(1)), 128, Integer.parseInt(z.group(1))};
+        // The reader refuses a station the manager does not hold, and its spawn accessors refuse a
+        // station that has no spawn — which is what the two-field has-check stood for.
+        StationInfo station = StationInfo.byId(WorldCommandFixtures::exec, stationId);
+        return new int[]{station.spawnX(), 128, station.spawnZ()};
     }
 
     private String buildFixture(int dim, int cx, int cy, int cz) throws Exception {
         String fixture = exec("artest fixture multiblock blackhole-gen "
                 + dim + " " + cx + " " + cy + " " + cz);
         assertTrue("BHG fixture build failed: " + fixture,
-                fixture.contains("\"ok\":true"));
-        Matcher m = CTRL_POS.matcher(fixture);
-        assertTrue("no controllerPos in fixture response: " + fixture, m.find());
+                Reply.of(fixture).ok());
+        assertTrue("no controllerPos in fixture response: " + fixture,
+                Reply.of("artest fixture multiblock", fixture).blockPos(CTRL_POS) != null);
         // Try-complete: BHG's onInventoryUpdated runs attemptFire which
         // requires isComplete; the fixture only places, doesn't call
         // attemptCompleteStructure. The first force-tick call below
@@ -203,7 +200,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
         String tryComplete = exec("artest machine try-complete "
                 + dim + " " + cx + " " + cy + " " + cz);
         assertTrue("BHG structure failed to complete: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
         return fixture;
     }
 
@@ -217,40 +214,35 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
                 + inputPos[0] + " " + inputPos[1] + " " + inputPos[2]
                 + " 0 minecraft:dirt 64 0");
         assertTrue("hatch fill failed: " + resp,
-                resp.contains("\"ok\":true") || resp.contains("\"count\":64"));
+                Reply.of(resp).ok() || (Reply.of(resp).integer("count") == FULL_STACK));
     }
 
     private void enableMachine(int dim, int cx, int cy, int cz) throws Exception {
         String resp = exec("artest machine set-enabled " + dim + " "
                 + cx + " " + cy + " " + cz + " true");
         assertTrue("machine set-enabled failed: " + resp,
-                resp.contains("\"enabled\":true"));
+                Reply.of(resp).bool("enabled"));
     }
 
     private void forceTick(int dim, int cx, int cy, int cz, int ticks) throws Exception {
         String resp = exec("artest tile force-tick " + dim + " "
                 + cx + " " + cy + " " + cz + " " + ticks);
-        assertTrue("force-tick errored: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("force-tick errored: " + resp, Reply.of(resp).ok());
     }
 
     private int[] powerOutPosFrom(String fixture) {
         return parseTriple(fixture, POWER_OUT_POS);
     }
 
-    private int readEnergyStored(int dim, int[] pos) throws Exception {
-        String resp = exec("artest energy stored " + dim + " "
-                + pos[0] + " " + pos[1] + " " + pos[2]);
-        Matcher m = ENERGY_STORED.matcher(resp);
-        assertTrue("no energyStored in response: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+    private long readEnergyStored(int dim, int[] pos) throws Exception {
+        return EnergyStore.at(WorldCommandFixtures::exec, dim, pos[0], pos[1], pos[2])
+                .requireEnergy("the plug must expose a store, or its reading is an absence")
+                .stored();
     }
 
-    private static int[] parseTriple(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("triple-pattern not found in: " + src, m.find());
-        return new int[]{
-                Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+    private static int[] parseTriple(String src, String field) {
+        int[] pos = Reply.of(src).blockPos(field);
+        assertTrue("`" + field + "` is not an [x, y, z] in: " + src, pos != null);
+        return pos;
     }
 }
