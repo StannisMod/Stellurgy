@@ -1,0 +1,184 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.Reply;
+import org.junit.Test;
+
+
+import dev.stannismod.stellurgy.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+
+/**
+ * TileTerraformingTerminal chip-recognition + redstone gate.
+ *
+ * <p>The terraforming terminal is the player-facing tile that wires a
+ * programmed BiomeChanger chip to its satellite for the planet-wide
+ * biome-mutation loop. Production gates the loop on two distinct
+ * conditions (TileTerraformingTerminal.java:135 + :225-234):</p>
+ *
+ * <ol>
+ *   <li>{@code hasValidBiomeChanger()} — the chip in slot 0 must be an
+ *       {@code ItemBiomeChanger} whose satellite is registered on the
+ *       terminal's dim and is an instance of {@code SatelliteBiomeChanger}.</li>
+ *   <li>The block must be receiving indirect redstone power.</li>
+ * </ol>
+ *
+ * <p>If BOTH hold on a server tick, {@code was_enabled_last_tick} flips
+ * to true and the block-model STATE property switches on — that's the
+ * player-visible "is this terminal actually running" signal driving the
+ * progress text and the block texture. If either gate fails, the
+ * terminal idles.</p>
+ *
+ * <p>Contract pinned:</p>
+ *
+ * <ul>
+ *   <li><b>Valid chip + redstone &rarr; enabled.</b> After force-ticking
+ *       a terminal loaded with a properly-programmed chip and powered
+ *       by an adjacent redstone block, {@code was_enabled_last_tick}
+ *       and the block STATE property are both true.</li>
+ *   <li><b>Valid chip, no redstone &rarr; idle.</b> Same chip without
+ *       redstone keeps {@code was_enabled_last_tick} false. Pins that
+ *       the chip-recognition gate doesn't auto-enable the loop.</li>
+ *   <li><b>Empty slot &rarr; invalid chip.</b> An unloaded terminal reports
+ *       {@code hasValidBiomeChanger() == false}. Pins the early-out
+ *       guard so a tick with no chip is safely a no-op.</li>
+ * </ul>
+ *
+ * <p><b>Out of scope</b>: the biome-mutation inner loop (battery
+ * extraction, TerraformingHelper get_next_position iteration, actual
+ * BiomeHandler.terraform_biomes mutation). The fresh satellite battery
+ * starts at 0 energy so the loop's energy-gate breaks immediately;
+ * exercising the loop would need a battery-precharge probe plus a
+ * working TerraformingHelper fixture, which sits at the boundary of
+ * production's chunk-management subsystem. The chip-recognition + power-
+ * gate pin here is the minimal contract that protects against the
+ * regression "player wires chip + redstone and nothing happens".</p>
+ */
+public class TerraformingTerminalChipRecognitionTest extends AbstractSharedServerTest {
+
+    private static final String WAS_ENABLED = "wasEnabledLastTick";
+    private static final String BLOCK_ON = "blockStateOn";
+    private static final String HAS_VALID = "hasValidBiomeChanger";
+    private static final String REDSTONE = "redstonePower";
+    private static final String SAT_ID = "id";
+
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
+    private static final int CZ = 11000;
+    private static final int CX_VALID = 11500;
+    private static final int CX_NO_RS = 12000;
+    private static final int CX_EMPTY = 12500;
+
+    /** Happy path — chip loaded + redstone applied &rarr; enabled. */
+    @Test
+    public void validChipPlusRedstoneEnablesTheTerminal() throws Exception {
+        int x = CX_VALID, y = CY, z = CZ;
+        long satId = setupTerminalWithValidChip(x, y, z);
+        assertNotEquals("satId must be non-negative after satellite build",
+                -1L, satId);
+
+        // Apply redstone via an adjacent redstone_block on the east face.
+        String redstone = exec("stellurgytest place 0 " + (x + 1) + " " + y + " " + z
+                + " minecraft:redstone_block");
+        assertTrue("redstone_block place failed: " + redstone,
+                Reply.of(redstone).bool("placed"));
+
+        // One force-tick is enough — update() reads redstone + slot 0
+        // then mutates was_enabled_last_tick and the block state in the
+        // same call.
+        exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1");
+
+        String info = exec("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z);
+        assertEquals("hasValidBiomeChanger must be true after chip load: " + info,
+                "true", extract(info, HAS_VALID));
+        assertEquals("redstone reach must be true after redstone_block placed: " + info,
+                "true", extract(info, REDSTONE));
+        assertEquals("was_enabled_last_tick must flip to true: " + info,
+                "true", extract(info, WAS_ENABLED));
+        assertEquals("block STATE property must reflect enabled: " + info,
+                "true", extract(info, BLOCK_ON));
+    }
+
+    /** Chip valid but no redstone &rarr; recognition passes but power gate
+     *  keeps the terminal idle. */
+    @Test
+    public void validChipWithoutRedstoneStaysIdle() throws Exception {
+        int x = CX_NO_RS, y = CY, z = CZ;
+        long satId = setupTerminalWithValidChip(x, y, z);
+        assertNotEquals(-1L, satId);
+
+        // No redstone source placed.
+        exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1");
+
+        String info = exec("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z);
+        assertEquals("chip is still valid — recognition is independent of power: "
+                        + info, "true", extract(info, HAS_VALID));
+        assertEquals("redstone power must be reported as off: " + info,
+                "false", extract(info, REDSTONE));
+        assertEquals("was_enabled_last_tick must stay false without redstone: "
+                        + info, "false", extract(info, WAS_ENABLED));
+        assertEquals("block STATE must stay off without redstone: " + info,
+                "false", extract(info, BLOCK_ON));
+    }
+
+    /** Empty slot &rarr; chip-recognition rejects, terminal idles even with
+     *  redstone. Pins the safe early-out branch. */
+    @Test
+    public void emptySlotReportsInvalidChipAndIdle() throws Exception {
+        int x = CX_EMPTY, y = CY, z = CZ;
+        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+                + " " + (x >> 4) + " " + (z >> 4));
+        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:terraformingTerminal");
+        assertTrue("terraformingTerminal place failed: " + place,
+                Reply.of(place).bool("placed"));
+        // Apply redstone — proves the gate is on the chip side, not on
+        // power side.
+        exec("stellurgytest place 0 " + (x + 1) + " " + y + " " + z + " minecraft:redstone_block");
+        exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 1");
+
+        String info = exec("stellurgytest terraforming terminal-info 0 " + x + " " + y + " " + z);
+        assertEquals("empty slot must report hasValidBiomeChanger=false: " + info,
+                "false", extract(info, HAS_VALID));
+        assertEquals("redstone is present but doesn't help without a chip: " + info,
+                "true", extract(info, REDSTONE));
+        assertEquals("was_enabled_last_tick must stay false on empty slot: " + info,
+                "false", extract(info, WAS_ENABLED));
+    }
+
+    // --- fixture helpers --------------------------------------------------
+
+    /** Place a terminal, build a SatelliteBiomeChanger on dim 0, load a
+     *  programmed chip into slot 0. Returns the satellite id (or -1 on
+     *  failure — caller asserts). */
+    private long setupTerminalWithValidChip(int x, int y, int z) throws Exception {
+        exec("stellurgytest chunk warmup 0 " + (x >> 4) + " " + (z >> 4)
+                + " " + (x >> 4) + " " + (z >> 4));
+        String place = exec("stellurgytest place 0 " + x + " " + y + " " + z
+                + " stellurgy:terraformingTerminal");
+        assertTrue("terraformingTerminal place failed: " + place,
+                Reply.of(place).bool("placed"));
+
+        // Build + register a SatelliteBiomeChanger on dim 0.
+        String build = exec("stellurgytest satellite-builder build 0 biomeChanger");
+        assertTrue("biomeChanger satellite build failed: " + build,
+                Reply.of(build).ok());
+        Reply mReply = Reply.of(build);
+        if (!mReply.has(SAT_ID)) {
+            return -1L;
+        }
+        long satId = Long.parseLong(mReply.text(SAT_ID));
+
+        String load = exec("stellurgytest terraforming terminal-load-chip 0 " + x + " " + y + " " + z
+                + " " + satId);
+        assertTrue("terminal-load-chip failed: " + load, Reply.of(load).ok());
+        return satId;
+    }
+
+    private static String extract(String src, String field) {
+        String value = Reply.of(src).text(field);
+        return value;
+    }
+}

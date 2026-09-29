@@ -1,0 +1,26 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:hyperdriveGenerator"
+        },
+        "title": {
+            "translate": "advancement.warp"
+        },
+        "description": {
+            "translate": "advancement.warp.desc"
+        }
+    },
+    "parent": "stellurgy:normal/dilithium",
+    "criteria": {
+        "warp": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "stellurgy:hyperdriveGenerator"
+                    }
+                ]
+            }
+        }
+    }
+} 

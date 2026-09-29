@@ -1,0 +1,46 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"ggg",
+	"tbc",
+	"aoa"
+    ],
+    "key":
+    {
+        "g":
+        {
+            "type": "forge:ore_dict",
+            "ore": "plateGold"
+        },
+        "t":
+        {
+            "item": "stellurgy:ic",
+            "data": 1
+        },
+        "c":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+        "a":
+        {
+            "item": "stellurgy:ic",
+            "data": 2
+        },
+        "o":
+        {
+            "item": "stellurgy:satelliteprimaryfunction",
+            "data": 0
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:microwavereciever",
+        "count": 1
+    }
+}

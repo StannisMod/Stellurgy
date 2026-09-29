@@ -1,0 +1,24 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+        
+        {
+            "type": "forge:ore_dict",
+            "ore": "itemBattery"
+        },
+	{
+            "item": "stellurgy:ic",
+            "data": 1
+        },
+	{
+            "item": "stellurgy:loader",
+            "data": 1
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:stationmarker",
+        "count": 1
+    }
+}

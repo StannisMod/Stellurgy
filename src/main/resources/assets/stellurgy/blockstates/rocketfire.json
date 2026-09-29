@@ -1,0 +1,60 @@
+{
+  "forge_marker": 1,
+  "defaults": {
+    "transform": "forge:default-block",
+    "textures": {
+      "fire0": "minecraft:blocks/fire_layer_0",
+      "fire1": "minecraft:blocks/fire_layer_1"
+    }
+  },
+  "variants": {
+    "level=0" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=1" : [
+      { "model": "stellurgy:fire" }
+    ],
+    "level=2" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=3" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=4" : [
+      { "model": "stellurgy:fire" }
+    ],
+    "level=5" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=6" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=7" : [
+      { "model": "stellurgy:fire" }
+    ],
+    "level=8" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=9" : [
+      { "model": "stellurgy:fire" }
+    ],
+    "level=10" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=11" : [
+      { "model": "stellurgy:fire" }
+    ],
+    "level=12" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=13" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=14" : [
+      { "model": "stellurgy:stellurgy_empty" }
+    ],
+    "level=15" : [
+      { "model": "stellurgy:fire" }
+    ]
+  }
+}

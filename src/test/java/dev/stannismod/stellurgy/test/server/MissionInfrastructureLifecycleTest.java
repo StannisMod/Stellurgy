@@ -1,0 +1,221 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.MissionCompletion;
+import dev.stannismod.stellurgy.test.RocketList;
+import dev.stannismod.stellurgy.test.Reply;
+import org.junit.Test;
+
+
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.RocketFixture;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * mission &harr; infrastructure lifecycle contract.
+ *
+ * <p>Pins the player-visible cause-effect of starting and completing
+ * a mission that has linked-infrastructure tiles (e.g. a Rocket
+ * Monitoring Station the player connected to the rocket pre-launch):</p>
+ * <ul>
+ *   <li>At start time the tile's {@code mission} field is set to the
+ *       mission instance (so its GUI / comparator output / progress
+ *       readouts reflect the live mission). Pinned via the production
+ *       {@link dev.stannismod.stellurgy.api.IInfrastructure#linkMission}
+ *       contract — the probe mirrors what
+ *       {@code EntityRocket.createMission} does after the mission ctor.</li>
+ *   <li>At completion the mission iterates {@code infrastructureCoords},
+ *       calls {@code unlinkMission()} on each live tile (the tile's
+ *       {@code mission} field becomes null), and re-links each tile to
+ *       the freshly respawned rocket via {@code rocket.linkInfrastructure}.
+ *       Post-condition: the rocket's {@code infrastructureCoords}
+ *       collection contains the tile's coord. This is the "your
+ *       monitoring station now follows the returned rocket" UX.</li>
+ * </ul>
+ *
+ * <p>Uses {@code monitoringStation} as the fixture infra-tile
+ * (registry: {@code stellurgy:monitoringStation}) — it's the
+ * simplest IInfrastructure implementor that actually stores a
+ * non-null mission ref on {@code linkMission} and clears it on
+ * {@code unlinkMission}. Counter-example: {@code TileGuidanceComputerAccessHatch}
+ * always returns false from linkMission (it's a chip-eject passthrough),
+ * so picking the right tile here matters.</p>
+ *
+ * <p>Position-isolated per {@link AbstractSharedServerTest} contract:
+ * each test method uses a unique {@code BASE_X} far from
+ * {@code MissionGasCompletionTest} (which uses 8000+).</p>
+ */
+public class MissionInfrastructureLifecycleTest extends AbstractSharedServerTest {
+
+    private static final String MISSION_ID = "missionId";
+
+    private static String ok(java.util.List<String> resp) {
+        return String.join("\n", resp);
+    }
+
+    private int buildAndAssembleRocket(int baseX) throws Exception {
+        final FixtureSite site = FixtureSite.openAir(0, baseX, 600);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
+        String list = ok(client().execute("stellurgytest rocket list 0"));
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
+    }
+
+    private long startGasMission(int rocketId, long duration) throws Exception {
+        String start = ok(client().execute(
+                "stellurgytest mission start-gas 0 " + rocketId + " " + duration + " oxygen 10"));
+        assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
+        Reply mmReply = Reply.of(start);
+        assertTrue("missing missionId: " + start, mmReply.has(MISSION_ID));
+        return Long.parseLong(mmReply.text(MISSION_ID));
+    }
+
+    /** Places a monitoringStation block in the SAME chunk as the rocket
+     *  so the chunk stays reliably loaded between probe commands.
+     *  Production's {@code onMissionComplete} calls
+     *  {@code world.getTileEntity(coord)} which returns null if the chunk
+     *  has been unloaded — placing far away (different chunk) makes the
+     *  re-link race unloads. Position is inside the fixture's
+     *  air-cleared bbox at the column above the launchpad (baseX, baseY+2,
+     *  baseZ) — chunk (baseX>>4, baseZ>>4) is the rocket's chunk. */
+    private int[] placeMonitoringStation(int baseX, int baseZ) throws Exception {
+        int ix = baseX;
+        int iy = FixtureSite.OPEN_AIR_Y;
+        int iz = baseZ;
+        ok(client().execute("stellurgytest place 0 " + ix + " " + iy + " " + iz
+                + " stellurgy:monitoringStation"));
+        return new int[]{ix, iy, iz};
+    }
+
+    /** After link-infra the tile's {@code mission} field points back to
+     *  the just-started mission. Pins the link half of the lifecycle. */
+    @Test
+    public void startLinksInfrastructureToMission() throws Exception {
+        int baseX = 9000;
+        int rid = buildAndAssembleRocket(baseX);
+        long mid = startGasMission(rid, 1000);
+        int[] ipos = placeMonitoringStation(baseX, 600);
+        String link = ok(client().execute("stellurgytest mission link-infra " + mid
+                + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
+        assertFalse("link-infra must not error: " + link, Reply.of(link).has("error"));
+        assertTrue("link-infra must report linked=true: " + link,
+                Reply.of(link).bool("linked"));
+
+        String state = ok(client().execute("stellurgytest mission infra-state 0 "
+                + ipos[0] + " " + ipos[1] + " " + ipos[2]));
+        assertFalse("infra-state must not error: " + state, Reply.of(state).has("error"));
+        assertTrue("infra must report hasMission=true after link: " + state,
+                Reply.of(state).bool("hasMission"));
+        assertTrue("infra must report this mission's id: " + state,
+                String.valueOf(mid).equals(Reply.of(state).text("missionId")));
+    }
+
+    /** After complete-now the production loop in MissionGasCollection
+     *  iterates infrastructureCoords and calls {@code unlinkMission()} on
+     *  the live tile (MissionGasCollection.java:80-86). Post-condition:
+     *  tile.mission becomes null — the player-visible effect is that the
+     *  monitoring station GUI stops showing the mission progress.
+     *
+     *  <p>The rocket-side half of the lifecycle (production also calls
+     *  {@code rocket.linkInfrastructure} on the freshly spawned
+     *  EntityStationDeployedRocket) is pinned by
+     *  {@link #completionLinksInfrastructureToRespawnedRocket} via the
+     *  {@code rocket-relink-state} probe. */
+    @Test
+    public void completionUnlinksInfrastructureFromMission() throws Exception {
+        int baseX = 9100;
+        int rid = buildAndAssembleRocket(baseX);
+        long mid = startGasMission(rid, 1000);
+        int[] ipos = placeMonitoringStation(baseX, 600);
+        String link = ok(client().execute("stellurgytest mission link-infra " + mid
+                + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
+        assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked"));
+
+        // Sanity: pre-completion tile reports the mission.
+        String preState = ok(client().execute("stellurgytest mission infra-state 0 "
+                + ipos[0] + " " + ipos[1] + " " + ipos[2]));
+        assertTrue("pre-completion infra must report hasMission=true: " + preState,
+                Reply.of(preState).bool("hasMission"));
+
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
+
+        // Post-completion tile.mission cleared by production's unlinkMission().
+        String postState = ok(client().execute("stellurgytest mission infra-state 0 "
+                + ipos[0] + " " + ipos[1] + " " + ipos[2]));
+        assertFalse("infra-state must not error: " + postState,
+                Reply.of(postState).has("error"));
+        assertTrue("infra must report hasMission=false after completion: " + postState,
+                (!Reply.of(postState).bool("hasMission")));
+    }
+
+    /** Rocket-side half of the lifecycle (MissionGasCollection.java:80-86):
+     *  for each entry in {@code infrastructureCoords} the gas-completion
+     *  loop calls {@code rocket.linkInfrastructure(tile)} on the freshly
+     *  spawned {@code EntityStationDeployedRocket}. Pins the post-condition
+     *  that the new rocket's {@code infrastructureCoords} set contains
+     *  the linked infra tile's coord, i.e. the "your monitoring station
+     *  now follows the returned rocket" UX.
+     *
+     *  <p>This test cannot reuse the bbox-restricted {@code rocket-cargo}
+     *  probe — with a vanilla EntityRocket fixture the
+     *  {@code writeMissionPersistentNBT} call inside the
+     *  MissionResourceCollection ctor is a no-op, so the new rocket's
+     *  {@code launchLocation} restored from empty NBT defaults to
+     *  (0,0,0). The rocket therefore spawns at world origin, outside
+     *  the {@code rocket-cargo} bbox around the original launch coords.
+     *  The {@code rocket-relink-state} probe is class-filtered (scans
+     *  the whole launch dim for EntityStationDeployedRocket instances)
+     *  and finds the rocket regardless of position. */
+    @Test
+    public void completionLinksInfrastructureToRespawnedRocket() throws Exception {
+        int baseX = 9200;
+        int rid = buildAndAssembleRocket(baseX);
+        long mid = startGasMission(rid, 1000);
+        int[] ipos = placeMonitoringStation(baseX, 600);
+        String link = ok(client().execute("stellurgytest mission link-infra " + mid
+                + " 0 " + ipos[0] + " " + ipos[1] + " " + ipos[2]));
+        assertTrue("setup link-infra must succeed: " + link, Reply.of(link).bool("linked"));
+
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("completion must fire: " + cargo.raw(), cargo.completed);
+
+        String relink = ok(client().execute("stellurgytest mission rocket-relink-state 0"));
+        assertFalse("rocket-relink-state must not error: " + relink,
+                Reply.of(relink).has("error"));
+        // At least one EntityStationDeployedRocket exists in launch dim
+        // post-completion — production's onMissionComplete spawned it.
+        assertFalse("deployedCount must be > 0 after gas completion: " + relink,
+                (Reply.of(relink).integer("deployedCount") == 0));
+        // Production looped infrastructureCoords and called
+        // rocket.linkInfrastructure for each entry. The placed monitoring
+        // station coord must appear in some StationDeployedRocket's
+        // infrastructureCoords list. Test for the exact triple as JSON
+        // array to avoid matching a coincidental coord-with-shared-axis.
+        // Walked as the structure it is: the reply holds a rocket per element, each with its own
+        // `infrastructure` array of [x,y,z]. Built as a needle it depended on the producer's
+        // rendering of a coordinate — a space after a comma, or a double for a whole number, and
+        // the claim reads as the link never having been made.
+        boolean linked = false;
+        for (String rocket : Reply.of("stellurgytest mission rocket-relink-state", relink)
+                .objectArray("rockets")) {
+            for (int[] coord : Reply.of("one deployed rocket", rocket)
+                    .blockPosArray("infrastructure")) {
+                linked |= coord[0] == ipos[0] && coord[1] == ipos[1] && coord[2] == ipos[2];
+            }
+        }
+        assertTrue("rocket infrastructureCoords must contain ["
+                        + ipos[0] + "," + ipos[1] + "," + ipos[2] + "]: " + relink, linked);
+    }
+}

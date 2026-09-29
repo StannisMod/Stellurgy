@@ -1,0 +1,50 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"psp",
+	"abc",
+	"iti"
+    ],
+    "key":
+    {
+        "t":
+        {
+            "item": "stellurgy:ic",
+            "data": 5
+        },
+        "s":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"a":
+        {
+            "item": "stellurgy:ic",
+            "data": 4
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"c":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gearSteel"
+        },
+	"i":
+        {
+	    "item": "minecraft:iron_block"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:rollingmachine",
+        "count": 1
+    }
+}

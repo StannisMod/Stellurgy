@@ -103,6 +103,58 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 iterator.remove();
             }
         }
+        // ...and the ships nothing has loaded. The sweep above walks `loadedShips`, so a craft that
+        // was emptied or declared finished while unloaded was never asked the question and stayed in
+        // the registry for the life of the world — answering position lookups, owning a lane, and
+        // needing every caller that produced one to reach in and deregister it by hand. A record
+        // exists whether or not a physics object does, so this is where such a craft can be
+        // collected at all.
+        //
+        // TWO ways a record can be finished, and the second was missed here for as long as this
+        // sweep existed. DEAD is a decision somebody recorded. BLOCKLESS is a fact about the record:
+        // a hull cut out of this world leaves its entry behind owning nothing, and nobody declares
+        // it dead — the blocks are simply gone. The sweep above already treats loaded-and-blockless
+        // as finished (`shouldShipBeDestroyed`), so this is the same judgement applied to the
+        // records that pass never reaches. This comment previously said the block set "is not
+        // readable here to be judged on"; that was wrong — `blockPositions` is serialized onto
+        // `ShipData` itself and survives with the record, so it is readable in exactly this loop.
+        //
+        // NULL IS NOT EMPTY. A null block set means the record does not say, and a record that does
+        // not say is left alone: absence of an answer is not an answer, and collecting on it would
+        // delete craft on the strength of a field nobody filled in.
+        //
+        // IN USE, not merely "in loadedShips": a ship queued for load, or loading in the background,
+        // is in this manager's hands without being in that map, and taking its record away in that
+        // window throws out of the world tick on the next chunk-provider pass and takes a dedicated
+        // server with it. A dead ship caught mid-load is left alone here and collected by the sweep
+        // above once it is loaded, which is one tick later and correct.
+        //
+        // A ship being SPAWNED is not at risk despite `isShipInUse` not covering the spawn queue:
+        // `queueShipSpawn` only queues the record, and `addShip` runs inside `spawnNewShips()` below
+        // — after the detector and the chunk injection, so the record enters the registry already
+        // owning its blocks, and it does so AFTER this loop within the same tick.
+        List<ShipData> finished = null;
+        for (Iterator<ShipData> records = QueryableShipData.get(world).iterator(); records.hasNext();) {
+            ShipData data = records.next();
+            if (isShipInUse(data.getUuid())) {
+                continue;
+            }
+            org.valkyrienskies.mod.common.util.datastructures.IBlockPosSetAABB blocks =
+                data.getBlockPositions();
+            if (data.isDead() || (blocks != null && blocks.isEmpty())) {
+                if (finished == null) {
+                    finished = new ArrayList<>();
+                }
+                finished.add(data);
+            }
+        }
+        // Removed after the walk rather than during it: the registry's iterator is its own, and this
+        // loop does not need to know what it promises about removal underneath itself.
+        if (finished != null) {
+            for (ShipData data : finished) {
+                QueryableShipData.get(world).removeShip(data);
+            }
+        }
         // Then execute queued ship spawn operations
         spawnNewShips();
         // Then determine which ships to load and unload
@@ -342,8 +394,16 @@ public class WorldServerShipManager implements IPhysObjectWorld {
                 throw new IllegalStateException("No ship found for ID:\n" + toLoadID);
             }
             ShipData toLoad = toLoadOptional.get();
+            // Already loaded is a SATISFIED request, not an error — the same reading the background
+            // loop below takes, and for the same reason. queueShipLoad is public and thread safe and
+            // says "ensure this ship is loaded"; it is not an assertion about the current state, and
+            // its callers are outside this manager's tick (a login path, a watch update, a probe that
+            // asks for the whole registry). "Please make sure X is loaded" answered while X is loaded
+            // has nothing to do. Throwing here instead put an IllegalStateException in the world tick
+            // with nothing between it and the server loop, and took the whole dedicated server down.
             if (loadedShips.containsKey(toLoadID)) {
-                throw new IllegalStateException("Tried loading a ShipData that was already loaded?\n" + toLoad);
+                loadingInBackground.remove(toLoadID);
+                continue;
             }
             // Remove this ship from the background loading set, if it is in it.
             loadingInBackground.remove(toLoadID);
@@ -400,9 +460,13 @@ public class WorldServerShipManager implements IPhysObjectWorld {
         backgroundLoadQueue.clear();
         // Unload far away ships immediately.
         for (final UUID toUnloadID : unloadQueue) {
-            // Make sure we have a ship with this ID that can be unloaded
+            // Not loaded is a SATISFIED request, the mirror of the load loop above: queueShipUnload
+            // asks for a ship not to be loaded, and one that is already unloaded needs nothing done
+            // to it. The state can arrive here legitimately — an unload queued on one tick for a ship
+            // something else unloaded first, or a queue that outlived the world's own pass — and
+            // dying for it is the same defect wearing the other sign.
             if (!loadedShips.containsKey(toUnloadID)) {
-                throw new IllegalStateException("Tried unloading a ShipData that isn\'t loaded? Ship ID is\n" + toUnloadID);
+                continue;
             }
             PhysicsObject physicsObject = getPhysObjectFromUUID(toUnloadID);
             if (VSConfig.showAnnoyingDebugOutput) {

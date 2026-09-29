@@ -2,7 +2,7 @@
 <oreconfig>
 
     <!--
-      Global fallback ore presets for AR planets.
+      Global fallback ore presets for Stellurgy planets.
       - per-planet <oreGen> in planetDefs.xml overrides this file
       - missing entries will fallback to vanilla+ARconfig/normal oregen rules
     -->

@@ -7,12 +7,12 @@ for **Minecraft 1.12.2**.
 
 It originally started as an attempt to fix and modernize Advanced Rocketry. At some point that stopped being
 an accurate description of the project. A lot of the old mod is still there, and rockets, planets, stations
-and the rest of the AR progression are not going away, but there is now a second layer being built on top of
+and the rest of the Advanced Rocketry progression are not going away, but there is now a second layer being built on top of
 it.
 
 The main difference is that I want space to actually exist as a place.
 
-In most of the old AR gameplay, a rocket takes you from one destination to another. Stellurgy keeps that kind
+In most of the old Advanced Rocketry gameplay, a rocket takes you from one destination to another. Stellurgy keeps that kind
 of rocket for early spaceflight, but later ships are supposed to work very differently: large block-built
 vessels that physically exist, can be flown, and remain usable while travelling. You should be able to get out
 of the pilot seat, walk through the ship, use its machines, work on it and live on it while it is going
@@ -97,7 +97,7 @@ Stellurgy is a derivative of Advanced Rocketry, not an unrelated mod using its n
 existing planetary and rocket gameplay is the starting point, and keeping compatibility with useful parts of
 the old ecosystem is important to me.
 
-At the same time, I don't want to preserve old behaviour purely because that is how AR happened to work in
+At the same time, I don't want to preserve old behaviour purely because that is how Advanced Rocketry happened to work in
 1.12.
 
 The rough progression I am aiming for is:
@@ -177,13 +177,13 @@ There is no download, so the only way to run Stellurgy today is to build it.
 | | |
 | --- | --- |
 | Minecraft | 1.12.2 with Forge |
-| Required at runtime | **[LibVulpes — this fork](https://github.com/StannisMod/libVulpes-fork2)** · [MixinBooter](https://www.curseforge.com/minecraft/mc-mods/mixinbooter) |
-| Bundled | Valkyrien Skies (vendored under `valkyrienskies/`, compiled in — no separate install) |
+| Required at runtime | [MixinBooter](https://www.curseforge.com/minecraft/mc-mods/mixinbooter) |
+| Bundled | Valkyrien Skies (vendored under `valkyrienskies/`) and LibVulpes (part of the main tree) — both compiled in, no separate install |
 | Optional | JEI · TheOneProbe / Waila · GregTech CEu · Galacticraft Legacy and Matter Overdrive compat |
 
 > [!IMPORTANT]
-> Stellurgy is built against the **forked LibVulpes** linked above and will not run correctly on the upstream
-> release. Installing stock LibVulpes is the most common way to get a broken setup.
+> LibVulpes ships inside Stellurgy. Do **not** install a LibVulpes jar next to it: the same classes would then
+> exist twice on the classpath.
 
 Gradle runs on JDK 25 while the mod compiles against Java 8; `./gradlew runClient` and `runServer` give you a
 dev environment with the ship physics already present. Build details, the test layout and the branch map are
@@ -214,6 +214,27 @@ rewards need updating**, and power and data cabling was replaced by a wireless s
 A pack built around the new ships is planned — Stellurgy, Valkyrien Skies for the physics, GregTech CEu for
 the tech tree, and a quest mod to guide the route. The older 2.x Advanced Rocketry line stays maintained
 separately for [Towards Rocket Science](https://www.curseforge.com/minecraft/modpacks/towardsrocketscience).
+
+## Running a server
+
+One vanilla setting matters more here than in most packs.
+
+**`allow-flight=true` in `server.properties`.** Vanilla kicks a player who has been "floating" — no block
+under him — for eighty ticks, four seconds, with *"Flying is not enabled on this server"*. A crew member
+walking the deck of a tier-2 craft in flight is that case by construction: the deck belongs to the craft's own
+subspace, and the anti-cheat looks for a block in the world, where there is none. Sitting down at the controls
+does not reset the count, because vanilla stops updating the on-foot check while a player rides and keeps
+counting the value it last had. Left at vanilla's default, an ordinary flight ends in a disconnect that looks
+like a mod bug and is not one.
+
+This is read off vanilla's own check (`NetHandlerPlayServer`, the `floating` flag set in `processPlayer` and
+counted in `update`, gated by `isFlightAllowed()`), and it applies to any mod that carries players on moving
+structures. The mod does not need the flag for anything else, and turning it on does not enable creative flight
+for anybody.
+
+**A manned craft stays below world coordinate 30 000 000.** Vanilla disconnects a player whose position packet
+exceeds that on any axis, whatever put him there, so it is a hard ceiling for anything with somebody aboard and
+not a tuning knob.
 
 ## Contributing
 

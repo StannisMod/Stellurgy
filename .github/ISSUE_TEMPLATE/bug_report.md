@@ -9,11 +9,11 @@ assignees: ''
 
 [Please fill out the form below and delete the sections in square brackets after reading them]
 
-## Version of Advanced Rocketry
+## Version of Stellurgy
 >[insert here
 
 >Why is this important?
->Knowing the version of Advanced Rocketry helps us narrow down an offending piece of code faster because we can easily determine what code is added and when.]
+>Knowing the version of Stellurgy helps us narrow down an offending piece of code faster because we can easily determine what code is added and when.]
 
 ## Have you verified this is an issue in the latest unstable build
 - [x] Y
@@ -34,7 +34,7 @@ assignees: ''
 >[insert here
 
 >Why is this important?
->Different versions of minecraft have different codebases for Advanced Rocketry.  Knowing the version of minecraft (and thus AR) helps us pinpoint issues quicker!]
+>Different versions of minecraft have different codebases for Stellurgy.  Knowing the version of minecraft (and thus Stellurgy) helps us pinpoint issues quicker!]
 
 ## Does this occur without other mods installed
 - [x] Y
@@ -43,7 +43,7 @@ assignees: ''
 >If Y, what is the MINIMUM set of mods required.
 
 >[Why is this important?  
->Sometimes interactions between mods cause issues.  While it can be a problem with Advanced Rocketry, sometimes it's not.  When there are a lot of mods, it can take bugtesters HOURS to go through the list to determine the root cause.  When there are a lot of bug reports, that can add DAYS to the time it takes to fix a large set of issues.]
+>Sometimes interactions between mods cause issues.  While it can be a problem with Stellurgy, sometimes it's not.  When there are a lot of mods, it can take bugtesters HOURS to go through the list to determine the root cause.  When there are a lot of bug reports, that can add DAYS to the time it takes to fix a large set of issues.]
 
 ## Crash report or log or visualVM (if applicable)
 http://pastebin.com is a good place to put them

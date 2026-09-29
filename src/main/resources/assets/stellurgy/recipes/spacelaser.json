@@ -1,0 +1,51 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"ata",
+	"bec",
+	"gpg"
+    ],
+    "key":
+    {
+        "c":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+        "t":
+        {
+            "item": "stellurgy:ic",
+            "data": 1
+        },
+        "a":
+        {
+            "item": "stellurgy:ic",
+            "data": 2
+        },
+        "e":
+	{
+            "type": "forge:ore_dict",
+            "ore": "gemEmerald"
+        },
+        "g":
+        {
+            "type": "forge:ore_dict",
+            "ore": "gearTitanium"
+        },
+        "b":
+        {
+            "type": "forge:ore_dict",
+            "ore": "itemBattery"
+        },
+        "p":
+        {
+            "item": "libvulpes:structuremachine"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:spacelaser",
+        "count": 1
+    }
+}

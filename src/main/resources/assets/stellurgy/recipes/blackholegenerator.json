@@ -1,0 +1,45 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"bgb",
+	"pcp",
+	"msm"
+    ],
+    "key":
+    {
+	"b":
+        {
+	    "item": "libvulpes:battery",
+	    "data": 1
+        },
+	"s":
+        {
+	    "item": "stellurgy:misc",
+	    "data": 0
+        },
+	"g":
+        {
+	    "item": "stellurgy:structuretower"
+        },
+	"c":
+        {
+	    "item": "libvulpes:advstructuremachine"
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateTitaniumAluminide"
+        },
+	"m":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "blockMotor"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:blackholegenerator",
+        "count": 1
+    }
+}

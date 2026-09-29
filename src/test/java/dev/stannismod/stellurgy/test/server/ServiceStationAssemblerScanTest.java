@@ -1,0 +1,185 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.RocketFixture;
+import org.junit.Test;
+
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+
+/**
+ * service-station assembler-discovery + no-progress-
+ * without-assembler contracts.
+ *
+ * <p>Companion to {@link ServiceStationBrokenPartScanContractTest} which
+ * pinned the "broken part scan" half of the repair cycle. This test pins
+ * the assembler-side half:</p>
+ *
+ * <ul>
+ *   <li><b>scanForAssemblers picks up a nearby TilePrecisionAssembler.</b>
+ *       Production scans a 5-block radius around the station for any
+ *       TilePrecisionAssembler tile (formed multiblock NOT required —
+ *       the scan checks {@code instanceof}, not {@code isComplete()}).
+ *       Pinned post-rising-edge-of-power, when
+ *       {@code !was_powered -> true} triggers the scan.</li>
+ *   <li><b>Without an assembler, broken parts stay queued.</b> A station
+ *       linked to a rocket with a worn part, powered on but with NO
+ *       TilePrecisionAssembler in its 5-block scan radius, keeps the
+ *       part in {@code partsToRepair} across many tick windows.
+ *       {@code giveWorkToAssemblers} iterates over the empty assembler
+ *       list, never reaching {@code consumePartToRepair}. Pins the
+ *       guard that prevents silent data loss when no assembler is
+ *       available.</li>
+ * </ul>
+ *
+ * <p><b>Out of scope</b>: the FULL repair cycle — broken part fed to
+ * assembler &rarr; assembler produces a "rocket"-named output item &rarr; service
+ * station observes via {@code processAssemblerResult} &rarr; part restored at
+ * stage 0 to rocket storage. Driving the assembler end-to-end requires a
+ * formed multiblock (4×3×3 structureBlock layout + hatches at wildcard
+ * positions + attemptCompleteStructure), which is a substantial
+ * fixture-build (the existing MachineRecipeEndToEndKit explicitly
+ * excludes wildcard machines — see kit javadoc, "Out of scope:
+ * wildcard-based machines"). Tracked as a separate follow-up TASK once
+ * a precision-assembler multiblock-fixture probe lands.</p>
+ */
+public class ServiceStationAssemblerScanTest extends AbstractSharedServerTest {
+
+    private static final String ENTITY_ID = "entityId";
+    private static final String PARTS_COUNT = "partsToRepairCount";
+    private static final String ASM_COUNT = "assemblersCount";
+
+    /**
+     * The one anchor every Y in this class is derived from: the craft's base, the service
+     * station beside it, and the precision assembler beside that. It was a hard-coded 64 until
+     * 2026-09-21; nothing here wants terrain, and because the station's Y is THIS number the
+     * class has to move as a unit or the link it asserts spans the height of the band.
+     */
+    private static final int CY_PAD = FixtureSite.OPEN_AIR_Y;
+    private static final int CZ_PAD = 13500;
+    private static final int CX_WITH_ASM = 14100;
+    private static final int CX_NO_ASM = 14500;
+
+    /** With a PrecisionAssembler block placed within 5 blocks of the
+     *  service station, the rising-edge-of-power scan discovers it and
+     *  populates the assemblers list. */
+    @Test
+    public void scanForAssemblersDiscoversNearbyPrecisionAssemblerBlock() throws Exception {
+        SetupResult s = setupStationAndRocket(CX_WITH_ASM);
+
+        // Place a precision-assembler controller block 2 blocks east of
+        // the service station — well within the 5-block scan radius.
+        // The block doesn't need a formed multiblock; scanForAssemblers
+        // only checks `te instanceof TilePrecisionAssembler`.
+        int ax = s.sx + 2, ay = s.sy, az = s.sz;
+        String placeAsm = exec("stellurgytest place 0 " + ax + " " + ay + " " + az
+                + " stellurgy:precisionassemblingmachine");
+        assertTrue("precision assembler place failed: " + placeAsm,
+                Reply.of(placeAsm).bool("placed"));
+
+        // Pre-state: scan hasn't run yet.
+        String preState = exec("stellurgytest infra service-state 0 "
+                + s.sx + " " + s.sy + " " + s.sz);
+        assertEquals("baseline: assemblersCount=0 before scan",
+                0, extract(preState, ASM_COUNT));
+
+        // Force the scan via the side-channel probe. The probe bypasses
+        // canPerformFunction's (worldTime % 20 == 0) gate and the
+        // power-rising-edge requirement — both are scheduling concerns,
+        // not the scan-discovery contract this test pins. `tile force-tick`
+        // can't advance world time, so production's gate keeps the scan
+        // from firing in a test-driven tick.
+        String scan = exec("stellurgytest infra service-scan-assemblers 0 "
+                + s.sx + " " + s.sy + " " + s.sz);
+        assertTrue("service-scan-assemblers must succeed: " + scan,
+                Reply.of(scan).ok());
+
+        String postState = exec("stellurgytest infra service-state 0 "
+                + s.sx + " " + s.sy + " " + s.sz);
+        assertEquals("scanForAssemblers must discover the adjacent precision "
+                        + "assembler block (5-block radius, instanceof check): "
+                        + postState, 1, extract(postState, ASM_COUNT));
+    }
+
+    /** Without any TilePrecisionAssembler in the 5-block radius, a
+     *  worn part stays in {@code partsToRepair} across many tick
+     *  windows — production's no-progress guard. */
+    @Test
+    public void noAssemblerKeepsBrokenPartQueuedAcrossManyTicks() throws Exception {
+        SetupResult s = setupStationAndRocket(CX_NO_ASM);
+
+        // Baseline: part queued, no assembler.
+        String pre = exec("stellurgytest infra service-state 0 "
+                + s.sx + " " + s.sy + " " + s.sz);
+        assertEquals("baseline: 1 part queued for repair",
+                1, extract(pre, PARTS_COUNT));
+        assertEquals("baseline: no assemblers nearby",
+                0, extract(pre, ASM_COUNT));
+
+        // Force the scan probe — same side-channel as test 1, but with
+        // no assembler in range it returns an empty list.
+        String scan = exec("stellurgytest infra service-scan-assemblers 0 "
+                + s.sx + " " + s.sy + " " + s.sz);
+        assertTrue("scan probe must succeed even with no assembler: " + scan,
+                Reply.of(scan).ok());
+
+        String post = exec("stellurgytest infra service-state 0 "
+                + s.sx + " " + s.sy + " " + s.sz);
+        assertEquals("scan with no nearby assembler must report assemblersCount=0: "
+                        + post, 0, extract(post, ASM_COUNT));
+        // Part stays queued — the contract being pinned is that the
+        // scan + give-work loop is safe under empty-list conditions
+        // (no NPE, no silent dequeue). giveWorkToAssemblers iterates
+        // over `assemblers.size()==0` items, never reaches
+        // consumePartToRepair, so partsToRepair stays at 1.
+        assertEquals("part must stay queued — no assembler means no consumption: "
+                        + post, 1, extract(post, PARTS_COUNT));
+    }
+
+    // --- fixture helpers --------------------------------------------------
+
+    private static final class SetupResult {
+        final int sx, sy, sz; // service-station coords
+        SetupResult(int sx, int sy, int sz) { this.sx = sx; this.sy = sy; this.sz = sz; }
+    }
+
+    /** Build a rocket via the standard fixture, assemble it, inject a
+     *  broken part, place a service station nearby, link the rocket.
+     *  Returns the service-station coords. */
+    private SetupResult setupStationAndRocket(int baseX) throws Exception {
+        // FIRST link, ASSERTING where the warmup+fill pair DUG and threw its own answer away. The
+        // halo is 7 rather than the default 2 because this scenario stands a service station beside
+        // the craft and the old fill reached `baseX+12`; the volume has to cover both.
+        String assemble = RocketFixture.assembleAt(
+                FixtureSite.openAir(0, baseX, CZ_PAD),
+                cmd -> exec(cmd), "simple", 7, 10,
+                "the craft the service station scans, and the ground the station stands on");
+        assertTrue("assemble must succeed: " + assemble,
+                Reply.of(assemble).ok());
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
+        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
+
+        String inject = exec("stellurgytest infra inject-broken-part " + rocketId + " 5");
+        assertTrue("inject must succeed: " + inject, Reply.of(inject).ok());
+
+        int sx = baseX + 10, sy = CY_PAD, sz = CZ_PAD;
+        String place = exec("stellurgytest place 0 " + sx + " " + sy + " " + sz
+                + " stellurgy:serviceStation");
+        assertTrue("service station place failed: " + place,
+                Reply.of(place).bool("placed"));
+        String link = exec("stellurgytest infra link 0 " + sx + " " + sy + " " + sz
+                + " " + rocketId);
+        assertTrue("infra link must succeed: " + link, Reply.of(link).ok());
+        return new SetupResult(sx, sy, sz);
+    }
+
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
+    }
+}

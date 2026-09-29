@@ -1,0 +1,20 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "item": "stellurgy:spacestationchip",
+	    "data": 0
+        },
+        {
+	    "item": "stellurgy:ic",
+	    "data": 1
+        }
+    ],
+    "time": 100,
+    "energy": 1,
+    "itemresults":
+    {
+	"item": "stellurgy:elevatorchip"
+    }
+}

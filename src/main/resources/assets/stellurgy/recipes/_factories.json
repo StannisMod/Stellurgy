@@ -1,0 +1,12 @@
+{
+    "recipes": {
+        "rollingmachine": "dev.stannismod.stellurgy.recipe.RecipeRollingMachine",
+        "precisionassembler": "dev.stannismod.stellurgy.recipe.RecipePrecisionAssembler",
+        "electricarcfurnace": "dev.stannismod.stellurgy.recipe.RecipeElectricArcFurnace",
+        "cuttingmachine": "dev.stannismod.stellurgy.recipe.RecipeCuttingMachine",
+        "chemicalreactor": "dev.stannismod.stellurgy.recipe.RecipeChemicalReactor",
+        "electrolyser": "dev.stannismod.stellurgy.recipe.RecipeElectrolyser",
+        "crystallizer": "dev.stannismod.stellurgy.recipe.RecipeCrystallizer",
+        "precisionlaseretcher": "dev.stannismod.stellurgy.recipe.RecipePrecisionLaserEtcher"
+    }
+}

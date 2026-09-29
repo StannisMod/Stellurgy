@@ -1,0 +1,212 @@
+package dev.stannismod.stellurgy.block;
+
+import net.minecraft.block.Block;
+import net.minecraft.block.material.Material;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.util.ITooltipFlag;
+import net.minecraft.item.ItemStack;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
+import dev.stannismod.stellurgy.api.AreaBlob;
+import dev.stannismod.stellurgy.api.util.IBlobHandler;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.client.TooltipInjector;
+import dev.stannismod.stellurgy.tile.atmosphere.TileSeal;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import javax.annotation.ParametersAreNonnullByDefault;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+
+public class BlockSeal extends Block {
+
+    private HashMap<HashedBlockPosition, BlobHandler> blobList = new HashMap<>();
+
+    public BlockSeal(Material materialIn) {
+        super(materialIn);
+    }
+
+    public void clearMap() {
+        blobList.clear();
+    }
+
+    @Override
+    public boolean hasTileEntity(@Nullable IBlockState state) {
+        return true;
+    }
+
+    @Override
+    @Nonnull
+    public TileEntity createTileEntity(@Nullable World world, @Nullable IBlockState state) {
+        return new TileSeal();
+    }
+
+    @Override
+    @ParametersAreNonnullByDefault
+    public void breakBlock(World worldIn, BlockPos pos, IBlockState state) {
+        super.breakBlock(worldIn, pos, state);
+
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        if (atmhandler == null)
+            return;
+
+        for (EnumFacing dir : EnumFacing.VALUES) {
+            BlobHandler handler = blobList.remove(new HashedBlockPosition(pos.offset(dir)));
+            if (handler != null) atmhandler.unregisterBlob(handler);
+
+            fireCheckAllDirections(worldIn, pos.offset(dir), dir);
+        }
+    }
+
+    public void removeSeal(@Nonnull World worldIn, @Nonnull BlockPos pos) {
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        if (atmhandler == null)
+            return;
+
+        for (EnumFacing dir : EnumFacing.VALUES) {
+            BlobHandler handler = blobList.remove(new HashedBlockPosition(pos.offset(dir)));
+            if (handler != null) atmhandler.unregisterBlob(handler);
+        }
+    }
+
+    public void clearBlob(@Nonnull World worldIn, @Nonnull BlockPos pos, @Nullable IBlockState state) {
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        if (atmhandler == null)
+            return;
+
+        for (EnumFacing dir : EnumFacing.VALUES) {
+            BlobHandler handler = blobList.remove(new HashedBlockPosition(pos.offset(dir)));
+            if (handler != null) atmhandler.unregisterBlob(handler);
+
+            //fireCheckAllDirections(worldIn, pos.offset(dir), dir);
+        }
+    }
+
+    @Override
+    public void onBlockAdded(@Nonnull World worldIn, @Nonnull BlockPos pos, @Nullable IBlockState state) {
+        super.onBlockAdded(worldIn, pos, state);
+
+        checkCompleteness(worldIn, pos);
+
+        for (EnumFacing dir : EnumFacing.VALUES) {
+            fireCheckAllDirections(worldIn, pos.offset(dir), dir);
+        }
+    }
+
+    public void fireCheckAllDirections(@Nonnull World worldIn, @Nonnull BlockPos startBlock, @Nonnull EnumFacing directionFrom) {
+        for (EnumFacing dir : EnumFacing.VALUES) {
+            if (directionFrom.getOpposite() != dir)
+                fireCheck(worldIn, startBlock.offset(dir));
+        }
+    }
+
+    private void fireCheck(@Nonnull World worldIn, @Nonnull BlockPos pos) {
+        Block block = worldIn.getBlockState(pos).getBlock();
+        if (block == this) {
+            BlockSeal blockSeal = (BlockSeal) block;
+            blockSeal.checkCompleteness(worldIn, pos);
+        }
+    }
+
+    private boolean checkCompleteness(@Nonnull World worldIn, @Nonnull BlockPos pos) {
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        if (atmhandler == null)
+            return false;
+
+        // check along XY axis
+        if (((worldIn.getBlockState(pos.up().west()).getBlock() == this &&
+                worldIn.getBlockState(pos.up().east()).getBlock() == this &&
+                worldIn.getBlockState(pos.up().up()).getBlock() == this) ||
+
+                (worldIn.getBlockState(pos.up().north()).getBlock() == this &&
+                        worldIn.getBlockState(pos.up().south()).getBlock() == this &&
+                        worldIn.getBlockState(pos.up().up()).getBlock() == this &&
+                        !blobList.containsKey(new HashedBlockPosition(pos.up()))))) {
+
+            pos = pos.up();
+            HashedBlockPosition hashPos = new HashedBlockPosition(pos);
+            BlobHandler handler = new BlobHandler(worldIn, pos);
+            blobList.put(hashPos, handler);
+
+            AreaBlob blob = new AreaBlob(handler);
+            blob.addBlock(hashPos, new LinkedList<>());
+            atmhandler.registerBlob(handler, pos, blob);
+
+            return true;
+        }
+
+        // check along XZ axis
+        if (worldIn.getBlockState(pos.east().north()).getBlock() == this &&
+                worldIn.getBlockState(pos.east().south()).getBlock() == this &&
+                worldIn.getBlockState(pos.east().east()).getBlock() == this &&
+                !blobList.containsKey(new HashedBlockPosition(pos.east()))) {
+
+            pos = pos.east();
+            HashedBlockPosition hashPos = new HashedBlockPosition(pos);
+            BlobHandler handler = new BlobHandler(worldIn, pos);
+            blobList.put(hashPos, handler);
+
+            AreaBlob blob = new AreaBlob(handler);
+            blob.addBlock(hashPos, new LinkedList<>());
+            atmhandler.registerBlob(handler, pos, blob);
+            return true;
+        }
+        return false;
+    }
+
+    private static class BlobHandler implements IBlobHandler {
+
+        World world;
+        BlockPos pos;
+
+        public BlobHandler(@Nonnull World world, @Nonnull BlockPos pos) {
+            this.world = world;
+            this.pos = pos;
+        }
+
+        @Override
+        public boolean canFormBlob() {
+            return true;
+        }
+
+        @Override
+        public World getWorldObj() {
+            return world;
+        }
+
+        @Override
+        public boolean canBlobsOverlap(HashedBlockPosition blockPosition, AreaBlob blob) {
+            return false;
+        }
+
+        @Override
+        public int getMaxBlobRadius() {
+            return 0;
+        }
+
+        @Override
+        @Nonnull
+        public HashedBlockPosition getRootPosition() {
+            return new HashedBlockPosition(pos);
+        }
+
+        @Override
+        public int getTraceDistance() {
+            return -1;
+        }
+    }
+
+    @SideOnly(Side.CLIENT)
+    @Override
+    public void addInformation(ItemStack stack, @Nullable World world, List<String> tooltip, ITooltipFlag flag) {
+        int insertAt = TooltipInjector.computeInsertIndex(tooltip, flag.isAdvanced());
+        TooltipInjector.renderShiftAlt(stack, tooltip, "tooltip.stellurgy.pipeseal", insertAt);
+    }  
+}

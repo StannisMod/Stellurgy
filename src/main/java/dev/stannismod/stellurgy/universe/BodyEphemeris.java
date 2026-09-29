@@ -1,0 +1,228 @@
+package dev.stannismod.stellurgy.universe;
+
+import net.minecraft.nbt.NBTTagCompound;
+
+import dev.stannismod.stellurgy.space.BlockDelta;
+
+/**
+ * A body's ORBITAL LAW, frozen as elements rather than as a position.
+ *
+ * <p>This is what makes a cell able to ride its body: given a tick, it answers where the body stands
+ * relative to whatever it orbits, in blocks. It is the same law
+ * {@code DimensionProperties.orbitThetaAt} + {@code positionFor} apply, lifted out of the dimension
+ * object so that a body which no longer has one &mdash; a PINNED procedural system, a POI &mdash;
+ * still moves.</p>
+ *
+ * <p><b>A pin freezes the ELEMENTS, never the positions.</b> Snapshotting a system's positions would
+ * stop that system dead the first time a player built a station in it, because pin-on-touch fires on
+ * the first {@code addPoi}. Elements cost the same four numbers and keep the system alive.</p>
+ *
+ * <p>Immutable value type; NBT round-trips as a flat sub-compound.</p>
+ */
+public final class BodyEphemeris {
+
+    /** The law of something that does not move: zero displacement at every tick. */
+    public static final BodyEphemeris STATIC = new BodyEphemeris(0L, 0L, 0L, 0d, 0d, 0d, false, 0d, 0L);
+
+    // A FIXED law (period <= 0) carries its displacement directly; an ORBIT law derives it.
+    private final long fixedX;
+    private final long fixedY;
+    private final long fixedZ;
+
+    private final double distUnits;   // orbital distance, in the caller's unit
+    private final double baseTheta;   // authored base angle, RADIANS
+    private final double phiDegrees;  // inclination, DEGREES (the loader stores it verbatim)
+    private final boolean retrograde;
+    private final double periodTicks; // <= 0 or non-finite ⇒ the body does not advance in time
+    private final long unitBlocks;    // blocks per unit of distUnits; 0 ⇒ this is a FIXED law
+
+    private BodyEphemeris(long fixedX, long fixedY, long fixedZ, double distUnits, double baseTheta,
+                          double phiDegrees, boolean retrograde, double periodTicks, long unitBlocks) {
+        this.fixedX = fixedX;
+        this.fixedY = fixedY;
+        this.fixedZ = fixedZ;
+        this.distUnits = distUnits;
+        this.baseTheta = baseTheta;
+        this.phiDegrees = phiDegrees;
+        this.retrograde = retrograde;
+        this.periodTicks = periodTicks;
+        this.unitBlocks = unitBlocks;
+    }
+
+    /** A constant displacement — a station slot at a fixed point inside its cell, a belt marker. */
+    public static BodyEphemeris fixed(long dx, long dy, long dz) {
+        if (dx == 0L && dy == 0L && dz == 0L) {
+            return STATIC;
+        }
+        return new BodyEphemeris(dx, dy, dz, 0d, 0d, 0d, false, 0d, 0L);
+    }
+
+    /**
+     * An orbit about whatever this body is bound to: {@code (d·cos φ·cos θ, d·sin φ, d·cos φ·sin θ)} in
+     * units of {@code unitBlocks}, with {@code θ = (2π·(t mod P)/P + baseTheta) · (retrograde ? −1 : +1)}.
+     *
+     * <p><b>The inclination tilts the orbit; it does not enlarge it.</b> The law used to read
+     * {@code (d·cos θ, d·sin φ, d·sin θ)}, whose length is {@code d·√(1 + sin²φ)} — so an inclined body
+     * stood further from its primary than its own orbital distance said, by up to 41 % at the steepest
+     * authored angle. Every number derived from that distance (insolation, temperature, period) said
+     * one thing while the flight said another, which is exactly the split this frame exists to close.
+     * With the cosine factor the offset's length is {@code d} at every inclination.</p>
+     *
+     * <p>The retrograde sign multiplies the SUM, not the time term alone — that is the shipped law and
+     * a body's NAME is derived through it, so changing the grouping would move every retrograde body's
+     * name.</p>
+     */
+    public static BodyEphemeris orbit(double distUnits, double baseTheta, double phiDegrees,
+                                      boolean retrograde, double periodTicks, long unitBlocks) {
+        return new BodyEphemeris(0L, 0L, 0L, distUnits, baseTheta, phiDegrees, retrograde,
+                periodTicks, unitBlocks);
+    }
+
+    /** {@code true} iff this law is time-invariant — the degenerate frame of a star, or of a void cell. */
+    /**
+     * The orbital distance this law was built with, in the caller's unit — for a moon, its distance
+     * from its PARENT, which lives nowhere else: {@code SystemBody.orbitalDistance()} deliberately
+     * holds the parent's distance from the star instead, because that is what a moon's climate
+     * depends on. Zero for a fixed law.
+     */
+    public double distUnits() {
+        return distUnits;
+    }
+
+    /**
+     * The base angle this law was built with, in RADIANS — where the body stands at tick zero, before
+     * any time has passed.
+     *
+     * <p>Read it rather than recovering an angle from where the body's cell ended up: a cell is coarse,
+     * so the recovered angle is the drawn one rounded to whatever the cell grid could express, and two
+     * consumers rounding it separately put the same body in two places.</p>
+     */
+    public double baseTheta() {
+        return baseTheta;
+    }
+
+    public boolean isStatic() {
+        return unitBlocks == 0L || !(periodTicks > 0d) || Double.isInfinite(periodTicks)
+                || distUnits == 0d;
+    }
+
+    /** The displacement, in blocks, at world tick {@code tick}. */
+    public BlockDelta offsetAt(long tick) {
+        if (unitBlocks == 0L) {
+            return BlockDelta.of(fixedX, fixedY, fixedZ);
+        }
+        double theta = thetaAt(tick);
+        double phi = Math.toRadians(phiDegrees);
+        double inPlane = distUnits * Math.cos(phi);
+        return BlockDelta.of(
+                Math.round(inPlane * Math.cos(theta) * unitBlocks),
+                Math.round(distUnits * Math.sin(phi) * unitBlocks),
+                Math.round(inPlane * Math.sin(theta) * unitBlocks));
+    }
+
+    /**
+     * The rate this displacement is changing at {@code tick}, in BLOCKS PER TICK — the analytic
+     * derivative of {@link #offsetAt}, not a difference of two of its readings.
+     *
+     * <p><b>Differencing the positions does not work, and the number that says so is measured.</b>
+     * {@link #offsetAt} rounds to whole blocks, so a central difference over two ticks is quantised
+     * to half a block per tick: Luna's true 14.7344 blocks/tick came back as exactly 15.0. At Luna's
+     * speed that is a 1.8 % error and survivable; at a slow body's — a fraction of a block per tick
+     * — the same quantisation is the difference between "stationary" and "twice its actual speed",
+     * and it is the SLOW bodies whose station a craft must keep most precisely, since a small error
+     * there is a large fraction of what there is to match.</p>
+     *
+     * <p>This is not a second source of truth for where a body is: it is the same law, differentiated.
+     * A velocity stated independently of {@link #offsetAt} could disagree with it; this one cannot.</p>
+     *
+     * <p>A static law has no rate — a fixed offset does not move — and answers zero on every axis.</p>
+     */
+    public double[] velocityBlocksPerTickAt(long tick) {
+        if (unitBlocks == 0L || !(periodTicks > 0d) || Double.isInfinite(periodTicks)) {
+            return new double[]{0d, 0d, 0d};
+        }
+        // dtheta/dt, carrying the direction the body actually travels in.
+        double omega = (2d * Math.PI / periodTicks) * (retrograde ? -1d : 1d);
+        double theta = thetaAt(tick);
+        double inPlane = distUnits * Math.cos(Math.toRadians(phiDegrees)) * unitBlocks;
+        // The out-of-plane component is a constant of the orbit, so it contributes no rate.
+        return new double[]{
+                -inPlane * Math.sin(theta) * omega,
+                0d,
+                inPlane * Math.cos(theta) * omega};
+    }
+
+    /** The orbital angle (radians) at {@code tick}. */
+    public double thetaAt(long tick) {
+        double timeTheta = 0d;
+        if (periodTicks > 0d && !Double.isInfinite(periodTicks)) {
+            timeTheta = ((tick % periodTicks) / periodTicks) * (2d * Math.PI);
+        }
+        return (timeTheta + baseTheta) * (retrograde ? -1d : 1d);
+    }
+
+    public void writeToNBT(NBTTagCompound nbt) {
+        NBTTagCompound sub = new NBTTagCompound();
+        sub.setLong("fx", fixedX);
+        sub.setLong("fy", fixedY);
+        sub.setLong("fz", fixedZ);
+        sub.setDouble("d", distUnits);
+        sub.setDouble("th", baseTheta);
+        sub.setDouble("phi", phiDegrees);
+        sub.setBoolean("retro", retrograde);
+        sub.setDouble("period", periodTicks);
+        sub.setLong("unit", unitBlocks);
+        nbt.setTag("ephemeris", sub);
+    }
+
+    /** Read a law written by {@link #writeToNBT}, or {@link #STATIC} when the sub-tag is absent. */
+    public static BodyEphemeris readFromNBT(NBTTagCompound nbt) {
+        if (nbt == null || !nbt.hasKey("ephemeris")) {
+            return STATIC;
+        }
+        NBTTagCompound sub = nbt.getCompoundTag("ephemeris");
+        return new BodyEphemeris(sub.getLong("fx"), sub.getLong("fy"), sub.getLong("fz"),
+                sub.getDouble("d"), sub.getDouble("th"), sub.getDouble("phi"),
+                sub.getBoolean("retro"), sub.getDouble("period"), sub.getLong("unit"));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof BodyEphemeris)) {
+            return false;
+        }
+        BodyEphemeris other = (BodyEphemeris) o;
+        return fixedX == other.fixedX && fixedY == other.fixedY && fixedZ == other.fixedZ
+                && Double.compare(distUnits, other.distUnits) == 0
+                && Double.compare(baseTheta, other.baseTheta) == 0
+                && Double.compare(phiDegrees, other.phiDegrees) == 0
+                && retrograde == other.retrograde
+                && Double.compare(periodTicks, other.periodTicks) == 0
+                && unitBlocks == other.unitBlocks;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Long.hashCode(fixedX);
+        result = 31 * result + Long.hashCode(fixedY);
+        result = 31 * result + Long.hashCode(fixedZ);
+        result = 31 * result + Double.hashCode(distUnits);
+        result = 31 * result + Double.hashCode(baseTheta);
+        result = 31 * result + Double.hashCode(phiDegrees);
+        result = 31 * result + (retrograde ? 1 : 0);
+        result = 31 * result + Double.hashCode(periodTicks);
+        result = 31 * result + Long.hashCode(unitBlocks);
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return unitBlocks == 0L
+                ? "BodyEphemeris[fixed " + fixedX + "," + fixedY + "," + fixedZ + "]"
+                : "BodyEphemeris[d=" + distUnits + " base=" + baseTheta + " phi=" + phiDegrees
+                        + " retro=" + retrograde + " period=" + periodTicks + " unit=" + unitBlocks + "]";
+    }
+}

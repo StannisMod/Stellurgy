@@ -1,0 +1,1298 @@
+/* Temporarily stores tile/blocks to move a block of them
+ *
+ *
+ */
+
+package dev.stannismod.stellurgy.util;
+
+import io.netty.buffer.ByteBuf;
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.init.Biomes;
+import net.minecraft.init.Blocks;
+import net.minecraft.inventory.IInventory;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagIntArray;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraft.network.PacketBuffer;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.EnumSkyBlock;
+import net.minecraft.world.IBlockAccess;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldType;
+import net.minecraft.world.biome.Biome;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.common.util.Constants.NBT;
+import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
+import net.minecraftforge.items.CapabilityItemHandler;
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.stations.IStorageChunk;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.item.ItemPackedStructure;
+import dev.stannismod.stellurgy.api.capability.CapabilityWear;
+import dev.stannismod.stellurgy.api.capability.IPartWear;
+import dev.stannismod.stellurgy.tile.TileBrokenPart;
+import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
+import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
+import dev.stannismod.stellurgy.world.util.WorldDummy;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.*;
+import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.block.*;
+
+public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBreakable {
+
+    /**
+     * Depth of structure-relocation cuts currently in progress on the server thread. A relocation
+     * (assembly, crossing, station cut) removes every block of a craft through
+     * {@code world.setBlockState(pos, AIR)}, which fires each block's {@code breakBlock} exactly as
+     * a pickaxe or an explosion would — but the craft is being MOVED, not destroyed, so destruction
+     * side effects (dismounting a seated pilot, zeroing his ship's controls) must not run. Blocks
+     * whose {@code breakBlock} distinguishes the two cases gate on {@link #isRelocationInProgress()}.
+     * Server main thread only (all cuts run there), so a plain int suffices.
+     */
+    private static int relocationDepth = 0;
+
+    /** Whether a structure-relocation cut is removing blocks right now (see {@link #relocationDepth}). */
+    public static boolean isRelocationInProgress() {
+        return relocationDepth > 0;
+    }
+
+    public Chunk chunk;
+    public WorldDummy world;
+    public boolean finalized = false; // Make sure we are ready to render
+    private Block[][][] blocks;
+    public int sizeX, sizeY, sizeZ;
+    private short[][][] metas;
+    private Map<BlockPos, TileEntity> pos2te = new HashMap<>();
+    private ArrayList<TileEntity> tileEntities;
+    //To store inventories (All inventories)
+    private ArrayList<TileEntity> inventoryTiles;
+    private ArrayList<TileEntity> liquidTiles;
+    private Entity entity;
+    private float weight;
+    private boolean hasServiceMonitor;
+
+    public Block[][][] getblocks() {
+        return blocks;
+    }
+
+    public boolean hasServiceMonitor() {
+        return hasServiceMonitor;
+    }
+
+    public StorageChunk() {
+        sizeX = 0;
+        sizeY = 0;
+        sizeZ = 0;
+        tileEntities = new ArrayList<>();
+        inventoryTiles = new ArrayList<>();
+        liquidTiles = new ArrayList<>();
+
+        world = new WorldDummy(Stellurgy.proxy.getProfiler(), this);
+        world.init();
+        this.chunk = new Chunk(world, 0, 0);
+    }
+
+    protected StorageChunk(int xSize, int ySize, int zSize) {
+        blocks = new Block[xSize][ySize][zSize];
+        metas = new short[xSize][ySize][zSize];
+
+        sizeX = xSize;
+        sizeY = ySize;
+        sizeZ = zSize;
+
+        tileEntities = new ArrayList<>();
+        inventoryTiles = new ArrayList<>();
+        liquidTiles = new ArrayList<>();
+
+        world = new WorldDummy(Stellurgy.proxy.getProfiler(), this);
+        world.init();
+        this.chunk = new Chunk(world, 0, 0);
+    }
+
+    private static boolean isInventoryBlock(TileEntity tile) {
+        return tile instanceof IInventory || tile.hasCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, EnumFacing.UP) && !(tile instanceof TileGuidanceComputer);
+    }
+
+    private static boolean isLiquidContainerBlock(TileEntity tile) {
+        // Prefer real sides for compatibility
+        for (EnumFacing f : EnumFacing.VALUES) {
+            if (tile.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, f)) {
+                return true;
+            }
+        }
+        // Fallback for unsided/internal handlers
+        return tile.hasCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
+    }
+
+
+    public void setWeight(int weight) {
+        this.weight = weight;
+    }
+
+    @Override
+    public float getWeight() {
+        return this.weight;
+    }
+
+    public float recalculateWeight() {
+        this.weight = 0;
+
+        // plain blocks
+        for (int x = 0; x < this.sizeX; x++) {
+            for (int y = 0; y < this.sizeY; y++) {
+                for (int z = 0; z < this.sizeZ; z++) {
+                    Block block = this.blocks[x][y][z];
+                    if (block != null) {
+                        this.weight += WeightEngine.INSTANCE.getWeight(null, block);
+                    }
+                }
+            }
+        }
+
+        // TEs
+        for (TileEntity te : this.tileEntities) {
+            this.weight += WeightEngine.INSTANCE.getTEWeight(te);
+
+            if (te instanceof TileSatelliteHatch) {
+                TileSatelliteHatch hatch = (TileSatelliteHatch) te;
+                if (hatch.getSatellite() != null) {
+                    weight += hatch.getSatellite().getProperties().getWeight();
+                } else if (hatch.getStackInSlot(0).getItem() instanceof ItemPackedStructure) {
+                    ItemPackedStructure struct = (ItemPackedStructure) hatch.getStackInSlot(0).getItem();
+                    weight += struct.getStructure(hatch.getStackInSlot(0)).getWeight();
+                }
+            }
+        }
+        return this.weight;
+    }
+
+    public void recalculateStats(StatsRocket stats) {
+        int thrustMonopropellant = 0;
+        int thrustBipropellant = 0;
+        int thrustNuclearNozzleLimit = 0;
+        int thrustNuclearReactorLimit = 0;
+        int thrustNuclearTotalLimit = 0;
+        int monopropellantfuelUse = 0;
+        int bipropellantfuelUse = 0;
+        int nuclearWorkingFluidUseMax = 0;
+        int fuelCapacityMonopropellant = 0;
+        int fuelCapacityBipropellant = 0;
+        int fuelCapacityOxidizer = 0;
+        int fuelCapacityNuclearWorkingFluid = 0;
+        int intakePower = 0;
+        float drillPower = 0f;
+        //stats.reset_no_fuel();
+        stats.reset_no_fuel();// Oh Quarter... you can not keep adding engine and seat locations every launch
+        final boolean isSD = (this.entity instanceof dev.stannismod.stellurgy.entity.EntityStationDeployedRocket);
+
+        float weight = 0;
+
+        for (int yCurr = 0; yCurr <= this.sizeY; yCurr++) {
+            for (int xCurr = 0; xCurr <= this.sizeX; xCurr++) {
+                for (int zCurr = 0; zCurr <= this.sizeZ; zCurr++) {
+                    BlockPos currBlockPos = new BlockPos(xCurr, yCurr, zCurr);
+                    BlockPos abovePos = new BlockPos(xCurr, yCurr + 1, zCurr);
+                    BlockPos belowPos = new BlockPos(xCurr, yCurr - 1, zCurr);
+
+                    if (this.getBlockState(currBlockPos).getBlock() != Blocks.AIR) {
+                        IBlockState state = world.getBlockState(currBlockPos);
+                        Block block = state.getBlock();
+
+                        if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
+                            weight += WeightEngine.INSTANCE.getWeight(world, currBlockPos);
+                        } else {
+                            weight += 1;
+                        }
+
+                        //If rocketEngine increaseThrust
+                        if (block instanceof IRocketEngine) {
+                            boolean eligible;
+                            if (isSD) {
+                                // SD rockets: skip vertical requirements
+                                eligible = true;
+                            } else {
+                                // Legacy vertical rule
+                                IBlockState belowState = world.getBlockState(belowPos);
+                                Block below = belowState.getBlock();
+                                eligible = below.isAir(belowState, world, belowPos)
+                                        || below instanceof BlockLandingPad
+                                        || below == StellurgyBlocks.blockLaunchpad;
+                            }
+
+                            if (eligible) {
+                                // Worn motors produce less thrust (partsWearSystem): a
+                                // motor at max wear keeps (1 - wearThrustPenaltyMax) of
+                                // its rated thrust. Feeds TWR -> may fail the launch gate.
+                                float wear = wearThrustFactor(currBlockPos);
+                                if (block instanceof BlockNuclearRocketMotor) {
+                                    nuclearWorkingFluidUseMax += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
+                                    thrustNuclearNozzleLimit  += (int) (((IRocketEngine) block).getThrust(world, currBlockPos) * wear);
+                                } else if (block instanceof BlockBipropellantRocketMotor) {
+                                    bipropellantfuelUse += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
+                                    thrustBipropellant  += (int) (((IRocketEngine) block).getThrust(world, currBlockPos) * wear);
+                                } else if (block instanceof BlockRocketMotor) {
+                                    monopropellantfuelUse += ((IRocketEngine) block).getFuelConsumptionRate(world, xCurr, yCurr, zCurr);
+                                    thrustMonopropellant  += (int) (((IRocketEngine) block).getThrust(world, currBlockPos) * wear);
+                                }
+                                stats.addEngineLocation(xCurr - (float)this.sizeX/2 + 0.5f, yCurr+0.5f, zCurr - (float)this.sizeZ/2 + 0.5f);
+                            }
+                        }
+
+                        if (block instanceof IFuelTank) {
+                            if (block instanceof BlockBipropellantFuelTank) {
+                                fuelCapacityBipropellant += (((IFuelTank) block).getMaxFill(world, currBlockPos, state) * StellurgyConfiguration.getCurrentConfig().fuelCapacityMultiplier);
+                            } else if (block instanceof BlockOxidizerFuelTank) {
+                                fuelCapacityOxidizer += (((IFuelTank) block).getMaxFill(world, currBlockPos, state) * StellurgyConfiguration.getCurrentConfig().fuelCapacityMultiplier);
+                            } else if (block instanceof BlockNuclearFuelTank) {
+                                fuelCapacityNuclearWorkingFluid += (((IFuelTank) block).getMaxFill(world, currBlockPos, state) * StellurgyConfiguration.getCurrentConfig().fuelCapacityMultiplier);
+                            }else if (block instanceof BlockFuelTank) {
+                                fuelCapacityMonopropellant += (((IFuelTank) block).getMaxFill(world, currBlockPos, state) * StellurgyConfiguration.getCurrentConfig().fuelCapacityMultiplier);
+                            }
+                        }
+
+                        if (block instanceof IRocketNuclearCore) {
+                            boolean counts;
+                            if (isSD) {
+                                // SD rockets: no vertical stack requirement
+                                counts = true;
+                            } else {
+                                Block below = world.getBlockState(belowPos).getBlock();
+                                counts = (below instanceof IRocketNuclearCore) || (below instanceof IRocketEngine);
+                            }
+                            if (counts) {
+                                thrustNuclearReactorLimit += ((IRocketNuclearCore) block).getMaxThrust(world, currBlockPos);
+                            }
+                        }
+
+                        if (block instanceof BlockSeat && world.getBlockState(abovePos).getBlock().isPassable(world, abovePos)) {
+                            stats.addPassengerSeat((int) (xCurr - (float) this.sizeX / 2 + 0.5f), yCurr, (int) (zCurr - (float) this.sizeZ / 2 + 0.5f));
+                        }
+
+                        if (block instanceof IMiningDrill) {
+                            drillPower += ((IMiningDrill) block).getMiningSpeed(world, currBlockPos);
+                        }
+                        if (block instanceof IIntake) {
+                            intakePower += ((IIntake) block).getIntakeAmt(state);
+                        }
+
+                        if (block.getUnlocalizedName().contains("servicemonitor")) {
+                            hasServiceMonitor = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        int nuclearWorkingFluidUse = 0;
+        if (thrustNuclearNozzleLimit > 0) {
+            //Only run the number of engines our cores can support - we can't throttle these effectively because they're small, so they shut off if they don't get full power
+            thrustNuclearTotalLimit = Math.min(thrustNuclearNozzleLimit, thrustNuclearReactorLimit);
+            nuclearWorkingFluidUse = (int) (nuclearWorkingFluidUseMax * (thrustNuclearTotalLimit / (float) thrustNuclearNozzleLimit));
+            thrustNuclearTotalLimit = (nuclearWorkingFluidUse * thrustNuclearNozzleLimit) / nuclearWorkingFluidUseMax;
+        }
+
+        //Set fuel stats
+        //Thrust depending on rocket type
+        stats.setBaseFuelRate(FuelRegistry.FuelType.LIQUID_MONOPROPELLANT, monopropellantfuelUse);
+        stats.setBaseFuelRate(FuelRegistry.FuelType.LIQUID_BIPROPELLANT, bipropellantfuelUse);
+        stats.setBaseFuelRate(FuelRegistry.FuelType.LIQUID_OXIDIZER, bipropellantfuelUse);
+        stats.setBaseFuelRate(FuelRegistry.FuelType.NUCLEAR_WORKING_FLUID, nuclearWorkingFluidUse);
+        //Fuel storage depending on rocket type
+        stats.setFuelCapacity(FuelRegistry.FuelType.LIQUID_MONOPROPELLANT, fuelCapacityMonopropellant);
+        stats.setFuelCapacity(FuelRegistry.FuelType.LIQUID_BIPROPELLANT, fuelCapacityBipropellant);
+        stats.setFuelCapacity(FuelRegistry.FuelType.LIQUID_OXIDIZER, fuelCapacityOxidizer);
+        stats.setFuelCapacity(FuelRegistry.FuelType.NUCLEAR_WORKING_FLUID, fuelCapacityNuclearWorkingFluid);
+
+        // SAFE liquid capacity sum (saturating at Integer.MAX_VALUE)
+        long liquidCapacitySum = 0L;
+
+        outer:
+        for (TileEntity te : this.getFluidTiles()) {
+            net.minecraftforge.fluids.capability.IFluidHandler fh =
+                    te.getCapability(net.minecraftforge.fluids.capability.CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, null);
+            if (fh == null) continue;
+
+            net.minecraftforge.fluids.capability.IFluidTankProperties[] props = fh.getTankProperties();
+            if (props == null) continue;
+
+            for (net.minecraftforge.fluids.capability.IFluidTankProperties p : props) {
+                if (p == null) continue;
+                long cap = Math.max(0L, (long) p.getCapacity());  // guard negatives
+                if (cap == 0L) continue;
+
+                long next = liquidCapacitySum + cap;              // saturating add
+                if (next >= (long) Integer.MAX_VALUE) {
+                    liquidCapacitySum = (long) Integer.MAX_VALUE;
+                    break outer; // early exit once saturated
+                }
+                liquidCapacitySum = next;
+            }
+        }
+
+        int liquidCapacitySafe = (int) Math.max(0L, Math.min(liquidCapacitySum, (long) Integer.MAX_VALUE));
+        stats.setStatTag("liquidCapacity", liquidCapacitySafe);
+
+
+        //Non-fuel stats (keep these after the capacity/tag work)
+        stats.setWeight(weight);
+        stats.setThrust(Math.max(Math.max(thrustMonopropellant, thrustBipropellant), thrustNuclearTotalLimit));
+        stats.setDrillingPower(drillPower);
+        stats.setStatTag("intakePower", intakePower);
+        // (liquidCapacity already set above)
+    }
+
+    public void addTileEntity(TileEntity te) {
+        pos2te.put(te.getPos(), te);
+        tileEntities.add(te);
+    }
+
+    public static StorageChunk copyWorldBB(World world, AxisAlignedBB bb) {
+        int actualMinX = (int) bb.maxX,
+                actualMinY = (int) bb.maxY,
+                actualMinZ = (int) bb.maxZ,
+                actualMaxX = (int) bb.minX,
+                actualMaxY = (int) bb.minY,
+                actualMaxZ = (int) bb.minZ;
+
+        //Try to fit to smallest bounds
+        for (int x = (int) bb.minX; x <= bb.maxX; x++) {
+            for (int z = (int) bb.minZ; z <= bb.maxZ; z++) {
+                for (int y = (int) bb.minY; y <= bb.maxY; y++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+
+                    Block block = world.getBlockState(pos).getBlock();
+
+                    if (!block.isAir(world.getBlockState(pos), world, pos)) {
+                        if (x < actualMinX)
+                            actualMinX = x;
+                        if (y < actualMinY)
+                            actualMinY = y;
+                        if (z < actualMinZ)
+                            actualMinZ = z;
+                        if (x > actualMaxX)
+                            actualMaxX = x;
+                        if (y > actualMaxY)
+                            actualMaxY = y;
+                        if (z > actualMaxZ)
+                            actualMaxZ = z;
+                    }
+                }
+            }
+        }
+
+        StorageChunk ret = new StorageChunk((actualMaxX - actualMinX + 1), (actualMaxY - actualMinY + 1), (actualMaxZ - actualMinZ + 1));
+
+        float weight = 0;
+
+        //Iterate though the bounds given storing blocks/meta/tiles
+        for (int x = actualMinX; x <= actualMaxX; x++) {
+            for (int z = actualMinZ; z <= actualMaxZ; z++) {
+                for (int y = actualMinY; y <= actualMaxY; y++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+
+                    weight += WeightEngine.INSTANCE.getWeight(world, pos);
+
+                    IBlockState state = world.getBlockState(pos);
+                    ret.blocks[x - actualMinX][y - actualMinY][z - actualMinZ] = state.getBlock();
+                    ret.metas[x - actualMinX][y - actualMinY][z - actualMinZ] = (short) state.getBlock().getMetaFromState(state);
+
+                    if (state.getBlock() == StellurgyBlocks.blockServiceMonitor) {
+                        ret.hasServiceMonitor = true;
+                    }
+
+                    TileEntity entity = world.getTileEntity(pos);
+                    if (entity != null) {
+                        NBTTagCompound nbt = new NBTTagCompound();
+                        entity.writeToNBT(nbt);
+
+                        //Transform tileEntity coords
+                        nbt.setInteger("x", nbt.getInteger("x") - actualMinX);
+                        nbt.setInteger("y", nbt.getInteger("y") - actualMinY);
+                        nbt.setInteger("z", nbt.getInteger("z") - actualMinZ);
+
+                        //XXX: Hack to make chisels & bits renderable
+                        if (nbt.getString("id").equals("minecraft:mod.chiselsandbits.tileentitychiseled"))
+                            nbt.setString("id", "minecraft:mod.chiselsandbits.tileentitychiseled.tesr");
+
+                        TileEntity newTile = ZUtils.createTile(nbt);
+                        if (newTile != null) {
+                            newTile.setWorld(ret.world);
+
+                            if (isInventoryBlock(newTile)) {
+                                ret.inventoryTiles.add(newTile);
+                            }
+
+                            if (isLiquidContainerBlock(newTile)) {
+                                ret.liquidTiles.add(newTile);
+                            }
+
+                            ret.addTileEntity(newTile);
+                        }
+                    }
+                }
+            }
+        }
+
+        ret.weight = weight;
+
+        return ret;
+    }
+
+    public static StorageChunk cutWorldBB(World worldObj, AxisAlignedBB bb) {
+        StorageChunk chunk = StorageChunk.copyWorldBB(worldObj, bb);
+
+        relocationDepth++;
+        try {
+        for (int x = (int) bb.minX; x <= bb.maxX; x++) {
+            for (int z = (int) bb.minZ; z <= bb.maxZ; z++) {
+                for (int y = (int) bb.minY; y <= bb.maxY; y++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+
+                    //Workaround for dupe
+                    TileEntity tile = worldObj.getTileEntity(pos);
+                    if (tile instanceof IInventory) {
+                        IInventory inv = (IInventory) tile;
+                        for (int i = 0; i < inv.getSizeInventory(); i++) {
+                            inv.setInventorySlotContents(i, ItemStack.EMPTY);
+                        }
+                    }
+
+                    worldObj.setBlockState(pos, Blocks.AIR.getDefaultState(), 2);
+                }
+            }
+        }
+        } finally {
+            relocationDepth--;
+        }
+
+        //Carpenter's block's dupe
+        for (Entity entity : worldObj.getEntitiesWithinAABB(EntityItem.class, bb.grow(5, 5, 5))) {
+            entity.setDead();
+        }
+
+        return chunk;
+    }
+
+    public EntityRocketBase getEntity() {
+        return (EntityRocketBase) entity;
+    }
+
+    public void setEntity(EntityRocketBase entity) {
+        this.entity = entity;
+    }
+
+    @Override
+    public int getSizeX() {
+        return sizeX;
+    }
+
+    @Override
+    public int getSizeY() {
+        return sizeY;
+    }
+
+    @Override
+    public int getSizeZ() {
+        return sizeZ;
+    }
+
+    @Override
+    public List<TileEntity> getTileEntityList() {
+        return tileEntities;
+    }
+
+    /**
+     * @return list of fluid handing tiles on the rocket all also implement IFluidHandler
+     */
+    public List<TileEntity> getFluidTiles() {
+        return liquidTiles;
+    }
+
+    public List<TileEntity> getInventoryTiles() {
+        return inventoryTiles;
+    }
+
+    public List<TileEntity> getGUITiles() {
+        return new LinkedList<>(inventoryTiles);
+    }
+
+    @Override
+    @Nonnull
+    public IBlockState getBlockState(BlockPos pos) {
+        int x = pos.getX();
+        int y = pos.getY();
+        int z = pos.getZ();
+        if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ || blocks[x][y][z] == null) {
+            return Blocks.AIR.getDefaultState();
+        }
+        return blocks[x][y][z].getStateFromMeta(metas[x][y][z]);
+    }
+
+    public void setBlockState(BlockPos pos, IBlockState state) {
+
+        // System.out.println("Block "+pos.getX()+":"+pos.getY()+":"+pos.getZ()+" set to "+state.getBlock().getUnlocalizedName());
+
+        int x = pos.getX();
+        int y = pos.getY();
+        int z = pos.getZ();
+
+        blocks[x][y][z] = state.getBlock();
+        metas[x][y][z] = (short) state.getBlock().getMetaFromState(state);
+    }
+
+    public void rotateBy(EnumFacing dir) {
+
+        HashedBlockPosition newSizes = new HashedBlockPosition(getSizeX(), getSizeY(), getSizeZ());
+
+        HashedBlockPosition newerSize = remapCoord(newSizes, dir);
+        newSizes = remapCoord(newSizes, dir);
+
+        Block[][][] blocks = new Block[newSizes.x][newSizes.y][newSizes.z];
+        short[][][] metas = new short[newSizes.x][newSizes.y][newSizes.z];
+
+        for (int y = 0; y < getSizeY(); y++) {
+            for (int z = 0; z < getSizeZ(); z++) {
+                for (int x = 0; x < getSizeX(); x++) {
+                    newSizes = getNewCoord(new HashedBlockPosition(x, y, z), dir);
+                    blocks[newSizes.x][newSizes.y][newSizes.z] = this.blocks[x][y][z];
+                    metas[newSizes.x][newSizes.y][newSizes.z] = this.metas[x][y][z];
+                }
+            }
+        }
+        this.blocks = blocks;
+        this.metas = metas;
+
+
+        for (TileEntity e : tileEntities) {
+            newSizes = getNewCoord(new HashedBlockPosition(e.getPos()), dir);
+            e.setPos(newSizes.getBlockPos());
+        }
+
+        this.sizeX = newerSize.x;
+        this.sizeY = newerSize.y;
+        this.sizeZ = newerSize.z;
+    }
+
+    private HashedBlockPosition remapCoord(HashedBlockPosition in, EnumFacing dir) {
+
+        HashedBlockPosition out = new HashedBlockPosition(0, 0, 0);
+
+        switch (dir) {
+            case DOWN:
+            case UP:
+                out.x = in.z;
+                out.y = in.y;
+                out.z = in.x;
+                break;
+            case NORTH:
+            case SOUTH:
+                out.x = in.y;
+                out.y = (short) (in.x);
+                out.z = in.z;
+                break;
+            case EAST:
+            case WEST:
+                out.x = in.x;
+                out.y = (short) (in.z);
+                out.z = in.y;
+                break;
+        }
+
+        return out;
+    }
+
+    public HashedBlockPosition getNewCoord(HashedBlockPosition in, EnumFacing dir) {
+
+        HashedBlockPosition out = new HashedBlockPosition(0, 0, 0);
+
+        switch (dir) {
+            case DOWN:
+                out.x = in.z;
+                out.y = in.y;
+                out.z = getSizeX() - in.x - 1;
+                break;
+            case UP:
+                out.x = getSizeZ() - in.z - 1;
+                out.y = in.y;
+                out.z = in.x;
+                break;
+            case NORTH:
+                out.x = in.y;
+                out.y = (short) (getSizeX() - in.x - 1);
+                out.z = in.z;
+                break;
+            case SOUTH:
+                out.x = getSizeY() - in.y - 1;
+                out.y = (short) in.x;
+                out.z = in.z;
+                break;
+            case EAST:
+                out.x = in.x;
+                out.y = (short) (getSizeZ() - in.z - 1);
+                out.z = in.y;
+                break;
+            case WEST:
+                out.x = in.x;
+                out.y = (short) in.z;
+                out.z = getSizeY() - in.y - 1;
+                break;
+        }
+
+        return out;
+    }
+
+    //TODO: optimize the F*** out of this
+    public void writeToNBT(NBTTagCompound nbt) {
+
+        if (world.isRemote) return; //client has no business writing here
+
+        nbt.setInteger("xSize", sizeX);
+        nbt.setInteger("ySize", sizeY);
+        nbt.setInteger("zSize", sizeZ);
+        nbt.setFloat("weight", weight);
+        nbt.setBoolean("hasServiceMonitor", hasServiceMonitor);
+
+        Iterator<TileEntity> tileEntityIterator = tileEntities.iterator();
+        NBTTagList tileList = new NBTTagList();
+        while (tileEntityIterator.hasNext()) {
+            TileEntity tile = tileEntityIterator.next();
+            try {
+                NBTTagCompound tileNbt = new NBTTagCompound();
+                tile.writeToNBT(tileNbt);
+                tileList.appendTag(tileNbt);
+            } catch (RuntimeException e) {
+                Stellurgy.logger.warn("A tile entity has thrown an error: " + tile.getClass().getCanonicalName());
+                blocks[tile.getPos().getX()][tile.getPos().getY()][tile.getPos().getZ()] = Blocks.AIR;
+                metas[tile.getPos().getX()][tile.getPos().getY()][tile.getPos().getZ()] = 0;
+                tileEntityIterator.remove();
+            }
+        }
+
+        int[] blockId = new int[sizeX * sizeY * sizeZ];
+        int[] metasId = new int[sizeX * sizeY * sizeZ];
+        for (int x = 0; x < sizeX; x++) {
+            for (int y = 0; y < sizeY; y++) {
+                for (int z = 0; z < sizeZ; z++) {
+                    blockId[z + (sizeZ * y) + (sizeZ * sizeY * x)] = Block.getIdFromBlock(blocks[x][y][z]);
+                    metasId[z + (sizeZ * y) + (sizeZ * sizeY * x)] = metas[x][y][z];
+                }
+            }
+        }
+
+        NBTTagIntArray idList = new NBTTagIntArray(blockId);
+        NBTTagIntArray metaList = new NBTTagIntArray(metasId);
+
+        nbt.setTag("idList", idList);
+        nbt.setTag("metaList", metaList);
+        nbt.setTag("tiles", tileList);
+    }
+
+    public void readFromNBT(NBTTagCompound nbt) {
+
+        //System.out.println("read from nbt");
+
+        sizeX = nbt.getInteger("xSize");
+        sizeY = nbt.getInteger("ySize");
+        sizeZ = nbt.getInteger("zSize");
+        weight = nbt.getFloat("weight");
+        hasServiceMonitor = nbt.getBoolean("hasServiceMonitor");
+
+        blocks = new Block[sizeX][sizeY][sizeZ];
+        metas = new short[sizeX][sizeY][sizeZ];
+
+        tileEntities.clear();
+        inventoryTiles.clear();
+        liquidTiles.clear();
+        pos2te.clear();
+        chunk = new Chunk(world, 0, 0);
+
+        int[] blockId = nbt.getIntArray("idList");
+        int[] metasId = nbt.getIntArray("metaList");
+
+
+        for (int x = 0; x < sizeX; x++) {
+            for (int y = 0; y < sizeY; y++) {
+                for (int z = 0; z < sizeZ; z++) {
+                    blocks[x][y][z] = Block.getBlockById(blockId[z + (sizeZ * y) + (sizeZ * sizeY * x)]);
+                    metas[x][y][z] = (short) metasId[z + (sizeZ * y) + (sizeZ * sizeY * x)];
+
+                    chunk.setBlockState(new BlockPos(x, y, z), this.blocks[x][y][z].getStateFromMeta(this.metas[x][y][z]));
+                    world.checkLightFor(EnumSkyBlock.BLOCK, new BlockPos(x, y, z));
+                }
+            }
+        }
+
+        NBTTagList tileList = nbt.getTagList("tiles", NBT.TAG_COMPOUND);
+
+        for (int i = 0; i < tileList.tagCount(); i++) {
+
+            try {
+                TileEntity tile = ZUtils.createTile(tileList.getCompoundTagAt(i));
+                if (tile == null) {
+                    Stellurgy.logger.warn("Rocket missing Tile (was a mod removed?)");
+                    continue;
+                }
+                tile.setWorld(world);
+
+                if (isInventoryBlock(tile)) {
+                    inventoryTiles.add(tile);
+                }
+
+                if (isLiquidContainerBlock(tile)) {
+                    liquidTiles.add(tile);
+                }
+
+                this.addTileEntity(tile);
+                tile.setWorld(world);
+
+                chunk.addTileEntity(tile);
+
+            } catch (Exception e) {
+                Stellurgy.logger.warn("Rocket missing Tile (was a mod removed?)");
+            }
+
+        }
+        this.chunk.generateSkylightMap();
+    }
+
+    //pass the coords of the xmin, ymin, zmin as well as the world to move the rocket
+    @Override
+    public void pasteInWorld(World world, int xCoord, int yCoord, int zCoord) {
+
+        // A structure arrives as a UNIT, and the destination's environment must not judge it
+        // block by block while it is still half-written. Every setBlockState below is seen by the
+        // atmosphere's block-conversion rule, which asks "is this block exposed to the local
+        // atmosphere?" using the world as it stands AT THAT INSTANT - and mid-paste, a block that
+        // will be deep inside a sealed hull is standing alone in the open. On a superheated planet
+        // that rule turns cloth, wood, carpet, vines and webs into fire on contact, so a ship or a
+        // rocket cargo carrying any of them lost those blocks the moment it landed: the pilot seat
+        // (cloth) was replaced by fire before its tile was restored, which left the arriving craft
+        // with no seat at all and its crew with nowhere to sit.
+        AtmosphereHandler.beginStructurePaste();
+        try {
+            //Set all the blocks
+            for (int x = 0; x < sizeX; x++) {
+                for (int z = 0; z < sizeZ; z++) {
+                    for (int y = 0; y < sizeY; y++) {
+
+                        if (blocks[x][y][z] != Blocks.AIR) {
+                            world.setBlockState(new BlockPos(xCoord + x, yCoord + y, zCoord + z), blocks[x][y][z].getStateFromMeta(metas[x][y][z]), 2);
+                        }
+                    }
+                }
+            }
+
+            //Set tiles for each block
+            for (TileEntity tile : tileEntities) {
+                NBTTagCompound nbt = new NBTTagCompound();
+                tile.writeToNBT(nbt);
+                int x = nbt.getInteger("x");
+                int y = nbt.getInteger("y");
+                int z = nbt.getInteger("z");
+
+                int tmpX = x + xCoord;
+                int tmpY = y + yCoord;
+                int tmpZ = z + zCoord;
+
+                //Set blocks of tiles again to avoid weirdness caused by updates
+                //world.setBlock(xCoord + x, yCoord + y, zCoord + z, blocks[x][y][z], metas[x][y][z], 2);
+
+
+                nbt.setInteger("x", tmpX);
+                nbt.setInteger("y", tmpY);
+                nbt.setInteger("z", tmpZ);
+
+                TileEntity entity = world.getTileEntity(new BlockPos(tmpX, tmpY, tmpZ));
+
+                if (entity != null)
+                    entity.readFromNBT(nbt);
+            }
+        } finally {
+            AtmosphereHandler.endStructurePaste();
+        }
+    }
+
+    public void damageParts() {
+        // Single gate for wear ACCRUAL. When the parts-wear system is disabled no
+        // part ever advances a wear stage, so a worn save loaded with the system
+        // off neither grows nor (combined with the gated consequences) bites.
+        if (!StellurgyConfiguration.getCurrentConfig().partsWearSystem) {
+            return;
+        }
+        for (TileEntity tile : tileEntities) {
+            IPartWear wear = CapabilityWear.get(tile);
+            if (wear != null) {
+                wear.transition();
+            }
+        }
+    }
+
+    @Nullable
+    public TileEntity getTileEntity(@Nonnull BlockPos pos) {
+        return pos2te.getOrDefault(pos, null);
+    }
+
+    @Override
+    public boolean isAirBlock(BlockPos pos) {
+        if (pos.getX() >= blocks.length || pos.getY() >= blocks[0].length || pos.getZ() >= blocks[0][0].length)
+            return true;
+        return blocks[pos.getX()][pos.getY()][pos.getZ()] == Blocks.AIR;
+    }
+
+    @Override
+    @Nonnull
+    public Biome getBiome(@Nullable BlockPos pos) {
+        //Don't care, gen ocean
+        return Biomes.OCEAN;
+    }
+
+    @Override
+    public boolean isSideSolid(BlockPos pos, @Nonnull EnumFacing side, boolean _default) {
+        int x = pos.getX();
+        int y = pos.getY();
+        int z = pos.getZ();
+        if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ || x + side.getFrontOffsetX() < 0
+                || x + side.getFrontOffsetX() >= sizeX || y + side.getFrontOffsetY() < 0 || y + side.getFrontOffsetY() >= sizeY
+                || z + side.getFrontOffsetZ() < 0 || z + side.getFrontOffsetZ() >= sizeZ)
+            return false;
+
+        return blocks[x + side.getFrontOffsetX()][y + side.getFrontOffsetY()][z + side.getFrontOffsetZ()].isSideSolid(blocks[x + side.getFrontOffsetX()][y + side.getFrontOffsetY()][z + side.getFrontOffsetZ()].getStateFromMeta(metas[x + side.getFrontOffsetX()][y + side.getFrontOffsetY()][z + side.getFrontOffsetZ()]), this, pos.offset(side), side.getOpposite());
+
+    }
+
+    public List<TileSatelliteHatch> getSatelliteHatches() {
+        LinkedList<TileSatelliteHatch> satelliteHatches = new LinkedList<>();
+        for (TileEntity tile : getTileEntityList()) {
+            if (tile instanceof TileSatelliteHatch) {
+                satelliteHatches.add((TileSatelliteHatch) tile);
+            }
+        }
+
+        return satelliteHatches;
+    }
+
+    @Deprecated
+    public List<SatelliteBase> getSatellites() {
+        LinkedList<SatelliteBase> satellites = new LinkedList<>();
+        LinkedList<TileSatelliteHatch> satelliteHatches = new LinkedList<>();
+        for (TileEntity tile : getTileEntityList()) {
+            if (tile instanceof TileSatelliteHatch) {
+                satelliteHatches.add((TileSatelliteHatch) tile);
+            }
+        }
+
+
+        for (TileSatelliteHatch tile : satelliteHatches) {
+            SatelliteBase satellite = tile.getSatellite();
+            if (satellite != null)
+                satellites.add(satellite);
+        }
+        return satellites;
+    }
+
+    public TileGuidanceComputer getGuidanceComputer() {
+        for (TileEntity tile : getTileEntityList()) {
+            if (tile instanceof TileGuidanceComputer) {
+                return (TileGuidanceComputer) tile;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Thrust multiplier for a motor at the given position based on its wear
+     * stage: 1.0 when pristine, (1 - wearThrustPenaltyMax) when fully worn.
+     * Returns 1.0 when the wear system is off or the block has no wear state.
+     */
+    private float wearThrustFactor(BlockPos pos) {
+        if (!StellurgyConfiguration.getCurrentConfig().partsWearSystem) {
+            return 1f;
+        }
+        double maxPenalty = StellurgyConfiguration.getCurrentConfig().wearThrustPenaltyMax;
+        if (maxPenalty <= 0) {
+            return 1f;
+        }
+        IPartWear wear = CapabilityWear.get(world.getTileEntity(pos));
+        if (wear != null) {
+            int max = wear.getMaxStage();
+            if (max <= 0) {
+                return 1f;
+            }
+            float frac = (float) wear.getStage() / max; // 0 = pristine, 1 = fully worn
+            return (float) Math.max(0.0, 1.0 - maxPenalty * frac);
+        }
+        return 1f;
+    }
+
+    public float getBreakingProbability() {
+        float prob = 0;
+
+        for (TileEntity te : tileEntities) {
+            IPartWear wear = CapabilityWear.get(te);
+            if (wear != null) {
+                float additionalProb = 0;
+
+                if (te.getBlockType() instanceof BlockNuclearRocketMotor) {
+                    additionalProb = 1F;
+                } else if (te.getBlockType() instanceof BlockRocketMotor || te.getBlockType() instanceof BlockBipropellantRocketMotor) {
+                    additionalProb = 0.2F;
+                }
+                prob += additionalProb * wear.getStage() / 10;
+                if (prob >= 1) {
+                    return Math.min(1, prob);
+                }
+            }
+        }
+
+        return prob;
+    }
+
+    /** A worn fuel tank: which fuel type it holds and how worn it is (0..1). */
+    public static class WornTank {
+        public final FuelType type;
+        public final float wornFraction;
+
+        public WornTank(FuelType type, float wornFraction) {
+            this.type = type;
+            this.wornFraction = wornFraction;
+        }
+    }
+
+    @Nullable
+    private static FuelType tankFuelType(Block b) {
+        // Subclasses first — Oxidizer/Bipropellant/Nuclear all extend BlockFuelTank.
+        if (b instanceof BlockOxidizerFuelTank) return FuelType.LIQUID_OXIDIZER;
+        if (b instanceof BlockBipropellantFuelTank) return FuelType.LIQUID_BIPROPELLANT;
+        if (b instanceof BlockNuclearFuelTank) return FuelType.NUCLEAR_WORKING_FLUID;
+        if (b instanceof BlockFuelTank) return FuelType.LIQUID_MONOPROPELLANT;
+        return null;
+    }
+
+    /** Worn fuel tanks (stage &gt; 0) with their fuel type and wear fraction. */
+    public List<WornTank> getWornTanks() {
+        List<WornTank> res = new ArrayList<>();
+        for (TileEntity te : tileEntities) {
+            IPartWear wear = CapabilityWear.get(te);
+            if (wear == null || wear.getMaxStage() <= 0 || wear.getStage() <= 0) {
+                continue;
+            }
+            FuelType ft = tankFuelType(te.getBlockType());
+            if (ft != null) {
+                res.add(new WornTank(ft, (float) wear.getStage() / wear.getMaxStage()));
+            }
+        }
+        return res;
+    }
+
+    /** True if any seat is worn at/above the given fraction of its max stage. */
+    public boolean hasCriticallyWornSeat(double stageFraction) {
+        for (TileEntity te : tileEntities) {
+            IPartWear wear = CapabilityWear.get(te);
+            if (wear == null || wear.getMaxStage() <= 0) {
+                continue;
+            }
+            if (te.getBlockType() instanceof BlockSeat
+                    && wear.getStage() >= Math.ceil(wear.getMaxStage() * stageFraction)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Display stacks for every worn part (stage &gt; 0) for the rocket GUI damage
+     * view: motors show their staged drop (with wear overlay), tanks/seats show
+     * their block icon.
+     */
+    public List<ItemStack> getWornPartDisplayStacks() {
+        List<ItemStack> res = new ArrayList<>();
+        for (TileEntity te : tileEntities) {
+            IPartWear wear = CapabilityWear.get(te);
+            if (wear == null || wear.getStage() <= 0) {
+                continue;
+            }
+            if (te instanceof TileBrokenPart) {
+                res.add(((TileBrokenPart) te).getDrop());
+            } else if (te.getBlockType() != null) {
+                res.add(new ItemStack(te.getBlockType()));
+            }
+        }
+        return res;
+    }
+
+    public List<TileBrokenPart> getBrokenBlocks() {
+        List<TileBrokenPart> res = new ArrayList<>();
+
+        for (TileEntity te : tileEntities) {
+            if (te instanceof TileBrokenPart) {
+                res.add((TileBrokenPart) te);
+            }
+        }
+
+        return res;
+    }
+
+    public boolean shouldBreak() {
+        return world.rand.nextFloat() < this.getBreakingProbability();
+    }
+
+    /**
+     * @return destination ID or Constants.INVALID_PLANET if none
+     */
+    public int getDestinationDimId(int currentDimId, int x, int z) {
+        for (TileEntity tile : getTileEntityList()) {
+            if (tile instanceof TileGuidanceComputer) {
+                return ((TileGuidanceComputer) tile).getDestinationDimId(currentDimId, new BlockPos(x, 0, z));
+            }
+        }
+
+        return Constants.INVALID_PLANET;
+    }
+
+    public Vector3F<Float> getDestinationCoordinates(int destDimID, boolean commit) {
+        for (TileEntity tile : getTileEntityList()) {
+            if (tile instanceof TileGuidanceComputer) {
+                return ((TileGuidanceComputer) tile).getLandingLocation(destDimID, commit);
+            }
+        }
+        return null;
+    }
+
+    public String getDestinationName(int destDimID) {
+        for (TileEntity tile : getTileEntityList()) {
+            if (tile instanceof TileGuidanceComputer) {
+                return ((TileGuidanceComputer) tile).getDestinationName(destDimID);
+            }
+        }
+        return "";
+    }
+
+    public void setDestinationCoordinates(Vector3F<Float> vec, int dimid) {
+        for (TileEntity tile : getTileEntityList()) {
+            if (tile instanceof TileGuidanceComputer) {
+                ((TileGuidanceComputer) tile).setReturnPosition(vec, dimid);
+            }
+        }
+    }
+
+
+    public void readtiles(ByteBuf in) {
+        PacketBuffer buffer = new PacketBuffer(in);
+        short numTiles = buffer.readShort();
+
+        //tileEntities.clear();
+        //inventoryTiles.clear();
+        //liquidTiles.clear();
+        //this can cause a ConcurrentModificationException in render if the rocket is loaded with fluids and tiles get updated
+        //so we need a hacky fix here and not modify the lists without deleting or adding elements
+
+        for (short i = 0; i < numTiles; i++) {
+            try {
+                NBTTagCompound nbt = buffer.readCompoundTag();
+
+                TileEntity tile = ZUtils.createTile(nbt);
+                BlockPos tilepos = tile.getPos();
+
+                for (int j = 0; j < tileEntities.size(); j++) {
+                    TileEntity t = tileEntities.get(j);
+                    if (t.getPos().equals(tilepos)) {
+                        t.readFromNBT(nbt);
+                    }
+                }
+                if (isInventoryBlock(tile)) {
+                    for (int j = 0; j < inventoryTiles.size(); j++) {
+                        TileEntity t = inventoryTiles.get(j);
+                        if (t.getPos().equals(tilepos)) {
+                            t.readFromNBT(nbt);
+                        }
+                    }
+                }
+                if (isLiquidContainerBlock(tile)) {
+                    for (int j = 0; j < liquidTiles.size(); j++) {
+                        TileEntity t = liquidTiles.get(j);
+                        if (t.getPos().equals(tilepos)) {
+                            t.readFromNBT(nbt);
+                        }
+                    }
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void writetiles(ByteBuf out) {
+        PacketBuffer buffer = new PacketBuffer(out);
+        buffer.writeShort(tileEntities.size());
+        Iterator<TileEntity> tileIterator = tileEntities.iterator();
+
+        while (tileIterator.hasNext()) {
+            TileEntity tile = tileIterator.next();
+
+            NBTTagCompound nbt = new NBTTagCompound();
+
+            try {
+                tile.writeToNBT(nbt);
+
+                try {
+                    buffer.writeCompoundTag(nbt);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+            } catch (RuntimeException e) {
+                Stellurgy.logger.warn("A tile entity has thrown an error while writing to network: " + tile.getClass().getCanonicalName());
+                tileIterator.remove();
+            }
+        }
+    }
+
+    public void writeToNetwork(ByteBuf out) {
+
+        if (DimensionManager.getWorld(0).isRemote) System.out.println("This should have never been called!");
+
+        PacketBuffer buffer = new PacketBuffer(out);
+
+        buffer.writeByte(this.sizeX);
+        buffer.writeByte(this.sizeY);
+        buffer.writeByte(this.sizeZ);
+        buffer.writeShort(tileEntities.size());
+
+        for (int x = 0; x < sizeX; x++) {
+            for (int y = 0; y < sizeY; y++) {
+                for (int z = 0; z < sizeZ; z++) {
+                    buffer.writeInt(Block.getIdFromBlock(this.blocks[x][y][z]));
+                    buffer.writeShort(this.metas[x][y][z]);
+                }
+            }
+        }
+
+        Iterator<TileEntity> tileIterator = tileEntities.iterator();
+
+        while (tileIterator.hasNext()) {
+            TileEntity tile = tileIterator.next();
+
+            NBTTagCompound nbt = new NBTTagCompound();
+
+            try {
+                tile.writeToNBT(nbt);
+
+                try {
+                    buffer.writeCompoundTag(nbt);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+            } catch (RuntimeException e) {
+                Stellurgy.logger.warn("A tile entity has thrown an error while writing to network: " + tile.getClass().getCanonicalName());
+                tileIterator.remove();
+            }
+        }
+
+        buffer.writeBoolean(hasServiceMonitor);
+    }
+
+    public void readFromNetwork(ByteBuf in) {
+        //System.out.println("read from network");
+
+        finalized = false;
+        PacketBuffer buffer = new PacketBuffer(in);
+
+        this.sizeX = buffer.readByte();
+        this.sizeY = buffer.readByte();
+        this.sizeZ = buffer.readByte();
+        short numTiles = buffer.readShort();
+
+        this.blocks = new Block[sizeX][sizeY][sizeZ];
+        this.metas = new short[sizeX][sizeY][sizeZ];
+
+        tileEntities.clear();
+        inventoryTiles.clear();
+        liquidTiles.clear();
+        pos2te.clear();
+
+        chunk = new Chunk(world, 0, 0);
+
+
+        for (int x = 0; x < sizeX; x++) {
+            for (int y = 0; y < sizeY; y++) {
+                for (int z = 0; z < sizeZ; z++) {
+
+                    this.blocks[x][y][z] = Block.getBlockById(buffer.readInt());
+                    this.metas[x][y][z] = buffer.readShort();
+
+                    chunk.setBlockState(new BlockPos(x, y, z), this.blocks[x][y][z].getStateFromMeta(this.metas[x][y][z]));
+                    world.checkLightFor(EnumSkyBlock.BLOCK,new BlockPos(x, y, z));
+                }
+            }
+        }
+
+        for (short i = 0; i < numTiles; i++) {
+            try {
+                NBTTagCompound nbt = buffer.readCompoundTag();
+
+                TileEntity tile = ZUtils.createTile(nbt);
+                if (tile == null) {
+                    Stellurgy.logger.warn("Rocket missing Tile while reading from network");
+                    continue;
+                }
+
+                tile.setWorld(world);
+                this.addTileEntity(tile);
+
+                if (isInventoryBlock(tile)) {
+                    inventoryTiles.add(tile);
+                }
+
+                if (isLiquidContainerBlock(tile))
+                    liquidTiles.add(tile);
+
+
+                chunk.addTileEntity(tile);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        hasServiceMonitor = buffer.readBoolean();
+
+        //We are now ready to render
+        this.chunk.generateSkylightMap();
+        finalized = true;
+    }
+
+    @Override
+    public int getCombinedLight(@Nullable BlockPos pos, int lightValue) {
+        return lightValue;
+    }
+
+    @Override
+    public int getStrongPower(@Nullable BlockPos pos, @Nullable EnumFacing direction) {
+        return 0;
+    }
+
+    @Override
+    @Nonnull
+    public WorldType getWorldType() {
+        return WorldType.CUSTOMIZED;
+    }
+}

@@ -1,0 +1,22 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+        {
+	    "item": "libvulpes:structuremachine"
+        },
+        {
+	    "item": "stellurgy:ic",
+	    "data": 0
+        },
+	{
+	    "item": "stellurgy:misc",
+	    "data": 0
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:altitudecontroller",
+        "count": 1
+    }
+}
