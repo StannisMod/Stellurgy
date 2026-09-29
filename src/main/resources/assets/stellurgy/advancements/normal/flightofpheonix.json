@@ -1,0 +1,20 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:hyperdriveGenerator"
+        },
+        "title": {
+            "translate": "advancement.flightOfThePhoenix"
+        },
+        "description": {
+            "translate": "advancement.flightOfThePhoenix.desc"
+        },
+        "frame": "challenge"
+    },
+    "parent": "stellurgy:normal/warp",
+    "criteria": {
+        "flightofpheonix": {
+            "trigger": "flightofpheonix"
+        }
+    }
+}

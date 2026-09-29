@@ -31,19 +31,19 @@ import net.minecraftforge.fml.common.registry.GameRegistry;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.apache.logging.log4j.Logger;
-import zmaster587.advancedRocketry.AdvancedRocketry;
-import zmaster587.advancedRocketry.api.Constants;
-import zmaster587.advancedRocketry.network.EntityNetworkIds;
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.network.EntityNetworkIds;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-// Vendored into Advanced Rocketry as its shield subsystem: no longer its own
-// @Mod. The mod is folded into AR's single container — AR drives the lifecycle
+// Vendored into Stellurgy as its shield subsystem: no longer its own
+// @Mod. The mod is folded into Stellurgy's single container — Stellurgy drives the lifecycle
 // (preInit/init/postInit) from its own @Mod handlers, and the static registry
-// handlers below register under AR's modid. The registry DOMAIN stays "affs".
+// handlers below register under Stellurgy's modid. The registry DOMAIN stays "affs".
 @Mod.EventBusSubscriber(modid = Constants.modId)
 public class AdvancedForceFieldSystem {
 
@@ -98,7 +98,7 @@ public class AdvancedForceFieldSystem {
         LOG = event.getModLog();
         ModConfig.load(event.getSuggestedConfigurationFile());
         initContent();
-        // GUI handler is registered by AR (AffsGuiRouter) — the guest is no longer its own mod
+        // GUI handler is registered by Stellurgy (AffsGuiRouter) — the guest is no longer its own mod
         // container, so it cannot own an IGuiHandler. GUIs are opened via openAffsGui below.
         NETWORK.registerMessage(PacketSetFieldRadius.Handler.class, PacketSetFieldRadius.class, packetId++, Side.SERVER);
         NETWORK.registerMessage(PacketSyncCodeValue.Handler.class, PacketSyncCodeValue.class, packetId++, Side.SERVER);
@@ -116,10 +116,10 @@ public class AdvancedForceFieldSystem {
         GameRegistry.registerTileEntity(TileEntityShieldConsole.class, new ResourceLocation(MODID, "shield_console"));
         GameRegistry.registerTileEntity(TileEntityAdminEnergySource.class, new ResourceLocation(MODID, "admin_energy_source"));
         GameRegistry.registerTileEntity(TileEntityContourInjector.class, new ResourceLocation(MODID, "contour_injector"));
-        // Owner is AR's mod instance (the guest is folded into AR's container), so this entity lives
+        // Owner is Stellurgy's mod instance (the guest is folded into Stellurgy's container), so this entity lives
         // in the host's one container-wide network id space and takes its id from the space's owner
         // instead of a number chosen here. Declare a new entity there before registering it.
-        EntityNetworkIds.register(new ResourceLocation(MODID, "laser_bolt"), EntityLaserBolt.class, "laser_bolt", AdvancedRocketry.instance, 64, 10, true);
+        EntityNetworkIds.register(new ResourceLocation(MODID, "laser_bolt"), EntityLaserBolt.class, "laser_bolt", Stellurgy.instance, 64, 10, true);
         if (event.getSide().isClient()) {
             com.github.stannismod.affs.client.ClientEntityRenderRegistry.init();
         }
@@ -129,14 +129,14 @@ public class AdvancedForceFieldSystem {
     }
 
     /**
-     * Opens an AFFS GUI. Because AFFS is folded into AR's single mod container, the owner
-     * passed to {@code openGui} must be AR's mod instance, and the local GUI id is offset into
-     * {@link zmaster587.advancedRocketry.integration.affs.AffsGuiRouter}'s AFFS range.
+     * Opens an AFFS GUI. Because AFFS is folded into Stellurgy's single mod container, the owner
+     * passed to {@code openGui} must be Stellurgy's mod instance, and the local GUI id is offset into
+     * {@link dev.stannismod.stellurgy.integration.affs.AffsGuiRouter}'s AFFS range.
      */
     public static void openAffsGui(net.minecraft.entity.player.EntityPlayer player, int guiId,
                                    net.minecraft.world.World world, int x, int y, int z) {
-        player.openGui(AdvancedRocketry.instance,
-                zmaster587.advancedRocketry.integration.affs.AffsGuiRouter.AFFS_GUI_BASE + guiId,
+        player.openGui(Stellurgy.instance,
+                dev.stannismod.stellurgy.integration.affs.AffsGuiRouter.AFFS_GUI_BASE + guiId,
                 world, x, y, z);
     }
 

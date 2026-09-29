@@ -1,0 +1,49 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"ada",
+	"ecf",
+	"bgb"
+    ],
+    "key":
+    {
+        "a":
+        {
+            "item": "minecraft:quartz"
+        },
+        "d":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"e":
+        {
+            "item": "stellurgy:ic",
+            "data": 4
+        },
+	"c":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"f":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+	"b":
+        {
+            "item": "minecraft:repeater"
+        },
+	"g":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateSteel"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:crystallizer",
+        "count": 1
+    }
+}

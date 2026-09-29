@@ -1299,7 +1299,7 @@ public final class ForgeTestClientBootstrap {
                     // getBedLocation() delegates to getBedLocation(this.dimension),
                     // which reads spawnPos for dim 0 and spawnChunkMap otherwise —
                     // mirroring the branch setSpawnPoint(pos, forced) takes. So
-                    // this is dimension-correct on AR planets too. null means the
+                    // this is dimension-correct on Stellurgy planets too. null means the
                     // packet never arrived.
                     BlockPos bed = mc.player.getBedLocation();
                     response.addProperty("hasBedLocation", bed != null);

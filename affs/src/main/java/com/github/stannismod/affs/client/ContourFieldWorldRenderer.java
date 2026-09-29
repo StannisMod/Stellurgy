@@ -16,7 +16,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import org.lwjgl.opengl.GL11;
-import zmaster587.advancedRocketry.api.Constants;
+import dev.stannismod.stellurgy.api.Constants;
 
 import java.util.ArrayList;
 

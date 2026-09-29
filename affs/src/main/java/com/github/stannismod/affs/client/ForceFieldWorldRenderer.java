@@ -11,7 +11,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import org.lwjgl.opengl.GL11;
-import zmaster587.advancedRocketry.api.Constants;
+import dev.stannismod.stellurgy.api.Constants;
 
 @Mod.EventBusSubscriber(modid = Constants.modId, value = Side.CLIENT)
 public final class ForceFieldWorldRenderer {

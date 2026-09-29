@@ -5,7 +5,7 @@ import net.minecraft.util.math.Vec3d;
 
 /**
  * A single declared strike against the shield — the cooperative strike interface (D134-2 tier-1). A
- * cooperating weapon (first implementer = an AR turret; the same seam serves future third-party
+ * cooperating weapon (first implementer = a Stellurgy turret; the same seam serves future third-party
  * integrations) builds one of these and hands it to {@link ShieldStrikeService#resolve}, which absorbs
  * it precisely: the energy is <em>known</em>, not guessed from velocity.
  *

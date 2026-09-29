@@ -15,7 +15,7 @@ import java.util.Map;
  * not in a console tile — is what makes consoles genuinely stateless: the data outlives every console,
  * every chunk unload and the session itself.
  *
- * <p>Stored on the overworld's per-world storage (mirrors AR's own network saved data) so a ship's
+ * <p>Stored on the overworld's per-world storage (mirrors Stellurgy's own network saved data) so a ship's
  * configuration survives the ship moving between dimensions, which a per-dimension store could not.</p>
  */
 public class ShieldControlData extends WorldSavedData {

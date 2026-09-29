@@ -1,0 +1,25 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "type": "forge:ore_dict",
+            "ore": "dustRedstone"
+        },
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gemEmerald"
+        },
+	{
+	    "item": "stellurgy:ic",
+	    "data": 0
+        }
+    ],
+    "time": 500,
+    "energy": 60,
+    "itemresults":
+    {
+	"item": "stellurgy:dataunit",
+	"data": 0
+    }
+}

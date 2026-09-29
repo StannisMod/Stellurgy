@@ -1,7 +1,0 @@
-{
-    "parent": "block/door_bottom",
-    "textures": {
-        "bottom": "advancedrocketry:blocks/smallAirlockDoor_lower",
-        "top": "advancedrocketry:blocks/smallAirlockDoor_upper"
-    }
-}

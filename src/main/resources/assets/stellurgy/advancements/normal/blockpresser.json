@@ -1,0 +1,26 @@
+{
+    "display": {
+        "icon": {
+            "item": "piston"
+        },
+        "title": {
+            "translate": "advancement.flattening"
+        },
+        "description": {
+            "translate": "advancement.flattening.desc"
+        }
+    },
+    "parent": "stellurgy:normal/root",
+    "criteria": {
+        "warp": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "stellurgy:platePress"
+                    }
+                ]
+            }
+        }
+    }
+} 

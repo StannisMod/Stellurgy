@@ -1,0 +1,35 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:spaceHelmet"
+        },
+        "title": {
+            "translate": "advancement.suitedUp"
+        },
+        "description": {
+            "translate": "advancement.suitedUp.desc"
+        }
+    },
+    "parent": "stellurgy:normal/root",
+    "criteria": {
+        "suited": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "stellurgy:spaceBoots"
+                    },
+		    {
+                        "item": "stellurgy:spaceLeggings"
+                    },
+		    {
+                        "item": "stellurgy:spaceHelmet"
+                    },
+		    {
+                        "item": "stellurgy:spaceChestplate"
+                    }
+                ]
+            }
+        }
+    }
+} 

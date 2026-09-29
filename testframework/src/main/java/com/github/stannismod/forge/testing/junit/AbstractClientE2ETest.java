@@ -39,7 +39,7 @@ import org.junit.Before;
  *       public void clickingPlanetUpdatesServerSelection() throws Exception {
  *           bot().openInventory();
  *           // … GUI interactions …
- *           List<String> state = server().client().execute("artest selector info Player");
+ *           List<String> state = server().client().execute("stellurgytest selector info Player");
  *           assertTrue(String.join("\n", state).contains("\"selected\":\"earth\""));
  *       }
  *   }

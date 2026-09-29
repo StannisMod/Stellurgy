@@ -96,10 +96,10 @@ public class ShipData {
      */
     private transient boolean dead;
     /**
-     * Advanced Rocketry's DURABLE ship id for this craft, or {@code null} for a craft AR does not
+     * Stellurgy's DURABLE ship id for this craft, or {@code null} for a craft Stellurgy does not
      * own.
      *
-     * <p>AR carries a second identity for a tier-2 ship: an id minted and persisted by its flight
+     * <p>Stellurgy carries a second identity for a tier-2 ship: an id minted and persisted by its flight
      * computer, chosen because it survives a re-assembly and therefore names the same vessel across
      * a crossing, a restart and a re-registration under a fresh {@link #uuid}. Its transit records,
      * its durable ledger and its aboard tags are all keyed by it, while everything in this mod is
@@ -109,10 +109,10 @@ public class ShipData {
      *
      * <p>Kept HERE, beside the uuid and indexed with it, so that translation is one hash probe rather
      * than a walk over every registered ship asking each for its computer. Set through
-     * {@link #setArDurableId} so the index is updated with the field.</p>
+     * {@link #setStellurgyDurableId} so the index is updated with the field.</p>
      */
     @Nullable
-    private UUID arDurableId;
+    private UUID stellurgyDurableId;
 
     // endregion
     private ShipData( ConcurrentUpdatableIndexedCollection<ShipData> owner, ShipPhysicsData physicsData, @Nonnull ShipInertiaData inertiaData,  ShipTransform shipTransform,  ShipTransform prevTickShipTransform,  AxisAlignedBB shipBB, boolean physicsEnabled,  VSChunkClaim chunkClaim,  UUID uuid,  String name) {
@@ -163,14 +163,14 @@ public class ShipData {
     }
 
     /**
-     * Bind (or clear) Advanced Rocketry's durable id for this craft — see {@link #arDurableId}.
+     * Bind (or clear) Stellurgy's durable id for this craft — see {@link #stellurgyDurableId}.
      *
      * <p>Goes through the index the same way {@link #setName} does: a field written behind the
      * collection's back leaves the index answering with the OLD value, which for an identity lookup
      * means confidently naming the wrong ship.</p>
      */
-    public ShipData setArDurableId(@Nullable UUID arDurableId) {
-        this.arDurableId = arDurableId;
+    public ShipData setStellurgyDurableId(@Nullable UUID stellurgyDurableId) {
+        this.stellurgyDurableId = stellurgyDurableId;
         owner.updateObjectIndices(this, AR_DURABLE_ID);
         return this;
     }
@@ -180,12 +180,12 @@ public class ShipData {
      * but not yet spawned. The index is not touched, because there is nothing to update: the record
      * is indexed on every attribute when it is added, so the name set here is carried in with it.
      *
-     * <p>The distinction is not cosmetic. {@link #setArDurableId}'s index update inserts the object
+     * <p>The distinction is not cosmetic. {@link #setStellurgyDurableId}'s index update inserts the object
      * into the store as a side effect, so using it here would register the ship BEFORE its blocks
      * exist — briefly answering position and identity lookups for a craft that is not there yet.</p>
      */
-    public ShipData setArDurableIdBeforeRegistration(@Nullable UUID arDurableId) {
-        this.arDurableId = arDurableId;
+    public ShipData setStellurgyDurableIdBeforeRegistration(@Nullable UUID stellurgyDurableId) {
+        this.stellurgyDurableId = stellurgyDurableId;
         return this;
     }
 
@@ -193,9 +193,9 @@ public class ShipData {
     // region Attributes
     public static final Attribute<ShipData, String> NAME = nullableAttribute(ShipData::getName);
     public static final Attribute<ShipData, UUID> UUID = attribute(ShipData::getUuid);
-    /** {@link #arDurableId}, nullable because most craft carry none. */
+    /** {@link #stellurgyDurableId}, nullable because most craft carry none. */
     public static final Attribute<ShipData, UUID> AR_DURABLE_ID =
-        nullableAttribute(ShipData::getArDurableId);
+        nullableAttribute(ShipData::getStellurgyDurableId);
     public static final Attribute<ShipData, Long> CHUNKS = new MultiValueAttribute<ShipData, Long>() {
         @Override
         public Set<Long> getValues(ShipData physo, QueryOptions queryOptions) {
@@ -304,10 +304,10 @@ public class ShipData {
         return this.name;
     }
 
-    /** Advanced Rocketry's durable id for this craft, or {@code null}. See {@link #arDurableId}. */
+    /** Stellurgy's durable id for this craft, or {@code null}. See {@link #stellurgyDurableId}. */
     @Nullable
-    public UUID getArDurableId() {
-        return this.arDurableId;
+    public UUID getStellurgyDurableId() {
+        return this.stellurgyDurableId;
     }
 
     @java.lang.SuppressWarnings("all")

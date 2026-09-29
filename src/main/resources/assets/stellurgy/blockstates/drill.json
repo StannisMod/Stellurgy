@@ -1,0 +1,21 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "transform": "forge:default-block",
+        "model": "minecraft:orientable",
+        "textures": {
+            "top": "stellurgy:blocks/laserbottom",
+            "front": "stellurgy:blocks/machinewarning",
+            "side": "stellurgy:blocks/machinewarning"
+        }
+    },
+    "variants": {
+        "facing=up": [{}],
+        "facing=down": [{}],
+        "facing=north": [{}],
+        "facing=south": { "model": "minecraft:orientable", "y": 180 },
+        "facing=west":  { "model": "minecraft:orientable", "y": 270 },
+        "facing=east":  { "model": "minecraft:orientable", "y": 90 },
+        "inventory" : [{}]
+    }
+}

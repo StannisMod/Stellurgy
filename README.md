@@ -7,12 +7,12 @@ for **Minecraft 1.12.2**.
 
 It originally started as an attempt to fix and modernize Advanced Rocketry. At some point that stopped being
 an accurate description of the project. A lot of the old mod is still there, and rockets, planets, stations
-and the rest of the AR progression are not going away, but there is now a second layer being built on top of
+and the rest of the Advanced Rocketry progression are not going away, but there is now a second layer being built on top of
 it.
 
 The main difference is that I want space to actually exist as a place.
 
-In most of the old AR gameplay, a rocket takes you from one destination to another. Stellurgy keeps that kind
+In most of the old Advanced Rocketry gameplay, a rocket takes you from one destination to another. Stellurgy keeps that kind
 of rocket for early spaceflight, but later ships are supposed to work very differently: large block-built
 vessels that physically exist, can be flown, and remain usable while travelling. You should be able to get out
 of the pilot seat, walk through the ship, use its machines, work on it and live on it while it is going
@@ -97,7 +97,7 @@ Stellurgy is a derivative of Advanced Rocketry, not an unrelated mod using its n
 existing planetary and rocket gameplay is the starting point, and keeping compatibility with useful parts of
 the old ecosystem is important to me.
 
-At the same time, I don't want to preserve old behaviour purely because that is how AR happened to work in
+At the same time, I don't want to preserve old behaviour purely because that is how Advanced Rocketry happened to work in
 1.12.
 
 The rough progression I am aiming for is:

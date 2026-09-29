@@ -2,7 +2,7 @@ package com.github.stannismod.affs.world.shield;
 
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import zmaster587.advancedRocketry.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * Resolves a shield block's <b>domain</b> — D134-6 Layer 1 (identity). A domain <em>bounds</em> the
@@ -12,7 +12,7 @@ import zmaster587.advancedRocketry.integration.vs.VSIntegration;
  * <p>Two kinds exist. A block managed by a Valkyrien Skies ship belongs to that ship's domain, which
  * follows the hull wherever it flies (the same {@code shipIdManagingBlock} resolution the field frame
  * uses, so frame and domain can never disagree). Everything else — a planet base, an asteroid outpost —
- * belongs to its dimension's domain. Base identity has no first-class concept in AR yet, so a dimension
+ * belongs to its dimension's domain. Base identity has no first-class concept in Stellurgy yet, so a dimension
  * is the coarsest defensible bound: two bases in one dimension share a <em>group namespace</em> (their
  * group names appear in each other's consoles), which costs nothing physically because a group only
  * pushes a priority into the member emitters it actually lists.</p>

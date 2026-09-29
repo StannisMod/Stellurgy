@@ -1,0 +1,40 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"tst",
+	"pbp",
+	"cpc"
+    ],
+    "key":
+    {
+        "s":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+        "t":
+        {
+            "item": "stellurgy:ic",
+            "data": 1
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateTin"
+        },
+	"c":
+        {
+	    "item": "stellurgy:planetidchip"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:planetanalyser",
+        "count": 1
+    }
+}

@@ -1,0 +1,24 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "textures": {
+            "#None": "stellurgy:/models/combustion"
+        },
+        "model": "stellurgy:models/rocket.obj",
+        "transform": "forge:default-block"
+    },
+    "variants": {
+        "facing=north": { "model": "stellurgy:models/rocket.obj", "texture": "stellurgy:textures/models/combustion.png", "x": 90 },
+        "facing=south": {  "model": "stellurgy:models/rocket.obj", "texture": "stellurgy:textures/models/combustion.png", "x": 90, "y": 180 },
+        "facing=west":  { "model": "stellurgy:models/rocket.obj", "texture": "stellurgy:textures/models/combustion.png", "x": 90, "y": 270 },
+        "facing=east":  { "model": "stellurgy:models/rocket.obj", "texture": "stellurgy:textures/models/combustion.png", "x": 90, "y": 90 },
+        "facing=up":  { "model": "stellurgy:models/rocket.obj", "texture": "stellurgy:textures/models/combustion.png", "x": 180 },
+        "facing=down":  { "model": "stellurgy:models/rocket.obj", "texture": "stellurgy:textures/models/combustion.png" },
+        "inventory": {
+            "model": "stellurgy:models/rocket.obj",
+            "textures": {
+                "layer0": "stellurgy:textures/models/combustion.png"
+            }
+        }
+    }
+}

@@ -1,0 +1,6 @@
+{
+    "parent": "libvulpes:block/tintedcubeall",
+    "textures": {
+        "all": "stellurgy:blocks/crystal"
+    }
+}

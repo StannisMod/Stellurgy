@@ -56,7 +56,7 @@ Java 8, so no `var`, records, or switch expressions. Registry names, NBT keys an
 
 ## Licence
 
-Advanced Rocketry is distributed under the **GNU General Public License, version 3, with a linking exception**
+Stellurgy is distributed under the **GNU General Public License, version 3, with a linking exception**
 (see [`LICENSE`](./LICENSE) and [`COPYING`](./COPYING)). By submitting a contribution — a pull request, a patch,
 or any other change — you agree to license it under those same terms, so the project can continue to be
 distributed as a whole under GPL-3.0 with the linking exception.

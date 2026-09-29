@@ -1,0 +1,26 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:crystallizer"
+        },
+        "title": {
+            "translate": "advancement.crystalline"
+        },
+        "description": {
+            "translate": "advancement.crystalline.desc"
+        }
+    },
+    "parent": "stellurgy:normal/holographic",
+    "criteria": {
+        "warp": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "stellurgy:crystallizer"
+                    }
+                ]
+            }
+        }
+    }
+} 

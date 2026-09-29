@@ -1,0 +1,10 @@
+{
+    "variants": {
+        "facing=up": { "model": "stellurgy:normal_thermite_torch" },
+        "facing=east": { "model": "stellurgy:normal_thermite_torch_wall" },
+        "facing=south": { "model": "stellurgy:normal_thermite_torch_wall", "y": 90 },
+        "facing=west": { "model": "stellurgy:normal_thermite_torch_wall", "y": 180 },
+        "facing=north": { "model": "stellurgy:normal_thermite_torch_wall", "y": 270 },
+        "inventory" : { "model": "stellurgy:normal_thermite_torch" }
+    }
+}

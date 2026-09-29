@@ -1,0 +1,28 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "type": "forge:ore_dict",
+            "ore": "dustRedstone"
+        },
+        {
+	    "item": "stellurgy:ic",
+	    "data": 0
+        },
+	{
+	    "item": "stellurgy:ic",
+	    "data": 3
+        },
+	{
+	    "item": "minecraft:redstone_torch"
+        }
+    ],
+    "time": 200,
+    "energy": 1,
+    "itemresults":
+    {
+	"item": "stellurgy:itemupgrade",
+	"data": 0
+    }
+}

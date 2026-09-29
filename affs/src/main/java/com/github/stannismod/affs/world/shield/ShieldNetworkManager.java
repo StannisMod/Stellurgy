@@ -11,11 +11,11 @@ import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import zmaster587.advancedRocketry.api.Constants;
+import dev.stannismod.stellurgy.api.Constants;
 
 import java.util.*;
 
-// Registered under AR's container: the vendored guest modid "affs" is not a loaded mod, so a
+// Registered under Stellurgy's container: the vendored guest modid "affs" is not a loaded mod, so a
 // @EventBusSubscriber keyed on it is skipped by AutomaticEventSubscriber (modid must equal the
 // owning container). All AFFS runtime handlers subscribe under Constants.modId, like the block registrar.
 @Mod.EventBusSubscriber(modid = Constants.modId)

@@ -1,0 +1,23 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"ppp",
+	"psp",
+	"ppp"
+    ],
+    "key":
+    {
+        "s": {
+            "item": "stellurgy:structuretower"
+        },
+        "p": {
+            "item": "stellurgy:solarpanel"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:solararraypanel",
+        "count": 8
+    }
+}

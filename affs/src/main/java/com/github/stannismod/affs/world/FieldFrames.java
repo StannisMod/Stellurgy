@@ -2,7 +2,7 @@ package com.github.stannismod.affs.world;
 
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import zmaster587.advancedRocketry.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
 /**
  * Resolves the {@link FieldFrame} for a shield block from its position (§4.3): the frame is a

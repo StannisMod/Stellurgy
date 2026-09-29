@@ -1,0 +1,197 @@
+package dev.stannismod.stellurgy.mission;
+
+import net.minecraft.inventory.IInventory;
+import net.minecraft.item.ItemStack;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.items.CapabilityItemHandler;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.items.wrapper.InvWrapper;
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.api.DataStorage.DataType;
+import dev.stannismod.stellurgy.api.IInfrastructure;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.item.ItemAsteroidChip;
+import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
+import dev.stannismod.stellurgy.util.Asteroid;
+import dev.stannismod.stellurgy.util.Asteroid.StackEntry;
+import zmaster587.libVulpes.util.HashedBlockPosition;
+
+import java.util.LinkedList;
+import java.util.List;
+
+
+public class MissionOreMining extends MissionResourceCollection {
+
+
+    public MissionOreMining() {
+        super();
+    }
+
+    public MissionOreMining(long l, EntityRocket entityRocket,
+                            LinkedList<IInfrastructure> connectedInfrastructure) {
+        super(l, entityRocket, connectedInfrastructure);
+
+        // Persist asteroid metadata for the monitor UI
+        try {
+            if (rocketStorage != null && rocketStorage.getGuidanceComputer() != null) {
+                ItemStack chip = rocketStorage.getGuidanceComputer().getStackInSlot(0);
+                if (!chip.isEmpty() && chip.getItem() instanceof ItemAsteroidChip) {
+                    ItemAsteroidChip ac = (ItemAsteroidChip) chip.getItem();
+
+                    String type = ac.getType(chip);
+                    Long   uuid = ac.getUUID(chip);
+
+                    if (type != null && !type.isEmpty())
+                        missionPersistantNBT.setString("asteroidType", type);
+                    if (uuid != null)
+                        missionPersistantNBT.setLong("asteroidUUID", uuid);
+                }
+            }
+        } catch (Throwable t) {
+            // leave fields unset; GUI will show defaults
+        }
+    }
+
+    @javax.annotation.Nullable
+    private static IItemHandler getItemHandler(TileEntity tile) {
+        if (tile == null) return null;
+
+        // Prefer capability (modded inventories)
+        if (tile.hasCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
+            IItemHandler h = tile.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+            if (h != null) return h;
+        }
+        for (EnumFacing face : EnumFacing.VALUES) {
+            if (tile.hasCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, face)) {
+                IItemHandler h = tile.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, face);
+                if (h != null) return h;
+            }
+        }
+
+        // Vanilla fallback (and “treat sided inventories like normal”, closest to old behavior)
+        if (tile instanceof IInventory) {
+            return new InvWrapper((IInventory) tile);
+        }
+
+        return null;
+    }
+
+    public String getAsteroidTypeOrEmpty() {
+        return (missionPersistantNBT != null && missionPersistantNBT.hasKey("asteroidType"))
+                ? missionPersistantNBT.getString("asteroidType") : "";
+    }
+    @javax.annotation.Nullable
+    public Long getAsteroidUUIDOrNull() {
+        return (missionPersistantNBT != null && missionPersistantNBT.hasKey("asteroidUUID"))
+                ? missionPersistantNBT.getLong("asteroidUUID") : null;
+    }
+    @Override
+    public void onMissionComplete() {
+
+        // The chip-refill step below dereferences the guidance computer
+        // unconditionally; resolve it once up front and bail on null so a rocket
+        // that lost its guidance computer (never had one, or dropped it on reload)
+        // does not NPE the server tick when drillingPower == 0 — that branch used
+        // to hold the only guard, but it is skipped when drillingPower is zero.
+        TileGuidanceComputer computer = rocketStorage.getGuidanceComputer();
+        if (computer == null) {
+            Stellurgy.logger.warn("Cannot find guidance computer in rocket landing at " + x + ", " + z + " in dim " + launchDimension + ".  Unable to respawn the rocket.");
+            return;
+        }
+
+        if (rocketStats.getDrillingPower() != 0f) {
+            int distanceData, compositionData, massData, maxData;
+
+            ItemStack stack = computer.getStackInSlot(0);
+
+            if (!stack.isEmpty() && stack.getItem() instanceof ItemAsteroidChip) {
+
+                distanceData = ((ItemAsteroidChip) stack.getItem()).getData(stack, DataType.DISTANCE);
+                compositionData = ((ItemAsteroidChip) stack.getItem()).getData(stack, DataType.COMPOSITION);
+                massData = ((ItemAsteroidChip) stack.getItem()).getData(stack, DataType.MASS);
+                maxData = ((ItemAsteroidChip) stack.getItem()).getMaxData(stack);
+
+                //fill the inventory of the rocket
+                if (distanceData / (double) maxData > Math.random()) {
+                    ItemStack[] stacks;
+
+                    Asteroid asteroid = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(((ItemAsteroidChip) stack.getItem()).getType(stack));
+
+                    if (asteroid != null) {
+
+                        List<StackEntry> stacks2 = asteroid.getHarvest(((ItemAsteroidChip) stack.getItem()).getUUID(stack));
+                        List<ItemStack> totalStacksList = new LinkedList<>();
+                        for (StackEntry entry : stacks2) {
+
+
+                            //TODO lower data should transform some output into cobblestone/stone
+                            if (compositionData / (float) maxData >= Math.random())
+                                entry.stack.setCount((int) (entry.stack.getCount() * 1.25f));
+
+                            //TODO lower data should reduce output
+                            if (massData / (float) maxData >= Math.random())
+                                entry.stack.setCount((int) (entry.stack.getCount() * 1.25f));
+
+                            //if(entry.stack.getMaxStackSize() < entry.stack.stackSize) {
+                            for (int i = 0; i < entry.stack.getCount() / entry.stack.getMaxStackSize(); i++) {
+                                ItemStack stack2 = new ItemStack(entry.stack.getItem(), entry.stack.getMaxStackSize(), entry.stack.getMetadata());
+                                totalStacksList.add(stack2);
+                            }
+                            //}
+                            int rem = entry.stack.getCount() % entry.stack.getMaxStackSize();
+                            if (rem > 0) {
+                                entry.stack.setCount(rem);
+                                totalStacksList.add(entry.stack);
+                            }
+                        }
+
+                        stacks = new ItemStack[totalStacksList.size()];
+                        totalStacksList.toArray(stacks);
+
+                        for (int g = 0; g < stacks.length; g++) {
+                            ItemStack remaining = stacks[g].copy();
+                            if (remaining.isEmpty()) continue;
+
+                            for (int i = 0; i < rocketStorage.getInventoryTiles().size() && !remaining.isEmpty(); i++) {
+                                TileEntity te = rocketStorage.getInventoryTiles().get(i);
+                                IItemHandler handler = getItemHandler(te);
+                                if (handler == null) continue;
+
+                                for (int slot = 0; slot < handler.getSlots() && !remaining.isEmpty(); slot++) {
+                                    remaining = handler.insertItem(slot, remaining, false);
+                                }
+                            }
+
+                            // Any leftover is intentionally voided
+                        }
+                    }
+                }
+            }
+        }
+
+        computer.setInventorySlotContents(0, ItemStack.EMPTY);
+        //Return asteroid ID chip
+        computer.setInventorySlotContents(0, new ItemStack(StellurgyItems.itemAsteroidChip));
+        EntityRocket rocket = new EntityRocket(DimensionManager.getWorld(launchDimension), rocketStorage, rocketStats, x, 999, z);
+
+        World world = DimensionManager.getWorld(launchDimension);
+        world.spawnEntity(rocket);
+        rocket.setInOrbit(true);
+        rocket.setInFlight(true);
+        rocket.motionY = -1.0;
+
+        for (HashedBlockPosition i : infrastructureCoords) {
+            TileEntity tile = world.getTileEntity(new BlockPos(i.x, i.y, i.z));
+            if (tile instanceof IInfrastructure) {
+                ((IInfrastructure) tile).unlinkMission();
+                rocket.linkInfrastructure(((IInfrastructure) tile));
+            }
+        }
+    }
+}

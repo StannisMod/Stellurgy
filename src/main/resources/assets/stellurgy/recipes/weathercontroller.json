@@ -1,0 +1,31 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+            "type": "forge:ore_dict",
+            "ore": "stickIron",
+            "count": 2
+        },
+        {
+            "type": "forge:ore_dict",
+            "ore": "stickTitanium"
+        },
+	{
+	    "item": "stellurgy:ic",
+	    "data": 2
+        },
+	{
+	    "item": "stellurgy:wafer",
+	    "data": 0,
+	    "count": 2
+        }
+    ],
+    "time": 1000,
+    "energy": 1,
+    "itemresults":
+    {
+	"item": "stellurgy:satelliteprimaryfunction",
+	"data": 6
+    }
+}

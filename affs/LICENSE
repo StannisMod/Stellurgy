@@ -2,9 +2,9 @@ Advanced Force Field System
 Copyright (C) 2025-2026 StannisMod
 
 This is the "Advanced Force Field System" (AFFS), the maintainer's own project,
-vendored into Advanced Rocketry as its shield subsystem. The files under this
+vendored into Stellurgy as its shield subsystem. The files under this
 directory retain their own copyright and licence, stated here; as part of the
-Advanced Rocketry distribution they are additionally covered by the project as a
+Stellurgy distribution they are additionally covered by the project as a
 whole (see the top-level LICENSE and COPYING).
 
 This program is free software: you can redistribute it and/or modify it under

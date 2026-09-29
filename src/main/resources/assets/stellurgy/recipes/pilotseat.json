@@ -1,0 +1,11 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients": [
+        { "item": "stellurgy:seat" },
+        { "item": "stellurgy:ic", "data": 0 }
+    ],
+    "result": {
+        "item": "stellurgy:pilotseat",
+        "count": 1
+    }
+}

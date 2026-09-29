@@ -9,7 +9,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.event.world.ExplosionEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import zmaster587.advancedRocketry.api.Constants;
+import dev.stannismod.stellurgy.api.Constants;
 
 import java.util.*;
 

@@ -283,8 +283,8 @@ public class PhysicsCalculations {
      * few seconds and a craft told to coast quietly stopped. The retention now scales with the
      * world's atmospheric density and is EXACTLY 1.0 in vacuum.</p>
      *
-     * <p><b>Why this file calls into Advanced Rocketry.</b> The decision — how much a medium of a
-     * given density keeps — lives on the AR side in {@code FreeFlightPhysics.ambientDragFactor},
+     * <p><b>Why this file calls into Stellurgy.</b> The decision — how much a medium of a
+     * given density keeps — lives on the Stellurgy side in {@code FreeFlightPhysics.ambientDragFactor},
      * because it is shared with the rocket tier and is unit-tested there without a server. The
      * alternatives were worse: a mixin against a tree we compile ourselves, or a registration seam,
      * which would be mutable static state something else depends on. The cost is one call to
@@ -292,9 +292,9 @@ public class PhysicsCalculations {
      * one line.</p>
      */
     private void applyAirDrag() {
-        double density = zmaster587.advancedRocketry.api.AtmosphereDensity
+        double density = dev.stannismod.stellurgy.api.AtmosphereDensity
                 .inAtmospheres(getParent().getWorld());
-        double drag = zmaster587.advancedRocketry.api.FreeFlightPhysics
+        double drag = dev.stannismod.stellurgy.api.FreeFlightPhysics
                 .ambientDragFactor(density, getPhysicsTimeDeltaPerPhysTick());
         if (drag >= 1.0) {
             return; // vacuum: nothing to take, and no float noise introduced by multiplying by 1

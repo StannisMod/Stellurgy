@@ -1,4 +1,4 @@
-Advanced Rocketry
+Stellurgy
 Copyright (C) 2024-2026 StannisMod and the Advanced Rocketry contributors
 
 This program is free software: you can redistribute it and/or modify it under
@@ -16,24 +16,24 @@ SPDX-License-Identifier: GPL-3.0-only WITH Linking-Exception
 LINKING EXCEPTION
 =================
 
-As a special exception, the copyright holders of Advanced Rocketry give you
-permission to link or combine independent modules with Advanced Rocketry solely
-through its public API — the `zmaster587.advancedRocketry.api` package and its
+As a special exception, the copyright holders of Stellurgy give you
+permission to link or combine independent modules with Stellurgy solely
+through its public API — the `dev.stannismod.stellurgy.api` package and its
 subpackages — to produce a combined work, and to convey the resulting combined
 work under terms of your choice, provided that:
 
-  (a) the independent module uses Advanced Rocketry only through that public
-      API, and is not otherwise derived from or based on Advanced Rocketry; and
+  (a) the independent module uses Stellurgy only through that public
+      API, and is not otherwise derived from or based on Stellurgy; and
 
-  (b) you comply with the GNU General Public License, version 3, for Advanced
-      Rocketry itself and for any modifications you make to it.
+  (b) you comply with the GNU General Public License, version 3, for Stellurgy
+      itself and for any modifications you make to it.
 
 An "independent module" is a module which is not derived from or based on
-Advanced Rocketry other than through the public API named above. Depending on,
+Stellurgy other than through the public API named above. Depending on,
 linking against, or calling that public API does not, by itself, make your work
-a work based on Advanced Rocketry for the purposes of this License.
+a work based on Stellurgy for the purposes of this License.
 
-If you modify Advanced Rocketry itself — any code outside the public API named
+If you modify Stellurgy itself — any code outside the public API named
 above — this exception does not extend to those modifications, which remain
 governed by the GNU General Public License, version 3.
 
@@ -57,6 +57,6 @@ their own licenses.
 
   * Valkyrien Skies, vendored under `valkyrienskies/`, is licensed under the
     Apache License, Version 2.0 — see `valkyrienskies/LICENSE`. Files changed
-    for Advanced Rocketry carry a notice to that effect. The Apache-2.0
+    for Stellurgy carry a notice to that effect. The Apache-2.0
     components retain their license; Apache-2.0 is compatible with version 3 of
     the GNU General Public License.

@@ -1,0 +1,41 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"bgb",
+	"lbf",
+	"ppp"
+    ],
+    "key":
+    {
+        "g":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+        "l":
+        {
+            "item": "stellurgy:ic",
+            "data": 5
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"f":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "fanSteel"
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateTin"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:fuelingstation",
+        "count": 1
+    }
+}

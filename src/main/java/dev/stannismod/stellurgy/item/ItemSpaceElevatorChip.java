@@ -1,0 +1,67 @@
+package dev.stannismod.stellurgy.item;
+
+import net.minecraft.client.util.ITooltipFlag;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.world.World;
+import dev.stannismod.stellurgy.util.DimensionBlockPosition;
+import dev.stannismod.stellurgy.util.NBTStorableListList;
+import zmaster587.libVulpes.LibVulpes;
+
+import javax.annotation.Nonnull;
+import java.util.List;
+
+public class ItemSpaceElevatorChip extends Item {
+
+    public ItemSpaceElevatorChip() {
+
+    }
+
+    @Override
+    public boolean isDamageable() {
+        return false;
+    }
+
+    public List<DimensionBlockPosition> getBlockPositions(@Nonnull ItemStack stack) {
+        NBTStorableListList list = new NBTStorableListList();
+
+        if (stack.hasTagCompound()) {
+            list.readFromNBT(stack.getTagCompound());
+        }
+
+        return list.getList();
+    }
+
+    public void setBlockPositions(@Nonnull ItemStack stack, List<DimensionBlockPosition> listToStore) {
+        NBTStorableListList list = new NBTStorableListList(listToStore);
+
+        if (stack.hasTagCompound()) {
+
+            if (listToStore.isEmpty())
+                // The list is written under "list" (NBTStorableListList), so the
+                // empty-clear must remove "list" — "positions" was a silent no-op.
+                stack.getTagCompound().removeTag("list");
+            else {
+                list.writeToNBT(stack.getTagCompound());
+            }
+        } else if (!listToStore.isEmpty()) {
+            NBTTagCompound nbt = new NBTTagCompound();
+            list.writeToNBT(nbt);
+
+            stack.setTagCompound(nbt);
+        }
+    }
+
+    @Override
+    public void addInformation(@Nonnull ItemStack stack, World player, List<String> list, ITooltipFlag bool) {
+
+        int numPos = getBlockPositions(stack).size();
+
+        if (numPos > 0)
+            list.add("Contains " + numPos + " entries");
+        else
+            list.add(LibVulpes.proxy.getLocalizedString("msg.empty"));
+    }
+
+}

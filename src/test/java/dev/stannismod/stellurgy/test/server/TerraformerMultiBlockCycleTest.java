@@ -1,0 +1,88 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.MachineInfo;
+import dev.stannismod.stellurgy.test.Reply;
+import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import org.junit.Test;
+
+import dev.stannismod.stellurgy.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * terraformer multiblock controller smoke.
+ *
+ * <p>The full atmosphere terraformer is a 17×17×3+ multiblock made almost
+ * entirely of libVulpes' {@code blockAdvStructureBlock} (whose registry name
+ * isn't part of Stellurgy's public API). Building the complete fixture from /stellurgytest
+ * primitives would need ~500 individual placements — wired through a future
+ * {@code /stellurgytest fixture terraformer} probe.</p>
+ *
+ * <p>This scenario locks down the production paths that DON'T require the
+ * complete multiblock:</p>
+ * <ol>
+ *   <li>{@code stellurgy:terraformer} controller block places + creates
+ *       the {@link dev.stannismod.stellurgy.tile.multiblock.TileAtmosphereTerraformer};</li>
+ *   <li>force-ticking the controller without a complete structure does NOT
+ *       crash (the production path checks {@code isComplete} before doing
+ *       any work);</li>
+ *   <li>{@code /stellurgytest terraforming info} reports a consistent
+ *       {@code proxyInitialized} state — the cross-cutting field every
+ *       terraforming production path depends on.</li>
+ * </ol>
+ *
+ * <p>The atmosphere mutation path (set-density &rarr; real density change with
+ * original preserved) is exercised by {@link TerraformingSmokeTest}; this
+ * scenario verifies the production controller doesn't blow up before the
+ * mutation gets to run.</p>
+ */
+public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
+
+    @Test
+    public void terraformerControllerSurvivesTickWithoutStructure() throws Exception {
+        int x = 2000, y = FixtureSite.OPEN_AIR_Y, z = 2000;
+
+        String place = String.join("\n", client().execute(
+                "stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:terraformer"));
+        assertTrue("terraformer place failed: " + place,
+                Reply.of(place).bool("placed"));
+
+        String info = String.join("\n", client().execute(
+                "stellurgytest machine info 0 " + x + " " + y + " " + z));
+        assertEquals("expected terraformer tile: " + info,
+                "TileAtmosphereTerraformer", MachineInfo.of(info).tileSimpleName());
+
+        // Try-complete on incomplete structure must report isComplete=false.
+        String tryComplete = String.join("\n", client().execute(
+                "stellurgytest machine try-complete 0 " + x + " " + y + " " + z));
+        assertTrue("incomplete terraformer should report isComplete=false: " + tryComplete,
+                (!Reply.of(tryComplete).bool("isComplete")));
+
+        // Force-tick — must not crash even with incomplete structure.
+        String tick = String.join("\n", client().execute(
+                "stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 60"));
+        assertTrue("force-tick errored: " + tick, Reply.of(tick).ok());
+        assertEquals("must tick all 60 iterations",
+                60, extractInt(tick, "ticked"));
+
+        // Tile must still resolve.
+        String postInfo = String.join("\n", client().execute(
+                "stellurgytest machine info 0 " + x + " " + y + " " + z));
+        assertEquals("tile must survive tick burst: " + postInfo,
+                "TileAtmosphereTerraformer", MachineInfo.of(postInfo).tileSimpleName());
+
+        // Terraforming info must keep reporting proxyInitialized — the
+        // cross-cutting field every gameplay path depends on. (Production:
+        // DimensionProperties.proxyInitialized governs whether the
+        // terraforming-helper has been built lazily.)
+        String terraInfo = String.join("\n", client().execute(
+                "stellurgytest terraforming info 0"));
+        assertTrue("terraforming info missing proxyInitialized: " + terraInfo,
+                Reply.of(terraInfo).has("proxyInitialized"));
+    }
+
+    private static int extractInt(String s, String field) {
+        return dev.stannismod.stellurgy.test.Reply.of(s).integer(field);
+    }
+}

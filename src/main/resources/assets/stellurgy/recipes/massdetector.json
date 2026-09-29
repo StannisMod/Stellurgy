@@ -1,0 +1,37 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"owo",
+        "rpr"
+    ],
+    "key":
+    {
+        "o":
+        {
+	    "item": "stellurgy:satelliteprimaryfunction",
+	    "data": 0
+        },
+        "w":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gemDilithium"
+        },
+        "p":
+        {
+	    "item": "stellurgy:ic",
+	    "data": 0
+        },
+        "r":
+        {
+	    "item": "stellurgy:wafer",
+	    "data": 0
+        }
+    },
+    "result":
+    {
+	"item": "stellurgy:satelliteprimaryfunction",
+	"data": 2,
+        "count": 1
+    }
+}

@@ -1,0 +1,21 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+        {
+	    "item": "libvulpes:structuremachine"
+        },
+        {
+	    "item": "minecraft:compass"
+        },
+	{
+	    "item": "stellurgy:misc",
+	    "data": 0
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:orientationcontroller",
+        "count": 1
+    }
+}

@@ -1,0 +1,39 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"cpc",
+	"lbl",
+	"coc"
+    ],
+    "key":
+    {
+	"c":
+        {
+            "item": "stellurgy:ic",
+            "data": 1
+        },
+	"o":
+        {
+            "item": "stellurgy:satelliteprimaryfunction",
+            "data": 1
+        },
+	"l":
+        {
+            "item": "minecraft:lever"
+        },
+	"b":
+        {
+            "item": "stellurgy:guidancecomputer"
+        },
+	"p":
+        {
+            "item": "minecraft:stone_button"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:planetholoselector",
+        "count": 1
+    }
+}
