@@ -318,6 +318,11 @@ public class ZoneScaleTest {
      * be addressed into the MOON's cell. On a lattice sized for nothing that is cell 0 — the planet's
      * own — which is "a moon shares its parent's name" returning through the crossing, the one door
      * the zone design has never been checked at.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `ZoneScale.addressOnLattice:233` made to ignore the width it
+     * is handed and use the undivided one (7 397 280), this fails with *"a craft standing exactly
+     * where the moon stands is named by cell 0_0_0.0_0_0 while the moon itself is named by
+     * 0_0_0.1_0_0"* — the defect verbatim.</p>
      */
     @Test
     public void aCraftIsReAddressedOnTheLatticeItsZonesBodiesAreNamedIn() {

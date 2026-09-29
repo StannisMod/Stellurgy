@@ -68,6 +68,13 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * against the 1 849 294 this fixture's Luna is named on). The craft arrived in the cell holding
      * EARTH, 1.5M blocks from where it was, and the moon it had just left was not among that cell's
      * bodies — it could not descend to it and its sky did not draw it.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, TWICE, one inversion per assertion, each leaving the other two
+     * scenarios green. With `SpaceSubsystem.latticeOf:606` made to ignore the recorded width, the
+     * naming verdict fails *"expected:&lt;1849294&gt; but was:&lt;7397176&gt;"*. With
+     * `SpaceSubsystem.addressIn:552-554` made to hand back the lattice address unchanged, the
+     * continuity verdict fails *"re-addressing must not displace the craft expected:&lt;0.0&gt; but
+     * was:&lt;321993.763009472&gt;"*.</p>
      */
     @Test
     public void aCraftLeavingAMoonsSphereIsNamedByTheMoonsOwnCell() {
@@ -105,7 +112,7 @@ public class ZoneCrossingAimsAtTheRightCellTest {
 
         // ...and it did not move. The name changed; the craft did not.
         assertEquals("re-addressing must not displace the craft", 0d,
-                absoluteOf(home.reg, named).distanceTo(absoluteOf(home.reg, craft)), 1d);
+                absoluteOf(home.reg, named).distanceTo(absoluteOf(home.reg, craft)), CONTINUITY_SLACK);
     }
 
     /**
@@ -114,6 +121,11 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * <p>The inward half of the same seam, and it is a different code path: outward re-addresses
      * against the GRANDPARENT, inward against a child the loop has just found. The two shared the
      * lattice defect and would have to share its fix.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `CellSeam.hasEnteredZone:141` made to answer {@code false}
+     * always, this fails with *"a craft inside a child's sphere must be taken into that child's
+     * zone"* while the outward and hysteresis scenarios stay green — so the red is this path's and
+     * not the seam's in general.</p>
      */
     @Test
     public void aCraftEnteringAMoonsSphereLandsInTheMoonsOwnZone() {
@@ -131,7 +143,7 @@ public class ZoneCrossingAimsAtTheRightCellTest {
         assertEquals("...whose lattice is the child's own", home.luna.name().cellKey(),
                 named.zone());
         assertEquals("re-addressing inward must not displace the craft either", 0d,
-                absoluteOf(home.reg, named).distanceTo(absoluteOf(home.reg, craft)), 1d);
+                absoluteOf(home.reg, named).distanceTo(absoluteOf(home.reg, craft)), CONTINUITY_SLACK);
     }
 
     /**
@@ -140,6 +152,12 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      *
      * <p>The CONTROL for both tests above: without it, a re-address that fired on every tick would
      * satisfy them exactly as well as one that fires when a boundary is crossed.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `CellSeam.hasLeftZone:128` made to fire for any body with a
+     * sphere — the exact "re-addresses on every tick" defect this control exists to exclude — it
+     * fails with *"must be left where it is expected null, but was: GalacticCoord[zone=19_0_0@1849294,
+     * sector=(1,0,0) …]"*, and the other two scenarios stay green ON that same inversion, which is
+     * precisely why a control is needed: they cannot tell the difference.</p>
      */
     @Test
     public void aCraftWellInsideItsOwnZoneIsLeftAlone() {
@@ -155,6 +173,20 @@ public class ZoneCrossingAimsAtTheRightCellTest {
 
     /** The tick everything is evaluated at. Not zero: a fixture that only works at rest hides a frame. */
     private static final long TICK = 5_000L;
+
+    /**
+     * How much displacement a re-address may show before the claim "it did not move" is a lie, in
+     * blocks — <b>and it is the rounding, not a budget</b>.
+     *
+     * <p>The address is integer blocks and the comparison runs through two frame origins, so a
+     * faithful re-address can land one block out by rounding alone; nothing smaller is measurable
+     * here. <b>The number it has to separate is measured, not guessed</b>: the defect this assertion
+     * exists to catch displaces the craft by <b>321 993.76</b> blocks (see the red-witness on the
+     * outward scenario), which is five orders of magnitude above this. There is no value between the
+     * two that would make the verdict go either way, which is what makes the slack safe to state as
+     * one block rather than argued down to zero.</p>
+     */
+    private static final double CONTINUITY_SLACK = 1d;
 
     private static final class Fixture {
         final UniverseRegistry reg;
