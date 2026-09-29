@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import org.junit.Test;
 import dev.stannismod.stellurgy.util.StationLandingLocation;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

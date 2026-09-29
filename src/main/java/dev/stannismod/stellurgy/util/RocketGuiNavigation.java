@@ -10,11 +10,11 @@ import net.minecraft.world.WorldServer;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
 import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.TextureResources;
-import zmaster587.libVulpes.inventory.modules.IButtonInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 
 import java.util.HashMap;
 import java.util.List;

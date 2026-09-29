@@ -14,7 +14,7 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.client.registry.IRenderFactory;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.entity.EntityLaserNode;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 import javax.annotation.Nullable;
 

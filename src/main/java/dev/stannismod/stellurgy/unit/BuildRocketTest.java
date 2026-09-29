@@ -16,8 +16,8 @@ import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
 import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
-import zmaster587.libVulpes.api.LibVulpesBlocks;
-import zmaster587.libVulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 
 import java.util.List;
 

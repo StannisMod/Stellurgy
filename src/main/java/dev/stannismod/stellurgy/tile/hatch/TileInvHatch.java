@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.tile.hatch;
 
-import zmaster587.libVulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
 
 public class TileInvHatch extends TileInventoryHatch {
 

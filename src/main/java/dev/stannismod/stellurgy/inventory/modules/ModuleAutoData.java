@@ -10,8 +10,8 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.util.IDataInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.util.IconResource;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import java.util.LinkedList;
 import java.util.List;

@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.dimension;
 
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class watersourcelocked{
     public HashedBlockPosition pos;

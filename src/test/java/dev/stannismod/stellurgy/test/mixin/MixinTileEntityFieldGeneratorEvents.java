@@ -9,9 +9,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import com.github.stannismod.affs.te.TileEntityFieldGenerator;
-import com.github.stannismod.affs.world.FieldFrame;
-import com.github.stannismod.affs.world.ShipFieldFrame;
+import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
+import dev.stannismod.stellurgy.affs.world.FieldFrame;
+import dev.stannismod.stellurgy.affs.world.ShipFieldFrame;
 
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 

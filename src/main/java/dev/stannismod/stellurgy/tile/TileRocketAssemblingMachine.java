@@ -32,21 +32,21 @@ import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine.ErrorCodes;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
 import dev.stannismod.stellurgy.util.StorageChunk;
 import dev.stannismod.stellurgy.util.WeightEngine;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.block.RotatableBlock;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
-import zmaster587.libVulpes.interfaces.ILinkableTile;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.items.ItemLinker;
-import zmaster587.libVulpes.network.PacketEntity;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.IMultiblock;
-import zmaster587.libVulpes.tile.TileEntityRFConsumer;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.INetworkMachine;
-import zmaster587.libVulpes.util.IconResource;
-import zmaster587.libVulpes.util.ZUtils;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
+import dev.stannismod.stellurgy.libvulpes.tile.TileEntityRFConsumer;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -1210,10 +1210,10 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         modules.add(new ModuleProgress(149, 90, 2, verticalProgressBar, this));
 
 
-        modules.add(new ModuleButton(5, 94, 0, LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.scan"), this, zmaster587.libVulpes.inventory.TextureResources.buttonScan));
+        modules.add(new ModuleButton(5, 94, 0, LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.scan"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonScan));
 
         ModuleButton buttonBuild;
-        modules.add(buttonBuild = new ModuleButton(5, 120, 1, LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.build"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild));
+        modules.add(buttonBuild = new ModuleButton(5, 120, 1, LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.build"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild));
         buttonBuild.setColor(0xFFFF2222);
 
         modules.add(thrustText = new ModuleText(8, 15, "", 0xFF22FF22));

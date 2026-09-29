@@ -7,7 +7,7 @@ import net.minecraft.network.PacketBuffer;
 
 import dev.stannismod.stellurgy.space.SpaceClockSync;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
-import zmaster587.libVulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
  * Server&rarr;client baseline for the space clock — one {@code long}, the value

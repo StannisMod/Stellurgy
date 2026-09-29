@@ -9,7 +9,7 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 import org.lwjgl.opengl.GL11;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class FxLaserHeat extends Particle {
 

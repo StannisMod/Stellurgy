@@ -18,7 +18,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
-import zmaster587.libVulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 
 import java.util.List;
 

@@ -8,8 +8,8 @@ import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.integration.jei.MachineRecipe;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
 
 import java.util.HashSet;
 import java.util.List;

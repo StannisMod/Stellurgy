@@ -39,19 +39,19 @@ import dev.stannismod.stellurgy.universe.UniverseRegistry;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.util.Asteroid.StackEntry;
 import dev.stannismod.stellurgy.util.IDataInventory;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.LibVulpesBlocks;
-import zmaster587.libVulpes.block.BlockMeta;
-import zmaster587.libVulpes.block.multiblock.BlockMultiblockMachine;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
-import zmaster587.libVulpes.inventory.GuiHandler;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
-import zmaster587.libVulpes.tile.multiblock.TilePlaceholder;
-import zmaster587.libVulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -207,7 +207,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         final Object[][][] struct = getStructure();
         if (struct == null || world == null) return;
 
-        final zmaster587.libVulpes.util.Vector3F<Integer> off = getControllerOffset(struct);
+        final dev.stannismod.stellurgy.libvulpes.util.Vector3F<Integer> off = getControllerOffset(struct);
         final EnumFacing front = getFrontDirection(world.getBlockState(pos));
 
         for (int y = 0; y < struct.length; y++) {
@@ -223,8 +223,8 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                     BlockPos bp = new BlockPos(gx, gy, gz);
 
                     TileEntity te = world.getTileEntity(bp);
-                    if (te instanceof zmaster587.libVulpes.tile.multiblock.TilePlaceholder) {
-                        te = ((zmaster587.libVulpes.tile.multiblock.TilePlaceholder) te).getReplacedTileEntity();
+                    if (te instanceof dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder) {
+                        te = ((dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder) te).getReplacedTileEntity();
                     }
 
                     if (te instanceof dev.stannismod.stellurgy.tile.hatch.TileDataBus) {
@@ -552,7 +552,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             modules.add(new ModuleTexturedSlotArray(5, 120, this, 1, 2, TextureResources.idChip));
             modules.add(new ModuleOutputSlotArray(45, 120, this, 2, 3));
 
-            ModuleButton scanButton = new ModuleButton(100, 120, 2, LibVulpes.proxy.getLocalizedString("msg.observetory.scan.button"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, LibVulpes.proxy.getLocalizedString("msg.observetory.scan.tooltip"), 64, 18);
+            ModuleButton scanButton = new ModuleButton(100, 120, 2, LibVulpes.proxy.getLocalizedString("msg.observetory.scan.button"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, LibVulpes.proxy.getLocalizedString("msg.observetory.scan.tooltip"), 64, 18);
             scanButton.setColor(extractData(dataConsumedPerRefresh, DataType.DISTANCE, EnumFacing.DOWN, false) == dataConsumedPerRefresh ? 0x00ff00 : 0xff0000);
             modules.add(scanButton);
 
@@ -560,7 +560,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             ModuleButton processBtn = new ModuleButton(
                 25, 120, 1, "",
                 this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonNull,
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonNull,
                 LibVulpes.proxy.getLocalizedString("msg.observetory.text.processdiscovery"),
                 17, 17
             );
@@ -723,24 +723,24 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.direction")
                             + " " + SCAN_DIRECTION_NAMES[scanDirectionIndex()], 0x2d2d2d, false));
             modules.add(new ModuleButton(120, 42, 3, SCAN_DIRECTION_NAMES[scanDirectionIndex()], this,
-                    zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                    dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.direction.tooltip"), 40, 18));
 
             modules.add(new ModuleText(8, 70,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.distance")
                             + " " + scanDistance + aimInLightYears(), 0x2d2d2d, false));
             modules.add(new ModuleButton(100, 66, 4, "-", this,
-                    zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                    dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.distance.tooltip"), 18, 18));
             modules.add(new ModuleButton(142, 66, 5, "+", this,
-                    zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                    dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.distance.tooltip"), 18, 18));
 
             modules.add(new ModuleProgress(8, 94, PROGRESS_SCAN, new ProgressBarImage(217, 0, 17, 17,
                     234, 0, EnumFacing.DOWN, TextureResources.progressBars), this));
             ModuleButton scanRegion = new ModuleButton(100, 94, 6,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.region"), this,
-                    zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                    dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.region.tooltip"), 64, 18);
             scanRegion.setColor(activeScan == null ? 0x00ff00 : 0xffff00);
             modules.add(scanRegion);
@@ -748,19 +748,19 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             if (activeScan != null) {
                 modules.add(new ModuleButton(166, 94, 7,
                         LibVulpes.proxy.getLocalizedString("msg.observetory.scan.abort"), this,
-                        zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                        dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                         LibVulpes.proxy.getLocalizedString("msg.observetory.scan.abort.tooltip"), 40, 18));
             }
             // Reading a crystal INTO this world, the reverse of the survey that fills one. It costs
             // no power and no data: the knowledge already exists, it is being put down here.
             modules.add(new ModuleButton(100, 142, 10,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.upload.button"), this,
-                    zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                    dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.upload.tooltip"), 64, 18));
             modules.add(new ModuleButton(166, 42, 8,
                     LibVulpes.proxy.getLocalizedString(passive
                             ? "msg.observetory.scan.mode.passive" : "msg.observetory.scan.mode.active"),
-                    this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                    this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.mode.tooltip"), 40, 18));
 
             // What a detection is followed up with. An operational choice with a cost, so it is a
@@ -769,7 +769,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             modules.add(new ModuleButton(166, 66, 9,
                     LibVulpes.proxy.getLocalizedString(characteriseWholeSystem
                             ? "msg.observetory.scan.detail.full" : "msg.observetory.scan.detail.coords"),
-                    this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                    this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                     LibVulpes.proxy.getLocalizedString("msg.observetory.scan.detail.tooltip"), 40, 18));
 
             modules.add(new ModuleText(8, 116, scanStatusText(), 0x2d2d2d, false));
@@ -779,7 +779,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
 
         } else if (tabModule.getTab() == 0) {
             modules.add(new ModulePower(18, 20, getBatteries()));
-            modules.add(toggleSwitch = new ModuleToggleSwitch(160, 5, 0, "", this, zmaster587.libVulpes.inventory.TextureResources.buttonToggleImage, 11, 26, getMachineEnabled()));
+            modules.add(toggleSwitch = new ModuleToggleSwitch(160, 5, 0, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonToggleImage, 11, 26, getMachineEnabled()));
 
             List<DataStorage> distanceStorage = new LinkedList<>();
             List<DataStorage> compositionStorage = new LinkedList<>();

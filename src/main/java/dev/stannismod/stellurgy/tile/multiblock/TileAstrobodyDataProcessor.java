@@ -22,18 +22,18 @@ import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.inventory.modules.ModuleData;
 import dev.stannismod.stellurgy.item.ItemAsteroidChip;
 import dev.stannismod.stellurgy.tile.hatch.TileDataBus;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.block.BlockMeta;
-import zmaster587.libVulpes.block.multiblock.BlockMultiblockMachine;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileInputHatch;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileInventoryHatch;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileOutputHatch;
-import zmaster587.libVulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInputHatch;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileOutputHatch;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
 import java.util.Arrays;
@@ -414,9 +414,9 @@ public class TileAstrobodyDataProcessor extends TileMultiPowerConsumer implement
         modules.add(new ModuleText(15, 76, LibVulpes.proxy.getLocalizedString("msg.abdp.research"), 0x404040));
 
 
-        modules.add(new ModuleToggleSwitch(15, 86, 4, "", this, zmaster587.libVulpes.inventory.TextureResources.buttonToggleImage, LibVulpes.proxy.getLocalizedString("msg.abdp.compositionresearch"), 11, 26, researchingAtmosphere));
-        modules.add(new ModuleToggleSwitch(65, 86, 5, "", this, zmaster587.libVulpes.inventory.TextureResources.buttonToggleImage, LibVulpes.proxy.getLocalizedString("msg.abdp.distanceresearch"), 11, 26, researchingDistance));
-        modules.add(new ModuleToggleSwitch(125, 86, 6, "", this, zmaster587.libVulpes.inventory.TextureResources.buttonToggleImage, LibVulpes.proxy.getLocalizedString("msg.abdp.massresearch"), 11, 26, researchingMass));
+        modules.add(new ModuleToggleSwitch(15, 86, 4, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonToggleImage, LibVulpes.proxy.getLocalizedString("msg.abdp.compositionresearch"), 11, 26, researchingAtmosphere));
+        modules.add(new ModuleToggleSwitch(65, 86, 5, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonToggleImage, LibVulpes.proxy.getLocalizedString("msg.abdp.distanceresearch"), 11, 26, researchingDistance));
+        modules.add(new ModuleToggleSwitch(125, 86, 6, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonToggleImage, LibVulpes.proxy.getLocalizedString("msg.abdp.massresearch"), 11, 26, researchingMass));
 
         //Research indicators
         modules.add(new ModuleProgress(26, 86, 1, TextureResources.progressScience, this));

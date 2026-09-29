@@ -31,10 +31,10 @@ import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.event.RocketEventHandler;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.IArmorComponent;
-import zmaster587.libVulpes.client.ResourceIcon;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

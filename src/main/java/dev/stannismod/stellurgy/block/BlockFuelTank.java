@@ -13,7 +13,7 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.IFuelTank;
 import dev.stannismod.stellurgy.api.IRocketEngine;
-import zmaster587.libVulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

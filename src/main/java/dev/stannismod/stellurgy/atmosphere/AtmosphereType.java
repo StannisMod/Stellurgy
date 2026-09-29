@@ -11,13 +11,13 @@ public class AtmosphereType implements IAtmosphere {
     /** Packet-safe send for atmosphere effects: FakePlayers / headless test
      *  players have no network connection — a raw sendToPlayer would NPE in
      *  the netty pipeline and crash the server tick loop. */
-    public static void sendToRealPlayer(zmaster587.libVulpes.network.BasePacket packet,
+    public static void sendToRealPlayer(dev.stannismod.stellurgy.libvulpes.network.BasePacket packet,
                                         net.minecraft.entity.player.EntityPlayer player) {
         if (player instanceof net.minecraft.entity.player.EntityPlayerMP
                 && ((net.minecraft.entity.player.EntityPlayerMP) player).connection == null) {
             return;
         }
-        zmaster587.libVulpes.network.PacketHandler.sendToPlayer(packet, player);
+        dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayer(packet, player);
     }
 
 

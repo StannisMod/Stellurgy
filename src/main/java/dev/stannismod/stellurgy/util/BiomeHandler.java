@@ -13,8 +13,8 @@ import net.minecraftforge.common.BiomeDictionary;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.network.PacketBiomeIDChange;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.util.Random;
 

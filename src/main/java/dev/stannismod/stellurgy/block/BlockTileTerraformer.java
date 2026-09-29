@@ -30,8 +30,8 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.tile.satellite.TileTerraformingTerminal;
 import dev.stannismod.stellurgy.util.TerraformingHelper;
-import zmaster587.libVulpes.block.RotatableBlock;
-import zmaster587.libVulpes.util.IAdjBlockUpdate;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
 
 import java.util.List;
 import javax.annotation.Nonnull;

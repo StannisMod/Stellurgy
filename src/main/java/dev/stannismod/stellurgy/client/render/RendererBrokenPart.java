@@ -11,7 +11,7 @@ import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.client.ClientProxy;
 import dev.stannismod.stellurgy.tile.TileBrokenPart;
 import dev.stannismod.stellurgy.util.IBrokenPartBlock;
-import zmaster587.libVulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 
 public class RendererBrokenPart extends TileEntitySpecialRenderer<TileBrokenPart> {
 

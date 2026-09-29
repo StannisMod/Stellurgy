@@ -7,10 +7,10 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
-import zmaster587.libVulpes.api.IArmorComponent;
-import zmaster587.libVulpes.api.IModularArmor;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

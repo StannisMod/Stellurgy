@@ -11,7 +11,7 @@ import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.world.util.WorldDummy;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileFluidHatch;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

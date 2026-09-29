@@ -24,8 +24,8 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.client.TooltipInjector;
-import zmaster587.libVulpes.interfaces.IRecipe;
-import zmaster587.libVulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

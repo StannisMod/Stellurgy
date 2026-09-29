@@ -13,7 +13,7 @@ import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.ISatelliteIdItem;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
-import zmaster587.libVulpes.util.UniversalBattery;
+import dev.stannismod.stellurgy.libvulpes.util.UniversalBattery;
 
 import javax.annotation.Nonnull;
 

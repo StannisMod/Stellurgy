@@ -8,8 +8,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import dev.stannismod.stellurgy.Stellurgy;
-import zmaster587.libVulpes.network.BasePacket;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class PacketBiomeIDChange extends BasePacket {
 

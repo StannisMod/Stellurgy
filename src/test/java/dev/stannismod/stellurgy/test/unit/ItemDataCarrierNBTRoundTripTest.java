@@ -9,7 +9,7 @@ import dev.stannismod.stellurgy.item.ItemMultiData;
 import dev.stannismod.stellurgy.item.ItemSpaceElevatorChip;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.DimensionBlockPosition;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.util.ArrayList;
 import java.util.Arrays;

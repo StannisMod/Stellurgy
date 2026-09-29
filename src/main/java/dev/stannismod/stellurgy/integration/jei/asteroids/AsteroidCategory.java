@@ -11,7 +11,7 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 public class AsteroidCategory implements IRecipeCategory<AsteroidWrapper> {
 

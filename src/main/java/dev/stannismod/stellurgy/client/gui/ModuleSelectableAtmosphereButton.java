@@ -7,7 +7,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.IAtmosphere;
 import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
-import zmaster587.libVulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 
 @SideOnly(Side.CLIENT)
 public class ModuleSelectableAtmosphereButton extends ModuleButton {

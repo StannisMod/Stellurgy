@@ -5,7 +5,7 @@ import org.junit.Test;
 import sun.misc.Unsafe;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.tile.infrastructure.TileRocketLoader;
-import zmaster587.libVulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;

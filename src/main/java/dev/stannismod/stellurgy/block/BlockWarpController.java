@@ -13,7 +13,7 @@ import dev.stannismod.stellurgy.api.stations.ISpaceObject;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import zmaster587.libVulpes.block.BlockTile;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 import java.util.List;
 import javax.annotation.Nonnull;

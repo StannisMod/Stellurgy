@@ -14,8 +14,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.RayTraceResult;
 import org.lwjgl.opengl.GL11;
-import zmaster587.libVulpes.render.RenderHelper;
-import zmaster587.libVulpes.tile.multiblock.TilePlaceholder;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder;
 
 public class RendererPhantomBlock extends TileEntitySpecialRenderer {
 

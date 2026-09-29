@@ -16,7 +16,7 @@ import dev.stannismod.stellurgy.api.satellite.IDataHandler;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.util.IDataInventory;
-import zmaster587.libVulpes.util.ZUtils;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 

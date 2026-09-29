@@ -14,7 +14,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 
 import dev.stannismod.stellurgy.navigation.CrystalEntry;
 import dev.stannismod.stellurgy.navigation.CrystalMemory;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 /**
  * A memory crystal — the physical form of a ship's galactic knowledge.

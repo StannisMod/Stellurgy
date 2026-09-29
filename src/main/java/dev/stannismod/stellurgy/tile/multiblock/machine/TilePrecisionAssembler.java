@@ -12,13 +12,13 @@ import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.util.AudioRegistry;
-import zmaster587.libVulpes.api.LibVulpesBlocks;
-import zmaster587.libVulpes.block.BlockMeta;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
-import zmaster587.libVulpes.util.IconResource;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import java.util.List;
 

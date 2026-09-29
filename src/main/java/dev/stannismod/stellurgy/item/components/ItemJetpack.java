@@ -26,12 +26,12 @@ import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.event.RocketEventHandler;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.api.IArmorComponent;
-import zmaster587.libVulpes.api.IJetPack;
-import zmaster587.libVulpes.api.IModularArmor;
-import zmaster587.libVulpes.client.ResourceIcon;
-import zmaster587.libVulpes.util.FluidUtils;
-import zmaster587.libVulpes.util.InputSyncHandler;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
+import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

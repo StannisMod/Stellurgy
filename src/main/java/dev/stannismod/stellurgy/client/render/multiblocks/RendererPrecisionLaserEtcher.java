@@ -7,8 +7,8 @@ import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import zmaster587.libVulpes.block.RotatableBlock;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 public class RendererPrecisionLaserEtcher extends TileEntitySpecialRenderer {
     WavefrontObject model;

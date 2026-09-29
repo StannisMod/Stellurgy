@@ -15,7 +15,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.PlanetInfoField;
-import zmaster587.libVulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
  * The navigation computer's <b>redacted</b> answer about one body: server&rarr;client, carrying only the

@@ -10,7 +10,7 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.util.ResourceLocation;
 import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 public class SatelliteBuilderCategory implements IRecipeCategory<SatelliteBuilderWrapper> {
 

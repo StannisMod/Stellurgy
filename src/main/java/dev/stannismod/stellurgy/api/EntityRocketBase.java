@@ -6,7 +6,7 @@ import net.minecraftforge.common.MinecraftForge;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

@@ -9,7 +9,7 @@ import net.minecraftforge.fml.client.registry.IRenderFactory;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.entity.EntityUIButton;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RenderButtonUIEntity extends Render<EntityUIButton> implements IRenderFactory<EntityUIButton> {
 

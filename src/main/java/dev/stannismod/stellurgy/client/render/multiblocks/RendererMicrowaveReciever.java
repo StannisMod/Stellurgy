@@ -13,7 +13,7 @@ import net.minecraft.util.math.MathHelper;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.tile.multiblock.energy.TileMicrowaveReciever;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RendererMicrowaveReciever extends TileEntitySpecialRenderer {
 

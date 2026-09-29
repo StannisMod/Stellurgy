@@ -7,7 +7,7 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.fluids.FluidUtil;
-import zmaster587.libVulpes.block.BlockTile;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 public class BlockPump extends BlockTile {
 

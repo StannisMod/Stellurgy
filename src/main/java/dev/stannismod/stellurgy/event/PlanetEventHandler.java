@@ -66,10 +66,10 @@ import dev.stannismod.stellurgy.util.SpawnListEntryNBT;
 import dev.stannismod.stellurgy.util.TransitionEntity;
 import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import dev.stannismod.stellurgy.world.util.BasicTeleporter;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.IModularArmor;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.*;

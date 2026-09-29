@@ -8,8 +8,8 @@ import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.client.render.RenderLaser;
-import zmaster587.libVulpes.block.RotatableBlock;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
 
 public class RenderBeacon extends TileEntitySpecialRenderer {
 

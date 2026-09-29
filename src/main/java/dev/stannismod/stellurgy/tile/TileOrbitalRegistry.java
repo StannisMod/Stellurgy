@@ -26,16 +26,16 @@ import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.util.StationLandingLocation;
 
-import zmaster587.libVulpes.client.util.ProgressBarImage;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.gui.CommonResources;
-import zmaster587.libVulpes.inventory.GuiHandler;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
-import zmaster587.libVulpes.util.EmbeddedInventory;
-import zmaster587.libVulpes.util.IconResource;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -203,7 +203,7 @@ public class TileOrbitalRegistry extends TileMultiPowerConsumer
     @Override
     public boolean completeStructure(net.minecraft.block.state.IBlockState state) {
         boolean result = super.completeStructure(state);
-        ((zmaster587.libVulpes.block.multiblock.BlockMultiblockMachine)
+        ((dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine)
                 world.getBlockState(pos).getBlock())
                 .setBlockState(world, world.getBlockState(pos), pos, result);
         return result;
@@ -739,7 +739,7 @@ public class TileOrbitalRegistry extends TileMultiPowerConsumer
                 GUI_BUTTON_SCAN,
                 LibVulpes.proxy.getLocalizedString("msg.observetory.scan.button"),
                 this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                 LibVulpes.proxy.getLocalizedString("msg.orbitalregistry.scan.tooltip"),
                 64, 18
         );
@@ -763,7 +763,7 @@ public class TileOrbitalRegistry extends TileMultiPowerConsumer
                 GUI_BUTTON_WRITE,
                 "",
                 this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonNull,
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonNull,
                 LibVulpes.proxy.getLocalizedString("msg.orbitalregistry.writechip"),
                 17, 17
         );
@@ -1320,7 +1320,7 @@ public class TileOrbitalRegistry extends TileMultiPowerConsumer
         if (world != null && world.isRemote
         && pendingReopenAfterScan
         && prevNonce != this.scanNonce
-        && net.minecraft.client.Minecraft.getMinecraft().currentScreen instanceof zmaster587.libVulpes.inventory.GuiModular) {
+        && net.minecraft.client.Minecraft.getMinecraft().currentScreen instanceof dev.stannismod.stellurgy.libvulpes.inventory.GuiModular) {
             pendingReopenAfterScan = false;
             PacketHandler.sendToServer(new PacketMachine(this, NET_REQUEST_REOPEN));
         }

@@ -12,7 +12,7 @@ import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.item.ItemOreScanner;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;

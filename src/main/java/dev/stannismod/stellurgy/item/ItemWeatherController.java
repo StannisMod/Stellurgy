@@ -18,13 +18,13 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.network.PacketSatellite;
 import dev.stannismod.stellurgy.satellite.SatelliteBiomeChanger;
 import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.GuiHandler;
-import zmaster587.libVulpes.inventory.TextureResources;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.INetworkItem;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketItemModifcation;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.INetworkItem;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketItemModifcation;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
@@ -52,7 +52,7 @@ public class ItemWeatherController extends ItemSatelliteIdentificationChip imple
         list.add(new ModuleButton(32, 16 + 24 * (1), 1, "dry", this, TextureResources.buttonBuild));
         list.add(new ModuleButton(32, 16 + 24 * (2), 0, "rain", this, TextureResources.buttonBuild));
         list.add(new ModuleButton(32, 16 + 24 * (3), 2, "flood", this, TextureResources.buttonBuild));
-        list.add(new ModuleButton(90, 19+24*3, 3, "", this, zmaster587.libVulpes.inventory.TextureResources.buttonLeft, 5, 8));
+        list.add(new ModuleButton(90, 19+24*3, 3, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonLeft, 5, 8));
         if (sat != null)
             list.add(new ModuleText(100, 19+24*3, "y="+sat.getFloodlevel(),0x2d2d2d));
         list.add(new ModuleButton(130, 19+24*3, 4, "", this, TextureResources.buttonRight, 5, 8));

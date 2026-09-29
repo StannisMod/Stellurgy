@@ -90,8 +90,8 @@ public abstract class MixinKeyBindingsEvents {
 
     @Inject(method = "handleShipPilotInput",
             at = @At(value = "INVOKE",
-                    target = "Lzmaster587/libVulpes/network/PacketHandler;"
-                            + "sendToServer(Lzmaster587/libVulpes/network/BasePacket;)V"))
+                    target = "Ldev/stannismod/stellurgy/libvulpes/network/PacketHandler;"
+                            + "sendToServer(Ldev/stannismod/stellurgy/libvulpes/network/BasePacket;)V"))
     // CallbackInfoReturnable even though this sits mid-method: the target returns a boolean.
     //
     // Named `...SentEvent`, NOT `stellurgyTest$inputSent`: MixinKeyBindingsSeatGate declares a handler of

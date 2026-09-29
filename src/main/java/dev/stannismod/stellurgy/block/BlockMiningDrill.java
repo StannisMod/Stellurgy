@@ -14,13 +14,13 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.IMiningDrill;
 import dev.stannismod.stellurgy.client.TooltipInjector;
-import zmaster587.libVulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 
 public class BlockMiningDrill extends BlockFullyRotatable implements IMiningDrill {
 
     public BlockMiningDrill() {
         super(Material.IRON);
-        //super(TileDrill.class, zmaster587.libVulpes.inventory.GuiHandler.guiId.MODULAR.ordinal());
+        //super(TileDrill.class, dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler.guiId.MODULAR.ordinal());
     }
 
     @Override

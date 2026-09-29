@@ -23,7 +23,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.util.AudioRegistry;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

@@ -94,7 +94,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      */
     private static final int PASS_TICKS = 3600;
 
-    private static final String GUI_MODULAR = "zmaster587.libVulpes.inventory.GuiModular";
+    private static final String GUI_MODULAR = "dev.stannismod.stellurgy.libvulpes.inventory.GuiModular";
     private static final String GUI_CHEST = "net.minecraft.client.gui.inventory.GuiChest";
     private static final String CHIP = "stellurgy:planetidchip";
 

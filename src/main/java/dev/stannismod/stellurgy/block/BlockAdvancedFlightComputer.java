@@ -11,7 +11,7 @@ import dev.stannismod.stellurgy.entity.EntityDummy;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import dev.stannismod.stellurgy.util.StorageChunk;
-import zmaster587.libVulpes.block.BlockTile;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 /**
  * The Advanced Flight Computer's block. A plain {@link BlockTile} except for destruction: the

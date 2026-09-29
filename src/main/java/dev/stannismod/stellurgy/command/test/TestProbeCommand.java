@@ -321,9 +321,9 @@ public class TestProbeCommand extends CommandBase {
             info.put("posX", x);
             info.put("posY", y);
             info.put("posZ", z);
-            if (tile instanceof com.github.stannismod.affs.te.TileEntityFieldGenerator) {
-                com.github.stannismod.affs.te.TileEntityFieldGenerator emitter =
-                        (com.github.stannismod.affs.te.TileEntityFieldGenerator) tile;
+            if (tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator) {
+                dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator emitter =
+                        (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator) tile;
                 info.put("kind", "emitter");
                 info.put("powered", emitter.isFieldPowered());
                 info.put("shieldStored", emitter.getEnergyStored());
@@ -349,33 +349,33 @@ public class TestProbeCommand extends CommandBase {
                 info.put("priority", emitter.getShieldPriority());
                 // P4 (D134-5/6): the emitter's domain, the priority group that lists it (if any), and its
                 // carried access credential — so a test can assert group push-down and code rotation.
-                String domainId = com.github.stannismod.affs.world.shield.ShieldDomains.forBlock(
+                String domainId = dev.stannismod.stellurgy.affs.world.shield.ShieldDomains.forBlock(
                         world, new BlockPos(x, y, z));
                 info.put("domainId", domainId == null ? "" : domainId);
                 info.put("accessCode", emitter.getAccessCode());
                 // peek, not configFor: reading an emitter must not create persistent domain state.
-                com.github.stannismod.affs.world.shield.ShieldDomainConfig domainConfig =
-                        com.github.stannismod.affs.world.shield.ShieldControl.peekConfig(world, new BlockPos(x, y, z));
-                com.github.stannismod.affs.world.shield.ShieldPriorityGroup owningGroup =
+                dev.stannismod.stellurgy.affs.world.shield.ShieldDomainConfig domainConfig =
+                        dev.stannismod.stellurgy.affs.world.shield.ShieldControl.peekConfig(world, new BlockPos(x, y, z));
+                dev.stannismod.stellurgy.affs.world.shield.ShieldPriorityGroup owningGroup =
                         domainConfig == null ? null : domainConfig.findGroupOf(new BlockPos(x, y, z));
                 info.put("group", owningGroup == null ? "" : owningGroup.getName());
-            } else if (tile instanceof com.github.stannismod.affs.te.TileEntityShieldGenerator) {
-                com.github.stannismod.affs.te.TileEntityShieldGenerator gen =
-                        (com.github.stannismod.affs.te.TileEntityShieldGenerator) tile;
+            } else if (tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldGenerator) {
+                dev.stannismod.stellurgy.affs.te.TileEntityShieldGenerator gen =
+                        (dev.stannismod.stellurgy.affs.te.TileEntityShieldGenerator) tile;
                 info.put("kind", "generator");
                 info.put("shieldStored", gen.getShieldStored());
                 info.put("feStored", gen.getFeStored());
                 info.put("available", gen.getAvailableShieldEnergy());
-            } else if (tile instanceof com.github.stannismod.affs.te.TileEntityShieldCable) {
+            } else if (tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldCable) {
                 // P6: a cable's transport cap, so a test can compare the two limiters (transport vs the
                 // emitter's recharge throughput) without pinning either magnitude.
-                com.github.stannismod.affs.te.TileEntityShieldCable cable =
-                        (com.github.stannismod.affs.te.TileEntityShieldCable) tile;
+                dev.stannismod.stellurgy.affs.te.TileEntityShieldCable cable =
+                        (dev.stannismod.stellurgy.affs.te.TileEntityShieldCable) tile;
                 info.put("kind", "cable");
                 info.put("throughput", cable.getThroughputPerTick());
-            } else if (tile instanceof com.github.stannismod.affs.te.TileEntityShieldAccumulator) {
-                com.github.stannismod.affs.te.TileEntityShieldAccumulator acc =
-                        (com.github.stannismod.affs.te.TileEntityShieldAccumulator) tile;
+            } else if (tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityShieldAccumulator) {
+                dev.stannismod.stellurgy.affs.te.TileEntityShieldAccumulator acc =
+                        (dev.stannismod.stellurgy.affs.te.TileEntityShieldAccumulator) tile;
                 info.put("kind", "accumulator");
                 info.put("shieldStored", acc.getShieldStored());
                 info.put("shieldMax", acc.getMaxShieldStored());
@@ -418,12 +418,12 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
                 return;
             }
-            java.util.List<com.github.stannismod.affs.te.TileEntityFieldGenerator> emitters =
-                    com.github.stannismod.affs.world.FieldSurfaceMath.getActiveGenerators(world);
+            java.util.List<dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator> emitters =
+                    dev.stannismod.stellurgy.affs.world.FieldSurfaceMath.getActiveGenerators(world);
             net.minecraft.util.math.Vec3d point =
                     new net.minecraft.util.math.Vec3d(x + 0.5D, y + 0.5D, z + 0.5D);
-            com.github.stannismod.affs.world.FieldSource owner =
-                    com.github.stannismod.affs.world.FieldZoneMath.nearestEmitter(emitters, point);
+            dev.stannismod.stellurgy.affs.world.FieldSource owner =
+                    dev.stannismod.stellurgy.affs.world.FieldZoneMath.nearestEmitter(emitters, point);
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("dim", dim);
             info.put("posX", x);
@@ -449,8 +449,8 @@ public class TestProbeCommand extends CommandBase {
             // the ship (and its chunk) is loaded, without the test knowing the subspace coordinates.
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             java.util.List<Map<String, Object>> emitters = new java.util.ArrayList<>();
-            for (com.github.stannismod.affs.te.TileEntityFieldGenerator e
-                    : com.github.stannismod.affs.te.TileEntityFieldGenerator.getActiveGenerators()) {
+            for (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator e
+                    : dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator.getActiveGenerators()) {
                 if (e == null || e.isInvalid() || e.getWorld() == null
                         || e.getWorld().provider.getDimension() != dim) {
                     continue;
@@ -499,13 +499,13 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (!(tile instanceof com.github.stannismod.affs.te.TileEntityFieldGenerator)) {
+            if (!(tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator)) {
                 send(sender, "{\"error\":\"not an emitter\",\"tileClass\":\""
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            com.github.stannismod.affs.te.TileEntityFieldGenerator emitter =
-                    (com.github.stannismod.affs.te.TileEntityFieldGenerator) tile;
+            dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator emitter =
+                    (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator) tile;
             emitter.setShieldEnergyForTest(amount);
             send(sender, "{\"ok\":true,\"powered\":" + emitter.isFieldPowered()
                     + ",\"stored\":" + emitter.getEnergyStored() + "}");
@@ -524,13 +524,13 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (!(tile instanceof com.github.stannismod.affs.te.TileEntityFieldGenerator)) {
+            if (!(tile instanceof dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator)) {
                 send(sender, "{\"error\":\"not an emitter\",\"tileClass\":\""
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            com.github.stannismod.affs.te.TileEntityFieldGenerator emitter =
-                    (com.github.stannismod.affs.te.TileEntityFieldGenerator) tile;
+            dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator emitter =
+                    (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator) tile;
             if (args.length >= 6) {
                 emitter.setPriority(parseIntOr(args[5], 0));
             }
@@ -558,8 +558,8 @@ public class TestProbeCommand extends CommandBase {
             BlockPos at = new BlockPos(x, y, z);
             String op = args[5];
             if ("list".equalsIgnoreCase(op)) {
-                com.github.stannismod.affs.world.shield.ShieldDomainConfig config =
-                        com.github.stannismod.affs.world.shield.ShieldControl.configFor(world, at);
+                dev.stannismod.stellurgy.affs.world.shield.ShieldDomainConfig config =
+                        dev.stannismod.stellurgy.affs.world.shield.ShieldControl.configFor(world, at);
                 if (config == null) {
                     send(sender, "{\"error\":\"no domain config\"}");
                     return;
@@ -567,7 +567,7 @@ public class TestProbeCommand extends CommandBase {
                 StringBuilder sb = new StringBuilder("{\"domainId\":\"").append(config.getDomainId())
                         .append("\",\"count\":").append(config.getGroupCount()).append(",\"groups\":[");
                 boolean first = true;
-                for (com.github.stannismod.affs.world.shield.ShieldPriorityGroup g : config.getGroups()) {
+                for (dev.stannismod.stellurgy.affs.world.shield.ShieldPriorityGroup g : config.getGroups()) {
                     if (!first) {
                         sb.append(',');
                     }
@@ -581,20 +581,20 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             if (args.length >= 8 && "create".equalsIgnoreCase(op)) {
-                com.github.stannismod.affs.world.shield.ShieldPriorityGroup g =
-                        com.github.stannismod.affs.world.shield.ShieldControl.createGroup(
+                dev.stannismod.stellurgy.affs.world.shield.ShieldPriorityGroup g =
+                        dev.stannismod.stellurgy.affs.world.shield.ShieldControl.createGroup(
                                 world, at, args[6], parseIntOr(args[7], 0));
                 send(sender, g == null ? "{\"ok\":false}"
                         : "{\"ok\":true,\"name\":\"" + g.getName() + "\",\"priority\":" + g.getPriority() + "}");
                 return;
             }
             if (args.length >= 7 && "delete".equalsIgnoreCase(op)) {
-                boolean ok = com.github.stannismod.affs.world.shield.ShieldControl.deleteGroup(world, at, args[6]);
+                boolean ok = dev.stannismod.stellurgy.affs.world.shield.ShieldControl.deleteGroup(world, at, args[6]);
                 send(sender, "{\"ok\":" + ok + "}");
                 return;
             }
             if (args.length >= 8 && "priority".equalsIgnoreCase(op)) {
-                boolean ok = com.github.stannismod.affs.world.shield.ShieldControl.setGroupPriority(
+                boolean ok = dev.stannismod.stellurgy.affs.world.shield.ShieldControl.setGroupPriority(
                         world, at, args[6], parseIntOr(args[7], 0));
                 send(sender, "{\"ok\":" + ok + "}");
                 return;
@@ -602,7 +602,7 @@ public class TestProbeCommand extends CommandBase {
             if (args.length >= 10 && "assign".equalsIgnoreCase(op)) {
                 BlockPos emitterPos = new BlockPos(parseIntOr(args[7], 0), parseIntOr(args[8], 0),
                         parseIntOr(args[9], 0));
-                boolean ok = com.github.stannismod.affs.world.shield.ShieldControl.assignEmitter(
+                boolean ok = dev.stannismod.stellurgy.affs.world.shield.ShieldControl.assignEmitter(
                         world, at, args[6], emitterPos);
                 send(sender, "{\"ok\":" + ok + "}");
                 return;
@@ -624,7 +624,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
                 return;
             }
-            String code = com.github.stannismod.affs.world.shield.ShieldControl.rotateAccessCode(
+            String code = dev.stannismod.stellurgy.affs.world.shield.ShieldControl.rotateAccessCode(
                     world, new BlockPos(x, y, z));
             send(sender, "{\"ok\":true,\"code\":\"" + code + "\"}");
             return;
@@ -647,14 +647,14 @@ public class TestProbeCommand extends CommandBase {
                     parseDoubleOr(args[5], 0), parseDoubleOr(args[6], 0), parseDoubleOr(args[7], 0));
             double maxDist = parseDoubleOr(args[8], 0);
             int impactEnergy = parseIntOr(args[9], 0);
-            com.github.stannismod.affs.world.shield.ShieldStrikeKind kind =
+            dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeKind kind =
                     "KINETIC".equalsIgnoreCase(args[10])
-                            ? com.github.stannismod.affs.world.shield.ShieldStrikeKind.KINETIC
-                            : com.github.stannismod.affs.world.shield.ShieldStrikeKind.RADIANT;
-            com.github.stannismod.affs.world.shield.ShieldStrike strike =
-                    com.github.stannismod.affs.world.shield.ShieldStrike.beam(origin, dir, maxDist, impactEnergy, kind);
-            com.github.stannismod.affs.world.shield.ShieldStrikeResult result =
-                    com.github.stannismod.affs.world.shield.ShieldStrikeService.resolve(world, strike);
+                            ? dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeKind.KINETIC
+                            : dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeKind.RADIANT;
+            dev.stannismod.stellurgy.affs.world.shield.ShieldStrike strike =
+                    dev.stannismod.stellurgy.affs.world.shield.ShieldStrike.beam(origin, dir, maxDist, impactEnergy, kind);
+            dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeResult result =
+                    dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeService.resolve(world, strike);
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("dim", dim);
             info.put("intercepted", result.isIntercepted());
@@ -3194,8 +3194,8 @@ public class TestProbeCommand extends CommandBase {
     private dev.stannismod.stellurgy.tile.multiblock.TileObservatory observatoryAt(
             net.minecraft.world.World world, BlockPos pos) {
         net.minecraft.tileentity.TileEntity te = world.getTileEntity(pos);
-        if (te instanceof zmaster587.libVulpes.tile.multiblock.TilePlaceholder) {
-            te = ((zmaster587.libVulpes.tile.multiblock.TilePlaceholder) te).getReplacedTileEntity();
+        if (te instanceof dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder) {
+            te = ((dev.stannismod.stellurgy.libvulpes.tile.multiblock.TilePlaceholder) te).getReplacedTileEntity();
         }
         return te instanceof dev.stannismod.stellurgy.tile.multiblock.TileObservatory
                 ? (dev.stannismod.stellurgy.tile.multiblock.TileObservatory) te : null;
@@ -3579,7 +3579,7 @@ public class TestProbeCommand extends CommandBase {
         // This turns that silence into an answer.
         if ("modules".equalsIgnoreCase(verb)) {
             try {
-                java.util.List<zmaster587.libVulpes.inventory.modules.ModuleBase> modules =
+                java.util.List<dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase> modules =
                         nav.getModules(0, sender instanceof EntityPlayerMP ? (EntityPlayerMP) sender : null);
                 send(sender, "{\"ok\":true,\"built\":true,\"modules\":"
                         + (modules == null ? -1 : modules.size()) + "}");
@@ -7666,7 +7666,7 @@ public class TestProbeCommand extends CommandBase {
                 info.put("storageSizeY", rocket.storage.getSizeY());
                 info.put("storageSizeZ", rocket.storage.getSizeZ());
                 try {
-                    zmaster587.libVulpes.util.HashedBlockPosition seat = rocket.stats.getPassengerSeat(0);
+                    dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition seat = rocket.stats.getPassengerSeat(0);
                     info.put("seatX", seat.x);
                     info.put("seatY", seat.y);
                     info.put("seatZ", seat.z);
@@ -8272,8 +8272,8 @@ public class TestProbeCommand extends CommandBase {
             // clients so the client-side flightMode field updates (otherwise a real
             // client / test bot would still see CLASSIC and its FF input gate would
             // never open).
-            zmaster587.libVulpes.network.PacketHandler.sendToPlayersTrackingEntity(
-                    new zmaster587.libVulpes.network.PacketEntity(
+            dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayersTrackingEntity(
+                    new dev.stannismod.stellurgy.libvulpes.network.PacketEntity(
                             rocket, (byte) EntityRocket.PacketType.SET_FLIGHT_MODE.ordinal()),
                     rocket);
             send(sender, "{\"ok\":true,\"entityId\":" + entityId + ",\"flightMode\":\""
@@ -8338,8 +8338,8 @@ public class TestProbeCommand extends CommandBase {
             // Mirror the SET_FLIGHT_ASSIST packet handler: replicate the new
             // state to tracking clients, otherwise their HUD keeps the old FA
             // label (the probe used to flip the server field silently).
-            zmaster587.libVulpes.network.PacketHandler.sendToPlayersTrackingEntity(
-                    new zmaster587.libVulpes.network.PacketEntity(rocket,
+            dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayersTrackingEntity(
+                    new dev.stannismod.stellurgy.libvulpes.network.PacketEntity(rocket,
                             (byte) EntityRocket.PacketType.SET_FLIGHT_ASSIST.ordinal()), rocket);
             send(sender, "{\"ok\":true,\"entityId\":" + entityId
                     + ",\"flightAssistOn\":" + rocket.isFlightAssistOn() + "}");
@@ -9054,7 +9054,7 @@ public class TestProbeCommand extends CommandBase {
             info.put("orbitalDistance", station.getOrbitalDistance());
             info.put("isAnchored", station.isAnchored());
             info.put("transitionTime", station.getTransitionTime());
-            zmaster587.libVulpes.util.HashedBlockPosition spawn = station.getSpawnLocation();
+            dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition spawn = station.getSpawnLocation();
             if (spawn != null) {
                 info.put("spawnX", spawn.x);
                 info.put("spawnY", spawn.y);
@@ -9191,7 +9191,7 @@ public class TestProbeCommand extends CommandBase {
             for (dev.stannismod.stellurgy.util.StationLandingLocation pad : sso.getLandingPads()) {
                 if (!first) builder.append(',');
                 first = false;
-                zmaster587.libVulpes.util.HashedBlockPosition pos = pad.getPos();
+                dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition pos = pad.getPos();
                 builder.append("{\"x\":").append(pos.x)
                         .append(",\"z\":").append(pos.z)
                         .append(",\"occupied\":").append(pad.getOccupied())
@@ -9219,7 +9219,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             SpaceStationObject sso = (SpaceStationObject) st;
-            zmaster587.libVulpes.util.HashedBlockPosition pad = sso.getNextLandingPad(commit);
+            dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition pad = sso.getNextLandingPad(commit);
             if (pad == null) {
                 send(sender, "{\"ok\":false,\"reason\":\"no free landing pad\",\"id\":" + id
                         + ",\"padCount\":" + sso.getLandingPads().size() + "}");
@@ -9291,13 +9291,13 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (!(tile instanceof zmaster587.libVulpes.inventory.modules.ISliderBar)) {
+            if (!(tile instanceof dev.stannismod.stellurgy.libvulpes.inventory.modules.ISliderBar)) {
                 send(sender, "{\"error\":\"tile not ISliderBar\",\"tile\":\""
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            zmaster587.libVulpes.inventory.modules.ISliderBar slider =
-                    (zmaster587.libVulpes.inventory.modules.ISliderBar) tile;
+            dev.stannismod.stellurgy.libvulpes.inventory.modules.ISliderBar slider =
+                    (dev.stannismod.stellurgy.libvulpes.inventory.modules.ISliderBar) tile;
             slider.setProgress(progressId, value);
             int readback = slider.getProgress(progressId);
             send(sender, "{\"ok\":true,\"tileClass\":\""
@@ -9362,14 +9362,14 @@ public class TestProbeCommand extends CommandBase {
                 }
                 field.setAccessible(true);
                 Object module = field.get(tile);
-                zmaster587.libVulpes.util.ZUtils.RedstoneState st =
-                        zmaster587.libVulpes.util.ZUtils.RedstoneState.valueOf(
+                dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState st =
+                        dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState.valueOf(
                                 stateName.toUpperCase(java.util.Locale.ROOT));
                 java.lang.reflect.Method setter = null;
                 for (Class<?> c = module.getClass(); c != null && setter == null; c = c.getSuperclass()) {
                     try {
                         setter = c.getDeclaredMethod("setRedstoneState",
-                                zmaster587.libVulpes.util.ZUtils.RedstoneState.class);
+                                dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState.class);
                     } catch (NoSuchMethodException ignored) {
                     }
                 }
@@ -9550,8 +9550,8 @@ public class TestProbeCommand extends CommandBase {
             try {
                 java.lang.reflect.Field bf = SatelliteBase.class.getDeclaredField("battery");
                 bf.setAccessible(true);
-                zmaster587.libVulpes.util.UniversalBattery batt =
-                        (zmaster587.libVulpes.util.UniversalBattery) bf.get(sat);
+                dev.stannismod.stellurgy.libvulpes.util.UniversalBattery batt =
+                        (dev.stannismod.stellurgy.libvulpes.util.UniversalBattery) bf.get(sat);
                 batt.setMaxEnergyStored(powerStorage);
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"failed to size battery\",\"msg\":\""
@@ -9773,12 +9773,12 @@ public class TestProbeCommand extends CommandBase {
             // to nail down the per-tick contract without contamination from
             // background DimensionManager.tickDimensions ticks that fire
             // between probe invocations.
-            zmaster587.libVulpes.util.UniversalBattery batt = null;
+            dev.stannismod.stellurgy.libvulpes.util.UniversalBattery batt = null;
             try {
                 java.lang.reflect.Field bf = dev.stannismod.stellurgy.api.satellite.SatelliteBase
                         .class.getDeclaredField("battery");
                 bf.setAccessible(true);
-                batt = (zmaster587.libVulpes.util.UniversalBattery) bf.get(sat);
+                batt = (dev.stannismod.stellurgy.libvulpes.util.UniversalBattery) bf.get(sat);
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"battery reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
@@ -9839,8 +9839,8 @@ public class TestProbeCommand extends CommandBase {
                 java.lang.reflect.Field bf = dev.stannismod.stellurgy.api.satellite.SatelliteBase
                         .class.getDeclaredField("battery");
                 bf.setAccessible(true);
-                zmaster587.libVulpes.util.UniversalBattery batt =
-                        (zmaster587.libVulpes.util.UniversalBattery) bf.get(sat);
+                dev.stannismod.stellurgy.libvulpes.util.UniversalBattery batt =
+                        (dev.stannismod.stellurgy.libvulpes.util.UniversalBattery) bf.get(sat);
                 send(sender, "{\"ok\":true,\"id\":" + satId
                         + ",\"stored\":" + batt.getUniversalEnergyStored()
                         + ",\"max\":" + batt.getMaxEnergyStored() + "}");
@@ -9907,9 +9907,9 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"satClass\":\"" + sat.getClass().getName() + "\""
                     + ",\"canTick\":" + sat.canTick()
                     + ",\"isUniversalEnergyTransmitter\":"
-                    + (sat instanceof zmaster587.libVulpes.api.IUniversalEnergyTransmitter)
+                    + (sat instanceof dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergyTransmitter)
                     + ",\"isUniversalEnergy\":"
-                    + (sat instanceof zmaster587.libVulpes.api.IUniversalEnergy)
+                    + (sat instanceof dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy)
                     + ",\"isSatelliteData\":"
                     + (sat instanceof dev.stannismod.stellurgy.satellite.SatelliteData) + "}");
             return;
@@ -9937,8 +9937,8 @@ public class TestProbeCommand extends CommandBase {
                 java.lang.reflect.Field bf = dev.stannismod.stellurgy.api.satellite.SatelliteBase
                         .class.getDeclaredField("battery");
                 bf.setAccessible(true);
-                zmaster587.libVulpes.util.UniversalBattery batt =
-                        (zmaster587.libVulpes.util.UniversalBattery) bf.get(sat);
+                dev.stannismod.stellurgy.libvulpes.util.UniversalBattery batt =
+                        (dev.stannismod.stellurgy.libvulpes.util.UniversalBattery) bf.get(sat);
                 int accepted = batt.acceptEnergy(amount, false);
                 send(sender, "{\"ok\":true,\"id\":" + satId + ",\"accepted\":" + accepted
                         + ",\"stored\":" + batt.getUniversalEnergyStored() + "}");
@@ -9967,7 +9967,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             ((dev.stannismod.stellurgy.satellite.SatelliteBiomeChanger) sat).addBlockToList(
-                    new zmaster587.libVulpes.util.HashedBlockPosition(x, y, z));
+                    new dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition(x, y, z));
             send(sender, "{\"ok\":true,\"id\":" + satId + ",\"added\":[" + x + "," + y + "," + z + "]}");
             return;
         }
@@ -10486,7 +10486,7 @@ public class TestProbeCommand extends CommandBase {
                     out.setString("dataType", bogusType);
                 }
             };
-            zmaster587.libVulpes.network.PacketHandler.sendToAll(
+            dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToAll(
                     new dev.stannismod.stellurgy.network.PacketSatellite(bogus));
             send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"dataType\":\""
                     + escapeJson(bogusType) + "\"}");
@@ -10878,7 +10878,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.item.ItemStack powerSrc = new net.minecraft.item.ItemStack(
                 dev.stannismod.stellurgy.api.StellurgyItems.itemSatellitePowerSource, 1, 1);
         net.minecraft.item.ItemStack battery = new net.minecraft.item.ItemStack(
-                zmaster587.libVulpes.api.LibVulpesItems.itemBattery, 1, 0);
+                dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems.itemBattery, 1, 0);
         int powerGeneration = 0, powerStorage = 0, maxData = 0;
         float weight = 0;
         for (net.minecraft.item.ItemStack stack : new net.minecraft.item.ItemStack[]{primary, powerSrc, battery}) {
@@ -12105,7 +12105,7 @@ public class TestProbeCommand extends CommandBase {
             String shortName = args[1];
             int recipeIndex = args.length >= 3 ? parseIntOr(args[2], 0) : 0;
             try {
-                Class<?> recipesMachineClass = Class.forName("zmaster587.libVulpes.recipe.RecipesMachine");
+                Class<?> recipesMachineClass = Class.forName("dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine");
                 Object instance = recipesMachineClass.getMethod("getInstance").invoke(null);
                 java.lang.reflect.Method getRecipes = recipesMachineClass.getMethod("getRecipes", Class.class);
                 Class<?> machineClass = Class.forName(
@@ -12214,7 +12214,7 @@ public class TestProbeCommand extends CommandBase {
             String fqn = args[1];
             int recipeIndex = args.length >= 3 ? parseIntOr(args[2], 0) : 0;
             try {
-                Class<?> recipesMachineClass = Class.forName("zmaster587.libVulpes.recipe.RecipesMachine");
+                Class<?> recipesMachineClass = Class.forName("dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine");
                 Object instance = recipesMachineClass.getMethod("getInstance").invoke(null);
                 java.lang.reflect.Method getRecipes = recipesMachineClass.getMethod("getRecipes", Class.class);
                 Class<?> machineClass = Class.forName(fqn);
@@ -12290,7 +12290,7 @@ public class TestProbeCommand extends CommandBase {
             };
             Map<String, Object> recipes = new LinkedHashMap<>();
             try {
-                Class<?> recipesMachineClass = Class.forName("zmaster587.libVulpes.recipe.RecipesMachine");
+                Class<?> recipesMachineClass = Class.forName("dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine");
                 Object instance = recipesMachineClass.getMethod("getInstance").invoke(null);
                 java.lang.reflect.Method getRecipes = recipesMachineClass.getMethod("getRecipes", Class.class);
                 for (String fqn : machines) {
@@ -13666,13 +13666,13 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (!(tile instanceof zmaster587.libVulpes.inventory.modules.IModularInventory)) {
+            if (!(tile instanceof dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory)) {
                 send(sender, "{\"error\":\"tile not IModularInventory\",\"tile\":\""
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            zmaster587.libVulpes.inventory.modules.IModularInventory imi =
-                    (zmaster587.libVulpes.inventory.modules.IModularInventory) tile;
+            dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory imi =
+                    (dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory) tile;
             String swallowed = null;
             try {
                 imi.getModules(0, null);
@@ -14480,12 +14480,12 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             TileEntity tile = world.getTileEntity(new BlockPos(x, y, z));
-            if (!(tile instanceof zmaster587.libVulpes.tile.IComparatorOverride)) {
+            if (!(tile instanceof dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride)) {
                 send(sender, "{\"error\":\"tile not IComparatorOverride\",\"tile\":\""
                         + (tile == null ? "null" : tile.getClass().getName()) + "\"}");
                 return;
             }
-            int value = ((zmaster587.libVulpes.tile.IComparatorOverride) tile)
+            int value = ((dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride) tile)
                     .getComparatorOverride();
             send(sender, "{\"ok\":true,\"value\":" + value + "}");
             return;
@@ -14505,13 +14505,13 @@ public class TestProbeCommand extends CommandBase {
                         + escapeJson(itemId) + "\"}");
                 return;
             }
-            if (!(item instanceof zmaster587.libVulpes.api.IArmorComponent)) {
+            if (!(item instanceof dev.stannismod.stellurgy.libvulpes.api.IArmorComponent)) {
                 send(sender, "{\"error\":\"item not IArmorComponent\",\"id\":\""
                         + escapeJson(itemId) + "\"}");
                 return;
             }
-            zmaster587.libVulpes.api.IArmorComponent comp =
-                    (zmaster587.libVulpes.api.IArmorComponent) item;
+            dev.stannismod.stellurgy.libvulpes.api.IArmorComponent comp =
+                    (dev.stannismod.stellurgy.libvulpes.api.IArmorComponent) item;
             net.minecraft.item.ItemStack stack =
                     new net.minecraft.item.ItemStack(item, count, meta);
             boolean head = comp.isAllowedInSlot(stack,
@@ -14674,7 +14674,7 @@ public class TestProbeCommand extends CommandBase {
             try {
                 // itemOutPorts is declared on TileMultiBlock (the libVulpes
                 // grandparent of TileRailgun), not TileMultiblockMachine.
-                java.lang.reflect.Field f = zmaster587.libVulpes.tile.multiblock
+                java.lang.reflect.Field f = dev.stannismod.stellurgy.libvulpes.tile.multiblock
                         .TileMultiBlock.class.getDeclaredField("itemOutPorts");
                 f.setAccessible(true);
                 Object obj = f.get(rg);
@@ -14753,17 +14753,17 @@ public class TestProbeCommand extends CommandBase {
             // Program a Linker to point at the destination controller, exactly
             // as TileRailgun.onLinkStart would on a right-click.
             net.minecraft.item.ItemStack linker =
-                    new net.minecraft.item.ItemStack(zmaster587.libVulpes.api.LibVulpesItems.itemLinker);
-            zmaster587.libVulpes.items.ItemLinker.setMasterCoords(linker, new BlockPos(dx, dy, dz));
-            zmaster587.libVulpes.items.ItemLinker.setDimId(linker, dDim);
-            boolean linkerSet = zmaster587.libVulpes.items.ItemLinker.isSet(linker);
+                    new net.minecraft.item.ItemStack(dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems.itemLinker);
+            dev.stannismod.stellurgy.libvulpes.items.ItemLinker.setMasterCoords(linker, new BlockPos(dx, dy, dz));
+            dev.stannismod.stellurgy.libvulpes.items.ItemLinker.setDimId(linker, dDim);
+            boolean linkerSet = dev.stannismod.stellurgy.libvulpes.items.ItemLinker.isSet(linker);
             src.setInventorySlotContents(0, linker);
 
             // Load the cargo into the source's first input port.
             int inPortCount = 0;
             boolean loadedInput = false;
             try {
-                java.lang.reflect.Field fin = zmaster587.libVulpes.tile.multiblock
+                java.lang.reflect.Field fin = dev.stannismod.stellurgy.libvulpes.tile.multiblock
                         .TileMultiBlock.class.getDeclaredField("itemInPorts");
                 fin.setAccessible(true);
                 Object obj = fin.get(src);
@@ -15473,7 +15473,7 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.block.state.IBlockState builderState = rocketBuilder.getDefaultState();
             try {
                 builderState = builderState.withProperty(
-                        zmaster587.libVulpes.block.RotatableBlock.FACING,
+                        dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                         net.minecraft.util.EnumFacing.NORTH);
             } catch (IllegalArgumentException ignored) {
                 // Property absent on this block variant — fall back to default state.
@@ -15891,7 +15891,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default.
@@ -15985,7 +15985,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default.
@@ -16154,7 +16154,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default.
@@ -16346,7 +16346,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default.
@@ -16427,7 +16427,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default.
@@ -16530,7 +16530,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default.
@@ -16665,7 +16665,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default.
@@ -16739,7 +16739,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default.
@@ -16847,7 +16847,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState builderState = uvBuilder.getDefaultState();
         try {
             builderState = builderState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — keep default state.
@@ -16966,7 +16966,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default state.
@@ -17046,7 +17046,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // Property absent — fall back to default state.
@@ -17405,7 +17405,7 @@ public class TestProbeCommand extends CommandBase {
                 // hatch can hold, so the kit needs to spill ingredients into a
                 // second hatch (the controller aggregates all input hatches).
                 return new WildcardConfig(
-                        zmaster587.libVulpes.api.LibVulpesBlocks.blockStructureBlock,
+                        dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks.blockStructureBlock,
                         new HatchOverride('I', 2, 0, 1),
                         new HatchOverride('I', 2, 1, 3),
                         new HatchOverride('O', 2, 0, 2),
@@ -17477,7 +17477,7 @@ public class TestProbeCommand extends CommandBase {
         try {
             Class<?> pressClass = Class.forName(
                     "dev.stannismod.stellurgy.block.BlockSmallPlatePress");
-            Class<?> recipesMachineClass = Class.forName("zmaster587.libVulpes.recipe.RecipesMachine");
+            Class<?> recipesMachineClass = Class.forName("dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine");
             Object instance = recipesMachineClass.getMethod("getInstance").invoke(null);
             java.util.List<?> recipes = (java.util.List<?>) recipesMachineClass
                     .getMethod("getRecipes", Class.class).invoke(instance, pressClass);
@@ -17570,10 +17570,10 @@ public class TestProbeCommand extends CommandBase {
             char c = (Character) cell;
             if (c == 'c') return controllerState;
             if (c == '*') return null;  // wildcard — caller's responsibility
-            java.util.List<zmaster587.libVulpes.block.BlockMeta> mapping =
-                    zmaster587.libVulpes.tile.multiblock.TileMultiBlock.getMapping(c);
+            java.util.List<dev.stannismod.stellurgy.libvulpes.block.BlockMeta> mapping =
+                    dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock.getMapping(c);
             if (mapping == null || mapping.isEmpty()) return null;
-            zmaster587.libVulpes.block.BlockMeta bm = mapping.get(0);
+            dev.stannismod.stellurgy.libvulpes.block.BlockMeta bm = mapping.get(0);
             net.minecraft.block.Block block = bm.getBlock();
             int meta = bm.getMeta();
             return block.getStateFromMeta(meta);
@@ -17582,8 +17582,8 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.block.Block block = (net.minecraft.block.Block) cell;
             return block.getDefaultState();
         }
-        if (cell instanceof zmaster587.libVulpes.block.BlockMeta) {
-            zmaster587.libVulpes.block.BlockMeta bm = (zmaster587.libVulpes.block.BlockMeta) cell;
+        if (cell instanceof dev.stannismod.stellurgy.libvulpes.block.BlockMeta) {
+            dev.stannismod.stellurgy.libvulpes.block.BlockMeta bm = (dev.stannismod.stellurgy.libvulpes.block.BlockMeta) cell;
             int meta = bm.getMeta();
             return bm.getBlock().getStateFromMeta(meta);
         }
@@ -17654,7 +17654,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraft.block.state.IBlockState controllerState = controller.getDefaultState();
         try {
             controllerState = controllerState.withProperty(
-                    zmaster587.libVulpes.block.RotatableBlock.FACING,
+                    dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.FACING,
                     net.minecraft.util.EnumFacing.NORTH);
         } catch (IllegalArgumentException ignored) {
             // FACING absent (e.g. fully-rotatable variants) — keep default.
@@ -18435,7 +18435,7 @@ public class TestProbeCommand extends CommandBase {
         net.minecraftforge.fluids.FluidStack drained = pad.drain(amtFluid, false);
         int filled = 0;
         if (amtFluid > 0 && drained != null
-                && zmaster587.libVulpes.util.FluidUtils.areFluidsSameType(drained.getFluid(),
+                && dev.stannismod.stellurgy.libvulpes.util.FluidUtils.areFluidsSameType(drained.getFluid(),
                         dev.stannismod.stellurgy.api.StellurgyFluids.fluidOxygen)
                 && drained.amount > 0) {
             net.minecraftforge.fluids.FluidStack actual = pad.drain(amtFluid, true);
@@ -18642,7 +18642,7 @@ public class TestProbeCommand extends CommandBase {
                 java.lang.reflect.Field stateF = dev.stannismod.stellurgy.tile.atmosphere
                         .TileOxygenVent.class.getDeclaredField("state");
                 stateF.setAccessible(true);
-                stateF.set(vent, zmaster587.libVulpes.util.ZUtils.RedstoneState.OFF);
+                stateF.set(vent, dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState.OFF);
             } catch (ReflectiveOperationException ignore) {
                 // Not fatal — addBlock will simply be a no-op when the vent
                 // can't form a blob, and the test will see sealed=false.
@@ -18659,7 +18659,7 @@ public class TestProbeCommand extends CommandBase {
             // Schedule the work, then busy-wait up to 2s for the worker to
             // settle so the test can read a stable sealed state.
             handler.addBlock(vent,
-                    new zmaster587.libVulpes.util.HashedBlockPosition(vent.getPos()));
+                    new dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition(vent.getPos()));
             long deadline = System.currentTimeMillis() + 2000L;
             while (System.currentTimeMillis() < deadline) {
                 try {
@@ -18818,14 +18818,14 @@ public class TestProbeCommand extends CommandBase {
         dev.stannismod.stellurgy.dimension.DimensionProperties props =
                 dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
                         .getDimensionProperties(dim);
-        java.util.Set<zmaster587.libVulpes.util.HashedBlockPosition> locs =
+        java.util.Set<dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition> locs =
                 props.getBeacons();
         StringBuilder out = new StringBuilder("{\"dim\":").append(dim);
         out.append(",\"count\":").append(locs == null ? -1 : locs.size());
         out.append(",\"locations\":[");
         if (locs != null) {
             boolean first = true;
-            for (zmaster587.libVulpes.util.HashedBlockPosition p : locs) {
+            for (dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition p : locs) {
                 if (!first) out.append(',');
                 first = false;
                 out.append('[').append(p.x).append(',').append(p.y).append(',').append(p.z).append(']');
@@ -19315,7 +19315,7 @@ public class TestProbeCommand extends CommandBase {
                     (dev.stannismod.stellurgy.entity.EntityElevatorCapsule) entity;
             cap.setDst(new dev.stannismod.stellurgy.util.DimensionBlockPosition(
                     dstDim,
-                    new zmaster587.libVulpes.util.HashedBlockPosition(dstX, dstY, dstZ)));
+                    new dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition(dstX, dstY, dstZ)));
             send(sender, "{\"ok\":true,\"entityId\":" + id
                     + ",\"dstDim\":" + dstDim
                     + ",\"dstX\":" + dstX + ",\"dstY\":" + dstY + ",\"dstZ\":" + dstZ + "}");
@@ -19342,7 +19342,7 @@ public class TestProbeCommand extends CommandBase {
                     (dev.stannismod.stellurgy.entity.EntityElevatorCapsule) entity;
             cap.setSourceTile(new dev.stannismod.stellurgy.util.DimensionBlockPosition(
                     srcDim,
-                    new zmaster587.libVulpes.util.HashedBlockPosition(srcX, srcY, srcZ)));
+                    new dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition(srcX, srcY, srcZ)));
             send(sender, "{\"ok\":true,\"entityId\":" + id
                     + ",\"srcDim\":" + srcDim
                     + ",\"srcX\":" + srcX + ",\"srcY\":" + srcY + ",\"srcZ\":" + srcZ + "}");
@@ -21956,9 +21956,9 @@ public class TestProbeCommand extends CommandBase {
                     return;
                 }
                 @SuppressWarnings("unchecked")
-                java.util.LinkedList<zmaster587.libVulpes.util.HashedBlockPosition> coords =
-                        (java.util.LinkedList<zmaster587.libVulpes.util.HashedBlockPosition>) readObjectField(m, "infrastructureCoords");
-                coords.add(new zmaster587.libVulpes.util.HashedBlockPosition(ix, iy, iz));
+                java.util.LinkedList<dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition> coords =
+                        (java.util.LinkedList<dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition>) readObjectField(m, "infrastructureCoords");
+                coords.add(new dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition(ix, iy, iz));
                 boolean linked = ((dev.stannismod.stellurgy.api.IInfrastructure) tile).linkMission(m);
                 send(sender, "{\"ok\":true,\"missionId\":" + missionId
                         + ",\"linked\":" + linked
@@ -22036,8 +22036,8 @@ public class TestProbeCommand extends CommandBase {
                     int n = 0;
                     if (coordsObj instanceof java.util.Collection) {
                         for (Object pos : (java.util.Collection<?>) coordsObj) {
-                            zmaster587.libVulpes.util.HashedBlockPosition hbp =
-                                    (zmaster587.libVulpes.util.HashedBlockPosition) pos;
+                            dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition hbp =
+                                    (dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition) pos;
                             if (n++ > 0) coordsJson.append(',');
                             coordsJson.append('[').append(hbp.x).append(',').append(hbp.y)
                                     .append(',').append(hbp.z).append(']');
@@ -22102,8 +22102,8 @@ public class TestProbeCommand extends CommandBase {
                 Object coordsObj = readObjectField(r, "infrastructureCoords");
                 if (coordsObj instanceof java.util.Collection) {
                     for (Object pos : (java.util.Collection<?>) coordsObj) {
-                        zmaster587.libVulpes.util.HashedBlockPosition hbp =
-                                (zmaster587.libVulpes.util.HashedBlockPosition) pos;
+                        dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition hbp =
+                                (dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition) pos;
                         if (infraEntries++ > 0) infraJson.append(',');
                         infraJson.append('[').append(hbp.x).append(',').append(hbp.y)
                                 .append(',').append(hbp.z).append(']');
@@ -22234,7 +22234,7 @@ public class TestProbeCommand extends CommandBase {
     private static int countItemsInPortList(Object tile, String fieldName,
                                             net.minecraft.item.Item item)
             throws ReflectiveOperationException {
-        java.lang.reflect.Field f = zmaster587.libVulpes.tile.multiblock
+        java.lang.reflect.Field f = dev.stannismod.stellurgy.libvulpes.tile.multiblock
                 .TileMultiBlock.class.getDeclaredField(fieldName);
         f.setAccessible(true);
         Object obj = f.get(tile);

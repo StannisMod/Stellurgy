@@ -8,7 +8,7 @@ import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
 import dev.stannismod.stellurgy.util.StationLandingLocation;
-import zmaster587.libVulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 public class RocketDataLoaderServer extends RocketDataLoader {
     EntityRocket rocket;

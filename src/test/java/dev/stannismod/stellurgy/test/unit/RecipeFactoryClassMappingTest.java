@@ -21,7 +21,7 @@ import dev.stannismod.stellurgy.tile.multiblock.machine.TileLathe;
 import dev.stannismod.stellurgy.tile.multiblock.machine.TilePrecisionAssembler;
 import dev.stannismod.stellurgy.tile.multiblock.machine.TilePrecisionLaserEtcher;
 import dev.stannismod.stellurgy.tile.multiblock.machine.TileRollingMachine;
-import zmaster587.libVulpes.recipe.RecipeMachineFactory;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipeMachineFactory;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;

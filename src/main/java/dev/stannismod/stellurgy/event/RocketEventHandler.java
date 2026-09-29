@@ -36,10 +36,10 @@ import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import dev.stannismod.stellurgy.util.ItemAirUtils;
-import zmaster587.libVulpes.api.IArmorComponent;
-import zmaster587.libVulpes.api.IModularArmor;
-import zmaster587.libVulpes.client.ResourceIcon;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 import javax.annotation.Nonnull;
 import java.util.List;

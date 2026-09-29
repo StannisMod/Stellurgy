@@ -13,7 +13,7 @@ import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
-import zmaster587.libVulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 import javax.annotation.Nullable;
 import java.lang.invoke.MethodHandle;

@@ -10,11 +10,11 @@ import net.minecraftforge.oredict.ShapedOreRecipe;
 import net.minecraftforge.oredict.ShapelessOreRecipe;
 import net.minecraftforge.registries.GameData;
 import dev.stannismod.stellurgy.block.BlockSmallPlatePress;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.material.AllowedProducts;
-import zmaster587.libVulpes.api.material.MaterialRegistry;
-import zmaster587.libVulpes.recipe.RecipesMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
+import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -65,7 +65,7 @@ public class RecipeHandler {
 
     public void createAutoGennedRecipes(HashMap<AllowedProducts, HashSet<String>> modProducts) {
 
-        for (zmaster587.libVulpes.api.material.Material ore : MaterialRegistry.getAllMaterials()) {
+        for (dev.stannismod.stellurgy.libvulpes.api.material.Material ore : MaterialRegistry.getAllMaterials()) {
             if (AllowedProducts.getProductByName("ORE").isOfType(ore.getAllowedProducts()) && AllowedProducts.getProductByName("INGOT").isOfType(ore.getAllowedProducts()))
                 GameRegistry.addSmelting(ore.getProduct(AllowedProducts.getProductByName("ORE")), ore.getProduct(AllowedProducts.getProductByName("INGOT")), 0);
 
@@ -182,7 +182,7 @@ public class RecipeHandler {
             for (Entry<AllowedProducts, HashSet<String>> entry : modProducts.entrySet()) {
                 if (entry.getKey() == AllowedProducts.getProductByName("PLATE")) {
                     for (String str : entry.getValue()) {
-                        zmaster587.libVulpes.api.material.Material material = zmaster587.libVulpes.api.material.Material
+                        dev.stannismod.stellurgy.libvulpes.api.material.Material material = dev.stannismod.stellurgy.libvulpes.api.material.Material
                                 .valueOfSafe(str.toUpperCase());
 
                         if (OreDictionary.doesOreNameExist("ingot" + str)
@@ -198,7 +198,7 @@ public class RecipeHandler {
                     }
                 } else if (entry.getKey() == AllowedProducts.getProductByName("STICK")) {
                     for (String str : entry.getValue()) {
-                        zmaster587.libVulpes.api.material.Material material = zmaster587.libVulpes.api.material.Material
+                        dev.stannismod.stellurgy.libvulpes.api.material.Material material = dev.stannismod.stellurgy.libvulpes.api.material.Material
                                 .valueOfSafe(str.toUpperCase());
 
                         if (OreDictionary.doesOreNameExist("ingot" + str)

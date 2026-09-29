@@ -18,7 +18,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.eventhandler.EventPriority;
-import zmaster587.libVulpes.tile.IMultiblock;
+import dev.stannismod.stellurgy.libvulpes.tile.IMultiblock;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.EntityRocketBase;
 import dev.stannismod.stellurgy.api.IInfrastructure;
@@ -32,19 +32,19 @@ import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
 import dev.stannismod.stellurgy.tile.TileUnmannedVehicleAssembler;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.client.util.IndicatorBarImage;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
-import zmaster587.libVulpes.interfaces.ILinkableTile;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.inventory.GuiHandler;
-import zmaster587.libVulpes.items.ItemLinker;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.IComparatorOverride;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.IAdjBlockUpdate;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
@@ -810,7 +810,7 @@ public class TileRocketMonitoringStation extends TileEntity
 
         if (tabModule.getTab() == 0) {
             // === STATUS TAB ===
-            modules.add(new ModuleButton(20, 40, 0, LibVulpes.proxy.getLocalizedString("msg.monitoringStation.buttonLaunch"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild));
+            modules.add(new ModuleButton(20, 40, 0, LibVulpes.proxy.getLocalizedString("msg.monitoringStation.buttonLaunch"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild));
 
             if (world.isRemote) {
                 launchStatus = new ModuleText(88, 92, "", 0xFFFFFF22, true); // centered

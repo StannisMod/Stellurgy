@@ -636,7 +636,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "client — every choice the pilot makes about where to fly is made on that "
                         + "screen, so a console that swallows the press strands a jump-capable ship. "
                         + "screen=\"" + consoleScreen + "\"",
-                consoleScreen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
+                consoleScreen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
 
         // Move the crystal into the SHIP slot with an explicit pick-up / put-down pair. A shift-click
         // would merge it into the source slot instead, where the address list is never read from —
@@ -686,7 +686,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         bot().closeScreen();
         consoleScreen = openConsoleFromTheDeck(slotDim, navAfcSub, navSub, budget);
         requireArranged("the console must reopen once the crystal is in it: " + consoleScreen,
-                consoleScreen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
+                consoleScreen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
 
         // He picks where to go. Not blind: he clicks an address, sees what the console says is at it,
         // and moves on if that is not somewhere he can land — which is what the pick button's own body
@@ -1635,7 +1635,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "client. Every act of the build is performed on that screen, so a machine "
                         + "that swallows the press leaves the player with no way to build a ship at "
                         + "all. screen=\"" + screen + "\"",
-                screen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
+                screen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
 
         // Marked BEFORE the Scan click: the first thing awaited below is the scan pass ENDING, and
         // that pass starts on this click.
@@ -1666,7 +1666,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         assertTrue("the assembler's screen must still be open for the Build press; a screen that"
                         + " closed on its own between Scan and Build leaves the player unable to"
                         + " build at all. screen=\"" + openScreen + "\"",
-                openScreen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
+                openScreen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
         bot().clickButtonById(BUTTON_BUILD);
 
         // The registry's own record of the ship being added — not a count of ships in dim 0, which

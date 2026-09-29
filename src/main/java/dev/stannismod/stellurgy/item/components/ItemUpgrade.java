@@ -14,9 +14,9 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
-import zmaster587.libVulpes.api.IArmorComponent;
-import zmaster587.libVulpes.client.ResourceIcon;
-import zmaster587.libVulpes.items.ItemIngredient;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
 
 import javax.annotation.Nonnull;
 import java.lang.reflect.Field;

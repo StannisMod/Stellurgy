@@ -13,7 +13,7 @@ import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
-import zmaster587.libVulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 import java.util.ArrayList;
 import java.util.Collections;

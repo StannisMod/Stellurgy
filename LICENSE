@@ -61,7 +61,13 @@ their own licenses.
     components retain their license; Apache-2.0 is compatible with version 3 of
     the GNU General Public License.
 
-  * LibVulpes by zmaster587, vendored under `libvulpes/`, is licensed under the
-    MIT License — see `libvulpes/LICENSE`. Those files remain available under
-    the MIT License, including as modified for Stellurgy; their inclusion here
-    is compatible with the GNU General Public License, version 3.
+  * LibVulpes by zmaster587, merged into this tree as the package
+    `dev.stannismod.stellurgy.libvulpes` (with its assets under
+    `assets/libvulpes/` and `assets/stellurgy/recipes/libvulpes/`), is licensed
+    under the MIT License — see LICENSE-LIBVULPES. Those files remain available
+    under the MIT License, including as modified for Stellurgy; their inclusion
+    here is compatible with the GNU General Public License, version 3.
+
+  * Advanced Force Field System, merged into this tree as the package
+    `dev.stannismod.stellurgy.affs` (with its assets under `assets/affs/`),
+    carries its own copyright notice and licence terms — see LICENSE-AFFS.

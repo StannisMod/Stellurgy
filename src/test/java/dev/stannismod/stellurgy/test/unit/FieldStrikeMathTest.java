@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import com.github.stannismod.affs.world.FieldSource;
-import com.github.stannismod.affs.world.FieldSurfaceMath;
+import dev.stannismod.stellurgy.affs.world.FieldSource;
+import dev.stannismod.stellurgy.affs.world.FieldSurfaceMath;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;

@@ -15,10 +15,10 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.entity.EntityRocket.PacketType;
-import zmaster587.libVulpes.interfaces.INetworkEntity;
-import zmaster587.libVulpes.network.PacketEntity;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

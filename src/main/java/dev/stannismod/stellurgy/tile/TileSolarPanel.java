@@ -6,10 +6,10 @@ import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.inventory.modules.ModuleText;
-import zmaster587.libVulpes.tile.TileInventoriedForgePowerMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedForgePowerMachine;
 
 import java.util.List;
 

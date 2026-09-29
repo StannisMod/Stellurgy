@@ -9,9 +9,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.gui.CommonResources;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 
 import javax.annotation.Nonnull;
 import java.util.Arrays;

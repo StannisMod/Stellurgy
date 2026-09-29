@@ -255,7 +255,7 @@ public class EntityDummy extends Entity {
             // of distinct ships never overlap), unlike containment among overlapping world boxes.
             String shipId = VSIntegration.shipIdManagingBlock(world, seatPos);
             if (shipId != null) {
-                zmaster587.libVulpes.network.PacketHandler.sendToPlayer(
+                dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayer(
                         new dev.stannismod.stellurgy.network.PacketDeckCapture(
                                 shipId, seatPos.getX() + 0.5, seatPos.getY(), seatPos.getZ() + 0.5),
                         (net.minecraft.entity.player.EntityPlayerMP) exit);

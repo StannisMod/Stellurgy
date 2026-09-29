@@ -18,11 +18,11 @@ import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
 import dev.stannismod.stellurgy.block.BlockRedstoneEmitter;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nullable;
 import java.util.LinkedList;
@@ -91,13 +91,13 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
                     atm,
                     label,
                     this,
-                    zmaster587.libVulpes.inventory.TextureResources.buttonBuild
+                    dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild
             ));
         }
 
         ModuleContainerPan panningContainer = new ModuleContainerPan(
                 5, 20, btns, new LinkedList<>(),
-                zmaster587.libVulpes.inventory.TextureResources.starryBG,
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.starryBG,
                 160, 100, 0, 500
         );
         modules.add(panningContainer);

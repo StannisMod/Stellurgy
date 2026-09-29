@@ -12,8 +12,8 @@ import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
-import zmaster587.libVulpes.inventory.modules.IModularInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 
 /**
  * Advanced Flight Computer — the block that marks an assembled craft as a

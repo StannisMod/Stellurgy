@@ -5,8 +5,8 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.GuiPlanetButton;
-import zmaster587.libVulpes.inventory.modules.IButtonInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 
 import java.util.LinkedList;
 import java.util.List;

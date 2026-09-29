@@ -32,21 +32,21 @@ import dev.stannismod.stellurgy.util.IBrokenPartBlock;
 import dev.stannismod.stellurgy.util.InventoryUtil;
 import dev.stannismod.stellurgy.util.StorageChunk;
 import dev.stannismod.stellurgy.util.nbt.NBTHelper;
-import zmaster587.libVulpes.interfaces.IRecipe;
-import zmaster587.libVulpes.recipe.RecipesMachine;
-import zmaster587.libVulpes.util.EmbeddedInventory;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.block.BlockTile;
-import zmaster587.libVulpes.interfaces.ILinkableTile;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.items.ItemLinker;
-import zmaster587.libVulpes.network.PacketEntity;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.IComparatorOverride;
-import zmaster587.libVulpes.tile.TileEntityRFConsumer;
-import zmaster587.libVulpes.util.IAdjBlockUpdate;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.IComparatorOverride;
+import dev.stannismod.stellurgy.libvulpes.tile.TileEntityRFConsumer;
+import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.*;
@@ -567,7 +567,7 @@ public class TileRocketServiceStation extends TileEntityRFConsumer implements IM
 
         modules.add(new ModulePower(150, 8, this.energy));
         modules.add(new ModuleButton(8, 6, 0, LibVulpes.proxy.getLocalizedString("msg.serviceStation.assemblerScan"),
-                this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 104, 16));
+                this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 104, 16));
 
         updateText();
 

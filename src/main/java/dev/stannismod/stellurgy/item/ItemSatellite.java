@@ -9,9 +9,9 @@ import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.satellite.SatelliteData;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.util.EmbeddedInventory;
-import zmaster587.libVulpes.util.ZUtils;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 import java.util.List;

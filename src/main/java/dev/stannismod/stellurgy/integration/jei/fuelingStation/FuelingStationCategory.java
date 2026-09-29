@@ -8,7 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.item.ItemStack;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
-import zmaster587.libVulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
 
 public class FuelingStationCategory implements IRecipeCategory<FuelingStationWrapper> {
 
@@ -62,7 +62,7 @@ public class FuelingStationCategory implements IRecipeCategory<FuelingStationWra
             // Only decorate the bucket input slot
             tooltip.add("");
             tooltip.add(net.minecraft.util.text.TextFormatting.YELLOW +
-                zmaster587.libVulpes.LibVulpes.proxy.getLocalizedString(
+                dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString(
                     "jei.ar.fuel.role." + wrapper.getRole().langKey()
                 ));
         });
@@ -82,7 +82,7 @@ public class FuelingStationCategory implements IRecipeCategory<FuelingStationWra
             // Blank spacer then role + usage
             tooltip.add("");
             tooltip.add(net.minecraft.util.text.TextFormatting.YELLOW +
-                zmaster587.libVulpes.LibVulpes.proxy.getLocalizedString(
+                dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString(
                     "jei.ar.fuel.role." + wrapper.getRole().langKey()
                 ));
         });        

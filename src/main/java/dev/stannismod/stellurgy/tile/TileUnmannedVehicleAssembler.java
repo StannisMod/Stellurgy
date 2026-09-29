@@ -17,12 +17,12 @@ import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
 import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
 import dev.stannismod.stellurgy.util.StorageChunk;
 import dev.stannismod.stellurgy.util.WeightEngine;
-import zmaster587.libVulpes.block.BlockFullyRotatable;
-import zmaster587.libVulpes.block.RotatableBlock;
-import zmaster587.libVulpes.network.PacketEntity;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.ZUtils;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 import dev.stannismod.stellurgy.api.*;

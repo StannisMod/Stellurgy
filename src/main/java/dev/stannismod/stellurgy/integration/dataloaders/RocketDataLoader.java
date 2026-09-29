@@ -23,8 +23,8 @@ import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
 import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.util.StationLandingLocation;
-import zmaster587.libVulpes.items.ItemLinker;
-import zmaster587.libVulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 /**
  * Used to load various description strings from objects of type T.

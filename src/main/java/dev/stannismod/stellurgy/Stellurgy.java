@@ -81,7 +81,7 @@ import dev.stannismod.stellurgy.integration.CompatibilityMgr;
 import dev.stannismod.stellurgy.integration.GalacticCraftHandler;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import org.valkyrienskies.mod.common.ValkyrienSkiesMod;
-import com.github.stannismod.affs.AdvancedForceFieldSystem;
+import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
 import dev.stannismod.stellurgy.integration.theoneprobe.TopIntegration;
 import dev.stannismod.stellurgy.item.components.ItemJetpack;
 import dev.stannismod.stellurgy.item.components.ItemPressureTank;
@@ -108,30 +108,30 @@ import dev.stannismod.stellurgy.world.ore.OreGenerator;
 import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import dev.stannismod.stellurgy.world.type.WorldTypePlanetGen;
 import dev.stannismod.stellurgy.world.type.WorldTypeSpace;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.LibVulpesBlocks;
-import zmaster587.libVulpes.api.LibVulpesItems;
-import zmaster587.libVulpes.api.material.AllowedProducts;
-import zmaster587.libVulpes.api.material.MaterialRegistry;
-import zmaster587.libVulpes.api.material.MixedMaterial;
-import zmaster587.libVulpes.block.*;
-import zmaster587.libVulpes.block.multiblock.BlockMultiBlockComponentVisible;
-import zmaster587.libVulpes.block.multiblock.BlockMultiBlockComponentVisibleAlphaTexture;
-import zmaster587.libVulpes.block.multiblock.BlockMultiblockMachine;
-import zmaster587.libVulpes.inventory.GuiHandler;
-import zmaster587.libVulpes.items.ItemBlockMeta;
-import zmaster587.libVulpes.items.ItemIngredient;
-import zmaster587.libVulpes.items.ItemProjector;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.recipe.RecipesMachine;
-import zmaster587.libVulpes.tile.TileMaterial;
-import zmaster587.libVulpes.tile.energy.TilePlugBase;
-import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileFluidHatch;
-import zmaster587.libVulpes.util.FluidUtils;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.InputSyncHandler;
-import zmaster587.libVulpes.util.SingleEntry;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
+import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
+import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
+import dev.stannismod.stellurgy.libvulpes.api.material.MixedMaterial;
+import dev.stannismod.stellurgy.libvulpes.block.*;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiBlockComponentVisible;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiBlockComponentVisibleAlphaTexture;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.items.ItemBlockMeta;
+import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
+import dev.stannismod.stellurgy.libvulpes.items.ItemProjector;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.TileMaterial;
+import dev.stannismod.stellurgy.libvulpes.tile.energy.TilePlugBase;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileFluidHatch;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
+import dev.stannismod.stellurgy.libvulpes.util.SingleEntry;
 
 import javax.annotation.Nonnull;
 import java.io.BufferedWriter;
@@ -432,7 +432,7 @@ public class Stellurgy {
 
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        // libVulpes is vendored and folded into this container. It goes FIRST: everything below
+        // libVulpes was a separate mod and is folded into this container. It goes FIRST: everything below
         // builds on the products, materials and packet discriminators it registers, and it used to
         // be a separate mod that FML initialised before this one.
         LibVulpes.instance.preInit(event);
@@ -655,7 +655,7 @@ public class Stellurgy {
         // from Stellurgy's own handlers (VS is no longer a separate @Mod with its own @EventHandler methods).
         ValkyrienSkiesMod.INSTANCE.preInit(event);
 
-        // Advanced Force Field System (shield subsystem) is vendored into Stellurgy and folded into Stellurgy's
+        // Advanced Force Field System (shield subsystem) was a separate mod and is folded into Stellurgy's
         // mod container: drive its lifecycle from Stellurgy's own handlers, as with VS above.
         AdvancedForceFieldSystem.INSTANCE.preInit(event);
     }
@@ -883,7 +883,7 @@ public class Stellurgy {
         // MODULAR window spends y 89..143 on the player's inventory grid - which is exactly where
         // half of this console's buttons used to be drawn, unclickable. NOINV keeps the hotbar, so a
         // crystal can still be dragged into the two slots.
-        StellurgyBlocks.blockNavigationComputer = new zmaster587.libVulpes.block.BlockTile(dev.stannismod.stellurgy.tile.TileNavigationComputer.class, GuiHandler.guiId.MODULARNOINV.ordinal()).setUnlocalizedName("navigationComputer").setCreativeTab(tabAdvRocketry).setHardness(3f);
+        StellurgyBlocks.blockNavigationComputer = new dev.stannismod.stellurgy.libvulpes.block.BlockTile(dev.stannismod.stellurgy.tile.TileNavigationComputer.class, GuiHandler.guiId.MODULARNOINV.ordinal()).setUnlocalizedName("navigationComputer").setCreativeTab(tabAdvRocketry).setHardness(3f);
         // The hyperdrive family. The two controllers carry tile entities because they have state or
         // are measured; the coil, cell, sink and emitter are structure — what they are worth is
         // decided by how many of them the player welded together, not by anything they hold.
@@ -1140,8 +1140,8 @@ public class Stellurgy {
 
 
         //Register Allowed Products
-        materialRegistry.registerMaterial(new zmaster587.libVulpes.api.material.Material("TitaniumAluminide", "pickaxe", 1, 0xaec2de, AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("GEAR").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue(), false));
-        materialRegistry.registerMaterial(new zmaster587.libVulpes.api.material.Material("TitaniumIridium", "pickaxe", 1, 0xd7dfe4, AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("GEAR").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue(), false));
+        materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("TitaniumAluminide", "pickaxe", 1, 0xaec2de, AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("GEAR").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue(), false));
+        materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("TitaniumIridium", "pickaxe", 1, 0xd7dfe4, AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("GEAR").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue(), false));
 
         materialRegistry.registerOres(LibVulpes.tabLibVulpesOres);
 
@@ -1192,7 +1192,7 @@ public class Stellurgy {
         // else to Stellurgy's, which in turn delegates every non-Stellurgy id on to libVulpes. Add a handler by
         // extending this chain, never by calling registerGuiHandler again.
         NetworkRegistry.INSTANCE.registerGuiHandler(this, new dev.stannismod.stellurgy.integration.affs.AffsGuiRouter(
-                new com.github.stannismod.affs.gui.GuiHandler(), new dev.stannismod.stellurgy.inventory.GuiHandler()));
+                new dev.stannismod.stellurgy.affs.gui.GuiHandler(), new dev.stannismod.stellurgy.inventory.GuiHandler()));
         planetWorldType = new WorldTypePlanetGen("PlanetCold");
         spaceWorldType = new WorldTypeSpace("Space");
 

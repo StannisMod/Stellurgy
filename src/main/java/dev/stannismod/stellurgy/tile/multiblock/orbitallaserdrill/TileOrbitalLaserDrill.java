@@ -25,14 +25,14 @@ import dev.stannismod.stellurgy.api.stations.ISpaceObject;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.util.TerraformingHelper;
 import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.LibVulpesBlocks;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
-import zmaster587.libVulpes.util.MultiInventory;
-import zmaster587.libVulpes.util.ZUtils;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
+import dev.stannismod.stellurgy.libvulpes.util.MultiInventory;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
@@ -122,7 +122,7 @@ public class TileOrbitalLaserDrill extends TileMultiPowerConsumer implements IGu
                 40, 20, 2,
                 LibVulpes.proxy.getLocalizedString("msg.spacelaser.reset"),
                 this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                 34, 20
         );
 
@@ -132,7 +132,7 @@ public class TileOrbitalLaserDrill extends TileMultiPowerConsumer implements IGu
                 3,     // buttonId
                 LibVulpes.proxy.getLocalizedString("msg.spacelaser.voidcobble"),
                 this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
                 85, 20
         );
 
@@ -927,9 +927,9 @@ public class TileOrbitalLaserDrill extends TileMultiPowerConsumer implements IGu
         }
 
         modules.add(new ModuleButton(83, 20, 0, "", this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonLeft, 5, 8));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonLeft, 5, 8));
         modules.add(new ModuleButton(137, 20, 1, "", this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonRight, 5, 8));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonRight, 5, 8));
         modules.add(resetBtn);
         modules.add(new ModulePower(11, 25, batteries));
 

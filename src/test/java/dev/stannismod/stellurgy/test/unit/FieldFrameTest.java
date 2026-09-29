@@ -1,8 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import com.github.stannismod.affs.world.FieldFrame;
-import com.github.stannismod.affs.world.FieldFrames;
-import com.github.stannismod.affs.world.WorldFieldFrame;
+import dev.stannismod.stellurgy.affs.world.FieldFrame;
+import dev.stannismod.stellurgy.affs.world.FieldFrames;
+import dev.stannismod.stellurgy.affs.world.WorldFieldFrame;
 import net.minecraft.util.math.Vec3d;
 import org.junit.Test;
 

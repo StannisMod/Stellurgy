@@ -35,7 +35,7 @@ public final class SpaceSubsystemEvents {
         dev.stannismod.stellurgy.network.PacketSlotDimSync sync =
                 dev.stannismod.stellurgy.network.PacketSlotDimSync.current();
         if (!sync.isEmpty()) {
-            zmaster587.libVulpes.network.PacketHandler.sendToPlayer(
+            dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayer(
                     sync, (net.minecraft.entity.player.EntityPlayerMP) event.player);
         }
         // After the slot dims are registered client-side, seed the joining player's render bodies

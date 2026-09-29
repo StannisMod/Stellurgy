@@ -80,7 +80,7 @@ public class BlockPressurizedFluidTank extends Block {
         // If we didn't perform a fluid interaction, open the GUI
         if (!acted) {
             player.openGui(Stellurgy.instance,
-                    zmaster587.libVulpes.inventory.GuiHandler.guiId.MODULAR.ordinal(),
+                    dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler.guiId.MODULAR.ordinal(),
                     world, pos.getX(), pos.getY(), pos.getZ());
         }
         return true;

@@ -11,12 +11,12 @@ import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.util.AudioRegistry;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.IModularInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.inventory.modules.ModuleProgress;
-import zmaster587.libVulpes.inventory.modules.ModuleText;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleProgress;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.List;
 

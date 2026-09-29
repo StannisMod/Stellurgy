@@ -20,7 +20,7 @@ import dev.stannismod.stellurgy.item.ItemAsteroidChip;
 import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.util.Asteroid.StackEntry;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.util.LinkedList;
 import java.util.List;

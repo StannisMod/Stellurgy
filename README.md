@@ -178,7 +178,7 @@ There is no download, so the only way to run Stellurgy today is to build it.
 | --- | --- |
 | Minecraft | 1.12.2 with Forge |
 | Required at runtime | [MixinBooter](https://www.curseforge.com/minecraft/mc-mods/mixinbooter) |
-| Bundled | Valkyrien Skies (vendored under `valkyrienskies/`) and LibVulpes (vendored under `libvulpes/`) — both compiled in, no separate install |
+| Bundled | Valkyrien Skies (vendored under `valkyrienskies/`) and LibVulpes (part of the main tree) — both compiled in, no separate install |
 | Optional | JEI · TheOneProbe / Waila · GregTech CEu · Galacticraft Legacy and Matter Overdrive compat |
 
 > [!IMPORTANT]

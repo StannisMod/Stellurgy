@@ -12,7 +12,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.FluidStack;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 
 import java.util.List;
 

@@ -5,7 +5,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
-import zmaster587.libVulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.util.LinkedList;
 

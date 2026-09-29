@@ -17,9 +17,9 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
-import zmaster587.libVulpes.api.material.AllowedProducts;
-import zmaster587.libVulpes.api.material.Material;
-import zmaster587.libVulpes.api.material.MaterialRegistry;
+import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
+import dev.stannismod.stellurgy.libvulpes.api.material.Material;
+import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
 
 import java.util.Random;
 

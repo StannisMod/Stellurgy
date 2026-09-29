@@ -11,7 +11,7 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
-import zmaster587.libVulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.io.IOException;
 import java.util.logging.Logger;

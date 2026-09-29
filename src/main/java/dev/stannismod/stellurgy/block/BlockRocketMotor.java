@@ -21,7 +21,7 @@ import dev.stannismod.stellurgy.api.IRocketEngine;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.tile.TileBrokenPart;
 import dev.stannismod.stellurgy.util.IBrokenPartBlock;
-import zmaster587.libVulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 
 import java.util.List;
 

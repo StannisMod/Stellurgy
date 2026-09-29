@@ -16,7 +16,7 @@ import net.minecraft.world.World;
 import net.minecraft.block.properties.PropertyDirection;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import zmaster587.libVulpes.block.BlockTile;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 
 import javax.annotation.Nonnull;

@@ -93,7 +93,7 @@ dependencies {
     compileOnly rfg.deobf("mezz.jei:jei_1.12.2:${jeiVersion}:api")
     runtimeOnly rfg.deobf("mezz.jei:jei_1.12.2:${jeiVersion}")
 
-    // libVulpes is vendored as source under libvulpes/ (see build.gradle). These are its OPTIONAL
+    // libVulpes lives in the main tree (dev.stannismod.stellurgy.libvulpes). These are its OPTIONAL
     // integrations, compile-time only: every call site is gated on the mod being present
     // (Loader.isModLoaded("ic2" / "gregtech" / "immersiveengineering"), or a null
     // @CapabilityInject for Tesla), so none of them is needed at runtime.

@@ -382,7 +382,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                         + " serverSideModuleBuild=" + exec("stellurgytest nav modules 0 " + navSub[0] + " "
                                 + navSub[1] + " " + navSub[2])
                         + navAim.diagnosis,
-                screen.startsWith("zmaster587.libVulpes.inventory.GuiModular"));
+                screen.startsWith("dev.stannismod.stellurgy.libvulpes.inventory.GuiModular"));
 
         bot().closeScreen();
     }

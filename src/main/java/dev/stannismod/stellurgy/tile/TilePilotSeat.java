@@ -15,7 +15,7 @@ import net.minecraftforge.fml.relauncher.Side;
 
 import dev.stannismod.stellurgy.api.FreeFlightInput;
 import dev.stannismod.stellurgy.entity.EntityDummy;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 /**
  * Pilot seat for a tier-2 (Valkyrien Skies) ship: the in-world control station that hands a

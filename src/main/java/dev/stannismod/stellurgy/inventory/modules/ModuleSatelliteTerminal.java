@@ -18,9 +18,9 @@ import dev.stannismod.stellurgy.satellite.SatelliteData;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.item.ItemSatelliteIdentificationChip;
 
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
 
 /**
  * Per-viewer status module for the Satellite Control Center.

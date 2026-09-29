@@ -25,9 +25,9 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.IPlanetDefiner;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.inventory.GuiModular;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiModular;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 import java.util.*;
 
@@ -105,15 +105,15 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
 
         staticModuleList.add(new ModuleButton(0, 0, Constants.INVALID_PLANET,
                 I18n.translateToLocal("msg.stellurgy.planetselector.up"),
-                this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild));
+                this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild));
 
         staticModuleList.add(new ModuleButton(0, 18, Constants.INVALID_PLANET + 1,
                 I18n.translateToLocal("msg.stellurgy.planetselector.select"),
-                this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild));
+                this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild));
 
         staticModuleList.add(new ModuleButton(0, 36, Constants.INVALID_PLANET + 2,
                 I18n.translateToLocal("msg.stellurgy.planetselector.planet.list"),
-                this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild));
+                this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild));
 
 
         ModuleDualProgressBar progressBar;
@@ -137,7 +137,7 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
         //renderPlanetarySystem(properties, center, center, 3f);
         if (FMLCommonHandler.instance().getSide().isClient()) {
 
-            //bgTexture = new ModuleImage(0, 54, zmaster587.libVulpes.inventory.TextureResources.buttonScan[0], 128,256);
+            //bgTexture = new ModuleImage(0, 54, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonScan[0], 128,256);
 
             //staticModuleList.add(bgTexture);
 

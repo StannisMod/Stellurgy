@@ -20,11 +20,11 @@ import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidTankProperties;
 import dev.stannismod.stellurgy.network.PacketFluidParticle;
-import zmaster587.libVulpes.cap.FluidCapability;
-import zmaster587.libVulpes.inventory.modules.IModularInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.tile.TileEntityRFConsumer;
+import dev.stannismod.stellurgy.libvulpes.cap.FluidCapability;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.tile.TileEntityRFConsumer;
 
 
 

@@ -67,7 +67,7 @@ import dev.stannismod.stellurgy.tile.infrastructure.TileFuelingStation;
 import dev.stannismod.stellurgy.tile.multiblock.machine.*;
 import dev.stannismod.stellurgy.tile.satellite.TileSatelliteBuilder;
 import dev.stannismod.stellurgy.tile.TileStationAssembler;
-import zmaster587.libVulpes.inventory.GuiModular;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiModular;
 
 import mezz.jei.api.IRecipeRegistry;
 import net.minecraft.client.Minecraft;

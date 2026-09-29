@@ -16,9 +16,9 @@ import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.inventory.GuiHandler;
 import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.IModularInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;

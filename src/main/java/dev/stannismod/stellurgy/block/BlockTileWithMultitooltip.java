@@ -7,8 +7,8 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.block.BlockTile;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTile;
 
 import javax.annotation.Nonnull;
 import java.util.List;

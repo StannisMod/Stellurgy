@@ -11,8 +11,8 @@ import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
 import dev.stannismod.stellurgy.dimension.DimensionProperties.Temps;
 import dev.stannismod.stellurgy.util.OreGenProperties.OreEntry;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.SingleEntry;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.SingleEntry;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;

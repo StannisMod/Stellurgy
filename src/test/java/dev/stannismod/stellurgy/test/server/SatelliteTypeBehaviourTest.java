@@ -17,7 +17,7 @@ import static org.junit.Assert.assertTrue;
  * <ul>
  *   <li><b>solarEnergy / {@code SatelliteMicrowaveEnergy}</b> — marker:
  *       must implement
- *       {@link zmaster587.libVulpes.api.IUniversalEnergyTransmitter}.
+ *       {@link dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergyTransmitter}.
  *       That contract is what
  *       {@code TileMicrowaveReciever} resolves against to accept beam-
  *       down energy; a regression that drops the interface would break
@@ -42,7 +42,7 @@ public class SatelliteTypeBehaviourTest extends AbstractSharedServerTest {
     private static final String BLOCK_NAME = "block";
 
     /** Pin: solarEnergy &rarr; SatelliteMicrowaveEnergy implements
-     *  {@link zmaster587.libVulpes.api.IUniversalEnergyTransmitter} —
+     *  {@link dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergyTransmitter} —
      *  the marker the orbital &rarr; ground energy receiver resolves
      *  against. Also pin canTick=true and isUniversalEnergy=true (the
      *  battery side of the contract, used by GUI updates). */

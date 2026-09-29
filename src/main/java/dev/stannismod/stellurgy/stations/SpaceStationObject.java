@@ -27,9 +27,9 @@ import dev.stannismod.stellurgy.network.PacketStationUpdate.Type;
 import dev.stannismod.stellurgy.tile.station.TileDockingPort;
 import dev.stannismod.stellurgy.util.SpacePosition;
 import dev.stannismod.stellurgy.util.StationLandingLocation;
-import zmaster587.libVulpes.block.BlockFullyRotatable;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.*;

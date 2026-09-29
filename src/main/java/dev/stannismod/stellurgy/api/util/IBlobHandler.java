@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.api.util;
 
 import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.AreaBlob;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public interface IBlobHandler {
 	/* *

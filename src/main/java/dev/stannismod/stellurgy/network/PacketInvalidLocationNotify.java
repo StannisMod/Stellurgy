@@ -6,9 +6,9 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import zmaster587.libVulpes.entity.fx.FxErrorBlock;
-import zmaster587.libVulpes.network.BasePacket;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.entity.fx.FxErrorBlock;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class PacketInvalidLocationNotify extends BasePacket {
 

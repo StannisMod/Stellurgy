@@ -4,7 +4,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import dev.stannismod.stellurgy.util.SpacePosition;
-import zmaster587.libVulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 public class PacketMoveRocketInSpace extends BasePacket {
 

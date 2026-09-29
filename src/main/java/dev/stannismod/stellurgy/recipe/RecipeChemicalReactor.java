@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.recipe;
 
 import dev.stannismod.stellurgy.tile.multiblock.machine.TileChemicalReactor;
-import zmaster587.libVulpes.recipe.RecipeMachineFactory;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipeMachineFactory;
 
 public class RecipeChemicalReactor extends RecipeMachineFactory {
 

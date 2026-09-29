@@ -8,7 +8,7 @@ import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 import javax.annotation.Nonnull;
 import java.util.List;

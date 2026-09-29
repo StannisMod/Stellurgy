@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.network;
 
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketItemModifcation;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketItemModifcation;
 
 import java.util.HashSet;
 import java.util.Set;

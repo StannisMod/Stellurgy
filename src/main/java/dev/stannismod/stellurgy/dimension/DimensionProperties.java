@@ -33,10 +33,10 @@ import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketSatellite;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.VulpineMath;
-import zmaster587.libVulpes.util.ZUtils;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.VulpineMath;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nullable;
 import java.lang.invoke.MethodHandle;

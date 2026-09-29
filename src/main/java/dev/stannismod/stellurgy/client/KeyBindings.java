@@ -27,13 +27,13 @@ import dev.stannismod.stellurgy.entity.EntityHoverCraft;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.interfaces.INetworkEntity;
-import zmaster587.libVulpes.network.PacketChangeKeyState;
-import zmaster587.libVulpes.network.PacketEntity;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.util.InputSyncHandler;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketChangeKeyState;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 
 @SideOnly(Side.CLIENT)
 public class KeyBindings {

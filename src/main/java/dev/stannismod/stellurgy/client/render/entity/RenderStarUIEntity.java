@@ -16,7 +16,7 @@ import dev.stannismod.stellurgy.client.render.SharedModels;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.entity.EntityUIStar;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RenderStarUIEntity extends Render<EntityUIStar> implements IRenderFactory<EntityUIStar> {
 

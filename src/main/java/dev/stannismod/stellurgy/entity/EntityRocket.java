@@ -84,16 +84,16 @@ import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
 import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
 import dev.stannismod.stellurgy.world.util.BasicTeleporter;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
-import zmaster587.libVulpes.gui.CommonResources;
-import zmaster587.libVulpes.interfaces.INetworkEntity;
-import zmaster587.libVulpes.inventory.GuiHandler;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.items.ItemLinker;
-import zmaster587.libVulpes.network.PacketEntity;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.*;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -3645,12 +3645,12 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
 
             //Add buttons
-            modules.add(new ModuleButton(180, 140, 0, LibVulpes.proxy.getLocalizedString("msg.entity.rocket.disass"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 64, 20));
+            modules.add(new ModuleButton(180, 140, 0, LibVulpes.proxy.getLocalizedString("msg.entity.rocket.disass"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 64, 20));
 
             //modules.add(new ModuleButton(180, 95, 1, "", this, TextureResources.buttonLeft, 10, 16));
             //modules.add(new ModuleButton(202, 95, 2, "", this, TextureResources.buttonRight, 10, 16));
 
-            modules.add(new ModuleButton(180, 114, 1, LibVulpes.proxy.getLocalizedString("msg.entity.rocket.seldst"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 64, 20));
+            modules.add(new ModuleButton(180, 114, 1, LibVulpes.proxy.getLocalizedString("msg.entity.rocket.seldst"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 64, 20));
             //modules.add(new ModuleText(180, 114, "Inventories", 0x404040));
         } else {
             ItemStack slot0 = storage.getGuidanceComputer() != null ? storage.getGuidanceComputer().getStackInSlot(0) : ItemStack.EMPTY;
@@ -3659,7 +3659,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             if (!slot0.isEmpty() && slot0.getItem() instanceof ItemStationChip && (uuid = ItemStationChip.getUUID(slot0)) != 0) {
                 ISpaceObject spaceObject = SpaceObjectManager.getSpaceManager().getSpaceStation(uuid);
 
-                modules.add(new ModuleStellarBackground(0, 0, zmaster587.libVulpes.inventory.TextureResources.starryBG));
+                modules.add(new ModuleStellarBackground(0, 0, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.starryBG));
                 //modules.add(new ModuleImage(0, 0, icon));
 
                 if (spaceObject == null)
@@ -3694,7 +3694,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 if (stats.isNuclear())
                     container = new ModulePlanetSelector(
                             properties.getStarId(),
-                            zmaster587.libVulpes.inventory.TextureResources.starryBG,
+                            dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.starryBG,
                             this,                       // selection notify
                             planetSelectorProgress,     // progress source
                             this,                       // planet definer
@@ -3703,7 +3703,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
                 else
                     container = new ModulePlanetSelector(
                             properties.getId(),
-                            zmaster587.libVulpes.inventory.TextureResources.starryBG,
+                            dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.starryBG,
                             this,                       // selection notify
                             planetSelectorProgress,     // progress source
                             false

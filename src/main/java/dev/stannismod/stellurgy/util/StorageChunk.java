@@ -45,9 +45,9 @@ import dev.stannismod.stellurgy.tile.TileBrokenPart;
 import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
 import dev.stannismod.stellurgy.world.util.WorldDummy;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.Vector3F;
-import zmaster587.libVulpes.util.ZUtils;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

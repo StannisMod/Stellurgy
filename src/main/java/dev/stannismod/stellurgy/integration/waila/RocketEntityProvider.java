@@ -20,7 +20,7 @@ import dev.stannismod.stellurgy.integration.dataloaders.AbstractDataContext;
 import dev.stannismod.stellurgy.integration.dataloaders.RocketDataLoader;
 import dev.stannismod.stellurgy.integration.dataloaders.RocketDataLoaderServer;
 import dev.stannismod.stellurgy.util.StationLandingLocation;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class RocketEntityProvider implements IWailaEntityProvider {
     static class WailaRocketDataLoader extends RocketDataLoader {

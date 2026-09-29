@@ -8,8 +8,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.IUniversalEnergyTransmitter;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergyTransmitter;
 
 import javax.annotation.Nonnull;
 

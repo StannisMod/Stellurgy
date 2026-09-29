@@ -9,9 +9,9 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.tile.multiblock.TileBeacon;
-import zmaster587.libVulpes.block.multiblock.BlockMultiblockMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.util.Random;
 

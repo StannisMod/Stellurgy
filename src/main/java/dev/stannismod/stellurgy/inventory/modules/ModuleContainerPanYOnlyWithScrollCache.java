@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.inventory.modules;
 
-import zmaster587.libVulpes.inventory.modules.ModuleContainerPanYOnly;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleContainerPanYOnly;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;

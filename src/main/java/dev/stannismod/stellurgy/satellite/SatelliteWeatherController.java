@@ -30,10 +30,10 @@ import dev.stannismod.stellurgy.world.weather.PlanetWeatherManager;
 import dev.stannismod.stellurgy.network.PacketAirParticle;
 import dev.stannismod.stellurgy.network.PacketFluidParticle;
 import dev.stannismod.stellurgy.util.BiomeHandler;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.IUniversalEnergy;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.*;

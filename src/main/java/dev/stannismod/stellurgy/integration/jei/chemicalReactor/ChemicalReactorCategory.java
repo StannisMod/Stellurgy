@@ -11,7 +11,7 @@ import net.minecraftforge.fluids.FluidStack;
 import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import dev.stannismod.stellurgy.integration.jei.MachineCategoryTemplate;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 import java.util.LinkedList;
 import java.util.List;

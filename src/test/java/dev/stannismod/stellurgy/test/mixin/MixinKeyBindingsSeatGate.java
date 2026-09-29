@@ -39,8 +39,8 @@ public abstract class MixinKeyBindingsSeatGate {
 
     @Inject(method = "handleShipPilotInput",
             at = @At(value = "INVOKE",
-                    target = "Lzmaster587/libVulpes/network/PacketHandler;"
-                            + "sendToServer(Lzmaster587/libVulpes/network/BasePacket;)V"))
+                    target = "Ldev/stannismod/stellurgy/libvulpes/network/PacketHandler;"
+                            + "sendToServer(Ldev/stannismod/stellurgy/libvulpes/network/BasePacket;)V"))
     // CallbackInfoReturnable, not CallbackInfo: the TARGET returns a boolean, and mixin requires the
     // returnable form for ANY injection into it — including one in the middle of the method, which is
     // where this one sits. Measured 2026-08-21: the plain form is refused with "Invalid descriptor …

@@ -5,8 +5,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
 import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.integration.jei.satelliteBuilder.SatelliteBuilderWrapper;
-import zmaster587.libVulpes.api.LibVulpesItems;
-import zmaster587.libVulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
 
 
 import java.util.ArrayList;

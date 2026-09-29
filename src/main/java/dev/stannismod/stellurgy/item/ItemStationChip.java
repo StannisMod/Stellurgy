@@ -23,13 +23,13 @@ import dev.stannismod.stellurgy.api.stations.ISpaceObject;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.inventory.modules.ModuleStellarBackground;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.GuiHandler;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.INetworkItem;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketItemModifcation;
-import zmaster587.libVulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.INetworkItem;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketItemModifcation;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -91,7 +91,7 @@ public class ItemStationChip extends ItemIdWithName implements IModularInventory
         ItemStack stack = player.getHeldItem(EnumHand.MAIN_HAND);
 
         if (!stack.isEmpty()) {
-            modules.add(new ModuleStellarBackground(0, 0, zmaster587.libVulpes.inventory.TextureResources.starryBG));
+            modules.add(new ModuleStellarBackground(0, 0, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.starryBG));
 
 
             List<ModuleBase> list2 = new LinkedList<>();

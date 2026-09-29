@@ -12,8 +12,8 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import dev.stannismod.stellurgy.tile.hatch.TileDataBus;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
-import zmaster587.libVulpes.block.multiblock.BlockHatch;
-import zmaster587.libVulpes.tile.TilePointer;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockHatch;
+import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
 import dev.stannismod.stellurgy.tile.infrastructure.*;
 
 public class BlockStellurgyHatch extends BlockHatch {

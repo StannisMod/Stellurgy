@@ -14,7 +14,7 @@ import net.minecraft.world.WorldServer;
 import net.minecraftforge.fluids.IFluidBlock;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.atmosphere.IAtmosphereSealHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;

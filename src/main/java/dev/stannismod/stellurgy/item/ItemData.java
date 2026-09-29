@@ -9,7 +9,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.api.DataStorage;
-import zmaster587.libVulpes.items.ItemIngredient;
+import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

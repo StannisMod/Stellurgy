@@ -36,14 +36,14 @@ import dev.stannismod.stellurgy.network.PacketSatellite;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.util.AudioRegistry;
 import dev.stannismod.stellurgy.util.StorageChunk;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.inventory.modules.ModuleButton;
-import zmaster587.libVulpes.inventory.modules.ModuleText;
-import zmaster587.libVulpes.network.PacketEntity;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -363,9 +363,9 @@ public class EntityStationDeployedRocket extends EntityRocket {
         } else {
             atmText.setText(LibVulpes.proxy.getLocalizedString("msg.entityDeployedRocket.notGasGiant"));
         }
-        modules.add(new ModuleButton(170, 114, 1, "", this, zmaster587.libVulpes.inventory.TextureResources.buttonLeft, 5, 8));
+        modules.add(new ModuleButton(170, 114, 1, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonLeft, 5, 8));
         modules.add(atmText);
-        modules.add(new ModuleButton(240, 114, 2, "", this, zmaster587.libVulpes.inventory.TextureResources.buttonRight, 5, 8));
+        modules.add(new ModuleButton(240, 114, 2, "", this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonRight, 5, 8));
 
         return modules;
     }

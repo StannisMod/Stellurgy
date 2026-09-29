@@ -8,8 +8,8 @@ import net.minecraftforge.fluids.FluidRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
 import dev.stannismod.stellurgy.util.WeightEngine;
-import zmaster587.libVulpes.util.HashedBlockPosition;
-import zmaster587.libVulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

@@ -14,13 +14,13 @@ import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.util.WeightEngine;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
-import zmaster587.libVulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -211,7 +211,7 @@ public class TileSatelliteBuilder extends TileMultiPowerConsumer implements IMod
         modules.add(new ModuleTexturedSlotArray(82, 16, this, chipCopySlot, chipCopySlot + 1, TextureResources.idChip));    // Id chip
         modules.add(new ModuleProgress(75, 36, 0, new ProgressBarImage(217, 0, 17, 17, 234, 0, EnumFacing.DOWN, TextureResources.progressBars), this));
         String buildLabel = LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.build");
-        modules.add(new ModuleButton(40, 56, 0, buildLabel, this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild));
+        modules.add(new ModuleButton(40, 56, 0, buildLabel, this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild));
         modules.add(new ModuleButton(173, 3, 1, "", this, TextureResources.buttonCopy, LibVulpes.proxy.getLocalizedString("msg.satbuilder.writesecondchip"), 24, 24));
 
         return modules;

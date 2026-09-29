@@ -14,8 +14,8 @@ import dev.stannismod.stellurgy.api.AreaBlob;
 import dev.stannismod.stellurgy.api.util.IBlobHandler;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.network.PacketAirParticle;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.*;

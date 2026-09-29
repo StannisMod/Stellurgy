@@ -6,7 +6,7 @@ import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.api.StellurgyItems;
-import zmaster587.libVulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
 
 public class RenderComponents {
 

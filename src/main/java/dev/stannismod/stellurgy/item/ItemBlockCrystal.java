@@ -2,8 +2,8 @@ package dev.stannismod.stellurgy.item;
 
 import net.minecraft.block.Block;
 import net.minecraft.item.ItemStack;
-import zmaster587.libVulpes.block.INamedMetaBlock;
-import zmaster587.libVulpes.items.ItemBlockMeta;
+import dev.stannismod.stellurgy.libvulpes.block.INamedMetaBlock;
+import dev.stannismod.stellurgy.libvulpes.items.ItemBlockMeta;
 
 import javax.annotation.Nonnull;
 

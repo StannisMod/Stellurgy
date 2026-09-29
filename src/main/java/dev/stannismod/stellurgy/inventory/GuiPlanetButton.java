@@ -6,7 +6,7 @@ import net.minecraft.client.renderer.Tessellator;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.client.render.planet.RenderPlanetarySky;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import zmaster587.libVulpes.gui.GuiImageButton;
+import dev.stannismod.stellurgy.libvulpes.gui.GuiImageButton;
 
 public class GuiPlanetButton extends GuiImageButton {
 

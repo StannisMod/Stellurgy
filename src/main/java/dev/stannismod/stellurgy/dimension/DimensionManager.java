@@ -27,7 +27,7 @@ import dev.stannismod.stellurgy.util.XMLPlanetLoader.DimensionPropertyCoupling;
 import dev.stannismod.stellurgy.world.provider.WorldProviderAsteroid;
 import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
-import zmaster587.libVulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

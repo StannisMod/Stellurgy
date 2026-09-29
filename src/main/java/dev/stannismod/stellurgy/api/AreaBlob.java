@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.api;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.world.World;
 import dev.stannismod.stellurgy.api.util.IBlobHandler;
-import zmaster587.libVulpes.util.AdjacencyGraph;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.AdjacencyGraph;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

@@ -14,8 +14,8 @@ import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.client.render.RenderLaser;
 import dev.stannismod.stellurgy.tile.multiblock.TileSpaceElevator;
-import zmaster587.libVulpes.block.RotatableBlock;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RendererSpaceElevator extends TileEntitySpecialRenderer {
 

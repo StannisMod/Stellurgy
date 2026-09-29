@@ -12,10 +12,10 @@ import dev.stannismod.stellurgy.inventory.modules.ModuleAutoData;
 import dev.stannismod.stellurgy.item.IDataItem;
 import dev.stannismod.stellurgy.item.ItemData;
 import dev.stannismod.stellurgy.util.IDataInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileInventoryHatch;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;

@@ -4,7 +4,7 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.util.ResourceLocation;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 
 public class ModuleStellarBackground extends ModuleBase {
 

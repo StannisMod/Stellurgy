@@ -34,15 +34,15 @@ import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.util.IDataInventory;
 import dev.stannismod.stellurgy.world.util.MultiData;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.client.util.IndicatorBarImage;
-import zmaster587.libVulpes.inventory.GuiHandler;
-import zmaster587.libVulpes.inventory.GuiHandler.guiId;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.util.EmbeddedInventory;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler.guiId;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
@@ -214,7 +214,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
                 int sizeY = 70;
 
                 if (world.isRemote) {
-                    modules.add(new ModuleScaledImage(baseX, baseY, sizeX, sizeY, zmaster587.libVulpes.inventory.TextureResources.starryBG));
+                    modules.add(new ModuleScaledImage(baseX, baseY, sizeX, sizeY, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.starryBG));
                     modules.add(srcPlanetImg);
 
 
@@ -230,7 +230,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
                     modules.add(new ModuleScaledImage(baseX, baseY, 70, 3, TextureResources.horizontalBar));
                     modules.add(new ModuleScaledImage(baseX, baseY + sizeY - 3, 70, -3, TextureResources.horizontalBar));
                 }
-                modules.add(new ModuleButton(baseX - 3, baseY + sizeY, 0, LibVulpes.proxy.getLocalizedString("msg.warpmon.selectplanet"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, sizeX + 6, 16));
+                modules.add(new ModuleButton(baseX - 3, baseY + sizeY, 0, LibVulpes.proxy.getLocalizedString("msg.warpmon.selectplanet"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, sizeX + 6, 16));
 
 
                 //Status text
@@ -256,7 +256,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
                 baseY = 20;
                 sizeX = 70;
                 sizeY = 70;
-                ModuleButton warp = new ModuleButton(baseX - 3, baseY + sizeY, 1, LibVulpes.proxy.getLocalizedString("msg.warpmon.warp"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, sizeX + 6, 16);
+                ModuleButton warp = new ModuleButton(baseX - 3, baseY + sizeY, 1, LibVulpes.proxy.getLocalizedString("msg.warpmon.warp"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, sizeX + 6, 16);
 
                 modules.add(warp);
 
@@ -274,7 +274,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
                     modules.add(warpFuel);
                     modules.add(warpCapacity);
 
-                    modules.add(new ModuleScaledImage(baseX, baseY, sizeX, sizeY, zmaster587.libVulpes.inventory.TextureResources.starryBG));
+                    modules.add(new ModuleScaledImage(baseX, baseY, sizeX, sizeY, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.starryBG));
 
                     if (dimCache != null && world.isRemote) {
                         modules.add(dstPlanetImg);
@@ -305,8 +305,8 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
                 modules.add(new ModuleSlotArray(105, 60, this, 7, 8));
                 modules.add(new ModuleSlotArray(130, 35, this, 8, 9));
 
-                modules.add(new ModuleButton(50, 117, 3, LibVulpes.proxy.getLocalizedString("msg.warpmon.search"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, LibVulpes.proxy.getLocalizedString("msg.warpmon.datareq"), 100, 10));
-                modules.add(new ModuleButton(50, 127, 4, LibVulpes.proxy.getLocalizedString("msg.warpmon.chip"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 100, 10));
+                modules.add(new ModuleButton(50, 117, 3, LibVulpes.proxy.getLocalizedString("msg.warpmon.search"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, LibVulpes.proxy.getLocalizedString("msg.warpmon.datareq"), 100, 10));
+                modules.add(new ModuleButton(50, 127, 4, LibVulpes.proxy.getLocalizedString("msg.warpmon.chip"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 100, 10));
                 modules.add(new ModuleTexturedSlotArray(30, 120, this, 3, 4, TextureResources.idChip));
                 modules.add(programmingProgress);
             }
@@ -318,7 +318,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
                 starId = station.getProperties().getParentProperties().getStar().getId();
             container = new ModulePlanetSelector(
                 starId,
-                zmaster587.libVulpes.inventory.TextureResources.starryBG,
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.starryBG,
                 this,
                 (IProgressBar) this,
                 (IPlanetDefiner) this,

@@ -12,9 +12,9 @@ import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.item.ItemBiomeChanger;
 import dev.stannismod.stellurgy.util.BiomeHandler;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.IUniversalEnergy;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.IUniversalEnergy;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import java.util.*;

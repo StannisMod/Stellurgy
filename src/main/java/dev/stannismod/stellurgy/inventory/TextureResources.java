@@ -2,9 +2,9 @@ package dev.stannismod.stellurgy.inventory;
 
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
-import zmaster587.libVulpes.client.util.IndicatorBarImage;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
-import zmaster587.libVulpes.util.IconResource;
+import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.recipe;
 
 import dev.stannismod.stellurgy.tile.multiblock.machine.TileCrystallizer;
-import zmaster587.libVulpes.recipe.RecipeMachineFactory;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipeMachineFactory;
 
 public class RecipeCrystallizer extends RecipeMachineFactory {
 

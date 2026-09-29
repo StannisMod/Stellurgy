@@ -250,7 +250,7 @@ public final class SpaceSlotPool {
                 return;
             }
             for (net.minecraft.entity.player.EntityPlayerMP p : server.getPlayerList().getPlayers()) {
-                zmaster587.libVulpes.network.PacketHandler.sendToPlayer(sync, p);
+                dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayer(sync, p);
             }
         } catch (Throwable t) {
             Stellurgy.logger.warn("[SPACE] slot-dim client sync failed", t);

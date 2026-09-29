@@ -17,9 +17,9 @@ import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.util.StorageChunk;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
@@ -196,10 +196,10 @@ public class TileStationAssembler extends TileRocketAssemblingMachine implements
 
         modules.add(new ModuleProgress(149, 30, 2, verticalProgressBar, this));
 
-        modules.add(new ModuleButton(5, 34, 0, LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.scan"), this, zmaster587.libVulpes.inventory.TextureResources.buttonScan));
+        modules.add(new ModuleButton(5, 34, 0, LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.scan"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonScan));
 
         ModuleButton buttonBuild;
-        modules.add(buttonBuild = new ModuleButton(5, 60, 1, LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.build"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild));
+        modules.add(buttonBuild = new ModuleButton(5, 60, 1, LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.build"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild));
         buttonBuild.setColor(0xFFFF2222);
         modules.add(errorText = new ModuleText(5, 22, "", 0xFFFFFF22));
         modules.add(new ModuleSync(4, this));

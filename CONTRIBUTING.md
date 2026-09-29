@@ -9,8 +9,8 @@
 Gradle itself runs on **JDK 25**, while the mod is compiled against **Java 8**. Point `JAVA_HOME` at a JDK 25
 installation before invoking Gradle, or the build will not configure.
 
-LibVulpes is vendored as source under `libvulpes/` and compiled into Stellurgy's own jar; change it there like
-any other source in this repository.
+LibVulpes and the force-field system are part of the main tree (`dev.stannismod.stellurgy.libvulpes`,
+`dev.stannismod.stellurgy.affs`); change them like any other source in this repository.
 
 ## Running a dev environment
 

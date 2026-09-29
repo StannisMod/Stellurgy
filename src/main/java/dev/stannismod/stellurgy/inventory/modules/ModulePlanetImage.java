@@ -9,7 +9,7 @@ import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.client.render.planet.RenderPlanetarySky;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 
 import java.util.Objects;
 

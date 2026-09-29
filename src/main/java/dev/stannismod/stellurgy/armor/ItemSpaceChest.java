@@ -11,9 +11,9 @@ import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.api.IAtmosphere;
 import dev.stannismod.stellurgy.api.armor.IFillableArmor;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.util.EmbeddedInventory;
-import zmaster587.libVulpes.util.FluidUtils;
-import zmaster587.libVulpes.util.IconResource;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.util.FluidUtils;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import javax.annotation.Nonnull;
 import java.util.LinkedList;

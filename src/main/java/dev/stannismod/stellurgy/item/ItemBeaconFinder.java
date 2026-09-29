@@ -23,11 +23,11 @@ import org.lwjgl.opengl.GL11;
 
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
-import zmaster587.libVulpes.api.IArmorComponent;
-import zmaster587.libVulpes.client.ResourceIcon;
-import zmaster587.libVulpes.inventory.TextureResources;
-import zmaster587.libVulpes.render.RenderHelper;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

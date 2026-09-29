@@ -7,9 +7,9 @@ import net.minecraft.client.gui.FontRenderer;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.FluidStack;
-import zmaster587.libVulpes.interfaces.IRecipe;
-import zmaster587.libVulpes.recipe.RecipesMachine.ChanceItemStack;
-import zmaster587.libVulpes.recipe.RecipesMachine.Recipe;
+import dev.stannismod.stellurgy.libvulpes.interfaces.IRecipe;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.ChanceItemStack;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine.Recipe;
 
 import java.awt.*;
 import java.util.ArrayList;

@@ -392,7 +392,7 @@ public final class DeckHold {
         // A RESTORE seed: it re-establishes what the durable record says, so it outranks whatever
         // capture the returning client made for itself out of the position and velocity vanilla
         // handed it. A dismount seed deliberately does not (contract note on PacketDeckCapture).
-        zmaster587.libVulpes.network.PacketHandler.sendToPlayer(
+        dev.stannismod.stellurgy.libvulpes.network.PacketHandler.sendToPlayer(
                 new dev.stannismod.stellurgy.network.PacketDeckCapture(
                         hold.shipId, hold.subX, hold.subY, hold.subZ, true),
                 player);

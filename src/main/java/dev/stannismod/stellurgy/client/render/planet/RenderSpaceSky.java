@@ -16,8 +16,8 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
-import zmaster587.libVulpes.render.RenderHelper;
-import zmaster587.libVulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 import java.util.Objects;
 

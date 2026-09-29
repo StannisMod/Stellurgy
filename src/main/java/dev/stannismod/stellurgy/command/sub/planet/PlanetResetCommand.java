@@ -7,7 +7,7 @@ import net.minecraft.server.MinecraftServer;
 import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
-import zmaster587.libVulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 public class PlanetResetCommand extends StellurgyCommand {
     @Override

@@ -12,10 +12,10 @@ import dev.stannismod.stellurgy.item.ItemSatellite;
 import dev.stannismod.stellurgy.network.PacketBackToRocketGui;
 import dev.stannismod.stellurgy.util.IWeighted;
 import dev.stannismod.stellurgy.util.RocketGuiNavigation;
-import zmaster587.libVulpes.inventory.modules.IButtonInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
 
 import java.util.List;
 

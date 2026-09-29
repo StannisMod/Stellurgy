@@ -28,8 +28,8 @@ import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.util.SpacePosition;
-import zmaster587.libVulpes.render.RenderHelper;
-import zmaster587.libVulpes.util.Vector3F;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
 import java.util.LinkedList;
 import java.util.List;

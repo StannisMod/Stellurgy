@@ -15,8 +15,8 @@ import dev.stannismod.stellurgy.api.IInfrastructure;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.util.LinkedList;
 

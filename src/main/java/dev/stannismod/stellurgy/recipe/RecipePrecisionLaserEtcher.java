@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.recipe;
 
 import dev.stannismod.stellurgy.tile.multiblock.machine.TilePrecisionLaserEtcher;
-import zmaster587.libVulpes.recipe.RecipeMachineFactory;
+import dev.stannismod.stellurgy.libvulpes.recipe.RecipeMachineFactory;
 
 public class RecipePrecisionLaserEtcher extends RecipeMachineFactory {
 

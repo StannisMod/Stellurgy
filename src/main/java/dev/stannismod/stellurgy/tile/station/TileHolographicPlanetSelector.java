@@ -18,12 +18,12 @@ import dev.stannismod.stellurgy.entity.EntityUIPlanet;
 import dev.stannismod.stellurgy.entity.EntityUIStar;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.util.INetworkMachine;
-import zmaster587.libVulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.util.Collection;
 import java.util.LinkedList;

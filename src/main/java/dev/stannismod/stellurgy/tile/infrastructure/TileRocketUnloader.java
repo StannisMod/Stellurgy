@@ -9,9 +9,9 @@ import net.minecraftforge.items.ItemHandlerHelper;
 import dev.stannismod.stellurgy.api.IInfrastructure;
 import dev.stannismod.stellurgy.tile.TileGuidanceComputer;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
-import zmaster587.libVulpes.inventory.modules.IButtonInventory;
-import zmaster587.libVulpes.util.INetworkMachine;
-import zmaster587.libVulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.util.List;
 

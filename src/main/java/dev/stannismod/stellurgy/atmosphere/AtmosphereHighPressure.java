@@ -3,7 +3,7 @@ package dev.stannismod.stellurgy.atmosphere;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 public class AtmosphereHighPressure extends AtmosphereNeedsSuit {
 

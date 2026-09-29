@@ -29,7 +29,7 @@ import dev.stannismod.stellurgy.network.PacketStationUpdate;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.Asteroid;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.lang.reflect.Field;
 

@@ -14,7 +14,7 @@ import net.minecraftforge.fluids.IFluidBlock;
 import net.minecraftforge.oredict.OreDictionary;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import zmaster587.libVulpes.block.BlockMeta;
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
 
 import java.util.List;
 import java.util.stream.Collectors;

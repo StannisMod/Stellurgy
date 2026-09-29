@@ -24,8 +24,8 @@ import static org.junit.Assert.assertTrue;
  * <p>A tab's title is {@code itemGroup.<label>}, resolved through the merged lang files of every
  * domain in the jar; 1.12 answers a missing key with the key itself, so the failure is a tab named
  * {@code itemGroup.advancedRocketryOres} and nothing logged. That exact shape shipped: libVulpes'
- * ore tab kept its old label when the lang key was renamed with the mod, and the two halves live in
- * different source roots, so no single-root review sees both.</p>
+ * ore tab kept its old label when the lang key was renamed with the mod, and the label and its key
+ * live in different packages and different domains, so no review of one sees the other.</p>
  *
  * <p>Scans source, like {@code LangKeyCrossReferenceTest}: a tab is a static field, and loading
  * every class that declares one would construct half the mod. <b>What it cannot see</b>: a label
@@ -36,16 +36,12 @@ public class CreativeTabTitleContractTest {
     /** Every compiled main source root; a tab declared in any of them ships in the jar. */
     private static final String[] SOURCE_ROOTS = {
             "src/main/java",
-            "libvulpes/src/main/java",
-            "affs/src/main/java",
             "valkyrienskies/src/main/java",
     };
 
     /** Every root that ships assets/&lt;domain&gt;/lang/. */
     private static final String[] RESOURCE_ROOTS = {
             "src/main/resources",
-            "libvulpes/src/main/resources",
-            "affs/src/main/resources",
             "valkyrienskies/src/main/resources",
     };
 

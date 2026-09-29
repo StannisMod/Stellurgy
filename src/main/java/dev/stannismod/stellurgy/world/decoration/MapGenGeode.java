@@ -14,7 +14,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import zmaster587.libVulpes.block.BlockMeta;
+import dev.stannismod.stellurgy.libvulpes.block.BlockMeta;
 
 import java.util.ArrayList;
 import java.util.List;

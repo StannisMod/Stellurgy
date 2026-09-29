@@ -3,8 +3,8 @@ package dev.stannismod.stellurgy.block;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
-import zmaster587.libVulpes.block.BlockTileComparatorOverride;
-import zmaster587.libVulpes.util.IAdjBlockUpdate;
+import dev.stannismod.stellurgy.libvulpes.block.BlockTileComparatorOverride;
+import dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate;
 
 public class BlockTileNeighborUpdate extends BlockTileComparatorOverride {
 
@@ -24,8 +24,8 @@ public class BlockTileNeighborUpdate extends BlockTileComparatorOverride {
                                 net.minecraft.util.math.BlockPos fromPos) {
         super.neighborChanged(state, world, pos, blockIn, fromPos);
         TileEntity te = world.getTileEntity(pos);
-        if (te instanceof zmaster587.libVulpes.util.IAdjBlockUpdate) {
-            ((zmaster587.libVulpes.util.IAdjBlockUpdate) te).onAdjacentBlockUpdated();
+        if (te instanceof dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate) {
+            ((dev.stannismod.stellurgy.libvulpes.util.IAdjBlockUpdate) te).onAdjacentBlockUpdated();
         }
     }
 

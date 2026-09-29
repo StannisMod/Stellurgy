@@ -25,18 +25,18 @@ import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.inventory.modules.ModuleNumericTextboxWithTooltip;
 import dev.stannismod.stellurgy.inventory.modules.ModuleWirelessBufferBar;
 import dev.stannismod.stellurgy.world.util.MultiData;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.interfaces.ILinkableTile;
-import zmaster587.libVulpes.inventory.modules.IGuiCallback;
-import zmaster587.libVulpes.inventory.modules.IModularInventory;
-import zmaster587.libVulpes.inventory.modules.IToggleButton;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.inventory.modules.ModuleText;
-import zmaster587.libVulpes.inventory.modules.ModuleToggleSwitch;
-import zmaster587.libVulpes.items.ItemLinker;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IGuiCallback;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IToggleButton;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleToggleSwitch;
+import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
@@ -102,7 +102,7 @@ public class TileWirelessTransceiver extends TileEntity implements INetworkMachi
                 160, 5, PACKET_ENABLED,
                 "",
                 this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonToggleImage,
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonToggleImage,
                 11, 26,
                 true
         );
@@ -231,8 +231,8 @@ public class TileWirelessTransceiver extends TileEntity implements INetworkMachi
             return BlockTransceiver.getFront(state).getOpposite();
         }
 
-        if (state.getBlock() instanceof zmaster587.libVulpes.block.RotatableBlock) {
-            return zmaster587.libVulpes.block.RotatableBlock.getFront(state).getOpposite();
+        if (state.getBlock() instanceof dev.stannismod.stellurgy.libvulpes.block.RotatableBlock) {
+            return dev.stannismod.stellurgy.libvulpes.block.RotatableBlock.getFront(state).getOpposite();
         }
 
         return EnumFacing.SOUTH;

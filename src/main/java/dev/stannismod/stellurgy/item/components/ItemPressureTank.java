@@ -19,9 +19,9 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.input.Keyboard;
 import dev.stannismod.stellurgy.capability.TankCapabilityItemStack;
-import zmaster587.libVulpes.api.IArmorComponent;
-import zmaster587.libVulpes.client.ResourceIcon;
-import zmaster587.libVulpes.items.ItemIngredient;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.client.ResourceIcon;
+import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -47,7 +47,7 @@ public class ItemPressureTank extends ItemIngredient implements IArmorComponent 
         super.addInformation(stack, world, list, flag);
 
         final int capMb = Math.max(0, getCapacity(stack));
-        final net.minecraftforge.fluids.FluidStack fs = zmaster587.libVulpes.util.FluidUtils.getFluidForItem(stack);
+        final net.minecraftforge.fluids.FluidStack fs = dev.stannismod.stellurgy.libvulpes.util.FluidUtils.getFluidForItem(stack);
 
         final String fluidName = (fs != null && fs.getFluid() != null) ? fs.getLocalizedName() : I18n.format("tooltip.stellurgy.fluidtank.empty");
         final int amount = (fs != null) ? fs.amount : 0;

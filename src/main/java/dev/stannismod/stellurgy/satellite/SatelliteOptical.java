@@ -2,7 +2,7 @@ package dev.stannismod.stellurgy.satellite;
 
 import dev.stannismod.stellurgy.api.DataStorage;
 import dev.stannismod.stellurgy.api.DataStorage.DataType;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 public class SatelliteOptical extends SatelliteData {
 

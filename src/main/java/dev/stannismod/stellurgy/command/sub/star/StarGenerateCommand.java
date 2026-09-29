@@ -8,7 +8,7 @@ import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.command.sub.StellurgyCommand;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.network.PacketStellarInfo;
-import zmaster587.libVulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 public class StarGenerateCommand extends StellurgyCommand {
     @Override

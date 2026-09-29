@@ -9,7 +9,7 @@ import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.tile.multiblock.TileAreaGravityController;
-import zmaster587.libVulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 
 public class RenderAreaGravityController extends TileEntitySpecialRenderer {
 

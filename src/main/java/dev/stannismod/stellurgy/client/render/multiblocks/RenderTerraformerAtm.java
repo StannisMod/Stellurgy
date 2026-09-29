@@ -10,8 +10,8 @@ import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.block.RotatableBlock;
-import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 
 public class RenderTerraformerAtm extends TileEntitySpecialRenderer {
 

@@ -16,7 +16,7 @@ import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.client.render.SharedModels;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.entity.EntityUIPlanet;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RenderPlanetUIEntity extends Render<EntityUIPlanet> implements IRenderFactory<EntityUIPlanet> {
 

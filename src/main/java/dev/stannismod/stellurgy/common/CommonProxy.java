@@ -12,12 +12,12 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
 import dev.stannismod.stellurgy.api.IAtmosphere;
 import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.inventory.modules.ModuleButton;
-import zmaster587.libVulpes.inventory.modules.ModuleContainerPanYOnly;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleContainerPanYOnly;
 import dev.stannismod.stellurgy.network.PacketLaserGun;
 import dev.stannismod.stellurgy.network.PacketStationUpdate;
-import zmaster587.libVulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 import java.util.List;
 import java.util.LinkedList;

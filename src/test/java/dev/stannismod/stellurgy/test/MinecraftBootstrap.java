@@ -67,8 +67,8 @@ public final class MinecraftBootstrap {
             // field is null in tests (wired by the Forge classloader in prod), so
             // inject a plain proxy. Headless it returns the translation KEY, which
             // is enough for non-null / distinct-name contracts.
-            if (zmaster587.libVulpes.LibVulpes.proxy == null) {
-                zmaster587.libVulpes.LibVulpes.proxy = new zmaster587.libVulpes.common.CommonProxy();
+            if (dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy == null) {
+                dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy = new dev.stannismod.stellurgy.libvulpes.common.CommonProxy();
             }
 
             // 3. Register a deterministic "Sol" star with id=0 so that

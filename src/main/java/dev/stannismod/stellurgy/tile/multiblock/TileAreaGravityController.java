@@ -22,13 +22,13 @@ import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.inventory.modules.ModuleSideSelectorTooltipOverlay;
 import dev.stannismod.stellurgy.util.AudioRegistry;
 import dev.stannismod.stellurgy.util.GravityHandler;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.LibVulpesBlocks;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiPowerConsumer;
-import zmaster587.libVulpes.util.ZUtils.RedstoneState;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiPowerConsumer;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -87,7 +87,7 @@ public class TileAreaGravityController extends TileMultiPowerConsumer implements
     public List<ModuleBase> getModules(int id, EntityPlayer player) {
         List<ModuleBase> modules = new LinkedList<>();
         modules.add(toggleSwitch = new ModuleToggleSwitch(160, 5, 0, "", this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonToggleImage, 11, 26, getMachineEnabled()));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonToggleImage, 11, 26, getMachineEnabled()));
         modules.add(new ModulePower(18, 20, getBatteries()));
         modules.add(sideSelectorModule);
         modules.add(redstoneControl);

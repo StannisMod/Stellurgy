@@ -116,7 +116,7 @@ public class StationAssemblerCategory implements IRecipeCategory<StationAssemble
             // Only when chip is unprogrammed
             if (dev.stannismod.stellurgy.item.ItemStationChip.getUUID(stack) == 0) {
                 // Vanilla "unprogrammed" text (with and without gray formatting)
-                final String vanilla = zmaster587.libVulpes.LibVulpes.proxy.getLocalizedString("msg.unprogrammed");
+                final String vanilla = dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString("msg.unprogrammed");
                 final String vanillaGray = net.minecraft.util.text.TextFormatting.GRAY + vanilla;
 
                 // Strip just that line (handle formatting/no-format)
@@ -128,7 +128,7 @@ public class StationAssemblerCategory implements IRecipeCategory<StationAssemble
 
                 // Insert our JEI-specific hint
                 tooltip.add(net.minecraft.util.text.TextFormatting.GRAY +
-                    zmaster587.libVulpes.LibVulpes.proxy.getLocalizedString(
+                    dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString(
                         "jei.ar.stationAssembler.newStationChipHint"
                     )
                 );

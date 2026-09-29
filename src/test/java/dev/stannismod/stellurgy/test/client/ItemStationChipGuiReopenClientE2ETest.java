@@ -61,7 +61,7 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
     private static final String CHIP = "stellurgy:spacestationchip";
 
     /**
-     * {@code zmaster587.libVulpes.inventory.GuiHandler.guiId.MODULARFULLSCREEN.ordinal()} — the id
+     * {@code dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler.guiId.MODULARFULLSCREEN.ordinal()} — the id
      * the chip re-opens on, and the one Stellurgy's handler used to answer null for. It travels in Forge's
      * own {@code OpenGui} message, so it is the id the handler is ASKED about, not an internal name.
      */

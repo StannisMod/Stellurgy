@@ -16,8 +16,8 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.tile.station.TileDockingPort;
 import dev.stannismod.stellurgy.tile.station.TileLandingPad;
-import zmaster587.libVulpes.block.BlockFullyRotatable;
-import zmaster587.libVulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 
 import java.util.List;
 

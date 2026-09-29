@@ -10,8 +10,8 @@ import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import zmaster587.libVulpes.block.RotatableBlock;
-import zmaster587.libVulpes.tile.multiblock.TileMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiblockMachine;
 
 import java.util.List;
 
@@ -71,21 +71,21 @@ public class RendererCrystallizer extends TileEntitySpecialRenderer {
                 GL11.glTranslated(1, 0.2, 0.7);
                 GL11.glRotatef(rotation, 0, 1, 0);
                 GL11.glScalef(progress, progress, progress);
-                zmaster587.libVulpes.render.RenderHelper.renderItem(multiBlockTile, stack, Minecraft.getMinecraft().getRenderItem());
+                dev.stannismod.stellurgy.libvulpes.render.RenderHelper.renderItem(multiBlockTile, stack, Minecraft.getMinecraft().getRenderItem());
                 GL11.glPopMatrix();
 
                 GL11.glPushMatrix();
                 GL11.glTranslated(1, 0.2, 1.5);
                 GL11.glRotatef(rotation, 0, 1, 0);
                 GL11.glScalef(progress, progress, progress);
-                zmaster587.libVulpes.render.RenderHelper.renderItem(multiBlockTile, stack, Minecraft.getMinecraft().getRenderItem());
+                dev.stannismod.stellurgy.libvulpes.render.RenderHelper.renderItem(multiBlockTile, stack, Minecraft.getMinecraft().getRenderItem());
                 GL11.glPopMatrix();
 
                 GL11.glPushMatrix();
                 GL11.glTranslated(1, 0.2, 2.3);
                 GL11.glRotatef(rotation, 0, 1, 0);
                 GL11.glScalef(progress, progress, progress);
-                zmaster587.libVulpes.render.RenderHelper.renderItem(multiBlockTile, stack, Minecraft.getMinecraft().getRenderItem());
+                dev.stannismod.stellurgy.libvulpes.render.RenderHelper.renderItem(multiBlockTile, stack, Minecraft.getMinecraft().getRenderItem());
                 GL11.glPopMatrix();
 
                 GL11.glPopMatrix();

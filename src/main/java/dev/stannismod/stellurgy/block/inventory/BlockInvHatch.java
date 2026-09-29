@@ -10,7 +10,7 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import dev.stannismod.stellurgy.tile.hatch.TileInvHatch;
-import zmaster587.libVulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 import dev.stannismod.stellurgy.Stellurgy;
 
 public class BlockInvHatch extends Block {

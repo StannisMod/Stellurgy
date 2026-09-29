@@ -15,8 +15,8 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.client.render.ClientDynamicTexture;
 import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 import javax.annotation.Nonnull;
 import java.nio.IntBuffer;

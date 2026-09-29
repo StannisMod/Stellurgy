@@ -7,7 +7,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import dev.stannismod.stellurgy.util.DimensionBlockPosition;
 import dev.stannismod.stellurgy.util.NBTStorableListList;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 
 import javax.annotation.Nonnull;
 import java.util.List;

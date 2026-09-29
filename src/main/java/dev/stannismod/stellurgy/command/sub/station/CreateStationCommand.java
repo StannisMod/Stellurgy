@@ -19,7 +19,7 @@ import dev.stannismod.stellurgy.item.ItemStationChip;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.world.util.BasicTeleporter;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nullable;
 import java.util.Collections;

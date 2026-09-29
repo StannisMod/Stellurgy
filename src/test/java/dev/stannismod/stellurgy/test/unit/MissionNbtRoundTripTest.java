@@ -147,11 +147,11 @@ public class MissionNbtRoundTripTest {
         // to pin the tag-list contract without invoking the full
         // parent readFromNBT (which would NPE on missing rocketStats
         // / rocketStorage compounds).
-        java.util.LinkedList<zmaster587.libVulpes.util.HashedBlockPosition> coords =
+        java.util.LinkedList<dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition> coords =
                 new java.util.LinkedList<>();
         for (int i = 0; i < list.tagCount(); i++) {
             int[] c = list.getCompoundTagAt(i).getIntArray("loc");
-            coords.add(new zmaster587.libVulpes.util.HashedBlockPosition(c[0], c[1], c[2]));
+            coords.add(new dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition(c[0], c[1], c[2]));
         }
         assertEquals("3 entries must round-trip", 3, coords.size());
         assertEquals("first entry preserves x=i*10 for i=0", 0, coords.get(0).x);

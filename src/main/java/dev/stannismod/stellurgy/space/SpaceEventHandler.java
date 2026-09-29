@@ -23,7 +23,7 @@ import net.minecraftforge.fml.common.network.FMLNetworkEvent.ServerConnectionFro
 
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.network.PacketSlotDimSync;
-import zmaster587.libVulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 
 /**
  * Server-side event wiring for the movable-ship space subsystem: putting a returning player back

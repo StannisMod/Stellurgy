@@ -8,7 +8,7 @@ import net.minecraftforge.fml.common.network.IGuiHandler;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
-import zmaster587.libVulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 
 public class GuiHandler implements IGuiHandler {
 
@@ -20,11 +20,11 @@ public class GuiHandler implements IGuiHandler {
      * {@code MODULARCENTEREDFULLSCREEN}: harmless while libVulpes owned a container and a handler of
      * its own, a collision the moment both ids arrive here.
      */
-    public static final int ORE_MAPPING_SATELLITE = zmaster587.libVulpes.inventory.GuiHandler.guiId.values().length;
+    public static final int ORE_MAPPING_SATELLITE = dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler.guiId.values().length;
 
     // Stateless dispatcher for every libVulpes modular id. One shared instance - it holds no state.
-    private static final zmaster587.libVulpes.inventory.GuiHandler LIBVULPES =
-            new zmaster587.libVulpes.inventory.GuiHandler();
+    private static final dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler LIBVULPES =
+            new dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler();
 
     //X coord is entity ID num if entity
     @Override

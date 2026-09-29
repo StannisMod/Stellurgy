@@ -25,12 +25,12 @@ import dev.stannismod.stellurgy.api.armor.IProtectiveArmor;
 import dev.stannismod.stellurgy.api.capability.CapabilitySpaceArmor;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
 import dev.stannismod.stellurgy.client.render.armor.RenderJetPack;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.api.IArmorComponent;
-import zmaster587.libVulpes.api.IJetPack;
-import zmaster587.libVulpes.api.IModularArmor;
-import zmaster587.libVulpes.util.EmbeddedInventory;
-import zmaster587.libVulpes.util.IconResource;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
+import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.util.EmbeddedInventory;
+import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

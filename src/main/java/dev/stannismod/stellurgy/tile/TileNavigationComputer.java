@@ -21,7 +21,7 @@ import dev.stannismod.stellurgy.navigation.CrystalMemory;
 import dev.stannismod.stellurgy.navigation.CrystalSync;
 import dev.stannismod.stellurgy.navigation.JumpGate;
 import dev.stannismod.stellurgy.space.GalacticCoord;
-import zmaster587.libVulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.navigation.NavBodyView;
 import dev.stannismod.stellurgy.navigation.NavInfoRedaction;
 import dev.stannismod.stellurgy.network.PacketNavBodyInfo;
@@ -30,18 +30,18 @@ import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
-import zmaster587.libVulpes.inventory.modules.IButtonInventory;
-import zmaster587.libVulpes.inventory.modules.IGuiCallback;
-import zmaster587.libVulpes.inventory.modules.ModuleNumericTextbox;
-import zmaster587.libVulpes.inventory.modules.IModularInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleBase;
-import zmaster587.libVulpes.inventory.modules.ModuleButton;
-import zmaster587.libVulpes.inventory.modules.ModuleSlotArray;
-import zmaster587.libVulpes.inventory.modules.ModuleText;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.multiblock.hatch.TileInventoryHatch;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IGuiCallback;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleNumericTextbox;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotArray;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.hatch.TileInventoryHatch;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 /**
  * The ship's navigation computer: it holds the addresses the ship can jump to, and the one it is
@@ -482,10 +482,10 @@ public class TileNavigationComputer extends TileInventoryHatch
 
         modules.add(new ModuleButton(30, 18, BUTTON_COPY,
                 LibVulpes.proxy.getLocalizedString("msg.navcomputer.copy"), this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 58, 18));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 58, 18));
         modules.add(new ModuleButton(30, 38, BUTTON_ERASE_SOURCE,
                 LibVulpes.proxy.getLocalizedString("msg.navcomputer.erase"), this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 58, 18));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 58, 18));
 
         statusText = new ModuleText(8, 58, targetLine(), 0x00FF00);
         addressText = new ModuleText(8, 70, addressLines(), 0xAAAAAA);
@@ -514,7 +514,7 @@ public class TileNavigationComputer extends TileInventoryHatch
                 caption = entry.name().isEmpty() ? entry.coord().cellKey() : entry.name();
             }
             ModuleButton pick = new ModuleButton(96, 18 + i * 20, BUTTON_PICK_FIRST + i, caption,
-                    this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 72, 18);
+                    this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 72, 18);
             pickButtons.add(pick);
             modules.add(pick);
         }
@@ -522,11 +522,11 @@ public class TileNavigationComputer extends TileInventoryHatch
         armButton = new ModuleButton(96, 120, BUTTON_ARM,
                 LibVulpes.proxy.getLocalizedString(
                         isArmed() ? "msg.navcomputer.disarm" : "msg.navcomputer.arm"), this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild, forecastLines(), 72, 18);
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, forecastLines(), 72, 18);
         modules.add(armButton);
         modules.add(new ModuleButton(96, 98, BUTTON_CLEAR_TARGET,
                 LibVulpes.proxy.getLocalizedString("msg.navcomputer.cleartarget"), this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 72, 18));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 72, 18));
 
         // The text boxes are CLIENT-ONLY, and this list is built on BOTH sides: the server builds it
         // too, to assemble the container behind the window. A text box's backing GuiTextField is a
@@ -548,11 +548,11 @@ public class TileNavigationComputer extends TileInventoryHatch
         }
         modules.add(new ModuleButton(8, 108, BUTTON_AIM_TYPED,
                 LibVulpes.proxy.getLocalizedString("msg.navcomputer.aimtyped"), this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 84, 18));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 84, 18));
 
         modules.add(new ModuleButton(36, 128, BUTTON_SYNC,
                 LibVulpes.proxy.getLocalizedString("msg.navcomputer.sync"), this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 52, 18));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 52, 18));
 
         // Shares the bottom row with the sync channel box (x 8..32) and its button (x 36..88), taking
         // x 96..168, y 128..146. The free band ENDS at y 146 - the hotbar starts at 147 - and a button
@@ -561,7 +561,7 @@ public class TileNavigationComputer extends TileInventoryHatch
         modules.add(new ModuleButton(96, 128, BUTTON_SKY_LABELS,
                 LibVulpes.proxy.getLocalizedString(skyLabels
                         ? "msg.navcomputer.labelsoff" : "msg.navcomputer.labelson"), this,
-                zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 72, 18));
+                dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 72, 18));
 
         return modules;
     }

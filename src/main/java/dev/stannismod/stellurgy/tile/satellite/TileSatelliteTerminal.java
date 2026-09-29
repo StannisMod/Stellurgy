@@ -24,12 +24,12 @@ import dev.stannismod.stellurgy.tile.TileWirelessTransceiver;
 import dev.stannismod.stellurgy.util.IDataInventory;
 import dev.stannismod.stellurgy.util.PlanetaryTravelHelper;
 
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.tile.TileInventoriedRFConsumer;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedRFConsumer;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -293,7 +293,7 @@ public class TileSatelliteTerminal extends TileInventoriedRFConsumer
             116, 70, 0,
             LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.connect"),
             this,
-            zmaster587.libVulpes.inventory.TextureResources.buttonBuild,
+            dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild,
             LibVulpes.proxy.getLocalizedString("msg.satctrlcenter.autodl_hint") // tooltip
         ));
 

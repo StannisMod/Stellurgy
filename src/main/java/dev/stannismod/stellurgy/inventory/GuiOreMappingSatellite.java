@@ -14,9 +14,9 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.client.render.ClientDynamicTexture;
 import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.render.RenderHelper;
-import zmaster587.libVulpes.util.VulpineMath;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.util.VulpineMath;
 
 import javax.annotation.Nonnull;
 import java.io.IOException;

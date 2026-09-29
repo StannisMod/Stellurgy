@@ -17,11 +17,11 @@ import dev.stannismod.stellurgy.network.PacketStationUpdate;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.world.provider.WorldProviderSpace;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.inventory.modules.*;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.network.PacketMachine;
-import zmaster587.libVulpes.util.INetworkMachine;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -65,7 +65,7 @@ public class TileStationOrientationController extends TileEntity implements ITic
 
         modules.add(new ModuleSlider(24, 50, 0, TextureResources.doubleWarningSideBarIndicator, this));
         modules.add(new ModuleSlider(24, 65, 1, TextureResources.doubleWarningSideBarIndicator, this));
-        modules.add(new ModuleButton(128, 35, 2, LibVulpes.proxy.getLocalizedString("msg.spacelaser.reset"), this, zmaster587.libVulpes.inventory.TextureResources.buttonBuild, 36, 15));
+        modules.add(new ModuleButton(128, 35, 2, LibVulpes.proxy.getLocalizedString("msg.spacelaser.reset"), this, dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild, 36, 15));
         //modules.add(new ModuleSlider(24, 35, 2, TextureResources.doubleWarningSideBarIndicator, (ISliderBar)this));
 
         // inline updater that runs only while GUI is open

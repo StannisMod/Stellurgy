@@ -5,8 +5,8 @@ import net.minecraft.util.EnumFacing;
 import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import dev.stannismod.stellurgy.integration.jei.MachineCategoryTemplate;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.client.util.ProgressBarImage;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 
 public class PrecisionAssemblerCategory extends MachineCategoryTemplate<PrecisionAssemblerWrapper> {
 

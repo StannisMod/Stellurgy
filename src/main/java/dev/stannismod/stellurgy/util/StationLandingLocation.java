@@ -1,6 +1,6 @@
 package dev.stannismod.stellurgy.util;
 
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class StationLandingLocation {
     private HashedBlockPosition pos;

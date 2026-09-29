@@ -9,8 +9,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
 import dev.stannismod.stellurgy.tile.multiblock.TileAtmosphereTerraformer;
-import zmaster587.libVulpes.block.multiblock.BlockMultiblockMachine;
-import zmaster587.libVulpes.tile.multiblock.TileMultiBlock;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
 
 public class BlockAtmosphereTerraformer extends BlockMultiblockMachine {
 

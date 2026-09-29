@@ -8,7 +8,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
-import zmaster587.libVulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
  * Server -> client: capture the recipient (a just-dismounted pilot) in his ship's frame, standing on a

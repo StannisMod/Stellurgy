@@ -28,11 +28,11 @@ import dev.stannismod.stellurgy.tile.multiblock.TileSpaceElevator;
 import dev.stannismod.stellurgy.util.DimensionBlockPosition;
 import dev.stannismod.stellurgy.util.TransitionEntity;
 import dev.stannismod.stellurgy.world.util.BasicTeleporter;
-import zmaster587.libVulpes.LibVulpes;
-import zmaster587.libVulpes.interfaces.INetworkEntity;
-import zmaster587.libVulpes.network.PacketEntity;
-import zmaster587.libVulpes.network.PacketHandler;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import javax.annotation.Nullable;
 import java.util.List;

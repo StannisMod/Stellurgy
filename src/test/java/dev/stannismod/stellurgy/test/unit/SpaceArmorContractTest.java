@@ -23,7 +23,7 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Pins pure-function behaviour that does NOT require a real
  * {@link net.minecraft.entity.player.EntityPlayer} or a registered
- * {@link zmaster587.libVulpes.api.IArmorComponent}. Component install /
+ * {@link dev.stannismod.stellurgy.libvulpes.api.IArmorComponent}. Component install /
  * tick paths are covered at server tier via the suit-workstation +
  * tile-init-modules probe.</p>
  *

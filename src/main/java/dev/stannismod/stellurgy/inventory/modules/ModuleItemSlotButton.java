@@ -7,17 +7,17 @@ import net.minecraft.client.renderer.RenderHelper;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import zmaster587.libVulpes.gui.CommonResources;
-import zmaster587.libVulpes.inventory.TextureResources;
-import zmaster587.libVulpes.inventory.modules.IButtonInventory;
-import zmaster587.libVulpes.inventory.modules.ModuleButton;
+import dev.stannismod.stellurgy.libvulpes.gui.CommonResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.IButtonInventory;
+import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 
 import javax.annotation.Nonnull;
 
 /**
  * Slot-like clickable button that renders ANY ItemStack (including non-block items) using RenderItem.
  * Drop-in replacement for ModuleSlotButton when the stack is not a Block item.
- * zmaster587.libVulpes.inventory.modules.ModuleSlotButton only works for Block items.
+ * dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleSlotButton only works for Block items.
  * this class was created to allow displaying items such as batteries, ingots, etc.
  * if libvulpes ModuleSlotButton is updated to support non-block items, this class may be deprecated.
  * remove this class if libvulpes ModuleSlotButton is updated to support non-block items.

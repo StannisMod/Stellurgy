@@ -14,7 +14,7 @@ import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.entity.EntityHoverCraft;
-import zmaster587.libVulpes.render.RenderHelper;
+import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RenderHoverCraft extends Render<EntityHoverCraft> implements IRenderFactory<EntityHoverCraft> {
 

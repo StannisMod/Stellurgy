@@ -130,7 +130,7 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
      * constructor does NOT call
      * {@code redstoneControl.setRedstoneState(OFF)} the way its
      * altitude sibling does. {@link
-     * zmaster587.libVulpes.inventory.modules.ModuleRedstoneOutputButton}'s
+     * dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleRedstoneOutputButton}'s
      * default state is {@code RedstoneState.ON}, so a freshly-placed
      * gravity controller enters its {@code update()} loop with
      * {@code redstoneControl.getState() == ON}, which on every tick

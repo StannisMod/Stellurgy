@@ -8,8 +8,8 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.entity.fx.OxygenCloudFX;
 import dev.stannismod.stellurgy.entity.fx.OxygenTraceFX;
-import zmaster587.libVulpes.network.BasePacket;
-import zmaster587.libVulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 public class PacketAirParticle extends BasePacket {
 

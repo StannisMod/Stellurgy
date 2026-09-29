@@ -13,8 +13,8 @@ import net.minecraft.world.World;
 import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
 import dev.stannismod.stellurgy.tile.multiblock.TileAtmosphereTerraformer;
 import dev.stannismod.stellurgy.tile.multiblock.orbitallaserdrill.TileOrbitalLaserDrill;
-import zmaster587.libVulpes.block.multiblock.BlockMultiblockMachine;
-import zmaster587.libVulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.libvulpes.block.multiblock.BlockMultiblockMachine;
+import dev.stannismod.stellurgy.libvulpes.inventory.GuiHandler;
 
 import java.util.Random;
 
