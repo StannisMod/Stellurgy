@@ -26,6 +26,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import javax.annotation.ParametersAreNullableByDefault;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.Stellurgy;
 
 public class BlockPressurizedFluidTank extends Block {
 
@@ -78,7 +79,7 @@ public class BlockPressurizedFluidTank extends Block {
 
         // If we didn't perform a fluid interaction, open the GUI
         if (!acted) {
-            player.openGui(zmaster587.libVulpes.LibVulpes.instance,
+            player.openGui(Stellurgy.instance,
                     zmaster587.libVulpes.inventory.GuiHandler.guiId.MODULAR.ordinal(),
                     world, pos.getX(), pos.getY(), pos.getZ());
         }

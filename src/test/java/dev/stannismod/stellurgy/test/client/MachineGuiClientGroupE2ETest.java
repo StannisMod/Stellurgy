@@ -196,13 +196,14 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * first click, instead of sampling {@code report_state} and hoping the sample lands while the
      * screen is there.</p>
      *
-     * <p><b>Silent about {@code gui_container_served}</b>, on purpose: every machine in this class
-     * opens its GUI on {@code LibVulpes.instance} (libVulpes' own {@code BlockTile} /
-     * {@code BlockMultiblockMachine} do the {@code openGui}), so Stellurgy's gui handler is never asked and
-     * never records. The server link available here is {@code container_opened}, which Forge posts
-     * only once SOME handler has answered with a container — a request a handler refused is an
-     * ABSENCE of that record beside a present {@code right_click_block}, which is exactly the
-     * distinction the old screen poll could not make.</p>
+     * <p><b>Does not await {@code gui_container_served}.</b> Since libVulpes was folded into
+     * Stellurgy's container, every machine here (libVulpes' own {@code BlockTile} /
+     * {@code BlockMultiblockMachine} do the {@code openGui}) is served by Stellurgy's gui handler, so
+     * that record IS written; this loop simply does not need it. Its server link is
+     * {@code container_opened}, which Forge posts only once the handler has answered with a
+     * container; a request the handler refused is an ABSENCE of that record beside a present
+     * {@code right_click_block}, which is exactly the distinction the old screen poll could not
+     * make.</p>
      */
     /** How long a GUI round trip may take — a deadline for one discrete record, never a settle. */
     private static final int GUI_LINK_BUDGET_TICKS = 200;

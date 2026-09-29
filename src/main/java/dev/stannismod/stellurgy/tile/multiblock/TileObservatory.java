@@ -63,6 +63,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.Map;
+import dev.stannismod.stellurgy.Stellurgy;
 
 public class TileObservatory extends TileMultiPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
 
@@ -1270,7 +1271,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
 
             if (id == TAB_SWITCH) {
                 tabModule.setTab(nbt.getShort("tab"));
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
             }
             else if (id == BUTTON_PRESS) {
@@ -1278,7 +1279,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                 lastType = buttonType.get(lastButton - LIST_OFFSET);
                 markDirty();
                 world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
             }
             else if (id == PICK_DIRECTION || id == PICK_DISTANCE) {
@@ -1291,7 +1292,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                 markDirty();
                 IBlockState st = world.getBlockState(pos);
                 world.notifyBlockUpdate(pos, st, st, 2);
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
             }
             else if (id == TOGGLE_WHOLE_SYSTEM) {
@@ -1299,7 +1300,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                 markDirty();
                 IBlockState st = world.getBlockState(pos);
                 world.notifyBlockUpdate(pos, st, st, 2);
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
             }
             else if (id == UPLOAD_CRYSTAL) {
@@ -1318,7 +1319,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                 }
                 IBlockState st = world.getBlockState(pos);
                 world.notifyBlockUpdate(pos, st, st, 2);
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
             }
             else if (id == SEED_CHANGE) {
@@ -1350,7 +1351,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                     world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
                     markDirty();
                     if (player != null) {
-                        player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                        player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                             getWorld(), pos.getX(), pos.getY(), pos.getZ());
                     }
                     return;
@@ -1375,14 +1376,14 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
 
                         // reopen 1 tick later to avoid cross-channel ordering race
                         ((WorldServer) world).addScheduledTask(() -> player.openGui(
-                                LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                                Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                                 getWorld(), pos.getX(), pos.getY(), pos.getZ()
                         ));
                     }
                 }
             }
             else if (id == REQUEST_REOPEN) {
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                     getWorld(), pos.getX(), pos.getY(), pos.getZ());
             }
         }

@@ -78,7 +78,7 @@ public class ItemStationChip extends ItemIdWithName implements IModularInventory
     public ActionResult<ItemStack> onItemRightClick(World worldIn, EntityPlayer playerIn, EnumHand hand) {
         ItemStack stack = playerIn.getHeldItem(hand);
         if (!playerIn.world.isRemote && !stack.isEmpty() && playerIn.isSneaking())
-            playerIn.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARCENTEREDFULLSCREEN.ordinal(), worldIn, -1, -1, -1);
+            playerIn.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARCENTEREDFULLSCREEN.ordinal(), worldIn, -1, -1, -1);
 
         return super.onItemRightClick(worldIn, playerIn, hand);
     }

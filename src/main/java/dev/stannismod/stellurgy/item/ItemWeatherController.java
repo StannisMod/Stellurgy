@@ -111,7 +111,7 @@ public class ItemWeatherController extends ItemSatelliteIdentificationChip imple
                 if (player.isSneaking()) {
                         ((SatelliteWeatherController) sat).floodlevel = player.getPosition().getY();
                         PacketHandler.sendToPlayer(new PacketSatellite(sat), player);
-                        player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), world, -1, -1, 0);
+                        player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), world, -1, -1, 0);
                 } else {
                     //Attempt to change weather only if player is in the same dimension
                     if (sat.getDimensionId() == world.provider.getDimension()) {
@@ -149,12 +149,12 @@ public class ItemWeatherController extends ItemSatelliteIdentificationChip imple
             if (buttonId == 4)
                 if (((SatelliteWeatherController) sat).floodlevel < 180) {
                     ((SatelliteWeatherController) sat).floodlevel += 1;
-                    Minecraft.getMinecraft(). player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), net.minecraftforge.common.DimensionManager.getWorld( sat.getDimensionId()), -1, -1, 0);
+                    Minecraft.getMinecraft(). player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), net.minecraftforge.common.DimensionManager.getWorld( sat.getDimensionId()), -1, -1, 0);
                 }
             if (buttonId == 3)
                 if (((SatelliteWeatherController) sat).floodlevel > 1){
                     ((SatelliteWeatherController) sat).floodlevel-=1;
-                    Minecraft.getMinecraft().player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), net.minecraftforge.common.DimensionManager.getWorld( sat.getDimensionId()), -1, -1, 0);
+                    Minecraft.getMinecraft().player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), net.minecraftforge.common.DimensionManager.getWorld( sat.getDimensionId()), -1, -1, 0);
                 }
 
             PacketHandler.sendToServer(new PacketItemModifcation(this, Minecraft.getMinecraft().player, (byte) buttonId));

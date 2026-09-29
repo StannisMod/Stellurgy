@@ -47,6 +47,7 @@ import zmaster587.libVulpes.util.INetworkMachine;
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.Stellurgy;
 
 public class TileWarpController extends TileEntity implements ITickable, IModularInventory, ISelectionNotify, INetworkMachine, IButtonInventory, IProgressBar, IDataSync, IGuiCallback, IDataInventory, IPlanetDefiner {
 
@@ -475,7 +476,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
         if (id == 0)
-            player.openGui(LibVulpes.instance, guiId.MODULARFULLSCREEN.ordinal(), world, this.getPos().getX(), this.getPos().getY(), this.getPos().getZ());
+            player.openGui(Stellurgy.instance, guiId.MODULARFULLSCREEN.ordinal(), world, this.getPos().getX(), this.getPos().getY(), this.getPos().getZ());
         else if (id == 1 || id == 3) {
             int dimId = nbt.getInteger("id");
 
@@ -487,7 +488,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
             //Update known planets
             markDirty();
             if (id == 3)
-                player.openGui(LibVulpes.instance, guiId.MODULARNOINV.ordinal(), world, this.getPos().getX(), this.getPos().getY(), this.getPos().getZ());
+                player.openGui(Stellurgy.instance, guiId.MODULARNOINV.ordinal(), world, this.getPos().getX(), this.getPos().getY(), this.getPos().getZ());
         } else if (id == 2) {
             final SpaceStationObject station = getSpaceObject();
 
@@ -504,7 +505,7 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
             }
         } else if (id == TAB_SWITCH && !world.isRemote) {
             tabModule.setTab(nbt.getShort("tab"));
-            player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), getWorld(), pos.getX(), pos.getY(), pos.getZ());
+            player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), getWorld(), pos.getX(), pos.getY(), pos.getZ());
         } else if (id >= 10 && id < 20) {
             storeData(nbt.getByte("id") + 10);
         } else if (id >= 20 && id < 30) {

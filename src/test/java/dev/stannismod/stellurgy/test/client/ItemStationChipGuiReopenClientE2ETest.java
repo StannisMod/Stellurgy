@@ -27,11 +27,16 @@ import static org.junit.Assert.assertTrue;
  * sent and the screen stays closed. The chip GUI becomes unusable: every
  * button press dismisses it instead of refreshing it.</p>
  *
- * <p>The initial open ({@code ItemStationChip.onItemRightClick:81}) targets
- * {@code LibVulpes.instance} and works — so the bug only shows on the
- * button-press RE-open. Stimulus is the real client (sneak-right-click to
- * open, then a real GUI button click); observation is the ordered event log
- * on both sides, ending at the client's own screen.</p>
+ * <p>When C010 was found, the initial open ({@code ItemStationChip.onItemRightClick})
+ * targeted libVulpes' own mod container and worked, so the bug only showed on the
+ * button-press RE-open. Since libVulpes was vendored and folded into Stellurgy's
+ * container, BOTH opens reach Stellurgy's handler, and the initial one arrives on
+ * {@code MODULARCENTEREDFULLSCREEN}, ordinal 2: the id Stellurgy's ore-mapping GUI
+ * used to hold. So the first half of this test now also pins that the two id spaces
+ * do not collide: a collision opens the ore-mapping GUI instead of {@code GuiModular}.
+ * Stimulus is the real client (sneak-right-click to open, then a real GUI button
+ * click); observation is the ordered event log on both sides, ending at the client's
+ * own screen.</p>
  *
  * <p><b>Corrected contract, pinned here (C010 fix, Path B)</b>: after a
  * button press the GUI re-opens as {@code GuiModularFullScreen} — the Stellurgy
@@ -147,8 +152,8 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
         assertTrue("equip-stationchip must succeed: " + equip, Reply.of(equip).ok());
         awaitHeld(equipMark, CHIP);
 
-        // Sneak + right-click opens the chip's libVulpes modular GUI (this open
-        // targets LibVulpes.instance, so it works even on the buggy build).
+        // Sneak + right-click opens the chip's libVulpes modular GUI on MODULARCENTEREDFULLSCREEN
+        // (ordinal 2), through Stellurgy's handler - see the class javadoc for why that id matters.
         //
         // Both marks are taken BEFORE the keypress, so nothing can happen between arming the
         // observation and the stimulus. The chain separates the three silences the old screen poll

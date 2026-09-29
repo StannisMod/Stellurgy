@@ -12,9 +12,17 @@ import zmaster587.libVulpes.inventory.modules.IModularInventory;
 
 public class GuiHandler implements IGuiHandler {
 
-    // Stateless dispatcher: every gui id that isn't Stellurgy's own OreMappingSatellite
-    // is forwarded to the libVulpes handler (see the delegation below). One
-    // shared instance — it holds no state.
+    /**
+     * The ore-mapping satellite's GUI id - Stellurgy's only GUI of its own. libVulpes is folded into
+     * this mod's container, so its modular ids ({@code MODULAR} .. {@code MODULARFULLSCREEN},
+     * ordinals 0-3) travel in the same id space and this handler serves them too; Stellurgy's own ids
+     * therefore start past the last of them. This id used to be the ordinal 2, which is libVulpes'
+     * {@code MODULARCENTEREDFULLSCREEN}: harmless while libVulpes owned a container and a handler of
+     * its own, a collision the moment both ids arrive here.
+     */
+    public static final int ORE_MAPPING_SATELLITE = zmaster587.libVulpes.inventory.GuiHandler.guiId.values().length;
+
+    // Stateless dispatcher for every libVulpes modular id. One shared instance - it holds no state.
     private static final zmaster587.libVulpes.inventory.GuiHandler LIBVULPES =
             new zmaster587.libVulpes.inventory.GuiHandler();
 
@@ -34,7 +42,7 @@ public class GuiHandler implements IGuiHandler {
             }
         }
 
-        if (ID == guiId.OreMappingSatellite.ordinal()) {
+        if (ID == ORE_MAPPING_SATELLITE) {
             SatelliteBase satellite = DimensionManager.getInstance().getSatellite(y);
 
             if (!(satellite instanceof SatelliteOreMapping) || satellite.getDimensionId() != world.provider.getDimension())
@@ -42,14 +50,9 @@ public class GuiHandler implements IGuiHandler {
 
             return new ContainerOreMappingSatellite((SatelliteOreMapping) satellite, player.inventory);
         }
-        // Delegate every non-Stellurgy gui id to the libVulpes handler. Both handlers
-        // were registered on Stellurgy.instance and Forge keeps only the
-        // last one (this Stellurgy handler), so without this delegation the libVulpes
-        // gui ids opened on Stellurgy.instance — e.g. the ItemStationChip
-        // button re-open (MODULARFULLSCREEN) — resolve to null and the GUI never
-        // opens. NB: this only covers libVulpes' own enum (MODULAR..MODULARFULLSCREEN,
-        // ordinals 0-3); an out-of-range id like SatelliteOreMapping.java:69's
-        // hardcoded 100 still maps to nothing (separate, pre-existing no-op). See C010.
+        // Every other id is libVulpes'. FML keeps ONE handler per container, and this container is
+        // the only one libVulpes has, so without this delegation every libVulpes GUI resolves to
+        // null and never opens. An id outside libVulpes' enum answers null there.
         return LIBVULPES.getServerGuiElement(ID, player, world, x, y, z);
     }
 
@@ -66,7 +69,7 @@ public class GuiHandler implements IGuiHandler {
             }
         }
 
-        if (ID == guiId.OreMappingSatellite.ordinal()) {
+        if (ID == ORE_MAPPING_SATELLITE) {
 
             SatelliteBase satellite = DimensionManager.getInstance().getSatellite(y);
 
@@ -75,16 +78,7 @@ public class GuiHandler implements IGuiHandler {
 
             return new GuiOreMappingSatellite((SatelliteOreMapping) satellite, player);
         }
-        // Delegate every non-Stellurgy gui id to the libVulpes handler (see the server
-        // side above for the caveat about ids outside libVulpes' 0-3 enum).
-        // Fixes the ItemStationChip button re-open. See C010.
+        // Every other id is libVulpes' - see the server side above.
         return LIBVULPES.getClientGuiElement(ID, player, world, x, y, z);
-    }
-
-    public enum guiId {
-        RocketBuilder,
-        BlastFurnace,
-        OreMappingSatellite,
-        StationChip
     }
 }

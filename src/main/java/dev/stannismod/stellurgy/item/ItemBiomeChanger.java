@@ -113,7 +113,7 @@ public class ItemBiomeChanger extends ItemSatelliteIdentificationChip implements
                 if (player.isSneaking()) {
                         //Make sure to update player so discoveredBiome Ids match
                         PacketHandler.sendToPlayer(new PacketSatellite(sat),player);
-                        player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), world, -1, -1, 0);
+                        player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), world, -1, -1, 0);
                 } else {
                     //Attempt to change biome only if player is in the same dimension
                     if (sat.getDimensionId() == world.provider.getDimension()) {

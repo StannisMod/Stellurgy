@@ -49,6 +49,7 @@ import zmaster587.libVulpes.util.INetworkMachine;
 import javax.annotation.Nonnull;
 import java.util.LinkedList;
 import java.util.List;
+import dev.stannismod.stellurgy.Stellurgy;
 
 public class TileRocketMonitoringStation extends TileEntity
     implements IModularInventory, ITickable, IAdjBlockUpdate, IInfrastructure,
@@ -778,7 +779,7 @@ public class TileRocketMonitoringStation extends TileEntity
         }
         else if (id == TAB_SWITCH && !world.isRemote) {
             tabModule.setTab(nbt.getShort("tab"));
-            player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+            player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
         }        
         if (id == 100) {

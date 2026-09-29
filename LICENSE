@@ -60,3 +60,8 @@ their own licenses.
     for Stellurgy carry a notice to that effect. The Apache-2.0
     components retain their license; Apache-2.0 is compatible with version 3 of
     the GNU General Public License.
+
+  * LibVulpes by zmaster587, vendored under `libvulpes/`, is licensed under the
+    MIT License — see `libvulpes/LICENSE`. Those files remain available under
+    the MIT License, including as modified for Stellurgy; their inclusion here
+    is compatible with the GNU General Public License, version 3.

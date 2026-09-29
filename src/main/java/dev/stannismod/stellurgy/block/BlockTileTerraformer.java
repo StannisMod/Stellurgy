@@ -30,13 +30,13 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.tile.satellite.TileTerraformingTerminal;
 import dev.stannismod.stellurgy.util.TerraformingHelper;
-import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.block.RotatableBlock;
 import zmaster587.libVulpes.util.IAdjBlockUpdate;
 
 import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import dev.stannismod.stellurgy.Stellurgy;
 
 public class BlockTileTerraformer extends RotatableBlock {
     protected Class<? extends TileEntity> tileClass;
@@ -90,7 +90,7 @@ public class BlockTileTerraformer extends RotatableBlock {
 
     public boolean onBlockActivated(World world, BlockPos pos, IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ) {
         if (!world.isRemote) {
-            player.openGui(LibVulpes.instance, this.guiId, world, pos.getX(), pos.getY(), pos.getZ());
+            player.openGui(Stellurgy.instance, this.guiId, world, pos.getX(), pos.getY(), pos.getZ());
         }
 
         return true;

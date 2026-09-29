@@ -111,13 +111,19 @@ public class LangKeyCrossReferenceTest {
         catalogue.addAll(keysOf("/assets/libvulpes/lang/en_US.lang", false));
 
         Path sources = Paths.get("src", "main", "java");
-        assertTrue("source tree not found at " + sources.toAbsolutePath()
-                        + " — this test scans sources from the project directory, so it "
-                        + "must run with the project root as its working directory",
-                Files.isDirectory(sources));
+        // libVulpes is vendored and compiled into the same jar, so its keys reach the player too.
+        Path vendoredLibVulpes = Paths.get("libvulpes", "src", "main", "java");
+        for (Path root : Arrays.asList(sources, vendoredLibVulpes)) {
+            assertTrue("source tree not found at " + root.toAbsolutePath()
+                            + " — this test scans sources from the project directory, so it "
+                            + "must run with the project root as its working directory",
+                    Files.isDirectory(root));
+        }
 
+        List<Path> files = new ArrayList<Path>(javaFilesUnder(sources));
+        files.addAll(javaFilesUnder(vendoredLibVulpes));
         Map<String, String> misses = new LinkedHashMap<String, String>();
-        for (Path file : javaFilesUnder(sources)) {
+        for (Path file : files) {
             String body = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
             for (Pattern call : CALLS) {
                 Matcher m = call.matcher(body);
@@ -126,7 +132,7 @@ public class LangKeyCrossReferenceTest {
                     if (isSkippable(key) || catalogue.contains(key)) {
                         continue;
                     }
-                    misses.put(key, sources.relativize(file).toString());
+                    misses.put(key, file.toString());
                 }
             }
         }

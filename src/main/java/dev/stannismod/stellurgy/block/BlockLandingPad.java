@@ -19,8 +19,8 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.tile.station.TileLandingPad;
-import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.inventory.GuiHandler;
+import dev.stannismod.stellurgy.Stellurgy;
 
 public class BlockLandingPad extends Block {
 
@@ -53,7 +53,7 @@ public class BlockLandingPad extends Block {
                                     IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing side, float hitX, float hitY,
                                     float hitZ) {
         if (!world.isRemote)
-            player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULAR.ordinal(), world, pos.getX(), pos.getY(), pos.getZ());
+            player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULAR.ordinal(), world, pos.getX(), pos.getY(), pos.getZ());
         return true;
     }
 

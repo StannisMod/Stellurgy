@@ -18,7 +18,6 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector;
-import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.inventory.GuiHandler;
 
 import java.util.List;
@@ -26,6 +25,7 @@ import java.util.List;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNullableByDefault;
+import dev.stannismod.stellurgy.Stellurgy;
 // Atmosphere Detector that emits redstone signal when a specific atmosphere is detected
 public class BlockRedstoneEmitter extends Block {
 
@@ -71,7 +71,7 @@ public class BlockRedstoneEmitter extends Block {
                                     IBlockState state, EntityPlayer player, EnumHand hand, EnumFacing side, float hitX, float hitY,
                                     float hitZ) {
         if (!world.isRemote) {
-            player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), world, pos.getX(), pos.getY(), pos.getZ());
+            player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), world, pos.getX(), pos.getY(), pos.getZ());
         }
         return true;
     }

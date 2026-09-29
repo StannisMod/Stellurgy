@@ -177,13 +177,13 @@ There is no download, so the only way to run Stellurgy today is to build it.
 | | |
 | --- | --- |
 | Minecraft | 1.12.2 with Forge |
-| Required at runtime | **[LibVulpes — this fork](https://github.com/StannisMod/libVulpes-fork2)** · [MixinBooter](https://www.curseforge.com/minecraft/mc-mods/mixinbooter) |
-| Bundled | Valkyrien Skies (vendored under `valkyrienskies/`, compiled in — no separate install) |
+| Required at runtime | [MixinBooter](https://www.curseforge.com/minecraft/mc-mods/mixinbooter) |
+| Bundled | Valkyrien Skies (vendored under `valkyrienskies/`) and LibVulpes (vendored under `libvulpes/`) — both compiled in, no separate install |
 | Optional | JEI · TheOneProbe / Waila · GregTech CEu · Galacticraft Legacy and Matter Overdrive compat |
 
 > [!IMPORTANT]
-> Stellurgy is built against the **forked LibVulpes** linked above and will not run correctly on the upstream
-> release. Installing stock LibVulpes is the most common way to get a broken setup.
+> LibVulpes ships inside Stellurgy. Do **not** install a LibVulpes jar next to it: the same classes would then
+> exist twice on the classpath.
 
 Gradle runs on JDK 25 while the mod compiles against Java 8; `./gradlew runClient` and `runServer` give you a
 dev environment with the ship physics already present. Build details, the test layout and the branch map are

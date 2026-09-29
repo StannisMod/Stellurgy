@@ -262,7 +262,7 @@ public class Stellurgy {
     }
     public static WorldType planetWorldType;
     public static WorldType spaceWorldType;
-    public static MaterialRegistry materialRegistry = new MaterialRegistry();
+    public static MaterialRegistry materialRegistry = new MaterialRegistry(Constants.modId);
     /** Products other mods may have auto-generated recipes for, accumulated from registry events
      *  during load and consumed once by {@code createAutoGennedRecipes} at init. OWNER: the LOADER
      *  — FML fires those events once per launch and the recipes are built once from what they left
@@ -432,6 +432,11 @@ public class Stellurgy {
 
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
+        // libVulpes is vendored and folded into this container. It goes FIRST: everything below
+        // builds on the products, materials and packet discriminators it registers, and it used to
+        // be a separate mod that FML initialised before this one.
+        LibVulpes.instance.preInit(event);
+
         version = event.getModMetadata().version;
 
         //Init API
@@ -1168,6 +1173,7 @@ public class Stellurgy {
 
     @EventHandler
     public void load(FMLInitializationEvent event) {
+        LibVulpes.instance.init(event);
         StellurgyAdvancements.register();
         proxy.init();
 
@@ -1277,6 +1283,7 @@ public class Stellurgy {
 
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
+        LibVulpes.instance.postInit(event);
 
         CapabilitySpaceArmor.register();
         // The player's own bindings: one home for what this mod holds on him, attached to the

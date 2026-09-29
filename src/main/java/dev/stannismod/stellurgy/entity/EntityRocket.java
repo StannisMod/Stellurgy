@@ -1440,7 +1440,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     }
 
     public void openGui(EntityPlayer player) {
-        player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULAR.ordinal(), player.world, this.getEntityId(), -1, 0);
+        player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULAR.ordinal(), player.world, this.getEntityId(), -1, 0);
 
         //Only handle the bypass on the server
         if (!world.isRemote)
@@ -3343,7 +3343,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         } else if (id == PacketType.REVERTWORLD.ordinal()) {
             Stellurgy.proxy.changeClientPlayerWorld(this.world);
         } else if (id == PacketType.OPENPLANETSELECTION.ordinal()) {
-            player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARFULLSCREEN.ordinal(), player.world, this.getEntityId(), -1, 0);
+            player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARFULLSCREEN.ordinal(), player.world, this.getEntityId(), -1, 0);
         } else if (id == PacketType.SENDPLANETDATA.ordinal()) {
             // A satellite-only rocket has no guidance computer; guard the deref
             // so confirming a destination on it no-ops instead of NPEing the

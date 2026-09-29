@@ -1255,7 +1255,7 @@ public class TileOrbitalRegistry extends TileMultiPowerConsumer
         if (!world.isRemote) {
             if (id == NET_TAB_SWITCH) {
                 tabModule.setTab(nbt.getShort("tab"));
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
 
             } else if (id == NET_BUTTON_SELECT_SAT) {
@@ -1263,7 +1263,7 @@ public class TileOrbitalRegistry extends TileMultiPowerConsumer
                 handleSatelliteSelectionFromButton(btn);
                 markDirty();
                 world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
 
             } else if (id == NET_BUTTON_SELECT_STAT) {
@@ -1271,12 +1271,12 @@ public class TileOrbitalRegistry extends TileMultiPowerConsumer
                 handleStationSelectionFromButton(btn);
                 markDirty();
                 world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
 
             } else if (id == NET_BUTTON_WRITE_CHIP) {
                 writeChipForCurrentTab();
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
 
             } else if (id == NET_BUTTON_SCAN) {
@@ -1292,9 +1292,9 @@ public class TileOrbitalRegistry extends TileMultiPowerConsumer
                 lastStationButton = -1;
                 markDirty();
                 world.notifyBlockUpdate(pos, world.getBlockState(pos), world.getBlockState(pos), 2);
-                //player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), getWorld(), pos.getX(), pos.getY(), pos.getZ());
+                //player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(), getWorld(), pos.getX(), pos.getY(), pos.getZ());
             } else if (id == NET_REQUEST_REOPEN) {
-                player.openGui(LibVulpes.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
+                player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULARNOINV.ordinal(),
                         getWorld(), pos.getX(), pos.getY(), pos.getZ());
             }
         }

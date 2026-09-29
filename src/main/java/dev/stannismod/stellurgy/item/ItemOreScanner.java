@@ -83,7 +83,7 @@ public class ItemOreScanner extends Item implements IModularInventory {
             SatelliteBase satellite = DimensionManager.getInstance().getSatellite(satelliteId);
 
             if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())
-                playerIn.openGui(Stellurgy.instance, GuiHandler.guiId.OreMappingSatellite.ordinal(), worldIn, playerIn.getPosition().getX(), (int) getSatelliteID(stack), playerIn.getPosition().getZ());
+                playerIn.openGui(Stellurgy.instance, GuiHandler.ORE_MAPPING_SATELLITE, worldIn, playerIn.getPosition().getX(), (int) getSatelliteID(stack), playerIn.getPosition().getZ());
 
         }
 
@@ -103,7 +103,7 @@ public class ItemOreScanner extends Item implements IModularInventory {
                 SatelliteBase satellite = DimensionManager.getInstance().getSatellite(satelliteId);
 
                 if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())
-                    playerIn.openGui(Stellurgy.instance, GuiHandler.guiId.OreMappingSatellite.ordinal(), worldIn, playerIn.getPosition().getX(), (int) getSatelliteID(stack), playerIn.getPosition().getZ());
+                    playerIn.openGui(Stellurgy.instance, GuiHandler.ORE_MAPPING_SATELLITE, worldIn, playerIn.getPosition().getX(), (int) getSatelliteID(stack), playerIn.getPosition().getZ());
 
             }
         }

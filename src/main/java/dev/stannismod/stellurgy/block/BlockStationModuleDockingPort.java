@@ -16,7 +16,6 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.tile.station.TileDockingPort;
 import dev.stannismod.stellurgy.tile.station.TileLandingPad;
-import zmaster587.libVulpes.LibVulpes;
 import zmaster587.libVulpes.block.BlockFullyRotatable;
 import zmaster587.libVulpes.inventory.GuiHandler;
 
@@ -26,6 +25,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import javax.annotation.ParametersAreNullableByDefault;
+import dev.stannismod.stellurgy.Stellurgy;
 
 public class BlockStationModuleDockingPort extends BlockFullyRotatable {
 
@@ -49,7 +49,7 @@ public class BlockStationModuleDockingPort extends BlockFullyRotatable {
                                     IBlockState state, EntityPlayer playerIn, EnumHand hand, EnumFacing side, float hitX, float hitY,
                                     float hitZ) {
         if (!worldIn.isRemote)
-            playerIn.openGui(LibVulpes.instance, GuiHandler.guiId.MODULAR.ordinal(), worldIn, pos.getX(), pos.getY(), pos.getZ());
+            playerIn.openGui(Stellurgy.instance, GuiHandler.guiId.MODULAR.ordinal(), worldIn, pos.getX(), pos.getY(), pos.getZ());
         return true;
     }
 

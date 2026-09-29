@@ -52,8 +52,9 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <p>The CLIENT half: {@code getClientGuiElement} is not observed here — the client's screen
  * opening is the harness recorder's {@code client_gui_opened}, off {@code GuiOpenEvent}. An AFFS gui
  * ({@code id >= AffsGuiRouter.AFFS_GUI_BASE}) is served by the AFFS handler and never reaches this
- * method, so it never records. A gui opened on any OTHER mod instance (libVulpes' own, a third
- * mod's) goes to that mod's handler, not this one. And the seam says nothing about whether the
+ * method, so it never records. A gui opened on any OTHER mod instance (a third mod's) goes to that
+ * mod's handler, not this one; libVulpes is not such a mod: it is folded into Stellurgy's container,
+ * so every libVulpes gui DOES pass here. And the seam says nothing about whether the
  * container was then actually opened for the player — Forge's {@code openGui} does that after this
  * call returns, and a {@code null} answer here is exactly the case where it will not.</p>
  */

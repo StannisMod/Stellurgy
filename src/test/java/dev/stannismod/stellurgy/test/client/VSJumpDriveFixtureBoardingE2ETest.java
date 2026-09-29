@@ -346,9 +346,8 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // BOTH logs are marked before the press, because opening a console is a two-sided link and a
         // single "what screen is up" poll cannot say which half never happened: the click has to
         // reach the SERVER (its own record), and the CLIENT has then to be told to display a screen
-        // (its record). The server's `gui_container_served` is deliberately NOT awaited here - this
-        // block is a libVulpes BlockTile and opens its GUI on the libVulpes mod instance, so the
-        // request never reaches Stellurgy's own gui handler, which is the only one that seam observes.
+        // (its record). The server's `gui_container_served` is not awaited here: `container_opened`
+        // already says the handler answered with a container, which is all this step needs.
         long navMark = events.markInstrumented();
         long navClientMark = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
