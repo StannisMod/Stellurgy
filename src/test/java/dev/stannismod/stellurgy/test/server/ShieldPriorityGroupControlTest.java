@@ -1,0 +1,160 @@
+package dev.stannismod.stellurgy.test.server;
+
+import org.junit.Test;
+
+import java.util.List;
+
+import dev.stannismod.stellurgy.test.ShieldTile;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * P4 control layer (D134-5 / D134-6): priority groups are a domain-level SSOT and consoles are stateless
+ * editors onto it. The contracts pinned here are the player-visible promises of the design:
+ *
+ * <ul>
+ *   <li><b>A group pushes its priority into its members</b> — one edit retunes many emitters, so a
+ *       20-emitter ship is managed with a handful of groups, not 20 sliders;</li>
+ *   <li><b>the setting is emitter-owned</b> — deleting the group leaves the emitters tuned as they were,
+ *       so losing the naming layer never silently retunes a shield;</li>
+ *   <li><b>consoles are replicated and stateless</b> — a group created from one console is visible and
+ *       editable from another, and breaking one console changes nothing;</li>
+ *   <li><b>rotating the access code</b> (Layer 3) changes the credential across the domain while leaving
+ *       grouping (Layer 2/4) untouched — the layers are genuinely orthogonal.</li>
+ * </ul>
+ */
+public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
+
+    private static final int DIM = 0;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
+
+    @Test
+    public void groupPushesPriorityIntoMemberEmitters() throws Exception {
+        int base = 1040, z = 840;
+        int e1 = base, e2 = base + 2;
+        place("affs:field_generator", e1, z);
+        place("affs:field_generator", e2, z);
+        int console = base + 4;
+        place("affs:shield_console", console, z);
+
+        assertTrue(Reply.of(exec(group(console, z, "create aft 7"))).ok());
+        assertTrue(Reply.of(exec(group(console, z, "assign aft " + e1 + " " + Y + " " + z))).ok());
+        assertTrue(Reply.of(exec(group(console, z, "assign aft " + e2 + " " + Y + " " + z))).ok());
+
+        assertEquals("group priority must be pushed into member emitter 1", 7, readPriority(e1, z));
+        assertEquals("group priority must be pushed into member emitter 2", 7, readPriority(e2, z));
+        assertEquals("the emitter must report the group that lists it", "aft", read(e1, z).group());
+
+        // One edit retunes the whole group — the D134-5 point ("all power to the rear shields").
+        assertTrue(Reply.of(exec(group(console, z, "priority aft 3"))).ok());
+        assertEquals("raising the group must retune member 1", 3, readPriority(e1, z));
+        assertEquals("raising the group must retune member 2", 3, readPriority(e2, z));
+
+        // The SETTING is emitter-owned: deleting the naming layer must not retune anything.
+        assertTrue(Reply.of(exec(group(console, z, "delete aft"))).ok());
+        assertEquals("deleting the group silently retuned emitter 1 — the setting is emitter-owned",
+                3, readPriority(e1, z));
+        assertEquals("deleting the group silently retuned emitter 2 — the setting is emitter-owned",
+                3, readPriority(e2, z));
+        assertEquals("a deleted group must no longer own the emitter", "", read(e1, z).group());
+    }
+
+    @Test
+    public void anyConsoleEditsTheSameDomainConfig() throws Exception {
+        int base = 1040, z = 852;
+        int emitter = base;
+        place("affs:field_generator", emitter, z);
+        int consoleA = base + 3;
+        int consoleB = base + 6;
+        place("affs:shield_console", consoleA, z);
+        place("affs:shield_console", consoleB, z);
+
+        // Created at console A...
+        assertTrue(Reply.of(exec(group(consoleA, z, "create bow 5"))).ok());
+        assertTrue(Reply.of(exec(group(consoleA, z, "assign bow " + emitter + " " + Y + " " + z))).ok());
+
+        // ...visible at console B, because both are views of ONE domain-level config.
+        String listedAtB = exec(group(consoleB, z, "list"));
+        // `name` IS a group's identity — this scenario named it "bow" itself — so this addresses
+        // the object it created, and two groups answering to one name would be the defect the
+        // refusal reports rather than an ambiguous read.
+        Reply.of("stellurgytest shield group list", listedAtB).element("groups", "name", "bow");
+
+        // ...and editable at console B, with the effect landing on the emitter.
+        assertTrue(Reply.of(exec(group(consoleB, z, "priority bow 9"))).ok());
+        assertEquals("an edit made at the second console did not reach the emitter", 9, readPriority(emitter, z));
+
+        // Destroying console A loses nothing: the group still exists and still edits.
+        assertTrue(Reply.of(exec("stellurgytest place " + DIM + " " + consoleA + " " + Y + " " + z + " minecraft:air")
+                ).bool("placed"));
+        String afterBreak = exec(group(consoleB, z, "list"));
+        Reply.of(afterBreak).element("groups", "name", "bow");
+        assertTrue(Reply.of(exec(group(consoleB, z, "priority bow 2"))).ok());
+        assertEquals("the surviving console cannot retune after the other was destroyed",
+                2, readPriority(emitter, z));
+    }
+
+    @Test
+    public void rotatingAccessCodeChangesCredentialButNotGrouping() throws Exception {
+        int base = 1040, z = 864;
+        int emitter = base;
+        place("affs:field_generator", emitter, z);
+        int console = base + 3;
+        place("affs:shield_console", console, z);
+
+        assertTrue(Reply.of(exec(group(console, z, "create hull 4"))).ok());
+        assertTrue(Reply.of(exec(group(console, z, "assign hull " + emitter + " " + Y + " " + z))).ok());
+        String codeBefore = read(emitter, z).accessCode();
+
+        String rotated = exec("stellurgytest shield rotate-code " + DIM + " " + console + " " + Y + " " + z);
+        assertTrue("rotation failed:\n" + rotated, Reply.of(rotated).ok());
+        String newCode = readString(rotated, "code");
+        assertFalse("the rotated code is empty — nothing was regenerated", newCode.isEmpty());
+        assertFalse("rotation produced the same code as before (" + newCode + ") — a leaked code would "
+                + "still work", newCode.equals(codeBefore));
+
+        ShieldTile afterRotation = read(emitter, z);
+        assertEquals("the new credential was not written to the emitter", newCode,
+                afterRotation.accessCode());
+        // Layer 3 (credential) and Layer 2/4 (grouping) are orthogonal: rotating one must not disturb the other.
+        assertEquals("rotating the access code disturbed the emitter's group membership",
+                "hull", afterRotation.group());
+        assertEquals("rotating the access code disturbed the redistribution priority",
+                4, readPriority(emitter, z));
+    }
+
+    private static String group(int x, int z, String opAndArgs) {
+        return "stellurgytest shield group " + DIM + " " + x + " " + Y + " " + z + " " + opAndArgs;
+    }
+
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
+    }
+
+    private int readPriority(int x, int z) throws Exception {
+        return read(x, z).priority();
+    }
+
+    private static String readString(String json, String key) {
+        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).text(key);
+    }
+
+    private void place(String block, int x, int z) throws Exception {
+        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
+        assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
+                Reply.of(resp).bool("placed"));
+    }
+
+    private static String exec(String command) throws Exception {
+        return join(client().execute(command));
+    }
+
+    private static String join(List<String> resp) {
+        return String.join("\n", resp);
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "parent": "block/cube_bottom_top",
+    "textures": {
+        "top": "stellurgy:blocks/rocketPad_nlEdge",
+        "side": "stellurgy:blocks/rocketPad_xCross",
+        "bottom": "stellurgy:blocks/rocketPad_nlEdge"
+    }
+}

@@ -1,0 +1,21 @@
+{
+    "variants": {
+        "type=all": { "model": "stellurgy:launchpad_all" },
+        "type=nredge": { "model": "stellurgy:launchpad_nrEdge" },
+        "type=ntedge": { "model": "stellurgy:launchpad_ntEdge" },
+        "type=trcorner": { "model": "stellurgy:launchpad_trCorner" },
+        "type=nledge": { "model": "stellurgy:launchpad_nlEdge" },
+        "type=xcross": { "model": "stellurgy:launchpad_xCross" },
+        "type=tlcorner": { "model": "stellurgy:launchpad_tlCorner" },
+        "type=bottomedge": { "model": "stellurgy:launchpad_bottomEdge" },
+        "type=nbedge": { "model": "stellurgy:launchpad_nbEdge" },
+        "type=brcorner": { "model": "stellurgy:launchpad_brCorner" },
+        "type=ycross": { "model": "stellurgy:launchpad_yCross" },
+        "type=leftedge": { "model": "stellurgy:launchpad_leftEdge" },
+        "type=blcorner": { "model": "stellurgy:launchpad_blCorner" },
+        "type=topedge": { "model": "stellurgy:launchpad_topEdge" },
+        "type=rightedge": { "model": "stellurgy:launchpad_rightEdge" },
+        "type=noedge": { "model": "stellurgy:launchpad_noEdge" },
+        "inventory" : { "model": "stellurgy:launchpad_all" }
+    }
+}

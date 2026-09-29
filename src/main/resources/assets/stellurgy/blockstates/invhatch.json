@@ -1,0 +1,7 @@
+{
+    "variants": {
+        "default": { "model": "stellurgy:satelliteHatch" },
+        "inventory": { "model": "stellurgy:satelliteHatch" },
+        "normal": { "model": "stellurgy:satelliteHatch" }
+    }
+}

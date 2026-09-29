@@ -1,0 +1,8 @@
+{
+    "parent": "block/piston",
+    "textures": {
+        "bottom": "stellurgy:blocks/platepresser_top",
+        "side": "stellurgy:blocks/platepresser_side",
+        "platform": "stellurgy:blocks/platepresser_bottom"
+    }
+}

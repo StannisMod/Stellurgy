@@ -1,0 +1,27 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"m",
+	"c",
+	" "
+    ],
+    "key":
+    {
+        "c":
+        {
+            "item": "stellurgy:dataunit",
+            "data": 0
+        },
+	"m":
+        {
+            "item": "libvulpes:structuremachine"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:loader",
+        "data": 0,
+        "count": 1
+    }
+}

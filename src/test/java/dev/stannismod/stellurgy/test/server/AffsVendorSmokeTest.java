@@ -1,0 +1,64 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.Reply;
+import org.junit.Test;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import dev.stannismod.stellurgy.test.FixtureSite;
+
+import static org.junit.Assert.assertTrue;
+
+/**
+ * Registration smoke for the vendored Advanced Force Field System (the shield subsystem
+ * folded into Stellurgy's single mod container).
+ *
+ * <p>The merge's real risk is <em>silent</em>: if the guest's
+ * {@code @Mod.EventBusSubscriber} no longer resolves to a loaded mod container, its
+ * {@code RegistryEvent.Register} handlers never fire and the AFFS blocks are simply
+ * absent — the server still boots green. This test refuses that trap: a block that is
+ * not in the registry cannot be placed, so a successful {@code /stellurgytest place} of each
+ * AFFS block is direct proof it registered under Stellurgy's container with the {@code affs:}
+ * domain preserved.</p>
+ */
+public class AffsVendorSmokeTest extends AbstractSharedServerTest {
+
+    @Test
+    public void vendoredAffsBlocksAreRegisteredAndPlaceable() throws Exception {
+        int y = FixtureSite.OPEN_AIR_Y, z = 800, baseX = 800;
+
+        // The AFFS shield core. The legacy projected_field proxy block was removed in the P1 trims
+        // (the modern field is scan-based and places no blocks), so it is not listed here.
+        Map<String, Integer> blocks = new LinkedHashMap<>();
+        blocks.put("affs:field_generator", 0);
+        blocks.put("affs:shield_generator", 2);
+        blocks.put("affs:shield_accumulator", 3);
+        blocks.put("affs:shield_cable", 4);
+        blocks.put("affs:shield_console", 6);
+        blocks.put("affs:admin_energy_source", 8);
+        blocks.put("affs:contour_frame", 10);
+        blocks.put("affs:contour_injector", 12);
+
+        StringBuilder failures = new StringBuilder();
+        for (Map.Entry<String, Integer> e : blocks.entrySet()) {
+            int x = baseX + e.getValue();
+            String resp = join(client().execute(
+                    "stellurgytest place 0 " + x + " " + y + " " + z + " " + e.getKey()));
+            // absence is the answer: the place verb writes `placed` only on its success
+            // path, and this suite RECORDS a failure per block rather than ending on the
+            // first one — a refusal here would take the other blocks' verdicts with it.
+            if (!Reply.of(resp).boolOr("placed", false)) {
+                failures.append(e.getKey()).append(" -> ").append(resp).append('\n');
+            }
+        }
+
+        assertTrue("vendored AFFS blocks failed to register/place (the @Mod merge dropped them "
+                + "silently if these are 'unknown block'):\n" + failures, failures.length() == 0);
+    }
+
+    private static String join(List<String> resp) {
+        return String.join("\n", resp);
+    }
+}

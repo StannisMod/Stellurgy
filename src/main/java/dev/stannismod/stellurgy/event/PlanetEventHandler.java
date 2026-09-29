@@ -1,0 +1,650 @@
+package dev.stannismod.stellurgy.event;
+
+import net.minecraft.block.BlockTorch;
+import net.minecraft.block.material.Material;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.ActiveRenderInfo;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EnumCreatureType;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayer.SleepResult;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Blocks;
+import net.minecraft.init.Items;
+import net.minecraft.inventory.EntityEquipmentSlot;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.EnumFacing;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldProvider;
+import net.minecraft.world.WorldServer;
+import net.minecraftforge.client.event.EntityViewRenderEvent.FogColors;
+import net.minecraftforge.client.event.EntityViewRenderEvent.RenderFogEvent;
+import net.minecraftforge.event.entity.living.LivingEvent.LivingUpdateEvent;
+import net.minecraftforge.event.entity.living.LivingFallEvent;
+import net.minecraftforge.event.entity.living.LivingSpawnEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock;
+import net.minecraftforge.event.entity.player.PlayerSleepInBedEvent;
+import net.minecraftforge.event.terraingen.OreGenEvent;
+import net.minecraftforge.event.world.BlockEvent;
+import net.minecraftforge.event.world.BlockEvent.PlaceEvent;
+import net.minecraftforge.event.world.ChunkEvent;
+import net.minecraftforge.event.world.WorldEvent;
+import net.minecraftforge.fml.common.eventhandler.Event.Result;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent;
+import net.minecraftforge.fml.common.network.FMLNetworkEvent.ServerConnectionFromClientEvent;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.advancements.StellurgyAdvancements;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.api.StellurgyBlocks;
+import dev.stannismod.stellurgy.api.StellurgyItems;
+import dev.stannismod.stellurgy.api.IPlanetaryProvider;
+import dev.stannismod.stellurgy.api.stations.ISpaceObject;
+import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.client.render.planet.RenderPlanetarySky;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
+import dev.stannismod.stellurgy.dimension.DimensionProperties;
+import dev.stannismod.stellurgy.dimension.watersourcelocked;
+import dev.stannismod.stellurgy.world.TemplateImporter;
+import dev.stannismod.stellurgy.entity.EntityRocket;
+import dev.stannismod.stellurgy.network.PacketConfigSync;
+import dev.stannismod.stellurgy.network.PacketDimInfo;
+import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
+import dev.stannismod.stellurgy.network.PacketStellarInfo;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.util.SpawnListEntryNBT;
+import dev.stannismod.stellurgy.util.TransitionEntity;
+import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
+import dev.stannismod.stellurgy.world.util.BasicTeleporter;
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+
+import javax.annotation.Nonnull;
+import java.util.*;
+
+public class PlanetEventHandler {
+
+    private static final ItemStack component = new ItemStack(StellurgyItems.itemUpgrade, 1, 4);
+    /**
+     * Server ticks this handler has seen. OWNER: the SERVER; LIFETIME: one server, released by
+     * {@link #onServerStopped()}.
+     *
+     * <p>It exists to be READ from outside — it is the cheapest evidence that the
+     * {@code ServerTickEvent} subscription is alive, since a lost subscription leaves it frozen
+     * where the last tick put it. That is only true of a counter that STARTS somewhere known: until
+     * the release below, a second world in the same launch inherited the first world's total, so
+     * "frozen at N" and "counting from N" were the same reading.</p>
+     */
+    public static long time = 0;
+    /** The warp-transition flash. OWNER: the CLIENT — {@code runBurst} is client-only and the read
+     *  at the bottom of this file goes through {@code Minecraft}; LIFETIME: one connection, released
+     *  in {@link #disconnected}. NOT released by the server hook below, which is a different owner. */
+    private static long endTime, duration;
+    /** Entity moves this server owes at a future world time. OWNER: the SERVER; LIFETIME: one
+     *  server. Holds live {@code Entity} references, so it is emptied by the release below rather
+     *  than carried into the next world. */
+    private static final List<TransitionEntity> transitionMap = new LinkedList<>();
+
+    public static void addDelayedTransition(TransitionEntity entity) {
+        transitionMap.add(entity);
+    }
+
+    /**
+     * Released here, by the owner: both of these belonged to the server that has just stopped.
+     *
+     * <p>The queue is emptied rather than left to be overwritten — its entries hold entities of a
+     * world that no longer exists, and a transition scheduled against the old world's total time
+     * would fire against the new one's.</p>
+     */
+    public static void onServerStopped() {
+        time = 0;
+        transitionMap.clear();
+    }
+
+    /**
+     * Starts a burst, used for move to warp effect
+     *
+     * @param endTime
+     * @param duration
+     */
+    @SideOnly(Side.CLIENT)
+    public static void runBurst(long endTime, long duration) {
+        PlanetEventHandler.endTime = endTime;
+        PlanetEventHandler.duration = duration;
+    }
+/*
+    public static void modifyChunk(World world, WorldProviderPlanet provider, Chunk chunk) {
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                BiomeHandler.changeBiome(world, ((ChunkManagerPlanet) ((WorldProviderPlanet) world.provider).chunkMgrTerraformed).getBiomeGenAt(x + chunk.x * 16, z + chunk.z * 16), new BlockPos(x + chunk.x * 16, 0, z + chunk.z * 16));
+            }
+        }
+    }
+
+ */
+
+    @SubscribeEvent
+    public void onCrafting(net.minecraftforge.fml.common.gameevent.PlayerEvent.ItemCraftedEvent event) {
+        if (!event.crafting.isEmpty()) {
+            Item item = event.crafting.getItem();//TODO Advancments for crafting.
+            //			if(item == LibVulpesItems.itemHoloProjector)
+            //				event.player.addStat(StellurgyAchivements.holographic);
+            //			else if(item == Item.getItemFromBlock(StellurgyBlocks.blockRollingMachine))
+            //				event.player.addStat(StellurgyAchivements.rollin);
+            //			else if(item == Item.getItemFromBlock(StellurgyBlocks.blockCrystallizer))
+            //				event.player.addStat(StellurgyAchivements.crystalline);
+            //			else if(item == Item.getItemFromBlock(StellurgyBlocks.blockLathe))
+            //				event.player.addStat(StellurgyAchivements.spinDoctor);
+            //			else if(item ==Item.getItemFromBlock(StellurgyBlocks.blockElectrolyser))
+            //				event.player.addStat(StellurgyAchivements.electrifying);
+            //			else if(item == Item.getItemFromBlock(StellurgyBlocks.blockArcFurnace))
+            //				event.player.addStat(StellurgyAchivements.feelTheHeat);
+            //			else if(item == Item.getItemFromBlock(StellurgyBlocks.blockWarpCore))
+            //				event.player.addStat(StellurgyAchivements.warp);
+            //			else if(item == Item.getItemFromBlock(StellurgyBlocks.blockPlatePress))
+            //				event.player.addStat(StellurgyAchivements.blockPresser);
+        }
+    }
+
+    @SubscribeEvent
+    public void CheckSpawn(LivingSpawnEvent.CheckSpawn event) {
+        World world = event.getWorld();
+        DimensionManager manager = DimensionManager.getInstance();
+
+        if (manager.isInitialized()) {
+            DimensionProperties properties = manager.getDimensionProperties(world.provider.getDimension());
+            if (properties != null) {
+                if (!properties.getAtmosphere().isImmune(event.getEntityLiving().getClass()))
+                    event.setResult(Result.DENY);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void SpawnEntity(WorldEvent.PotentialSpawns event) {
+        World world = event.getWorld();
+
+        DimensionProperties properties = DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension());
+        if (properties != null) {
+            List<SpawnListEntryNBT> entries = properties.getSpawnListEntries();
+            if (!entries.isEmpty() && event.getType() != EnumCreatureType.MONSTER)
+                event.getList().addAll(entries);
+        }
+    }
+
+    @SubscribeEvent
+    public void onWorldGen(OreGenEvent.GenerateMinable event) {
+
+        if (event.getWorld().provider instanceof WorldProviderPlanet &&
+                DimensionManager.getInstance().getDimensionProperties(event.getWorld().provider.getDimension()).getOreGenProperties(event.getWorld()) != null) {
+
+            switch (event.getType()) {
+                case COAL:
+                case DIAMOND:
+                case EMERALD:
+                case GOLD:
+                case IRON:
+                case LAPIS:
+                case QUARTZ:
+                case REDSTONE:
+                case CUSTOM:
+                    event.setResult(Result.DENY);
+                    break;
+                default:
+                    event.setResult(Result.DEFAULT);
+            }
+        }
+    }
+
+    //Handle gravity
+    @SubscribeEvent
+    public void playerTick(LivingUpdateEvent event) {
+/*
+        if (event.getEntity().world.isRemote && event.getEntity().posY > 260 && event.getEntity().posY < 270 && event.getEntity().motionY < -.1) {
+            RocketEventHandler.destroyOrbitalTextures(event.getEntity().world);
+        }
+ */
+        if (event.getEntity().isInWater()) {
+            if (Atmosphere.LOWOXYGEN.isImmune(event.getEntityLiving()))
+                event.getEntity().setAir(300);
+        }
+
+        if (!event.getEntity().world.isRemote && event.getEntity().world.getTotalWorldTime() % 20 == 0 && event.getEntity() instanceof EntityPlayer) {
+            if (DimensionManager.getInstance().getDimensionProperties(event.getEntity().world.provider.getDimension()).getName().equals("Luna") &&
+                    event.getEntity().getPosition().distanceSq(2347, 80, 67) < 512) {
+                StellurgyAdvancements.WENT_TO_THE_MOON.trigger((EntityPlayerMP) event.getEntity());
+            }
+        }
+
+        //GravityHandler.applyGravity(event.getEntity());
+    }
+
+    /**
+     * The space-dimension guard: a player in the space dimension who stands in no station's slot and
+     * is not riding a rocket is put on a station's spawn, or sent to the overworld when there is no
+     * station at all.
+     *
+     * <p>At the END of the space world's own tick, never from a living update. On the server a
+     * player's living update runs inside {@code NetHandlerPlayServer.update}, whose very next
+     * statement writes the pre-tick position back; a teleport made there does not hold until the
+     * client confirms it, so the guard fired again on every tick in between, each time re-sending its
+     * chat lines. The world tick runs before the network tick, so the handler's own capture of the
+     * position already sees the move.</p>
+     */
+    @SubscribeEvent
+    public void spaceDimensionGuard(TickEvent.WorldTickEvent event) {
+        if (event.phase != TickEvent.Phase.END || event.world.isRemote
+                || event.world.provider.getDimension() != StellurgyConfiguration.getCurrentConfig().spaceDimId) {
+            return;
+        }
+        // A copy: the no-station branch moves the player out of this world's list.
+        for (EntityPlayer player : new ArrayList<>(event.world.playerEntities)) {
+            evictIfOffStation(player);
+        }
+    }
+
+    private void evictIfOffStation(EntityPlayer player) {
+        if (SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(player.getPosition()) != null
+                || player.getRidingEntity() instanceof EntityRocket) {
+            return;
+        }
+        double distance = 0;
+        HashedBlockPosition teleportPosition = null;
+        for (ISpaceObject spaceObject : SpaceObjectManager.getSpaceManager().getSpaceObjects()) {
+            if (spaceObject instanceof SpaceStationObject) {
+                SpaceStationObject station = ((SpaceStationObject) spaceObject);
+                double distanceTo = player.getPosition().getDistance(station.getSpawnLocation().x, station.getSpawnLocation().y, station.getSpawnLocation().z);
+                if (distanceTo > distance) {
+                    distance = distanceTo;
+                    teleportPosition = station.getSpawnLocation();
+                }
+            }
+        }
+        if (teleportPosition != null) {
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation1")));
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation2")));
+            player.setPositionAndUpdate(teleportPosition.x, teleportPosition.y, teleportPosition.z);
+        } else {
+            player.sendMessage(new TextComponentString(LibVulpes.proxy.getLocalizedString("msg.chat.nostation3")));
+            player.changeDimension(0, new BasicTeleporter(player.getPosition()));
+        }
+    }
+
+    @SubscribeEvent
+    public void sleepEvent(@Nonnull PlayerSleepInBedEvent event) {
+
+        if (event.getEntity().world.provider instanceof WorldProviderPlanet) {
+            WorldProvider provider = event.getEntity().world.provider;
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+
+            if (!StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace && AtmosphereHandler.hasAtmosphereHandler(provider.getDimension()) && atmhandler != null &&
+                    !atmhandler.getAtmosphereType(event.getPos()).isBreathable()) {
+                event.setResult(SleepResult.OTHER_PROBLEM);
+            }
+        }
+    }
+
+
+    //TODO: more robust way of inv checking
+	/*@SubscribeEvent
+	public void containerOpen(PlayerContainerEvent event) {
+		//event.getEntity()Player.openContainer
+		if(RocketInventoryHelper.canPlayerBypassInvChecks(event.getEntityPlayer()) && event instanceof PlayerContainerEvent.Close)
+			RocketInventoryHelper.removePlayerFromInventoryBypass(event.getEntityPlayer());
+		if(event instanceof PlayerContainerEvent.Open) {
+
+		}
+	}*/
+
+    @SubscribeEvent
+    public void blockPlacedEvent(@Nonnull PlaceEvent event) {
+        WorldProvider provider = event.getWorld().provider;
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+
+        if (!event.getWorld().isRemote && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
+                !atmhandler.allowsCombustionAt(event.getPos())) {
+
+            if (event.getPlacedBlock().getBlock() == Blocks.TORCH) {
+                EnumFacing direction = event.getPlacedBlock().getValue(BlockTorch.FACING);
+                event.getWorld().setBlockState(event.getPos(), StellurgyBlocks.blockUnlitTorch.getDefaultState().withProperty(BlockTorch.FACING, direction));
+            } else if (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().torchBlocks.contains(event.getPlacedBlock().getBlock())) {
+                event.setResult(Result.DENY);
+                event.setCanceled(true);
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void blockRightClicked(@Nonnull RightClickBlock event) {
+        EnumFacing direction = event.getFace();
+        WorldProvider provider = event.getWorld().provider;
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+
+        if (!event.getWorld().isRemote && direction != null && event.getEntityPlayer() != null && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
+                !atmhandler.allowsCombustionAt(event.getPos().offset(direction))) {
+
+            if (!event.getEntityPlayer().getHeldItem(event.getHand()).isEmpty()) {
+                if (event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.FLINT_AND_STEEL || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.FIRE_CHARGE || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.BLAZE_POWDER || event.getEntityPlayer().getHeldItem(event.getHand()).getItem() == Items.BLAZE_ROD)
+                    event.setCanceled(true);
+            }
+        }
+
+        if (!event.getWorld().isRemote && !event.getItemStack().isEmpty() && event.getItemStack().getItem() == Item.getItemFromBlock(StellurgyBlocks.blockGenericSeat) && event.getWorld().getBlockState(event.getPos()).getBlock() == Blocks.TNT) {
+            StellurgyAdvancements.BEER.trigger((EntityPlayerMP) event.getEntityPlayer());
+        }
+    }
+
+    @SubscribeEvent
+    public void disconnected(ClientDisconnectionFromServerEvent event) {
+        // Reload configs from disk
+        StellurgyConfiguration.useClientDiskConfig();
+        // C031: clear stale client-side Stellurgy dimension data when leaving a REMOTE
+        // server so it doesn't bleed into the next server joined in the same
+        // client session. dimensionList/starList are a JVM-global singleton and
+        // PacketDimInfo only merges per-id — it never removes a dim that existed
+        // only on the previous server, so those linger as ghost planets/stars.
+        // Guarded to remote-only: in single-player the client and the integrated
+        // server share this DimensionManager, and the integrated server's own
+        // onServerStopped already clears it — clearing here mid-shutdown could
+        // race its save.
+        if (net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance() == null) {
+            DimensionManager.getInstance().unregisterAllDimensions();
+        }
+        // Released here, by the owner: the warp flash is this CLIENT's, and its end time is a moment
+        // on the world it was started in. Carried across the gap it is compared against the NEXT
+        // world's clock, which knows nothing about it — so the overlay either draws for no reason or
+        // is already expired, and which one you get depends on where that world's day count happens
+        // to stand. Unconditional, unlike the dimension sweep above: nothing but this client writes
+        // these two, so there is no integrated server whose shutdown could be raced.
+        endTime = 0;
+        duration = 0;
+    }
+
+    //Tick dimensions, needed for satellites, and GUIs
+    @SubscribeEvent
+    public void tick(TickEvent.ServerTickEvent event) {
+        //Tick satellites
+        if (event.phase == TickEvent.Phase.END) {
+            DimensionManager.getInstance().tickDimensions();
+            time++;
+
+            if (!transitionMap.isEmpty()) {
+                Iterator<TransitionEntity> itr = transitionMap.iterator();
+
+                while (itr.hasNext()) {
+                    TransitionEntity ent = itr.next();
+                    if (ent.entity.world.getTotalWorldTime() >= ent.time) {
+                        ent.entity.setLocationAndAngles(
+                                ent.location.getX(),
+                                ent.location.getY(),
+                                ent.location.getZ(),
+                                ent.entity.rotationYaw,
+                                ent.entity.rotationPitch
+                        );
+                        WorldServer newWorld = ent.entity.getServer().getWorld(ent.dimId);
+                        Entity moved = ent.entity.changeDimension(
+                                ent.dimId,
+                                new BasicTeleporter(ent.entity.getPosition())
+                        );
+
+                        // Grace on the post-transfer entity instance
+                        dev.stannismod.stellurgy.atmosphere.RocketTransferGrace.stamp(
+                                moved, newWorld.getTotalWorldTime());
+
+                        Entity rocket = newWorld.getEntityFromUuid(ent.entity2.getPersistentID());
+                        if (rocket != null && moved != null) {
+                            moved.startRiding(rocket, true);
+                        }
+                        itr.remove();
+                    }
+                }
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void tickClient(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END)
+            DimensionManager.getInstance().tickDimensionsClient();
+    }
+
+    //Make sure the player receives data about the dimensions
+    @SubscribeEvent
+    public void playerLoggedInEvent(ServerConnectionFromClientEvent event) {
+
+        //Send config first
+        if (!event.isLocal())
+            PacketHandler.sendToDispatcher(new PacketConfigSync(), event.getManager());
+
+        //Make sure stars are sent next
+        for (int i : DimensionManager.getInstance().getStarIds()) {
+            PacketHandler.sendToDispatcher(new PacketStellarInfo(i, DimensionManager.getInstance().getStar(i)), event.getManager());
+        }
+
+        for (int i : DimensionManager.getInstance().getRegisteredDimensions()) {
+            PacketHandler.sendToDispatcher(new PacketDimInfo(i, DimensionManager.getInstance().getDimensionProperties(i)), event.getManager());
+        }
+
+        for (ISpaceObject spaceObject : SpaceObjectManager.getSpaceManager().getSpaceObjects()) {
+            PacketHandler.sendToDispatcher(new PacketSpaceStationInfo(spaceObject.getId(), spaceObject), event.getManager());
+        }
+
+        PacketHandler.sendToDispatcher(new PacketDimInfo(0, DimensionManager.getInstance().getDimensionProperties(0)), event.getManager());
+    }
+
+    @SubscribeEvent
+    public void worldLoadEvent(WorldEvent.Load event) {
+        if (!event.getWorld().isRemote) {
+            World world = event.getWorld();
+            int dim = world.provider.getDimension();
+            AtmosphereHandler.registerWorld(dim);
+            // Import a TEMPLATE planet's region files before its chunks are first generated (no-op otherwise).
+            TemplateImporter.importIfNeeded(world, DimensionManager.getInstance().getDimensionProperties(dim));
+        } else if (StellurgyConfiguration.getCurrentConfig().skyOverride)
+            event.getWorld().provider.setSkyRenderer(new RenderPlanetarySky());
+    }
+
+    @SubscribeEvent
+    public void worldUnloadEvent(WorldEvent.Unload event) {
+        if (!event.getWorld().isRemote)
+            AtmosphereHandler.unregisterWorld(event.getWorld().provider.getDimension());
+    }
+
+    //Handle fog density and color
+    @SubscribeEvent
+    @SideOnly(Side.CLIENT)
+    public void fogColor(FogColors event) {
+
+
+        IBlockState state = ActiveRenderInfo.getBlockStateAtEntityViewpoint(event.getEntity().world, event.getEntity(), (float) event.getRenderPartialTicks());
+
+        if (state.getMaterial() == Material.WATER)
+            return;
+
+
+        DimensionProperties properties = DimensionManager.getInstance().getDimensionProperties(event.getEntity().dimension);
+        if (properties != null) {
+            if (event.getEntity().world.provider instanceof IPlanetaryProvider) {
+                Vec3d color = event.getEntity().world.provider.getFogColor(event.getEntity().world.getCelestialAngle((float) event.getRenderPartialTicks()), (float) event.getRenderPartialTicks());
+                event.setRed((float) Math.min(color.x, 1f));
+                event.setGreen((float) Math.min(color.y, 1f));
+                event.setBlue((float) Math.min(color.z, 1f));
+
+                //Make sure fog doesn't happen on zero atmospheres
+                if (properties.getAtmosphereDensity() == 0) {
+                    event.setRed(0);
+                    event.setGreen(0);
+                    event.setBlue(0);
+                }
+            }
+
+            if (endTime > 0) {
+                double amt = (endTime - Minecraft.getMinecraft().world.getTotalWorldTime()) / (double) duration;
+                if (amt < 0) {
+                    endTime = 0;
+                } else {
+                    event.setRed((float) amt);
+                    event.setGreen((float) amt);
+                    event.setBlue((float) amt);
+                }
+
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public void handleSourcePlacement(BlockEvent.CreateFluidSourceEvent event) {
+        List<watersourcelocked> source_lock_list = DimensionManager.getInstance().getDimensionProperties(event.getWorld().provider.getDimension()).water_source_locked_positions;
+        HashedBlockPosition hp = new HashedBlockPosition(event.getPos().getX(),event.getPos().getY(),event.getPos().getZ());
+
+        for (watersourcelocked i:source_lock_list){
+            if (i.pos.equals(hp))
+                event.setResult(Result.DENY);
+        }
+        /*
+        int target_sea_lvl = DimensionManager.getInstance().getDimensionProperties(event.getWorld().provider.getDimension()).getTargetSeaLevel();
+        IBlockState state = event.getState();
+        if (event.getPos().getY() >= target_sea_lvl)
+            event.setResult(Result.DENY);
+
+         */
+    }
+
+    @SubscribeEvent
+    public void serverTickEvent(TickEvent.WorldTickEvent event) {
+
+        /*
+        World world = event.world;
+        int target_sea_lvl = DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getTargetSeaLevel();
+
+        if (world.provider instanceof IPlanetaryProvider) {
+
+            Collection<Chunk> list = (net.minecraftforge.common.DimensionManager.getWorld(world.provider.getDimension())).getChunkProvider().getLoadedChunks();
+
+            for (Chunk chunk : list) {
+                int randomx = world.rand.nextInt(16) + chunk.x*16;
+                int randomz = world.rand.nextInt(16) + chunk.z*16;
+                BlockPos topblock = world.getHeight(new BlockPos(randomx, 0, randomz)).down();
+                if (topblock.getY() >= target_sea_lvl && (world.getBlockState(topblock).getBlock() == Blocks.WATER ||world.getBlockState(topblock).getBlock() == Blocks.FLOWING_WATER)) {
+
+                    if (!(world.getBlockState(topblock).getValue(BlockLiquid.LEVEL).intValue() == 0))
+                        continue;
+
+                        world.setBlockState(topblock, Blocks.AIR.getDefaultState());
+                        //world.notifyBlockUpdate(topblock, world.getBlockState(topblock), world.getBlockState(topblock), 3);
+
+                }
+
+            }
+        }
+
+         */
+    }
+
+
+
+
+    @SubscribeEvent
+    public void onChunkLoad(ChunkEvent.Load event) {
+
+        DimensionManager.getInstance().getDimensionProperties(event.getWorld().provider.getDimension()).add_chunk_to_terraforming_list(event.getChunk());
+        //Do not modify all at once, this causes !!!EXTREME!!! lag
+        /*
+        if (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().enableTerraforming && event.getWorld().provider.getClass() == WorldProviderPlanet.class) {
+            if (DimensionManager.getInstance().getDimensionProperties(event.getWorld().provider.getDimension()).isTerraformed()) {
+                Chunk chunk = event.getWorld().getChunkFromChunkCoords(event.getChunkX(), event.getChunkZ());
+                modifyChunk(event.getWorld(), (WorldProviderPlanet) event.getWorld().provider, chunk);
+            }
+        }
+         */
+    }
+
+    @SubscribeEvent
+    @SideOnly(Side.CLIENT)
+    public void fogColor(RenderFogEvent event) {
+
+        if (event.getFogMode() == -1) {
+            return;
+        }
+        DimensionProperties properties = DimensionManager.getInstance().getDimensionProperties(event.getEntity().dimension);
+        if (properties != null && event.getState().getBlock() != Blocks.WATER && event.getState().getBlock() != Blocks.LAVA) {//& properties.atmosphereDensity > 125) {
+            GlStateManager.setFog(GlStateManager.FogMode.LINEAR);
+
+
+            float f1 = event.getFarPlaneDistance();
+            float near;
+            float far;
+
+            int atmosphere = Math.min(properties.getAtmosphereDensity(), 200);
+            ItemStack armor = Minecraft.getMinecraft().player.getItemStackFromSlot(EntityEquipmentSlot.HEAD);
+
+            if (!armor.isEmpty() && armor.getItem() instanceof IModularArmor) {
+                for (ItemStack i : ((IModularArmor) armor.getItem()).getComponents(armor)) {
+                    if (i.isItemEqual(component)) {
+                        atmosphere = Math.min(atmosphere, 100);
+                        break;
+                    }
+                }
+            }
+
+            //Check environment
+            if (dev.stannismod.stellurgy.client.ClientAtmosphere.pressure()
+                    != dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING) {
+                atmosphere = Math.min(
+                        dev.stannismod.stellurgy.client.ClientAtmosphere.pressure(), 200);
+            }
+
+            if (atmosphere > 100) {
+                near = 0.75f * f1 * (2.00f - atmosphere * atmosphere / 10000f);
+                far = f1;
+            } else {
+                near = 0.75f * f1 * (2.00f - atmosphere / 100f);
+                far = f1 * (2.002f - atmosphere / 100f);
+            }
+
+            GlStateManager.setFogStart(near);
+            GlStateManager.setFogEnd(far);
+            GlStateManager.setFogDensity(0);
+
+
+            //event.setCanceled(false);
+        }
+
+    }
+
+
+    //Saves NBT data
+    @SubscribeEvent
+    public void worldSaveEvent(WorldEvent.Save event) {
+        //TODO: save only the one dimension
+        if (event.getWorld().provider.getDimension() == 0)
+            try {
+                DimensionManager.getInstance().saveDimensions(DimensionManager.workingPath);
+            } catch (Exception e) {
+                Stellurgy.logger.fatal("An error has occurred saving planet data, this can happen if another mod causes the game to crash during game load.  If the game has fully loaded, then this is a serious error, Stellurgy data has not been saved.");
+                e.printStackTrace();
+            }
+    }
+
+
+    //Make sure the player doesnt die on low gravity worlds
+    @SubscribeEvent
+    public void fallEvent(LivingFallEvent event) {
+        if (event.getEntity().world.provider instanceof IPlanetaryProvider) {
+            IPlanetaryProvider planet = (IPlanetaryProvider) event.getEntity().world.provider;
+            event.setDistance((float) (event.getDistance() * planet.getGravitationalMultiplier(event.getEntity().getPosition())));
+        }
+    }
+}

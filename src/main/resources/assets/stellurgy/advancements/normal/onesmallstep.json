@@ -1,0 +1,20 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:moonTurf"
+        },
+        "title": {
+            "translate": "advancement.oneSmallStep"
+        },
+        "description": {
+            "translate": "advancement.oneSmallStep.desc"
+        },
+        "frame": "challenge"
+    },
+    "parent": "stellurgy:normal/moonlanding",
+    "criteria": {
+        "onesmallstep": {
+            "trigger": "onesmallstep"
+        }
+    }
+}

@@ -1,0 +1,20 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+        {
+	    "item": "libvulpes:hatch",
+	    "data": 2
+        },
+	{
+	    "item": "stellurgy:ic",
+	    "data": 1
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:loader",
+        "count": 1,
+        "data": 5
+    }
+}

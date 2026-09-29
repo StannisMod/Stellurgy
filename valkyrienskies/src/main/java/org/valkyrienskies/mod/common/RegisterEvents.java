@@ -18,7 +18,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityEntryBuilder;
-import zmaster587.advancedRocketry.network.EntityNetworkIds;
+import dev.stannismod.stellurgy.network.EntityNetworkIds;
 
 @Mod.EventBusSubscriber(modid = ValkyrienSkiesMod.HOST_MOD_ID)
 public class RegisterEvents {

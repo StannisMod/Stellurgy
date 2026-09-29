@@ -85,11 +85,11 @@ minecraft {
 
     // Add various JVM arguments here for runtime
     def args = ['-ea:' + group]
-    // Dev convenience: expose the /artest test-only probe command tree in runClient/runServer so the
+    // Dev convenience: expose the /stellurgytest test-only probe command tree in runClient/runServer so the
     // maintainer can diagnose a live world without a launch flag. Gated by this system property, which
-    // shipped jars never pass, so it stays a dev-only tool. Opt out with -Pdev_artest=false.
-    if ((project.findProperty('dev_artest') ?: 'true').toString().toBoolean()) {
-        args << '-Dadvancedrocketry.tests=true'
+    // shipped jars never pass, so it stays a dev-only tool. Opt out with -Pdev_stellurgytest=false.
+    if ((project.findProperty('dev_stellurgytest') ?: 'true').toString().toBoolean()) {
+        args << '-Dstellurgy.tests=true'
     }
     if (propertyBool('use_mixins')) {
         args << '-Dmixin.hotSwap=true'
@@ -161,23 +161,19 @@ if (propertyBool('enable_junit_testing')) {
     // its clone-sibling + publishToMavenLocal setup step. The external repo
     // (github.com/StannisMod/ForgeTestFramework) lives on for other consumers.
     sourceSets.test.java.srcDir 'testframework/src/main/java'
+    // The harness's own mixin config + class. They live in the TEST source set, so they are
+    // absent from the shipped jar entirely: a test-only mixin reaches from the harness INTO the
+    // product, never from production into itself, and a released game pays nothing for it.
+    sourceSets.test.resources.srcDir 'testframework/src/main/resources'
 }
 
 // Valkyrien Skies physics engine — vendored as a git subtree under valkyrienskies/
 // and compiled into the main source set. VS is a mandatory part of the mod: its
-// classes (org.valkyrienskies.*) ship inside AR. Its mixins/AT are registered
-// alongside AR's own; its former shaded libraries are declared as ordinary
+// classes (org.valkyrienskies.*) ship inside Stellurgy. Its mixins/AT are registered
+// alongside Stellurgy's own; its former shaded libraries are declared as ordinary
 // dependencies (see gradle/scripts/dependencies.gradle).
 sourceSets.main.java.srcDir 'valkyrienskies/src/main/java'
 sourceSets.main.resources.srcDir 'valkyrienskies/src/main/resources'
-
-// Advanced Force Field System — vendored under affs/ and compiled into the main
-// source set as AR's shield subsystem. Its classes (com.github.stannismod.affs.*)
-// ship inside AR; it is no longer a separate @Mod (folded into AR's mod container),
-// its access-transformer entries are merged into advancedrocketry_at.cfg, and it
-// keeps its own registry domain (affs:). See affs/LICENSE.
-sourceSets.main.java.srcDir 'affs/src/main/java'
-sourceSets.main.resources.srcDir 'affs/src/main/resources'
 
 apply from: 'gradle/scripts/dependencies.gradle'
 
@@ -313,15 +309,15 @@ def configureHeadlessTest = { Test t, String packageGlob ->
     t.javaLauncher.set(javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(8)
     })
-    // Test-only flag gating /artest probe commands and other test-only behaviour.
-    t.systemProperty 'advancedrocketry.tests', 'true'
+    // Test-only flag gating /stellurgytest probe commands and other test-only behaviour.
+    t.systemProperty 'stellurgy.tests', 'true'
     // Forward the golden-corpus rewrite flag into the forked test JVM. Regenerating the universe
     // fixture is a deliberate act (it means a new schema version is being released), so it is opt-in
     // per invocation rather than a property with a default:
-    //   ./gradlew testUnit --rerun -Dadvancedrocketry.universe.corpus.write=true
-    if (System.getProperty('advancedrocketry.universe.corpus.write') != null) {
-        t.systemProperty 'advancedrocketry.universe.corpus.write',
-                System.getProperty('advancedrocketry.universe.corpus.write')
+    //   ./gradlew testUnit --rerun -Dstellurgy.universe.corpus.write=true
+    if (System.getProperty('stellurgy.universe.corpus.write') != null) {
+        t.systemProperty 'stellurgy.universe.corpus.write',
+                System.getProperty('stellurgy.universe.corpus.write')
     }
     t.testLogging {
         events 'failed', 'skipped', 'passed'
@@ -331,16 +327,21 @@ def configureHeadlessTest = { Test t, String packageGlob ->
 }
 
 tasks.register('testUnit', Test) {
-    configureHeadlessTest(it, 'zmaster587/advancedRocketry/test/unit/**')
+    configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/unit/**')
+    // The vendored harness compiles into this source set but sat in no tier's include rules, so
+    // its own unit tests could not be run by anything. They belong in the fast tier: they need no
+    // Minecraft and no bridge, and they cover seams (a package-private constructor, a timeout
+    // diagnosis) that a real-client tier can only reach by starting a client.
+    include 'com/github/stannismod/forge/testing/**'
 }
 
 tasks.register('testIntegration', Test) {
-    configureHeadlessTest(it, 'zmaster587/advancedRocketry/test/integration/**')
+    configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/integration/**')
 }
 
 test {
-    configureHeadlessTest(it, 'zmaster587/advancedRocketry/test/unit/**')
-    include 'zmaster587/advancedRocketry/test/integration/**'
+    configureHeadlessTest(it, 'dev/stannismod/stellurgy/test/unit/**')
+    include 'dev/stannismod/stellurgy/test/integration/**'
 }
 
 // ─── Real-server / real-client harness layers (RFG) ─────────────────────────
@@ -378,7 +379,7 @@ def configureHarnessTest = { Test t, boolean enableClient ->
     // not the run task itself.
     // Exclude the main source set output (classes + resources) from the test
     // portion: the run task's classpath already carries our mod as the built jar,
-    // and FML throws DuplicateModsFoundException if it finds advancedrocketry both
+    // and FML throws DuplicateModsFoundException if it finds stellurgy both
     // as build/classes/java/main AND build/libs/*.jar. The jar form is also the
     // one that carries the FMLCorePlugin/FMLAT manifest, so coremod + AT discovery
     // (GradleForgeHacks scanning java.class.path) only works from the jar anyway.
@@ -395,7 +396,7 @@ def configureHarnessTest = { Test t, boolean enableClient ->
         languageVersion = JavaLanguageVersion.of(8)
     })
 
-    t.systemProperty 'advancedrocketry.tests', 'true'
+    t.systemProperty 'stellurgy.tests', 'true'
     // Gate that flips AbstractHeadlessServerTest / AbstractClientE2ETest from
     // Assume-skip to live. Without it the whole layer no-ops.
     t.systemProperty 'forge.test.harness.enabled', 'true'
@@ -420,6 +421,21 @@ def configureHarnessTest = { Test t, boolean enableClient ->
         // the FBO path, and as the knob that tells a timing-sensitive failure from an FBO-caused one.
         if (project.hasProperty('clientFbo')) {
             t.systemProperty 'forge.test.client.fbo', project.property('clientFbo').toString()
+        }
+        // -PmixinDebug turns on Mixin's own apply log in BOTH child JVMs (the harness forwards every
+        // `mixin.*` property it is given). Off by default because it is loud; reach for it the moment
+        // a test-only mixin returns an empty observation, since "queued" and "woven" are different
+        // claims and only this distinguishes them.
+        // -PplotOffset=N starts this class's plot allocator at N instead of 0, so a scenario can be
+        // run on a LATER plot without a predecessor in front of it. It exists to separate two things
+        // that every ordinary run changes together — what ran before this scenario, and where its
+        // fixture stands — and which therefore cannot be told apart by comparing a solo run against
+        // a class run. An experiment lever: it belongs in no gate and no default.
+        if (project.hasProperty('plotOffset')) {
+            t.systemProperty 'stellurgytest.plot.offset', project.property('plotOffset').toString()
+        }
+        if (project.hasProperty('mixinDebug')) {
+            t.systemProperty 'mixin.debug', project.property('mixinDebug').toString()
         }
         // -PclientWindowState=normal keeps the client's game window visible (default: the harness
         // suppresses it off-screen/minimized for the whole client lifetime). The visible mode is
@@ -475,17 +491,29 @@ def configureHarnessTest = { Test t, boolean enableClient ->
     t.forkEvery 1L
     t.minHeapSize = '256m'
     t.maxHeapSize = '512m'
-    // One wall-clock multiplier for every hard harness ceiling (boot, handshake, waitTicks,
-    // command round-trips): N concurrent MC pairs stretch the effective tick rate, and fixed
-    // ceilings would turn that contention into spurious reds. See TestTimeouts.
-    t.systemProperty 'forge.test.timeout.factor', String.valueOf(1.0d + harnessForks / 4.0d)
-
     // Harness worlds are generated from a FIXED seed so terrain under a fixture's coordinates is
     // the same every run (an unpinned seed made every fixed-coordinate fixture a coin flip).
     // -PlevelSeed=<value> re-rolls it deliberately; -PlevelSeed=random restores vanilla's
     // per-run random landscape, which is how you check a fixture is not seed-dependent.
     if (project.hasProperty('levelSeed')) {
         t.systemProperty 'forge.test.level.seed', project.property('levelSeed').toString()
+    }
+
+    // Harness worlds are FLAT by default (surface at y=64 everywhere), so a fixture at a fixed Y
+    // stands on the ground by construction instead of betting on the landscape. -PlevelType=DEFAULT
+    // puts every world back on generated terrain — the one-run answer to "is the flat world the
+    // reason this broke?". A test whose SUBJECT is generated terrain asks for it per-test instead
+    // (AbstractHeadlessServerTest#requiresGeneratedTerrain).
+    if (project.hasProperty('levelType')) {
+        t.systemProperty 'forge.test.level.type', project.property('levelType').toString()
+    }
+
+    // Heap for each harness SERVER child. The framework's 1g default was calibrated on generated
+    // terrain, where most chunk sections above the surface are empty and cost nothing; a flat world
+    // carries solid layers in every column, and a VS ship claims 15x15 chunks around itself.
+    // -PserverXmx=2g is how you ask whether a red is that floor rather than the code.
+    if (project.hasProperty('serverXmx')) {
+        t.systemProperty 'forge.test.server.xmx', project.property('serverXmx').toString()
     }
 
     t.testLogging {
@@ -498,14 +526,14 @@ def configureHarnessTest = { Test t, boolean enableClient ->
 tasks.register('testServer', Test) {
     description = 'Dedicated-server scenario e2e (src/test/.../test/server).'
     configureHarnessTest(it, false)
-    include 'zmaster587/advancedRocketry/test/server/**'
+    include 'dev/stannismod/stellurgy/test/server/**'
     mustRunAfter 'testIntegration'
 }
 
 tasks.register('testClient', Test) {
     description = 'Real-client + server e2e (src/test/.../test/client). Auto-skips headless.'
     configureHarnessTest(it, true)
-    include 'zmaster587/advancedRocketry/test/client/**'
+    include 'dev/stannismod/stellurgy/test/client/**'
     mustRunAfter 'testServer'
 }
 
@@ -516,7 +544,7 @@ tasks.register('testMilestone', Test) {
     // milestone reachable.
     description = 'Milestone e2e — one full playable loop on the real client (src/test/.../test/milestone).'
     configureHarnessTest(it, true)
-    include 'zmaster587/advancedRocketry/test/milestone/**'
+    include 'dev/stannismod/stellurgy/test/milestone/**'
     mustRunAfter 'testClient'
 }
 

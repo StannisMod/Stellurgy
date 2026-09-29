@@ -1,0 +1,26 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:rollingMachine"
+        },
+        "title": {
+            "translate": "advancement.rollin"
+        },
+        "description": {
+            "translate": "advancement.rollin.desc"
+        }
+    },
+    "parent": "stellurgy:normal/holographic",
+    "criteria": {
+        "warp": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "stellurgy:rollingMachine"
+                    }
+                ]
+            }
+        }
+    }
+} 

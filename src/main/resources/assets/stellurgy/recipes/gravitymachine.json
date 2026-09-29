@@ -1,0 +1,30 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"sds",
+	"sws"
+    ],
+    "key":
+    {
+        "d":
+        {
+            "item": "stellurgy:satelliteprimaryfunction",
+            "data": 2
+        },
+	"w":
+        {
+            "item": "stellurgy:warpcore"
+        },
+	"s":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "sheetTitanium"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:gravitymachine",
+        "count": 1
+    }
+}

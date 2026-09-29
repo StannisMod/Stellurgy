@@ -10,7 +10,7 @@ Forge 1.12.2's mod scanner runs on Java 8 with an old ASM that throws
 `IllegalArgumentException` ("probably a corrupt zip") when it reads a Java-9
 `module-info.class`, aborting mod loading. Stock VS avoided this by
 shading+relocating these libraries into its own jar (which drops their
-`module-info`); since we compile VS's source into AR and consume the libraries
+`module-info`); since we compile VS's source into Stellurgy and consume the libraries
 directly, we strip `module-info.class` instead so the dev/test classpath boots.
 
 `cqengine`, `javax.inject` and `picocli` carry no root `module-info.class`, so

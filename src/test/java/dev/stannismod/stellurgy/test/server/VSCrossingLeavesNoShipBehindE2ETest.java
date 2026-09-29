@@ -1,0 +1,333 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.ShipIdentity;
+
+import org.junit.Test;
+
+
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.RocketFixture;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * A per-ship crossing MOVES a ship, so it must not ADD one to the world it left.
+ *
+ * <p>A crossing snapshots the source ship's subspace shipyard, cuts those blocks, pastes them elsewhere
+ * and re-assembles a fresh ship there. One ship goes away exactly as one appears, so the number of ships
+ * the source world holds is CONSERVED across it. Both legs assert that single invariant.</p>
+ *
+ * <p><b>Two counters, each blind to one of the two ways a ship can be left behind.</b>
+ * {@code vs ship-count} is the LOADED physics-object set; {@code vs ship-count-all} is the queryable
+ * REGISTRY. A ship object left loaded but unregistered is invisible to the second; a registry entry left
+ * behind with nothing loaded to collect it is invisible to the first. Both are read on every crossing, so
+ * neither leak can hide behind the counter that cannot see it. The unregistered-object half is what this
+ * class is aimed at; the other half has its own arrangement in
+ * {@link VSCrossingOutOfAnUnloadedSourceE2ETest}, because it needs the opposite starting state.</p>
+ *
+ * <p><b>Measured as a delta, never against zero.</b> The server is shared across this class's methods, so
+ * each crossing is measured against counts taken immediately before it.</p>
+ *
+ * <p><b>The enabling condition is asserted, not assumed.</b> A ship OBJECT can only be stranded if the
+ * source was loaded when its blocks were cut, so each leg asserts the source is loaded before it crosses
+ * — otherwise a leg whose arrangement quietly drifted would pass while measuring nothing.</p>
+ *
+ * <p><b>Why arrival is checked by POSE.</b> The ship lookup behind {@code vs ship-info} returns the
+ * nearest loaded ship at any distance, so on a build that strands ships it answers with the stranded one
+ * and "a ship is managed here" would be true before anything arrived. Every arrival check therefore
+ * requires the resolved ship to actually be AT the destination.</p>
+ *
+ * <p><b>Why nothing here pumps {@code vs load-ships}.</b> It is not needed — a ship is created already
+ * loaded, and {@code permaload} keeps it that way for the whole class (a test server holds it for
+ * every class now, not just this one), so the loaded set fills itself. It is also not safe: pumping
+ * a load while {@code permaload} holds crashes the dedicated server if any registered ship happens
+ * to be unloaded, which a shared harness cannot rule out. <b>That hazard is now tier-wide</b>, since
+ * the flag is held everywhere and seventeen sites pump loads; what keeps the one class whose ships
+ * ARE registered-and-unloaded safe is that it turns the flag off for itself.</p>
+ *
+ * <p>Gated on the server's real VS presence; skips cleanly otherwise.</p>
+ */
+public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTest {
+
+
+    private static final int BASE_Z = 5400;
+    /** Where a ship is built, and the clear-sky altitude every crossing lands at. */
+    private static final int BUILD_Y = FixtureSite.OPEN_AIR_Y, SKY_Y = 150;
+    /** One base per method, far enough apart that no method can resolve another's ship. */
+    private static final int LEG1_X = 5400, LEG2_X = 6000, LEG3_X = 6600;
+    /** Distance between a crossing's source and its destination — well beyond {@link #POSE_TOLERANCE}. */
+    private static final int HOP = 160;
+    /** How far a re-assembled ship's own pose may sit from the anchor it was seeded on. */
+    private static final double POSE_TOLERANCE = 64.0;
+
+    /**
+     * How much WORLD a bounded wait is allowed: 200 server ticks, the ten seconds the old
+     * {@code 40 x 250 ms} meant on an idle box. On the SERVER's clock, because what these wait for —
+     * a queued assembly being drained, a queued load being served — is driven by the server tick
+     * loop itself, and the worlds involved are often the ones that have not started ticking yet.
+     */
+    private static final int WAIT_TICKS = 200;
+
+    /** The defect in one crossing: the ship object left behind in the world the crossing departed. */
+    @Test
+    public void aCrossingDoesNotLeaveAShipInTheWorldItLeft() throws Exception {
+
+        // This leg measures the ship OBJECT a crossing strands, which can only exist if the source
+        // is loaded when it is cut — which `buildShipAt` now establishes on the substrate's own
+        // records rather than on a positional poll.
+        buildShipAt(LEG1_X);
+
+        crossConserving(LEG1_X, BUILD_Y, LEG1_X + HOP, SKY_Y, "the crossing");
+    }
+
+    /** The same leak three crossings deep — the shape a player walks (entry, jump, descent). */
+    @Test
+    public void threeCrossingsDoNotAccumulateShips() throws Exception {
+
+        buildShipAt(LEG2_X);
+
+        int x = LEG2_X, y = BUILD_Y;
+        for (int i = 1; i <= 3; i++) {
+            crossConserving(x, y, x + HOP, SKY_Y, "crossing " + i + " of 3");
+            x += HOP;
+            y = SKY_Y;
+        }
+    }
+
+    /**
+     * The nearest-ship lookup must not answer with a hull that owns no blocks.
+     *
+     * <p>The two legs above measure what the WORLD is left holding. This one measures what the
+     * LOOKUP is willing to say, which is a different failure and outlives the first: the manager
+     * collects an emptied hull on its next tick, so for the remainder of the tick in which a
+     * crossing cuts one, a blockless craft is still in the loaded set and still has a position.
+     * Anything asking "which ship is here" in that window — a seat lookup, a pose read, a teleport,
+     * the opening lookup of the next crossing out of the same place — could be handed a craft that
+     * is on its way out of the world, and this class's own history records the symptom: a seat
+     * search answering {@code seatFound:false} on a ship that had just been built.
+     *
+     * <p><b>The window is entered deliberately, not waited for.</b> Provoking it for real means
+     * winning a race against the destroy pass; the probe empties a loaded ship and asks the lookup
+     * inside ONE call, which is the only place the window is guaranteed to still be open — two probe
+     * commands are separated by a whole world pass, so a second command would ask after the
+     * collector had run and would pass on a build with no filter at all.
+     *
+     * <p>Nothing is left behind: the destroy pass collects the emptied hull on its next tick, the
+     * same path a cut hull takes in production.
+     */
+    @Test
+    @org.junit.Ignore("SUBJECT REMOVED, retired in place 2026-09-14. This pins a property of the"
+            + " nearest-ship lookup — that it refuses a hull whose blocks have just been taken away —"
+            + " and that lookup no longer exists: a ship's blocks live in its subspace, so in the"
+            + " world it has a pose and no extent for a distance to be measured to, and the whole"
+            + " positional family was removed rather than bounded. Its fault injector"
+            + " (`vs empty-nearest-and-look`) went with it, so the body below calls a verb that is"
+            + " not there. Kept rather than deleted because the REASONING is the part worth finding"
+            + " again: a craft with no blocks is a record on its way out of the world, and any lookup"
+            + " that hands it to a caller gives an answer that is about to stop being true.")
+    public void theNearestShipLookupRefusesAHullWithNoBlocks() throws Exception {
+
+        // The ship must be loaded and findable before it is emptied, or this leg tests the lookup
+        // against nothing — established by `buildShipAt` on the substrate's own records.
+        buildShipAt(LEG3_X);
+
+        String looked = exec("stellurgytest vs empty-nearest-and-look 0 "
+                + LEG3_X + " " + BUILD_Y + " " + BASE_Z);
+        assertTrue("the fault injection itself failed, so this leg measures nothing: " + looked,
+                Reply.of(looked).ok());
+
+        String emptied = field(looked, "emptied");
+        String answered = field(looked, "lookupAnswered");
+        assertTrue("the injection must name the ship it emptied, or there is nothing to compare the"
+                + " lookup's answer against: " + looked, !emptied.isEmpty());
+        assertTrue("the nearest-ship lookup answered with the hull whose blocks had just been taken"
+                        + " away. A craft with no blocks is not a craft: it is a record on its way out"
+                        + " of the world, and handing it to a caller that asked which ship is HERE"
+                        + " gives an answer that is about to stop being true — the seat searches, pose"
+                        + " reads and teleports behind this lookup then act on a ship that is leaving."
+                        + " emptied=" + emptied + " lookupAnswered=" + answered,
+                !emptied.equals(answered));
+    }
+
+    /** One named field out of a probe envelope, or {@code ""} when it carries none. */
+    private static String field(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, "");
+    }
+
+    @org.junit.After
+    public void resetPermaload() throws Exception {
+        // Shared-harness state-leak contract: never leave "permanently loaded" set for a later method.
+    }
+
+    // --- the invariant ------------------------------------------------------------------------------
+
+    /** Cross the ship at the source and assert the world holds as many ships after as before, by BOTH counters. */
+    private void crossConserving(int sx, int sy, int dx, int dy, String what) throws Exception {
+        int loadedBefore = loadedShips();
+        int registryBefore = queryableShips();
+
+        // Marked before the crossing: it CUTS the hull and pastes a new one, so the arrival is a
+        // fresh registry add — announced once, with the same durable name and a new physics id.
+        long crossMark = events.mark();
+        String cross = repack(sx, sy, dx, dy);
+        assertTrue(what + " itself failed, so this leg measures nothing: " + cross,
+                Reply.of(cross).ok());
+        requireLoadedShipAt(crossMark, dx, dy,
+                "the crossed ship never arrived at " + dx + "," + dy + "; " + what + "=" + cross);
+
+        int loadedAfter = loadedShips();
+        int registryAfter = queryableShips();
+        assertEquals(what + " left a ship OBJECT behind in the world it departed: loaded ships went "
+                        + loadedBefore + " -> " + loadedAfter + " across a crossing that moved a single "
+                        + "ship, while the registry went " + registryBefore + " -> " + registryAfter + ". "
+                        + "A loaded ship the registry does not hold is never destroyed and never "
+                        + "unloaded, and a crossing leaves one every time.",
+                loadedBefore, loadedAfter);
+        assertEquals(what + " left a registry ENTRY behind in the world it departed: registered ships "
+                        + "went " + registryBefore + " -> " + registryAfter + " (loaded " + loadedBefore
+                        + " -> " + loadedAfter + ").",
+                registryBefore, registryAfter);
+    }
+
+    // --- arrangement --------------------------------------------------------------------------------
+
+    /** Build one tier-2 ship at {@code (baseX, BUILD_Y, BASE_Z)} and wait until VS has really created it. */
+    private void buildShipAt(int baseX) throws Exception {
+        // Marked before the assemble: the registry add is made inside it, and is announced once.
+        long buildMark = events.mark();
+        String coords = placeFixture(FixtureSite.openAir(0, baseX, BASE_Z), "with-pilot-seat");
+        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
+                (Reply.of(asm).integer("rocketCount") == 0));
+        durableShipId = ShipIdentity.nameFromAssembly(asm);
+        // The registry-count comparison that stood here is gone with the positional poll below it:
+        // "the count went up" is a statement about the dimension, and the add itself names the craft.
+        requireLoadedShipAt(buildMark, baseX, BUILD_Y,
+                "the craft this leg builds must be a loaded ship before anything is crossed");
+    }
+
+    /**
+     * This craft's DURABLE name. Not its physics id: this class crosses the same ship three times in
+     * a row and every crossing mints a new physics id, so the name is the only handle that spans the
+     * run — which is also why the cut is aimed with a freshly translated id each time.
+     */
+    private String durableShipId;
+
+    private String repack(int sx, int sy, int dx, int dy) throws Exception {
+        // The crossing CUTS a ship, so it is told which one. The positional form resolves the yard as
+        // "whatever craft is nearest", and this class exists to prove no ship is LEFT BEHIND — so the
+        // leftovers it hunts for are precisely what such a lookup would reach for.
+        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, durableShipId);
+        return exec("stellurgytest vs ship-repack 0 id " + shipId + " " + sx + " " + sy + " " + BASE_Z
+                + " " + dx + " " + dy + " " + BASE_Z);
+    }
+
+    // --- observation --------------------------------------------------------------------------------
+
+    private int loadedShips() throws Exception {
+        return extractInt(exec("stellurgytest vs ship-count 0"), "count");
+    }
+
+    private int queryableShips() throws Exception {
+        return extractInt(exec("stellurgytest vs ship-count-all 0"), "count");
+    }
+
+    /** Both counters together: the pair is the diagnosis, either one alone is just a number. */
+    private String counters() throws Exception {
+        return "[loaded=" + loadedShips() + " registry=" + queryableShips() + "]";
+    }
+
+    /**
+     * Is there a loaded ship whose own pose is at {@code (x,y,BASE_Z)}?
+     *
+     * <p>Answered by asking EVERY loaded ship where it is. The previous form asked the world which
+     * ship was nearest the spot and then compared that one ship's pose — an unbounded lookup with a
+     * filter on its single answer, so a hull sitting exactly here was invisible whenever the lookup
+     * preferred another. Same claim, no lookup that can pick the wrong craft to test.</p>
+     */
+    private boolean shipIsAt(int x, int y) throws Exception {
+        return ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, BASE_Z, POSE_TOLERANCE);
+    }
+
+    /**
+     * Wait for THIS craft's hull to be registered and then LOADED, and assert WHERE it stands.
+     *
+     * <p>Three steps, and the split is the point: the poll this replaces asked one positional
+     * question — "is a loaded ship at this pose yet" — and so could not tell a hull that was never
+     * registered from one registered and never loaded from one loaded in the wrong place. Each of
+     * those is a different defect and this class exists to tell crossings' defects apart.</p>
+     *
+     * <p>Both links are the substrate's own: {@code ship_spawned} is written from
+     * {@code QueryableShipData.addShip} and carries the durable Stellurgy id the hull was bound with, so
+     * the first wait names THIS craft; the physics id it also carries is what the second wait uses,
+     * so "the hull became loaded" is asked about the very hull the first wait found rather than
+     * about whatever else is in the dimension. Every crossing mints a NEW physics id, which is
+     * exactly why the durable name is the handle and the physics id is read out of the record.</p>
+     *
+     * <p>The pose is then an ASSERTION rather than a wait, because by this point production has
+     * said the ship is up: a hull that is loaded and standing somewhere else is a finding, not a
+     * reason to keep looking.</p>
+     */
+    private void requireLoadedShipAt(long mark, int x, int y, String what) throws Exception {
+        String spawned = events.awaitRecordWithField(mark, "ship_spawned", "stellurgyShip", durableShipId,
+                what + " — no hull was ever registered for this craft", WAIT_TICKS);
+        String vsShip = Events.text(spawned, "vsShip");
+        events.awaitField(mark, "ship_loaded", "vsShip", vsShip,
+                what + " — hull " + vsShip + " reached the registry and never became a loaded ship",
+                WAIT_TICKS);
+        assertTrue(what + " — hull " + vsShip + " is loaded, but no loaded ship stands within "
+                        + POSE_TOLERANCE + " of " + x + "," + y + "," + BASE_Z + ": " + counters(),
+                shipIsAt(x, y));
+    }
+
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+
+    // --- helpers ------------------------------------------------------------------------------------
+
+    private String exec(String cmd) throws Exception {
+        return String.join("\n", client().execute(cmd));
+    }
+
+
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair: a {@code clearArea} that ran a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
+     * rather than asked, and threw away its own answer — {@code placed}, the count of blocks that
+     * were standing in the volume. The shared builder asks instead, and on an open-air site
+     * anything found is an arrangement failure that names itself. The warmup went with it: the
+     * fill force-loads every chunk in its own box, so the first link was already doing that job.</p>
+     *
+     * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
+     * they are what this scenario's green runs were taken over.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft this scenario builds stands in this volume");
+        return bp[0] + " " + bp[1] + " " + bp[2];
+    }
+
+    private static int extractInt(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
+    }
+
+    private static double extractDouble(String json, String key) {
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).numberOr(key, 0.0);
+    }
+}

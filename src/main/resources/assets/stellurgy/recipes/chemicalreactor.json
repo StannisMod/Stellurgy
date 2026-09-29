@@ -1,0 +1,51 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"psp",
+	"abc",
+	"rdr"
+    ],
+    "key":
+    {
+        "r":
+        {
+            "item": "stellurgy:ic",
+            "data": 0
+        },
+        "s":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"a":
+        {
+            "item": "stellurgy:ic",
+            "data": 4
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"c":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateGold"
+        },
+	"d":
+        {
+            "item": "stellurgy:ic",
+            "data": 5
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:chemicalreactor",
+        "count": 1
+    }
+}

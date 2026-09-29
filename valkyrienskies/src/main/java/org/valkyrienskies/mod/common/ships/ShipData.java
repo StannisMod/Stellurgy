@@ -79,10 +79,27 @@ public class ShipData {
      */
     private String name;
     /**
-     * Advanced Rocketry's DURABLE ship id for this craft, or {@code null} for a craft AR does not
+     * This ship is DEAD: it is to be collected on the next tick of the world that carries it,
+     * whether or not it is loaded.
+     *
+     * <p><b>Why the flag lives here and not on the physics object.</b> A ship's disposal was decided
+     * by {@code PhysicsObject.shouldShipBeDestroyed()}, and the destroy pass asks it only of the
+     * LOADED ships — so a craft nobody had loaded could not be collected by the substrate at all, and
+     * every caller that emptied one had to reach in and deregister it by hand. A record exists loaded
+     * or not, which is the only place a disposal decision can be made once and then honoured.</p>
+     *
+     * <p><b>Transient on purpose.</b> Death is a decision about the next tick, not a property of the
+     * craft worth persisting: a save taken between the mark and the collection restores a ship whose
+     * block set is empty, and an empty block set already answers {@code shouldShipBeDestroyed} on its
+     * own. Writing it out would also make a corrupted or hand-edited save able to delete a live
+     * ship.</p>
+     */
+    private transient boolean dead;
+    /**
+     * Stellurgy's DURABLE ship id for this craft, or {@code null} for a craft Stellurgy does not
      * own.
      *
-     * <p>AR carries a second identity for a tier-2 ship: an id minted and persisted by its flight
+     * <p>Stellurgy carries a second identity for a tier-2 ship: an id minted and persisted by its flight
      * computer, chosen because it survives a re-assembly and therefore names the same vessel across
      * a crossing, a restart and a re-registration under a fresh {@link #uuid}. Its transit records,
      * its durable ledger and its aboard tags are all keyed by it, while everything in this mod is
@@ -92,10 +109,10 @@ public class ShipData {
      *
      * <p>Kept HERE, beside the uuid and indexed with it, so that translation is one hash probe rather
      * than a walk over every registered ship asking each for its computer. Set through
-     * {@link #setArDurableId} so the index is updated with the field.</p>
+     * {@link #setStellurgyDurableId} so the index is updated with the field.</p>
      */
     @Nullable
-    private UUID arDurableId;
+    private UUID stellurgyDurableId;
 
     // endregion
     private ShipData( ConcurrentUpdatableIndexedCollection<ShipData> owner, ShipPhysicsData physicsData, @Nonnull ShipInertiaData inertiaData,  ShipTransform shipTransform,  ShipTransform prevTickShipTransform,  AxisAlignedBB shipBB, boolean physicsEnabled,  VSChunkClaim chunkClaim,  UUID uuid,  String name) {
@@ -146,14 +163,14 @@ public class ShipData {
     }
 
     /**
-     * Bind (or clear) Advanced Rocketry's durable id for this craft — see {@link #arDurableId}.
+     * Bind (or clear) Stellurgy's durable id for this craft — see {@link #stellurgyDurableId}.
      *
      * <p>Goes through the index the same way {@link #setName} does: a field written behind the
      * collection's back leaves the index answering with the OLD value, which for an identity lookup
      * means confidently naming the wrong ship.</p>
      */
-    public ShipData setArDurableId(@Nullable UUID arDurableId) {
-        this.arDurableId = arDurableId;
+    public ShipData setStellurgyDurableId(@Nullable UUID stellurgyDurableId) {
+        this.stellurgyDurableId = stellurgyDurableId;
         owner.updateObjectIndices(this, AR_DURABLE_ID);
         return this;
     }
@@ -163,12 +180,12 @@ public class ShipData {
      * but not yet spawned. The index is not touched, because there is nothing to update: the record
      * is indexed on every attribute when it is added, so the name set here is carried in with it.
      *
-     * <p>The distinction is not cosmetic. {@link #setArDurableId}'s index update inserts the object
+     * <p>The distinction is not cosmetic. {@link #setStellurgyDurableId}'s index update inserts the object
      * into the store as a side effect, so using it here would register the ship BEFORE its blocks
      * exist — briefly answering position and identity lookups for a craft that is not there yet.</p>
      */
-    public ShipData setArDurableIdBeforeRegistration(@Nullable UUID arDurableId) {
-        this.arDurableId = arDurableId;
+    public ShipData setStellurgyDurableIdBeforeRegistration(@Nullable UUID stellurgyDurableId) {
+        this.stellurgyDurableId = stellurgyDurableId;
         return this;
     }
 
@@ -176,9 +193,9 @@ public class ShipData {
     // region Attributes
     public static final Attribute<ShipData, String> NAME = nullableAttribute(ShipData::getName);
     public static final Attribute<ShipData, UUID> UUID = attribute(ShipData::getUuid);
-    /** {@link #arDurableId}, nullable because most craft carry none. */
+    /** {@link #stellurgyDurableId}, nullable because most craft carry none. */
     public static final Attribute<ShipData, UUID> AR_DURABLE_ID =
-        nullableAttribute(ShipData::getArDurableId);
+        nullableAttribute(ShipData::getStellurgyDurableId);
     public static final Attribute<ShipData, Long> CHUNKS = new MultiValueAttribute<ShipData, Long>() {
         @Override
         public Set<Long> getValues(ShipData physo, QueryOptions queryOptions) {
@@ -258,6 +275,27 @@ public class ShipData {
         return this.uuid;
     }
 
+    /** Whether this ship has been marked for collection — see {@link #dead}. */
+    public boolean isDead() {
+        return this.dead;
+    }
+
+    /**
+     * Mark this ship for collection on the next tick of its world.
+     *
+     * <p>The caller says the craft is finished; WHEN and HOW it leaves the registry stays the
+     * substrate's business, which is the point — a caller that deregistered by hand had to know the
+     * substrate's own ordering (that a blockless ship is collected by a pass which copies nothing
+     * back, and that removing the record first makes the load/unload pass iterate a collection the
+     * entry is already out of, so it never sees it again). Marking states the intent and leaves the
+     * ordering where it is understood.</p>
+     *
+     * <p>Idempotent, and never un-set: nothing revives a ship somebody declared finished.</p>
+     */
+    public void markDead() {
+        this.dead = true;
+    }
+
     /**
      * The (unique) name of the physo as displayed to players
      */
@@ -266,10 +304,10 @@ public class ShipData {
         return this.name;
     }
 
-    /** Advanced Rocketry's durable id for this craft, or {@code null}. See {@link #arDurableId}. */
+    /** Stellurgy's durable id for this craft, or {@code null}. See {@link #stellurgyDurableId}. */
     @Nullable
-    public UUID getArDurableId() {
-        return this.arDurableId;
+    public UUID getStellurgyDurableId() {
+        return this.stellurgyDurableId;
     }
 
     @java.lang.SuppressWarnings("all")

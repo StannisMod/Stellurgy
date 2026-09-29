@@ -1,0 +1,26 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:lathe"
+        },
+        "title": {
+            "translate": "advancement.spinDoctor"
+        },
+        "description": {
+            "translate": "advancement.spinDoctor.desc"
+        }
+    },
+    "parent": "stellurgy:normal/holographic",
+    "criteria": {
+        "warp": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "stellurgy:lathe"
+                    }
+                ]
+            }
+        }
+    }
+} 

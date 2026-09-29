@@ -1,0 +1,3204 @@
+package dev.stannismod.stellurgy.dimension;
+
+import net.minecraft.block.Block;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.init.Blocks;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.*;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
+import net.minecraft.world.biome.Biome;
+import net.minecraft.world.biome.Biome.TempCategory;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraftforge.common.BiomeDictionary;
+import net.minecraftforge.common.BiomeManager;
+import net.minecraftforge.common.BiomeManager.BiomeEntry;
+import net.minecraftforge.common.util.Constants.NBT;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidRegistry;
+import net.minecraftforge.fml.common.SidedProxy;
+import org.apache.commons.lang3.ArrayUtils;
+import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
+import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
+import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
+import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.Afuckinginterface;
+import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.network.PacketDimInfo;
+import dev.stannismod.stellurgy.network.PacketSatellite;
+import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.libvulpes.util.VulpineMath;
+import dev.stannismod.stellurgy.libvulpes.util.ZUtils;
+
+import javax.annotation.Nullable;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
+import dev.stannismod.stellurgy.api.*;
+import dev.stannismod.stellurgy.util.*;
+
+
+public class DimensionProperties implements Cloneable, IDimensionProperties {
+
+    private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+    /**
+     * Contains default graphic {@link ResourceLocation} to display for different planet types
+     */
+    public static final ResourceLocation atmosphere = new ResourceLocation("stellurgy:textures/planets/Atmosphere2.png");
+    public static final ResourceLocation atmosphereLEO = new ResourceLocation("stellurgy:textures/planets/AtmosphereLEO.png");
+    public static final ResourceLocation atmGlow = new ResourceLocation("stellurgy:textures/planets/atmGlow.png");
+    public static final ResourceLocation planetRings = new ResourceLocation("stellurgy:textures/planets/rings.png");
+    public static final ResourceLocation planetRingsNew = new ResourceLocation("stellurgy:textures/planets/ringsnew.png");
+    public static final ResourceLocation planetRingShadow = new ResourceLocation("stellurgy:textures/planets/ringShadow.png");
+    public static final ResourceLocation shadow = new ResourceLocation("stellurgy:textures/planets/shadow.png");
+    public static final ResourceLocation shadow3 = new ResourceLocation("stellurgy:textures/planets/shadow3.png");
+
+    /**
+     * The ceiling on a planet's atmospheric pressure, in hundredths of an atmosphere.
+     * <p>
+     * <b>It is a property of the TYPE, not a statement about worlds.</b> The old value said 16
+     * atmospheres, which quietly declared Venus (92) unrepresentable and a gas giant absurd — a
+     * balance opinion wearing a constant's clothes. What a ceiling is legitimately for is keeping the
+     * arithmetic that reads this from overflowing, so it is derived from `int` with three orders of
+     * magnitude of headroom: every consumer either divides, compares, or widens to double, and the
+     * largest scaling any of them applies is nowhere near a thousand.
+     * <p>
+     * It exists at all only while pressure is an authored integer. Once a planet carries a
+     * composition and its pressure is the SUM of what is in it, there is nothing here to clamp.
+     */
+    public static final int MAX_ATM_PRESSURE = Integer.MAX_VALUE / 1000;
+    public static final int MIN_ATM_PRESSURE = 0;
+    public static final int MAX_DISTANCE = Integer.MAX_VALUE;
+    public static final int MIN_DISTANCE = 1;
+    public static final int MAX_GRAVITY = 400;
+    public static final int MIN_GRAVITY = 0;
+    /**
+     * A planet's rotational period when nothing else determines it: the default day length, and the
+     * scale the gravity-derived period is expressed in. Numerically equal to
+     * {@link dev.stannismod.stellurgy.util.AstronomicalBodyHelper#TICKS_PER_DAY} but a DIFFERENT
+     * quantity — that one is the platform's tick rate, this one is a per-planet property that most
+     * planets do not keep. Do not collapse them.
+     */
+    public static final int DEFAULT_ROTATIONAL_PERIOD = 24000;
+    public static final int WEATHER_START_LENGTH = 168000;
+    public static final int WEATHER_PROLONGATION_LENGTH = 12000;
+
+    // Geode, Volcano, Crater clamps
+    private static final float MIN_FEATURE_FREQUENCY_MULTIPLIER = 0.01f;
+    private static final float MAX_FEATURE_FREQUENCY_MULTIPLIER = 10f;
+
+    private static float clampFeatureFrequencyMultiplier(float multiplier) {
+        return MathHelper.clamp(multiplier, MIN_FEATURE_FREQUENCY_MULTIPLIER, MAX_FEATURE_FREQUENCY_MULTIPLIER);
+    }
+    //True if dimension is managed and created by Stellurgy (false otherwise)
+    public boolean isNativeDimension;
+    public boolean skyRenderOverride;
+    //Gas giants DO NOT need a dimension registered to them
+    public float[] skyColor;
+    public float[] fogColor;
+    public float[] ringColor;
+    public float gravitationalMultiplier;
+    public int orbitalDist;
+    public boolean hasOxygen;
+    public boolean colorOverride;
+    //Used in solar panels
+    public double peakInsolationMultiplier;
+    public double peakInsolationMultiplierWithoutAtmosphere;
+    /**
+     * This world's surface temperature in KELVIN — a DERIVED quantity, cached here.
+     *
+     * <p><b>Private, and it is the point.</b> It used to be a public field that
+     * {@link #getAverageTemp()} ASSIGNED on every call, while a dozen readers inside this class took
+     * the field directly — so what any of them saw depended on whether anything had happened to call
+     * the accessor first, and the value NBT had faithfully restored was discarded by the first read
+     * after a load. One door in ({@link #setAverageTemp}), one door out, and the recompute now happens
+     * where an INPUT changes rather than where the answer is asked for.</p>
+     */
+    private int averageTemperature;
+    public int rotationalPeriod;
+    //Stored in radians
+    public double orbitTheta;
+    public double baseOrbitTheta;
+    public double prevOrbitalTheta;
+    public double orbitalPhi;
+    public double rotationalPhi;
+    public boolean isRetrograde;
+    public OreGenProperties oreProperties = null;
+    public List<ItemStack> laserDrillOres;
+    public List<String> geodeOres;
+    public List<String> craterOres;
+    // The parsing of laserOreDrills is destructive of the actual oredict entries, so we keep a copy of the raw data around for XML writing
+    public String laserDrillOresRaw;
+    public String customIcon;
+    public float[] sunriseSunsetColors;
+    public boolean hasRings;
+    public int ringAngle;
+    public boolean hasRivers;
+    public List<ItemStack> requiredArtifacts;
+
+    // Custom weather properties
+    private boolean customWorldInfo = false;
+    private int rainStartLength = WEATHER_START_LENGTH;
+    private int thunderStartLength = WEATHER_START_LENGTH;
+    private int rainProlongationLength = WEATHER_PROLONGATION_LENGTH;
+    private int thunderProlongationLength = WEATHER_PROLONGATION_LENGTH;
+    private int rainMarker;  // -1 - never rain, 1 - always rain, 0 - regular weather
+    private int thunderMarker;  // -1 - never thunder, 1 - always thunder, 0 - regular weather
+    private boolean acidicRain;  // rain on this planet harms unprotected players under open sky
+
+    Atmosphere atmosphereType;
+    StellarBody star;
+    int starId;
+    private int originalAtmosphereDensity;
+    private int atmosphereDensity;
+    private String name;
+    //public ExtendedBiomeProperties biomeProperties;
+    private LinkedList<BiomeEntry> allowedBiomes;
+    private LinkedList<BiomeEntry> craterBiomeWeights;
+    private boolean isRegistered = false;
+    //private boolean isTerraformed = false;
+    //Planet Heirachy
+    private HashSet<Integer> childPlanets;
+    private int parentPlanet;
+    private int planetId;
+    private boolean isStation;
+    private boolean isGasGiant;
+    private boolean canGenerateCraters;
+    private boolean canGenerateGeodes;
+    private boolean canGenerateVolcanoes;
+    private boolean canGenerateStructures;
+    private boolean canGenerateCaves;
+    private boolean canDecorate; //Should the button draw shadows, etc.  Clientside
+    private boolean overrideDecoration;
+    private float craterFrequencyMultiplier;
+    private float volcanoFrequencyMultiplier;
+    private float geodeFrequencyMultiplier;
+    //Satellites
+    private HashMap<Long, SatelliteBase> satellites;
+    private HashMap<Long, SatelliteBase> tickingSatellites;
+    private List<Fluid> harvestableAtmosphere;
+    private List<SpawnListEntryNBT> spawnableEntities;
+    private HashSet<HashedBlockPosition> beaconLocations;
+    private IBlockState oceanBlock;
+    private IBlockState fillerBlock;
+    private int seaLevel;
+    /**
+     * Per-dim atmosphere&harr;orbit line (blocks): the world-Y a tier-2 ship must climb past to
+     * enter space, and the reference the descent/gravity-well side reads. The SINGLE owner of the
+     * ceiling — nothing else may hard-code an orbit line. Sentinel {@link #ORBIT_HEIGHT_UNSET}
+     * (the default) falls back to the global {@code StellurgyConfiguration.orbit}; XML-overridable per
+     * planet. Value is {@code tunable}. The hardcoded 256..456 atmosphere-density taper
+     * ({@link #getAtmosphereDensityAtHeight}) is visual-only and never a gate.
+     */
+    private int orbitHeight;
+    private int generatorType;
+
+    /** Sentinel for {@link #orbitHeight}: no per-dim override — use the global config value. */
+    public static final int ORBIT_HEIGHT_UNSET = -1;
+    // How terrain is produced (orthogonal to generatorType, which stays the NATIVE sub-flavour selector).
+    private TerrainSource terrainSource = TerrainSource.NATIVE;
+    private String terrainWorldType = ""; // foreign WorldType name for MOD_WORLDTYPE
+    private String terrainTemplate = "";  // template folder name for TEMPLATE
+    /**
+     * The settings string handed to this dimension's chunk generator — vanilla's "generator options",
+     * per dimension instead of per save. A foreign {@link net.minecraft.world.WorldType} receives it
+     * as the second argument of {@code getChunkGenerator}, and reads it back off this world's
+     * {@code WorldInfo} when it identifies itself; an empty string means "your defaults".
+     */
+    private String terrainGeneratorOptions = "";
+
+    // ─── Bulk properties: mass and radius are PRIMARY, gravity is derived from them ────────────────
+    /**
+     * This body's mass in Earth masses, or {@link #BULK_UNSET} when nothing has stated one.
+     *
+     * <p>Mass and radius are the PRIMARY bulk properties and surface gravity is what falls out of them
+     * ({@code g = M/R²}) — not the other way round. That ordering is what lets a scan advertise a
+     * planet's mass ({@code PlanetInfoField.MASS} is promised at telescope tier, for every planet,
+     * authored ones included) and what makes the zoning of a procedural system physical rather than
+     * tabulated: a big cold body accretes gas and becomes a giant, a small hot one cannot hold air.</p>
+     *
+     * <p>{@link #gravitationalMultiplier} REMAINS an explicit override. A planet whose XML states a
+     * gravity keeps exactly that gravity, whatever its mass and radius say, so no authored world moves
+     * when this arrives; the derivation only fills in a gravity nobody stated.</p>
+     */
+    private double mass = BULK_UNSET;
+    /** This body's radius in Earth radii, or {@link #BULK_UNSET}. See {@link #mass}. */
+    private double radius = BULK_UNSET;
+    /**
+     * The fraction of incident light this world's surface reflects, 0..1 — stated by its TYPE and
+     * used to derive its temperature. Defaults to Earth's, so a world whose type says nothing keeps
+     * exactly the temperature it had when 0.3 was hard-coded into the formula.
+     */
+    private double albedo = AstronomicalBodyHelper.EARTH_ALBEDO;
+    /**
+     * Whether {@link #gravitationalMultiplier} was STATED rather than derived. The single bit that keeps
+     * "authored planets are unchanged" true: it is set by the XML element, by the public setter and by
+     * anything that assigns the field directly through the legacy path, and it makes
+     * {@link #setBulk} leave the gravity alone.
+     */
+    private boolean gravityAuthored;
+    /**
+     * Whether this world keeps one face permanently to its star.
+     *
+     * <p>An explicit flag and not a {@code rotationalPeriod} of zero: zero is mapped back to a full day
+     * by the sleep arithmetic, so it would silently mean "an ordinary planet" — the one value that
+     * cannot express this. A locked world has no day/night cycle at all, which is a different statement
+     * from "its day is long".</p>
+     */
+    private boolean tidallyLocked;
+    /**
+     * The parent star's metal content relative to Sol, and therefore how metal-rich this world's ore is.
+     *
+     * <p>It scales the METALLIC entries of whatever ore palette this world's climate earns it; it does
+     * not decide which kinds of deposit are possible. Climate answers "what sort of deposits", the star
+     * answers "how much metal is in them", and the two multiply rather than compete.</p>
+     */
+    private double metallicity = 1d;
+    /** Lazily-built, never persisted: this world's own scaled copy of the shared climate ore table. */
+    private transient OreGenProperties scaledOreCache;
+    private transient double scaledOreCacheFor = Double.NaN;
+
+    /** Sentinel for {@link #mass} / {@link #radius}: nobody has stated one. */
+    public static final double BULK_UNSET = 0d;
+    //public int target_sea_level;
+
+    // modId must be declared explicitly: this @SidedProxy lives outside the @Mod class, and the jar
+    // now ships more than one @Mod. FML's implicit owner resolution matches the target class name
+    // against the @Mod class names, which fails for a field in a non-@Mod class when >1 mod is present,
+    // leaving this proxy uninjected (null). Naming the owning mod bypasses that resolution.
+    @SidedProxy(modId = Constants.modId, serverSide = "dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.serverlists", clientSide = "dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.clientlists")
+    public static Afuckinginterface proxylists;
+
+
+    public List<ChunkPos> terraformingChunksAlreadyAdded;
+
+    //class
+    public List<watersourcelocked> water_source_locked_positions;
+
+    //public boolean water_can_exist;
+    public DimensionProperties(int id) {
+        name = "Temp";
+        resetProperties();
+
+        planetId = id;
+        parentPlanet = Constants.INVALID_PLANET;
+        childPlanets = new HashSet<>();
+        orbitalPhi = 0;
+        isRetrograde = false;
+        ringColor = new float[]{.4f, .4f, .7f};
+        oceanBlock = null;
+        fillerBlock = null;
+
+        laserDrillOres = new ArrayList<>();
+        geodeOres = new ArrayList<>();
+        craterOres = new ArrayList<>();
+
+        allowedBiomes = new LinkedList<>();
+        craterBiomeWeights = new LinkedList<>();
+        satellites = new HashMap<>();
+        requiredArtifacts = new LinkedList<>();
+        tickingSatellites = new HashMap<>();
+        isNativeDimension = true;
+        skyRenderOverride = false;
+        hasOxygen = true;
+        colorOverride = false;
+        peakInsolationMultiplier = -1;
+        peakInsolationMultiplierWithoutAtmosphere = -1;
+        isGasGiant = false;
+        hasRings = false;
+        canGenerateCraters = true;
+        canGenerateGeodes = true;
+        canGenerateStructures = true;
+        canGenerateVolcanoes = false;
+        canGenerateCaves = true;
+        hasRivers = true;
+        craterFrequencyMultiplier = 1f;
+        volcanoFrequencyMultiplier = 1f;
+        geodeFrequencyMultiplier = 1f;
+        canDecorate = true;
+
+        customIcon = "";
+        harvestableAtmosphere = new LinkedList<>();
+        spawnableEntities = new LinkedList<>();
+        beaconLocations = new HashSet<>();
+        seaLevel = 63;
+        generatorType = 0;
+        terrainSource = TerrainSource.NATIVE;
+        terrainWorldType = "";
+        terrainTemplate = "";
+        terrainGeneratorOptions = "";
+
+        //target_sea_level = seaLevel;
+        //water_can_exist = true;
+        water_source_locked_positions = new ArrayList<>();
+
+        terraformingChunksAlreadyAdded = new ArrayList<>();
+
+        ringAngle = 70;
+    }
+
+    public void load_terraforming_helper(boolean reset) {
+        if (!net.minecraftforge.common.DimensionManager.getWorld(getId()).isRemote) {
+
+            if (!proxylists.isinitialized(getId())){
+                proxylists.initdim(getId());
+            }
+
+            getAverageTemp();
+            getViableBiomes(false);
+            if (reset) {
+                proxylists.getChunksFullyTerraformed(getId()).clear();
+                proxylists.getChunksFullyBiomeChanged(getId()).clear();
+                terraformingChunksAlreadyAdded.clear();
+            }
+
+            System.out.println("load helper with protecting blocks: " + proxylists.getProtectingBlocksForDimension(getId()).size() + " (" + reset + ")");
+
+            proxylists.sethelper(getId(), new TerraformingHelper(getId(), getBiomesEntries(getViableBiomes(false)), proxylists.getChunksFullyTerraformed(getId()), proxylists.getChunksFullyBiomeChanged(getId())));
+
+            System.out.println("num biomes: "+ getViableBiomes(false).size());
+
+            Collection<Chunk> list = (net.minecraftforge.common.DimensionManager.getWorld(getId())).getChunkProvider().getLoadedChunks();
+            System.out.println("add chunks to tf list");
+            if (!list.isEmpty()) {
+                for (Chunk chunk : list) {
+                    add_chunk_to_terraforming_list(chunk);
+                }
+            }
+            System.out.println("ok!");
+        }
+
+    }
+
+    public void registerProtectingBlock(BlockPos p) {
+        boolean already_registered = false;
+        for (BlockPos i : proxylists.getProtectingBlocksForDimension(getId())) {
+            if (i.equals(p)) {
+                already_registered = true;
+                break;
+            }
+        }
+        //System.out.println("register protecting block called");
+        if (!already_registered) {
+            proxylists.getProtectingBlocksForDimension(getId()).add(p);
+            //System.out.println("block registered");
+            if (proxylists.gethelper(getId()) != null) {
+                proxylists.gethelper(getId()).recalculate_chunk_status();
+            }
+        }
+    }
+
+    public void unregisterProtectingBlock(BlockPos p) {
+        for (BlockPos i : proxylists.getProtectingBlocksForDimension(getId())) {
+            if (i.equals(p)) {
+                proxylists.getProtectingBlocksForDimension(getId()).remove(i);
+                if (proxylists.gethelper(getId()) != null)
+                    proxylists.gethelper(getId()).recalculate_chunk_status();
+                break;
+            }
+        }
+    }
+
+    public void add_block_to_terraforming_queue(BlockPos p) {
+        proxylists.gethelper(getId()).add_position_to_queue(p);
+    }
+    public void add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(ChunkPos pos){
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                    add_block_to_terraforming_queue(new BlockPos(pos.x * 16 + x, 0, pos.z * 16 + z));
+            }
+        }
+    }
+
+    public void add_block_to_biomechanging_queue(BlockPos p) {
+        proxylists.gethelper(getId()).add_position_to_biomechanging_queue(p);
+    }
+
+    synchronized boolean chunk_was_added_to_terraforming_list_if_not_add_it(ChunkPos pos){
+        for (ChunkPos i : terraformingChunksAlreadyAdded) {
+            if (pos.x == i.x && pos.z == i.z) {
+                return true;
+            }
+        }
+        terraformingChunksAlreadyAdded.add(new ChunkPos(pos.x,pos.z));
+        return false;
+    }
+
+    //adds a chunk to the terraforming list
+    //adds it to be biomechanged by default
+    //if it already was biomechanged fully, add it directly to terraforming queue
+    public void add_chunk_to_terraforming_list(Chunk chunk) {
+
+        if (proxylists.gethelper(getId()) != null) {
+
+            boolean chunk_was_already_done = proxylists.getChunksFullyTerraformed(getId()).contains(new ChunkPos(chunk.x,chunk.z));; // do not add a chunk if it is already fully terraformed
+            if (chunk_was_already_done)
+                return;
+
+            //System.out.println("add chunk to terraforming list: "+chunk.x+":"+chunk.z);
+
+            chunkdata current_chunk = proxylists.gethelper(getId()).getChunkFromList(chunk.x, chunk.z);
+            if (current_chunk == null || !current_chunk.chunk_fully_biomechanged) {
+
+                if(chunk_was_added_to_terraforming_list_if_not_add_it(new ChunkPos(chunk.x,chunk.z)))
+                    return;
+
+
+
+                for (int x = 0; x < 16; x++) {
+                    for (int z = 0; z < 16; z++) {
+                        if (current_chunk == null || !current_chunk.fully_generated[x][z])
+                            // if a position in the chunk is already fully generated, skip
+                            add_block_to_biomechanging_queue(new BlockPos(chunk.x * 16 + x, 0, chunk.z * 16 + z));
+
+                    }
+                }
+            }else  if (!current_chunk.chunk_fully_generated) {
+                if(chunk_was_added_to_terraforming_list_if_not_add_it(new ChunkPos(chunk.x,chunk.z)))
+                    return;
+
+                add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(new ChunkPos(chunk.x,chunk.z));
+            }
+        }
+    }
+
+    public DimensionProperties(int id, String name) {
+        this(id);
+        this.name = name;
+    }
+
+    public DimensionProperties(int id, boolean shouldRegister) {
+        this(id);
+        isStation = !shouldRegister;
+    }
+
+    /**
+     * @return {@link ResourceLocation} refering to the image to render as atmospheric haze as seen from orbit
+     */
+    public static ResourceLocation getAtmosphereResource() {
+        return atmosphere;
+    }
+
+    public static ResourceLocation getShadowResource() {
+        return shadow;
+    }
+
+    public static ResourceLocation getAtmosphereLEOResource() {
+        return atmosphereLEO;
+    }
+
+    public static DimensionProperties createFromNBT(int id, NBTTagCompound nbt) {
+        DimensionProperties properties = new DimensionProperties(id);
+        properties.readFromNBT(nbt);
+        properties.planetId = id;
+
+        return properties;
+    }
+
+    public void copyData(DimensionProperties props) {
+        this.satellites = props.satellites;
+        this.tickingSatellites = props.tickingSatellites;
+    }
+
+
+    @Override
+    public Object clone() {
+        try {
+            return super.clone();
+        } catch (CloneNotSupportedException e) {
+            return null;
+        }
+    }
+
+    /**
+     * @param world
+     * @return null to use default world gen properties, otherwise a list of ores to generate
+     */
+    public OreGenProperties getOreGenProperties(World world) {
+        if (oreProperties != null)
+            return oreProperties;
+        OreGenProperties climate = OreGenProperties.getOresForPressure(
+                AtmosphereTypes.getAtmosphereTypeFromValue(originalAtmosphereDensity),
+                Temps.getTempFromValue(getAverageTemp()));
+        if (climate == null || metallicity == 1d)
+            return climate;
+        // The climate table is a SHARED static object — one instance per (pressure, temperature) cell,
+        // handed to every world that lands in it — so a per-planet scaling must never mutate it. This
+        // world gets its own copy instead, cached because ore generation asks per chunk.
+        if (scaledOreCache == null || scaledOreCacheFor != metallicity) {
+            scaledOreCache = climate.withMetalsScaled(metallicity);
+            scaledOreCacheFor = metallicity;
+        }
+        return scaledOreCache;
+    }
+
+    /**
+     * Resets all properties to default
+     */
+    public void resetProperties() {
+        fogColor = new float[]{1f, 1f, 1f};
+        skyColor = new float[]{1f, 1f, 1f};
+        sunriseSunsetColors = new float[]{.7f, .2f, .2f, 1};
+        ringColor = new float[]{.4f, .4f, .7f};
+        gravitationalMultiplier = 1;
+        rotationalPeriod = DEFAULT_ROTATIONAL_PERIOD;
+        orbitalDist = 100;
+        originalAtmosphereDensity = atmosphereDensity = 100;
+        childPlanets = new HashSet<>();
+        requiredArtifacts = new LinkedList<>();
+        parentPlanet = Constants.INVALID_PLANET;
+        starId = 0;
+        averageTemperature = 100;
+        hasRings = false;
+        harvestableAtmosphere = new LinkedList<>();
+        spawnableEntities = new LinkedList<>();
+        beaconLocations = new HashSet<>();
+        seaLevel = 63;
+        orbitHeight = ORBIT_HEIGHT_UNSET;
+        oceanBlock = null;
+        fillerBlock = null;
+        generatorType = 0;
+        terrainSource = TerrainSource.NATIVE;
+        terrainWorldType = "";
+        terrainTemplate = "";
+        terrainGeneratorOptions = "";
+        laserDrillOres = new ArrayList<>();
+        mass = BULK_UNSET;
+        radius = BULK_UNSET;
+        albedo = AstronomicalBodyHelper.EARTH_ALBEDO;
+        gravityAuthored = false;
+        tidallyLocked = false;
+        metallicity = 1d;
+        scaledOreCache = null;
+        scaledOreCacheFor = Double.NaN;
+    }
+
+    // ─── Bulk properties ───────────────────────────────────────────────────────
+
+    /** This body's mass in Earth masses, or {@link #BULK_UNSET} when nobody has stated one. */
+    public double getMass() {
+        return mass;
+    }
+
+    /** This body's radius in Earth radii, or {@link #BULK_UNSET}. */
+    public double getRadius() {
+        return radius;
+    }
+
+    /** The fraction of incident light this world reflects, 0..1. */
+    public double getAlbedo() {
+        return albedo;
+    }
+
+    /** State this world's albedo; clamped to 0..1. */
+    public void setAlbedo(double a) {
+        this.albedo = Math.min(Math.max(a, 0d), 1d);
+    }
+
+    public boolean hasBulkProperties() {
+        return mass > BULK_UNSET && radius > BULK_UNSET;
+    }
+
+    /**
+     * The mass, in Earth masses, to use in a two-body orbital law about this body — what a moon's
+     * period is derived from.
+     *
+     * <p>Falls back to surface gravity when nothing has stated a mass, and that is not a fudge:
+     * {@code g = M/R²}, so gravity and mass are the same number at one Earth radius, and a body with
+     * no stated bulk is precisely a body nobody has given a radius. What it replaces IS the fudge —
+     * every caller used to pass gravity unconditionally, which is exact for Earth and off by
+     * {@code sqrt(M/g)} for everything else.</p>
+     */
+    public double getOrbitalMass() {
+        return mass > BULK_UNSET ? mass : gravitationalMultiplier;
+    }
+
+    /**
+     * State this body's mass and radius, deriving surface gravity from them unless a gravity was
+     * explicitly authored.
+     *
+     * @param massEarths   mass in Earth masses
+     * @param radiusEarths radius in Earth radii
+     */
+    public void setBulk(double massEarths, double radiusEarths) {
+        this.mass = Math.max(0d, massEarths);
+        this.radius = Math.max(0d, radiusEarths);
+        if (!gravityAuthored && hasBulkProperties()) {
+            gravitationalMultiplier = (float) derivedGravity(this.mass, this.radius);
+        }
+    }
+
+    /**
+     * Surface gravity in Earth gravities from mass and radius — {@code g = M/R²} — clamped to the range
+     * the game can actually run a player in. The floor is the same one the legacy random generator has
+     * always used; the ceiling is {@link #MAX_GRAVITY}.
+     */
+    public static double derivedGravity(double massEarths, double radiusEarths) {
+        double g = massEarths / Math.max(1e-6d, radiusEarths * radiusEarths);
+        double lo = 0.05d;
+        double hi = MAX_GRAVITY / 100d;
+        if (Double.isNaN(g) || g < lo) {
+            return lo;
+        }
+        return g > hi ? hi : g;
+    }
+
+    /** Whether a gravity was STATED for this body rather than derived from its bulk. */
+    public boolean isGravityAuthored() {
+        return gravityAuthored;
+    }
+
+    /** Mark this body's {@link #gravitationalMultiplier} as authored — the XML/override path. */
+    public void setGravityAuthored(boolean authored) {
+        this.gravityAuthored = authored;
+    }
+
+    /**
+     * Whether this world keeps one face to its star: no day/night cycle at all, rather than a long day.
+     */
+    public boolean isTidallyLocked() {
+        return tidallyLocked;
+    }
+
+    public void setTidallyLocked(boolean locked) {
+        this.tidallyLocked = locked;
+    }
+
+    /** The parent star's metal content relative to Sol — see {@link #metallicity}. */
+    public double getMetallicity() {
+        return metallicity;
+    }
+
+    public void setMetallicity(double value) {
+        this.metallicity = (Double.isNaN(value) || value <= 0d) ? 1d : value;
+        this.scaledOreCache = null;
+        this.scaledOreCacheFor = Double.NaN;
+    }
+
+    public List<Fluid> getHarvestableGasses() {
+        return harvestableAtmosphere;
+    }
+
+    public List<ItemStack> getRequiredArtifacts() {
+        return requiredArtifacts;
+    }
+
+    @Override
+    public float getGravitationalMultiplier() {
+        return gravitationalMultiplier;
+    }
+
+    @Override
+    public void setGravitationalMultiplier(float mult) {
+        gravitationalMultiplier = mult;
+        // Stating a gravity is what makes it an override: from here on the mass/radius derivation must
+        // not touch it, or an authored planet would silently change the moment it gained a mass.
+        gravityAuthored = true;
+    }
+
+    public List<SpawnListEntryNBT> getSpawnListEntries() {
+        return spawnableEntities;
+    }
+
+    /**
+     * @return the color of the sun as an array of floats represented as  {r,g,b}
+     */
+    public float[] getSunColor() {
+        return getStar().getColor();
+    }
+
+    /**
+     * @return the host star for this planet
+     */
+    public StellarBody getStar() {
+        if (isStar()) {
+            star = getStarData();
+        }
+        if (star == null)
+            star = DimensionManager.getInstance().getStar(starId);
+        return star;
+    }
+
+    public boolean hasSurface() {
+        return !(isGasGiant() || isStar());
+    }
+
+    public boolean isGasGiant() {
+        return isGasGiant;
+    }
+
+    public void setGasGiant(boolean gas) {
+        this.isGasGiant = gas;
+    }
+
+    public boolean isStar() {
+        return planetId >= Constants.STAR_ID_OFFSET;
+    }
+
+    /**
+     * Sets the host star for the planet
+     *
+     * @param star the star to set as the host for this planet
+     */
+    public void setStar(StellarBody star) {
+        this.starId = star.getId();
+        this.star = star;
+        if (!this.isMoon() && !isStation())
+            this.star.addPlanet(this);
+    }
+
+    public void setStar(int id) {
+        this.starId = id;
+        if (DimensionManager.getInstance().getStar(id) != null)
+            setStar(DimensionManager.getInstance().getStar(id));
+    }
+
+    public StellarBody getStarData() {
+        return DimensionManager.getInstance().getStar(planetId - Constants.STAR_ID_OFFSET);
+    }
+
+    public boolean hasRings() {
+        return this.hasRings;
+    }
+
+    public void setHasRings(boolean value) {
+        this.hasRings = value;
+    }
+
+    //Adds a beacon location to the planet's surface
+    public void addBeaconLocation(World world, HashedBlockPosition pos) {
+        beaconLocations.add(pos);
+
+        //LAAZZY
+        if (!world.isRemote) {
+            for (DimensionProperties taught : teachOwnSystem()) {
+                PacketHandler.sendToAll(new PacketDimInfo(taught.getId(), taught));
+            }
+            PacketHandler.sendToAll(new PacketDimInfo(getId(), this));
+        }
+    }
+
+    /**
+     * Tell the bodies of this body's own system that this place exists, and return the ones that
+     * did not already know.
+     *
+     * <p><b>A beacon is a local announcement, not a galactic one.</b> It used to add this planet to
+     * the GLOBAL known-set, so planting one anywhere made the place selectable from every launch pad
+     * in the game. What is true is narrower and more interesting: the neighbours know, because they
+     * can see it. So the beacon writes into the known-set of every body of its own system, and
+     * nothing outside that system learns anything.</p>
+     *
+     * <p>It can never be the thing that first reveals a place - a beacon is planted by hand, so
+     * somebody already flew here, which means the destination was already reachable. That is why
+     * scoping it costs nothing: a beacon spreads knowledge inside reach and never creates reach.</p>
+     */
+    public List<DimensionProperties> teachOwnSystem() {
+        List<DimensionProperties> taught = new ArrayList<>();
+        discoverPlanet(getId()); // the body it stands on, always - the degenerate system of one
+        StellarBody star = getStar();
+        if (star == null) {
+            return taught; // a world with no star of its own: the beacon teaches only its own ground
+        }
+        for (IDimensionProperties sibling : star.getPlanets()) {
+            DimensionProperties props = DimensionManager.getInstance()
+                    .getDimensionPropertiesOrNull(sibling.getId());
+            if (props == null) {
+                continue;
+            }
+            teach(props, taught);
+            // A moon is a child of its planet rather than of the star, so the star's list alone
+            // would leave every moon of the system ignorant of a beacon in it.
+            for (int childId : props.getChildPlanets()) {
+                DimensionProperties child = DimensionManager.getInstance()
+                        .getDimensionPropertiesOrNull(childId);
+                if (child != null) {
+                    teach(child, taught);
+                }
+            }
+        }
+        return taught;
+    }
+
+    /** Teach {@code body} about this place, collecting it when that changed anything. */
+    private void teach(DimensionProperties body, List<DimensionProperties> taught) {
+        if (body.getId() == getId() || body.isPlanetKnownHere(getId())) {
+            return;
+        }
+        body.discoverPlanet(getId());
+        taught.add(body);
+    }
+
+    public HashSet<HashedBlockPosition> getBeacons() {
+        return beaconLocations;
+    }
+
+    //Removes a beacon location to the planet's surface
+    public void removeBeaconLocation(World world, HashedBlockPosition pos) {
+        beaconLocations.remove(pos);
+
+        if (beaconLocations.isEmpty() && !StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets.contains(getId()))
+            DimensionManager.getInstance().knownPlanets.remove(getId());
+
+        //LAAZZY
+        if (!world.isRemote)
+            PacketHandler.sendToAll(new PacketDimInfo(getId(), this));
+    }
+
+    /**
+     * @return the {@link ResourceLocation} representing this planet, generated from the planet's properties
+     */
+    public ResourceLocation getPlanetIcon() {
+
+
+        if (!customIcon.isEmpty()) {
+            try {
+                String resource_location = "stellurgy:textures/planets/" + customIcon.toLowerCase() + ".png";
+                if (TextureResources.planetResources.containsKey(resource_location))
+                    return TextureResources.planetResources.get(resource_location);
+
+                ResourceLocation new_resource = new ResourceLocation(resource_location);
+                TextureResources.planetResources.put(resource_location, new_resource);
+                return new_resource;
+            } catch (IllegalArgumentException e) {
+                return PlanetIcons.UNKNOWN.resource;
+            }
+
+        }
+
+        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity);
+        Temps tempType = Temps.getTempFromValue(getAverageTemp());
+
+        if (isStar() && getStarData().isBlackHole())
+            return TextureResources.locationBlackHole_icon;
+
+        if (isGasGiant())
+            return PlanetIcons.GASGIANTBLUE.resource;
+
+        if (isAsteroid())
+            return PlanetIcons.ASTEROID.resource;
+
+        if (tempType == Temps.TOOHOT)
+            return PlanetIcons.MARSLIKE.resource;
+        if (atmType != AtmosphereTypes.NONE && VulpineMath.isBetween(tempType.ordinal(), Temps.COLD.ordinal(), Temps.TOOHOT.ordinal()))
+            return PlanetIcons.EARTHLIKE.resource;//TODO: humidity
+        else if (tempType.compareTo(Temps.COLD) > 0)
+            if (atmType.compareTo(AtmosphereTypes.LOW) > 0)
+                return PlanetIcons.MOON.resource;
+            else
+                return PlanetIcons.ICEWORLD.resource;
+        else if (atmType.compareTo(AtmosphereTypes.LOW) > 0) {
+
+            if (tempType.compareTo(Temps.COLD) < 0)
+                return PlanetIcons.MARSLIKE.resource;
+            else
+                return PlanetIcons.MOON.resource;
+        } else
+            return PlanetIcons.LAVA.resource;
+    }
+
+    /**
+     * @return the {@link ResourceLocation} representing this planet, generated from the planet's properties
+     */
+    public ResourceLocation getPlanetIconLEO() {
+
+        if (!customIcon.isEmpty()) {
+            try {
+                String resource_location = "stellurgy:textures/planets/" + customIcon.toLowerCase() + "leo.jpg";
+                if (TextureResources.planetResources.containsKey(resource_location))
+                    return TextureResources.planetResources.get(resource_location);
+
+                ResourceLocation new_resource = new ResourceLocation(resource_location);
+                TextureResources.planetResources.put(resource_location, new_resource);
+                return new_resource;
+
+            } catch (IllegalArgumentException e) {
+                return PlanetIcons.UNKNOWN.resource;
+            }
+        }
+
+        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity);
+        Temps tempType = Temps.getTempFromValue(getAverageTemp());
+
+
+        if (isGasGiant())
+            return PlanetIcons.GASGIANTBLUE.resourceLEO;
+
+        if (tempType == Temps.TOOHOT)
+            return PlanetIcons.MARSLIKE.resourceLEO;
+        if (atmType != AtmosphereTypes.NONE && VulpineMath.isBetween(tempType.ordinal(), Temps.COLD.ordinal(), Temps.TOOHOT.ordinal()))
+            return PlanetIcons.EARTHLIKE.resourceLEO;//TODO: humidity
+        else if (tempType.compareTo(Temps.COLD) > 0)
+            if (atmType.compareTo(AtmosphereTypes.LOW) > 0)
+                return PlanetIcons.MOON.resourceLEO;
+            else
+                return PlanetIcons.ICEWORLD.resourceLEO;
+        else if (atmType.compareTo(AtmosphereTypes.LOW) > 0) {
+
+            if (tempType.compareTo(Temps.COLD) < 0)
+                return PlanetIcons.MARSLIKE.resourceLEO;
+            else
+                return PlanetIcons.MOON.resourceLEO;
+        } else
+            return PlanetIcons.LAVA.resourceLEO;
+    }
+
+    /**
+     * @return the name of the planet
+     */
+    public String getName() {
+        return name;
+    }
+
+    //Planet hierarchy
+
+    /**
+     * Sets the name of the planet
+     */
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    /**
+     * @return the DIMID of the planet
+     */
+    public int getId() {
+        return planetId;
+    }
+
+    /**
+     * Sets the planet's id
+     *
+     * @param id
+     */
+    public void setId(int id) {
+        this.planetId = id;
+    }
+
+    /**
+     * @return the DimID of the parent planet
+     */
+    public int getParentPlanet() {
+        return parentPlanet;
+    }
+
+    /**
+     * Sets this planet as a moon of the supplied planet's id.
+     *
+     * @param parent parent planet's DimensionProperties, or null for none
+     */
+    public void setParentPlanet(DimensionProperties parent) {
+        this.setParentPlanet(parent, true);
+    }
+
+    /**
+     * @return the {@link DimensionProperties} of the parent planet
+     */
+    public DimensionProperties getParentProperties() {
+        if (parentPlanet != Constants.INVALID_PLANET)
+            return DimensionManager.getInstance().getDimensionProperties(parentPlanet);
+        return null;
+    }
+
+    /**
+     * Range 0 < value <= 200
+     *
+     * @return if the planet is a moon, then the distance from the host planet where the earth's moon is 100, higher is farther, if planet, distance from the star, 100 is earthlike, higher value is father
+     */
+    public int getParentOrbitalDistance() {
+        return orbitalDist;
+    }
+
+    @Override
+    public void setParentOrbitalDistance(int distance) {
+        this.orbitalDist = distance;
+
+    }
+
+    /**
+     * @return if a planet, the same as getParentOrbitalDistance(), if a moon, the moon's distance from the host star
+     */
+    public int getSolarOrbitalDistance() {
+        if (this.isStar()) {
+            return 1;
+        }
+        if (parentPlanet != Constants.INVALID_PLANET)
+            return getParentProperties().getSolarOrbitalDistance();
+        return orbitalDist;
+
+    }
+
+    public double getSolarTheta() {
+        if (parentPlanet != Constants.INVALID_PLANET)
+            return getParentProperties().getSolarTheta();
+        return orbitTheta;
+    }
+
+    /**
+     * Sets this planet as a moon of the supplied planet's ID
+     *
+     * @param parent DimensionProperties of the parent planet, or null for none
+     * @param update true to update the parent's planet to the change
+     */
+    public void setParentPlanet(DimensionProperties parent, boolean update) {
+
+        if (update) {
+            if (parentPlanet != Constants.INVALID_PLANET)
+                getParentProperties().childPlanets.remove(getId());
+
+            if (parent == null) {
+                parentPlanet = Constants.INVALID_PLANET;
+            } else {
+                parentPlanet = parent.getId();
+                star = parent.getStar();
+                if (parent.getId() != Constants.INVALID_PLANET)
+                    parent.childPlanets.add(getId());
+            }
+        } else {
+            if (parent == null) {
+                parentPlanet = Constants.INVALID_PLANET;
+            } else {
+                star = parent.getStar();
+                starId = star.getId();
+                parentPlanet = parent.getId();
+            }
+        }
+    }
+
+    /**
+     * @return true if the planet has moons
+     */
+    public boolean hasChildren() {
+        return !childPlanets.isEmpty();
+    }
+
+    /**
+     * @return true if this DIM orbits another
+     */
+    public boolean isMoon() {
+        return parentPlanet != Constants.INVALID_PLANET && parentPlanet != SpaceObjectManager.WARPDIMID;
+    }
+
+
+    public int getAtmosphereDensity() {
+        return atmosphereDensity;
+    }
+
+    //TODO: allow for more exotic atmospheres
+
+    public void setAtmosphereDensity(int atmosphereDensity) {
+
+        int prevAtm = this.atmosphereDensity;
+        this.atmosphereDensity = atmosphereDensity;
+
+        // The ONE input that changes while a world is in play — the terraformer thickens or thins the
+        // air, and the greenhouse term moves with it. Everything else a temperature is derived from
+        // (the stars, the orbit, the albedo) is fixed when the world is materialized, and is STATED
+        // through setAverageTemp rather than recomputed here: a load path that recomputed would be
+        // running before its own inputs had all been read.
+        recalculateTemperature();
+
+        load_terraforming_helper(true);
+
+
+        PacketHandler.sendToAll(new PacketDimInfo(getId(), this));
+    }
+
+    public void setAtmosphereDensityDirect(int atmosphereDensity) {
+        originalAtmosphereDensity = this.atmosphereDensity = atmosphereDensity;
+    }
+
+    /**
+     * @return true if the dimension properties refer to that of a space station or orbiting object registered in {@link SpaceObjectManager}
+     */
+    public boolean isStation() {
+        return isStation;
+    }
+
+    /**
+     * @return the default atmosphere of this dimension
+     */
+    public Atmosphere getAtmosphere() {
+        if (hasAtmosphere() && hasOxygen) {
+            if (averageTemperature >= 900)
+                return Atmosphere.SUPERHEATED;
+            if (Temps.getTempFromValue(getAverageTemp()) == Temps.TOOHOT)
+                return Atmosphere.VERYHOT;
+            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.SUPERHIGHPRESSURE)
+                return Atmosphere.SUPERHIGHPRESSURE;
+            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.HIGHPRESSURE)
+                return Atmosphere.HIGHPRESSURE;
+            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.LOW)
+                return Atmosphere.LOWOXYGEN;
+            return Atmosphere.AIR;
+        } else if (hasAtmosphere() && !hasOxygen) {
+            if (averageTemperature >= 900)
+                return Atmosphere.SUPERHEATEDNOO2;
+            if (Temps.getTempFromValue(averageTemperature) == Temps.TOOHOT)
+                return Atmosphere.VERYHOTNOO2;
+            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.SUPERHIGHPRESSURE)
+                return Atmosphere.SUPERHIGHPRESSURENOO2;
+            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.HIGHPRESSURE)
+                return Atmosphere.HIGHPRESSURENOO2;
+            return Atmosphere.NOO2;
+        }
+        return Atmosphere.VACUUM;
+    }
+
+    /**
+     * @return true if the planet has an atmosphere
+     */
+    public boolean hasAtmosphere() {
+        return AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity).compareTo(AtmosphereTypes.NONE) < 0;
+    }
+
+    /**
+     * @return the multiplier compared to Earth(1040W) for peak insolation of the body
+     */
+    public double getPeakInsolationMultiplier() {
+        //Set peak insolation multiplier --  we do this here because I've had problems with it in the past in the XML loader, and people keep asking to change it
+        //Assumes that a 16 atmosphere is 16x the partial pressure but not thicker, because I don't want to deal with that and this is fairly simple right now
+        //Get what it would be relative to LEO, this gives ~0.76 for Earth at the surface
+        double insolationRelativeToLEO = AstronomicalBodyHelper.getStellarBrightness(getStar(), getSolarOrbitalDistance()) * Math.pow(Math.E, -(0.0026899d * getAtmosphereDensity()));
+        //Multiply by Earth LEO/Earth Surface for ratio relative to Earth surface (1360/1040)
+        peakInsolationMultiplier = insolationRelativeToLEO * 1.308d;
+        return peakInsolationMultiplier;
+    }
+
+    /**
+     * @return the multiplier compared to Earth(1040W) for peak insolation of the body, ignoring the atmosphere
+     */
+    public double getPeakInsolationMultiplierWithoutAtmosphere() {
+        //Set peak insolation multiplier without atmosphere --  we do this here because I've had problems with it in the past in the XML loader, and people keep asking to change it
+        peakInsolationMultiplierWithoutAtmosphere = AstronomicalBodyHelper.getStellarBrightness(getStar(), getSolarOrbitalDistance()) * 1.308d;
+        return peakInsolationMultiplierWithoutAtmosphere;
+    }
+
+
+    public boolean isAsteroid() {
+        return generatorType == Constants.GENTYPE_ASTEROID;
+    }
+
+    /**
+     * @return true if the planet should be rendered with shadows, atmosphere glow, clouds, etc
+     */
+    public boolean hasDecorators() {
+        return !isAsteroid() && !isStar() || (canDecorate && overrideDecoration);
+    }
+
+    public void setDecoratoration(boolean value) {
+        canDecorate = value;
+        overrideDecoration = true;
+    }
+
+    public boolean isDecorationOverridden() {
+        return overrideDecoration;
+    }
+
+    public void unsetDecoratoration() {
+        overrideDecoration = false;
+    }
+
+    /**
+     * @return set of all moons orbiting this planet
+     */
+    public Set<Integer> getChildPlanets() {
+        return childPlanets;
+    }
+
+    /**
+     * @return how many moons deep this planet is, IE: if the moon of a moon of a planet then three is returned
+     */
+    public int getPathLengthToStar() {
+        if (isMoon())
+            return 1 + getParentProperties().getPathLengthToStar();
+        return 1;
+    }
+
+    /**
+     * Does not check for hierarchy loops!
+     *
+     * @param child DimensionProperties of the new child
+     * @return true if successfully added as a child planet
+     */
+    public boolean addChildPlanet(DimensionProperties child) {
+        //TODO: check for hierarchy loops!
+        if (child == this)
+            return false;
+
+        childPlanets.add(child.getId());
+        child.setParentPlanet(this);
+        return true;
+    }
+
+    /**
+     * Removes the passed DIMID from the list of moons
+     *
+     * @param id DIMID of the child planet to remove
+     */
+    public void removeChild(int id) {
+        childPlanets.remove(id);
+    }
+
+    //Satellites --------------------------------------------------------
+
+    /**
+     * Adds a satellite to this DIM
+     *
+     * @param satellite satellite to add
+     * @param world     world to add the satellite to
+     */
+    public void addSatellite(SatelliteBase satellite, World world) {
+        //Prevent dupes
+        if (satellites.containsKey(satellite.getId())) {
+            satellites.remove(satellite.getId());
+            tickingSatellites.remove(satellite.getId());
+        }
+
+        satellites.put(satellite.getId(), satellite);
+        satellite.setDimensionId(world);
+
+
+        if (satellite.canTick())
+            tickingSatellites.put(satellite.getId(), satellite);
+
+        if (!world.isRemote)
+            PacketHandler.sendToAll(new PacketSatellite(satellite));
+    }
+
+    /**
+     * Adds a satellite to this DIM
+     *
+     * @param satellite satellite to add
+     * @param world     world to add the satellite to
+     */
+    public void addSatellite(SatelliteBase satellite, int world, boolean isRemote) {
+        //Prevent dupes
+        if (satellites.containsKey(satellite.getId())) {
+            satellites.remove(satellite.getId());
+            tickingSatellites.remove(satellite.getId());
+        }
+
+        satellites.put(satellite.getId(), satellite);
+        satellite.setDimensionId(world);
+
+
+        if (satellite.canTick())
+            tickingSatellites.put(satellite.getId(), satellite);
+
+        if (!isRemote)
+            PacketHandler.sendToAll(new PacketSatellite(satellite));
+    }
+
+    /**
+     * Really only meant to be used on the client when receiving a packet
+     *
+     * @param satellite the satellite to add to orbit
+     */
+    public void addSatellite(SatelliteBase satellite) {
+        if (satellites.containsKey(satellite.getId())) {
+            satellites.remove(satellite.getId());
+            tickingSatellites.remove(satellite.getId());
+        }
+        satellites.put(satellite.getId(), satellite);
+
+        if (satellite.canTick()) //TODO: check for dupes
+            tickingSatellites.put(satellite.getId(), satellite);
+    }
+
+    /**
+     * Removes the satellite from orbit around this world
+     *
+     * @param satelliteId ID # for this satellite
+     * @return reference to the satellite object
+     */
+    public SatelliteBase removeSatellite(long satelliteId) {
+        SatelliteBase satellite = satellites.remove(satelliteId);
+
+        if (satellite != null && satellite.canTick() && tickingSatellites.containsKey(satelliteId))
+            tickingSatellites.get(satelliteId).setDead();
+
+        return satellite;
+    }
+
+    /**
+     * @param id ID # for this satellite
+     * @return a reference to the satelliteBase object given this ID
+     */
+    public SatelliteBase getSatellite(long id) {
+        return satellites.get(id);
+    }
+
+    /**
+     * Returns all of a dimension's satellites
+     *
+     * @return a Collection containing all of a dimension's satellites
+     */
+    public Collection<SatelliteBase> getAllSatellites() {
+        return this.satellites.values();
+    }
+
+    public Collection<SatelliteBase> getTickingSatellites() {
+        return this.tickingSatellites.values();
+    }
+
+    //TODO: multithreading
+
+    /**
+     * Tick satellites as needed
+     */
+    public void tick() {
+
+        Iterator<SatelliteBase> iterator = tickingSatellites.values().iterator();
+        //System.out.println(":"+tickingSatellites.size());
+        while (iterator.hasNext()) {
+            SatelliteBase satellite = iterator.next();
+            satellite.tickEntity();
+
+            if (satellite.isDead()) {
+                iterator.remove();
+                satellites.remove(satellite.getId());
+                break;//avoid  java.util.ConcurrentModificationException
+            }
+        }
+        updateOrbit();
+
+        //remove water source locks over time
+        Iterator<watersourcelocked> iterator_2 = water_source_locked_positions.iterator();
+        while (iterator_2.hasNext()) {
+            watersourcelocked i = iterator_2.next();
+            i.timer -= 1;
+            if (i.timer <= 0) {
+                BlockPos p = i.pos.getBlockPos();
+                iterator_2.remove(); // Safe removal during iteration
+                World world = (net.minecraftforge.common.DimensionManager.getWorld(getId()));
+                if (world != null) {
+                    world.notifyNeighborsOfStateChange(p, world.getBlockState(p).getBlock(), false);
+                }
+            }
+        }
+
+        World world = (net.minecraftforge.common.DimensionManager.getWorld(getId()));
+        //world has to be loaded
+        if (world != null) {
+            if (proxylists.gethelper(getId()) != null) {
+                TerraformingHelper t = proxylists.gethelper(getId());
+                if (t.has_blocks_in_dec_queue()) {
+                    //if (new Random().nextInt(100) < 50) {
+                    for (int i = 0; i < 5; i++) {
+                        BlockPos target = t.get_next_position_decoration(true);
+                        if (target != null) {
+                            BiomeHandler.do_decoration(world, target, getId());
+                        } else break;
+                    }
+                    //}
+                }
+            }
+        }
+    }
+    public void add_water_locked_pos(HashedBlockPosition pos) {
+        for (watersourcelocked i : water_source_locked_positions) {
+            if (i.pos.equals(pos)) {
+                i.reset_timer();
+                return;
+            }
+        }
+        this.water_source_locked_positions.add(new watersourcelocked(pos));
+    }
+
+    /**
+     * Advance the live orbital angle to this tick. One law, {@link #orbitThetaAt}, evaluated at now:
+     * the sky a player looks at and the address a navigation computer extrapolates to must be the
+     * same orbit, or the ship arrives somewhere the planet is not drawn.
+     *
+     * <p>"Now" is the space clock, and it has to be, because that is the tick every OTHER evaluation
+     * of this same law is made at — the address a body reports, the standoff an arrival is priced
+     * with, the sky feed a cell publishes. The two agreed by accident while the space clock was
+     * simply the overworld's counter and this read a proxy that answered with it; they are separate
+     * numbers now, with separate restore points, and the invariant above only survives if both sides
+     * read the one clock rather than two that happen to match.</p>
+     */
+    public void updateOrbit() {
+        this.prevOrbitalTheta = this.orbitTheta;
+        this.orbitTheta = orbitThetaAt(dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
+    }
+
+    /**
+     * @return true if this dimension is allowed to have rivers
+     */
+    public boolean hasRivers() {
+        return hasRivers || (AtmosphereTypes.getAtmosphereTypeFromValue(originalAtmosphereDensity).compareTo(AtmosphereTypes.LOW) <= 0 && Temps.getTempFromValue(getAverageTemp()).isInRange(Temps.COLD, Temps.HOT));
+    }
+
+
+    /**
+     * Each Planet is assigned a list of biomes that are allowed to spawn there
+     *
+     * @return List of biomes allowed to spawn on this planet
+     */
+    public List<BiomeEntry> getBiomes() {
+        return allowedBiomes;
+    }
+
+    /**
+     * Clears the list of allowed biomes and replaces it with the provided list
+     *
+     * @param biomes
+     */
+    public void setBiomes(List<Biome> biomes) {
+        allowedBiomes.clear();
+        addBiomes(biomes);
+    }
+
+
+    /**
+     * Used to determine if a biome is allowed to spawn on ANY planet
+     *
+     * @param biome biome to check
+     * @return true if the biome is not allowed to spawn on any Dimension
+     */
+    public boolean isBiomeblackListed(Biome biome, boolean is_NOT_terraforming) {
+
+        if (!is_NOT_terraforming) {
+            String modId = biome.getRegistryName().getResourceDomain();
+            if (!StellurgyConfiguration.getCurrentConfig().allowNonStellurgyBiomesInTerraforming) {
+                if (!modId.equals("minecraft") && !modId.equals("stellurgy")) {
+                    return true;
+                }
+            }
+        }
+        if (biome.equals(StellurgyBiomes.spaceBiome)) return true;
+
+        return StellurgyBiomes.instance.getBlackListedBiomes().contains(Biome.getIdForBiome(biome));
+    }
+
+    /**
+     * @return a list of biomes allowed to spawn in this dimension
+     */
+    public List<Biome> getViableBiomes(boolean not_terraforming) {
+        List<Biome> viableBiomes = new ArrayList<>();
+
+        if (!hasSurface()) {
+            return viableBiomes;
+        }
+
+        Random random = new Random(System.nanoTime());
+
+        if (atmosphereDensity > AtmosphereTypes.LOW.value && random.nextInt(3) == 0 && not_terraforming) {
+            List<Biome> list = new LinkedList<>(StellurgyBiomes.instance.getSingleBiome());
+
+            while (list.size() > 1) {
+                Biome biome = list.get(random.nextInt(list.size()));
+                Temps temp = Temps.getTempFromValue(averageTemperature);
+                if ((biome.getTempCategory() == TempCategory.COLD && temp.isInRange(Temps.FRIGID, Temps.NORMAL)) ||
+                        ((biome.getTempCategory() == TempCategory.MEDIUM || biome.getTempCategory() == TempCategory.OCEAN) &&
+                                temp.isInRange(Temps.COLD, Temps.HOT)) ||
+                        (biome.getTempCategory() == TempCategory.WARM && temp.isInRange(Temps.NORMAL, Temps.HOT))) {
+                    viableBiomes.add(biome);
+                    return viableBiomes;
+                }
+                list.remove(biome);
+            }
+        }
+
+
+        if (atmosphereDensity <= AtmosphereTypes.LOW.value) {
+            viableBiomes.add(StellurgyBiomes.moonBiome);
+            viableBiomes.add(StellurgyBiomes.moonBiomeDark);
+        } else if (Temps.getTempFromValue(averageTemperature).hotterOrEquals(Temps.TOOHOT)) {
+            viableBiomes.add(StellurgyBiomes.hotDryBiome);
+            viableBiomes.add(StellurgyBiomes.volcanic);
+            viableBiomes.add(StellurgyBiomes.volcanicBarren);
+//            viableBiomes.add(Biomes.HELL);
+        } else if (Temps.getTempFromValue(averageTemperature).hotterOrEquals(Temps.HOT)) {
+
+            for (Biome biome : Biome.REGISTRY) {
+                if (biome != null && (BiomeDictionary.getTypes(biome).contains(BiomeDictionary.Type.HOT) || BiomeDictionary.getTypes(biome).contains(BiomeDictionary.Type.OCEAN)) && !isBiomeblackListed(biome, not_terraforming)) {
+                    viableBiomes.add(biome);
+                }
+            }
+        } else if (Temps.getTempFromValue(averageTemperature).hotterOrEquals(Temps.NORMAL)) {
+            for (Biome biome : Biome.REGISTRY) {
+                if (biome != null && !BiomeDictionary.getTypes(biome).contains(BiomeDictionary.Type.COLD) && !isBiomeblackListed(biome, not_terraforming)) {
+                    viableBiomes.add(biome);
+                }
+            }
+            //if (not_terraforming)
+            //viableBiomes.addAll(BiomeDictionary.getBiomes(BiomeDictionary.Type.OCEAN));
+        } else if (Temps.getTempFromValue(averageTemperature).hotterOrEquals(Temps.COLD)) {
+            for (Biome biome : Biome.REGISTRY) {
+                if (biome != null && !BiomeDictionary.getTypes(biome).contains(BiomeDictionary.Type.HOT) && !isBiomeblackListed(biome, not_terraforming)) {
+                    viableBiomes.add(biome);
+                }
+            }
+            //if (not_terraforming)
+            //viableBiomes.addAll(BiomeDictionary.getBiomes(BiomeDictionary.Type.OCEAN));
+        } else if (Temps.getTempFromValue(averageTemperature).hotterOrEquals(Temps.FRIGID)) {
+
+            for (Biome biome : Biome.REGISTRY) {
+                if (biome != null && BiomeDictionary.getTypes(biome).contains(BiomeDictionary.Type.COLD) && !isBiomeblackListed(biome, not_terraforming)) {
+                    viableBiomes.add(biome);
+                }
+            }
+        } else {
+            for (Biome biome : Biome.REGISTRY) {
+                if (biome != null && BiomeDictionary.getTypes(biome).contains(BiomeDictionary.Type.COLD) && !isBiomeblackListed(biome, not_terraforming)) {
+                    viableBiomes.add(biome);
+                }
+            }
+        }
+
+        int maxBiomesPerPlanet = StellurgyConfiguration.getCurrentConfig().maxBiomesPerPlanet;
+        if (viableBiomes.size() > maxBiomesPerPlanet) {
+            viableBiomes = ZUtils.copyRandomElements(viableBiomes, maxBiomesPerPlanet);
+        }
+
+        if (atmosphereDensity > AtmosphereTypes.HIGHPRESSURE.value && Temps.getTempFromValue(averageTemperature).isInRange(Temps.NORMAL, Temps.HOT))
+            viableBiomes.addAll(StellurgyBiomes.instance.getHighPressureBiomes());
+
+        return viableBiomes;
+    }
+
+    /**
+     * Adds a biome and weight to the list for craters
+     *
+     * @param biome     biome to be added as viable
+     * @param frequency frequency, with 100 as max (and default), for craters to spawn in this biome
+     */
+    public void addCraterBiomeWeight(Biome biome, int frequency) {
+        ArrayList<BiomeEntry> biomes = new ArrayList<>();
+        biomes.add(new BiomeEntry(biome, Math.min(Math.max(0, frequency), 100)));
+        craterBiomeWeights.addAll(biomes);
+    }
+
+    /**
+     * Gets the list of crater frequency biomes
+     *
+     * @return list of crater biomes + frequency in BiomeEntry format (0-100 weight)
+     */
+    public List<BiomeEntry> getCraterBiomeWeights() {
+        return craterBiomeWeights;
+    }
+
+    /**
+     * Adds a biome to the list of biomes allowed to spawn on this planet
+     *
+     * @param biome biome to be added as viable
+     */
+    public void addBiomeWeighted(Biome biome, int weight) {
+        ArrayList<BiomeEntry> biomes = new ArrayList<>();
+        biomes.add(new BiomeEntry(biome, weight));
+        allowedBiomes.addAll(biomes);
+    }
+
+    /**
+     * Adds a biome to the list of biomes allowed to spawn on this planet
+     *
+     * @param biome biome to be added as viable
+     */
+    public void addBiome(Biome biome) {
+        ArrayList<Biome> biomes = new ArrayList<>();
+        biomes.add(biome);
+        allowedBiomes.addAll(getBiomesEntries(biomes));
+    }
+
+    /**
+     * Adds a biome to the list of biomes allowed to spawn on this planet
+     *
+     * @param biomeId biome to be added as viable
+     * @return true if the biome was added successfully, false otherwise
+     */
+    public boolean addBiome(int biomeId) {
+
+        Biome biome = Biome.getBiome(biomeId);
+        if (biomeId == 0 || Biome.getIdForBiome(biome) != 0) {
+            List<Biome> biomes = new ArrayList<>();
+            biomes.add(biome);
+            allowedBiomes.addAll(getBiomesEntries(biomes));
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Adds a list of biomes to the allowed list of biomes for this planet
+     *
+     * @param biomes
+     */
+    public void addBiomes(List<Biome> biomes) {
+        //TODO check for duplicates
+        allowedBiomes.addAll(getBiomesEntries(biomes));
+    }
+
+    public void setBiomeEntries(List<BiomeEntry> biomes) {
+        //If list is itself DO NOT CLEAR IT
+        if (biomes != allowedBiomes) {
+            allowedBiomes.clear();
+            allowedBiomes.addAll(biomes);
+        }
+    }
+
+    /**
+     * Adds all biomes of this type to the list of biomes allowed to generate
+     *
+     * @param type
+     */
+    public void addBiomeType(BiomeDictionary.Type type) {
+
+        ArrayList<Biome> entryList = new ArrayList<>(BiomeDictionary.getBiomes(type));
+
+        //Neither are acceptable on planets
+        entryList.remove(Biome.getBiome(8));
+        entryList.remove(Biome.getBiome(9));
+
+        //Make sure we don't add double entries
+        Iterator<Biome> iter = entryList.iterator();
+        while (iter.hasNext()) {
+            Biome nextBiome = iter.next();
+            for (BiomeEntry entry : allowedBiomes) {
+                if (BiomeDictionary.areSimilar(entry.biome, nextBiome))
+                    iter.remove();
+            }
+
+        }
+        allowedBiomes.addAll(getBiomesEntries(entryList));
+
+    }
+
+    /**
+     * Removes all biomes of this type from the list of biomes allowed to generate
+     *
+     * @param type
+     */
+    public void removeBiomeType(BiomeDictionary.Type type) {
+        for (Biome biome : Biome.REGISTRY) {
+            allowedBiomes.removeIf(biomeEntry -> BiomeDictionary.areSimilar(biomeEntry.biome, biome));
+        }
+
+    }
+
+    /**
+     * Gets a list of BiomeEntries allowed to spawn in this dimension
+     *
+     * @param biomeIds
+     * @return the list of BiomeEntries
+     */
+    private ArrayList<BiomeEntry> getBiomesEntries(List<Biome> biomeIds) {
+
+        ArrayList<BiomeEntry> biomeEntries = new ArrayList<>();
+
+        for (Biome biomes : biomeIds) {
+			/*if(biomes == Biome.desert) {
+				biomeEntries.add(new BiomeEntry(BiomeGenBase.desert, 30));
+				continue;
+			}
+			else if(biomes == BiomeGenBase.savanna) {
+				biomeEntries.add(new BiomeEntry(BiomeGenBase.savanna, 20));
+				continue;
+			}
+			else if(biomes == BiomeGenBase.plains) {
+				biomeEntries.add(new BiomeEntry(BiomeGenBase.plains, 10));
+				continue;
+			}*/
+
+            boolean notFound = true;
+
+            label:
+
+            for (BiomeManager.BiomeType types : BiomeManager.BiomeType.values()) {
+                for (BiomeEntry entry : BiomeManager.getBiomes(types)) {
+                    if (biomes == null)
+                        Stellurgy.logger.warn("Null biomes loaded for DIMID: " + this.getId());
+                    else if (entry.biome.equals(biomes)) {
+                        biomeEntries.add(entry);
+                        notFound = false;
+
+                        break label;
+                    }
+                }
+            }
+
+            if (notFound && biomes != null) {
+                biomeEntries.add(new BiomeEntry(biomes, 30));
+            }
+        }
+
+        return biomeEntries;
+    }
+
+    public void initDefaultAttributes() {
+        if (Temps.getTempFromValue(averageTemperature).hotterOrEquals(Temps.TOOHOT))
+            setOceanBlock(Blocks.LAVA.getDefaultState());
+
+        //Add planet Properties
+        setGenerateCraters(AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()).lessDenseThan(AtmosphereTypes.NORMAL));
+        setGenerateVolcanos(Temps.getTempFromValue(averageTemperature).hotterOrEquals(DimensionProperties.Temps.HOT));
+        setGenerateStructures(isHabitable());
+        setGenerateGeodes(getAtmosphereDensity() > 125);
+    }
+
+
+    private void readFromTechnicalNBT(NBTTagCompound nbt) {
+        NBTTagList list;
+        if (nbt.hasKey("beaconLocations")) {
+            list = nbt.getTagList("beaconLocations", NBT.TAG_INT_ARRAY);
+
+            for (int i = 0; i < list.tagCount(); i++) {
+                int[] location = list.getIntArrayAt(i);
+                beaconLocations.add(new HashedBlockPosition(location[0], location[1], location[2]));
+            }
+            // No global add on load any more. What a beacon taught is held by the bodies it taught,
+            // in their own saved known-sets, so re-announcing this place to the whole game at every
+            // load would put back exactly the reach the scoping removed. A world whose beacons
+            // predate the local sets simply has nothing recorded - 3.0.0 carries no old saves.
+        } else
+            beaconLocations.clear();
+
+        //Satellites
+
+        if (nbt.hasKey("satallites")) {
+            NBTTagCompound allSatelliteNBT = nbt.getCompoundTag("satallites");
+
+            for (String keyObject : allSatelliteNBT.getKeySet()) {
+                Long longKey = Long.parseLong(keyObject);
+
+                NBTTagCompound satelliteNBT = allSatelliteNBT.getCompoundTag(keyObject);
+
+                if (satellites.containsKey(longKey)) {
+                    satellites.get(longKey).readFromNBT(satelliteNBT);
+                } else {
+                    SatelliteBase satellite = SatelliteRegistry.createFromNBT(satelliteNBT);
+
+                    // Unknown/unresolvable dataType → createFromNBT returns null;
+                    // drop the satellite. Never put a null into the satellites map —
+                    // it would NPE the next world save (writeToNBT iterates the map
+                    // unguarded). See C002/C155.
+                    if (satellite == null) {
+                        Stellurgy.logger.warn("Satellite with unknown/bad dataType detected (key="
+                                + longKey + "), dropping");
+                    } else {
+                        satellites.put(longKey, satellite);
+
+                        if (satellite.canTick()) {
+                            tickingSatellites.put(satellite.getId(), satellite);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public void readFromNBT(NBTTagCompound nbt) {
+
+        NBTTagList list;
+
+        // Cleared first: this object is reused across loads, and a merge would make a body remember
+        // what a previous save taught it.
+        locallyKnownPlanets.clear();
+        for (int dimId : nbt.getIntArray("locallyKnownPlanets")) {
+            locallyKnownPlanets.add(dimId);
+        }
+
+        if (nbt.hasKey("skyColor")) {
+            list = nbt.getTagList("skyColor", NBT.TAG_FLOAT);
+            skyColor = new float[list.tagCount()];
+            for (int f = 0; f < list.tagCount(); f++) {
+                skyColor[f] = list.getFloatAt(f);
+            }
+        }
+
+        if (nbt.hasKey("ringColor")) {
+            list = nbt.getTagList("ringColor", NBT.TAG_FLOAT);
+            ringColor = new float[list.tagCount()];
+            for (int f = 0; f < list.tagCount(); f++) {
+                ringColor[f] = list.getFloatAt(f);
+            }
+        }
+
+        if (nbt.hasKey("sunriseSunsetColors")) {
+            list = nbt.getTagList("sunriseSunsetColors", NBT.TAG_FLOAT);
+            sunriseSunsetColors = new float[list.tagCount()];
+            for (int f = 0; f < list.tagCount(); f++) {
+                sunriseSunsetColors[f] = list.getFloatAt(f);
+            }
+        }
+
+        if (nbt.hasKey("fogColor")) {
+            list = nbt.getTagList("fogColor", NBT.TAG_FLOAT);
+            fogColor = new float[list.tagCount()];
+            for (int f = 0; f < list.tagCount(); f++) {
+                fogColor[f] = list.getFloatAt(f);
+            }
+        }
+
+        // Load biomes
+        // New format: registry names, safe vs biome ID drift across modpack versions.
+        // Legacy format: integer biome IDs, kept only for old temp.dat compatibility.
+        //
+        // If biomeNames exists, it is authoritative. Do not also read legacy integer IDs.
+        if (nbt.hasKey("biomeNames", NBT.TAG_LIST)) {
+
+            NBTTagList biomeNames = nbt.getTagList("biomeNames", NBT.TAG_STRING);
+            int[] biomeWeights = nbt.getIntArray("weights");
+
+            List<BiomeEntry> biomesList = new ArrayList<>();
+
+            for (int i = 0; i < biomeNames.tagCount(); i++) {
+                String biomeNameString = biomeNames.getStringTagAt(i);
+                int weight = i < biomeWeights.length ? biomeWeights[i] : 30;
+
+                try {
+                    ResourceLocation biomeName = new ResourceLocation(biomeNameString);
+                    Biome biome = Biome.REGISTRY.getObject(biomeName);
+
+                    if (biome != null && biome.getRegistryName() != null && biome.getRegistryName().equals(biomeName)) {
+                        biomesList.add(new BiomeEntry(biome, weight));
+                    } else {
+                        Stellurgy.logger.warn("Unknown biome registry name '" + biomeNameString + "' for DIMID " + getId() + ", skipping");
+                    }
+                } catch (RuntimeException e) {
+                    Stellurgy.logger.warn("Invalid biome registry name '" + biomeNameString + "' for DIMID " + getId() + ", skipping");
+                }
+            }
+
+            allowedBiomes.clear();
+            allowedBiomes.addAll(biomesList);
+
+            if (allowedBiomes.isEmpty()) {
+                Stellurgy.logger.error("No valid biomeNames resolved for DIMID " + getId() + ". This planet has an empty allowed biome list.");
+            }
+        }
+        else if (nbt.hasKey("biomes", NBT.TAG_INT_ARRAY)) {
+
+            allowedBiomes.clear();
+
+            int[] biomeIds = nbt.getIntArray("biomes");
+            int[] biomeWeights = nbt.getIntArray("weights");
+
+            if (biomeWeights.length == 0) {
+                biomeWeights = new int[biomeIds.length];
+                Arrays.fill(biomeWeights, 30);
+            }
+
+            List<BiomeEntry> biomesList = new ArrayList<>();
+
+            for (int i = 0; i < biomeIds.length; i++) {
+                int weight = i < biomeWeights.length ? biomeWeights[i] : 30;
+                Biome biome = StellurgyBiomes.instance.getBiomeById(biomeIds[i]);
+
+                if (biome != null) {
+                    biomesList.add(new BiomeEntry(biome, weight));
+                } else {
+                    Stellurgy.logger.warn("Unknown legacy biome ID " + biomeIds[i] + " for DIMID " + getId() + ", skipping");
+                }
+            }
+
+            allowedBiomes.addAll(biomesList);
+        }
+
+        // Crater biomes mirror allowedBiomes: new format = registry names
+        // (craterBiomeNames), safe vs biome-ID drift across modpack versions;
+        // legacy format = integer biome IDs, kept only for old temp.dat.
+        //
+        // If craterBiomeNames exists, it is authoritative. The legacy integer
+        // path skips unresolvable IDs (so no null biome reaches MapGenCrater and
+        // NPEs at world-gen) and guards the weight index (findings C043/C044).
+        if (nbt.hasKey("craterBiomeNames", NBT.TAG_LIST)) {
+
+            craterBiomeWeights.clear();
+            NBTTagList craterNames = nbt.getTagList("craterBiomeNames", NBT.TAG_STRING);
+            int[] biomeWeights = nbt.getIntArray("craterWeights");
+            List<BiomeEntry> biomesList = new ArrayList<>();
+
+            for (int i = 0; i < craterNames.tagCount(); i++) {
+                String biomeNameString = craterNames.getStringTagAt(i);
+                int weight = i < biomeWeights.length ? biomeWeights[i] : 30;
+
+                try {
+                    ResourceLocation biomeName = new ResourceLocation(biomeNameString);
+                    Biome biome = Biome.REGISTRY.getObject(biomeName);
+
+                    if (biome != null && biome.getRegistryName() != null && biome.getRegistryName().equals(biomeName)) {
+                        biomesList.add(new BiomeEntry(biome, weight));
+                    } else {
+                        Stellurgy.logger.warn("Unknown crater biome registry name '" + biomeNameString + "' for DIMID " + getId() + ", skipping");
+                    }
+                } catch (RuntimeException e) {
+                    Stellurgy.logger.warn("Invalid crater biome registry name '" + biomeNameString + "' for DIMID " + getId() + ", skipping");
+                }
+            }
+
+            craterBiomeWeights.addAll(biomesList);
+        }
+        else if (nbt.hasKey("craterBiomes", NBT.TAG_INT_ARRAY)) {
+
+            craterBiomeWeights.clear();
+            int[] biomeIds = nbt.getIntArray("craterBiomes");
+            int[] biomeWeights = nbt.getIntArray("craterWeights");
+            List<BiomeEntry> biomesList = new ArrayList<>();
+            for (int i = 0; i < biomeIds.length; i++) {
+                int weight = i < biomeWeights.length ? biomeWeights[i] : 30;
+                Biome biome = StellurgyBiomes.instance.getBiomeById(biomeIds[i]);
+                if (biome != null) {
+                    biomesList.add(new BiomeEntry(biome, weight));
+                } else {
+                    Stellurgy.logger.warn("Unknown legacy crater biome ID " + biomeIds[i] + " for DIMID " + getId() + ", skipping");
+                }
+            }
+
+            craterBiomeWeights.addAll(biomesList);
+        }
+
+        if (nbt.hasKey("laserDrillOres")) {
+            laserDrillOres.clear();
+            list = nbt.getTagList("laserDrillOres", NBT.TAG_COMPOUND);
+            for (NBTBase entry : list) {
+                assert entry instanceof NBTTagCompound;
+                laserDrillOres.add(new ItemStack((NBTTagCompound) entry));
+            }
+        }
+
+        if (nbt.hasKey("laserDrillOresRaw")) {
+            laserDrillOresRaw = nbt.getString("laserDrillOresRaw");
+        }
+
+        if (nbt.hasKey("geodeOres")) {
+            geodeOres.clear();
+            list = nbt.getTagList("geodeOres", NBT.TAG_STRING);
+            for (NBTBase entry : list) {
+                assert entry instanceof NBTTagString;
+                geodeOres.add(((NBTTagString) entry).getString());
+            }
+        }
+
+        if (nbt.hasKey("craterOres")) {
+            craterOres.clear();
+            list = nbt.getTagList("craterOres", NBT.TAG_STRING);
+            for (NBTBase entry : list) {
+                assert entry instanceof NBTTagString;
+                craterOres.add(((NBTTagString) entry).getString());
+            }
+        }
+
+        if (nbt.hasKey("artifacts")) {
+            requiredArtifacts.clear();
+            list = nbt.getTagList("artifacts", NBT.TAG_COMPOUND);
+            for (NBTBase entry : list) {
+                assert entry instanceof NBTTagCompound;
+                requiredArtifacts.add(new ItemStack((NBTTagCompound) entry));
+            }
+        }
+
+        gravitationalMultiplier = nbt.getFloat("gravitationalMultiplier");
+        // Bulk properties, written only when stated: an absent key leaves the sentinel, so a world
+        // saved before planets had a mass reloads with exactly the gravity it already had.
+        mass = nbt.hasKey("mass") ? nbt.getDouble("mass") : BULK_UNSET;
+        radius = nbt.hasKey("radius") ? nbt.getDouble("radius") : BULK_UNSET;
+        albedo = nbt.hasKey("albedo") ? nbt.getDouble("albedo") : AstronomicalBodyHelper.EARTH_ALBEDO;
+        gravityAuthored = nbt.getBoolean("gravityAuthored");
+        tidallyLocked = nbt.getBoolean("tidallyLocked");
+        metallicity = nbt.hasKey("metallicity") ? nbt.getDouble("metallicity") : 1d;
+        scaledOreCache = null;
+        scaledOreCacheFor = Double.NaN;
+        orbitalDist = nbt.getInteger("orbitalDist");
+        orbitTheta = nbt.getDouble("orbitTheta");
+        baseOrbitTheta = nbt.getDouble("baseOrbitTheta");
+        orbitalPhi = nbt.getDouble("orbitPhi");
+        rotationalPhi = nbt.getDouble("rotationalPhi");
+        isRetrograde = nbt.getBoolean("isRetrograde");
+        hasOxygen = nbt.getBoolean("hasOxygen");
+        colorOverride = nbt.getBoolean("colorOverride");
+        atmosphereDensity = nbt.getInteger("atmosphereDensity");
+
+        if (nbt.hasKey("originalAtmosphereDensity"))
+            originalAtmosphereDensity = nbt.getInteger("originalAtmosphereDensity");
+        else
+            originalAtmosphereDensity = atmosphereDensity;
+
+        peakInsolationMultiplier = nbt.getDouble("peakInsolationMultiplier");
+        peakInsolationMultiplierWithoutAtmosphere = nbt.getDouble("peakInsolationMultiplierWithoutAtmosphere");
+        averageTemperature = nbt.getInteger("avgTemperature");
+        rotationalPeriod = nbt.getInteger("rotationalPeriod");
+        name = nbt.getString("name");
+        customIcon = nbt.getString("icon");
+        isNativeDimension = !nbt.hasKey("isNative") || nbt.getBoolean("isNative"); //Prevent world breakages when loading from old version
+        isGasGiant = nbt.getBoolean("isGasGiant");
+        hasRings = nbt.getBoolean("hasRings");
+        ringAngle = nbt.getInteger("ringAngle");
+        seaLevel = nbt.getInteger("sealevel");
+        // Absent key -> no per-dim override (fall back to the global config), so default planets
+        // round-trip unchanged (the originalAtmosphereDensity guarded-read pattern).
+        orbitHeight = nbt.hasKey("orbitHeight", NBT.TAG_INT)
+                ? nbt.getInteger("orbitHeight") : ORBIT_HEIGHT_UNSET;
+        //target_sea_level = nbt.getInteger("target_sea_level");
+        generatorType = nbt.getInteger("genType");
+        terrainSource = nbt.hasKey("terrainSource") ? TerrainSource.byName(nbt.getString("terrainSource")) : TerrainSource.NATIVE;
+        terrainWorldType = nbt.getString("terrainWorldType");
+        terrainTemplate = nbt.getString("terrainTemplate");
+        terrainGeneratorOptions = nbt.getString("terrainGeneratorOptions");
+        canGenerateCraters = nbt.getBoolean("canGenerateCraters");
+        canGenerateGeodes = nbt.getBoolean("canGenerateGeodes");
+        canGenerateStructures = nbt.getBoolean("canGenerateStructures");
+        canGenerateVolcanoes = nbt.getBoolean("canGenerateVolcanos");
+        canGenerateCaves = nbt.getBoolean("canGenerateCaves");
+        hasRivers = nbt.getBoolean("hasRivers");
+        //also clamp nbt load
+        if (nbt.hasKey("geodeFrequencyMultiplier", NBT.TAG_FLOAT))
+            setGeodeMultiplier(nbt.getFloat("geodeFrequencyMultiplier"));
+        if (nbt.hasKey("craterFrequencyMultiplier", NBT.TAG_FLOAT))
+            setCraterMultiplier(nbt.getFloat("craterFrequencyMultiplier"));
+        if (nbt.hasKey("volcanoFrequencyMultiplier", NBT.TAG_FLOAT))
+            setVolcanoMultiplier(nbt.getFloat("volcanoFrequencyMultiplier"));
+
+        // Custom weather info
+        if (nbt.hasKey("rainStartLength", NBT.TAG_INT))
+            setRainStartLength(nbt.getInteger("rainStartLength"));
+        if (nbt.hasKey("thunderStartLength", NBT.TAG_INT))
+            setThunderStartLength(nbt.getInteger("thunderStartLength"));
+        if (nbt.hasKey("rainProlongationLength", NBT.TAG_INT))
+            setRainProlongationLength(nbt.getInteger("rainProlongationLength"));
+        if (nbt.hasKey("thunderProlongationLength", NBT.TAG_INT))
+            setThunderProlongationLength(nbt.getInteger("thunderProlongationLength"));
+
+        if (nbt.hasKey("rainMarker", NBT.TAG_INT))
+            setRainMarker(nbt.getInteger("rainMarker"));
+        if (nbt.hasKey("thunderMarker", NBT.TAG_INT))
+            setThunderMarker(nbt.getInteger("thunderMarker"));
+        if (nbt.hasKey("acidicRain"))
+            setAcidicRain(nbt.getBoolean("acidicRain"));
+
+        // Sanity clamp
+        if (getRainStartLength() <= 0) setRainStartLength(WEATHER_START_LENGTH);
+        if (getThunderStartLength() <= 0) setThunderStartLength(WEATHER_START_LENGTH);
+        if (getRainProlongationLength() <= 0) setRainProlongationLength(WEATHER_PROLONGATION_LENGTH);
+        if (getThunderProlongationLength() <= 0) setThunderProlongationLength(WEATHER_PROLONGATION_LENGTH);
+        // Clamp markers to documented range
+        setRainMarker(MathHelper.clamp(getRainMarker(), -1, 1));
+        setThunderMarker(MathHelper.clamp(getThunderMarker(), -1, 1));
+
+
+        //Hierarchy
+        if (nbt.hasKey("childrenPlanets")) {
+            for (int i : nbt.getIntArray("childrenPlanets"))
+                childPlanets.add(i);
+        }
+
+        //Note: parent planet must be set before setting the star otherwise it would cause duplicate planets in the StellarBody's array
+        parentPlanet = nbt.getInteger("parentPlanet");
+        this.setStar(DimensionManager.getInstance().getStar(nbt.getInteger("starId")));
+
+        if (isGasGiant) {
+            NBTTagList fluidList = nbt.getTagList("fluids", NBT.TAG_STRING);
+            getHarvestableGasses().clear();
+
+            for (int i = 0; i < fluidList.tagCount(); i++) {
+                Fluid fluid = FluidRegistry.getFluid(fluidList.getStringTagAt(i));
+                if (fluid != null)
+                    getHarvestableGasses().add(fluid);
+            }
+
+            //Do not allow empty atmospheres, at least not yet
+            if (getHarvestableGasses().isEmpty())
+                getHarvestableGasses().addAll(AtmosphereRegister.getInstance().getHarvestableGasses());
+        }
+
+        if (nbt.hasKey("oceanBlock")) {
+            Block block = Block.REGISTRY.getObject(new ResourceLocation(nbt.getString("oceanBlock")));
+            if (block == Blocks.AIR) {
+                oceanBlock = null;
+            } else {
+                int meta = nbt.getInteger("oceanBlockMeta");
+                oceanBlock = block.getStateFromMeta(meta);
+            }
+        } else
+            oceanBlock = null;
+
+        if (nbt.hasKey("fillBlock")) {
+            Block block = Block.REGISTRY.getObject(new ResourceLocation(nbt.getString("fillBlock")));
+            if (block == Blocks.AIR) {
+                fillerBlock = null;
+            } else {
+                int meta = nbt.getInteger("fillBlockMeta");
+                fillerBlock = block.getStateFromMeta(meta);
+            }
+        } else
+            fillerBlock = null;
+
+
+        readFromTechnicalNBT(nbt);
+    }
+
+
+
+    private void writeTechnicalNBT(NBTTagCompound nbt) {
+        NBTTagList list;
+        if (!beaconLocations.isEmpty()) {
+            list = new NBTTagList();
+
+            for (HashedBlockPosition pos : beaconLocations) {
+                list.appendTag(new NBTTagIntArray(new int[]{pos.x, pos.y, pos.z}));
+            }
+            nbt.setTag("beaconLocations", list);
+        }
+
+        //Satellites
+
+        if (!satellites.isEmpty()) {
+            NBTTagCompound allSatelliteNBT = new NBTTagCompound();
+            for (Entry<Long, SatelliteBase> entry : satellites.entrySet()) {
+                NBTTagCompound satelliteNBT = new NBTTagCompound();
+
+                entry.getValue().writeToNBT(satelliteNBT);
+                allSatelliteNBT.setTag(entry.getKey().toString(), satelliteNBT);
+            }
+            nbt.setTag("satallites", allSatelliteNBT);
+        }   }
+
+    //terraforming data
+    public void read_terraforming_data(NBTTagCompound nbt){
+
+        int dimid =getId();
+        if (!proxylists.isinitialized(dimid)){
+            proxylists.initdim(dimid);
+        }
+
+        if (nbt.hasKey("fullyGeneratedChunks")) {
+
+            NBTTagList list = nbt.getTagList("fullyGeneratedChunks", NBT.TAG_COMPOUND);
+            if (!list.hasNoTags())
+                proxylists.setChunksFullyTerraformed(dimid, new HashSet<ChunkPos>());
+            for (NBTBase entry : list) {
+                assert entry instanceof NBTTagCompound;
+                int x = ((NBTTagCompound) entry).getInteger("x");
+                int z = ((NBTTagCompound) entry).getInteger("z");
+                System.out.println("Chunk fully terraformed: " + x + ":" + z);
+
+                boolean chunk_was_already_done = false;
+                for (ChunkPos i : proxylists.getChunksFullyTerraformed(dimid)) {
+                    if (x == i.x && z == i.z) {
+                        chunk_was_already_done = true;
+                        break;
+                    }
+                }
+                if (!chunk_was_already_done)
+                    proxylists.getChunksFullyTerraformed(dimid).add(new ChunkPos(x, z));
+                else System.out.println("Chunk is already in list: " + x + ":" + z);
+            }
+        }
+
+        if (nbt.hasKey("fullyBiomeChangedChunks")) {
+
+            NBTTagList list = nbt.getTagList("fullyBiomeChangedChunks", NBT.TAG_COMPOUND);
+            if (!list.hasNoTags())
+                proxylists.setChunksFullyBiomeChanged(dimid, new HashSet<ChunkPos>());
+            for (NBTBase entry : list) {
+                assert entry instanceof NBTTagCompound;
+                int x = ((NBTTagCompound) entry).getInteger("x");
+                int z = ((NBTTagCompound) entry).getInteger("z");
+                System.out.println("Chunk fully biome changed: " + x + ":" + z);
+
+                boolean chunk_was_already_done = false;
+                for (ChunkPos i : proxylists.getChunksFullyBiomeChanged(dimid)) {
+                    if (x == i.x && z == i.z) {
+                        chunk_was_already_done = true;
+                        break;
+                    }
+                }
+                if (!chunk_was_already_done)
+                    proxylists.getChunksFullyBiomeChanged(dimid).add(new ChunkPos(x, z));
+                else System.out.println("Chunk is already in list: " + x + ":" + z);
+            }
+        }
+
+        if (nbt.hasKey("terraformingProtectedBlocks")) {
+
+            NBTTagList list = nbt.getTagList("terraformingProtectedBlocks", NBT.TAG_COMPOUND);
+            if (!list.hasNoTags())
+                proxylists.setProtectingBlocksForDimension(dimid, new ArrayList<>());
+            for (NBTBase entry : list) {
+                assert entry instanceof NBTTagCompound;
+                int x = ((NBTTagCompound) entry).getInteger("x");
+                int z = ((NBTTagCompound) entry).getInteger("z");
+                int y = ((NBTTagCompound) entry).getInteger("y");
+                proxylists.getProtectingBlocksForDimension(dimid).add(new BlockPos(x, y, z));
+                System.out.println("read protecting block at " + x + ":" + y + ":" + z + " - - " + proxylists.getProtectingBlocksForDimension(dimid).size());
+            }
+        }
+    }
+    public void write_terraforming_data(NBTTagCompound nbt) {
+        // write terraforming data
+
+        int dimid = getId();
+        if (!proxylists.isinitialized(dimid)){
+            return;
+        }
+        NBTTagList list = new NBTTagList();
+        for (ChunkPos pos : proxylists.getChunksFullyTerraformed(dimid)) {
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setInteger("x", pos.x);
+            entry.setInteger("z", pos.z);
+            list.appendTag(entry);
+        }
+        nbt.setTag("fullyGeneratedChunks", list);
+
+        list = new NBTTagList();
+        for (ChunkPos pos : proxylists.getChunksFullyBiomeChanged(dimid)) {
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setInteger("x", pos.x);
+            entry.setInteger("z", pos.z);
+            list.appendTag(entry);
+        }
+        nbt.setTag("fullyBiomeChangedChunks", list);
+
+        list = new NBTTagList();
+            for (BlockPos pos : proxylists.getProtectingBlocksForDimension(dimid)) {
+                NBTTagCompound entry = new NBTTagCompound();
+                entry.setInteger("x", pos.getX());
+                entry.setInteger("y", pos.getY());
+                entry.setInteger("z", pos.getZ());
+                list.appendTag(entry);
+            }
+            nbt.setTag("terraformingProtectedBlocks", list);
+
+
+    }
+    /**
+     * What is known ON this body: the planets a launch pad standing here may be aimed at, beyond the
+     * ones everybody knows.
+     *
+     * <p><b>Knowledge belongs to a place.</b> An observatory built here teaches THIS body; a beacon
+     * teaches the bodies of its own system; a memory crystal uploaded here deposits what somebody
+     * carried in. None of that reaches the global set, and none of it reaches a neighbouring world -
+     * a launch pad on a moon offers a different list than the pad on the planet below it.</p>
+     *
+     * <p>It is ADDITIVE over the global set rather than a replacement for it, so a pack that authors
+     * {@code <isKnown>} keeps authoring exactly as it did: the global set is the floor everyone
+     * stands on, this is what a particular world has learned since.</p>
+     *
+     * <p>Communal per world, not per player: two players on the same body see the same list.</p>
+     */
+    private final Set<Integer> locallyKnownPlanets = new HashSet<>();
+
+    /** Teach this body about {@code dimId}. Idempotent. */
+    public void discoverPlanet(int dimId) {
+        locallyKnownPlanets.add(dimId);
+    }
+
+    /** Whether THIS body knows {@code dimId} - the local half of the gate, with no global fallback. */
+    public boolean isPlanetKnownHere(int dimId) {
+        return locallyKnownPlanets.contains(dimId);
+    }
+
+    /** What this body knows, for readers that need the whole set (GUI, sync, tests). */
+    public Set<Integer> getLocallyKnownPlanets() {
+        return Collections.unmodifiableSet(locallyKnownPlanets);
+    }
+
+    public void writeToNBT(NBTTagCompound nbt) {
+        NBTTagList list;
+
+        if (!locallyKnownPlanets.isEmpty()) {
+            int[] known = new int[locallyKnownPlanets.size()];
+            int k = 0;
+            for (int dimId : locallyKnownPlanets) {
+                known[k++] = dimId;
+            }
+            nbt.setIntArray("locallyKnownPlanets", known);
+        }
+
+        if (skyColor != null) {
+            list = new NBTTagList();
+            for (float f : skyColor) {
+                list.appendTag(new NBTTagFloat(f));
+            }
+            nbt.setTag("skyColor", list);
+        }
+
+        if (sunriseSunsetColors != null) {
+            list = new NBTTagList();
+            for (float f : sunriseSunsetColors) {
+                list.appendTag(new NBTTagFloat(f));
+            }
+            nbt.setTag("sunriseSunsetColors", list);
+        }
+
+        list = new NBTTagList();
+        for (float f : fogColor) {
+            list.appendTag(new NBTTagFloat(f));
+        }
+        nbt.setTag("fogColor", list);
+
+        if (hasRings) {
+            nbt.setInteger("ringAngle", ringAngle);
+            list = new NBTTagList();
+            for (float f : ringColor) {
+                list.appendTag(new NBTTagFloat(f));
+            }
+            nbt.setTag("ringColor", list);
+        }
+
+
+        // Only save planet-generation biomes for Stellurgy-owned dimensions with real surfaces.
+        // Non-native dimensions are metadata/proxies, and gas giants/stars do not use biome generation.
+        if (isNativeDimension && hasSurface() && !allowedBiomes.isEmpty()) {
+            NBTTagList biomeNames = new NBTTagList();
+            int[] weights = new int[allowedBiomes.size()];
+            int validCount = 0;
+
+            for (BiomeEntry entry : allowedBiomes) {
+                ResourceLocation biomeName = entry.biome != null ? Biome.REGISTRY.getNameForObject(entry.biome) : null;
+
+                if (biomeName != null) {
+                    biomeNames.appendTag(new NBTTagString(biomeName.toString()));
+                    weights[validCount] = entry.itemWeight;
+                    validCount++;
+                } else {
+                    Stellurgy.logger.warn("Cannot save unnamed/null biome for DIMID " + getId() + ", skipping");
+                }
+            }
+
+            if (!biomeNames.hasNoTags()) {
+                if (validCount != weights.length) {
+                    weights = Arrays.copyOf(weights, validCount);
+                }
+
+                nbt.setTag("biomeNames", biomeNames);
+                nbt.setIntArray("weights", weights);
+            }
+        }
+
+        // Persist crater biomes by registry NAME (craterBiomeNames), matching
+        // allowedBiomes, so the save survives biome-ID drift across modpack/version
+        // changes (findings C043/C044). Null/unnamed biomes are skipped, not written.
+        if (!craterBiomeWeights.isEmpty()) {
+            NBTTagList craterNames = new NBTTagList();
+            int[] weights = new int[craterBiomeWeights.size()];
+            int validCount = 0;
+            for (BiomeEntry entry : craterBiomeWeights) {
+                ResourceLocation biomeName = entry.biome != null ? Biome.REGISTRY.getNameForObject(entry.biome) : null;
+                if (biomeName != null) {
+                    craterNames.appendTag(new NBTTagString(biomeName.toString()));
+                    weights[validCount] = entry.itemWeight;
+                    validCount++;
+                } else {
+                    Stellurgy.logger.warn("Cannot save unnamed/null crater biome for DIMID " + getId() + ", skipping");
+                }
+            }
+
+            if (!craterNames.hasNoTags()) {
+                if (validCount != weights.length) {
+                    weights = Arrays.copyOf(weights, validCount);
+                }
+
+                nbt.setTag("craterBiomeNames", craterNames);
+                nbt.setIntArray("craterWeights", weights);
+            }
+        }
+
+        if (!laserDrillOres.isEmpty()) {
+            list = new NBTTagList();
+            for (ItemStack ore : laserDrillOres) {
+                NBTTagCompound entry = new NBTTagCompound();
+                ore.writeToNBT(entry);
+                list.appendTag(entry);
+            }
+            nbt.setTag("laserDrillOres", list);
+        }
+
+        if (laserDrillOresRaw != null) {
+            nbt.setTag("laserDrillOresRaw", new NBTTagString(laserDrillOresRaw));
+        }
+
+        if (!geodeOres.isEmpty()) {
+            list = new NBTTagList();
+            for (String ore : geodeOres) {
+                list.appendTag(new NBTTagString(ore));
+            }
+            nbt.setTag("geodeOres", list);
+        }
+
+        if (!craterOres.isEmpty()) {
+            list = new NBTTagList();
+            for (String ore : craterOres) {
+                list.appendTag(new NBTTagString(ore));
+            }
+            nbt.setTag("craterOres", list);
+        }
+
+        if (!requiredArtifacts.isEmpty()) {
+            list = new NBTTagList();
+            for (ItemStack ore : requiredArtifacts) {
+                NBTTagCompound entry = new NBTTagCompound();
+                ore.writeToNBT(entry);
+                list.appendTag(entry);
+            }
+            nbt.setTag("artifacts", list);
+        }
+
+        nbt.setInteger("starId", starId);
+        nbt.setFloat("gravitationalMultiplier", gravitationalMultiplier);
+        // Non-default-only, the terrainSource idiom: a planet that never stated a mass writes no mass
+        // key, so its NBT stays byte-identical to what it wrote before bulk properties existed.
+        if (mass > BULK_UNSET) {
+            nbt.setDouble("mass", mass);
+        }
+        if (radius > BULK_UNSET) {
+            nbt.setDouble("radius", radius);
+        }
+        if (albedo != AstronomicalBodyHelper.EARTH_ALBEDO) {
+            nbt.setDouble("albedo", albedo);
+        }
+        if (gravityAuthored) {
+            nbt.setBoolean("gravityAuthored", true);
+        }
+        if (tidallyLocked) {
+            nbt.setBoolean("tidallyLocked", true);
+        }
+        if (metallicity != 1d) {
+            nbt.setDouble("metallicity", metallicity);
+        }
+        nbt.setInteger("orbitalDist", orbitalDist);
+        nbt.setDouble("orbitTheta", orbitTheta);
+        nbt.setDouble("baseOrbitTheta", baseOrbitTheta);
+        nbt.setDouble("orbitPhi", orbitalPhi);
+        nbt.setDouble("rotationalPhi", rotationalPhi);
+        nbt.setBoolean("isRetrograde", isRetrograde);
+        nbt.setBoolean("hasOxygen", hasOxygen);
+        nbt.setBoolean("colorOverride", colorOverride);
+        nbt.setInteger("atmosphereDensity", atmosphereDensity);
+        nbt.setInteger("originalAtmosphereDensity", originalAtmosphereDensity);
+        nbt.setDouble("peakInsolationMultiplier", peakInsolationMultiplier);
+        nbt.setDouble("peakInsolationMultiplierWithoutAtmosphere", peakInsolationMultiplierWithoutAtmosphere);
+        nbt.setInteger("avgTemperature", averageTemperature);
+        nbt.setInteger("rotationalPeriod", rotationalPeriod);
+        nbt.setString("name", name);
+        nbt.setString("icon", customIcon);
+        nbt.setBoolean("isNative", isNativeDimension);
+        nbt.setBoolean("isGasGiant", isGasGiant);
+        nbt.setBoolean("hasRings", hasRings);
+        nbt.setInteger("sealevel", seaLevel);
+        //nbt.setInteger("target_sea_level", target_sea_level);
+        // Emit only when overridden so a default planet serialises unchanged (terrainSource pattern).
+        if (orbitHeight != ORBIT_HEIGHT_UNSET)
+            nbt.setInteger("orbitHeight", orbitHeight);
+        nbt.setInteger("genType", generatorType);
+        // Emit terrain-source keys only when non-default so a NATIVE planet serialises unchanged.
+        if (terrainSource != TerrainSource.NATIVE)
+            nbt.setString("terrainSource", terrainSource.name());
+        if (!terrainWorldType.isEmpty())
+            nbt.setString("terrainWorldType", terrainWorldType);
+        if (!terrainTemplate.isEmpty())
+            nbt.setString("terrainTemplate", terrainTemplate);
+        if (!terrainGeneratorOptions.isEmpty())
+            nbt.setString("terrainGeneratorOptions", terrainGeneratorOptions);
+        nbt.setBoolean("canGenerateCraters", canGenerateCraters);
+        nbt.setBoolean("canGenerateGeodes", canGenerateGeodes);
+        nbt.setBoolean("canGenerateStructures", canGenerateStructures);
+        nbt.setBoolean("canGenerateVolcanos", canGenerateVolcanoes);
+        nbt.setBoolean("canGenerateCaves", canGenerateCaves);
+        nbt.setBoolean("hasRivers", hasRivers);
+        nbt.setFloat("geodeFrequencyMultiplier", geodeFrequencyMultiplier);
+        nbt.setFloat("craterFrequencyMultiplier", craterFrequencyMultiplier);
+        nbt.setFloat("volcanoFrequencyMultiplier", volcanoFrequencyMultiplier);
+
+        // Custom weather data
+        nbt.setInteger("rainStartLength", getRainStartLength());
+        nbt.setInteger("thunderStartLength", getThunderStartLength());
+        nbt.setInteger("rainProlongationLength", getRainProlongationLength());
+        nbt.setInteger("thunderProlongationLength", getThunderProlongationLength());
+        nbt.setInteger("rainMarker", getRainMarker());
+        nbt.setInteger("thunderMarker", getThunderMarker());
+        nbt.setBoolean("acidicRain", isAcidicRain());
+
+        //Hierarchy
+        if (!childPlanets.isEmpty()) {
+            Integer[] intList = new Integer[childPlanets.size()];
+
+            NBTTagIntArray childArray = new NBTTagIntArray(ArrayUtils.toPrimitive(childPlanets.toArray(intList)));
+            nbt.setTag("childrenPlanets", childArray);
+        }
+
+        nbt.setInteger("parentPlanet", parentPlanet);
+
+        if (isGasGiant) {
+            NBTTagList fluidList = new NBTTagList();
+
+            for (Fluid f : getHarvestableGasses()) {
+                fluidList.appendTag(new NBTTagString(f.getName()));
+            }
+
+            nbt.setTag("fluids", fluidList);
+        }
+
+        if (oceanBlock != null) {
+            nbt.setString("oceanBlock", Block.REGISTRY.getNameForObject(oceanBlock.getBlock()).toString());
+            nbt.setInteger("oceanBlockMeta", oceanBlock.getBlock().getMetaFromState(oceanBlock));
+        }
+
+        if (fillerBlock != null) {
+            nbt.setString("fillBlock", Block.REGISTRY.getNameForObject(fillerBlock.getBlock()).toString());
+            nbt.setInteger("fillBlockMeta", fillerBlock.getBlock().getMetaFromState(fillerBlock));
+        }
+
+
+
+        writeTechnicalNBT(nbt);
+    }
+
+    /**
+     * @return temperature of the planet in Kelvin
+     */
+    @Override
+    public int getAverageTemp() {
+        return averageTemperature;
+    }
+
+    /**
+     * State this world's surface temperature, in KELVIN.
+     *
+     * <p>The one door in. A caller that MATERIALIZES a world — realization from a derived profile, an
+     * XML load, a probe fixture — states the number it already has; everything else changes an INPUT
+     * and lets {@link #recalculateTemperature()} follow.</p>
+     */
+    public void setAverageTemp(int kelvin) {
+        this.averageTemperature = kelvin;
+    }
+
+    /**
+     * Recompute the surface temperature from this world's current inputs — its stars, its orbit, its
+     * atmosphere and its albedo.
+     *
+     * <p>Called where an input CHANGES, never where the answer is read. On a world that was
+     * materialized from a derived profile this is a no-op by construction: {@code PlanetDerivation}
+     * ends on this same call with this same albedo, so a recompute reproduces the number a telescope
+     * already reported. That equality is the contract, and it is what stopped a scanned world from
+     * cooling down on the way there.</p>
+     */
+    public void recalculateTemperature() {
+        setAverageTemp(AstronomicalBodyHelper.getAverageTemperature(getStar(),
+                getSolarOrbitalDistance(), getAtmosphereDensity(), albedo));
+    }
+
+    public IBlockState getOceanBlock() {
+        return oceanBlock;
+    }
+
+    public void setOceanBlock(IBlockState block) {
+        oceanBlock = block;
+    }
+
+    public IBlockState getStoneBlock() {
+        return fillerBlock;
+    }
+
+    public void setStoneBlock(IBlockState block) {
+        fillerBlock = block;
+    }
+
+    /**
+     * Function for calculating atmosphere thinning with respect to height, normalized
+     *
+     * @param y
+     * @return the density of the atmosphere at the given height
+     */
+    public float getAtmosphereDensityAtHeight(double y) {
+        return atmosphereDensity * MathHelper.clamp((float) (1 + (256 - y) / 200f), 0f, 1f) / 100f;
+    }
+
+    /**
+     * Gets the fog color at a given altitude, used to assist the illusion of thinning atmosphere
+     *
+     * @param y        y-height
+     * @param fogColor current fog color at this location
+     * @return
+     */
+    public float[] getFogColorAtHeight(double y, Vec3d fogColor) {
+        float atmDensity = getAtmosphereDensityAtHeight(y);
+        return new float[]{(float) (atmDensity * fogColor.x), (float) (atmDensity * fogColor.y), (float) (atmDensity * fogColor.z)};
+    }
+
+    public boolean isHabitable() {
+        return this.getAtmosphere().isBreathable()
+                && Temps.getTempFromValue(this.averageTemperature).isInRange(Temps.COLD, Temps.HOT);
+    }
+
+    /**
+     * This body's position in its system RIGHT NOW, in orbit-units:
+     * {@code (d·cos θ, d·sin φ, d·sin θ)}, read from the live angle {@link #updateOrbit()} maintains.
+     * Same formula and same units as {@link #getPlanetPositionAt} — see there for both.
+     */
+    public double[] getPlanetPosition() {
+        return positionFor(this.orbitTheta);
+    }
+
+    /**
+     * Where this body sits at world tick {@code worldTick}, in orbit-units — the ephemeris the
+     * navigation computer extrapolates with, and what {@code SystemContent} turns into the body's
+     * addressable CELL.
+     *
+     * <p><b>Units.</b> {@code orbitTheta} and {@code baseOrbitTheta} are RADIANS —
+     * {@link #updateOrbit()} writes {@link AstronomicalBodyHelper#getOrbitalTheta} straight into the
+     * field, and the XML loader converts its degrees-valued {@code <orbitalTheta>} element on the way
+     * in. {@code orbitalPhi} is DEGREES (the loader stores it verbatim). So exactly ONE of the two
+     * angles is converted here. Running theta through {@code Math.toRadians} as well — which this
+     * did — squeezed a whole orbit into 6.3&deg;, so every body in a system sat within a thin wedge
+     * of its anchor's +X axis at {@code x ≈ orbitalDist}. Since generation only guarantees neighbours
+     * 4 orbit-units apart, and a cell IS 4 orbit-units wide, that put consecutive planets exactly one
+     * cell apart with each one parked against a cell boundary: a body's address then flipped cells
+     * under the slightest orbital motion, and two bodies could share one address outright.</p>
+     */
+    public double[] getPlanetPositionAt(long worldTick) {
+        return positionFor(orbitThetaAt(worldTick));
+    }
+
+    /** The orbit-unit position this body has at orbital angle {@code theta} (radians). */
+    private double[] positionFor(double theta) {
+        double orbitalDistance = this.orbitalDist;
+        double phi = Math.toRadians(this.orbitalPhi);
+
+        return new double[]{orbitalDistance * Math.cos(theta), orbitalDistance * Math.sin(phi), orbitalDistance * Math.sin(theta)};
+    }
+
+    /**
+     * This body's orbital angle (radians) at world tick {@code worldTick} — the same law
+     * {@link #updateOrbit()} applies to the live field, evaluated at an arbitrary time instead of
+     * now. This is what lets a navigation computer aim at where a body WILL BE when the ship leaves
+     * hyperspace rather than where it was when the pilot pressed the button.
+     */
+    public double orbitThetaAt(long worldTick) {
+        double theta = 0d;
+        if (isMoon() && getParentProperties() != null) {
+            theta = AstronomicalBodyHelper.getMoonOrbitalThetaAt(orbitalDist,
+                    (float) getParentProperties().getOrbitalMass(), worldTick);
+        } else {
+            StellarBody host = getStar();
+            if (host != null) {
+                theta = AstronomicalBodyHelper.getOrbitalThetaAt(orbitalDist, host.getMass(), worldTick);
+            }
+        }
+        return (theta + baseOrbitTheta) * (isRetrograde ? -1 : 1);
+    }
+
+    public int getStarId() {
+        return starId;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Dimension ID: %d.  Dimension Name: %s.  Parent Star %d ", getId(), getName(), getStarId());
+    }
+
+    @Override
+    public double getOrbitTheta() {
+        return orbitTheta;
+    }
+
+    @Override
+    public int getOrbitalDist() {
+        return orbitalDist;
+    }
+
+    public int getSeaLevel() {
+        return seaLevel;
+    }
+
+    public void setSeaLevel(int sealevel) {
+        this.seaLevel = MathHelper.clamp(sealevel, 0, 255);
+    }
+
+    /**
+     * The atmosphere&harr;orbit line of this dimension (blocks of world Y): per-dim override when
+     * set, else the global {@code StellurgyConfiguration.orbit}. Single owner of the ceiling for the
+     * tier-2 entry check and the descent/gravity-well reads.
+     */
+    public int getOrbitHeight() {
+        if (orbitHeight != ORBIT_HEIGHT_UNSET) {
+            return orbitHeight;
+        }
+        StellurgyConfiguration cfg = StellurgyConfiguration.getCurrentConfig();
+        return cfg != null ? cfg.orbit : 1000;
+    }
+
+    /** Set the per-dim orbit height, or {@link #ORBIT_HEIGHT_UNSET} to fall back to the config. */
+    public void setOrbitHeight(int height) {
+        this.orbitHeight = height < 0 ? ORBIT_HEIGHT_UNSET : Math.max(255, height);
+    }
+
+    /** Whether an explicit per-dim orbit height is set (drives conditional XML/NBT export). */
+    public boolean hasCustomOrbitHeight() {
+        return orbitHeight != ORBIT_HEIGHT_UNSET;
+    }
+/*
+    public int getTargetSeaLevel() {
+        //check if at least one dimension changing satellite is in orbit
+        boolean weathercontrollerfound = false;
+
+        for (SatelliteBase satellite : tickingSatellites.values()) {
+            if (satellite instanceof SatelliteWeatherController) {
+                weathercontrollerfound = true;
+                break;
+            }
+        }
+        if (!weathercontrollerfound) {
+            target_sea_level = seaLevel;
+        }
+
+        return this.target_sea_level;
+    }
+
+    public void setTargetSeaLevel(int sealevel) {
+        this.target_sea_level = MathHelper.clamp(sealevel, 0, 255);
+    }
+
+ */
+
+    public int getGenType() {
+        return generatorType;
+    }
+
+    public void setGenType(int genType) {
+        this.generatorType = genType;
+    }
+
+    public TerrainSource getTerrainSource() {
+        return terrainSource;
+    }
+
+    public void setTerrainSource(TerrainSource terrainSource) {
+        this.terrainSource = terrainSource == null ? TerrainSource.NATIVE : terrainSource;
+    }
+
+    public String getTerrainWorldType() {
+        return terrainWorldType;
+    }
+
+    public void setTerrainWorldType(String terrainWorldType) {
+        this.terrainWorldType = terrainWorldType == null ? "" : terrainWorldType;
+    }
+
+    public String getTerrainTemplate() {
+        return terrainTemplate;
+    }
+
+    public void setTerrainTemplate(String terrainTemplate) {
+        this.terrainTemplate = terrainTemplate == null ? "" : terrainTemplate;
+    }
+
+    public String getTerrainGeneratorOptions() {
+        return terrainGeneratorOptions;
+    }
+
+    public void setTerrainGeneratorOptions(String terrainGeneratorOptions) {
+        this.terrainGeneratorOptions = terrainGeneratorOptions == null ? "" : terrainGeneratorOptions;
+    }
+
+    public void setGenerateCraters(boolean canGenerateCraters) {
+        this.canGenerateCraters = canGenerateCraters;
+    }
+
+    public boolean canGenerateCraters() {
+        return this.canGenerateCraters;
+    }
+
+    public float getCraterMultiplier() {
+        return craterFrequencyMultiplier;
+    }
+
+    public void setCraterMultiplier(float craterFrequencyMultiplier) {
+        this.craterFrequencyMultiplier = clampFeatureFrequencyMultiplier(craterFrequencyMultiplier);
+    }
+
+    public void setGenerateGeodes(boolean canGenerateGeodes) {
+        this.canGenerateGeodes = canGenerateGeodes;
+    }
+
+    public boolean canGenerateGeodes() {
+        return this.canGenerateGeodes;
+    }
+
+    public float getGeodeMultiplier() {
+        return geodeFrequencyMultiplier;
+    }
+
+    public void setGeodeMultiplier(float geodeFrequencyMultiplier) {
+        this.geodeFrequencyMultiplier = clampFeatureFrequencyMultiplier(geodeFrequencyMultiplier);
+    }
+
+    public void setGenerateVolcanos(boolean canGenerateVolcanos) {
+        this.canGenerateVolcanoes = canGenerateVolcanos;
+    }
+
+    public boolean canGenerateVolcanos() {
+        return this.canGenerateVolcanoes;
+    }
+
+    public float getVolcanoMultiplier() {
+        return volcanoFrequencyMultiplier;
+    }
+
+    public void setVolcanoMultiplier(float volcanoFrequencyMultiplier) {
+        this.volcanoFrequencyMultiplier = clampFeatureFrequencyMultiplier(volcanoFrequencyMultiplier);
+    }
+
+    public void setGenerateStructures(boolean canGenerateStructures) {
+        this.canGenerateStructures = canGenerateStructures;
+    }
+
+    public boolean canGenerateStructures() {
+        return canGenerateStructures;
+    }
+
+    public void setGenerateCaves(boolean canGenerateCaves) {
+        this.canGenerateCaves = canGenerateCaves;
+    }
+
+    public boolean canGenerateCaves() {
+        return this.canGenerateCaves;
+    }
+
+    /**
+     * How big this world is drawn in the planet view.
+     *
+     * <p><b>It follows the body's RADIUS, which is what a drawn size is.</b> It used to be
+     * {@code max(g², 0.5)} — a size synthesised from gravity, which is not a size — and that was a
+     * necessary approximation only while a planet had no radius of its own. It has had one since mass
+     * and radius became primary properties, and gravity is now DERIVED from them, so sizing by gravity
+     * squared means sizing by mass²/radius⁴: a dense small world drew larger than a big light one.</p>
+     *
+     * <p>The floor and the per-kind factors are unchanged, so an Earth-sized world (radius 1) draws
+     * exactly as it did — what moves is everything that is not Earth-sized.</p>
+     */
+    public float getRenderSizePlanetView() {
+        return (isMoon() ? 8f : 10f) * renderRadiusFactor() * 100;
+    }
+
+    /** The same, in the solar view, where a moon is drawn much smaller against its system. */
+    public float getRenderSizeSolarView() {
+        return (isMoon() ? 0.2f : 1f) * renderRadiusFactor() * 100;
+    }
+
+    /**
+     * The body's radius in Earth radii, floored — the one quantity both views scale by. A world with
+     * no stated bulk falls back to one Earth radius, which is what an unstated bulk describes
+     * everywhere else in this layer.
+     */
+    private float renderRadiusFactor() {
+        double r = getRadius();
+        return (float) Math.max(r > 0d ? r : 1d, 0.5d);
+    }
+
+    // Relative to parent
+    @Override
+    public SpacePosition getSpacePosition() {
+        float distanceMultiplier = isMoon() ? 75f : 100f;
+
+        SpacePosition spacePosition = new SpacePosition();
+        spacePosition.star = getStar();
+        spacePosition.world = this;
+        spacePosition.isInInterplanetarySpace = this.isMoon();
+        spacePosition.pitch = 0;
+        spacePosition.roll = 0;
+        spacePosition.yaw = 0;
+
+        spacePosition = spacePosition.getFromSpherical(distanceMultiplier * orbitalDist + (isMoon() ? 100 : 0), orbitTheta);
+
+        return spacePosition;
+    }
+
+    @Override
+    public float[] getRingColor() {
+        return ringColor;
+    }
+
+    @Override
+    public float[] getSkyColor() {
+        return skyColor;
+    }
+
+    public boolean usesCustomWorldInfo() {
+        return customWorldInfo;
+    }
+
+    public void updateCustomWorldInfo() {
+        boolean isDefault = getRainStartLength() == getThunderStartLength() && getRainStartLength() == WEATHER_START_LENGTH
+                && getRainProlongationLength() == getThunderProlongationLength() && getRainProlongationLength() == WEATHER_PROLONGATION_LENGTH
+                && getRainMarker() == 0 && getThunderMarker() == 0;
+        customWorldInfo = !isDefault;
+    }
+
+    //<editor-fold desc="Custom weather">
+    public int getRainStartLength()
+    {
+        return rainStartLength;
+    }
+
+    public void setRainStartLength(int rainStartLength)
+    {
+        this.rainStartLength = rainStartLength;
+        updateCustomWorldInfo();
+    }
+
+    public int getThunderStartLength()
+    {
+        return thunderStartLength;
+    }
+
+    public void setThunderStartLength(int thunderStartLength)
+    {
+        this.thunderStartLength = thunderStartLength;
+        updateCustomWorldInfo();
+    }
+
+    public int getRainProlongationLength()
+    {
+        return rainProlongationLength;
+    }
+
+    public void setRainProlongationLength(int rainProlongationLength)
+    {
+        this.rainProlongationLength = rainProlongationLength;
+        updateCustomWorldInfo();
+    }
+
+    public int getThunderProlongationLength()
+    {
+        return thunderProlongationLength;
+    }
+
+    public void setThunderProlongationLength(int thunderProlongationLength)
+    {
+        this.thunderProlongationLength = thunderProlongationLength;
+        updateCustomWorldInfo();
+    }
+
+    public int getRainMarker() {
+        return rainMarker;
+    }
+
+    public int getThunderMarker() {
+        return thunderMarker;
+    }
+
+    public void setRainMarker(int marker) {
+        this.rainMarker = marker;
+        updateCustomWorldInfo();
+    }
+
+    public void setThunderMarker(int marker) {
+        this.thunderMarker = marker;
+        updateCustomWorldInfo();
+    }
+
+    public boolean isAcidicRain() {
+        return acidicRain;
+    }
+
+    public void setAcidicRain(boolean acidicRain) {
+        this.acidicRain = acidicRain;
+    }
+    //</editor-fold>
+
+    /**
+     * Temperatures are stored in Kelvin
+     * This facilitates precise temperature calculations and specifications
+     * 286 is Earthlike (13 C), Hot is 52 C, Cold is -23 C. Snowball is absolute zero
+     */
+    public enum Temps {
+        TOOHOT(450),
+        HOT(325),
+        NORMAL(275),
+        COLD(250),
+        FRIGID(175),
+        SNOWBALL(0);
+
+        private final int temp;
+
+        Temps(int i) {
+            temp = i;
+        }
+
+        /**
+         * @return a temperature that refers to the supplied value
+         */
+
+        public static Temps getTempFromValue(int value) {
+            for (Temps type : Temps.values()) {
+                if (value >= type.temp)
+                    return type;
+            }
+            return SNOWBALL;
+        }
+
+        @Deprecated
+        public int getTemp() {
+            return temp;
+        }
+
+        public boolean hotterThan(Temps type) {
+            return this.compareTo(type) < 0;
+        }
+
+        public boolean hotterOrEquals(Temps type) {
+            return this.compareTo(type) <= 0;
+        }
+
+        public boolean colderThan(Temps type) {
+            return this.compareTo(type) > 0;
+        }
+
+        /**
+         * @param lowerBound lower Bound (inclusive)
+         * @param upperBound upper Bound (inclusive)
+         * @return true if this resides between the to bounds
+         */
+        public boolean isInRange(Temps lowerBound, Temps upperBound) {
+            return this.compareTo(lowerBound) <= 0 && this.compareTo(upperBound) >= 0;
+        }
+    }
+
+    /**
+     * Contains standardized pressure ranges for planets
+     * where 100 is earthlike, largers values are higher pressure
+     */
+    public enum AtmosphereTypes {
+        SUPERHIGHPRESSURE(800),
+        HIGHPRESSURE(200),
+        NORMAL(75),
+        LOW(25),
+        NONE(0);
+
+        private final int value;
+
+        AtmosphereTypes(int value) {
+            this.value = value;
+        }
+
+        public static AtmosphereTypes getAtmosphereTypeFromValue(int value) {
+            for (AtmosphereTypes type : AtmosphereTypes.values()) {
+                if (value > type.value)
+                    return type;
+            }
+            return NONE;
+        }
+
+        public int getAtmosphereValue() {
+            return value;
+        }
+
+        public boolean denserThan(AtmosphereTypes type) {
+            return this.compareTo(type) < 0;
+        }
+
+        public boolean lessDenseThan(AtmosphereTypes type) {
+            return this.compareTo(type) > 0;
+        }
+    }
+
+    public enum PlanetIcons {
+        EARTHLIKE(new ResourceLocation("stellurgy:textures/planets/Earthlike.png")),
+        LAVA(new ResourceLocation("stellurgy:textures/planets/Lava.png")),
+        MARSLIKE(new ResourceLocation("stellurgy:textures/planets/marslike.png")),
+        MOON(new ResourceLocation("stellurgy:textures/planets/moon.png")),
+        WATERWORLD(new ResourceLocation("stellurgy:textures/planets/WaterWorld.png")),
+        ICEWORLD(new ResourceLocation("stellurgy:textures/planets/IceWorld.png")),
+        DESERT(new ResourceLocation("stellurgy:textures/planets/desertworld.png")),
+        CARBON(new ResourceLocation("stellurgy:textures/planets/carbonworld.png")),
+        VENUSIAN(new ResourceLocation("stellurgy:textures/planets/venusian.png")),
+        GASGIANTBLUE(new ResourceLocation("stellurgy:textures/planets/GasGiantBlue.png")),
+        GASGIANTRED(new ResourceLocation("stellurgy:textures/planets/GasGiantred.png")),
+        GASGIANTBROWN(new ResourceLocation("stellurgy:textures/planets/gasgiantbrown.png")),
+        ASTEROID(new ResourceLocation("stellurgy:textures/planets/asteroid.png")),
+        UNKNOWN(new ResourceLocation("stellurgy:textures/planets/Unknown.png"));
+
+
+        private ResourceLocation resource;
+        private ResourceLocation resourceLEO;
+
+        PlanetIcons(ResourceLocation resource) {
+            this.resource = resource;
+
+            this.resourceLEO = new ResourceLocation(resource.toString().substring(0, resource.toString().length() - 4) + "LEO.jpg");
+        }
+
+        PlanetIcons(ResourceLocation resource, ResourceLocation leo) {
+            this.resource = resource;
+
+            this.resourceLEO = leo;
+        }
+
+        public ResourceLocation getResource() {
+            return resource;
+        }
+
+        public ResourceLocation getResourceLEO() {
+            return resourceLEO;
+        }
+    }
+
+    /**
+     * Used to get/set properties by command.
+     */
+    public static class PropLookup {
+        private final DimensionProperties props;
+
+        public PropLookup(DimensionProperties props) {
+            this.props = props;
+        }
+
+        @Nullable
+        public MethodHandle getPropertyGetter(String name) throws IllegalAccessException {
+            Optional<Field> field = Arrays.stream(props.getClass().getDeclaredFields())
+                    .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                    .filter(f -> !Modifier.isFinal(f.getModifiers()))
+                    .filter(f -> f.getName().equalsIgnoreCase(name))
+                    .findFirst();
+            if (!field.isPresent()) {
+                return null;
+            }
+            return LOOKUP.unreflectGetter(field.get());
+        }
+
+        @Nullable
+        public MethodHandle getPropertySetter(String name) throws IllegalAccessException {
+            Optional<Field> field = Arrays.stream(props.getClass().getDeclaredFields())
+                    .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                    .filter(f -> !Modifier.isFinal(f.getModifiers()))
+                    .filter(f -> f.getName().equalsIgnoreCase(name))
+                    .findFirst();
+            if (!field.isPresent()) {
+                return null;
+            }
+            return LOOKUP.unreflectSetter(field.get());
+        }
+
+        public static List<String> getPropertyNames(boolean fromSet) {
+            return Arrays.stream(DimensionProperties.class.getDeclaredFields())
+                    .filter(f -> !Modifier.isStatic(f.getModifiers()))
+                    .filter(f -> !Modifier.isFinal(f.getModifiers()))
+                    .filter(f -> {
+                        // Only primitives or Strings (and array variants) can be set by command
+                        if (fromSet) {
+                            Class<?> type = f.getType();
+                            if (type.isArray()) {
+                                type = type.getComponentType();
+                            }
+                            return type.isPrimitive() || type.equals(String.class);
+                        }
+                        return true;
+                    })
+                    .map(Field::getName)
+                    .collect(Collectors.toList());
+        }
+    }
+}

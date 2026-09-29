@@ -1,0 +1,26 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+            "type": "forge:ore_dict",
+            "ore": "ingotTitaniumIridium",
+            "count": 2
+        },
+        {
+            "type": "forge:ore_dict",
+            "ore": "plateTitaniumAluminide"
+        },
+	    {
+            "item": "stellurgy:advrocketmotor",
+            "data": 7
+        }
+    ],
+    "time": 2700,
+    "energy": 700,
+    "itemresults":
+    {
+        "item": "stellurgy:advrocketmotor",
+        "count": 1
+    }
+}

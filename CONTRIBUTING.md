@@ -9,8 +9,8 @@
 Gradle itself runs on **JDK 25**, while the mod is compiled against **Java 8**. Point `JAVA_HOME` at a JDK 25
 installation before invoking Gradle, or the build will not configure.
 
-LibVulpes is consumed as a local jar from `libs/`. It is the fork at
-[StannisMod/libVulpes-fork2](https://github.com/StannisMod/libVulpes-fork2), not the upstream release.
+LibVulpes and the force-field system are part of the main tree (`dev.stannismod.stellurgy.libvulpes`,
+`dev.stannismod.stellurgy.affs`); change them like any other source in this repository.
 
 ## Running a dev environment
 
@@ -56,7 +56,7 @@ Java 8, so no `var`, records, or switch expressions. Registry names, NBT keys an
 
 ## Licence
 
-Advanced Rocketry is distributed under the **GNU General Public License, version 3, with a linking exception**
+Stellurgy is distributed under the **GNU General Public License, version 3, with a linking exception**
 (see [`LICENSE`](./LICENSE) and [`COPYING`](./COPYING)). By submitting a contribution — a pull request, a patch,
 or any other change — you agree to license it under those same terms, so the project can continue to be
 distributed as a whole under GPL-3.0 with the linking exception.

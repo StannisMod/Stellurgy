@@ -1,0 +1,155 @@
+package dev.stannismod.stellurgy.space;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * The authoritative server-side record of every tier-2 ship known to the space subsystem:
+ * {@code shipId -> (galactic coordinate, cell, lifecycle state)}.
+ *
+ * <p><b>Where a ship is, not which world it is in.</b> The ledger deliberately holds no slot
+ * dimension id. A slot id is minted per boot and re-used as cells come and go, so a copy of one
+ * stored here would be a cache of {@link SpaceManager}'s cell&rarr;slot map — and a cache that
+ * nothing refreshes, since the coordinate can be updated without the binding changing and the
+ * binding can change without the coordinate moving. Ask {@link SpaceManager#slotDimOf} for the
+ * dimension; it is derived from the coordinate this ledger owns.</p>
+ *
+ * <p><b>Key discipline:</b> the key is the ship's DURABLE id — the UUID minted at tier-2 assembly
+ * and persisted in the Advanced Flight Computer's tile NBT (crossings carry tile NBT verbatim, so
+ * it survives every jump). The physics mod's own ship UUID is re-minted on every re-assembly and
+ * must never key an entry here.</p>
+ *
+ * <p><b>Refcount ownership:</b> a {@link State#SETTLED} entry owns ONE occupant refcount on its
+ * cell (the {@link SpaceManager#materialize} the settling performed). Whoever moves the ship out
+ * of the cell (a transit departure, a descent) releases that refcount and updates the entry —
+ * the ledger records ownership, it does not call the manager itself.</p>
+ *
+ * <p>In-memory only (rebuilt as ships re-enter); NBT persistence is a follow-up concern. This is
+ * the fix for transit-arrival amnesia: an arrived ship's coordinate now lives here instead of
+ * being dropped with the finished transit. Server main thread only.</p>
+ */
+public final class ShipLedger {
+
+    /** A ledgered ship's lifecycle state. */
+    public enum State {
+        /** Occupying a cell (owns one occupant refcount on it). */
+        SETTLED,
+        /** Parked in the shared hyperspace world while its coordinate advances logically. */
+        IN_TRANSIT
+    }
+
+    /** One ship's ledger record. Immutable value — updates replace the entry. */
+    public static final class Entry {
+        public final GalacticCoord coord;
+        public final State state;
+        /**
+         * Whether the SHIP knows where it is. The server always does — this is the ship's own fix,
+         * which a misjump can lose. A ship that has lost it cannot aim a jump until it re-localizes,
+         * and re-localization always succeeds eventually, so this can never strand a ship forever.
+         */
+        public final boolean positionKnown;
+
+        Entry(GalacticCoord coord, State state) {
+            this(coord, state, true);
+        }
+
+        Entry(GalacticCoord coord, State state, boolean positionKnown) {
+            this.coord = coord;
+            this.state = state;
+            this.positionKnown = positionKnown;
+        }
+
+        public String cellKey() {
+            return coord.cellKey();
+        }
+    }
+
+    private final Map<UUID, Entry> ships = new HashMap<>();
+
+    /**
+     * Record {@code shipId} as settled at {@code coord}. The caller has just materialized that cell
+     * (or handed over an existing refcount); the entry now owns it. The slot the cell landed in is
+     * not recorded — {@link SpaceManager#slotDimOf} answers that from the binding it already keeps,
+     * and is right even after the pool has re-shuffled its ids.
+     */
+    public void settle(UUID shipId, GalacticCoord coord) {
+        ships.put(shipId, new Entry(coord, State.SETTLED));
+    }
+
+    /**
+     * Mark {@code shipId} in transit toward {@code target} (its origin refcount has been released
+     * by the departure). The recorded coordinate is the TARGET — the logical integration detail
+     * stays with the transit machinery; the ledger answers "where is/will be this ship".
+     */
+    public void beginTransit(UUID shipId, GalacticCoord target) {
+        ships.put(shipId, new Entry(target, State.IN_TRANSIT));
+    }
+
+    /**
+     * Refresh a SETTLED ship's coordinate from its live pose (the flight computer's per-tick
+     * self-report). A no-op for a ship that is not settled — a parked ship's coordinate is owned
+     * by the transit integrator, not by a stale pose.
+     */
+    public void updatePosition(UUID shipId, GalacticCoord coord) {
+        Entry e = ships.get(shipId);
+        if (e == null || e.state != State.SETTLED) {
+            return;
+        }
+        ships.put(shipId, new Entry(coord, State.SETTLED));
+    }
+
+    /** The ledger record for {@code shipId}, or {@code null} if unknown. */
+    /**
+     * Record whether {@code shipId} knows where it is. Set false by a misjump, true again by a
+     * re-localization; unknown ships are ignored rather than invented.
+     */
+    public void setPositionKnown(UUID shipId, boolean known) {
+        Entry entry = ships.get(shipId);
+        if (entry != null) {
+            ships.put(shipId, new Entry(entry.coord, entry.state, known));
+        }
+    }
+
+    /** Whether {@code shipId} knows where it is; an unknown ship is not lost, it is simply unknown. */
+    public boolean isPositionKnown(UUID shipId) {
+        Entry entry = ships.get(shipId);
+        return entry == null || entry.positionKnown;
+    }
+
+    public Entry get(UUID shipId) {
+        return ships.get(shipId);
+    }
+
+    /** Remove {@code shipId} (left the subsystem entirely, e.g. descended onto a planet). */
+    public void remove(UUID shipId) {
+        ships.remove(shipId);
+    }
+
+    /** Number of ledgered ships. */
+    public int size() {
+        return ships.size();
+    }
+
+    /**
+     * Whether any settled ship occupies the cell {@code cellKey}. This is what makes a cell
+     * "claimed": the protection follows the thing the player actually owns, so it needs no separate
+     * flag of its own that could drift out of step with the ledger or fail to survive a restart.
+     */
+    public boolean holdsShipIn(String cellKey) {
+        if (cellKey == null) {
+            return false;
+        }
+        for (Entry e : ships.values()) {
+            if (e.state == State.SETTLED && cellKey.equals(e.cellKey())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A read-only copy of the ledger (probe/diagnostic surface). */
+    public Map<UUID, Entry> snapshot() {
+        return new HashMap<>(ships);
+    }
+}

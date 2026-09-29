@@ -1,0 +1,23 @@
+{
+  "variants": {
+    "varient=0":  { "model": "stellurgy:databusbig" },
+    "varient=1":  { "model": "stellurgy:databusbig" },
+    "varient=2":  { "model": "stellurgy:databusbig" },
+    "varient=3":  { "model": "stellurgy:databusbig" },
+    "varient=4":  { "model": "stellurgy:databusbig" },
+    "varient=5":  { "model": "stellurgy:databusbig" },
+    "varient=6":  { "model": "stellurgy:databusbig" },
+    "varient=7":  { "model": "stellurgy:databusbig" },
+
+    "varient=8":  { "model": "stellurgy:databusbig" },
+    "varient=9":  { "model": "stellurgy:databusbig" },
+    "varient=10": { "model": "stellurgy:databusbig" },
+    "varient=11": { "model": "stellurgy:databusbig" },
+    "varient=12": { "model": "stellurgy:databusbig" },
+    "varient=13": { "model": "stellurgy:databusbig" },
+    "varient=14": { "model": "stellurgy:databusbig" },
+    "varient=15": { "model": "stellurgy:databusbig" },
+
+    "inventory":  { "model": "stellurgy:databusbig" }
+  }
+}

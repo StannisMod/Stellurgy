@@ -1,0 +1,22 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+            "type": "forge:ore_dict",
+            "ore": "ingotTitaniumIridium",
+            "count": 2
+        },
+	    {
+            "item": "stellurgy:nuclearrocketmotor",
+            "data": 3
+        }
+    ],
+    "time": 2000,
+    "energy": 300,
+    "itemresults":
+    {
+        "item": "stellurgy:nuclearrocketmotor",
+        "count": 1
+    }
+}
