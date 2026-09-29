@@ -92,7 +92,7 @@ public final class CellSeam {
         if (cell == null) {
             return null;
         }
-        return cell.cellCentre().withLocal(localOf(wx, false), localOf(wy, true), localOf(wz, false));
+        return cell.cellCentre().withLocal(localOf(wx), localOf(wy), localOf(wz));
     }
 
     /**
