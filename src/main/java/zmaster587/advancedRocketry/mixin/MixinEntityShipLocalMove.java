@@ -44,11 +44,11 @@ public abstract class MixinEntityShipLocalMove {
         // and cancel: collision for this body is the ship-frame sweep's job, and the world position
         // is derived state.
         if (zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.isResolving(self)) {
-            // Every world-frame move request against a resolved body is counted (side-local statics,
-            // readable by probes/e2e) and, in test mode, traced - the discriminator for "who still
-            // pushes a resolved body through the world pipeline".
+            // Every world-frame move request against a resolved body is announced, naming the body,
+            // and in test mode traced - the discriminator for "who still pushes a resolved body
+            // through the world pipeline".
             zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.noteWorldMove(
-                    String.valueOf(type), x, y, z);
+                    self, String.valueOf(type), x, y, z);
             if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()
                     && (x * x + y * y + z * z) > 1.0E-6) {
                 zmaster587.advancedRocketry.AdvancedRocketry.logger.info("[FF-TRACE/MOVE]"

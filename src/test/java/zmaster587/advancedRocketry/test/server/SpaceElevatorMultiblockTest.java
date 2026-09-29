@@ -1,7 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -25,7 +30,7 @@ import static org.junit.Assert.assertTrue;
 public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 6500;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 6500;
 
     @Test
@@ -34,19 +39,19 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock space-elevator 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock space-elevator failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileSpaceElevator tile at controller pos: " + info,
-                info.contains("TileSpaceElevator"));
+        assertEquals("expected TileSpaceElevator tile at controller pos: " + info,
+                "TileSpaceElevator", MachineInfo.of(info).tileSimpleName());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("space-elevator multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -55,7 +60,7 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         warmup(cx, cz);
         String fixture = join(client().execute(
                 "artest fixture multiblock space-elevator 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Break BEFORE first try-complete — once attemptCompleteStructure
         // succeeds, libVulpes converts the footprint blocks to their hidden-
@@ -65,12 +70,12 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         String breakAdj = join(client().execute(
                 "artest place 0 " + (cx + 1) + " " + cy + " " + (cz + 5) + " minecraft:stone"));
         assertTrue("could not replace adv-structure: " + breakAdj,
-                breakAdj.contains("\"ok\":true"));
+                Reply.of(breakAdj).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing adv-structure east of motor: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -79,18 +84,18 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         warmup(cx, cz);
         String fixture = join(client().execute(
                 "artest fixture multiblock space-elevator 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Break BEFORE first try-complete (see sibling test).
         String breakSlab = join(client().execute(
                 "artest place 0 " + cx + " " + cy + " " + (cz + 1) + " minecraft:stone"));
         assertTrue("could not replace slab: " + breakSlab,
-                breakSlab.contains("\"ok\":true"));
+                Reply.of(breakSlab).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing slab in outer ring: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {
@@ -110,6 +115,6 @@ public class SpaceElevatorMultiblockTest extends AbstractSharedServerTest {
         int cz2 = (blockZ + 16) >> 4;
         String resp = join(client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + resp, Reply.of(resp).ok());
     }
 }

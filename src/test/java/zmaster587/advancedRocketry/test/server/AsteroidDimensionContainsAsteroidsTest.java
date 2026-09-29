@@ -1,10 +1,9 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -30,9 +29,8 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
 
     private static final int ASTEROID_DIM = 60123;
 
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern COUNT = Pattern.compile("\"count\":(\\d+)");
+    private static final String AR_DIMS_ARRAY = "arDimensions";
+    private static final String COUNT = "count";
 
     @Test
     public void asteroidDimGeneratesFillBlocks() throws Exception {
@@ -43,9 +41,9 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
         String create = exec("artest worldgen create-asteroid-dim "
                 + ASTEROID_DIM + " " + template);
         assertTrue("create-asteroid-dim must succeed: " + create,
-                create.contains("\"ok\":true"));
+                Reply.of(create).ok());
         assertTrue("created dim must report isAsteroid:true: " + create,
-                create.contains("\"isAsteroid\":true"));
+                Reply.of(create).bool("isAsteroid"));
 
         // Force the dim loaded so its WorldProviderAsteroid + ChunkProviderAsteroids
         // come online.
@@ -56,9 +54,9 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
         // density figure.
         String stats = exec("artest worldgen ore-stats "
                 + ASTEROID_DIM + " 0 0 2 minecraft:stone");
-        Matcher m = COUNT.matcher(stats);
-        assertTrue("ore-stats must report a count: " + stats, m.find());
-        int count = Integer.parseInt(m.group(1));
+        Reply oreStats = Reply.of("artest worldgen ore-stats", stats);
+        assertTrue("ore-stats must report a count: " + stats, oreStats.has(COUNT));
+        int count = oreStats.integer(COUNT);
         assertTrue("asteroid dimension must generate > 0 fill (stone) blocks "
                         + "across the scanned region — the 'asteroids exist' "
                         + "contract; count=" + count + " stats=" + stats,
@@ -68,13 +66,10 @@ public class AsteroidDimensionContainsAsteroidsTest extends AbstractSharedServer
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = exec("artest dim list");
         Assume.assumeFalse("No AR dimensions registered — skipping",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0 && dim != ASTEROID_DIM) return dim;
         }
         Assume.assumeTrue("Only overworld registered — skipping", false);

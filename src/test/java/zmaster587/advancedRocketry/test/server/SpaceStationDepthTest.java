@@ -1,10 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -20,25 +20,23 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID_PATTERN = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AFTER_PATTERN = Pattern.compile("\"after\":(-?\\d+)");
-    private static final Pattern MAX_PATTERN = Pattern.compile("\"max\":(-?\\d+)");
-    private static final Pattern RETURNED_PATTERN = Pattern.compile("\"returned\":(-?\\d+)");
+    private static final String ID_PATTERN = "id";
+    private static final String AFTER_PATTERN = "after";
+    private static final String MAX_PATTERN = "max";
+    private static final String RETURNED_PATTERN = "returned";
 
     private int createStation(int orbitingDim) throws Exception {
         String resp = String.join("\n", client().execute("artest station create " + orbitingDim));
-        assertTrue("station create failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID_PATTERN.matcher(resp);
-        assertTrue("could not parse station id from create response: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("station create failed: " + resp, Reply.of(resp).ok());
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not parse station id from create response: " + resp, mReply.has(ID_PATTERN));
+        return Integer.parseInt(mReply.text(ID_PATTERN));
     }
 
-    private static int parseGroup(Pattern pattern, String resp, String label) {
-        Matcher m = pattern.matcher(resp);
-        if (!m.find()) {
-            throw new AssertionError("could not parse " + label + " from response: " + resp);
-        }
-        return Integer.parseInt(m.group(1));
+    private static int parseGroup(String field, String resp, String label) {
+        Reply reply = Reply.of(resp);
+        assertTrue("could not parse " + label + ": " + resp, reply.has(field));
+        return reply.integer(field);
     }
 
     @Test
@@ -51,12 +49,9 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         assertNotEquals(a, c);
 
         String list = String.join("\n", client().execute("artest station list"));
-        assertTrue("station " + a + " missing from list: " + list,
-                list.contains("\"id\":" + a));
-        assertTrue("station " + b + " missing from list: " + list,
-                list.contains("\"id\":" + b));
-        assertTrue("station " + c + " missing from list: " + list,
-                list.contains("\"id\":" + c));
+        Reply.of(list).element("stations", "id", String.valueOf(a));
+        Reply.of(list).element("stations", "id", String.valueOf(b));
+        Reply.of(list).element("stations", "id", String.valueOf(c));
     }
 
     @Test
@@ -72,9 +67,9 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         int expected = Math.min(500, max);
         assertEquals("fuel set did not produce expected after value", expected, after);
 
-        String info = String.join("\n", client().execute("artest station info " + id));
-        assertTrue("info must reflect the fuel amount we just set: " + info,
-                info.contains("\"fuelAmount\":" + expected));
+        StationInfo info = station(id);
+        assertEquals("info must reflect the fuel amount we just set: " + info.raw(),
+                expected, info.fuelAmount());
     }
 
     @Test
@@ -131,8 +126,12 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
         assertEquals("useFuel(60) on 100 stock must leave 40", 40, after);
         assertEquals("useFuel(60) must return 60 consumed", 60, returned);
 
-        String info = String.join("\n", client().execute("artest station info " + id));
-        assertTrue("info must reflect the partial drain: " + info,
-                info.contains("\"fuelAmount\":40"));
+        StationInfo info = station(id);
+        assertEquals("info must reflect the partial drain: " + info.raw(), 40, info.fuelAmount());
+    }
+
+    /** What the server says about one station. */
+    private StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(cmd -> String.join("\n", client().execute(cmd)), stationId);
     }
 }

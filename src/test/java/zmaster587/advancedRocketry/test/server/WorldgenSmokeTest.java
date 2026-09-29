@@ -1,10 +1,9 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -20,23 +19,32 @@ import static org.junit.Assert.assertTrue;
  */
 public class WorldgenSmokeTest extends AbstractHeadlessServerTest {
 
-    private static final Pattern COUNT = Pattern.compile("\"count\":(-?\\d+)");
-    private static final Pattern CHUNKS = Pattern.compile("\"chunksScanned\":(-?\\d+)");
+    /** The smallest bedrock count a vanilla chunk column may plausibly hold — the test's own bar
+     *  on "worldgen ran at all", far under what a real column carries. */
+    private static final long MIN_BEDROCK = 50L;
+
+    // Generated terrain IS this test's subject, and it is what the harness hands out by default.
+    // Do not give this class requiresFlatTerrain(): a flat world has no decoration pass, so its
+    // iron count is zero and the AR oregen tripwire below would measure the preset, not the
+    // generator.
+
+    private static final String COUNT = "count";
+    private static final String CHUNKS = "chunksScanned";
 
     @Test
     public void earthChunkAndOreCountsLookSane() throws Exception {
         String sample = String.join("\n", client().execute("artest worldgen sample 0 0 0"));
-        assertTrue("worldgen sample failed: " + sample, !sample.contains("\"error\""));
+        assertTrue("worldgen sample failed: " + sample, !Reply.of(sample).has("error"));
         assertTrue("worldgen reports air on top — generator likely crashed: " + sample,
-                !sample.contains("\"topBlock\":\"minecraft:air\""));
+                !"minecraft:air".equals(Reply.of(sample).text("topBlock")));
 
         String bedrock = String.join("\n", client().execute(
                 "artest worldgen ore-stats 0 0 0 1 minecraft:bedrock"));
-        assertTrue("ore-stats bedrock failed: " + bedrock, !bedrock.contains("\"error\""));
+        assertTrue("ore-stats bedrock failed: " + bedrock, !Reply.of(bedrock).has("error"));
         assertEquals("expected 9 chunks scanned", 9L, parseLong(CHUNKS, bedrock));
         long bedrockCount = parseLong(COUNT, bedrock);
         assertTrue("vanilla bedrock count too low: " + bedrockCount + " in " + bedrock,
-                bedrockCount >= 50L);
+                bedrockCount >= MIN_BEDROCK);
 
         String iron = String.join("\n", client().execute(
                 "artest worldgen ore-stats 0 0 0 1 minecraft:iron_ore"));
@@ -45,8 +53,7 @@ public class WorldgenSmokeTest extends AbstractHeadlessServerTest {
                 ironCount > 0L);
     }
 
-    private static long parseLong(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    private static long parseLong(String field, String s) {
+        return (long) Reply.of(s).number(field);
     }
 }

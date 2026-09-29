@@ -1,6 +1,9 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -34,20 +37,20 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
     /** C076 — TileSolarArray ticks off-station in the space dim without NPE. */
     @Test
     public void solarArrayInSpaceDimOffStationTicksWithoutCrashing() throws Exception {
-        int cx = 9100, cy = 100, cz = 9100;
+        int cx = 9100, cy = FixtureSite.OPEN_AIR_Y, cz = 9100;
 
         ok(client().execute("artest dim load " + SPACE_DIM));
 
         String fixture = join(client().execute("artest fixture multiblock solar-array "
                 + SPACE_DIM + " " + cx + " " + cy + " " + cz));
         assertTrue("fixture multiblock solar-array must build in dim " + SPACE_DIM
-                + ": " + fixture, fixture.contains("\"ok\":true"));
+                + ": " + fixture, Reply.of(fixture).ok());
 
         String tryComplete = join(client().execute("artest machine try-complete "
                 + SPACE_DIM + " " + cx + " " + cy + " " + cz));
         assertTrue("solar array must validate (isComplete=true) so update() reaches "
                 + "the insolation branch: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
 
         // Fixed: the off-station tick returns 0 insolation instead of NPEing.
         String tick = join(client().execute("artest tile force-tick "
@@ -55,7 +58,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
         assertTrue("TileSolarArray.update() off-station in the space dim must tick "
                 + "without throwing (0 insolation, not a crash) after the null-guard "
                 + "fix at TileSolarArray.java:138: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
         assertTrue("server must survive the off-station solar-array tick",
                 client().isAlive());
     }
@@ -74,7 +77,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
         String place = join(client().execute("artest place " + SPACE_DIM
                 + " " + x + " " + y + " " + z + " advancedrocketry:solarGenerator"));
         assertTrue("solar generator must place: " + place,
-                place.contains("\"ok\":true") || place.contains("\"placed\":true"));
+                Reply.of(place).ok() || Reply.of(place).bool("placed"));
 
         client().execute("time set day");
         client().execute("weather clear 100000");
@@ -84,7 +87,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
         assertTrue("TileSolarPanel.getPowerPerOperation() off-station in the space dim "
                 + "must tick without throwing (0 insolation) after the null-guard fix "
                 + "at TileSolarPanel.java:60: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
         assertTrue("server must survive the off-station solar-panel tick",
                 client().isAlive());
     }

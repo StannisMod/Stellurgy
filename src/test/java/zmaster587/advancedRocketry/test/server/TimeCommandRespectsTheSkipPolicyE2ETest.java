@@ -1,12 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.CellInfo;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.ArrangementFailure.requireArranged;
 
 /**
  * {@code /time set} obeys the time-skip policy per world: it moves the clocks it is allowed to move,
@@ -38,23 +38,20 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
 
     /** A planet dimension the shipped universe actually has, or {@link Integer#MIN_VALUE}. */
     private int findAPlanet() throws Exception {
-        String home = exec("artest space cell-info 0 0 0 0");
-        Matcher cell = Pattern.compile("\"dimCell\":\"([^\"]+)\"").matcher(home);
-        if (!cell.find()) {
+        CellInfo home = CellInfo.atSector(this::exec, 0, 0, 0, 0);
+        if (home.dimCell == null) {
             return Integer.MIN_VALUE;
         }
-        String[] sectors = cell.group(1).split("_");
-        if (sectors.length != 3) {
-            return Integer.MIN_VALUE;
-        }
-        String bodies = exec("artest space cell-info " + sectors[0] + " " + sectors[1] + " "
-                + sectors[2] + " 0");
-        // Any body with a real dimension behind it that is NOT the overworld.
-        Matcher body = Pattern.compile("\\{\"dim\":(\\d+),\"kind\":\"(?:PLANET|MOON)\"").matcher(bodies);
-        while (body.find()) {
-            int dim = Integer.parseInt(body.group(1));
-            if (dim != 0) {
-                return dim;
+        // Asked by the registry's OWN key rather than by splitting it into three numbers: the key's
+        // shape is the registry's business, and a split that stops matching answers MIN_VALUE, which
+        // this method's callers read as "the shipped universe has no such body".
+        CellInfo cell = CellInfo.atKey(this::exec, home.dimCell, 0);
+        // Any body with a real dimension behind it that is NOT the overworld. Each body is read as
+        // its own object: the regex this replaces matched `dim` and `kind` in one expression and so
+        // held only while the producer kept them adjacent and in that order.
+        for (CellInfo.Body one : cell.systemBodies) {
+            if (("PLANET".equals(one.kind) || "MOON".equals(one.kind)) && one.dim != 0) {
+                return one.dim;
             }
         }
         return Integer.MIN_VALUE;
@@ -63,15 +60,15 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
     @Test
     public void timeSetSkipsTheWorldsWhoseSkipIsLockedAndMovesTheRest() throws Exception {
         int planet = findAPlanet();
-        assertTrue("ARRANGEMENT: this test needs a non-overworld planet dimension in the shipped"
+        requireArranged("this test needs a non-overworld planet dimension in the shipped"
                 + " universe; without one there is nothing for the policy to protect and the test"
                 + " would pass on any build.", planet != Integer.MIN_VALUE);
 
         long overworldBefore = dimTime(0);
         try {
             // ---- LOCKED: the shipped default. The planet must not move; the overworld must. ----
-            assertTrue(exec("artest config set allowTimeSkipOnPlanets false").contains("\"ok\":true"));
-            assertTrue(exec("artest config set allowTimeSkipOnOverworld true").contains("\"ok\":true"));
+            assertTrue(Reply.of(exec("artest config set allowTimeSkipOnPlanets false")).ok());
+            assertTrue(Reply.of(exec("artest config set allowTimeSkipOnOverworld true")).ok());
 
             long planetBefore = dimTime(planet);
             exec("time set " + LOCKED_PROBE_TIME);
@@ -93,7 +90,7 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
                     Math.abs(planetAfterLocked - planetBefore) <= DRIFT_ALLOWANCE);
 
             // ---- ALLOWED: opt the arcade mechanic back in. The same command must now reach it. ----
-            assertTrue(exec("artest config set allowTimeSkipOnPlanets true").contains("\"ok\":true"));
+            assertTrue(Reply.of(exec("artest config set allowTimeSkipOnPlanets true")).ok());
             exec("time set " + ALLOWED_PROBE_TIME);
 
             assertLandedOn("with the flag on, the same command must reach the planet — this is the"
@@ -127,8 +124,8 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
     /** The per-dimension day-cycle clock, straight off the probe that reads each world's own. */
     private long dimTime(int dim) throws Exception {
         String raw = exec("artest dim time " + dim);
-        Matcher m = Pattern.compile("\"worldTime\":(-?\\d+)").matcher(raw);
-        assertTrue("the dim-time probe reports no worldTime for dim " + dim + ": " + raw, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(raw);
+        assertTrue("the dim-time probe reports no worldTime for dim " + dim + ": " + raw, mReply.has("worldTime"));
+        return (long) mReply.number("worldTime");
     }
 }

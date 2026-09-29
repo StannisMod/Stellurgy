@@ -30,6 +30,7 @@ import org.lwjgl.opengl.GL11;
 import zmaster587.advancedRocketry.api.ARConfiguration;
 import zmaster587.advancedRocketry.api.armor.IFillableArmor;
 import zmaster587.advancedRocketry.atmosphere.AtmosphereHandler;
+import zmaster587.advancedRocketry.client.ClientAtmosphere;
 import zmaster587.advancedRocketry.client.FreeFlightHudState;
 import zmaster587.advancedRocketry.client.KeyBindings;
 import zmaster587.advancedRocketry.client.render.ClientDynamicTexture;
@@ -56,34 +57,7 @@ public class RocketEventHandler extends Gui {
     public static GuiBox atmBar = new GuiBox(8, 27, 200, 48);
     private static String displayString = "";
     private static long lastDisplayTime = -1000;
-    /** Last rendered Free Flight HUD text (joined with " | "), for client e2e
-     *  assertions. Empty when not riding a FF rocket. Updated each HUD frame. */
-    public static volatile String lastFreeFlightHud = "";
-    /** Frame-time camera-lock telemetry: worst divergence (deg)
-     *  between the player camera and the craft axes seen on any rendered HUD
-     *  frame of the current FF flight — i.e. what the pilot literally saw,
-     *  sampled atomically on the render thread. Bounded small while flying
-     *  (intra-tick mouse deflection only); a runaway means the lock broke.
-     *  Reset when the flight ends. Read reflectively by client e2e. */
-    public static volatile double maxCameraLockErrorDeg = 0.0;
-    /** Same divergence for the MOST RECENT rendered frame (not the running
-     *  max) — at rest this is what the pilot currently sees, readable in one
-     *  atomic reflective call (a bot reading camera and craft separately can
-     *  straddle a tracker-quantisation bleed tick and see a phantom gap). */
-    public static volatile double lastCameraLockErrorDeg = 0.0;
-    /** Client-rendered FF attitude readback, sampled on the
-     *  render thread from the interpolated attitude quaternion the camera used —
-     *  the pilot's actual view. For perception-contract client e2e:
-     *  {@link #ffClientCamRoll} pins mouse-horizontal &rarr; bank; {@link #ffClientMinForwardZ}
-     *  (most-negative nose Z over the flight) pins a pitch LOOP past vertical with
-     *  no ±85° clamp (a clamped nose can never point backwards &rarr; Z stays ≳ 0).
-     *  Reset when the flight ends. */
-    public static volatile double ffClientCamPitch = 0.0;
-    public static volatile double ffClientCamRoll  = 0.0;
-    public static volatile double ffClientForwardZ = 1.0;
-    public static volatile double ffClientMinForwardZ = 1.0;
-    /** Frame counter that throttles the [FF-TRACE/CAM] deck-walking camera probe (test mode only). */
-    private static int ffCamTraceFrames = 0;
+
     private ResourceLocation background = TextureResources.rocketHud;
     private static long suppressSuffocationWarningUntil = Long.MIN_VALUE;
     private static int lastSuffocationWarningDim = Integer.MIN_VALUE;
@@ -105,8 +79,8 @@ public class RocketEventHandler extends Gui {
                                             FreeFlightHudState state) {
         FontRenderer fr = mc.fontRenderer;
         List<String> ffLines = KeyBindings.freeFlightHudLines(state);
-        // Expose the rendered text for client-side e2e assertions (read reflectively by the bridge).
-        lastFreeFlightHud = String.join(" | ", ffLines);
+        // No store of the joined text: `KeyBindings.freeFlightHudLines` is public and this method is
+        // where the HUD is drawn, so a watcher on it composes the same line from the same snapshot.
         int lineH = fr.FONT_HEIGHT + 1;
         int scaledH2 = event.getResolution().getScaledHeight();
         // Bottom-left, to the right of the instrument panel, stacked up.
@@ -153,8 +127,8 @@ public class RocketEventHandler extends Gui {
         drawRect(boxC - boxR, boxYc - boxR, boxC + boxR, boxYc + boxR, 0xA0202830);
         drawRect(boxC - boxR, boxYc, boxC + boxR, boxYc + 1, 0xFF607078);
         drawRect(boxC, boxYc - boxR, boxC + 1, boxYc + boxR, 0xFF607078);
-        int dx = (int) (clampUnit(KeyBindings.hudYawRate)   * (boxR - 2));
-        int dy = (int) (clampUnit(KeyBindings.hudPitchRate) * (boxR - 2));
+        int dx = (int) (clampUnit(KeyBindings.hudYawRate())   * (boxR - 2));
+        int dy = (int) (clampUnit(KeyBindings.hudPitchRate()) * (boxR - 2));
         drawRect(boxC + dx - 1, boxYc + dy - 1, boxC + dx + 2, boxYc + dy + 2, 0xFF40D0FF);
 
         // Elite-style flight cursor at screen centre: a square deflection zone with a dot at the
@@ -194,14 +168,6 @@ public class RocketEventHandler extends Gui {
      */
     @SubscribeEvent
     public void onFreeFlightCameraSetup(net.minecraftforge.client.event.EntityViewRenderEvent.CameraSetup event) {
-        // Render-stage liveness + subject presence, for tests that measure what the client DRAWS.
-        // A zero on a draw-stage counter has several causes (hook not woven, render stage not
-        // running, nothing to draw), and they are only separable with a control: this samples the
-        // render stage itself and the client world's entity population from the SAME frame.
-        zmaster587.advancedRocketry.client.ShipFrameCamera.cameraHookCalls++;
-        zmaster587.advancedRocketry.client.ShipFrameCamera.clientLoadedEntities =
-                Minecraft.getMinecraft().world == null
-                        ? -1 : Minecraft.getMinecraft().world.loadedEntityList.size();
         net.minecraft.entity.Entity view = Minecraft.getMinecraft().getRenderViewEntity();
         if (view == null) return;
         net.minecraft.entity.Entity ridden = view.getRidingEntity();
@@ -212,10 +178,6 @@ public class RocketEventHandler extends Gui {
         // is the only one that can answer "is the PICTURE jerking" as opposed to "is the ship". A
         // frame that arrives late — chunk meshing, a collection pause — shows up here as a gap and
         // nowhere else.
-        {
-            net.minecraft.util.math.Vec3d recEye = view.getPositionEyes(p);
-            zmaster587.advancedRocketry.util.MotionTrace.clientFrame(recEye.x, recEye.y, recEye.z, p);
-        }
 
         if (ridden instanceof zmaster587.advancedRocketry.entity.EntityRocket) {
             zmaster587.advancedRocketry.entity.EntityRocket rocket =
@@ -235,12 +197,6 @@ public class RocketEventHandler extends Gui {
             event.setYaw(e[0] + 180f);
             event.setPitch(e[1]);
             event.setRoll(e[2]);
-            // Client-attitude readback for perception-contract e2e (see the fields).
-            ffClientCamPitch = e[1];
-            ffClientCamRoll  = e[2];
-            double fz = cq.rotate(0, 0, 1)[2]; // client nose Z (world)
-            ffClientForwardZ = fz;
-            if (fz < ffClientMinForwardZ) ffClientMinForwardZ = fz;
             return;
         }
 
@@ -257,11 +213,6 @@ public class RocketEventHandler extends Gui {
             event.setYaw(e[0] + 180f);
             event.setPitch(e[1]);
             event.setRoll(e[2]);
-            zmaster587.advancedRocketry.client.ShipFrameCamera.recordCamera(true, e[0], e[1], e[2],
-                    cq.rotate(0, 1, 0),
-                    zmaster587.advancedRocketry.client.ShipFrameCamera.shipCamEyeX,
-                    zmaster587.advancedRocketry.client.ShipFrameCamera.shipCamEyeY,
-                    zmaster587.advancedRocketry.client.ShipFrameCamera.shipCamEyeZ);
             return;
         }
 
@@ -275,49 +226,15 @@ public class RocketEventHandler extends Gui {
         // overlaps a large air (and, for a grounded ship, terrain) volume around the hull; levelling the
         // view for anyone inside it hijacks the camera of a player merely flying up through the airspace
         // or standing on the ground beside the hull - he is not on the deck, so his view must be his own.
-        // [FF-TRACE/CAM] test-gated, throttled (1/20 frames), only while aboard a ship's box: is the
-        // deck-walking camera levelling engaged, and does the levelled view keep the player's own yaw and
-        // pitch (only roll added)? A walking crew member whose view "goes where the mouse isn't" is either
-        // not resolved on the deck (isResolving=false, the branch below returns his own view) or the
-        // levelling is leaking into yaw/pitch. Self-records both cases, with no command to time by hand.
-        // NOT test-gated: the harness child JVMs run without test mode, and this static is their
-        // only window onto what the crosshair actually resolves (same pattern as the
-        // ShipFrameTravel discriminator statics). One short string per frame.
-        {
-            net.minecraft.util.math.RayTraceResult over = Minecraft.getMinecraft().objectMouseOver;
-            zmaster587.advancedRocketry.client.ShipFrameCamera.lastMouseOverBlock =
-                    over == null || over.typeOfHit != net.minecraft.util.math.RayTraceResult.Type.BLOCK
-                            ? "" : over.getBlockPos().getX() + "," + over.getBlockPos().getY() + ","
-                                    + over.getBlockPos().getZ();
-            net.minecraft.util.math.Vec3d rayEye = view.getPositionEyes(p);
-            zmaster587.advancedRocketry.client.ShipFrameCamera.lastRayEyeX = rayEye.x;
-            zmaster587.advancedRocketry.client.ShipFrameCamera.lastRayEyeY = rayEye.y;
-            zmaster587.advancedRocketry.client.ShipFrameCamera.lastRayEyeZ = rayEye.z;
-        }
-        if (zmaster587.advancedRocketry.command.test.TestProbeCommandRegistration.isTestMode()
-                && (ffCamTraceFrames++ % 20) == 0
-                && zmaster587.advancedRocketry.integration.vs.VSIntegration.shipAttitudeAt(
-                        view.world, view.posX, view.posY, view.posZ) != null) {
-            boolean resolving = zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.isResolvingAboard(view);
-            zmaster587.advancedRocketry.AdvancedRocketry.logger.info("[FF-TRACE/CAM] walking"
-                    + " resolving=" + resolving
-                    + " deckActive=" + zmaster587.advancedRocketry.client.DeckLook.active
-                    + " deckYaw=" + zmaster587.advancedRocketry.client.DeckLook.deckYawDeg
-                    + " deckPitch=" + zmaster587.advancedRocketry.client.DeckLook.deckPitchDeg
-                    + " worldYaw=" + (event.getYaw() - 180f)
-                    + " worldPitch=" + event.getPitch());
-        }
         // ABOARD specifically: a HULL-STAND body - standing on the OUTER hull, where the ship frame
         // has no floor beneath it - keeps world-frame semantics, so its camera is its own and is
         // never levelled to a deck it is not standing on.
         if (!zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.isResolvingAboard(view)) {
-            zmaster587.advancedRocketry.client.ShipFrameCamera.shipCamActive = false;
             return;
         }
         zmaster587.advancedRocketry.api.FreeFlightPhysics.Quat shipQ =
                 zmaster587.advancedRocketry.client.ShipFrameCamera.viewShipQuat(view, p);
         if (shipQ == null) {
-            zmaster587.advancedRocketry.client.ShipFrameCamera.shipCamActive = false;
             return;
         }
         double[] shipUp = shipQ.rotate(0.0, 1.0, 0.0);
@@ -333,7 +250,7 @@ public class RocketEventHandler extends Gui {
             zmaster587.advancedRocketry.client.DeckLook.frame(view, shipQ);
         }
         if (view == Minecraft.getMinecraft().player
-                && zmaster587.advancedRocketry.client.DeckLook.active) {
+                && zmaster587.advancedRocketry.client.DeckLook.isActive()) {
             zmaster587.advancedRocketry.api.FreeFlightPhysics.Quat cam =
                     shipQ.mul(zmaster587.advancedRocketry.client.DeckLook.lookQuat());
             e = zmaster587.advancedRocketry.api.FreeFlightPhysics.eulerFromQuat(cam);
@@ -349,11 +266,6 @@ public class RocketEventHandler extends Gui {
         event.setYaw(e[0] + 180f);
         event.setPitch(e[1]);
         event.setRoll(e[2]);
-        zmaster587.advancedRocketry.client.ShipFrameCamera.recordCamera(true,
-                e[0], e[1], e[2], shipUp,
-                zmaster587.advancedRocketry.client.ShipFrameCamera.shipCamEyeX,
-                zmaster587.advancedRocketry.client.ShipFrameCamera.shipCamEyeY,
-                zmaster587.advancedRocketry.client.ShipFrameCamera.shipCamEyeZ);
     }
 
     /**
@@ -462,24 +374,6 @@ public class RocketEventHandler extends Gui {
                 // Free Flight Mode HUD is rendered below (backend-agnostic — it also serves the
                 // tier-2 ship), driven by a FreeFlightHudState snapshot rather than this rocket.
 
-                // Camera-nose lock telemetry: on every rendered
-                // frame of an FF flight, record the worst player-camera vs
-                // craft-axes divergence. Small values = intra-tick mouse
-                // deflection (by design); a runaway means the lock broke.
-                if (rocket.isFreeFlight() && rocket.isInFlight()
-                        && KeyBindings.isCameraPinnedThisFlight()) {
-                    double yawErr = Math.abs(MathHelper.wrapDegrees(
-                            mc.player.rotationYaw - rocket.rotationYaw));
-                    double pitchErr = Math.abs(
-                            mc.player.rotationPitch - rocket.rotationPitch);
-                    double err = Math.max(yawErr, pitchErr);
-                    lastCameraLockErrorDeg = err;
-                    if (err > maxCameraLockErrorDeg) maxCameraLockErrorDeg = err;
-                } else if (!rocket.isInFlight()) {
-                    maxCameraLockErrorDeg = 0.0;
-                    lastCameraLockErrorDeg = 0.0;
-                    ffClientMinForwardZ = 1.0; // fresh loop witness per flight
-                }
 
             }
 
@@ -530,22 +424,22 @@ public class RocketEventHandler extends Gui {
 
             if (mc.player.dimension != lastSuffocationWarningDim) {
                 lastSuffocationWarningDim = mc.player.dimension;
-                AtmosphereHandler.lastSuffocationTime = worldTime - numTicksToDisplay - 1;
+                ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
                 suppressSuffocationWarningUntil = worldTime + 40;
             }
 
             // In event of world change make sure the warning isn't displayed
-            if (worldTime - AtmosphereHandler.lastSuffocationTime < 0) {
-                AtmosphereHandler.lastSuffocationTime = worldTime - numTicksToDisplay - 1;
+            if (worldTime - ClientAtmosphere.lastSuffocationTime() < 0) {
+                ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
             }
 
             // Tell the player he's suffocating if needed
             if (worldTime >= suppressSuffocationWarningUntil &&
-                    worldTime - AtmosphereHandler.lastSuffocationTime < numTicksToDisplay) {
+                    worldTime - ClientAtmosphere.lastSuffocationTime() < numTicksToDisplay) {
                 FontRenderer fontRenderer = mc.fontRenderer;
                 String str = "";
-                if (AtmosphereHandler.currentAtm != null) {
-                    str = AtmosphereHandler.currentAtm.getDisplayMessage();
+                if (ClientAtmosphere.atmosphere() != null) {
+                    str = ClientAtmosphere.atmosphere().getDisplayMessage();
                 }
 
                 int screenX = event.getResolution().getScaledWidth() / 6 - fontRenderer.getStringWidth(str) / 2;

@@ -1,7 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -22,7 +27,7 @@ import static org.junit.Assert.assertTrue;
 public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 7500;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 7500;
 
     @Test
@@ -30,19 +35,19 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock solar-array 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock solar-array failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileSolarArray tile at controller pos: " + info,
-                info.contains("TileSolarArray"));
+        assertEquals("expected TileSolarArray tile at controller pos: " + info,
+                "TileSolarArray", MachineInfo.of(info).tileSimpleName());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("solar-array multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -50,7 +55,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock solar-array 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Right plug flanking controller — globalY = cy, globalX = cx + 1, globalZ = cz.
         // Replacing with stone (NOT removing the plug TE — stone doesn't match 'p',
@@ -59,12 +64,12 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         String breakPlug = join(client().execute(
                 "artest place 0 " + (cx + 1) + " " + cy + " " + cz + " minecraft:stone"));
         assertTrue("could not replace plug: " + breakPlug,
-                breakPlug.contains("\"ok\":true"));
+                Reply.of(breakPlug).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing 'p' plug: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -72,7 +77,7 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock solar-array 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // The '*' wildcard accepts solarArrayPanel OR Blocks.AIR — but NOT
         // stone. Replace a mid-array panel with stone and the validator
@@ -81,12 +86,12 @@ public class SolarArrayMultiblockTest extends AbstractSharedServerTest {
         String breakCell = join(client().execute(
                 "artest place 0 " + cx + " " + cy + " " + (cz + 10) + " minecraft:stone"));
         assertTrue("could not replace panel: " + breakCell,
-                breakCell.contains("\"ok\":true"));
+                Reply.of(breakCell).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite stone in '*' wildcard cell: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

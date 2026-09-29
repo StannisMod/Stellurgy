@@ -26,7 +26,7 @@ public class AtmosphereNeedsSuit extends AtmosphereType {
 
     @Override
     public boolean isImmune(EntityLivingBase player) {
-        if (player.getEntityData().getLong("arRocketTransferGrace") > player.world.getTotalWorldTime()) {
+        if (RocketTransferGrace.isActive(player, player.world.getTotalWorldTime())) {
             return true;
         }
 

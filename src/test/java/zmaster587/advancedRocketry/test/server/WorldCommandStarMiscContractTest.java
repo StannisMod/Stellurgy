@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.nio.file.Files;
@@ -100,15 +101,14 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
                 !resp.contains("Serious error has occurred"));
     }
 
-    private static final Pattern CUTTING_COUNT =
-            Pattern.compile("\"TileCuttingMachine\":(\\d+)");
+    private static final String CUTTING_COUNT = "TileCuttingMachine";
 
     private int cuttingMachineRecipeCount() throws Exception {
         String summary = exec("artest machine recipes-summary");
-        Matcher m = CUTTING_COUNT.matcher(summary);
+        Reply mReply = Reply.of(summary);
         assertTrue("recipes-summary must include TileCuttingMachine count: "
-                + summary, m.find());
-        return Integer.parseInt(m.group(1));
+                + summary, mReply.has(CUTTING_COUNT));
+        return Integer.parseInt(mReply.text(CUTTING_COUNT));
     }
 
     /** Stronger pin: not just "chat envelope says success" but

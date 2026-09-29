@@ -1,9 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -26,66 +29,60 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
+    /**
+     * How far a restored attitude must be from the identity quaternion, summed over its axes.
+     *
+     * <p>The TEST'S OWN sensitivity bar: an identity attitude is what a round-trip that lost
+     * everything produces, so this refuses exactly that.</p>
+     */
+    private static final double NON_IDENTITY_ATTITUDE = 0.1;
+
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
     private static double num(String json, String key) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\":(-?[0-9.eE+-]+)").matcher(json);
-        assertTrue("response missing numeric key " + key + ": " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("response missing numeric key " + key + ": " + json, Reply.of(json).has(key));
+        return Reply.of(json).number(key);
     }
 
     private static boolean bool(String json, String key) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\":(true|false)").matcher(json);
-        assertTrue("response missing boolean key " + key + ": " + json, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply reply = Reply.of(json);
+        assertTrue("response missing boolean key " + key + ": " + json, reply.has(key));
+        return reply.bool(key);
     }
 
     private static String str(String json, String key) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\":\"([^\"]*)\"").matcher(json);
-        assertTrue("response missing string key " + key + ": " + json, m.find());
-        return m.group(1);
+        assertTrue("response missing string key " + key + ": " + json, Reply.of(json).has(key));
+        return Reply.of(json).text(key);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-
-        String assemble = ok(client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+                "simple", 2, 10,
+                "the craft is built and flown in this volume");
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
     public void freeFlightStateSurvivesNbtRoundTrip() throws Exception {
-        int id = buildAndAssemble(3300, 64, 700);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 700));
 
         String r = ok(client().execute("artest entity rocket-nbt-roundtrip 0 " + id));
-        assertTrue("round-trip probe failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
 
         // Flight mode survives.
         assertEquals("flight mode must survive save/load: " + r,
@@ -102,7 +99,7 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
         // assertions above are not trivially satisfied by an all-zero write.
         assertTrue("round-trip attitude must be non-identity: " + r,
                 Math.abs(num(r, "peerQuatX")) + Math.abs(num(r, "peerQuatY"))
-                        + Math.abs(num(r, "peerQuatZ")) > 0.1);
+                        + Math.abs(num(r, "peerQuatZ")) > NON_IDENTITY_ATTITUDE);
 
         // Flight-assist toggle + velocity setpoint survive.
         assertTrue("flight-assist ON must survive: " + r, bool(r, "peerFaOn"));
@@ -113,10 +110,10 @@ public class FreeFlightNbtRoundTripTest extends AbstractSharedServerTest {
 
     @Test
     public void legacySaveMissingFreeFlightKeysDefaultsSafely() throws Exception {
-        int id = buildAndAssemble(3340, 64, 700);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3340, 700));
 
         String r = ok(client().execute("artest entity rocket-nbt-roundtrip 0 " + id));
-        assertTrue("round-trip probe failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("round-trip probe failed: " + r, Reply.of(r).ok());
 
         // A save with no ffQuat* keys must load as the upright identity attitude.
         double tol = 1e-3;

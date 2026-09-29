@@ -1,7 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -19,7 +24,7 @@ import static org.junit.Assert.assertTrue;
 public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
 
     private static final int CX = 7000;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 7000;
 
     @Test
@@ -27,19 +32,19 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
         String fixture = join(client().execute(
                 "artest fixture multiblock microwave-receiver 0 " + CX + " " + CY + " " + CZ));
         assertTrue("fixture multiblock microwave-receiver failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
 
         String info = join(client().execute(
                 "artest machine info 0 " + CX + " " + CY + " " + CZ));
-        assertTrue("expected TileMicrowaveReciever tile at controller pos: " + info,
-                info.contains("TileMicrowaveReciever"));
+        assertEquals("expected TileMicrowaveReciever tile at controller pos: " + info,
+                "TileMicrowaveReciever", MachineInfo.of(info).tileSimpleName());
 
         String tryComplete = join(client().execute(
                 "artest machine try-complete 0 " + CX + " " + CY + " " + CZ));
         assertTrue("try-complete probe errored: " + tryComplete,
-                tryComplete.contains("\"ok\":true"));
+                Reply.of(tryComplete).ok());
         assertTrue("microwave-receiver multiblock didn't validate (isComplete=false): " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     @Test
@@ -47,7 +52,7 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 30, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock microwave-receiver 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Break BEFORE first try-complete (no-baseline pattern — solar panels
         // are TE-aware in hidden-multiblock state).
@@ -55,12 +60,12 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
         String breakCorner = join(client().execute(
                 "artest place 0 " + (cx + 2) + " " + cy + " " + (cz - 2) + " minecraft:stone"));
         assertTrue("could not replace corner: " + breakCorner,
-                breakCorner.contains("\"ok\":true"));
+                Reply.of(breakCorner).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing corner panel: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     @Test
@@ -68,18 +73,18 @@ public class MicrowaveReceiverMultiblockTest extends AbstractSharedServerTest {
         int cx = CX + 60, cy = CY, cz = CZ;
         String fixture = join(client().execute(
                 "artest fixture multiblock microwave-receiver 0 " + cx + " " + cy + " " + cz));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
+        assertTrue("fixture failed: " + fixture, Reply.of(fixture).ok());
 
         // Cell immediately east of controller — globalY = cy, globalX = cx + 1, globalZ = cz.
         String breakAdj = join(client().execute(
                 "artest place 0 " + (cx + 1) + " " + cy + " " + cz + " minecraft:stone"));
         assertTrue("could not replace adjacent panel: " + breakAdj,
-                breakAdj.contains("\"ok\":true"));
+                Reply.of(breakAdj).ok());
 
         String broken = join(client().execute(
                 "artest machine try-complete 0 " + cx + " " + cy + " " + cz));
         assertTrue("structure validated despite missing adjacent panel: " + broken,
-                broken.contains("\"isComplete\":false"));
+                (!Reply.of(broken).bool("isComplete")));
     }
 
     private static String join(java.util.List<String> resp) {

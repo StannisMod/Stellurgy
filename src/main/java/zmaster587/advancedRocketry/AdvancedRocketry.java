@@ -1,5 +1,9 @@
 package zmaster587.advancedRocketry;
 
+import zmaster587.advancedRocketry.api.atmosphere.IAtmosphereSealHandler;
+import zmaster587.advancedRocketry.api.ISpaceObjectManager;
+import zmaster587.advancedRocketry.api.dimension.solar.IGalaxy;
+import zmaster587.advancedRocketry.api.IGravityManager;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.MapColor;
 import net.minecraft.block.material.Material;
@@ -171,12 +175,150 @@ public class AdvancedRocketry {
     public static String version;
     @Instance(value = Constants.modId)
     public static AdvancedRocketry instance;
+
+    // ---- The four API services, owned here ---------------------------------------------------
+    //
+    // They used to be public mutable statics on AdvancedRocketryAPI, assigned from wherever each
+    // service happened to be constructed. That is a mutable static holding a COLLABORATOR, and it
+    // had already produced the defect it always produces: `gravityManager` was written from TWO
+    // places, one of them a static initialiser on GravityHandler that fires when the class loads —
+    // which is what `new GravityHandler()` at the other site does. Two handlers were built, the
+    // first published and then immediately replaced, and anything that read the field in between
+    // held the orphan.
+    //
+    // The owner is this mod object: its singleton-ness is guaranteed by Forge's @Instance rather
+    // than by convention, which is the property that makes it an owner at all. Each keeps the lifecycle
+    // point it already had — moving init order is a separate change with separate risk — but now
+    // has ONE writer, and a second install is a loud error instead of a silent overwrite.
+
+    private IAtmosphereSealHandler apiSealHandler;
+    private ISpaceObjectManager apiSpaceObjects;
+    private IGalaxy apiGalaxy;
+    private IGravityManager apiGravity;
+
+    private static <T> T installOnce(T current, T next, String what) {
+        if (next == null) {
+            throw new IllegalArgumentException(what + " must not be null");
+        }
+        if (current != null) {
+            throw new IllegalStateException(what + " is already installed ("
+                    + current.getClass().getName() + "); a second install is a lifecycle bug");
+        }
+        return next;
+    }
+
+    /** @see AdvancedRocketryAPI#atmosphereSealHandler() */
+    public void installSealHandler(IAtmosphereSealHandler handler) {
+        apiSealHandler = installOnce(apiSealHandler, handler, "the atmosphere seal handler");
+    }
+
+    /**
+    * The two services above belong to the JVM. These two belong to the SERVER, and the difference is
+    * in their names because it is a difference in lifetime, not in style.
+    *
+    * <p>Both objects happen to be process-wide singletons, but their STATE is the running server's —
+    * station locations, orbits, temporary dimensions, the initialised flag, the save's planets — and
+    * each already has an {@code onServerStopped()} that empties it. So the reference this mod object
+    * publishes is attached when a server starts and RELEASED when it stops, exactly as
+    * {@code spaceSubsystem} beside it is: an API caller between servers is told there is no galaxy,
+    * rather than handed the last one's emptied object.</p>
+    *
+    * <p>This is not the end state. The right owner for state that belongs to a server is the server,
+    * and a process-wide singleton whose maps are cleared rather than replaced keeps a stale reference
+    * alive across saves. Attaching and releasing here makes the LIFETIME honest and is a strictly
+    * smaller change than moving the objects; the ownership question is recorded, not answered.</p>
+    */
+    public void attachServerServices(ISpaceObjectManager manager, IGalaxy galaxy) {
+        apiSpaceObjects = installOnce(apiSpaceObjects, manager, "the space object manager");
+        apiGalaxy = installOnce(apiGalaxy, galaxy, "the galaxy");
+    }
+
+    /** Released by the owner: these belonged to the server that has just stopped. */
+    public void detachServerServices() {
+        apiSpaceObjects = null;
+        apiGalaxy = null;
+    }
+
+    /** @see AdvancedRocketryAPI#gravityManager() */
+    public void installGravityManager(IGravityManager manager) {
+        apiGravity = installOnce(apiGravity, manager, "the gravity manager");
+    }
+
+    public IAtmosphereSealHandler sealHandler() {
+        return apiSealHandler;
+    }
+
+    public ISpaceObjectManager spaceObjects() {
+        return apiSpaceObjects;
+    }
+
+    public IGalaxy galaxy() {
+        return apiGalaxy;
+    }
+
+    public IGravityManager gravity() {
+        return apiGravity;
+    }
     public static WorldType planetWorldType;
     public static WorldType spaceWorldType;
-    public static CompatibilityMgr compat = new CompatibilityMgr();
     public static MaterialRegistry materialRegistry = new MaterialRegistry();
-    public static HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
+    /** Products other mods may have auto-generated recipes for, accumulated from registry events
+     *  during load and consumed once by {@code createAutoGennedRecipes} at init. OWNER: the LOADER
+     *  — FML fires those events once per launch and the recipes are built once from what they left
+     *  here. Final: the map is filled, never replaced. */
+    private static final HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
     private static Configuration config;
+
+    /**
+     * This server's space subsystem, or {@code null} when it has none (before server start, on a
+     * remote client, or when the subsystem stood down — the config flag off, or Valkyrien Skies
+     * absent).
+     *
+     * <p><b>The mod owns it, and that is the whole point of the field being here.</b>
+     * {@link zmaster587.advancedRocketry.space.SpaceSubsystem} has a public constructor, so it is not
+     * a singleton and cannot hold a meaningful "current" one of itself — it used to, together with an
+     * attach/detach pair and six static per-service accessors, and its own start hook did
+     * {@code attach(new SpaceSubsystem(...))}: the class built itself and assigned itself to its own
+     * static field. Two instances could then be alive at once and which one a caller reached depended
+     * on which accessor it happened to use, with no way to ask whose subsystem it had.</p>
+     *
+     * <p>Written by the four server-lifecycle handlers in this class and by nothing else — there is
+     * no setter and no swap seam, so nothing can leave a running server without its subsystem. A test
+     * that wants an isolated stack builds its own {@code SpaceSubsystem} and ticks it itself; it
+     * cannot pass it off as the server's.</p>
+     */
+    private zmaster587.advancedRocketry.space.SpaceSubsystem spaceSubsystem;
+
+    /**
+     * The space subsystem this server is running, or {@code null} when it has none. THE one route to
+     * it: callers read the services they need off the returned object ({@code .ledger},
+     * {@code .manager}, {@code .transit}, …) in a single read, so a caller needing two of them can
+     * never end up holding one from each of two stacks.
+     */
+    public static zmaster587.advancedRocketry.space.SpaceSubsystem spaceSubsystem() {
+        return instance == null ? null : instance.spaceSubsystem;
+    }
+
+    /**
+     * Returns a player to the plain world — see {@link zmaster587.advancedRocketry.player.PlayerRelease}.
+     *
+     * <p><b>Lifetime: the MOD's, and stated because it differs from {@code spaceSubsystem} above.</b>
+     * That one is attached when a server starts and released when it stops, because its state is the
+     * running server's. This object holds NO per-player state of its own — only references to the
+     * binding owners and the order in which to ask them — and those owners are themselves built once
+     * at mod init and left on the bus. So its lifetime is theirs; giving it a shorter one would say
+     * something untrue about what it holds.</p>
+     *
+     * <p>That the owners' own state is the SERVER's while their objects are the mod's is a real
+     * defect and a pre-existing one, recorded in {@code attachServerServices}' javadoc below. This
+     * class neither worsens nor fixes it.</p>
+     */
+    private zmaster587.advancedRocketry.player.PlayerRelease playerRelease;
+
+    /** The release service, or {@code null} before mod init has built it. */
+    public static zmaster587.advancedRocketry.player.PlayerRelease playerRelease() {
+        return instance == null ? null : instance.playerRelease;
+    }
 
     static {
         FluidRegistry.enableUniversalBucket(); // Must be called before preInit
@@ -293,8 +435,8 @@ public class AdvancedRocketry {
 
         //Init API
         DimensionManager.planetWorldProvider = WorldProviderPlanet.class;
-        AdvancedRocketryAPI.atomsphereSealHandler = SealableBlockHandler.INSTANCE;
-        ((SealableBlockHandler) AdvancedRocketryAPI.atomsphereSealHandler).loadDefaultData();
+        instance.installSealHandler(SealableBlockHandler.INSTANCE);
+        SealableBlockHandler.INSTANCE.loadDefaultData();
 
         // Integrations
         // The One Probe integration
@@ -332,6 +474,11 @@ public class AdvancedRocketry {
 
         //Register cap events
         MinecraftForge.EVENT_BUS.register(new CapabilityProtectiveArmor());
+        // Attaches the player-bindings capability, and carries it across a death — Forge copies no
+        // capability on respawn, and without this a player who dies aboard his ship loses the only
+        // record of which ship it was.
+        MinecraftForge.EVENT_BUS.register(
+                new zmaster587.advancedRocketry.player.CapabilityPlayerBindings());
 
         //Register Packets - the discriminator space is declared in PacketRegistry, which owns the
         //wire order; a packet is added by appending it there, never by a call from here.
@@ -1131,6 +1278,10 @@ public class AdvancedRocketry {
     public void postInit(FMLPostInitializationEvent event) {
 
         CapabilitySpaceArmor.register();
+        // The player's own bindings: one home for what this mod holds on him, attached to the
+        // player and written with him. Registered beside its siblings; unlike them its storage does
+        // real work, because a player is not a host that persists its own NBT.
+        zmaster587.advancedRocketry.player.CapabilityPlayerBindings.register();
         zmaster587.advancedRocketry.api.capability.CapabilityWear.register();
         //Need to raise the Max Entity Radius to allow player interaction with rockets
         World.MAX_ENTITY_RADIUS = 20;
@@ -1196,7 +1347,7 @@ public class AdvancedRocketry {
         MinecraftForge.EVENT_BUS.register(inputSync);
 
         MinecraftForge.EVENT_BUS.register(new MapGenLander());
-        AdvancedRocketryAPI.gravityManager = new GravityHandler();
+        instance.installGravityManager(new GravityHandler());
 
         // Compat stuff
         if (Loader.isModLoaded("galacticraftcore") && zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().overrideGCAir) {
@@ -1206,6 +1357,10 @@ public class AdvancedRocketry {
                 FMLCommonHandler.instance().bus().register(eventHandler);
         }
         CompatibilityMgr.isSpongeInstalled = Loader.isModLoaded("sponge");
+        // Asked here, beside the other one, because this is where the loader's answer becomes
+        // available and because two "is that mod here" questions asked in two places drift apart.
+        // Nothing reads it yet — see the field, which says why it is kept anyway.
+        CompatibilityMgr.isGregtechInstalled = Loader.isModLoaded("gregtech");
         VSIntegration.init();
         // End compat stuff
 
@@ -1217,20 +1372,25 @@ public class AdvancedRocketry {
         MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.SpaceSubsystemEvents());
         // Login restore (a returning player goes back to his ship, not to a stale pool slot) and the
         // cell-divergence hook. Independent of the controller so it stays quiet while it is down.
-        MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.SpaceEventHandler());
+        // The two binding owners are KEPT, not just registered: returning a player to the plain
+        // world is a direct call on every subsystem that holds something of his, and a caller that
+        // had to rediscover these instances would be reaching for a bus instead — which is what
+        // this replaced, and which could not say in what order the five releases ran, whether they
+        // all ran, or what a thrown one meant.
+        zmaster587.advancedRocketry.space.SpaceEventHandler spaceEvents =
+                new zmaster587.advancedRocketry.space.SpaceEventHandler();
+        MinecraftForge.EVENT_BUS.register(spaceEvents);
         // Carries a pre-assembly boarding across the asynchronous ship assembly (core assembly
         // glue - registered unconditionally, works with the space subsystem down).
         MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.AssemblyCrewRebind());
         // Hyperspace is a void with ships in it and nothing else: leaving your ship out there is
         // fatal. Idle on every tick that has no hyperspace world and no player in it.
-        MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.HyperspaceVoid());
+        zmaster587.advancedRocketry.space.HyperspaceVoid hyperspaceVoid =
+                new zmaster587.advancedRocketry.space.HyperspaceVoid();
+        MinecraftForge.EVENT_BUS.register(hyperspaceVoid);
+        playerRelease = new zmaster587.advancedRocketry.player.PlayerRelease(
+                spaceEvents, hyperspaceVoid);
         MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.util.DelayedActionBar());
-        // Position-writer timeline around ship crossings (ungated diagnostics, probe-readable).
-        MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.space.ArrivalTrace.Hooks());
-        // Chunk-load counters for the motion flight recorder: a tick that ran long is only
-        // attributable to chunk work if the count of chunks that arrived during it is on the same
-        // sample. Two increments per chunk load, nothing else.
-        MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.util.MotionTrace.Hooks());
         // What the ship-was-named announcement said, per ship. An edge leaves no trace in the world
         // it changes, so the only way to check one fired exactly once is to have been listening.
         MinecraftForge.EVENT_BUS.register(new zmaster587.advancedRocketry.util.ShipLifecycleTrace.Hooks());
@@ -1284,7 +1444,13 @@ public class AdvancedRocketry {
                 net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance());
         // Layer-2: restore the persisted ship ledger (settled positions survive a restart) now that the
         // overworld MapStorage is reachable, before any player logs in.
-        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStarted();
+        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStarted(spaceSubsystem);
+        // The two API services whose STATE belongs to this server, published together and released
+        // together in serverStopped. Here rather than in either object's constructor: a constructor
+        // runs from its class's own static initialiser, at whatever moment something first touches
+        // the class, which may be before Forge has assigned this mod instance at all.
+        attachServerServices(SpaceObjectManager.getSpaceManager(),
+                zmaster587.advancedRocketry.dimension.DimensionManager.getInstance());
     }
 
     @EventHandler
@@ -1300,9 +1466,10 @@ public class AdvancedRocketry {
         // (or a harness-spawned server sets -Dforge.test.server=true).
         TestProbeCommandRegistration.registerIfTestMode(event);
 
-        // Movable-ship space subsystem: register the slot pool + build the controller. No-op in test
-        // mode so it never collides with the /artest probe's own pool registration.
-        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStarting();
+        // Movable-ship space subsystem: register the slot pool + build the subsystem this server will
+        // run. Built here and HELD here — the mod is its owner; the step gives back what to hold and
+        // hands back what we already had when it stands down, so this assignment cannot lose one.
+        spaceSubsystem = zmaster587.advancedRocketry.space.SpaceSubsystem.buildForServer(spaceSubsystem);
 
         //Regenerate Chemical Reactor armor recipes
         TileChemicalReactor.reloadRecipesSpecial();
@@ -1406,7 +1573,7 @@ public class AdvancedRocketry {
      */
     @EventHandler
     public void serverStopping(net.minecraftforge.fml.common.event.FMLServerStoppingEvent event) {
-        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStopping();
+        zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStopping(spaceSubsystem);
     }
 
     @EventHandler
@@ -1415,10 +1582,15 @@ public class AdvancedRocketry {
         zmaster587.advancedRocketry.dimension.DimensionManager.getInstance().onServerStopped();
         SpaceObjectManager.getSpaceManager().onServerStopped();
         zmaster587.advancedRocketry.space.SpaceSubsystem.onServerStopped();
+        zmaster587.advancedRocketry.event.PlanetEventHandler.onServerStopped();
+        // Released here, by the owner: the subsystem belonged to the server that has just stopped.
+        spaceSubsystem = null;
+        detachServerServices();
+        zmaster587.advancedRocketry.universe.UniverseRegistry.onServerStopped();
         zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.clear();
         zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId = Constants.INVALID_PLANET;
         ((BlockSeal) AdvancedRocketryBlocks.blockPipeSealer).clearMap();
-        DimensionManager.dimOffset = config.getInt("minDimension", "Planet", 2, -127, 8000, "Dimensions including and after this number are allowed to be made into planets");
+        DimensionManager.getInstance().setDimOffset(config.getInt("minDimension", "Planet", 2, -127, 8000, "Dimensions including and after this number are allowed to be made into planets"));
         zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().spaceDimId = config.get(Configuration.CATEGORY_GENERAL, "spaceStationId", -2, "Dimension ID to use for space stations").getInt();
         WeightEngine.INSTANCE.save();
     }

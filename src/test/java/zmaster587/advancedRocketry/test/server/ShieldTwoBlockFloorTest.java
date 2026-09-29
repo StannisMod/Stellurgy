@@ -1,8 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
+
+import zmaster587.advancedRocketry.test.ShieldTile;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -26,7 +30,7 @@ import static org.junit.Assert.assertTrue;
 public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int CHARGE_ITERATIONS = 60;
     private static final int FE_PER_ITERATION = 4000;
 
@@ -40,10 +44,10 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         chargeAndSolve(gx, gz);
 
-        String emitter = exec("artest shield read " + DIM + " " + ex + " " + Y + " " + ez);
+        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, ex, Y, ez);
         assertTrue("adjacent generator+emitter (no cable) failed to power — the cable-less edge did not "
-                        + "carry shield energy:\n" + emitter,
-                emitter.contains("\"powered\":true"));
+                        + "carry shield energy:\n" + emitter.raw(),
+                emitter.powered());
     }
 
     @Test
@@ -56,10 +60,10 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
 
         chargeAndSolve(gx, gz);
 
-        String emitter = exec("artest shield read " + DIM + " " + ex + " " + Y + " " + ez);
+        ShieldTile emitter = ShieldTile.at(cmd -> exec(cmd), DIM, ex, Y, ez);
         assertTrue("disconnected emitter (one-block gap, no cable) powered anyway — a spurious edge is "
-                        + "carrying energy across the gap:\n" + emitter,
-                emitter.contains("\"powered\":false"));
+                        + "carrying energy across the gap:\n" + emitter.raw(),
+                !emitter.powered());
     }
 
     /** Feed the generator FE and run one network solve per iteration. */
@@ -74,7 +78,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed"));
     }
 
     private static String exec(String command) throws Exception {

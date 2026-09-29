@@ -11,6 +11,9 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.multiplayer.PlayerControllerMP;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.item.EntityXPOrb;
 import net.minecraft.inventory.ClickType;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
@@ -21,7 +24,10 @@ import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.util.ScreenShotHelper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraftforge.client.event.GuiOpenEvent;
+import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.fml.common.FMLCommonHandler;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import org.lwjgl.input.Keyboard;
@@ -44,6 +50,31 @@ public final class ForgeTestClientBootstrap {
 
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
     private static final AtomicLong CLIENT_TICKS = new AtomicLong(0L);
+
+    /**
+     * Monitor for {@link #clientWorldLive} — the record that the client world is live, published
+     * by the client thread itself and awaited, never polled.
+     *
+     * <p>The client tick handler is the first moment the client thread is ours to ask at all: the
+     * bridge accepts its socket during mod post-init, while that thread is still inside
+     * {@code Minecraft.init} loading recipes, and NOTHING scheduled on it runs until init returns.
+     * A boot wait built on {@code runOnClientThread} therefore spends its budget on the length of
+     * {@code Minecraft.init} rather than on the world, and its expiry says "the client thread is
+     * busy" — which is a statement about the box, not about the subject.</p>
+     *
+     * <p>Measured 2026-09-22 over the 57 clients of the last PASSING full client leg: the interval
+     * from the bridge coming up to the client thread's first scheduled task ran 14 s to 53 s, with
+     * 21 of the 57 at or above 45 s. A 45 s future budget over that interval therefore put a third
+     * of a healthy tier on the wrong side of a cliff nobody had measured, and three full legs
+     * (112, 108 and 8-of-8 reds) were spent on it.</p>
+     *
+     * <p>The flag tracks the CURRENT state, not the first time it became true: a relog tears the
+     * world down and builds it again, and a one-shot record would answer "ready" for the gap.</p>
+     */
+    private static final Object CLIENT_WORLD_LOCK = new Object();
+
+    /** Guarded by {@link #CLIENT_WORLD_LOCK}; written only by the client thread's tick handler. */
+    private static boolean clientWorldLive;
 
     /**
      * The server address the last "disconnect" command left, so a later "connect" can rejoin it.
@@ -70,6 +101,24 @@ public final class ForgeTestClientBootstrap {
             PENDING_CONNECTION_ACTION = new java.util.concurrent.atomic.AtomicReference<>();
 
     /**
+     * The one {@code screenshot} capture waiting for a frame to be DRAWN, performed at the END of
+     * the next {@code RenderTickEvent} and released by it.
+     *
+     * <p>Why a frame and not a scheduled task: {@code runOnClientThread} runs inside
+     * {@code runTick}, BEFORE that loop's frame is rendered, so the pixels it can read are the
+     * previous frame's — drawn before whatever the test just changed (the HUD hidden, a
+     * framebuffer bound, a teleport). Every caller therefore advanced a few ticks first, and a
+     * number of ticks buys no number of frames: under load the loop runs several ticks per
+     * frame. At the end of a frame's render the frame the capture wants is the one in the
+     * buffer.</p>
+     *
+     * <p>Owned by this client JVM, which this bridge serves for its whole life; at most one
+     * capture is pending, because the bridge answers one request at a time.</p>
+     */
+    private static final java.util.concurrent.atomic.AtomicReference<FutureTask<JsonObject>>
+            PENDING_FRAME_CAPTURE = new java.util.concurrent.atomic.AtomicReference<>();
+
+    /**
      * Ring buffer of sound locations the client {@code SoundManager} was asked
      * to play ({@code PlaySoundEvent} fires once per {@code playSound(ISound)}
      * on the real client). Read via {@code report_sounds}, reset via
@@ -81,6 +130,48 @@ public final class ForgeTestClientBootstrap {
     private static final int PLAYED_SOUNDS_CAP = 256;
     private static final AtomicLong SOUNDS_TOTAL = new AtomicLong(0L);
 
+    /**
+     * The CLIENT half of the ordered event log (the server half lives in the mod's probe).
+     *
+     * <p>Same shape as the sound log above and for the same reason: a test must be able to WAIT FOR
+     * something that happened rather than sample a value that may not persist. Records are buffered,
+     * so a reader that arrives late still sees everything after its mark; {@code recording} is
+     * reported on every read so an empty log can never be mistaken for a recorder nobody
+     * subscribed.</p>
+     */
+    private static final Object EVENT_LOG_LOCK = new Object();
+    /**
+     * One ring PER TYPE, not one ring for the log.
+     *
+     * <p>A shared ring is emptied by whichever type is chattiest, so a rare event is evicted by a
+     * common one and the log then answers "it never happened" about something it merely threw away.
+     * Measured 2026-08-21: a ship crossing loads a thousand chunks, {@code chunk_data_applied}
+     * filled the ring, and the position writes a crossing test reads were gone before anything asked
+     * for them — with {@code dropped} honestly reporting 173, which made the log honest and useless
+     * at the same time.</p>
+     */
+    private static final java.util.LinkedHashMap<String, java.util.ArrayDeque<String>> EVENT_LOG =
+            new java.util.LinkedHashMap<>();
+    /** Evictions per type: WHICH type is being truncated is the half a reader can act on. */
+    private static final java.util.LinkedHashMap<String, Long> EVENTS_DROPPED_BY_TYPE =
+            new java.util.LinkedHashMap<>();
+    private static final int EVENT_LOG_CAP_PER_TYPE = 256;
+
+    /**
+     * {@code chunk_data_applied}'s own ring. One teleport into a column the client does not hold
+     * sends a whole view square at once — (2·16+1)² = 1089 chunks at render distance 16 — and a wait
+     * for ONE of them read after that burst found it evicted: measured 2026-09-24, 131 and 437 records
+     * of this type dropped from a 256-deep ring inside a single placement, and the placement link
+     * failed on a chunk that had arrived.
+     */
+    private static final int CHUNK_DATA_CAP = 2048;
+
+    private static int capOf(String type) {
+        return "chunk_data_applied".equals(type) ? CHUNK_DATA_CAP : EVENT_LOG_CAP_PER_TYPE;
+    }
+    private static long eventSeq;
+    private static volatile boolean eventsRecording;
+
     private ForgeTestClientBootstrap() {
     }
 
@@ -90,11 +181,128 @@ public final class ForgeTestClientBootstrap {
         }
 
         installClientLogFile();
+        installEventMixins();
         FMLCommonHandler.instance().bus().register(new TickCounter());
+        FMLCommonHandler.instance().bus().register(new FrameCapturer());
         FMLCommonHandler.instance().bus().register(new SoundRecorder());
+        FMLCommonHandler.instance().bus().register(new GuiOpenRecorder());
+        FMLCommonHandler.instance().bus().register(new EntityJoinRecorder());
         Thread bridgeThread = new Thread(ForgeTestClientBootstrap::runBridge, "forge-test-client-bridge");
         bridgeThread.setDaemon(true);
         bridgeThread.start();
+    }
+
+    /**
+     * Read back whether the launch-time coremod queued the mixin configurations, and say so loudly
+     * if it did not.
+     *
+     * <p>The reasoning that first put a registration here was that mixin prepares a configuration
+     * when its targets are transformed, and {@code NetHandlerPlayClient} loads only when the client
+     * CONNECTS — long after FML init. It is sound and it is WRONG: what matters is when the
+     * ENVIRONMENT selects its configurations, not when a target class loads. The launch-time coremod
+     * is not optional, and this method no longer registers anything.</p>
+     *
+     * <p>If that assumption ever stops holding the failure is loud, not silent: the config is
+     * {@code required}, and a test's {@code events mark} asserts {@code recording} before anything
+     * downstream is believed.</p>
+     */
+    private static void installEventMixins() {
+        // NOT a registration: by FML init the mixin environment has already chosen its
+        // configurations, and calling Mixins.addConfiguration here throws nothing and does nothing.
+        // (Measured: a recorder that reported `recording:true` and recorded nothing, forever — the
+        // exact false witness the flag exists to prevent.) The config is queued by the harness's own
+        // coremod at the early loader point; all that is read here is whether that happened.
+        eventsRecording = com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod.isConfigQueued();
+        if (!eventsRecording) {
+            System.out.println("[forge-test] the harness mixin config was never queued —"
+                    + " client event recording is OFF (is -Dfml.coreMods.load set?)");
+        }
+    }
+
+    /**
+     * Called from the harness's own mixin at the TAIL of {@code handleChunkData} — the first instant
+     * the client can actually see a chunk's blocks. See that mixin for why no Forge event will do.
+     */
+    public static void recordChunkApplied(int chunkX, int chunkZ, boolean full) {
+        recordEvent("chunk_data_applied", "\"cx\":" + chunkX + ",\"cz\":" + chunkZ
+                + ",\"full\":" + full);
+    }
+
+    /**
+     * Record one event from a CONSUMER's own test-only mixin.
+     *
+     * <p>The harness owns the log and the honesty flag; what is worth recording is the consuming
+     * project's business, and it says so through its own mixin config (see
+     * {@code ForgeTestCoreMod.CONSUMER_INDEX}). Self-gating: a no-op when nothing queued the mixin
+     * configs, so a caller never has to ask first.</p>
+     *
+     * @param payload a JSON fragment WITHOUT braces, or empty
+     */
+    /**
+     * Observation points that have EXECUTED on this side at least once, by name — see the note on the
+     * `instruments` field of an {@code event_since} reply. Recorded even when {@code eventsRecording}
+     * is false, because "the code ran" and "the log was listening" are separate facts and a caller
+     * that cannot tell them apart is exactly what this exists to prevent.
+     */
+    private static final java.util.Set<String> INSTRUMENTS_ENTERED =
+            java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<String>());
+
+    /** Called by an observation point the first thing it does, before any threshold or condition. */
+    public static void noteInstrumentEntered(String name) {
+        if (name != null && !name.isEmpty()) {
+            INSTRUMENTS_ENTERED.add(name);
+        }
+    }
+
+    /** The names of every observation point that has executed here, as a JSON array. */
+    private static String instrumentsEntered() {
+        StringBuilder out = new StringBuilder("[");
+        synchronized (INSTRUMENTS_ENTERED) {
+            for (String name : INSTRUMENTS_ENTERED) {
+                if (out.length() > 1) {
+                    out.append(',');
+                }
+                out.append('"').append(name).append('"');
+            }
+        }
+        return out.append(']').toString();
+    }
+
+    public static void recordEvent(String type, String payload) {
+        if (!eventsRecording) {
+            return;
+        }
+        long tick = CLIENT_TICKS.get();
+        synchronized (EVENT_LOG_LOCK) {
+            java.util.ArrayDeque<String> ring = EVENT_LOG.get(type);
+            if (ring == null) {
+                ring = new java.util.ArrayDeque<>();
+                EVENT_LOG.put(type, ring);
+            }
+            ring.addLast("{\"seq\":" + (eventSeq++) + ",\"tick\":" + tick
+                    + ",\"side\":\"client\",\"type\":\"" + type + "\""
+                    + (payload == null || payload.isEmpty() ? "" : "," + payload) + "}");
+            while (ring.size() > capOf(type)) {
+                ring.removeFirst();
+                Long was = EVENTS_DROPPED_BY_TYPE.get(type);
+                EVENTS_DROPPED_BY_TYPE.put(type, was == null ? 1L : was + 1L);
+            }
+        }
+    }
+
+    /** The {@code seq} of a rendered record — the first number in it, and the merge key. */
+    private static long seqOf(String record) {
+        int start = record.indexOf(':') + 1;
+        return Long.parseLong(record.substring(start, record.indexOf(',')));
+    }
+
+    /** Total evictions across every type's ring. Caller holds {@link #EVENT_LOG_LOCK}. */
+    private static long eventsDroppedTotal() {
+        long total = 0;
+        for (Long n : EVENTS_DROPPED_BY_TYPE.values()) {
+            total += n;
+        }
+        return total;
     }
 
     private static void installClientLogFile() {
@@ -172,8 +380,7 @@ public final class ForgeTestClientBootstrap {
 
     private static Socket connectWithRetry(int port) throws IOException {
         IOException last = null;
-        long deadline = System.nanoTime() + com.github.stannismod.forge.testing.TestTimeouts
-                .scaledNanos(TimeUnit.MINUTES.toNanos(2));
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
 
         while (System.nanoTime() < deadline) {
             try {
@@ -481,8 +688,9 @@ public final class ForgeTestClientBootstrap {
                 // The observation channel ALONE, with the screen left exactly as it is.
                 //
                 // A test that reads "the player was told X" must clear the chat immediately
-                // before the stimulus, because the harness itself writes to that channel —
-                // every server command echoes a FORGE_TEST_DONE marker into it. But a GUI
+                // before the stimulus, because the arrangement itself writes to that channel,
+                // and a line it caused can still be in flight when its last command returns.
+                // But a GUI
                 // test's stimulus is a click on an OPEN screen, and reset_client_state closes
                 // the screen, so using it to arm the channel destroys the arrangement it was
                 // called to protect. Hence this narrower verb: same chat/overlay wipe, no
@@ -924,6 +1132,48 @@ public final class ForgeTestClientBootstrap {
                     }
                     return response;
                 });
+            case "use_mouse_over":
+                // Right-click WHATEVER THE CROSSHAIR IS ON, by calling vanilla's own dispatch.
+                //
+                // `interact_block` is told which block to hit; that answers "does interacting with
+                // THIS position work". It cannot answer "is the block the player interacts with the
+                // one his crosshair outlines", because the caller supplies the very position under
+                // test. Vanilla decides that itself in Minecraft.rightClickMouse, which reads
+                // mc.objectMouseOver — so this INVOKES that method rather than reproducing what it
+                // does. Reproducing it would put a copy of the dispatch in the harness, and a copy
+                // agrees with production until the day production changes.
+                //
+                // Private, hence reflection: the dev runtime carries MCP names, and the harness runs
+                // nowhere else. A rename shows up as a loud NoSuchMethodException, not a silent miss.
+                //
+                // The crosshair is reported as it stood AT THE MOMENT OF THE CLICK, in this same
+                // response: reading it in a separate socket call is a second frame, and the whole
+                // question is what the click and the outline saw on ONE frame.
+                return runOnClientThread(() -> {
+                    Minecraft mc = Minecraft.getMinecraft();
+                    if (mc.player == null || mc.world == null) {
+                        throw new IllegalStateException("use_mouse_over: client world/player not ready");
+                    }
+                    JsonObject response = ok();
+                    net.minecraft.util.math.RayTraceResult hit = mc.objectMouseOver;
+                    response.addProperty("aimedAtBlock", hit != null
+                            && hit.typeOfHit == net.minecraft.util.math.RayTraceResult.Type.BLOCK);
+                    BlockPos aimed = hit == null ? null : hit.getBlockPos();
+                    response.addProperty("blockX", aimed == null ? Integer.MIN_VALUE : aimed.getX());
+                    response.addProperty("blockY", aimed == null ? Integer.MIN_VALUE : aimed.getY());
+                    response.addProperty("blockZ", aimed == null ? Integer.MIN_VALUE : aimed.getZ());
+                    response.addProperty("blockBefore", aimed == null ? ""
+                            : String.valueOf(mc.world.getBlockState(aimed).getBlock().getRegistryName()));
+                    try {
+                        java.lang.reflect.Method dispatch =
+                                Minecraft.class.getDeclaredMethod("rightClickMouse");
+                        dispatch.setAccessible(true);
+                        dispatch.invoke(mc);
+                    } catch (Exception e) {
+                        throw new IllegalStateException("use_mouse_over: rightClickMouse failed: " + e, e);
+                    }
+                    return response;
+                });
             case "interact_block":
                 // Real right-click: PlayerControllerMP.processRightClickBlock
                 // sends CPacketPlayerTryUseItemOnBlock, so the server's
@@ -1094,6 +1344,77 @@ public final class ForgeTestClientBootstrap {
                 response.addProperty("managerLoaded", managerLoaded);
                 return response;
             }
+            case "event_mark":
+                // The sequence a reader asks `event_since` for, taken BEFORE the action under test.
+                // That is what removes the start race a poll always has: records are buffered, so a
+                // reader arriving late still sees everything that happened after its mark.
+                synchronized (EVENT_LOG_LOCK) {
+                    JsonObject markReply = ok();
+                    markReply.addProperty("seq", eventSeq);
+                    markReply.addProperty("recording", eventsRecording);
+                    return markReply;
+                }
+            case "event_since": {
+                // Everything recorded at or after `seq`, in order, optionally filtered by type.
+                // `recording` and `dropped` ride along on purpose: "nothing happened", "nobody was
+                // listening" and "the ring overflowed" must never be the same reply.
+                long from = requireInt(request, "seq");
+                String wanted = request.has("type") ? request.get("type").getAsString() : null;
+                StringBuilder sb = new StringBuilder("{\"ok\":true,\"recording\":")
+                        .append(eventsRecording).append(",\"dropped\":");
+                int matched = 0;
+                StringBuilder items = new StringBuilder();
+                synchronized (EVENT_LOG_LOCK) {
+                    sb.append(eventsDroppedTotal()).append(",\"droppedByType\":{");
+                    int d = 0;
+                    for (java.util.Map.Entry<String, Long> e : EVENTS_DROPPED_BY_TYPE.entrySet()) {
+                        if (d++ > 0) {
+                            sb.append(',');
+                        }
+                        sb.append('"').append(e.getKey()).append("\":").append(e.getValue());
+                    }
+                    // Which observation points have EXECUTED on this side. An empty `events` list is
+                    // only an answer once this says somebody was looking: a mixin that never wove, one
+                    // that wove but whose method never ran, and one that ran and saw nothing are
+                    // otherwise the same reply — and the first two read as the third.
+                    sb.append("},\"instruments\":").append(instrumentsEntered());
+                    sb.append(",\"from\":").append(from);
+                    // Merged across the per-type rings and re-ordered by sequence: ORDER is what a
+                    // chain assertion reads, and once the rings are separate the sequence is the
+                    // only thing still carrying it.
+                    java.util.List<String> merged = new java.util.ArrayList<>();
+                    for (java.util.ArrayDeque<String> ring : EVENT_LOG.values()) {
+                        for (String record : ring) {
+                            long seq = seqOf(record);
+                            if (seq < from) {
+                                continue;
+                            }
+                            if (wanted != null && !record.contains("\"type\":\"" + wanted + "\"")) {
+                                continue;
+                            }
+                            merged.add(record);
+                        }
+                    }
+                    java.util.Collections.sort(merged, new java.util.Comparator<String>() {
+                        @Override
+                        public int compare(String a, String b) {
+                            return Long.compare(seqOf(a), seqOf(b));
+                        }
+                    });
+                    for (String record : merged) {
+                        if (matched++ > 0) {
+                            items.append(',');
+                        }
+                        items.append(record);
+                    }
+                }
+                // `count` BEFORE the records, like every other envelope key: a reader that takes the
+                // first `"count":` in the text must never meet a record's own field first (the server
+                // probe was bitten by exactly that on 2026-09-05).
+                sb.append(",\"count\":").append(matched)
+                        .append(",\"events\":[").append(items).append("]}");
+                return new com.google.gson.JsonParser().parse(sb.toString()).getAsJsonObject();
+            }
             case "clear_sounds":
                 // Reset the played-sound log (see report_sounds) so a test can
                 // scope its assertion to sounds triggered after this point.
@@ -1113,6 +1434,11 @@ public final class ForgeTestClientBootstrap {
                         return response;
                     }
                     response.addProperty("loaded", mc.world.isBlockLoaded(pos));
+                    // `loaded` is vanilla's `isBlockLoaded`, which on the client answers TRUE for the
+                    // blank EmptyChunk it stands in for every chunk the server has not sent — so it
+                    // cannot say whether the client HOLDS the chunk. `chunkEmpty` can: a chunk the
+                    // server sent is a real Chunk, and only the stand-in reports isEmpty().
+                    response.addProperty("chunkEmpty", mc.world.getChunkFromBlockCoords(pos).isEmpty());
                     if (mc.world.isBlockLoaded(pos)) {
                         response.addProperty("block", String.valueOf(mc.world.getBlockState(pos).getBlock().getRegistryName()));
                         response.addProperty("tile", mc.world.getTileEntity(pos) == null
@@ -1260,27 +1586,20 @@ public final class ForgeTestClientBootstrap {
                 // The only way a headless test can see what the client actually DREW. Vanilla's F2
                 // cannot be driven: it is dispatched off the raw LWJGL key-event queue, which
                 // set_key (a KeyBinding state write) never reaches. So call the same helper directly,
-                // on the client thread, where the GL context is current.
-                return runOnClientThread(() -> {
+                // on the client thread, where the GL context is current — at the END of the next
+                // rendered frame (see PENDING_FRAME_CAPTURE), so what is captured was drawn after
+                // this request, and a caller never has to guess how many ticks make a frame.
+                return captureAtTheEndOfTheNextFrame(() -> {
                     Minecraft mc = Minecraft.getMinecraft();
                     String name = requireString(request, "name");
                     String fileName = name.endsWith(".png") ? name : name + ".png";
                     // Without the FBO, ScreenShotHelper falls back to glReadPixels of the current READ
-                    // buffer. Read the FRONT buffer, which at least holds the frame on screen; the
-                    // caller should have enabled the framebuffer if it means to trust the pixels.
+                    // buffer, which at the end of a frame's render — before the swap — is the BACK
+                    // buffer holding that frame. The caller should have enabled the framebuffer if it
+                    // means to trust the pixels.
                     boolean fbo = OpenGlHelper.isFramebufferEnabled();
-                    int previousReadBuffer = fbo ? 0 : GL11.glGetInteger(GL11.GL_READ_BUFFER);
-                    if (!fbo) {
-                        GL11.glReadBuffer(GL11.GL_FRONT);
-                    }
-                    try {
-                        ScreenShotHelper.saveScreenshot(mc.mcDataDir, fileName,
-                                mc.displayWidth, mc.displayHeight, mc.getFramebuffer());
-                    } finally {
-                        if (!fbo) {
-                            GL11.glReadBuffer(previousReadBuffer);
-                        }
-                    }
+                    ScreenShotHelper.saveScreenshot(mc.mcDataDir, fileName,
+                            mc.displayWidth, mc.displayHeight, mc.getFramebuffer());
                     File written = new File(new File(mc.mcDataDir, "screenshots"), fileName);
                     JsonObject response = ok();
                     response.addProperty("path", written.getAbsolutePath());
@@ -1377,10 +1696,12 @@ public final class ForgeTestClientBootstrap {
     private static JsonObject waitTicks(JsonObject request) {
         int ticks = boundedInt(request, "ticks", 0, 1000000);
         long start = CLIENT_TICKS.get();
-        // Load-scaled: under concurrent forks the effective client tick rate drops and a fixed
-        // wall-clock ceiling would turn a tick-counted wait into a spurious timeout.
-        long deadline = System.nanoTime() + com.github.stannismod.forge.testing.TestTimeouts
-                .scaledNanos(TimeUnit.MINUTES.toNanos(2));
+        // Same relation as waitForWorld, and for the same reason: at a flat two minutes this
+        // deadline equalled the bot's read timeout, so "Timed out waiting for N client ticks" —
+        // which names the tick count and is far better than "the client bridge did not answer" —
+        // could never be delivered. A client that stops ticking is now reported as one.
+        long deadline = System.nanoTime()
+                + TimeUnit.MILLISECONDS.toNanos(CLIENT_SIDE_BUDGET_MILLIS);
 
         while (CLIENT_TICKS.get() - start < ticks) {
             if (System.nanoTime() > deadline) {
@@ -1396,27 +1717,66 @@ public final class ForgeTestClientBootstrap {
         return ok();
     }
 
-    private static void waitForWorld() {
-        long deadline = System.nanoTime() + com.github.stannismod.forge.testing.TestTimeouts
-                .scaledNanos(TimeUnit.MINUTES.toNanos(2));
-        while (System.nanoTime() < deadline) {
-            try {
-                Boolean ready = runOnClientThread(() -> {
-                    Minecraft mc = Minecraft.getMinecraft();
-                    return mc.world != null && mc.player != null && mc.player.connection != null;
-                });
-                if (Boolean.TRUE.equals(ready)) {
-                    return;
-                }
-                Thread.sleep(100L);
-            } catch (RuntimeException exception) {
-                throw exception;
-            } catch (InterruptedException interruptedException) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupted while waiting for the client world to load", interruptedException);
+    /**
+     * The client side's own budget, DERIVED from the bot's read timeout and deliberately shorter.
+     *
+     * <p>The relation is the point, not the fraction: an inner deadline equal to the outer one can
+     * never be reported, because the client stops waiting exactly when the caller has already given
+     * up on it. Three quarters leaves the bridge a quarter of the window to write a reply that says
+     * what IT was waiting for — "Timed out waiting for the client world to load" is a far better
+     * red than "the client bridge did not answer", and before 2026-09-22 it was unreachable.</p>
+     */
+    private static final long CLIENT_SIDE_BUDGET_MILLIS =
+            com.github.stannismod.forge.testing.client.ClientBot.READ_TIMEOUT_MILLIS * 3L / 4L;
+
+    /**
+     * Publish whether the client world is live RIGHT NOW. Runs on the client thread only.
+     *
+     * <p>Every tick, because the property goes both ways: a disconnect or a relog takes the world
+     * down, and a waiter that had been told "ready" once would read the gap as readiness.</p>
+     */
+    private static void publishWorldLiveness() {
+        Minecraft mc = Minecraft.getMinecraft();
+        boolean live = mc.world != null && mc.player != null && mc.player.connection != null;
+        synchronized (CLIENT_WORLD_LOCK) {
+            if (live != clientWorldLive) {
+                clientWorldLive = live;
+                CLIENT_WORLD_LOCK.notifyAll();
             }
         }
-        throw new IllegalStateException("Timed out waiting for the client world to load");
+    }
+
+    /**
+     * Wait for the record that the client world is live — a link, not a poll.
+     *
+     * <p>The state is read FIRST and the wait entered only if it is not already true: a world that
+     * came up before the command arrived publishes no further change, and a wait that skipped the
+     * read would spend its whole budget on a client that was ready before it was asked.</p>
+     *
+     * <p>The budget bounds a DEAD client, not a slow one. Its expiry says which of the two the
+     * client is, by reporting whether the client thread has ticked at all: no ticks means it never
+     * left {@code Minecraft.init}, ticks without a world means it is running and not connecting.</p>
+     */
+    private static void waitForWorld() {
+        long deadline = System.nanoTime()
+                + TimeUnit.MILLISECONDS.toNanos(CLIENT_SIDE_BUDGET_MILLIS);
+        synchronized (CLIENT_WORLD_LOCK) {
+            while (!clientWorldLive) {
+                long remainingNanos = deadline - System.nanoTime();
+                if (remainingNanos <= 0L) {
+                    throw new IllegalStateException("Timed out waiting for the client world to load"
+                            + " after " + CLIENT_SIDE_BUDGET_MILLIS + " ms; client ticks so far: "
+                            + CLIENT_TICKS.get()
+                            + " (0 means the client thread never left Minecraft.init)");
+                }
+                try {
+                    CLIENT_WORLD_LOCK.wait(Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remainingNanos)));
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting for the client world to load", interruptedException);
+                }
+            }
+        }
     }
 
     private static <T> T runOnClientThread(Callable<T> callable) {
@@ -1424,10 +1784,32 @@ public final class ForgeTestClientBootstrap {
         FutureTask<T> task = new FutureTask<>(callable);
         mc.addScheduledTask(task);
         try {
-            return task.get(com.github.stannismod.forge.testing.TestTimeouts
-                    .scaledMillis(TimeUnit.MINUTES.toMillis(2)), TimeUnit.MILLISECONDS);
+            // HALF the client-side budget, so a task that never runs still leaves the caller of
+            // this method time to fail with its own words — and leaves the bridge time to answer.
+            // It used to be a flat two minutes, i.e. the bot's whole read timeout, which made a
+            // busy client thread indistinguishable from a dead channel.
+            return task.get(CLIENT_SIDE_BUDGET_MILLIS / 2L, TimeUnit.MILLISECONDS);
         } catch (Exception exception) {
             throw new RuntimeException(exception);
+        }
+    }
+
+    /**
+     * Run {@code capture} at the END of the next frame the client renders, and answer its result.
+     * The frame-side half is {@link FrameCapturer}.
+     */
+    private static JsonObject captureAtTheEndOfTheNextFrame(Callable<JsonObject> capture) {
+        FutureTask<JsonObject> task = new FutureTask<>(capture);
+        if (!PENDING_FRAME_CAPTURE.compareAndSet(null, task)) {
+            throw new IllegalStateException("a screenshot is already waiting for a frame");
+        }
+        try {
+            return task.get(CLIENT_SIDE_BUDGET_MILLIS / 2L, TimeUnit.MILLISECONDS);
+        } catch (Exception exception) {
+            throw new RuntimeException("no frame was rendered to capture (client ticks so far: "
+                    + CLIENT_TICKS.get() + ")", exception);
+        } finally {
+            PENDING_FRAME_CAPTURE.compareAndSet(task, null);
         }
     }
 
@@ -1438,19 +1820,68 @@ public final class ForgeTestClientBootstrap {
         return mc.player;
     }
 
-    /** {id, count, nbt} of a client-side ItemStack; empty stacks → id="" count=0. */
+    /**
+     * {id, count, nbt, tag} of a client-side ItemStack; empty stacks → id="" count=0.
+     *
+     * <p>{@code nbt} is the tag's {@code toString()} — a RENDERING, kept for a failure message to
+     * print. {@code tag} is the same tag as DATA, and it is what a reader asking for one value
+     * should use: a caller that wants the suit's air out of {@code nbt} has to write
+     * {@code \bair:(\d+)} over Minecraft's own display format, which nothing anywhere promises to
+     * keep stable, and which cannot tell a tag named {@code air} from one whose name merely ends in
+     * it. Added 2026-09-18, with the one such caller converted in the same change.</p>
+     */
     private static JsonObject stackJson(ItemStack stack) {
         JsonObject json = new JsonObject();
         if (stack == null || stack.isEmpty()) {
             json.addProperty("id", "");
             json.addProperty("count", 0);
             json.addProperty("nbt", "");
+            json.add("tag", new JsonObject());
             return json;
         }
         json.addProperty("id", String.valueOf(stack.getItem().getRegistryName()));
         json.addProperty("count", stack.getCount());
-        json.addProperty("nbt", stack.getTagCompound() == null ? "" : stack.getTagCompound().toString());
+        net.minecraft.nbt.NBTTagCompound tag = stack.getTagCompound();
+        json.addProperty("nbt", tag == null ? "" : tag.toString());
+        json.add("tag", tag == null ? new JsonObject() : nbtJson(tag));
         return json;
+    }
+
+    /**
+     * An NBT compound as JSON: every tag by its own NAME, numbers as numbers, nested compounds
+     * nested, lists as arrays.
+     *
+     * <p>A tag whose type this does not model (a byte/int/long array) arrives as its
+     * {@code toString()} rather than being dropped — an absent key and a key this cannot render are
+     * different things, and a reader must be able to tell them apart.</p>
+     */
+    private static JsonObject nbtJson(net.minecraft.nbt.NBTTagCompound tag) {
+        JsonObject out = new JsonObject();
+        for (String key : tag.getKeySet()) {
+            out.add(key, nbtValue(tag.getTag(key)));
+        }
+        return out;
+    }
+
+    private static JsonElement nbtValue(net.minecraft.nbt.NBTBase value) {
+        if (value instanceof net.minecraft.nbt.NBTTagCompound) {
+            return nbtJson((net.minecraft.nbt.NBTTagCompound) value);
+        }
+        if (value instanceof net.minecraft.nbt.NBTTagList) {
+            net.minecraft.nbt.NBTTagList list = (net.minecraft.nbt.NBTTagList) value;
+            JsonArray array = new JsonArray();
+            for (int i = 0; i < list.tagCount(); i++) {
+                array.add(nbtValue(list.get(i)));
+            }
+            return array;
+        }
+        if (value instanceof net.minecraft.nbt.NBTTagString) {
+            return new com.google.gson.JsonPrimitive(((net.minecraft.nbt.NBTTagString) value).getString());
+        }
+        if (value instanceof net.minecraft.nbt.NBTPrimitive) {
+            return new com.google.gson.JsonPrimitive(((net.minecraft.nbt.NBTPrimitive) value).getDouble());
+        }
+        return new com.google.gson.JsonPrimitive(String.valueOf(value));
     }
 
     private static JsonObject ok() {
@@ -1651,8 +2082,9 @@ public final class ForgeTestClientBootstrap {
      * <p>Shared by {@code reset_client_state} (which also closes the screen and releases keys)
      * and {@code clear_chat} (which does not). The chat backlog is the dangerous channel in a
      * shared harness: an assertion of the form "the player was told X" searches the last N
-     * lines, so a previous scenario's identical line — or one of the harness's own
-     * {@code FORGE_TEST_DONE} markers — satisfies it with no stimulus behind it at all.</p>
+     * lines, so a previous scenario's identical line — or a line the arrangement itself caused,
+     * still in flight when the arrangement's last command returned — satisfies it with no stimulus
+     * behind it at all.</p>
      *
      * <p>{@code overlayMessageTime} is the real gate for the action bar: the overlay STRING
      * lingers after expiry, so only the countdown says "still on screen".</p>
@@ -1701,9 +2133,62 @@ public final class ForgeTestClientBootstrap {
         throw new NoSuchFieldException(fieldName);
     }
 
+    /**
+     * The client bus recorders — three Forge events the harness turns into ordered records, beside
+     * the sound ring they predate.
+     *
+     * <p>Each one observes a fact the CLIENT already produces and writes it through
+     * {@link #recordEvent}, so a test awaits it on the client log like any mixin-recorded event.
+     * None of them adds a line to production: the bus posts these events whether or not anyone is
+     * subscribed. Every handler calls {@link #noteInstrumentEntered} first thing, above its own
+     * gates, so "the recorder never ran" and "the recorder ran and filtered" stay distinguishable.</p>
+     *
+     * <ul>
+     *   <li>{@code client_sound_played} — inside {@link SoundRecorder#onPlaySound}, beside the ring
+     *       write: the {@code SoundManager} was ASKED to play a sound ({@code location} is the
+     *       registry name; {@code category} the {@code SoundCategory} it was filed under, or
+     *       {@code "none"} when the sound reports none). Silent about whether the sound was then
+     *       actually heard: {@code PlaySoundEvent} fires before asset resolution and before the
+     *       category volume is applied, and a handler after this one may still swap or null the
+     *       result sound. Silent too about a sound with no location at all — it sits behind the
+     *       ring's own pre-existing guard and never reaches either the ring or this record.</li>
+     *   <li>{@code client_gui_opened} — {@link GuiOpenRecorder}: the client was asked to display a
+     *       screen ({@code gui} is the screen's simple class name, or {@code "none"} for a null gui,
+     *       which is how a screen CLOSES and is a fact worth a record, so it is never filtered).
+     *       Taken at {@code LOWEST} priority with cancelled events delivered, so {@code cancelled}
+     *       is the verdict every other subscriber left, not this one's own view. Silent about which
+     *       block, entity or item the screen belongs to — the server's {@code container_opened}
+     *       says that — and about what the screen shows once drawn.</li>
+     *   <li>{@code entity_joined_world} — {@link EntityJoinRecorder}: an entity was added to the
+     *       CLIENT world ({@code e} the id, {@code cls} the simple class name, {@code x,y,z} its
+     *       position at the join, {@code dim} the world's dimension id). The integrated server posts
+     *       the same event for its own worlds in this JVM, so the record is gated on
+     *       {@code world.isRemote}; the server half is the probe's own recorder. {@code EntityItem}
+     *       and {@code EntityXPOrb} are skipped — a drop or a mining session would turn the ring
+     *       over with nothing a chain waits for. A join cancelled by another subscriber is not a
+     *       join and is not recorded. Silent about the entity's identity beyond its class and id,
+     *       and about respawns of the same id.</li>
+     * </ul>
+     *
+     * <p>Order between any two of these, and between them and any mixin-recorded event, is a fact
+     * of a run and is not asserted here.</p>
+     *
+     * <p><b>What gates them, honestly.</b> These are BUS subscribers, not mixins: the game posts
+     * every event above whether or not a mixin was ever woven, and they are registered from
+     * {@link #bootstrap()} beside the tick and sound recorders. On the SERVER half of this vocabulary
+     * that makes the recording flag the only gate. Here it does not, and the difference is worth
+     * stating rather than inheriting: {@link #recordEvent} drops everything while
+     * {@code eventsRecording} is false, and that flag is set from
+     * {@code ForgeTestCoreMod.isConfigQueued()} in {@link #installEventMixins()} — so on the client
+     * a harness whose coremod never queued its mixin config records none of these either, even
+     * though nothing here needs a mixin. The reply's own {@code recording} field is the fact to
+     * read; a false there means these three are silent for a reason that has nothing to do with the
+     * game.</p>
+     */
     private static final class SoundRecorder {
         @SubscribeEvent
         public void onPlaySound(net.minecraftforge.client.event.sound.PlaySoundEvent event) {
+            noteInstrumentEntered("client_sound_events");
             net.minecraft.client.audio.ISound sound = event.getSound();
             if (sound == null || sound.getSoundLocation() == null) {
                 return;
@@ -1715,6 +2200,62 @@ public final class ForgeTestClientBootstrap {
                     PLAYED_SOUNDS.removeFirst();
                 }
                 SOUNDS_TOTAL.incrementAndGet();
+            }
+            net.minecraft.util.SoundCategory category = sound.getCategory();
+            recordEvent("client_sound_played", "\"location\":\"" + location + "\",\"category\":\""
+                    + (category == null ? "none" : category.getName()) + "\"");
+        }
+    }
+
+    /** See the recorder note on {@link SoundRecorder}. */
+    private static final class GuiOpenRecorder {
+        // LOWEST + receiveCanceled: the record carries the bus's FINAL verdict on the open, which
+        // only the last subscriber to run can read. A cancelled open is still recorded — the test
+        // that awaits a screen and finds it cancelled has learned exactly what it needed.
+        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        public void onGuiOpen(GuiOpenEvent event) {
+            noteInstrumentEntered("client_gui_events");
+            GuiScreen gui = event.getGui();
+            recordEvent("client_gui_opened", "\"gui\":\""
+                    + (gui == null ? "none" : gui.getClass().getSimpleName())
+                    + "\",\"cancelled\":" + event.isCanceled());
+        }
+    }
+
+    /** See the recorder note on {@link SoundRecorder}. */
+    private static final class EntityJoinRecorder {
+        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        public void onEntityJoin(EntityJoinWorldEvent event) {
+            noteInstrumentEntered("client_entity_join_events");
+            Entity entity = event.getEntity();
+            if (entity == null || event.getWorld() == null || !event.getWorld().isRemote
+                    || event.isCanceled()
+                    || entity instanceof EntityItem || entity instanceof EntityXPOrb) {
+                return;
+            }
+            recordEvent("entity_joined_world", "\"e\":" + entity.getEntityId()
+                    + ",\"cls\":\"" + entity.getClass().getSimpleName() + "\""
+                    + ",\"x\":" + jsonNumber(entity.posX) + ",\"y\":" + jsonNumber(entity.posY)
+                    + ",\"z\":" + jsonNumber(entity.posZ)
+                    + ",\"dim\":" + event.getWorld().provider.getDimension());
+        }
+    }
+
+    /** Six significant figures, {@code Locale.ROOT} — a coordinate, never a locale's comma. */
+    private static String jsonNumber(double v) {
+        return String.format(Locale.ROOT, "%.6g", v);
+    }
+
+    /** Performs a pending {@code screenshot} once a frame has been drawn — see
+     *  {@link #PENDING_FRAME_CAPTURE}. */
+    private static final class FrameCapturer {
+        @SubscribeEvent
+        public void onRenderTick(TickEvent.RenderTickEvent event) {
+            if (event.phase == TickEvent.Phase.END) {
+                FutureTask<JsonObject> capture = PENDING_FRAME_CAPTURE.getAndSet(null);
+                if (capture != null) {
+                    capture.run();
+                }
             }
         }
     }
@@ -1730,6 +2271,7 @@ public final class ForgeTestClientBootstrap {
                     installNonWarpingMouseHelper();
                 }
                 CLIENT_TICKS.incrementAndGet();
+                publishWorldLiveness();
                 // Deferred connection teardown: this event runs on the client thread OUTSIDE
                 // the scheduled-task drain, so closing the channel here cannot deadlock
                 // against an inbound packet handler (see PENDING_CONNECTION_ACTION).

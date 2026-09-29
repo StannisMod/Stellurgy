@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -40,13 +41,13 @@ import static org.junit.Assert.assertTrue;
  */
 public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
 
-    private static final Pattern NET_ID = Pattern.compile("\"networkID\":(-?\\d+)");
-    private static final Pattern SHARED_ID = Pattern.compile("\"sharedNetworkId\":(-?\\d+)");
-    private static final Pattern MODE = Pattern.compile("\"mode\":\"(extract|inject)\"");
-    private static final Pattern ENABLED = Pattern.compile("\"enabled\":(true|false)");
-    private static final Pattern IS_SOURCE = Pattern.compile("\"isSource\":(true|false)");
-    private static final Pattern IS_SINK = Pattern.compile("\"isSink\":(true|false)");
-    private static final Pattern NETWORK_EXISTS = Pattern.compile("\"networkExists\":(true|false)");
+    private static final String NET_ID = "networkID";
+    private static final String SHARED_ID = "sharedNetworkId";
+    private static final String MODE = "mode";
+    private static final String ENABLED = "enabled";
+    private static final String IS_SOURCE = "isSource";
+    private static final String IS_SINK = "isSink";
+    private static final String NETWORK_EXISTS = "networkExists";
 
     // Each test method picks a unique BASE_X offset per the
     // AbstractSharedServerTest position-isolation contract. 50 blocks of
@@ -263,25 +264,25 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
     public void frozenSaveIdentifiersMustNotBeRespelled() throws Exception {
         String reg = String.join("\n", client().execute(
                 "artest registry lookup advancedrocketry:wirelessTransciever"));
-        assertTrue("registry lookup probe errored: " + reg, reg.contains("\"ok\":true"));
+        assertTrue("registry lookup probe errored: " + reg, Reply.of(reg).ok());
         assertTrue("FROZEN block registry name advancedrocketry:wirelesstransciever is gone — "
                         + "every existing world loses its placed transceivers: " + reg,
-                reg.contains("\"blockRegistered\":true"));
+                Reply.of(reg).bool("blockRegistered"));
         assertTrue("FROZEN ItemBlock registry name is gone — stored transceivers are deleted "
                         + "from inventories and chests: " + reg,
-                reg.contains("\"itemRegistered\":true"));
+                Reply.of(reg).bool("itemRegistered"));
         assertTrue("transceiver is no longer craftable — the recipe result no longer resolves "
                         + "against the frozen registry name: " + reg,
-                reg.contains("\"craftable\":true"));
+                Reply.of(reg).bool("craftable"));
 
         int baseX = 3000;
         placeAt(baseX);
         String nbt = String.join("\n", client().execute(
                 "artest tile nbt-id " + DIM + " " + baseX + " " + Y + " " + Z));
-        assertTrue("tile nbt-id probe errored: " + nbt, nbt.contains("\"ok\":true"));
+        assertTrue("tile nbt-id probe errored: " + nbt, Reply.of(nbt).ok());
         assertTrue("FROZEN tile entity id changed — tiles in existing chunks and inside packed "
                         + "rockets/stations load as null, losing network id, mode and priority: " + nbt,
-                nbt.contains("\"id\":\"minecraft:artransciever\""));
+                "minecraft:artransciever".equals(Reply.of(nbt).text("id")));
 
         // The client resolves blockstate and models from the registry name
         // (lowercased). A server tier cannot render, but it can prove the files
@@ -297,7 +298,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
 
     // --- helpers -----------------------------------------------------------
 
-    private static final int Y = 65;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z = 2000;
     private static final int DIM = 0;
 
@@ -307,26 +308,18 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
                     "artest place " + DIM + " " + x + " " + Y + " " + Z
                             + " advancedrocketry:wirelessTransciever"));
             assertTrue("place failed at x=" + x + ": " + r,
-                    r.contains("\"placed\":true"));
-            // Under parallel-fork load the tile entity can lag the block
-            // setBlockState (or the chunk holding it can unload between
-            // commands). wireless-pair then sees tile=null and flakes.
-            // Poll wireless-info until the probe signals it found the tile
-            // (response carries `"ok":true`; tile-missing responses carry
-            // `"error":...`). Budget 20 × 500 ms — happy path costs one
-            // round-trip; non-happy 10 s ceiling absorbs the worst case
-            // observed under load.
-            String last = "n/a";
-            boolean ready = false;
-            for (int attempt = 0; attempt < 20; attempt++) {
-                last = info(x);
-                if (last.contains("\"ok\":true")) {
-                    ready = true;
-                    break;
-                }
-                Thread.sleep(500);
-            }
-            assertTrue("tile entity never materialized at x=" + x + ": " + last, ready);
+                    Reply.of(r).bool("placed"));
+            // ONE read, not a poll: the tile is there before `place` answers. 1.12.2's
+            // Chunk.setBlockState creates the tile entity and hands it to World.setTileEntity
+            // before it returns, and World.getTileEntity consults the pending list when the world
+            // is mid-tick — so the place probe, which force-loads the chunk and then calls
+            // setBlockState, has already established what this read asks about. wireless-info's
+            // `"ok":true` IS `getTileEntity(pos) instanceof TileWirelessTransceiver`, so a loop
+            // here has nothing left to wait for; on a real failure its timeout reported ten
+            // seconds of silence where this read names the tile that is actually at the position.
+            String info = info(x);
+            assertTrue("no transceiver tile at x=" + x + " right after place: " + info,
+                    Reply.of(info).ok());
         }
     }
 
@@ -350,7 +343,7 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
                 "artest pipe wireless-pair " + DIM + " "
                         + x1 + " " + Y + " " + Z + " "
                         + x2 + " " + Y + " " + Z));
-        assertTrue("pair probe failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("pair probe failed: " + r, Reply.of(r).ok());
         return extractInt(SHARED_ID, r);
     }
 
@@ -358,31 +351,31 @@ public class WirelessTransceiverContractTest extends AbstractSharedServerTest {
         String r = String.join("\n", client().execute(
                 "artest pipe wireless-set-mode " + DIM + " "
                         + x + " " + Y + " " + Z + " " + mode));
-        assertTrue("set-mode failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("set-mode failed: " + r, Reply.of(r).ok());
     }
 
     private void setEnabled(int x, boolean enabled) throws Exception {
         String r = String.join("\n", client().execute(
                 "artest pipe wireless-set-enabled " + DIM + " "
                         + x + " " + Y + " " + Z + " " + enabled));
-        assertTrue("set-enabled failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("set-enabled failed: " + r, Reply.of(r).ok());
     }
 
     private static String extractMode(String haystack) {
-        Matcher m = MODE.matcher(haystack);
-        if (!m.find()) throw new AssertionError("no mode in: " + haystack);
-        return m.group(1);
+        Reply mReply = Reply.of(haystack);
+        if (!mReply.has(MODE)) throw new AssertionError("no mode in: " + haystack);
+        return mReply.text(MODE);
     }
 
-    private static int extractInt(Pattern p, String haystack) {
-        Matcher m = p.matcher(haystack);
-        if (!m.find()) throw new AssertionError("pattern " + p + " did not match: " + haystack);
-        return Integer.parseInt(m.group(1));
+    private static int extractInt(String field, String haystack) {
+        Reply reply = Reply.of(haystack);
+        assertTrue("probe response missing `" + field + "`: " + haystack, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static boolean extractBool(Pattern p, String haystack) {
-        Matcher m = p.matcher(haystack);
-        if (!m.find()) throw new AssertionError("pattern " + p + " did not match: " + haystack);
-        return Boolean.parseBoolean(m.group(1));
+    private static boolean extractBool(String field, String haystack) {
+        Reply reply = Reply.of(haystack);
+        assertTrue("probe response missing `" + field + "`: " + haystack, reply.has(field));
+        return reply.bool(field);
     }
 }

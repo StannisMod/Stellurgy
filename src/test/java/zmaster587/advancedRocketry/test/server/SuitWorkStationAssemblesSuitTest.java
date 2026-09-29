@@ -1,8 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -39,8 +44,25 @@ public class SuitWorkStationAssemblesSuitTest extends AbstractHeadlessServerTest
     /** Isolated patch — no collision with MachineDomainSmokeSuite
      *  (highest x ~2200) or other restart/UV tests (2400, 2500). */
     private static final int X = 2700;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z = 2700;
+
+    /**
+     * The NBT dump of SLOT 0 — the chestplate this test placed — lower-cased for the token read
+     * below.
+     *
+     * <p>Both claims used to lower-case the WHOLE reply and search that. The reply carries every
+     * slot of the hatch plus the jetpack sitting in slot 1, so the negative claim ("no jetpack
+     * token yet") was answered by the jetpack STACK the arrangement had just put beside it, and
+     * the positive one would have been satisfied by that same stack whether or not the component
+     * ever reached the armour. Reading slot 0's own dump is what makes them about the chestplate.
+     * The token search inside THAT string stays: an NBT dump is Mojangson, and the contract is
+     * that the component id appears in it.</p>
+     */
+    private static String slotZeroNbt(String hatchRead) {
+        return Reply.of("artest hatch read", hatchRead).element("slots", "slot", "0")
+                .text("nbt").toLowerCase(java.util.Locale.ROOT);
+    }
 
     @Test
     public void chestplateGainsJetpackComponentWhenJetpackPlacedInComponentSlot() throws Exception {
@@ -48,12 +70,12 @@ public class SuitWorkStationAssemblesSuitTest extends AbstractHeadlessServerTest
         String place = join(client().execute(
                 "artest place 0 " + X + " " + Y + " " + Z + " advancedrocketry:suitWorkStation"));
         assertTrue("suitWorkStation place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         // Sanity: tile is the expected class + IInventory.
         String info0 = join(client().execute("artest machine info 0 " + X + " " + Y + " " + Z));
-        assertTrue("expected TileSuitWorkStation tile: " + info0,
-                info0.contains("TileSuitWorkStation"));
+        assertEquals("expected TileSuitWorkStation tile: " + info0,
+                "TileSuitWorkStation", MachineInfo.of(info0).tileSimpleName());
 
         // Init-modules: TileSuitWorkStation.slotArray is populated only when
         // the GUI-open path calls getModules(). On a freshly-placed server
@@ -66,31 +88,34 @@ public class SuitWorkStationAssemblesSuitTest extends AbstractHeadlessServerTest
         String initMods = join(client().execute(
                 "artest tile init-modules 0 " + X + " " + Y + " " + Z));
         assertTrue("init-modules probe failed: " + initMods,
-                initMods.contains("\"ok\":true"));
+                Reply.of(initMods).ok());
 
         // 2. Put a fresh spaceChestplate into slot 0.
         String fillArmor = join(client().execute(
                 "artest hatch fill 0 " + X + " " + Y + " " + Z + " 0 advancedrocketry:spaceChestplate 1"));
         assertTrue("chestplate fill failed: " + fillArmor,
-                fillArmor.contains("\"ok\":true"));
+                Reply.of(fillArmor).ok());
 
         // 3. Read with NBT — pin baseline. The chestplate must NOT yet have a
         // jetpack component in its NBT.
         String pre = join(client().execute(
                 "artest hatch read 0 " + X + " " + Y + " " + Z + " nbt"));
-        assertTrue("slot 0 must contain spaceChestplate: " + pre,
-                pre.contains("\"item\":\"advancedrocketry:spacechestplate\""));
+        // SLOT 0 — where this test put the chestplate. Addressing the slot by its contents asks
+        // the hatch "is a chestplate anywhere in you", which a leaked stack in slot 3 answers.
+        assertEquals("slot 0 must hold the chestplate this test placed: " + pre,
+                "advancedrocketry:spacechestplate",
+                Reply.of("artest hatch read", pre).element("slots", "slot", "0").text("item"));
         assertTrue("fresh chestplate must not contain jetPack token yet — "
                         + "either the component slot pre-populated unexpectedly "
                         + "or a previous test leaked. Response: " + pre,
-                !pre.toLowerCase().contains("jetpack"));
+                !slotZeroNbt(pre).contains("jetpack"));
 
         // 4. Put a jetpack into slot 1. Suit work station calls
         // addArmorComponent -> mutates the chestplate's NBT.
         String fillJet = join(client().execute(
                 "artest hatch fill 0 " + X + " " + Y + " " + Z + " 1 advancedrocketry:jetPack 1"));
         assertTrue("jetPack fill failed: " + fillJet,
-                fillJet.contains("\"ok\":true"));
+                Reply.of(fillJet).ok());
 
         // 5. Re-read inventory with NBT. Two things must now be observable:
         //    (a) The chestplate's NBT in slot 0 now contains the jetpack
@@ -104,15 +129,19 @@ public class SuitWorkStationAssemblesSuitTest extends AbstractHeadlessServerTest
         //        contract: "armor component at index 0 is jetpack".
         String post = join(client().execute(
                 "artest hatch read 0 " + X + " " + Y + " " + Z + " nbt"));
-        assertTrue("slot 0 must still contain spaceChestplate after component dispatch: " + post,
-                post.contains("\"item\":\"advancedrocketry:spacechestplate\""));
+        assertEquals("slot 0 must still hold the same chestplate after the dispatch: " + post,
+                "advancedrocketry:spacechestplate",
+                Reply.of("artest hatch read", post).element("slots", "slot", "0").text("item"));
         // (a) Chestplate's NBT must now contain the jetpack registry id.
         // Coupling to lower-cased token (Forge normalises resource paths).
         assertTrue("chestplate NBT must contain jetpack reference after addArmorComponent: " + post,
-                post.toLowerCase().contains("jetpack"));
+                slotZeroNbt(post).contains("jetpack"));
         // (b) Slot 1 must read-through to the armor's component 0 (jetpack).
-        assertTrue("slot 1 must report the jetpack via getComponentInSlot read-through: " + post,
-                post.contains("\"slot\":1") && post.contains("\"item\":\"advancedrocketry:jetpack\""));
+        // SLOT 1 specifically — the read-through contract is about that index, and asking whether
+        // some slot holds a jetpack would pass on the component sitting anywhere else.
+        assertEquals("slot 1 must report the jetpack via getComponentInSlot read-through: " + post,
+                "advancedrocketry:jetpack",
+                Reply.of("artest hatch read", post).element("slots", "slot", "1").text("item"));
     }
 
     private static String join(java.util.List<String> resp) {

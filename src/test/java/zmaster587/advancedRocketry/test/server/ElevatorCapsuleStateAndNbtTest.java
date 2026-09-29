@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -40,33 +41,32 @@ import static org.junit.Assert.assertTrue;
 public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
 
     private static final int BASE_X = 7000;
-    private static final int BASE_Y = 80;
+    /**
+     * The open-air band, not terrain. A hard-coded 80 until 2026-09-14, and no scenario here wants
+     * ground: the subjects are the capsule's motion FLAGS and its NBT round-trip, both read out of
+     * the entity the tick after it spawns. 80 bought whatever the pinned seed rolled at x=7000 —
+     * unsurveyed either way — so the capsule may have been spawned inside the landscape, which for
+     * a 3x3 entity is a collision the scenario never asks about and would not report. In the band
+     * there is nothing to be inside of.
+     */
+    private static final int BASE_Y = FixtureSite.OPEN_AIR_Y;
     private static final int BASE_Z = 7000;
 
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern IS_ASCENDING =
-            Pattern.compile("\"isAscending\":(true|false)");
-    private static final Pattern IS_DESCENDING =
-            Pattern.compile("\"isDescending\":(true|false)");
-    private static final Pattern IS_IN_MOTION =
-            Pattern.compile("\"isInMotion\":(true|false)");
-    private static final Pattern PEER_IS_ASCENDING =
-            Pattern.compile("\"peerIsAscending\":(true|false)");
-    private static final Pattern PEER_IS_DESCENDING =
-            Pattern.compile("\"peerIsDescending\":(true|false)");
-    private static final Pattern PEER_IS_IN_MOTION =
-            Pattern.compile("\"peerIsInMotion\":(true|false)");
-    private static final Pattern HAS_DST_KEY =
-            Pattern.compile("\"hasDstKey\":(true|false)");
-    private static final Pattern HAS_SRC_KEY =
-            Pattern.compile("\"hasSrcKey\":(true|false)");
-    private static final Pattern MOTION_DIR_NBT =
-            Pattern.compile("\"motionDirNbt\":(-?\\d+)");
-    private static final Pattern DST_DIM = Pattern.compile("\"dstDim\":(-?\\d+)");
-    private static final Pattern DST_X = Pattern.compile("\"dstX\":(-?\\d+)");
-    private static final Pattern DST_Y = Pattern.compile("\"dstY\":(-?\\d+)");
-    private static final Pattern DST_Z = Pattern.compile("\"dstZ\":(-?\\d+)");
-    private static final Pattern SRC_DIM = Pattern.compile("\"srcDim\":(-?\\d+)");
+    private static final String ENTITY_ID = "entityId";
+    private static final String IS_ASCENDING = "isAscending";
+    private static final String IS_DESCENDING = "isDescending";
+    private static final String IS_IN_MOTION = "isInMotion";
+    private static final String PEER_IS_ASCENDING = "peerIsAscending";
+    private static final String PEER_IS_DESCENDING = "peerIsDescending";
+    private static final String PEER_IS_IN_MOTION = "peerIsInMotion";
+    private static final String HAS_DST_KEY = "hasDstKey";
+    private static final String HAS_SRC_KEY = "hasSrcKey";
+    private static final String MOTION_DIR_NBT = "motionDirNbt";
+    private static final String DST_DIM = "dstDim";
+    private static final String DST_X = "dstX";
+    private static final String DST_Y = "dstY";
+    private static final String DST_Z = "dstZ";
+    private static final String SRC_DIM = "srcDim";
 
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -86,27 +86,27 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
         String warmup = join(client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
         assertTrue("chunk warmup failed: " + warmup,
-                warmup.contains("\"ok\":true"));
+                Reply.of(warmup).ok());
         String spawn = join(client().execute(
                 "artest entity spawn 0 " + x + ".5 " + BASE_Y + " " + BASE_Z + ".5"
                         + " advancedrocketry:ARSpaceElevatorCapsule"));
         assertTrue("capsule spawn failed: " + spawn,
-                spawn.contains("\"ok\":true") && spawn.contains("\"spawned\":true"));
-        Matcher m = ENTITY_ID.matcher(spawn);
-        assertTrue("spawn response must carry entityId: " + spawn, m.find());
-        return Integer.parseInt(m.group(1));
+                Reply.of(spawn).ok() && Reply.of(spawn).bool("spawned"));
+        Reply mReply = Reply.of(spawn);
+        assertTrue("spawn response must carry entityId: " + spawn, mReply.has(ENTITY_ID));
+        return Integer.parseInt(mReply.text(ENTITY_ID));
     }
 
-    private static boolean extractBool(String src, Pattern p) {
-        Matcher m = p.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Boolean.parseBoolean(m.group(1));
+    private static boolean extractBool(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.bool(field);
     }
 
-    private static int extractInt(String src, Pattern p) {
-        Matcher m = p.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extractInt(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
     // ── Phase 2: motion-state contracts ──────────────────────────────────
@@ -118,7 +118,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
         String setResp = join(client().execute(
                 "artest entity capsule-set-motion 0 " + id + " 1"));
         assertTrue("capsule-set-motion(1) must succeed: " + setResp,
-                setResp.contains("\"ok\":true"));
+                Reply.of(setResp).ok());
 
         String state = join(client().execute(
                 "artest entity capsule-state 0 " + id));
@@ -137,7 +137,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
         String setResp = join(client().execute(
                 "artest entity capsule-set-motion 0 " + id + " -1"));
         assertTrue("capsule-set-motion(-1) must succeed: " + setResp,
-                setResp.contains("\"ok\":true"));
+                Reply.of(setResp).ok());
 
         String state = join(client().execute(
                 "artest entity capsule-state 0 " + id));
@@ -175,20 +175,20 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
 
         // Populate motion + dst + src — the three pieces the save
         // format must round-trip per writeEntityToNBT (lines 130-141).
-        assertTrue(join(client().execute(
+        assertTrue(Reply.of(join(client().execute(
                 "artest entity capsule-set-motion 0 " + id + " 1"))
-                .contains("\"ok\":true"));
-        assertTrue(join(client().execute(
+                ).ok());
+        assertTrue(Reply.of(join(client().execute(
                 "artest entity capsule-set-dst 0 " + id + " 1 100 64 200"))
-                .contains("\"ok\":true"));
-        assertTrue(join(client().execute(
+                ).ok());
+        assertTrue(Reply.of(join(client().execute(
                 "artest entity capsule-set-src 0 " + id + " 0 -50 70 -25"))
-                .contains("\"ok\":true"));
+                ).ok());
 
         String rt = join(client().execute(
                 "artest entity capsule-nbt-roundtrip 0 " + id));
         assertTrue("roundtrip probe must succeed: " + rt,
-                rt.contains("\"ok\":true"));
+                Reply.of(rt).ok());
 
         // The save-format contract: the three NBT keys are present.
         assertTrue("populated capsule must serialize a dstDimid key: " + rt,
@@ -234,7 +234,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
         String rt = join(client().execute(
                 "artest entity capsule-nbt-roundtrip 0 " + id));
         assertTrue("roundtrip must succeed on un-linked capsule: " + rt,
-                rt.contains("\"ok\":true"));
+                Reply.of(rt).ok());
         assertFalse("un-linked capsule must NOT write dstDimid key: " + rt,
                 extractBool(rt, HAS_DST_KEY));
         assertFalse("un-linked capsule must NOT write srcDimid key: " + rt,

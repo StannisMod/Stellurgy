@@ -1,9 +1,9 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -39,32 +39,37 @@ import static org.junit.Assert.assertTrue;
 public class WarpControllerDepthTest extends AbstractSharedServerTest {
 
     private static final int SPACE_DIM = -2;
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+),\"orbitingBody\":");
-    private static final Pattern SPAWN_X = Pattern.compile("\"spawnX\":(-?\\d+)");
-    private static final Pattern SPAWN_Z = Pattern.compile("\"spawnZ\":(-?\\d+)");
+    /** The station's own id. The regex this replaces anchored on the NEXT field so as not to match
+     *  some other {@code id} in the reply — reading by name needs no such anchor. */
+    private static final String STATION_ID = "id";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static int parseGroup(Pattern p, String s, String label) {
-        Matcher m = p.matcher(s);
-        if (!m.find()) throw new AssertionError("could not parse " + label + " from: " + s);
-        return Integer.parseInt(m.group(1));
+    /** A numeric field of a probe reply whose verb has no reader of its own yet. */
+    private static int parseGroup(String field, String s, String label) {
+        Reply reply = Reply.of(s);
+        assertTrue("could not parse " + label + ": " + s, reply.has(field));
+        return reply.integer(field);
     }
 
     /** Create a station orbiting the given dim; return its id. */
     private int createStationOrbiting(int orbitingDim) throws Exception {
         String resp = ok(client().execute("artest station create " + orbitingDim));
-        assertTrue("station create failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("station create failed: " + resp, Reply.of(resp).ok());
         return parseGroup(STATION_ID, resp, "station id");
+    }
+
+    /** What the server says about one station. */
+    private StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(cmd -> ok(client().execute(cmd)), stationId);
     }
 
     /** Read the station's spawn (x, z) coordinates in spaceDim. */
     private int[] stationSpawnCoords(int stationId) throws Exception {
-        String info = ok(client().execute("artest station info " + stationId));
-        return new int[]{parseGroup(SPAWN_X, info, "spawnX"),
-                          parseGroup(SPAWN_Z, info, "spawnZ")};
+        StationInfo info = station(stationId);
+        return new int[]{info.spawnX(), info.spawnZ()};
     }
 
     /** Place a warp controller (warpMonitor block) at the given pos in
@@ -78,7 +83,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String place = ok(client().execute("artest place " + dim + " " + x + " " + y
                 + " " + z + " advancedrocketry:warpMonitor"));
         assertTrue("warp monitor place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
         return ok(client().execute("artest tile warp-state " + dim + " " + x + " " + y + " " + z));
     }
 
@@ -89,10 +94,10 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         // for non-spaceDim positions would silently let players warp
         // anywhere by placing a monitor in their base.
         String state = placeAndReadWarpState(0, 5000, 80, 5000);
-        assertTrue("tileClass must be TileWarpController: " + state,
-                state.contains("TileWarpController"));
+        assertEquals("tileClass must be TileWarpController: " + state,
+                "TileWarpController", MachineInfo.of(state).tileSimpleName());
         assertTrue("overworld controller must NOT see a space object: " + state,
-                state.contains("\"hasSpaceObject\":false"));
+                (!Reply.of(state).bool("hasSpaceObject")));
     }
 
     @Test
@@ -105,7 +110,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String tick = ok(client().execute(
                 "artest tile force-tick 0 5100 80 5100 5"));
         assertTrue("warp controller force-tick must not error: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
     }
 
     @Test
@@ -120,10 +125,10 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
 
         String state = placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
         assertTrue("controller at station spawn must see a space object: " + state,
-                state.contains("\"hasSpaceObject\":true"));
+                Reply.of(state).bool("hasSpaceObject"));
         assertTrue("hosted station id must match the one we created (" + stationId
                         + "): " + state,
-                state.contains("\"stationId\":" + stationId));
+                String.valueOf(stationId).equals(Reply.of(state).text("stationId")));
     }
 
     @Test
@@ -140,16 +145,12 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         // Use overworld-> destination = an AR dim other than 0. To keep this
         // test cheap we just verify "station did not move" — regardless of
         // dest, the fuel gate denies the warp.
-        String before = ok(client().execute("artest station info " + stationId));
-        int orbBefore = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
-                before, "orbitingPlanetId before");
+        int orbBefore = station(stationId).orbitingPlanetId;
 
         ok(client().execute(
                 "artest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
 
-        String after = ok(client().execute("artest station info " + stationId));
-        int orbAfter = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
-                after, "orbitingPlanetId after");
+        int orbAfter = station(stationId).orbitingPlanetId;
         assertEquals("warp with fuel=0 must NOT move the station's orbit",
                 orbBefore, orbAfter);
     }
@@ -174,19 +175,15 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String state = ok(client().execute(
                 "artest tile warp-state " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
         assertTrue("station starts non-anchored (default): " + state,
-                state.contains("\"stationAnchored\":false"));
+                (!Reply.of(state).bool("stationAnchored")));
 
         // Warp trigger: with no destination set (destOrbitingDim is the
         // current orbit by default), the destination-equals-current gate
         // ALSO denies. Verify the result: orbit did not change.
-        String before = ok(client().execute("artest station info " + stationId));
-        int orbBefore = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
-                before, "orb");
+        int orbBefore = station(stationId).orbitingPlanetId;
         ok(client().execute("artest tile warp-trigger " + SPACE_DIM
                 + " " + xz[0] + " 128 " + xz[1]));
-        String after = ok(client().execute("artest station info " + stationId));
-        int orbAfter = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
-                after, "orb");
+        int orbAfter = station(stationId).orbitingPlanetId;
         assertEquals("warp with destination==current must NOT move station",
                 orbBefore, orbAfter);
     }
@@ -202,7 +199,7 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         int[] xz = stationSpawnCoords(stationId);
         String state = placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
         assertTrue("warp-state must expose travelCost: " + state,
-                state.contains("\"travelCost\":"));
+                Reply.of(state).has("travelCost"));
     }
 
     @Test
@@ -224,24 +221,20 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
 
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 
-        String preInfo = ok(client().execute("artest station info " + stationId));
-        int orbBefore = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
-                preInfo, "orb before");
+        int orbBefore = station(stationId).orbitingPlanetId;
         assertEquals("station starts orbiting dim 0", 0, orbBefore);
 
         String debug = ok(client().execute(
                 "artest tile warp-trigger-debug " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
         assertTrue("the station reports that it cannot travel: " + debug,
-                debug.contains("\"canTravel\":false"));
+                (!Reply.of(debug).bool("canTravel")));
         assertTrue("and that is the ONLY gate standing in the way - fuel, destination and anchor "
-                + "are all satisfied: " + debug, debug.contains("\"allGatesGreen\":false"));
+                + "are all satisfied: " + debug, (!Reply.of(debug).bool("allGatesGreen")));
 
         ok(client().execute(
                 "artest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
 
-        String after = ok(client().execute("artest station info " + stationId));
-        int orbAfter = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
-                after, "orb after");
+        int orbAfter = station(stationId).orbitingPlanetId;
         assertEquals("a station holds its orbit until stations themselves become craft",
                 orbBefore, orbAfter);
     }
@@ -260,18 +253,14 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String anchorResp = ok(client().execute(
                 "artest station set-anchor " + stationId + " true"));
         assertTrue("anchor probe must succeed: " + anchorResp,
-                anchorResp.contains("\"after\":true"));
+                Reply.of(anchorResp).bool("after"));
 
         placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
 
-        int orbBefore = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
-                ok(client().execute("artest station info " + stationId)),
-                "orb before");
+        int orbBefore = station(stationId).orbitingPlanetId;
         ok(client().execute(
                 "artest tile warp-trigger " + SPACE_DIM + " " + xz[0] + " 128 " + xz[1]));
-        int orbAfter = parseGroup(Pattern.compile("\"orbitingPlanetId\":(-?\\d+)"),
-                ok(client().execute("artest station info " + stationId)),
-                "orb after");
+        int orbAfter = station(stationId).orbitingPlanetId;
         assertEquals("anchored station's orbit must NOT change despite fuel and destination",
                 orbBefore, orbAfter);
     }
@@ -295,8 +284,8 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         String stateB = placeAndReadWarpState(SPACE_DIM, bXZ[0], 128, bXZ[1]);
 
         assertTrue("controller A must resolve to station " + a + ": " + stateA,
-                stateA.contains("\"stationId\":" + a));
+                String.valueOf(a).equals(Reply.of(stateA).text("stationId")));
         assertTrue("controller B must resolve to station " + b + ": " + stateB,
-                stateB.contains("\"stationId\":" + b));
+                String.valueOf(b).equals(Reply.of(stateB).text("stationId")));
     }
 }

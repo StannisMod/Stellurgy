@@ -1,11 +1,16 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
+
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -30,66 +35,58 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketLaunchEventTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
+    private static final String ROCKET_LIST_ID = "id";
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        // Pre-clear a generous halo so any pre-existing terrain or test
-        // detritus doesn't leak into the scan.
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
+    }
 
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-
-        String assemble = String.join("\n", client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        String assemble = RocketFixture.assembleAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                "simple", 2, 10,
+                "the craft is built and flown in this volume");
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = String.join("\n", client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
     public void launchForceSetsInFlightFlag() throws Exception {
         // Use unique baseX per test so fixtures from earlier tests in this
         // JVM don't collide (RocketAssemblySmokeTest grabs 500..580).
-        int id = buildAndAssemble(700, 64, 500);
-        String preInfo = String.join("\n", client().execute("artest rocket info " + id));
-        assertTrue("freshly assembled rocket should NOT already be in flight: " + preInfo,
-                preInfo.contains("\"isInFlight\":false"));
+        int id = buildAndAssemble(FixtureSite.openAir(0, 700, 500));
+        RocketInfo preInfo = rocketInfo(id);
+        assertFalse("freshly assembled rocket should NOT already be in flight: " + preInfo.raw(),
+                preInfo.inFlight);
 
         // false=skip fuel fill, force = setInFlight(true) bypass.
         String launch = String.join("\n",
                 client().execute("artest rocket launch " + id + " false force"));
-        assertTrue("force launch must succeed: " + launch, launch.contains("\"ok\":true"));
+        assertTrue("force launch must succeed: " + launch, Reply.of(launch).ok());
         assertTrue("force launch response must report isInFlight=true: " + launch,
-                launch.contains("\"isInFlight\":true"));
+                Reply.of(launch).bool("isInFlight"));
 
         // Verify via a separate info probe — confirms the flag persists
         // through the entity registry, not just the launch response.
-        String postInfo = String.join("\n", client().execute("artest rocket info " + id));
-        assertTrue("rocket info must report isInFlight=true after force launch: " + postInfo,
-                postInfo.contains("\"isInFlight\":true"));
+        RocketInfo postInfo = rocketInfo(id);
+        assertTrue("rocket info must report isInFlight=true after force launch: " + postInfo.raw(),
+                postInfo.inFlight);
     }
 
     @Test
     public void launchInstantRespondsOkAndEchoesMode() throws Exception {
-        int id = buildAndAssemble(740, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 740, 500));
 
         // instant: fills fuel + calls rocket.launch() — the production
         // launch path. Production launch() has pre-conditions (launchpad
@@ -100,11 +97,11 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
         // the fuel-fill loop fired), and not crash.
         String launch = String.join("\n",
                 client().execute("artest rocket launch " + id + " true instant"));
-        assertTrue("instant launch must succeed: " + launch, launch.contains("\"ok\":true"));
+        assertTrue("instant launch must succeed: " + launch, Reply.of(launch).ok());
         assertTrue("launch response must echo back the chosen mode: " + launch,
-                launch.contains("\"mode\":\"instant\""));
+                "instant".equals(Reply.of(launch).text("mode")));
         assertTrue("launch with fuelFill=true must echo it: " + launch,
-                launch.contains("\"fuelFilled\":true"));
+                Reply.of(launch).bool("fuelFilled"));
     }
 
     @Test
@@ -115,7 +112,7 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
         String launch = String.join("\n",
                 client().execute("artest rocket launch 9999999 false force"));
         assertTrue("launch on unknown id must report rocket-not-found: " + launch,
-                launch.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(launch).text("error")));
     }
 
     @Test
@@ -125,12 +122,12 @@ public class RocketLaunchEventTest extends AbstractSharedServerTest {
         // not crash. (In production, the rocket is briefly in 'in flight'
         // before takeoff finishes; a second launch button-press is a
         // realistic edge case.)
-        int id = buildAndAssemble(780, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 780, 500));
         client().execute("artest rocket launch " + id + " false force");
         String second = String.join("\n",
                 client().execute("artest rocket launch " + id + " false force"));
-        assertTrue("second-launch must still ok: " + second, second.contains("\"ok\":true"));
+        assertTrue("second-launch must still ok: " + second, Reply.of(second).ok());
         assertTrue("second-launch must still report isInFlight=true: " + second,
-                second.contains("\"isInFlight\":true"));
+                Reply.of(second).bool("isInFlight"));
     }
 }

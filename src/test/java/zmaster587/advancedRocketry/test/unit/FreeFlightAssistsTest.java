@@ -27,6 +27,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class FreeFlightAssistsTest {
 
+    /** The per-tick velocity budget the assist is allowed, in blocks/tick — PRODUCTION'S own
+     *  ceiling, restated here because it is exactly what this leg asserts. */
+    private static final double DV_BUDGET = 0.02;
+
     private static final double DELTA = 1e-6;
     private static final double THRUST = 0.10;
     private static final double GRAV = 0.04;
@@ -153,7 +157,7 @@ public class FreeFlightAssistsTest {
         // Huge error, small budget: one tick may change motion by at most accel.
         Step s = FreeFlightPhysics.faStep(0, 0, 0, 0f, 0f, 3.0, 0, 0, 0.02, 0.0, true);
         double dv = Math.sqrt(s.motionX*s.motionX + s.motionY*s.motionY + s.motionZ*s.motionZ);
-        assertTrue("dv " + dv + " must be <= budget 0.02", dv <= 0.02 + DELTA);
+        assertTrue("dv " + dv + " must be <= budget 0.02", dv <= DV_BUDGET + DELTA);
     }
 
     @Test

@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.FluidStored;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -35,10 +36,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class FluidTankStackedFillTest extends AbstractSharedServerTest {
 
-    private static final Pattern AMOUNT_NTH =
-            Pattern.compile("\"amount\":(\\d+)");
-    private static final Pattern CAPACITY =
-            Pattern.compile("\"capacity\":(\\d+)");
 
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -54,7 +51,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                     "artest chunk warmup 0 " + (cx - 1) + " " + (cz - 1) + " "
                             + (cx + 1) + " " + (cz + 1)));
             assertTrue("chunk warmup failed: " + resp,
-                    resp.contains("\"ok\":true"));
+                    Reply.of(resp).ok());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -67,7 +64,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                         + " advancedrocketry:liquidTank"));
         assertTrue("liquidTank place failed at (" + x + "," + y + "," + z
                         + "): " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed"));
     }
 
     /** Return the {@code capacity} reported by {@code fluid stored}.
@@ -77,9 +74,7 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
     private static int storedCapacity(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "artest fluid stored 0 " + x + " " + y + " " + z));
-        Matcher m = CAPACITY.matcher(resp);
-        assertTrue("capacity must be present: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        return FluidStored.of(resp).capacity(0);
     }
 
     /** Return the {@code amount} field from the {@code fluid stored}
@@ -88,25 +83,22 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         String resp = join(client().execute(
                 "artest fluid stored 0 " + x + " " + y + " " + z));
         assertTrue("fluid stored must succeed: " + resp,
-                resp.contains("\"hasFluid\":true"));
-        if (resp.contains("\"fluid\":null")) {
-            return 0;
-        }
-        Matcher m = AMOUNT_NTH.matcher(resp);
-        assertTrue("amount field must be present when fluid is non-null: "
-                + resp, m.find());
-        return Integer.parseInt(m.group(1));
+                Reply.of(resp).bool("hasFluid"));
+        // An empty tank reports `"fluid":null` and no amount, which is a reading and not a failure.
+        return FluidStored.of(resp).amount(0);
     }
 
     @Test
     public void smallInjectionFillsBottomTankAndLeavesTopEmpty() throws Exception {
-        // Stack:
-        //   top at (BASE_X, 65, BASE_Z)
-        //   bottom at (BASE_X, 64, BASE_Z)
+        // A STACK, and the whole subject is that the top sits one block above the bottom. Both Ys
+        // were absolute (64 and 65) until 2026-09-14, and the mechanical lift into the open-air
+        // band gave them the SAME constant — two numbers that were a RELATION, written as two
+        // absolutes. The second tank then refused to place on top of the first and the red said
+        // "liquidTank place failed", which is true and says nothing about tanks.
         int baseX = 8000;
         int baseZ = 8000;
-        int bottomY = 64;
-        int topY = 65;
+        int bottomY = FixtureSite.OPEN_AIR_Y;
+        int topY = bottomY + 1;
         warmup(baseX, baseZ);
         placeTank(baseX, bottomY, baseZ);
         placeTank(baseX, topY, baseZ);
@@ -118,9 +110,9 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                 "artest fluid inject 0 " + baseX + " " + topY + " " + baseZ
                         + " oxygen " + injectAmt));
         assertTrue("inject must succeed: " + inject,
-                inject.contains("\"ok\":true"));
+                Reply.of(inject).ok());
         assertTrue("inject must report filled=injectAmt: " + inject,
-                inject.contains("\"filled\":" + injectAmt));
+                String.valueOf(injectAmt).equals(Reply.of(inject).text("filled")));
 
         int topAmt = storedAmount(baseX, topY, baseZ);
         int bottomAmt = storedAmount(baseX, bottomY, baseZ);
@@ -140,8 +132,8 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
         // Different column from the first test (position isolation).
         int baseX = 8020;
         int baseZ = 8000;
-        int bottomY = 64;
-        int topY = 65;
+        int bottomY = FixtureSite.OPEN_AIR_Y;
+        int topY = bottomY + 1;   // a stack: see the sibling scenario above
         warmup(baseX, baseZ);
         placeTank(baseX, bottomY, baseZ);
         placeTank(baseX, topY, baseZ);
@@ -157,9 +149,9 @@ public class FluidTankStackedFillTest extends AbstractSharedServerTest {
                 "artest fluid inject 0 " + baseX + " " + topY + " " + baseZ
                         + " oxygen " + injectAmt));
         assertTrue("inject must succeed: " + inject,
-                inject.contains("\"ok\":true"));
+                Reply.of(inject).ok());
         assertTrue("inject must report filled=injectAmt (no clamping): " + inject,
-                inject.contains("\"filled\":" + injectAmt));
+                String.valueOf(injectAmt).equals(Reply.of(inject).text("filled")));
 
         int topAmt = storedAmount(baseX, topY, baseZ);
         int bottomAmt = storedAmount(baseX, bottomY, baseZ);

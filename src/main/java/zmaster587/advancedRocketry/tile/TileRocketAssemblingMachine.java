@@ -621,25 +621,24 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                     || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse))) {
                 status = ErrorCodes.COMBINEDTHRUST;
 
-            } else if (VSIntegration.isAvailable() && flightComputerCount > 1) {
+            } else if (flightComputerCount > 1) {
                 // One craft — one command authority. A second Advanced Flight Computer would tick
                 // and steer against the linked one (both are physics force controllers), so a
                 // multi-computer build is rejected at the scan, before anything can assemble.
                 status = ErrorCodes.MULTIPLEFLIGHTCOMPUTERS;
 
-            } else if (VSIntegration.isAvailable() && scannedFlightComputerPos != null
-                    && pilotSeatCount > 1) {
+            } else if (scannedFlightComputerPos != null && pilotSeatCount > 1) {
                 // One craft — one command seat. Only the last-scanned pilot seat would be linked;
                 // a pilot in any other seat would have silently dead controls. Passenger seats
                 // (the plain seat block) are unrestricted — this counts only pilot seats.
                 status = ErrorCodes.MULTIPLEPILOTSEATS;
 
-            } else if (!hasGuidance && !hasSatellite
-                    && !(scannedFlightComputerPos != null && VSIntegration.isAvailable())) {
+            } else if (!hasGuidance && !hasSatellite && scannedFlightComputerPos == null) {
                 // An Advanced Flight Computer is the tier-2 ship's own flight computer, so it
-                // satisfies the "computer with instructions" requirement — but only when the
-                // build will actually become a ship (VS present). Without VS the computer is
-                // inert and a real guidance computer is still needed for the fallback rocket.
+                // satisfies the "computer with instructions" requirement. This used to ask whether
+                // the physics substrate was present as well, for a build that could not become a
+                // ship; the substrate is compiled into this jar, so the only build that asks is
+                // one somebody removed it from.
                 status = ErrorCodes.NOGUIDANCE;
 
             } else if (getThrust() <= getNeededThrust()) {
@@ -738,7 +737,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         // no ship is ever created. So cut the scanned structure out (leaving the pad
         // and terrain intact, exactly like the rocket path) and paste it back one
         // block higher: the air gap under it bounds the flood-fill to the craft.
-        if (scannedFlightComputerPos != null && VSIntegration.isAvailable()) {
+        if (scannedFlightComputerPos != null) {
             removeReplaceableBlocks(rocketBB);
             final StorageChunk shipStructure;
             try {
@@ -799,7 +798,24 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                         (int) rocketBB.maxY - scannedFlightComputerPos.getY(),
                         (int) rocketBB.maxZ - scannedFlightComputerPos.getZ());
             }
-            VSIntegration.assembleTier2Ship(world, shipAnchor);
+            // The name is NOT handed in, and that is the point. This assembly is anchored on the very
+            // flight computer that carries the durable id, so the ship is asked what it is called
+            // rather than told — one source of truth, the tile's own NBT, and no call site that can
+            // forget. It went unbound here for exactly that reason: the id above was minted and the
+            // value dropped, so a craft that had not yet crossed could not be found by its own name.
+            // The FOOTPRINT of the craft that was just pasted, not a point: the assembly finds the
+            // flight computer inside it and takes the ship's identity off that tile. `shipAnchor`
+            // above is still this build's computer and is still what the seat links to; it is no
+            // longer handed to the assembly, because a caller that can pass an anchor can pass the
+            // wrong one.
+            // The footprint is taken from the SNAPSHOT's own sizes, not derived from the scan box:
+            // the snapshot is what was pasted, so its extents are the pasted region by definition,
+            // and a width computed off an AABB's min/max is one inclusive-vs-exclusive mistake away
+            // from a scan that misses the layer the flight computer stands in. (Measured: deriving
+            // it from `rocketBB` reded all five ground-flight scenarios — `rocket_assembled` fired
+            // and no ship was ever spawned.) The origin is the paste's own origin, lift and all.
+            VSIntegration.assembleTier2Ship(world, shipStructure,
+                    (int) rocketBB.minX, (int) rocketBB.minY + liftGap, (int) rocketBB.minZ);
             // A pilot who took the seat BEFORE assembly is riding a mount bound to the seat's
             // build-time position, which the cut above just vacated - once the blocks relocate
             // into the ship's subspace nothing in his control chain resolves and the ship ignores

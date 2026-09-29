@@ -13,6 +13,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.WorldServer;
 
 import zmaster587.advancedRocketry.entity.EntityDummy;
+import zmaster587.advancedRocketry.integration.vs.ShipFrameTravel;
 import zmaster587.advancedRocketry.integration.vs.VSIntegration;
 
 /**
@@ -91,11 +92,15 @@ public final class AboardBodies {
                     afcPos, vsShipId);
             return stowed;
         }
+        int scanned = 0;
+        int considered = 0;
         for (Entity body : new ArrayList<>(world.loadedEntityList)) {
+            scanned++;
             if (body.isDead || body instanceof EntityPlayer || body instanceof EntityDummy
                     || body.isRiding()) {
                 continue;
             }
+            considered++;
             double[] local = VSIntegration.toShipFrameFor(
                     world, vsShipId, body.posX, body.posY, body.posZ);
             if (local == null || !stay.contains(new Vec3d(local[0], local[1], local[2]))) {
@@ -115,6 +120,16 @@ public final class AboardBodies {
         if (!stowed.isEmpty()) {
             LOGGER.info("[SPACE] stowed {} body(ies) aboard the ship at {} for its crossing",
                     stowed.size(), afcPos);
+        } else {
+            // CARRYING NOTHING IS ALSO AN ANSWER, and it used to be the one case here that said
+            // nothing at all. "there was nobody aboard" and "somebody was aboard and this did not
+            // see him" are the same silence otherwise, and only the second is a defect — so the
+            // SCAN is reported: how many entities this world offered, how many survived the
+            // filter, and which ship they were measured against. A crossing that quietly loses
+            // cargo is then a line in the log rather than an absence a player notices later.
+            LOGGER.info("[SPACE] the ship at {} (physics id {}) carries no loose body across its "
+                    + "crossing: {} entity(ies) in this world, {} of them eligible, none inside its "
+                    + "stay region {}", afcPos, vsShipId, scanned, considered, stay);
         }
         return stowed;
     }
@@ -126,9 +141,16 @@ public final class AboardBodies {
 
     /**
      * Put every stowed body back on the re-assembled ship whose flight computer sits at subspace
-     * {@code afcPos} in {@code dstWorld}, at the point it was taken from and at rest. Returns how
-     * many were placed; {@code 0} with a non-empty list means the ship is not up yet and the caller
-     * should retry, which is the same contract the crew placement has.
+     * {@code afcPos} in {@code dstWorld}, at the point it was taken from, at rest RELATIVE TO THE
+     * DECK, and HELD there. Returns how many were placed; {@code 0} with a non-empty list means the
+     * ship is not up yet and the caller should retry, which is the same contract the crew placement
+     * has.
+     *
+     * <p><b>Held, not merely placed.</b> "At rest" is a statement about the DECK's frame, not the
+     * world's: a craft keeps its cruise across a crossing, so the ship a carry delivers to is
+     * typically moving, and a body put down in the right place with no hold is left behind on the
+     * next tick. So the placement is followed by the same declaration the crew placement makes,
+     * and the per-tick deck pass carries the body from then on.</p>
      *
      * <p><b>All or nothing.</b> Whether the ship can say where a point on it is does not vary from
      * body to body — it is one question about one ship — so it is asked ONCE, before anything is
@@ -146,6 +168,18 @@ public final class AboardBodies {
         if (afcWorld == null) {
             return 0; // the ship is not rebuilt here yet; nothing is lost, the caller retries
         }
+        // The ship's IDENTITY, asked once and part of the same "is it up yet" question. A body is
+        // not merely put down on a deck, it is HELD to it (below), and a hold names its ship. The
+        // registry answered a point on this craft one line ago, so a null here is an inconsistency
+        // rather than a "not yet" — but it is treated as "not yet" deliberately: retrying is what
+        // the caller already does, while placing an UNHELD body would be the very defect this
+        // method exists to avoid, dressed as success.
+        String shipId = VSIntegration.shipIdManagingBlock(dstWorld, afcPos);
+        if (shipId == null) {
+            LOGGER.warn("[SPACE] the ship at {} answers for its own points but has no id to hold a "
+                    + "carried body to; releasing nothing this pass", afcPos);
+            return 0;
+        }
         int placed = 0, unmappable = 0, unbuildable = 0, refused = 0;
         StringBuilder where = new StringBuilder();
         for (Stowed body : bodies) {
@@ -157,30 +191,26 @@ public final class AboardBodies {
                 unmappable++;
                 continue;
             }
-            // Load the chunk this body lands in, FIRST. An arrival happens where nobody is standing —
-            // that is the ordinary case for a jump, not an edge one — and vanilla refuses an entity
-            // whose chunk is not in the loaded set, without a word (`World.spawnEntity` ->
-            // `WorldServer.isChunkLoaded` -> `chunkExists`, which ignores its own allowEmpty flag).
-            // Depending on somebody else having loaded it is what made a carried body vanish. The
-            // crossing already force-loads the ship's own shipyard chunks for the same reason.
-            dstWorld.getChunkFromBlockCoords(new BlockPos(world[0], world[1], world[2]));
-
             Entity restored = EntityList.createEntityFromNBT(body.nbt, dstWorld);
             if (restored == null) {
                 unbuildable++;
                 continue; // an entity type this world cannot build; its record is dropped, not retried
             }
-            restored.setPosition(world[0], world[1], world[2]);
             restored.motionX = 0.0D;
             restored.motionY = 0.0D;
             restored.motionZ = 0.0D;
             restored.fallDistance = 0.0f;
-            // The world gets to REFUSE, and it refuses SILENTLY: vanilla drops an entity whose chunk
-            // is not loaded unless it is marked forceSpawn (`World.spawnEntity`), and it drops one
-            // whose uuid it already knows (`WorldServer.canAddEntity`). Ignoring this boolean is how
-            // a carry reports success for a body the destination never accepted — the count said
-            // "placed 1" while the world held nothing.
-            if (!dstWorld.spawnEntity(restored)) {
+            // Through the shared arrival spawn: it loads the chunk the body lands in, which
+            // `spawnEntity` needs and does not do, and it hands back what the WORLD said. This
+            // counted a placement either way before, so a carry that put its cargo nowhere reported
+            // the same number as one that put it down.
+            boolean accepted = ArrivalSpawn.at(dstWorld, restored, world[0], world[1], world[2]);
+            // The identity is logged because the body is followed by uuid afterwards, and a re-spawn
+            // that minted a new one would be invisible from every later reading.
+            LOGGER.info("[SPACE] released a carried body into dim {} at ({},{},{}): accepted={} "
+                            + "uuid={}", dstWorld.provider.getDimension(), world[0], world[1],
+                    world[2], accepted, restored.getUniqueID());
+            if (!accepted) {
                 refused++;
                 // WHERE it was refused, in the same breath. The refusal branch used to print counts
                 // only, so the one question it raises - which chunk is missing - could not be answered
@@ -200,6 +230,28 @@ public final class AboardBodies {
                     .append(round1(world[0])).append(' ')
                     .append(round1(world[1])).append(' ')
                     .append(round1(world[2]));
+            // HELD, not merely placed — and this is the half the crew path always had and this one
+            // did not. `CrewTransfer` puts a player on his deck point and then DECLARES the hold
+            // (`DeckHold.holdOnDeck`), so the per-tick deck pass carries him when the craft moves.
+            // A carried body got the placement and no declaration, so it was correct for exactly as
+            // long as the ship stood still — and a ship crossing a seam is typically UNDER WAY,
+            // because a craft keeps its cruise across a crossing by design. The deck then climbed
+            // out from under the cargo, which reads afterwards as "the crossing dropped it".
+            //
+            // The contact capture cannot cover this: it is keyed on deck SUPPORT and takes an
+            // EntityLivingBase, so an item — the commonest thing to be carrying — is never a
+            // candidate for it. A declared seed is the only path that reaches a non-living body,
+            // and it is the same one a dismount and an arrival already use.
+            boolean held = ShipFrameTravel.seedShipFrameCapture(
+                    restored, shipId, sub[0], sub[1], sub[2]);
+            if (!held) {
+                // Placed but not held: say so rather than counting it as a clean carry. The body is
+                // where it should be THIS tick and will be left behind the moment the craft moves,
+                // which is a different outcome from the one this method promises.
+                LOGGER.warn("[SPACE] a carried body was released onto the ship at {} but could not "
+                        + "be held to its deck (uuid={}); it will not follow the craft", afcPos,
+                        restored.getUniqueID());
+            }
             placed++;
         }
         // Say what happened, in both directions. A carry that delivers everything and a carry that
@@ -210,8 +262,8 @@ public final class AboardBodies {
         if (unmappable > 0 || unbuildable > 0 || refused > 0) {
             LOGGER.warn("[SPACE] released {} of {} stowed body(ies) onto the ship at {}: {} could not "
                             + "be mapped onto it, {} could not be rebuilt in this world (dropped for "
-                            + "good), {} were REFUSED by the world itself - which it does without a "
-                            + "word when the chunk they would land in is not loaded. Bodies: {}",
+                            + "good), {} were REFUSED by the world itself even with the chunk they "
+                            + "would land in loaded. Bodies: {}",
                     placed, bodies.size(), afcPos, unmappable, unbuildable, refused, where);
         } else {
             // WHERE, not just how many. A body that came back and a body that came back to the wrong

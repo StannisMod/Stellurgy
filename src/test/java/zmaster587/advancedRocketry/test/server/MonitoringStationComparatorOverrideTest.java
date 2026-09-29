@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -37,17 +36,19 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class MonitoringStationComparatorOverrideTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID =
-            Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern COMPARATOR_OVERRIDE =
-            Pattern.compile("\"comparatorOverride\":(-?\\d+)");
-    private static final Pattern LINKED_ENTITY_ID =
-            Pattern.compile("\"linkedEntityId\":(-?\\d+)");
+    private static final String BUILDER_POS = "builderPos";
+    private static final String ENTITY_ID = "entityId";
+    private static final String COMPARATOR_OVERRIDE = "comparatorOverride";
+    private static final String LINKED_ENTITY_ID = "linkedEntityId";
 
     // Position-isolated x offsets per AbstractSharedServerTest contract.
-    private static final int CY = 64;
+    /**
+     * The one anchor every coordinate in this class is relative to — the station sits at
+     * {@code CY + 2} on a stone pad the test lays at {@code CY}, and the rocket's base is {@code CY}
+     * itself. It was a hard-coded 64 until 2026-09-14; nothing here wants terrain, and because every
+     * other Y is derived from this one, the whole class moves as a unit.
+     */
+    private static final int CY = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 7000;
     private static final int CX_NO_ROCKET = 7400;
     private static final int CX_ALTITUDE = 7600;
@@ -69,7 +70,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
                 + " advancedrocketry:monitoringStation");
 
         String info = exec("artest infra monitor-info 0 " + mx + " " + my + " " + mz);
-        assertTrue("monitor-info must succeed: " + info, info.contains("\"ok\":true"));
+        assertTrue("monitor-info must succeed: " + info, Reply.of(info).ok());
         assertEquals("freshly-placed monitor with no linked rocket must "
                         + "report linkedEntityId=-1: " + info,
                 -1, extract(info, LINKED_ENTITY_ID));
@@ -92,7 +93,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
     @Test
     public void linkedMonitorComparatorOutputRisesWithRocketPosY() throws Exception {
         // Build + assemble a rocket near (CX_ALTITUDE, CY, CZ).
-        int rocketId = buildAndAssemble(CX_ALTITUDE, CY, CZ);
+        int rocketId = buildAndAssemble(CX_ALTITUDE, CZ);
 
         // Place the monitor at the same column (chunk-co-located so the
         // monitor's chunk and the rocket's chunk are always loaded
@@ -107,7 +108,7 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
         String linkResp = exec("artest infra link 0 " + mx + " " + my + " " + mz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + linkResp,
-                linkResp.contains("\"linked\":true"));
+                Reply.of(linkResp).bool("linked"));
 
         // Read comparator with the rocket at a LOW altitude.
         exec("artest rocket set-state " + rocketId + " posY=68");
@@ -132,30 +133,20 @@ public class MonitoringStationComparatorOverrideTest extends AbstractSharedServe
 
     // -- helpers ----------------------------------------------------------
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                + " minecraft:air");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ
-                + " simple");
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("no builderPos: " + fixture, bp.find());
-        String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
-        assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId: " + assemble, eim.find());
-        return Integer.parseInt(eim.group(1));
+    private int buildAndAssemble(int baseX, int baseZ) throws Exception {
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. The site is in the band, so this ASSERTS rather
+        // than digs, and its fill force-loads every chunk in the box, which is what the warmup did.
+        return zmaster587.advancedRocketry.test.RocketFixture.rocketEntityId(
+                zmaster587.advancedRocketry.test.RocketFixture.assembleAt(
+                        zmaster587.advancedRocketry.test.FixtureSite.openAir(0, baseX, baseZ),
+                        cmd -> exec(cmd), "simple", 2, 10,
+                        "the craft the monitoring station reports on stands in this volume"));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

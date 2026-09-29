@@ -26,6 +26,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class JumpWindowTest {
 
+    /** The share of the hull that may sit inside a 5x5x5 window. The TEST'S OWN: the claim is that
+     *  MOST of it is outside, so half is the line the word turns on. */
+    private static final double MOST_IS_OUTSIDE = 0.5D;
+
     private static JumpWindow.Envelope hull(int minX, int minY, int minZ,
                                             int maxX, int maxY, int maxZ) {
         return new JumpWindow.Envelope(minX, minY, minZ, maxX, maxY, maxZ);
@@ -50,7 +54,7 @@ public class JumpWindowTest {
         assertFalse(coverage.complete());
         assertTrue("the warning quotes how much is outside, so a corner reads differently "
                 + "from half the ship: " + coverage, coverage.uncoveredBlocks() > 0L);
-        assertTrue("and most of the hull is outside a 5x5x5 window", coverage.fraction() < 0.5D);
+        assertTrue("and most of the hull is outside a 5x5x5 window", coverage.fraction() < MOST_IS_OUTSIDE);
     }
 
     @Test

@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -36,14 +35,14 @@ import static org.junit.Assert.assertTrue;
  */
 public class StationDeployedRocketWireSymmetryTest extends AbstractSharedServerTest {
 
-    private static final Pattern WRITTEN = Pattern.compile("\"written\":(-?\\d+)");
-    private static final Pattern READ = Pattern.compile("\"read\":(-?\\d+)");
-    private static final Pattern TRAILING = Pattern.compile("\"trailing\":(-?\\d+)");
+    private static final String WRITTEN = "written";
+    private static final String READ = "read";
+    private static final String TRAILING = "trailing";
 
     @Test
     public void inheritedSubPacketRoundTripsSymmetrically() throws Exception {
         String resp = join(client().execute("artest rocket wire-symmetry TURNUPDATE"));
-        assertTrue("wire-symmetry probe errored: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("wire-symmetry probe errored: " + resp, Reply.of(resp).ok());
 
         int written = intOf(WRITTEN, resp);
         int read = intOf(READ, resp);
@@ -64,18 +63,17 @@ public class StationDeployedRocketWireSymmetryTest extends AbstractSharedServerT
         // symmetric both pre- and post-fix — a regression guard that the fix
         // must not disturb the gas-selection path.
         String resp = join(client().execute("artest rocket wire-symmetry MENU_CHANGE"));
-        assertTrue("wire-symmetry probe errored: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("wire-symmetry probe errored: " + resp, Reply.of(resp).ok());
         assertTrue("sanity: MENU_CHANGE must carry the gasId payload on the wire, got "
                 + resp, intOf(WRITTEN, resp) > 0);
         assertEquals("MENU_CHANGE must round-trip with zero trailing bytes: " + resp,
                 0, intOf(TRAILING, resp));
     }
 
-    private static int intOf(Pattern pattern, String text) {
-        Matcher matcher = pattern.matcher(text);
-        assertTrue("probe response missing " + pattern.pattern() + ": " + text,
-                matcher.find());
-        return Integer.parseInt(matcher.group(1));
+    private static int intOf(String field, String text) {
+        Reply reply = Reply.of(text);
+        assertTrue("probe response missing `" + field + "`: " + text, reply.has(field));
+        return reply.integer(field);
     }
 
     private static String join(java.util.List<String> resp) {

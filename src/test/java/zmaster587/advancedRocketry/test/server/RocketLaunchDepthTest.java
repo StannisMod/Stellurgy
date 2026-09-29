@@ -1,13 +1,18 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -48,56 +53,41 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketLaunchDepthTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        // Pre-clear a generous halo so any pre-existing terrain or test
-        // detritus doesn't leak into the scan.
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+    }
 
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-
-        String assemble = ok(client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // FIRST link: the volume this rocket is built and launched in is empty. It is an assertion
+        // and not a clearing — the site stands in open air, so anything standing in it means the
+        // arrangement is wrong, and saying so here is what keeps it from arriving later as a launch
+        // that would not take off.
+        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+                "simple", 2, 10,
+                "the rocket is built and launched in this volume");
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue("Only overworld is an AR planet — cannot program target",
@@ -114,36 +104,35 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // RocketLaunchEventTest.launchInstantRespondsOkAndEchoesMode only
         // proved the probe wiring didn't crash.
         int destDim = firstNonOverworldArDimOrSkip();
-        int id = buildAndAssemble(1000, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1000, 500));
 
         String prog = ok(client().execute(
                 "artest rocket set-destination " + id + " " + destDim));
         assertTrue("set-destination must succeed: " + prog,
-                prog.contains("\"ok\":true"));
+                Reply.of(prog).ok());
         assertTrue("set-destination must echo back the dim it programmed: " + prog,
-                prog.contains("\"dim\":" + destDim));
+                String.valueOf(destDim).equals(Reply.of(prog).text("dim")));
         assertTrue("set-destination must round-trip the chip's stored dim: " + prog,
-                prog.contains("\"chipDim\":" + destDim));
+                String.valueOf(destDim).equals(Reply.of(prog).text("chipDim")));
 
         // Launch with fuelFill=true + mode=instant -> real rocket.launch().
         // This MUST flip isInFlight to true and NOT report an error.
         String launch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
         assertTrue("launch response must be ok=true: " + launch,
-                launch.contains("\"ok\":true"));
+                Reply.of(launch).ok());
 
-        String info = ok(client().execute("artest rocket info " + id));
+        RocketInfo info = rocketInfo(id);
         // The whole point: production launch path took the rocket from
         // ground to in-flight. A regression that introduces a new gate
         // (e.g. requires a sealed cockpit, requires player onboard,
         // requires fuel of a specific type) surfaces here as
         // isInFlight=false + a non-empty errorMessage.
-        assertTrue("real launch did NOT flip isInFlight=true: " + info,
-                info.contains("\"isInFlight\":true"));
+        assertTrue("real launch did NOT flip isInFlight=true: " + info.raw(), info.inFlight);
         // No errorMessage — production setError(...) is only called on
         // the bail-out branches. A successful launch leaves errorStr "".
-        assertTrue("successful launch must NOT report an error message: " + info,
-                info.contains("\"errorMessage\":\"\""));
+        assertFalse("successful launch must NOT report an error message: " + info.raw(),
+                info.hasError());
     }
 
     @Test
@@ -151,23 +140,24 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // No set-destination call -> guidance computer slot 0 is empty ->
         // getDestinationDimId returns Constants.INVALID_PLANET -> launch
         // bails with "error.rocket.cannotGetThere".
-        int id = buildAndAssemble(1100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1100, 500));
 
         String launch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
         assertTrue("launch probe must succeed (wiring is fine): " + launch,
-                launch.contains("\"ok\":true"));
+                Reply.of(launch).ok());
 
-        String info = ok(client().execute("artest rocket info " + id));
+        RocketInfo info = rocketInfo(id);
         // Production: the cannotGetThere branch calls setError(...) AND
         // returns BEFORE setInFlight. Pin both observations.
-        assertTrue("launch without destination must NOT flip isInFlight: " + info,
-                info.contains("\"isInFlight\":false"));
+        assertFalse("launch without destination must NOT flip isInFlight: " + info.raw(),
+                info.inFlight);
         // The error message is a localised string; in dev we get either
         // the raw key OR the localised form. Match the substring that's
-        // common to both: "cannotGetThere".
-        assertTrue("rocket must report a cannot-get-there error message: " + info,
-                info.contains("cannotGetThere"));
+        // common to both: "cannotGetThere". This is a substring of ONE field's
+        // value, not of the reply.
+        assertTrue("rocket must report a cannot-get-there error message: " + info.raw(),
+                info.errorMessage.contains("cannotGetThere"));
     }
 
     @Test
@@ -177,12 +167,12 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // any events and must NOT mutate state. Verify by force-launching
         // (cheap, deterministic), then calling instant launch — the
         // second call must complete cleanly with isInFlight still true.
-        int id = buildAndAssemble(1200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1200, 500));
         ok(client().execute("artest rocket launch " + id + " false force"));
 
-        String preInfo = ok(client().execute("artest rocket info " + id));
-        assertTrue("force-launch must have flipped isInFlight: " + preInfo,
-                preInfo.contains("\"isInFlight\":true"));
+        RocketInfo preInfo = rocketInfo(id);
+        assertTrue("force-launch must have flipped isInFlight: " + preInfo.raw(),
+                preInfo.inFlight);
 
         // Now invoke production launch() on the already-flying rocket.
         // The early-return at line 1761-1762 must prevent any state
@@ -194,11 +184,11 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         String secondLaunch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
         assertTrue("second launch on in-flight rocket must still be probe-ok: "
-                        + secondLaunch, secondLaunch.contains("\"ok\":true"));
+                        + secondLaunch, Reply.of(secondLaunch).ok());
 
-        String postInfo = ok(client().execute("artest rocket info " + id));
-        assertTrue("isInFlight must STAY true after no-op re-launch: " + postInfo,
-                postInfo.contains("\"isInFlight\":true"));
+        RocketInfo postInfo = rocketInfo(id);
+        assertTrue("isInFlight must STAY true after no-op re-launch: " + postInfo.raw(),
+                postInfo.inFlight);
         // destinationDim must NOT have been updated by the re-launch — the
         // early-return guard skipped the destinationDimId assignment branch.
         // For force-launched rocket without a chip, destinationDim starts
@@ -206,8 +196,8 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // "no error message added by the re-launch" as the testable
         // observation: a regression that removed the early-return would
         // run the destination-lookup branch and call setError().
-        assertTrue("no-op re-launch must not add a new error message: " + postInfo,
-                postInfo.contains("\"errorMessage\":\"\""));
+        assertFalse("no-op re-launch must not add a new error message: " + postInfo.raw(),
+                postInfo.hasError());
     }
 
     @Test
@@ -225,30 +215,30 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
         // This is essentially a sanity check that "obviously valid"
         // configurations work. If a regression broke it, every
         // overworld->overworld flight would silently fail.
-        int id = buildAndAssemble(1300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1300, 500));
         ok(client().execute("artest rocket set-destination " + id + " 0"));
 
         String launch = ok(client().execute(
                 "artest rocket launch " + id + " true instant"));
-        assertTrue("launch wiring ok: " + launch, launch.contains("\"ok\":true"));
+        assertTrue("launch wiring ok: " + launch, Reply.of(launch).ok());
 
-        String info = ok(client().execute("artest rocket info " + id));
+        RocketInfo info = rocketInfo(id);
         // Whichever branch production picks, the test pins observable
         // behaviour: either isInFlight=true (same-system flight OK) OR
         // isInFlight=false + an error message. Both are valid contract
         // surfaces; a regression that crashes mid-decision is NOT.
-        boolean inFlight = info.contains("\"isInFlight\":true");
-        boolean hasError = !info.contains("\"errorMessage\":\"\"");
+        boolean inFlight = info.inFlight;
+        boolean hasError = info.hasError();
         assertTrue("launch with same-dim destination must produce a "
                         + "coherent outcome (either in-flight OR an error, "
-                        + "never both crashed): " + info,
+                        + "never both crashed): " + info.raw(),
                 inFlight || hasError);
         // Specifically: never both at once.
         assertNotEquals("inFlight=true with a non-empty error message is "
-                + "incoherent: " + info, inFlight, hasError);
+                + "incoherent: " + info.raw(), inFlight, hasError);
         // Pin destination round-trip irrespective of outcome.
-        assertTrue("destinationDim must reflect what we programmed: " + info,
-                info.contains("\"destinationDim\":0"));
+        assertEquals("destinationDim must reflect what we programmed: " + info.raw(),
+                0, info.destinationDim);
     }
 
     /** Final assertion that the {@code errorMessage} field is wired into
@@ -256,13 +246,13 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      *  silent bail-outs. */
     @Test
     public void rocketInfoExposesErrorMessageField() throws Exception {
-        int id = buildAndAssemble(1400, 64, 500);
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("rocket info must expose errorMessage field: " + info,
-                info.contains("\"errorMessage\":"));
+        int id = buildAndAssemble(FixtureSite.openAir(0, 1400, 500));
+        // The reader REFUSES a report with no `errorMessage` — that is this test's first half,
+        // and it is now enforced for every caller rather than asserted once here.
+        RocketInfo info = rocketInfo(id);
         // Freshly assembled rocket -> no error yet.
-        assertTrue("freshly assembled rocket must have empty errorMessage: " + info,
-                info.contains("\"errorMessage\":\"\""));
+        assertFalse("freshly assembled rocket must have empty errorMessage: " + info.raw(),
+                info.hasError());
     }
 
     /** Ensure set-destination probe rejects invalid entityId — keeps the
@@ -271,6 +261,6 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
     public void setDestinationOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket set-destination 9999999 0"));
         assertTrue("set-destination on unknown id must return error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 }

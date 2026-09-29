@@ -1,14 +1,15 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.DimInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -27,25 +28,22 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
     private static final String AR_PROVIDER_FQN =
             "zmaster587.advancedRocketry.world.provider.WorldProviderPlanet";
 
-    private static final Pattern AR_DIM_PATTERN =
-            Pattern.compile("\"arDimensions\":\\[(-?\\d+)");
+    private static final String AR_DIM_PATTERN = "arDimensions";
 
-    private static final Pattern AR_DIMS_ARRAY_PATTERN =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)\\]");
+    private static final String AR_DIMS_ARRAY_PATTERN = "arDimensions";
 
-    private static final Pattern ANGLE_PATTERN =
-            Pattern.compile("\"angle\":(-?[0-9.eE+-]+)");
+    private static final String ANGLE_PATTERN = "angle";
 
     @Test
     public void arPlanetsArePreloaded() throws Exception {
         String joined = String.join("\n", client().execute("artest dim list"));
 
         assertTrue("dim list missing arDimensions key — probe wiring broken: " + joined,
-                joined.contains("\"arDimensions\":["));
+                (Reply.of(joined).arrayLength("arDimensions") >= 0));
 
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
     }
 
     @Test
@@ -58,9 +56,9 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         String joined = String.join("\n", client().execute("artest dim load 0"));
 
         assertTrue("dim load 0 did not echo dim:0 in response: " + joined,
-                joined.contains("\"dim\":0"));
+                (Reply.of(joined).integer("dim") == 0));
         assertTrue("dim load 0 did not report loaded:true: " + joined,
-                joined.contains("\"loaded\":true"));
+                Reply.of(joined).bool("loaded"));
     }
 
     @Test
@@ -69,41 +67,37 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         // so this assertion targets the first NON-overworld AR planet — the
         // ones that actually exercise AR's WorldProviderPlanet wiring.
         int arDim = firstNonOverworldArDimOrSkip();
-        String info = loadAndInfo(arDim);
-        assertTrue(
-                "dim " + arDim + " providerClass should be " + AR_PROVIDER_FQN + ": " + info,
-                info.contains("\"providerClass\":\"" + AR_PROVIDER_FQN + "\""));
+        DimInfo info = loadAndInfo(arDim);
+        assertEquals(
+                "dim " + arDim + " providerClass should be " + AR_PROVIDER_FQN + ": " + info.raw(),
+                AR_PROVIDER_FQN, info.providerClass());
     }
 
     @Test
     public void biomeProviderIsNonNull() throws Exception {
         int arDim = firstNonOverworldArDimOrSkip();
-        String info = loadAndInfo(arDim);
-        assertTrue("biomeProviderClass field missing from dim info: " + info,
-                info.contains("\"biomeProviderClass\":"));
-        assertTrue("biomeProviderClass reported null for AR dim " + arDim + ": " + info,
-                !info.contains("\"biomeProviderClass\":\"null\""));
+        // The reader REFUSES both an absent field and the producer's literal "null", which is
+        // exactly the pair of assertions this leg used to spell for itself.
+        DimInfo info = loadAndInfo(arDim);
+        assertFalse("biomeProviderClass reported null for AR dim " + arDim + ": " + info.raw(),
+                info.biomeProviderClass().isEmpty());
     }
 
     @Test
     public void chunkGeneratorIsNonNull() throws Exception {
         int arDim = firstNonOverworldArDimOrSkip();
-        String info = loadAndInfo(arDim);
-        assertTrue("chunkGeneratorClass field missing from dim info: " + info,
-                info.contains("\"chunkGeneratorClass\":"));
-        assertTrue("chunkGeneratorClass reported null for AR dim " + arDim + ": " + info,
-                !info.contains("\"chunkGeneratorClass\":\"null\""));
+        DimInfo info = loadAndInfo(arDim);
+        assertFalse("chunkGeneratorClass reported null for AR dim " + arDim + ": " + info.raw(),
+                info.chunkGeneratorClass().isEmpty());
     }
 
     @Test
     public void saveFolderResolvesToExpectedPath() throws Exception {
         int arDim = firstNonOverworldArDimOrSkip();
-        String info = loadAndInfo(arDim);
-        assertTrue("saveDir field missing from dim info: " + info,
-                info.contains("\"saveDir\":"));
+        DimInfo info = loadAndInfo(arDim);
         // WorldProviderPlanet.getSaveFolder() returns "advRocketry/" + super.getSaveFolder().
-        assertTrue("saveDir for AR planet " + arDim + " should be under advRocketry/: " + info,
-                info.contains("\"saveDir\":\"advRocketry/"));
+        assertTrue("saveDir for AR planet " + arDim + " should be under advRocketry/: " + info.raw(),
+                info.saveDir().startsWith("advRocketry/"));
     }
 
     @Test
@@ -151,24 +145,22 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIM_PATTERN.matcher(joined);
-        assertTrue("could not parse first AR dim id from probe response: " + joined, m.find());
-        return Integer.parseInt(m.group(1));
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        int[] dims = Reply.of("artest dim list", joined).intArray(AR_DIM_PATTERN);
+        assertTrue("could not parse first AR dim id from probe response: " + joined, dims.length > 0);
+        return dims[0];
     }
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = String.join("\n", client().execute("artest dim list"));
         Assume.assumeFalse(
                 "No AR dimensions registered — skipping (empty galaxy?)",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY_PATTERN.matcher(joined);
-        assertTrue("could not parse arDimensions array from probe response: " + joined, m.find());
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply listed = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array from probe response: " + joined,
+                listed.has(AR_DIMS_ARRAY_PATTERN));
         Integer found = null;
-        for (String part : m.group(1).split(",")) {
-            String trimmed = part.trim();
-            if (trimmed.isEmpty()) continue;
-            int dim = Integer.parseInt(trimmed);
+        for (int dim : listed.intArray(AR_DIMS_ARRAY_PATTERN)) {
             if (dim != 0) {
                 found = dim;
                 break;
@@ -181,9 +173,9 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
         return found;
     }
 
-    private String loadAndInfo(int dim) throws Exception {
+    private DimInfo loadAndInfo(int dim) throws Exception {
         loadDim(dim);
-        return String.join("\n", client().execute("artest dim info " + dim));
+        return DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), dim);
     }
 
     private void loadDim(int dim) throws Exception {
@@ -194,10 +186,10 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
 
     private static double extractAngle(List<String> response) {
         String joined = String.join("\n", response);
-        Matcher m = ANGLE_PATTERN.matcher(joined);
-        if (!m.find()) {
+        Reply mReply = Reply.of(joined);
+        if (!mReply.has(ANGLE_PATTERN)) {
             throw new AssertionError("could not extract angle from probe response: " + joined);
         }
-        return Double.parseDouble(m.group(1));
+        return Double.parseDouble(mReply.text(ANGLE_PATTERN));
     }
 }

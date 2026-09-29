@@ -1,9 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -23,99 +27,92 @@ import static org.junit.Assert.assertTrue;
  */
 public class WearSystemTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-
-    private void preClear(int baseX, int baseY, int baseZ) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        client().execute("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air");
-    }
-
-    private int[] buildFixture(int baseX, int baseY, int baseZ) throws Exception {
-        preClear(baseX, baseY, baseZ);
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("no builderPos: " + fixture, bp.find());
-        return new int[]{Integer.parseInt(bp.group(1)), Integer.parseInt(bp.group(2)), Integer.parseInt(bp.group(3))};
+    /**
+     * FIRST link and the build, in one call: the volume this craft is built in is EMPTY, and a
+     * failure names what was in it.
+     *
+     * <p>The site stands in open air, so this ASSERTS rather than digs. It still warms the chunks —
+     * the fill inside it force-loads every chunk in the box — so nothing downstream lost a
+     * guarantee it had.</p>
+     */
+    private int[] buildFixture(FixtureSite site) throws Exception {
+        return RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                "simple", 2, 10, "the craft is built and worn in this volume");
     }
 
     private int assembleAndGetId(int[] builderPos) throws Exception {
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + builderPos[0] + " " + builderPos[1] + " " + builderPos[2]));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
         String list = String.join("\n", client().execute("artest rocket list 0"));
-        Matcher m = ROCKET_LIST_ID.matcher(list);
-        int id = -1;
-        while (m.find()) id = Integer.parseInt(m.group(1));
-        assertTrue("no rocket id after assemble: " + list, id >= 0);
-        return id;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket id after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     private int thrustOf(int entityId) throws Exception {
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        Matcher m = Pattern.compile("\"thrust\":(-?\\d+)").matcher(info);
-        assertTrue("no thrust in info: " + info, m.find());
-        return Integer.parseInt(m.group(1));
+        return rocketInfo(entityId).thrust;
+    }
+
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
     }
 
     @Test
     public void motorTankSeatHostWearCapability() throws Exception {
-        int bx = 2900, by = 64, bz = 2900;
-        buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2900, 2900);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
 
         // Engine, fuel tank, seat positions (see fixture builder).
         String engine = String.join("\n", client().execute(
                 "artest wear get 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ));
-        assertTrue("motor must host wear cap: " + engine, engine.contains("\"registered\":true"));
+        assertTrue("motor must host wear cap: " + engine, Reply.of(engine).bool("registered"));
 
         String tank = String.join("\n", client().execute(
                 "artest wear get 0 " + rocketX + " " + (rocketY + 1) + " " + rocketZ));
-        assertTrue("fuel tank must host wear cap: " + tank, tank.contains("\"registered\":true"));
+        assertTrue("fuel tank must host wear cap: " + tank, Reply.of(tank).bool("registered"));
 
         String seat = String.join("\n", client().execute(
                 "artest wear get 0 " + rocketX + " " + (rocketY + 4) + " " + rocketZ));
-        assertTrue("seat must host wear cap: " + seat, seat.contains("\"registered\":true"));
+        assertTrue("seat must host wear cap: " + seat, Reply.of(seat).bool("registered"));
     }
 
     @Test
     public void wearStageRoundTripsThroughCapability() throws Exception {
-        int bx = 2960, by = 64, bz = 2900;
-        buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 2900);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        buildFixture(bSite);
         int ex = bx + 3 - 1, ey = by + 1, ez = bz + 3;
 
         String set = String.join("\n", client().execute("artest wear set 0 " + ex + " " + ey + " " + ez + " 7"));
-        assertTrue("wear set failed: " + set, set.contains("\"ok\":true"));
+        assertTrue("wear set failed: " + set, Reply.of(set).ok());
 
         String get = String.join("\n", client().execute("artest wear get 0 " + ex + " " + ey + " " + ez));
-        Matcher m = Pattern.compile("\"stage\":(\\d+)").matcher(get);
-        assertTrue("no stage in get: " + get, m.find());
-        assertEquals("wear stage must persist", 7, Integer.parseInt(m.group(1)));
+        Reply mReply = Reply.of(get);
+        assertTrue("no stage in get: " + get, mReply.has("stage"));
+        assertEquals("wear stage must persist", 7, mReply.integer("stage"));
     }
 
     private double breakingProbOf(int entityId) throws Exception {
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        Matcher m = Pattern.compile("\"breakingProb\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)").matcher(info);
-        assertTrue("no breakingProb in info: " + info, m.find());
-        return Double.parseDouble(m.group(1));
+        return rocketInfo(entityId).breakingProb;
     }
 
     @Test
     public void wornMotorRaisesBreakingProbability() throws Exception {
         // Pristine rocket: zero failure probability.
-        int ax = 2900, ay = 64, az = 3020;
-        int pristine = assembleAndGetId(buildFixture(ax, ay, az));
+        final FixtureSite aSite = FixtureSite.openAir(0, 2900, 3020);
+        final int ax = aSite.x, ay = aSite.y, az = aSite.z;
+        int pristine = assembleAndGetId(buildFixture(aSite));
         assertEquals("pristine rocket must have zero breaking probability",
                 0.0, breakingProbOf(pristine), 1e-6);
 
         // Max out one engine's wear before assembly -> breaking probability rises.
-        int bx = 2960, by = 64, bz = 3020;
-        int[] builder = buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 3020);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        int[] builder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
         client().execute("artest wear set 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ + " 10");
         int worn = assembleAndGetId(builder);
@@ -125,12 +122,13 @@ public class WearSystemTest extends AbstractSharedServerTest {
 
     @Test
     public void standaloneRepairResetsMotorWear() throws Exception {
-        int bx = 2900, by = 64, bz = 3080;
-        int[] builder = buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2900, 3080);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        int[] builder = buildFixture(bSite);
         int rocketId = assembleAndGetId(builder);
         // Wear one motor to stage 5 (no PrecisionAssembler nearby -> standalone path).
         String inject = String.join("\n", client().execute("artest infra inject-broken-part " + rocketId + " 5"));
-        assertTrue("inject-broken-part failed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("inject-broken-part failed: " + inject, Reply.of(inject).ok());
         assertTrue("worn motor must give a non-zero breaking probability",
                 breakingProbOf(rocketId) > 0);
 
@@ -140,22 +138,22 @@ public class WearSystemTest extends AbstractSharedServerTest {
                 + " " + (sx + 1) + " " + (sy + 2) + " " + (sz + 1) + " minecraft:air");
         String place = String.join("\n", client().execute(
                 "artest place 0 " + sx + " " + sy + " " + sz + " advancedrocketry:serviceStation"));
-        assertTrue("service station place failed: " + place, place.contains("\"placed\":true"));
+        assertTrue("service station place failed: " + place, Reply.of(place).bool("placed"));
         // Redstone power — performFunction requires getEquivalentPower=true.
         client().execute("artest place 0 " + sx + " " + (sy + 1) + " " + sz + " minecraft:redstone_block");
 
         String link = String.join("\n", client().execute(
                 "artest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("link failed: " + link, link.contains("\"ok\":true"));
+        assertTrue("link failed: " + link, Reply.of(link).ok());
 
         // Load the stage-5 repair recipe's non-part materials (ingot + plate),
         // each well above the x3 standalone multiplier.
         String load0 = String.join("\n", client().execute(
                 "artest wear station-load 0 " + sx + " " + sy + " " + sz + " 0 ore:ingotTitaniumIridium 16"));
-        assertTrue("station-load ingot failed: " + load0, load0.contains("\"ok\":true"));
+        assertTrue("station-load ingot failed: " + load0, Reply.of(load0).ok());
         String load1 = String.join("\n", client().execute(
                 "artest wear station-load 0 " + sx + " " + sy + " " + sz + " 1 ore:plateTitaniumAluminide 16"));
-        assertTrue("station-load plate failed: " + load1, load1.contains("\"ok\":true"));
+        assertTrue("station-load plate failed: " + load1, Reply.of(load1).ok());
 
         // Drive performFunction directly (no assembler -> standalone repair branch).
         client().execute("artest infra service-perform-function 0 " + sx + " " + sy + " " + sz);
@@ -167,36 +165,39 @@ public class WearSystemTest extends AbstractSharedServerTest {
 
     @Test
     public void wornTankAndSeatSurfaceForLaunchGate() throws Exception {
-        int bx = 2960, by = 64, bz = 3080;
-        int[] builder = buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 3080);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        int[] builder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
         client().execute("artest wear set 0 " + rocketX + " " + (rocketY + 1) + " " + rocketZ + " 8");  // a fuel tank
         client().execute("artest wear set 0 " + rocketX + " " + (rocketY + 4) + " " + rocketZ + " 10"); // the seat
         int rocketId = assembleAndGetId(builder);
 
         String status = String.join("\n", client().execute("artest wear rocket-status " + rocketId + " 0.7"));
-        assertTrue("rocket-status must find the rocket: " + status, status.contains("\"found\":true"));
+        assertTrue("rocket-status must find the rocket: " + status, Reply.of(status).bool("found"));
 
-        Matcher tanks = Pattern.compile("\"wornTankCount\":(\\d+)").matcher(status);
-        assertTrue("no wornTankCount: " + status, tanks.find());
+        Reply tanksReply = Reply.of(status);
+        assertTrue("no wornTankCount: " + status, tanksReply.has("wornTankCount"));
         assertTrue("a worn fuel tank must be surfaced for the launch gate: " + status,
-                Integer.parseInt(tanks.group(1)) >= 1);
+                tanksReply.integer("wornTankCount") >= 1);
         assertTrue("a critically-worn seat must be detected: " + status,
-                status.contains("\"hasCriticallyWornSeat\":true"));
+                Reply.of(status).bool("hasCriticallyWornSeat"));
     }
 
     @Test
     public void wornMotorsProduceLessThrust() throws Exception {
         // Pristine reference rocket.
         int[] pristineBuilder = {0, 0, 0};
-        int ax = 2900, ay = 64, az = 2960;
-        pristineBuilder = buildFixture(ax, ay, az);
+        final FixtureSite aSite = FixtureSite.openAir(0, 2900, 2960);
+        final int ax = aSite.x, ay = aSite.y, az = aSite.z;
+        pristineBuilder = buildFixture(aSite);
         int pristineThrust = thrustOf(assembleAndGetId(pristineBuilder));
         assertTrue("pristine thrust must be positive", pristineThrust > 0);
 
         // Worn rocket: max out both engine wear stages before assembly.
-        int bx = 2960, by = 64, bz = 2960;
-        int[] wornBuilder = buildFixture(bx, by, bz);
+        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 2960);
+        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
+        int[] wornBuilder = buildFixture(bSite);
         int rocketX = bx + 3, rocketY = by + 1, rocketZ = bz + 3;
         client().execute("artest wear set 0 " + (rocketX - 1) + " " + rocketY + " " + rocketZ + " 10");
         client().execute("artest wear set 0 " + (rocketX + 1) + " " + rocketY + " " + rocketZ + " 10");

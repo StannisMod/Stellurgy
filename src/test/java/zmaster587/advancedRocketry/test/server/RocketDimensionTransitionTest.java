@@ -1,10 +1,14 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -43,65 +47,61 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern UUID_FIELD =
-            Pattern.compile("\"uuid\":\"([0-9a-fA-F-]+)\"");
-    private static final Pattern DIM_FIELD = Pattern.compile("\"dim\":(-?\\d+)");
-    private static final Pattern ENTITY_ID_FIELD = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern STORAGE_SIZE_X = Pattern.compile("\"storageSizeX\":(-?\\d+)");
-    private static final Pattern STORAGE_SIZE_Y = Pattern.compile("\"storageSizeY\":(-?\\d+)");
-    private static final Pattern STORAGE_SIZE_Z = Pattern.compile("\"storageSizeZ\":(-?\\d+)");
-    private static final Pattern ENGINE_COUNT = Pattern.compile("\"engineCount\":(-?\\d+)");
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
+    // What follows are `artest rocket find-by-uuid`'s OWN field names. They are spelled the same as
+    // `rocket info`'s and are a different verb's answer — the post-transition reads go through
+    // find-by-uuid deliberately (see the comment at that call site), and it has no reader yet.
+    private static final String UUID_FIELD = "uuid";
+    private static final String DIM_FIELD = "dim";
+    private static final String ENTITY_ID_FIELD = "entityId";
+    private static final String STORAGE_SIZE_X = "storageSizeX";
+    private static final String STORAGE_SIZE_Y = "storageSizeY";
+    private static final String STORAGE_SIZE_Z = "storageSizeZ";
+    private static final String ENGINE_COUNT = "engineCount";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static String g(Pattern p, String s, String label) {
-        Matcher m = p.matcher(s);
-        if (!m.find()) throw new AssertionError("could not parse " + label + ": " + s);
-        return m.group(1);
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+    }
+
+    private static String g(String field, String s, String label) {
+        Reply reply = Reply.of(s);
+        assertTrue("could not parse " + label + ": " + s, reply.has(field));
+        return reply.text(field);
     }
 
     private int firstNonOverworldArDimOrSkip() throws Exception {
         String joined = ok(client().execute("artest dim list"));
         Assume.assumeFalse("No AR dimensions registered",
-                joined.contains("\"arDimensions\":[]"));
-        Matcher m = AR_DIMS_ARRAY.matcher(joined);
-        assertTrue("could not parse arDimensions array: " + joined, m.find());
-        for (String part : m.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int dim = Integer.parseInt(t);
+                (Reply.of(joined).arrayLength("arDimensions") == 0));
+        Reply dims = Reply.of("artest dim list", joined);
+        assertTrue("could not parse arDimensions array: " + joined, dims.has(AR_DIMS_ARRAY));
+        for (int dim : dims.intArray(AR_DIMS_ARRAY)) {
             if (dim != 0) return dim;
         }
         Assume.assumeTrue("Only overworld is an AR planet", false);
         return -1;
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-        ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
@@ -110,13 +110,21 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // tests below all depend on UUID being readable from both info and
         // list endpoints. A regression that drops the uuid field would
         // mask cause-effect failures in the harder tests.
-        int id = buildAndAssemble(5000, 64, 500);
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("rocket info must expose uuid: " + info,
-                UUID_FIELD.matcher(info).find());
+        int id = buildAndAssemble(FixtureSite.openAir(0, 5000, 500));
+        // The reader REFUSES an absent uuid rather than answering one, and that refusal IS this
+        // assertion: the value travels into `find-by-uuid` in the legs below.
+        RocketInfo info = rocketInfo(id);
+        assertFalse("rocket info must expose uuid: " + info.raw(), info.requireUuid().isEmpty());
+        // Asked of each ROCKET, because that is where the field lives — `uuid` is a member of the
+        // `rockets` array's elements and never a field of the reply.
         String list = ok(client().execute("artest rocket list 0"));
-        assertTrue("rocket list must expose uuid: " + list,
-                UUID_FIELD.matcher(list).find());
+        java.util.List<RocketList.Entry> listed = RocketList.of(list);
+        assertTrue("rocket list must carry the craft just built, or it says nothing about uuid: "
+                + list, !listed.isEmpty());
+        for (RocketList.Entry listedRocket : listed) {
+            assertTrue("rocket list must expose uuid for " + listedRocket + ": " + list,
+                    listedRocket.uuid != null);
+        }
     }
 
     @Test
@@ -132,11 +140,10 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // Assertion: find-by-uuid in destDim must succeed and report dim==destDim.
         // The old entityId must NOT exist in dim 0 anymore.
         int destDim = firstNonOverworldArDimOrSkip();
-        int id = buildAndAssemble(5100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 5100, 500));
 
         // Capture UUID before launch.
-        String infoBefore = ok(client().execute("artest rocket info " + id));
-        String uuid = g(UUID_FIELD, infoBefore, "uuid");
+        String uuid = rocketInfo(id).requireUuid();
 
         // Force-load the destination dim before transition. The shared
         // harness has no player to keep arbitrary AR dims hot, and Forge's
@@ -146,10 +153,10 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         ok(client().execute("artest rocket set-destination " + id + " " + destDim));
         ok(client().execute("artest rocket launch " + id + " true instant"));
 
-        String launchedInfo = ok(client().execute("artest rocket info " + id));
+        RocketInfo launchedInfo = rocketInfo(id);
         assertTrue("launch must set isInFlight=true (precondition for transition test): "
-                        + launchedInfo,
-                launchedInfo.contains("\"isInFlight\":true"));
+                        + launchedInfo.raw(),
+                launchedInfo.inFlight);
 
         // Force orbit reached -> triggers transition.
         ok(client().execute("artest rocket force-orbit-reached " + id));
@@ -157,7 +164,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // Find the rocket by UUID — must now be in destDim.
         String byUuid = ok(client().execute("artest rocket find-by-uuid " + uuid));
         assertTrue("rocket must be findable by UUID after transition: " + byUuid,
-                byUuid.contains("\"ok\":true"));
+                Reply.of(byUuid).ok());
         int dimAfter = Integer.parseInt(g(DIM_FIELD, byUuid, "dim"));
         assertEquals("rocket must have transitioned to destination dim", destDim, dimAfter);
     }
@@ -171,15 +178,15 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // that drops the storage NBT (e.g. fails to call
         // copyDataFromOld) would shrink storageSizeX/Y/Z to defaults.
         int destDim = firstNonOverworldArDimOrSkip();
-        int id = buildAndAssemble(5200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 5200, 500));
 
-        String infoBefore = ok(client().execute("artest rocket info " + id));
-        String uuid = g(UUID_FIELD, infoBefore, "uuid");
-        int idBefore = Integer.parseInt(g(ENTITY_ID_FIELD, infoBefore, "entityId before"));
-        int sxBefore = Integer.parseInt(g(STORAGE_SIZE_X, infoBefore, "sizeX before"));
-        int syBefore = Integer.parseInt(g(STORAGE_SIZE_Y, infoBefore, "sizeY before"));
-        int szBefore = Integer.parseInt(g(STORAGE_SIZE_Z, infoBefore, "sizeZ before"));
-        int engBefore = Integer.parseInt(g(ENGINE_COUNT, infoBefore, "engines before"));
+        RocketInfo infoBefore = rocketInfo(id);
+        String uuid = infoBefore.requireUuid();
+        int idBefore = infoBefore.entityId;
+        int sxBefore = infoBefore.storageSizeX();
+        int syBefore = infoBefore.storageSizeY();
+        int szBefore = infoBefore.storageSizeZ();
+        int engBefore = infoBefore.engineCount;
 
         // Force-load the destination dim before transition. The shared
         // harness has no player to keep arbitrary AR dims hot, and Forge's
@@ -196,7 +203,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // round-trip lands (no player anchor in the dest dim).
         String byUuid = ok(client().execute("artest rocket find-by-uuid " + uuid));
         assertTrue("rocket must be findable post-transition: " + byUuid,
-                byUuid.contains("\"ok\":true"));
+                Reply.of(byUuid).ok());
         int idAfter = Integer.parseInt(g(ENTITY_ID_FIELD, byUuid, "entityId after"));
         assertNotEquals("entityId must change across changeDimension", idBefore, idAfter);
         int sxAfter = Integer.parseInt(g(STORAGE_SIZE_X, byUuid, "sizeX after"));
@@ -220,10 +227,9 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // checks canTravelTo and returns null (line 1944 in EntityRocket).
         // Assertion: the call doesn't throw, and the rocket still exists
         // in dim 0 under its original UUID (no half-transitioned state).
-        int id = buildAndAssemble(5300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 5300, 500));
 
-        String infoBefore = ok(client().execute("artest rocket info " + id));
-        String uuid = g(UUID_FIELD, infoBefore, "uuid");
+        String uuid = rocketInfo(id).requireUuid();
 
         // Launch needs a valid dim — use overworld self-route as a
         // pre-launch nudge, then force a bogus destDim AFTER launch.
@@ -237,16 +243,16 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         // -> changeDimension(-12345) -> canTravelTo guard returns null.
         String resp = ok(client().execute("artest rocket force-orbit-reached " + id));
         assertTrue("force-orbit-reached must not crash on invalid destDim: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
 
         // Rocket must still be findable by UUID, dim unchanged.
         String byUuid = ok(client().execute("artest rocket find-by-uuid " + uuid));
         assertTrue("rocket must still exist after invalid-dim transition attempt: " + byUuid,
-                byUuid.contains("\"ok\":true"));
+                Reply.of(byUuid).ok());
         int dimAfter = Integer.parseInt(g(DIM_FIELD, byUuid, "dim after"));
         assertEquals("rocket must remain in original dim 0", 0, dimAfter);
         assertFalse("rocket must NOT be marked dead by the failed transition: " + byUuid,
-                byUuid.contains("\"isDead\":true"));
+                Reply.of(byUuid).bool("isDead"));
     }
 
     @Test
@@ -257,13 +263,13 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket find-by-uuid 00000000-0000-0000-0000-000000000000"));
         assertTrue("unknown uuid must error: " + resp,
-                resp.contains("\"error\":\"rocket not found by uuid\""));
+                "rocket not found by uuid".equals(Reply.of(resp).text("error")));
     }
 
     @Test
     public void findByUuidOnMalformedUuidReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket find-by-uuid not-a-uuid"));
         assertTrue("malformed uuid must error: " + resp,
-                resp.contains("\"error\":\"invalid uuid\""));
+                "invalid uuid".equals(Reply.of(resp).text("error")));
     }
 }

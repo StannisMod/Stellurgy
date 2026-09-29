@@ -1,11 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import org.junit.Ignore;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.DimInfo;
+import zmaster587.advancedRocketry.test.DimWeather;
+
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 /**
  * vanilla / non-AR dimension isolation.
@@ -27,44 +28,43 @@ import static org.junit.Assert.assertTrue;
  */
 public class NonARDimensionIsolationTest extends AbstractHeadlessServerTest {
 
-    @Ignore("hangs at suite scale (~44th testServer class) — the `dim info "
-            + "-1/1` probes force a Nether/End load on the long-lived shared "
-            + "AbstractHeadlessServerTest server, which deadlocks after ~43 prior "
-            + "classes; passes 2/2 in isolation. Not a wrap-policy regression: the "
-            + "wrapper-isolation half of this contract (Nether/End NOT "
-            + "ARDimensionWorldInfo) is still pinned green by "
-            + "overworldAndVanillaDimsAreNotWrapped below. Only the isARPlanet "
-            + "classification check is parked here until the harness hang is fixed.")
     @Test
     public void netherAndEndAreNotARPlanets() throws Exception {
-        String nether = String.join("\n", client().execute("artest dim info -1"));
-        assertFalse("nether is mis-classified as an AR planet: " + nether,
-                nether.contains("\"isARPlanet\":true"));
+        DimInfo nether = dimInfo(-1);
+        assertFalse("nether is mis-classified as an AR planet: " + nether.raw(), nether.arPlanet);
 
-        String end = String.join("\n", client().execute("artest dim info 1"));
-        assertFalse("end is mis-classified as an AR planet: " + end,
-                end.contains("\"isARPlanet\":true"));
+        DimInfo end = dimInfo(1);
+        assertFalse("end is mis-classified as an AR planet: " + end.raw(), end.arPlanet);
     }
 
     @Test
     public void overworldAndVanillaDimsAreNotWrapped() throws Exception {
-        String overworld = String.join("\n", client().execute("artest weather get 0"));
-        assertFalse("overworld must NOT have the AR weather wrapper installed: " + overworld,
-                overworld.contains("ARDimensionWorldInfo"));
+        // The sanity check the three claims below used to need — that the reply really is a weather
+        // reading and not the probe's `{"error":"world not loaded"}` — is now the read itself, and
+        // it covers all three rather than only the overworld: a NEGATED substring over the whole
+        // reply is satisfied by a world that does not exist, which is how each of these could have
+        // passed while proving nothing.
+        DimWeather overworld = weather(0);
+        assertFalse("overworld must NOT have the AR weather wrapper installed: " + overworld.raw(),
+                overworld.usesARWorldInfo());
 
-        String nether = String.join("\n", client().execute("artest weather get -1"));
-        assertFalse("nether must NOT have the AR weather wrapper installed: " + nether,
-                nether.contains("ARDimensionWorldInfo"));
+        DimWeather nether = weather(-1);
+        assertFalse("nether must NOT have the AR weather wrapper installed: " + nether.raw(),
+                nether.usesARWorldInfo());
 
-        String end = String.join("\n", client().execute("artest weather get 1"));
-        assertFalse("end must NOT have the AR weather wrapper installed: " + end,
-                end.contains("ARDimensionWorldInfo"));
+        DimWeather end = weather(1);
+        assertFalse("end must NOT have the AR weather wrapper installed: " + end.raw(),
+                end.usesARWorldInfo());
+    }
 
-        // Sanity check — these three vanilla dims still respond and look
-        // like real WorldInfo (the wrapper would say "ARDimensionWorldInfo",
-        // a missing world would say "error", a misconfigured probe would
-        // say neither — make sure we're observing real worldInfoClass data).
-        assertTrue("overworld weather get must return a worldInfoClass field: " + overworld,
-                overworld.contains("\"worldInfoClass\":"));
+    /** One world's sky, refusing a world the probe could not bring up. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+                .requireDim(dim);
+    }
+
+    /** What the server says about one dimension, read through the verb's own reader. */
+    private DimInfo dimInfo(int dim) throws Exception {
+        return DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), dim);
     }
 }

@@ -1,10 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -24,7 +27,7 @@ public class AffsVendorSmokeTest extends AbstractSharedServerTest {
 
     @Test
     public void vendoredAffsBlocksAreRegisteredAndPlaceable() throws Exception {
-        int y = 64, z = 800, baseX = 800;
+        int y = FixtureSite.OPEN_AIR_Y, z = 800, baseX = 800;
 
         // The AFFS shield core. The legacy projected_field proxy block was removed in the P1 trims
         // (the modern field is scan-based and places no blocks), so it is not listed here.
@@ -43,7 +46,10 @@ public class AffsVendorSmokeTest extends AbstractSharedServerTest {
             int x = baseX + e.getValue();
             String resp = join(client().execute(
                     "artest place 0 " + x + " " + y + " " + z + " " + e.getKey()));
-            if (!resp.contains("\"placed\":true")) {
+            // absence is the answer: the place verb writes `placed` only on its success
+            // path, and this suite RECORDS a failure per block rather than ending on the
+            // first one — a refusal here would take the other blocks' verdicts with it.
+            if (!Reply.of(resp).boolOr("placed", false)) {
                 failures.append(e.getKey()).append(" -> ").append(resp).append('\n');
             }
         }

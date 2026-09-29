@@ -1,14 +1,24 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.ShipReadiness;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.EntrySlots;
+import zmaster587.advancedRocketry.test.EntryStatus;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
+
 import org.junit.After;
-import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.awaitEnteredSpace;
 
 /**
  * E2E: does the tier-2 PLANET DESCENT take a ship in space across into a real planet dimension through the
@@ -23,65 +33,69 @@ import static org.junit.Assert.assertTrue;
  * ship is loaded in the overworld and the ship has left the ledger. The proximity TRIGGER predicate is
  * pinned separately + deterministically by {@code DescentControllerTest}; this e2e is the "the crossing
  * physically moves a settled ship into a planet dim" acceptance. Gated on the server's real VS presence
- * (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * (run with); skips cleanly otherwise.</p>
  */
 public class VSShipDescentE2ETest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
 
     /** A loaded overworld region distinct from the entry e2e's, well clear of other tests. */
-    private static final int SRC_X = 6400, SRC_Y = 80, SRC_Z = 6400;
+    private static final int SRC_X = 6400, SRC_Y = FixtureSite.OPEN_AIR_Y, SRC_Z = 6400;
     /** A world Y comfortably above the default orbit ceiling (ARConfiguration.orbit = 1000). */
     private static final int ABOVE_CEILING_Y = 1200;
     /** The descent target: the overworld — always registered, terrain-generated. */
     private static final int TARGET_DIM = 0;
 
+    /**
+     * Budgets in SERVER TICKS, none of them fork-scaled: 600 is the thirty seconds the old
+     * 120 x 250 ms meant on an idle box, 200 the ten seconds of 40 x 250 ms.
+     */
+    private static final int SETTLE_TICKS = 600;
+    private static final int FIND_AFC_TICKS = 200;
+
     @Test
     public void aSettledShipDescendsIntoAPlanetDimViaTheCrossing() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
-        exec("artest vs permaload true");
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // --- Phase 1: ENTER a ship so it is settled in a slot cell (the proven entry path). ---
-        clearArea(SRC_X, SRC_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
+        String coords = placeFixture(FixtureSite.openAir(0, SRC_X, SRC_Z), "with-pilot-seat");
         String asm = exec("artest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
-                asm.contains("\"rocketCount\":0"));
-        assertTrue("the source VS ship never loaded", waitForLoadedShip(0) >= 1);
+                (Reply.of(asm).integer("rocketCount") == 0));
+        assertTrue("the source VS ship never loaded", loadedShips(0) >= 1);
 
-        String srcInfo = exec("artest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
-        assertTrue("source ship not managed by VS: " + srcInfo, srcInfo.contains("\"managed\":true"));
-        double sx = extractDouble(srcInfo, "posX"), sy = extractDouble(srcInfo, "posY"),
-                sz = extractDouble(srcInfo, "posZ");
+        // The ship's own name, from the assembler that minted it — and from there its physics id. The
+        // pad sits in a world this class shares, so "the ship near (SRC_X,SRC_Y,SRC_Z)" is a question
+        // a neighbour's craft can answer.
+        String shipId = ShipIdentity.nameFromAssembly(asm);
+        String vsId = ShipIdentity.physicsIdOf(this::exec, 0, shipId);
+
+        ShipInfo src = ShipInfo.byId(this::exec, 0, vsId);
+        double sx = src.x, sy = src.y, sz = src.z;
 
         // A held throttle on THIS ship's own flight computer => a pilot is flying.
-        String held = exec("artest vs ff-input-by-id 0 " + extractString(srcInfo, "id") + " 0 1 0 0 0 0");
+        String held = exec("artest vs ff-input-by-id 0 " + vsId + " 0 1 0 0 0 0");
         assertTrue("the held input must reach this ship's flight computer: " + held,
-                held.contains("\"afcResolved\":true"));
-        String tp = exec("artest vs teleport-ship 0 " + (int) sx + " " + (int) sy + " " + (int) sz
-                + " " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
-        assertTrue("climb teleport failed: " + tp, tp.contains("\"ok\":true"));
-        exec("artest vs unpark 0 " + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+                Reply.of(held).bool("afcResolved"));
+        String tp = exec("artest vs teleport-ship-by-id 0 " + vsId + " "
+                + (int) sx + " " + ABOVE_CEILING_Y + " " + (int) sz);
+        assertTrue("climb teleport failed: " + tp, Reply.of(tp).ok());
+        // Marked before the unpark, which is what lets the entry start: the arrival is announced
+        // once, and a mark taken after it would wait for a second entry.
+        long entryMark = events.mark();
+        exec("artest vs unpark-by-id 0 " + vsId);
 
-        String status = "";
-        boolean settled = false;
-        for (int i = 0; i < 120; i++) {
-            status = exec("artest space entry-status");
-            if (extractInt(status, "ships") >= 1 && "SETTLED".equals(extractString(status, "state"))) {
-                settled = true;
-                break;
-            }
-            loadAllEntrySlots(setup);
-            Thread.sleep(250);
-        }
-        assertTrue("precondition: ship never entered space to descend from; last status=" + status, settled);
-        int slotDim = extractInt(status, "slotDim");
-        String shipId = extractString(status, "shipId");
-        assertTrue("settled slot dim not reported: " + status, slotDim > Integer.MIN_VALUE);
+        // Linked on the record the entry publishes at its settle, rather than reading the ledger row
+        // over and over until it agrees.
+        awaitEnteredSpace(events, entryMark, shipId,
+                "precondition: the ship must enter space, or there is nothing to descend from",
+                SETTLE_TICKS, () -> loadAllEntrySlots(setup));
+        EntryStatus entryStatus = EntryStatus.forShip(this::exec, shipId).requireFound(
+                "the arrival was announced, so the ledger must hold this craft's row");
+        int slotDim = entryStatus.slotDim;
+        assertTrue("settled slot dim not reported: " + entryStatus.raw(),
+                slotDim > Integer.MIN_VALUE);
 
         // --- Phase 2: DESCEND that settled ship into the overworld. ---
         // CONTROL: the overworld holds no VS ship now (entry cut the source out) — a later "1" is the descent.
@@ -95,113 +109,110 @@ public class VSShipDescentE2ETest extends AbstractSharedServerTest {
         // Ensure the settled ship is loaded in its slot, then locate its flight computer. The ship's
         // blocks (incl. the AFC tile entity) live in the slot world's far subspace shipyard; they enter
         // loadedTileEntityList only once VS loads the ship, so force-load + poll (async load).
-        assertTrue("the settled ship never loaded in its slot", waitForLoadedShip(slotDim) >= 1);
-        String afc = null;
-        for (int i = 0; i < 40 && afc == null; i++) {
-            exec("artest vs load-ships " + slotDim);
-            // By id: this scenario already knows which ship it flew up, and "the first settled ship
-            // in the slot" is a different question that happens to have the same answer today.
-            String r = exec("artest space find-afc " + slotDim + " " + shipId);
-            if (r.contains("\"found\":true")) {
-                afc = r;
-            } else {
-                Thread.sleep(250);
-            }
-        }
-        assertTrue("could not locate the ship's flight computer in the slot", afc != null);
+        assertTrue("the settled ship never loaded in its slot", loadedShips(slotDim) >= 1);
+        // NOT A WAIT, and it never was one — it RETRIED an operation, which is the shape ruled on
+        // when seventeen ship-load waits were deleted rather than converted: a wait exists because
+        // something is not true synchronously after an action, and here the action is the pump on
+        // the line above. The load is asked for once, and the lookup that follows is answerable
+        // because the ship is resident when it is asked — the reading directly above has already
+        // established that the slot holds a loaded ship.
+        //
+        // By id: this scenario knows which ship it flew up, and "the first settled ship in the slot"
+        // is a different question that happens to have the same answer today.
+        exec("artest vs load-ships " + slotDim);
+        String afc = exec("artest space find-afc " + slotDim + " " + shipId);
+        assertTrue("could not locate the ship's flight computer in the slot " + slotDim
+                        + " after its ships were load-queued; the slot reports "
+                        + loadedShips(slotDim) + " loaded ship(s): " + afc,
+                Reply.of(afc).boolOr("found", false));
         int ax = extractInt(afc, "x"), ay = extractInt(afc, "y"), az = extractInt(afc, "z");
 
+        // Marked BEFORE the command whose effect is awaited.
+        long descentMark = events.mark();
         String begin = exec("artest space descent-begin " + slotDim + " " + ax + " " + ay + " " + az
                 + " " + shipId + " " + TARGET_DIM);
-        assertTrue("descent did not start: " + begin, begin.contains("\"started\":true"));
+        assertTrue("descent did not start: " + begin, Reply.of(begin).bool("started"));
 
         // The cut dropped the ship from the ledger at once (it has left the subsystem).
         assertEquals("the descending ship leaves the ledger on the cut", 0,
-                extractInt(exec("artest space entry-status"), "ships"));
+                EntryStatus.wholeLedger(this::exec).ships);
 
-        // The crossing re-assembles the ship in the overworld (async); poll until it is loaded there.
-        boolean landed = false;
-        for (int i = 0; i < 120; i++) {   // ~30 s ceiling: async crossing + re-assembly
-            if (waitForLoadedShip(TARGET_DIM) >= 1) {
-                landed = true;
-                break;
-            }
-            exec("artest space descent-status");
-            Thread.sleep(250);
-        }
-        assertTrue("the ship never crossed into the overworld via the descent; countAll="
-                + exec("artest vs ship-count-all " + TARGET_DIM), landed);
+        // The crossing re-assembles the ship in the planet's world asynchronously, and production
+        // announces when it has: this waits for THAT, by id, instead of sampling the loaded count
+        // until it happens to be non-zero. A count cannot tell "it never arrived" from "it arrived
+        // and was unloaded again before this read"; the record can, and on failure it prints the
+        // chain instead of a number. The `descent-status` poll this replaces was a pure read of a
+        // counter -- diagnostic only, so nothing is lost by dropping it.
+        events.awaitField(descentMark, "ship_entered_planet","ship", shipId,
+                "the ship never crossed into the planet's dimension via the descent; countAll="
+                        + exec("artest vs ship-count-all " + TARGET_DIM),
+                SETTLE_TICKS);
     }
 
     @After
     public void cleanup() throws Exception {
-        if (serverHasVs()) {
-            exec("artest space entry-clear");
-            exec("artest vs permaload false");
-        }
+        exec("artest space entry-clear");
     }
 
     // --- helpers (mirror VSShipEntryE2ETest) --------------------------------------------------------
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
+    /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {
-        Matcher m = Pattern.compile("\"dims\":\\[(-?\\d+),(-?\\d+)]").matcher(setup);
-        if (m.find()) {
-            exec("artest vs load-ships " + m.group(1));
-            exec("artest vs load-ships " + m.group(2));
-        }
+        EntrySlots.loadAll(this::exec, setup);
     }
 
-    private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
-    private void clearArea(int baseX, int baseZ) throws Exception {
-        int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
-        int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("artest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
-    }
 
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
+    /**
+     * WHERE this scenario's craft stands, and the first link that says the volume is empty.
+     *
+     * <p>What stood here was a pair: a {@code clearArea} that ran a chunk warmup and an air fill
+     * over {@code y-2 .. y+12}, and a {@code placeFixture} that laid the blocks. The fill DUG
+     * rather than asked, and threw away its own answer — {@code placed}, the count of blocks that
+     * were standing in the volume. The shared builder asks instead, and on an open-air site
+     * anything found is an arrangement failure that names itself. The warmup went with it: the
+     * fill force-loads every chunk in its own box, so the first link was already doing that job.</p>
+     *
+     * <p>HALO 4 and HEIGHT 12 are the old volume's own numbers, kept rather than re-derived:
+     * they are what this scenario's green runs were taken over.</p>
+     */
+    private String placeFixture(FixtureSite site, String variant) throws Exception {
+        int[] bp = RocketFixture.placeAt(site, this::exec, variant, 4, 12,
+                "the craft this scenario builds stands in this volume");
+        return bp[0] + " " + bp[1] + " " + bp[2];
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).integerOr(key, Integer.MIN_VALUE);
     }
 
     private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : 0.0;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).numberOr(key, 0.0);
     }
 
     private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
+        // FIELD name, so it cannot know what a missing one means — and the callers here
+        // include waits, which read the shape that does not carry the field yet.
+        return Reply.of(json).textOr(key, null);
     }
 }

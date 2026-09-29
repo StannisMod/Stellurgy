@@ -1,13 +1,15 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -55,15 +57,14 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class BeaconEnableCycleTest extends AbstractSharedServerTest {
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 100;
     private static final int CX_ENABLE  = 100;
     private static final int CX_DISABLE = 200;
     private static final int CX_BREAK   = 300;
 
-    private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
-    private static final Pattern BEACON_TRIPLE =
-            Pattern.compile("\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    /** The dim's beacon registry, as {@code "locations":[[x,y,z], …]}. */
+    private static final String LOCATIONS = "locations";
 
     private static int planetDim = -1;
 
@@ -79,7 +80,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
 
         String load = exec("artest dim load " + planetDim);
         assertTrue("planet dim load failed: " + load,
-                load.contains("\"loaded\":true") || load.contains("\"ok\":true"));
+                Reply.of(load).bool("loaded"));
     }
 
     @AfterClass
@@ -131,6 +132,16 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
                         + readBeaconList(),
                 beaconListContains(CX_BREAK, CY, CZ));
 
+        // MARKED BEFORE THE BREAK, so a red can say what the registry actually DID rather than only
+        // what it ended up holding. This assertion has failed intermittently in the parallel tier
+        // while passing serially, and its message could not distinguish three different defects: the
+        // unregister never ran, it ran and something registered the position again, or the break
+        // never reached production at all. The mixins behind `beacon_break` / `beacon_registered` /
+        // `beacon_unregistered` separate them. An earlier attempt put that report in a production LOG
+        // and it was unreadable from here — the mod logger writes into the server child's own log,
+        // which nothing in this harness captures.
+        String mark = exec("artest events mark");
+
         // Break the controller via place-air. world.setBlockState calls
         // the old block's breakBlock callback in Forge 1.12, which is
         // how BlockBeacon.breakBlock gets a chance to clean up the
@@ -138,12 +149,14 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         String breakResp = exec("artest place " + planetDim + " "
                 + CX_BREAK + " " + CY + " " + CZ + " minecraft:air");
         assertTrue("could not air-replace controller block: " + breakResp,
-                breakResp.contains("\"ok\":true"));
+                Reply.of(breakResp).ok());
 
+        boolean stillThere = beaconListContains(CX_BREAK, CY, CZ);
         assertFalse("broken-controller beacon still in registry"
                         + " (" + CX_BREAK + "," + CY + "," + CZ + ") — "
-                        + readBeaconList(),
-                beaconListContains(CX_BREAK, CY, CZ));
+                        + readBeaconList()
+                        + " | what the registry did: " + beaconEventsSince(mark),
+                stillThere);
     }
 
     // ─── helpers ───────────────────────────────────────────────────────
@@ -152,22 +165,53 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         String fixture = exec("artest fixture multiblock beacon "
                 + planetDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("beacon fixture build failed: " + fixture,
-                fixture.contains("\"ok\":true"));
+                Reply.of(fixture).ok());
         String tryComplete = exec("artest machine try-complete "
                 + planetDim + " " + cx + " " + CY + " " + CZ);
         assertTrue("beacon structure failed to complete: " + tryComplete,
-                tryComplete.contains("\"isComplete\":true"));
+                Reply.of(tryComplete).bool("isComplete"));
     }
 
     private static void enableMachine(int cx, boolean enabled) throws Exception {
         String resp = exec("artest machine set-enabled " + planetDim + " "
                 + cx + " " + CY + " " + CZ + " " + enabled);
         assertTrue("machine set-enabled failed: " + resp,
-                resp.contains("\"enabled\":" + enabled));
+                String.valueOf(enabled).equals(Reply.of(resp).text("enabled")));
     }
 
     private static String readBeaconList() throws Exception {
         return exec("artest beacon list " + planetDim);
+    }
+
+    /**
+     * Every beacon-registry record since {@code mark}, for a failure message.
+     *
+     * <p>Built to survive its own failure: if the mark could not be parsed, or the records never
+     * arrived, this says SO rather than returning an empty string that reads as "the registry did
+     * nothing" — which is one of the three answers the caller is trying to tell apart.</p>
+     */
+    private static String beaconEventsSince(String markReply) throws Exception {
+        // `artest events mark` answers `seq`, not `mark`. The first version of this looked for the
+        // latter and reported "no mark was taken" — which is the guard below doing its job: it said
+        // it could not speak rather than returning an empty string that reads as "the registry did
+        // nothing", one of the three answers this method exists to tell apart.
+        Reply mark = Reply.of("artest events mark", markReply);
+        if (!mark.has("seq")) {
+            return "(no mark was taken, so nothing can be said about the sequence: " + markReply + ")";
+        }
+        String records = exec("artest events since " + mark.integer("seq"));
+        // Asked of each record's own `type`. `contains("beacon_")` over the envelope is answered
+        // by the INSTRUMENTS list, which names every registered recorder whether or not it wrote
+        // anything — so the "no beacon record at all" branch below could never be reached, and
+        // the three answers this method exists to tell apart collapsed into one.
+        boolean anyBeacon = false;
+        for (String record : Events.records(records)) {
+            String type = Events.text(record, "type");
+            anyBeacon |= type != null && type.startsWith("beacon_");
+        }
+        return anyBeacon ? records
+                : "(no beacon record at all in " + records.length() + " bytes of events — either the "
+                        + "break never reached production, or the recording mixins are not applied)";
     }
 
     /** True iff the dim's beacon-locations registry contains the triple
@@ -175,26 +219,31 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
      *  array of {@code /artest beacon list}. */
     private static boolean beaconListContains(int x, int y, int z) throws Exception {
         String resp = readBeaconList();
-        int locsStart = resp.indexOf("\"locations\"");
-        assertTrue("beacon list response missing locations field: " + resp,
-                locsStart >= 0);
-        Matcher m = BEACON_TRIPLE.matcher(resp);
-        m.region(locsStart, resp.length());
-        while (m.find()) {
-            if (Integer.parseInt(m.group(1)) == x
-                    && Integer.parseInt(m.group(2)) == y
-                    && Integer.parseInt(m.group(3)) == z) {
+        Reply list = Reply.of("artest beacon list", resp);
+        assertTrue("beacon list response missing locations field: " + resp, list.has(LOCATIONS));
+        for (int[] at : list.blockPosArray(LOCATIONS)) {
+            if (at[0] == x && at[1] == y && at[2] == z) {
                 return true;
             }
         }
         return false;
     }
 
+    /**
+     * The AR dimensions registered right now.
+     *
+     * <p>Asked of the probe, not scraped out of {@code ar planet list}. Nothing here is a claim
+     * about that command's OUTPUT — it was only ever a convenient place to find the ids, and a
+     * {@code DIM(\d+):} over it breaks on any change to how a planet line is captioned. Both read
+     * the same source: {@code PlanetListCommand:28} iterates
+     * {@code DimensionManager.getInstance().getRegisteredDimensions()}, which is exactly what
+     * {@code artest dim list} reports as {@code arDimensions}.</p>
+     */
     private static Set<Integer> arDims() throws Exception {
-        String list = exec("ar planet list");
         Set<Integer> ids = new HashSet<>();
-        Matcher m = DIM_LINE.matcher(list);
-        while (m.find()) ids.add(Integer.parseInt(m.group(1)));
+        for (int dim : Reply.of("artest dim list", exec("artest dim list")).intArray("arDimensions")) {
+            ids.add(dim);
+        }
         return ids;
     }
 }

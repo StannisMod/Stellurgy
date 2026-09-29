@@ -9,7 +9,6 @@ import com.google.gson.JsonObject;
 import org.junit.AfterClass;
 import org.junit.Assume;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Rule;
 import org.junit.rules.TestName;
@@ -18,9 +17,16 @@ import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.Events;
+
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import zmaster587.advancedRocketry.test.Plot;
+import zmaster587.advancedRocketry.test.PlayerState;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -53,10 +59,25 @@ import static org.junit.Assert.assertTrue;
  *       {@code artest station list}) must narrow the answer with {@link Plot#contains}.</li>
  *   <li><b>Declare the phase</b> as it goes, through {@link #scenario()} — that is what lets a
  *       failure name the broken system without anyone opening this file.</li>
- *   <li><b>No un-restored global mutation.</b> Atmosphere density, weather, permaload and a server
- *       restart are not shareable; a scenario needing one belongs on the per-method
- *       {@link AbstractClientE2ETest} instead.</li>
+ *   <li><b>No un-restored global mutation.</b> Atmosphere density and weather are shareable only if
+ *       every scenario SETS what it needs and MEASURES that the set took; a scenario that assumes a
+ *       global instead belongs on the per-method {@link AbstractClientE2ETest}. ({@code vs
+ *       permaload} used to be on this list and is not any more: a test server holds its ships
+ *       loaded from the moment the probes register, so it is a property of the server rather than
+ *       something each scenario sets — and the three whose subject IS an unloaded ship turn it off
+ *       for themselves.)</li>
+ *   <li><b>Declare a config, do not write one.</b> A value the server reads at START goes through
+ *       {@link #seedGameDirectory}, which merges the class's keys into one file before boot; a value
+ *       read at every use is flipped per scenario through {@code artest config set} and restored in
+ *       the family reset. "This class writes its own {@code advancedRocketry.cfg}" stopped being a
+ *       reason to leave this base on 2026-08-23 — what could not be merged was the whole-FILE write,
+ *       never the settings, and the four classes that carried that justification turned out to want
+ *       one key, the same number twice, and a flag already on the runtime whitelist.</li>
  * </ol>
+ *
+ * <p><b>Still not shareable: a server RESTART.</b> The pair is owned by this class and a scenario
+ * that stops the server takes every later scenario with it — and the restart is the SUBJECT of the
+ * classes that do it, so there is nothing to amortise anyway.</p>
  *
  * <h2>The reset, and why it is asserted rather than trusted</h2>
  *
@@ -84,6 +105,33 @@ public abstract class AbstractSharedClientE2ETest {
     /** Scenario name -> its plot. Stable within a run because the method order is pinned. */
     private static final Map<String, Plot> PLOTS = new HashMap<>();
     private static int nextPlotIndex;
+
+    /**
+     * Where this class's plot allocation STARTS, from {@code -PplotOffset=N} (default 0).
+     *
+     * <p>An experiment lever, and it exists because an ordinary run cannot separate two variables it
+     * always changes together: <b>what ran in this world before a scenario</b>, and <b>which plot the
+     * scenario's fixture stands on</b>. Running a test alone gives it plot #0 and no predecessor;
+     * running it second gives it plot #1 AND a predecessor. A scenario that is green in the first and
+     * red in the second therefore accuses both, and comparing the two runs answers neither.</p>
+     *
+     * <p>With this, a scenario can be run alone on plot #N — one variable moved, the other held.
+     * Belongs in no gate and no default: it changes where fixtures stand, which is the one thing the
+     * allocator exists to decide.</p>
+     */
+    private static final int PLOT_OFFSET = Integer.getInteger("artest.plot.offset", 0);
+    /** Which concrete class the live pair was booted for; null when nothing is up. */
+    private static Class<?> bootedFor;
+
+    /** The client's start-time framebuffer switch, read by the harness as it launches the child. */
+    private static final String CLIENT_FBO_PROPERTY = "forge.test.client.fbo";
+    /**
+     * What {@link #CLIENT_FBO_PROPERTY} held before this class claimed it, and whether it claimed it
+     * at all. CLEAR MEANS RESTORE: a null here is a real state (the property was unset), so the flag
+     * is what says "we changed it", never the value.
+     */
+    private static String displacedFboProperty;
+    private static boolean fboPropertyClaimed;
 
     /**
      * Never cleared in an {@code @After}. JUnit runs {@code @After} BEFORE
@@ -149,8 +197,64 @@ public abstract class AbstractSharedClientE2ETest {
 
     // ── lifecycle ────────────────────────────────────────────────────────────
 
-    @BeforeClass
-    public static void bootSharedHarness() throws Exception {
+    /**
+     * The game directory this class needs BEFORE its server boots — declared as keys, not as a file.
+     *
+     * <p>Default: nothing, and a class that declares nothing boots in a bare temp directory exactly
+     * as this base always has. Override it when a scenario's premise is a config value or a planet
+     * catalogue that must exist at server start:</p>
+     *
+     * <pre>
+     * protected void seedGameDirectory(GameDirSeed seed) {
+     *     seed.config("performance", "I:spaceCellPoolSize", 1, getClass());
+     * }
+     * </pre>
+     *
+     * <p><b>Only for what the server reads at START.</b> A value read at every use — the time-skip
+     * policy, the terraform flags, anything on {@code artest config set}'s whitelist — is flipped
+     * PER SCENARIO through that verb instead, and restored in the family reset. Seeding such a key
+     * pins one side of it for the whole class and quietly makes the other side untestable there.</p>
+     */
+    protected void seedGameDirectory(GameDirSeed seed) throws Exception {
+        // declared by subclasses that need one; empty is the common case
+    }
+
+    /**
+     * Whether this class's client must be STARTED with the framebuffer object, because it measures
+     * what the client drew.
+     *
+     * <p>Default false, which is the harness's own default and the render path every other class
+     * runs. Override it in a class that captures WORLD pixels.</p>
+     *
+     * <p><b>Turning the FBO on at runtime is not the same thing and does not work.</b> The harness
+     * measured it on 2026-07-29 and says so in {@code ClientBot.setFramebuffer}: a framebuffer
+     * recreated mid-session receives the HUD pass but not the world pass, so a capture comes back as
+     * the framebuffer's own clear colour — opaque WHITE — with the HUD drawn over it. That looks
+     * exactly like "the world rendered nothing", and it cost this project a session in July and six
+     * red tier runs since, under a bug entry the maintainer could never reproduce in play because
+     * there was nothing to reproduce.</p>
+     *
+     * <p>It is a per-CLASS client option and nothing else needs to know: the harness reads the system
+     * property when it launches the child, and this base sets it around the boot and puts the
+     * previous value back afterwards. It became declarable when the boot became lazy — a
+     * {@code @BeforeClass} could not have asked the subclass.</p>
+     */
+    protected boolean clientNeedsFramebuffer() {
+        return false;
+    }
+
+    /**
+     * Boot the class's pair once, on its FIRST scenario.
+     *
+     * <p>It is not a {@code @BeforeClass} because a static method cannot ask the subclass anything —
+     * and what it has to ask is {@link #seedGameDirectory}, which is the whole point: "this class
+     * writes its own config" stopped being a reason to leave the shared harness on 2026-08-23, and
+     * the only thing that had made it one was that a static boot could not see the declaration.</p>
+     *
+     * <p>The Assume guards moved here with it, so a run without the harness enabled skips each
+     * scenario instead of the class. Same runs skipped, one line each instead of one for the class.</p>
+     */
+    private void ensureHarnessBooted() throws Exception {
         Assume.assumeTrue(
                 "Server harness disabled — set -D"
                         + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
@@ -162,13 +266,43 @@ public abstract class AbstractSharedClientE2ETest {
                 Boolean.parseBoolean(System.getProperty(
                         AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
 
+        if (bootedFor == getClass() && sharedServer != null) {
+            return;
+        }
+        // A previous class's pair in the same JVM (the tier runs forkEvery=1, so this is a
+        // belt-and-braces path rather than the usual one): close it before starting another, or the
+        // second boot contends with a live server for ports and disk.
+        if (sharedServer != null || sharedClient != null) {
+            closeSharedHarness();
+        }
+
         HARNESS_DEAD.set(false);
         firstFailure = null;
         PLOTS.clear();
-        nextPlotIndex = 0;
+        nextPlotIndex = PLOT_OFFSET;
+
+        GameDirSeed seed = new GameDirSeed();
+        seedGameDirectory(seed);
 
         long startedNanos = System.nanoTime();
-        sharedServer = RealDedicatedServerHarness.start();
+        String seeded = "";
+        if (seed.isEmpty()) {
+            sharedServer = RealDedicatedServerHarness.start();
+        } else {
+            java.nio.file.Path root =
+                    java.nio.file.Files.createTempDirectory("forge-shared-client-");
+            seeded = seed.writeInto(root);
+            sharedServer = RealDedicatedServerHarness.startWith(root, /*cleanupOnClose=*/true);
+        }
+        // The client's start-time options come from system properties the harness reads as it
+        // launches the child, so a class that needs one sets it HERE, around the boot, and the value
+        // it displaced goes back in closeSharedHarness. Set, not assumed: a scenario that measures
+        // pixels asserts the option took (see ClientBot.setFramebuffer's own `previous`).
+        if (clientNeedsFramebuffer()) {
+            displacedFboProperty = System.getProperty(CLIENT_FBO_PROPERTY);
+            fboPropertyClaimed = true;
+            System.setProperty(CLIENT_FBO_PROPERTY, "true");
+        }
         try {
             sharedClient = RealClientHarness.start(sharedServer);
         } catch (Exception startupFailure) {
@@ -180,11 +314,14 @@ public abstract class AbstractSharedClientE2ETest {
             sharedServer = null;
             throw startupFailure;
         }
+        bootedFor = getClass();
         // The number this whole base class exists to amortise — print it so a run can be audited
-        // against the claim rather than against a memory of it.
+        // against the claim rather than against a memory of it. The seed is printed with it: a
+        // scenario whose premise is a config value must be able to show that value was there.
         System.out.println("[shared-harness] boot ms="
                 + (System.nanoTime() - startedNanos) / 1_000_000L
-                + " — one server JVM + one client JVM for the whole class");
+                + " — one server JVM + one client JVM for " + getClass().getSimpleName()
+                + (seeded.isEmpty() ? " (no seeded game directory)" : " seeded:" + seeded));
     }
 
     @AfterClass
@@ -207,6 +344,16 @@ public abstract class AbstractSharedClientE2ETest {
             }
             sharedServer = null;
         }
+        bootedFor = null;
+        if (fboPropertyClaimed) {
+            if (displacedFboProperty == null) {
+                System.clearProperty(CLIENT_FBO_PROPERTY);
+            } else {
+                System.setProperty(CLIENT_FBO_PROPERTY, displacedFboProperty);
+            }
+            displacedFboProperty = null;
+            fboPropertyClaimed = false;
+        }
         if (deferred != null) throw deferred;
     }
 
@@ -223,6 +370,7 @@ public abstract class AbstractSharedClientE2ETest {
     @Before
     public final void prepareScenario() throws Exception {
         enforceDeterministicOrder();
+        ensureHarnessBooted();
         failFastWhenTheGroupIsAlreadyDown();
         resetBetweenScenarios();
     }
@@ -248,7 +396,7 @@ public abstract class AbstractSharedClientE2ETest {
     private void resetBetweenScenarios() throws Exception {
         final Plot.Lane lane = lane();
         Plot plot = PLOTS.computeIfAbsent(testName.getMethodName(),
-                name -> new Plot(nextPlotIndex++, name, 0, lane));
+                name -> Plot.forScenario(nextPlotIndex++, name, 0, lane));
         scenario = new Scenario(testName.getMethodName(), subsystem(), plot);
 
         // SERVER side first: its commands echo harness markers into the chat the client reset is
@@ -266,29 +414,142 @@ public abstract class AbstractSharedClientE2ETest {
         // own. Both are un-restored global mutations of the SHARED subject, which is the one thing
         // this base class exists to stop.
         serverClient().execute("artest player set-health 20");
+        // Every trace window a failed predecessor left open, on BOTH sides, is released here — a
+        // window belongs to the scenario that opened it, and this is where a scenario that died
+        // before closing one hands it back. Each side records how many it discarded, so an
+        // inherited window is visible in the log of the scenario that inherited it.
+        exec("artest invoke-static zmaster587.advancedRocketry.test.trace.SideTrace"
+                + " discardServerWindows");
+        bot().invokeStaticInt("zmaster587.advancedRocketry.test.trace.SideTrace",
+                "discardClientWindows");
+        // This scenario's pilot-input delivery chain, both halves, from here on. Twenty-one failure
+        // messages print it; before it was a window, its counts were the JVM's since boot.
+        seatDelivery = SeatDelivery.open(this::exec, bot(), events(), clientEvents());
         // A family of scenarios can carry a channel this base knows nothing about — a seat the
         // player is still riding, a subsystem flag it switched on. It runs HERE, before the
         // teleport, because a player still bound to a vehicle is not moved by /tp: the plot
         // assertion below would then fail naming coordinates, which is the symptom and not the
         // cause. Everything the hook does is asserted by the hook itself.
         resetFamilyStateBeforeTeleport();
+        // Every binding a subsystem holds for this player — the aboard record, a cell claim, a deck
+        // hold, a drift run, the atmosphere he was last told — released through production's OWN
+        // service, which is the operation a player's release is. The mount the family hook above
+        // already took is the one binding that is the caller's rather than a subsystem's. Released
+        // AFTER that hook (a seated player's seat belongs to the family) and BEFORE the teleport (a
+        // deck hold would pin him where he was). What was released is recorded, so a scenario that
+        // inherited something can see what; that he is bound to nothing AFTERWARDS is asserted,
+        // because a release nobody checks cannot be told from no release.
+        String released = exec("artest player release");
+        assertTrue("the between-scenario release must run: " + released, Reply.of(released).ok());
+        scenario.record("releasedAtStart", Reply.of(released).integer("releasedCount"));
+        String stillBound = exec("artest player bindings");
+        assertEquals("after the between-scenario release the player must be bound to nothing, or the"
+                + " next scenario inherits its predecessor's ship, cell or hold: " + stillBound,
+                0, Reply.of(stillBound).arrayLength("bound"));
         // DIMENSION, and it must come before the teleport: vanilla /tp moves the player WITHIN the
         // world he is in, so a scenario left behind in the space dim or on a planet would be placed
         // at the right X/Z in the WRONG world — and the plot assertion below, which reads X and Z,
         // would happily agree. The transfer is conditional because it is not free: a scenario that
         // never left dim 0 must not pay a dimension change and a chunk re-send every time.
-        JsonObject where = bot().reportWeather();
-        int clientDim = where != null && where.has("dim") ? where.get("dim").getAsInt() : plot.dim;
-        if (clientDim != plot.dim) {
+        //
+        // ASKED OF THE SERVER, not of the client. The client's own weather report is where this read
+        // used to come from, and it is a channel that LAGS: right after a scenario that crossed a
+        // dimension the client can still name the world it left, the transfer is then skipped as
+        // unnecessary, and the teleport below places the body at the plot's X/Z inside the world it
+        // was actually in. Measured 2026-08-23 in a full tier run: a scenario opened with its body
+        // teleported to y=151 in a SPACE CELL, where there is no ground — it fell, the substrate's
+        // own entity-drag then took it, and the plot verdict reported it at x=3.0e7, thirty million
+        // blocks out. The event log named every writer and the teleport itself was innocent.
+        //
+        // The server cannot be stale about which world it is ticking a player in.
+        int serverDim = playerDimOnTheServer(plot.dim);
+        if (serverDim != plot.dim) {
+            // The CLIENT's far side of the transfer, marked one statement before the command that
+            // causes it: the server tears the old world down and builds a new one over a round
+            // trip nobody here can bound, and `client_dimension_changed` is recorded where the
+            // client finishes doing exactly that.
+            long transferMark = clientEvents().mark();
             serverClient().execute("artest tp " + plot.dim);
-            bot().waitTicks(20);
+            // NO WAIT ON THE SERVER HALF, and that is a statement about the code rather than a
+            // shortened budget: `PlayerList.transferPlayerToDimension` assigns `player.dimension`
+            // in its first three lines and runs to the end on the server thread, and the probe
+            // answers only after it returns. So the reply IS the receipt, and this read — a second
+            // command, ordered behind the first on that same thread — cannot see the old world.
+            // The twenty ticks that used to sit here were not buying the transfer; they were a
+            // disguised assertion that twenty ticks is enough for one, which is a claim about the
+            // box. Measured in vanilla source, `build/rfg/minecraft-src/…/PlayerList.java:650`.
+            int afterTransfer = playerDimOnTheServer(plot.dim);
+            assertEquals("the between-scenario transfer must actually move the player's world, or"
+                    + " the teleport that follows puts him at the right coordinates in the wrong"
+                    + " one; the server still ticks him in", plot.dim, afterTransfer);
+            // And the client must ARRIVE, because the scenario about to run renders there. The
+            // rendered-dim assertion at the end of this method reads that world once; this is what
+            // makes the read honest, where before it was backed by whatever the three settles in
+            // between happened to add up to.
+            awaitClientDim(transferMark, plot.dim,
+                    "a scenario that starts rendering the world it LEFT measures the previous"
+                            + " one's surroundings");
         }
+        // Mark the event log HERE, one statement before the teleport, so that a plot miss can ask
+        // the one question the diagnostic below could never answer: WHO wrote this body's position.
+        // Everything else it asks names CANDIDATES (a ship near the plot, a ship near the body, a
+        // deck capture, the client's resolver); `pos_jump` carries the writer's own caller trail.
+        // Defensive on purpose - this runs before EVERY scenario, and a base class must not fail a
+        // whole class because a recorder was unavailable. An unusable mark is REMEMBERED, not
+        // thrown, so an empty log later reads as "the recorder was off" rather than as a finding.
+        markThePositionRecorder();
+        // The CLIENT's mark for the same write. A teleport's far side is the client APPLYING the
+        // server's position packet, and the harness records that as `client_pos_look_applied` with
+        // the absolute coordinates the client ends up holding — so the plot check below reads a
+        // body that has demonstrably been placed, rather than one that has merely had long enough.
+        long placedMark = clientEvents().mark();
         serverClient().execute("tp @a " + (plot.centerX() + 0.5) + " " + (Plot.DEFAULT_Y + 1)
                 + " " + (plot.centerZ() + 0.5) + " 0 0");
-        bot().waitTicks(10);
+        // Matched on WHERE, not merely on "a teleport happened": the packet is resent on every
+        // movement rejection (the harness's own note on this seam says so), so a record alone would
+        // close this wait on a rubber-band from the world he is leaving. The predicate is the same
+        // region the plot check below uses, asked of the coordinates the client actually applied.
+        clientEvents().awaitMatching(placedMark, "client_pos_look_applied",
+                reply -> appliedInsidePlot(reply, plot),
+                "placing the client inside " + plot,
+                "the scenario's opening teleport must REACH the client — everything this method"
+                        + " asserts afterwards is about a body at the plot, and a body still in"
+                        + " flight fails those assertions in the previous scenario's name",
+                PLACEMENT_LINK_BUDGET_TICKS);
 
+        // Health is restored HERE: after the teleport, and with the settle wait below still between
+        // it and the client reset. Both halves of that placement were paid for in a gate.
+        //
+        // AFTER THE TELEPORT, because the head's `set-health 20` heals the player where the PREVIOUS
+        // scenario left him and he is then carried through a dimension change and a teleport before
+        // anyone looks, so anything that hurts him on the way out silently undoes it. Measured
+        // 2026-09-06: the first FULL-suite gate (186 tests, where each fork's neighbours differ from
+        // the *VS* subset's) failed the health gate at 18.5.
+        //
+        // BEFORE THE RESET, and the ordering is kept even though the reason that forced it is gone.
+        // `serverClient().execute` used to complete each command with a sentinel BROADCAST into the
+        // client's chat, arriving a tick or two after the command returned: issued immediately
+        // before the reset, these two left one marker behind and every scenario in the tier failed
+        // its own backlog-is-empty guard. The server answers over its own control socket now and the
+        // harness refuses to start without one, so no such line exists.
+        long hurtMark = events().mark();
+        // The CLIENT's mark for the same write, taken here because the packet it produces is what
+        // the gate below waits for. It survives `resetClientState` — that resets the screen and the
+        // chat, both client-owned display state, and does not touch the event log.
+        long healthMark = clientEvents().mark();
+        serverClient().execute("artest player set-health 20");
+        // NO PACING BETWEEN THE WRITE AND THE RESET. The heal is gated below by a LINK on
+        // `client_health_updated` since a mark taken BEFORE the write, so a packet still in flight
+        // is what that wait is for; ten ticks here only decided whether the gate's cheap branch or
+        // its link branch ran, and paid for that decision in every scenario of the tier.
         JsonObject cleared = bot().resetClientState();
-        bot().waitTicks(2);
+        // NOR AFTER THE RESET, and again because of what the code does rather than to save time:
+        // `reset_client_state` runs its whole body inside `runOnClientThread` — closes the screen,
+        // clears the chat and the overlay, releases the keys — and answers only afterwards, so this
+        // reply is the receipt for all four. The three assertions below can therefore be read as
+        // assertions about the RESET. Two ticks of waiting could not make them truer; a late chat
+        // line arriving inside that window could make them falser, which is the wrong direction for
+        // a wait to be able to move a verdict.
 
         // Assert the reset, do not trust it. This is the shared harness's own contract, and it is
         // the assertion the spike that produced this class failed on before any of it existed.
@@ -323,45 +584,75 @@ public abstract class AbstractSharedClientE2ETest {
                 + " searches the last N lines can pass on a previous scenario's identical message;"
                 + " reset reported " + cleared, 0, chatLines);
         if (!plot.contains(px, pz)) {
-            // READ ONCE, then WAIT — never wait first. The teleport is a server write and this is a
-            // client read, so a miss has two causes and only one of them is a fault: the body is
-            // still on its way (a round trip this read got in front of), or something else owns it.
-            // Waiting is therefore the RECOVERY, not the routine: a scenario whose first read lands
-            // inside its plot spends exactly the ticks it always did, and only a scenario that has
-            // already missed pays anything. An earlier cut polled unconditionally and cost a
-            // neighbouring class five reds — a settle every scenario pays is not an observation of
-            // the arrangement, it IS the arrangement.
+            // READ ONCE, AND IT IS THE VERDICT. The wait that used to live here was the recovery for
+            // a read that could get in front of the teleport's round trip — and that race is gone:
+            // the link above does not return until the client has APPLIED a position inside this
+            // plot, so a body outside it now has exactly one meaning. Something moved him after he
+            // was placed, and that is the interesting case, not the tolerable one.
             //
-            // Measured 2026-08-12, four scenarios of one class in one run: THREE reached their plot
-            // while being watched (they were early reads and nothing more) and one never arrived at
-            // all, with its body below Y=-800 and falling. One message had been reporting both.
+            // So the six-sample trail below is DIAGNOSIS and no longer a second chance. Keeping it
+            // as one would re-introduce the defect in its most convincing form: a body that wanders
+            // back inside the plot during the poll would pass, and the failure it hid is a scenario
+            // running on a body somebody else owns.
+            //
+            // Measured 2026-08-12, before the link existed, four scenarios of one class in one run:
+            // THREE reached their plot while being watched (early reads and nothing more) and one
+            // never arrived at all, with its body below Y=-800 and falling. One message had been
+            // reporting both; the link separates them at the source.
             String settle = diagnoseMissedPlot(plot);
-            state = bot().reportState();
-            px = state.has("playerX") ? state.get("playerX").getAsDouble() : px;
-            pz = state.has("playerZ") ? state.get("playerZ").getAsDouble() : pz;
-            if (!plot.contains(px, pz)) {
-                org.junit.Assert.fail("a scenario must start inside its own plot " + plot
-                        + "; the client reports the player at " + px + "," + pz
-                        + settle + " resetCleared=" + cleared);
-            }
-            scenario.record("plotSettle", settle.replace('\n', ' '));
+            org.junit.Assert.fail("a scenario must start inside its own plot " + plot
+                    + "; the client APPLIED a placement there and then reported the player at "
+                    + px + "," + pz + " — so this body was moved after it was placed"
+                    + settle + " resetCleared=" + cleared);
         }
 
-        // Health is asserted on the CLIENT's own view, and polled rather than read once: the
-        // set-health above is a server write and the client learns it on the next update packet.
+        // Asserted on the CLIENT's own view, and polled rather than read once: the set-health above
+        // (issued before the client reset, so its harness marker is cleared with everything else) is
+        // a server write and the client learns it on the next update packet.
         double health = state.has("health") ? state.get("health").getAsDouble() : -1.0;
-        for (int waited = 0; waited < 40 && health < 19.5; waited += 5) {
-            bot().waitTicks(5);
-            // Guarded like every other read here: a client that dies DURING the poll would
-            // otherwise reproduce the same bare NPE this method was just taught not to throw, one
-            // loop iteration later and with the guard above already passed.
-            JsonObject polled = bot().reportState();
-            health = polled != null && polled.has("health")
-                    ? polled.get("health").getAsDouble() : -1.0;
+        if (health < FULL_HEALTH_BAR) {
+            // THE LINK, and it is CONDITIONAL for a reason worth stating: a server write that
+            // changes nothing sends nothing, so a client already at full health is never told
+            // anything and an unconditional wait would burn its budget on every healthy scenario —
+            // which is every scenario that did not hurt anybody. The read above is what separates
+            // the two cases; only a client that is still short waits for the packet that heals it.
+            //
+            // What replaced the poll is the packet ITSELF: `client_health_updated` is recorded where
+            // the client applies `SPacketUpdateHealth`, so this waits for the server's write
+            // ARRIVING rather than for a sampled field to look right. The record carries what the
+            // server SENT, which a locally predicted value cannot be mistaken for.
+            clientEvents().awaitMatching(healthMark, "client_health_updated",
+                    reply -> anyHealthAtLeast(reply, FULL_HEALTH_BAR),
+                    "carrying health >= " + FULL_HEALTH_BAR,
+                    "the reset heals the player on the server, and the client must be TOLD: a"
+                            + " scenario that starts short of full health measures the previous"
+                            + " one's leftovers", HEALTH_LINK_BUDGET_TICKS);
+            // Re-read for the message below: the record says the packet arrived, this says what the
+            // client holds now, and a disagreement between them is worth seeing in the failure text.
+            JsonObject healed = bot().reportState();
+            health = healed != null && healed.has("health")
+                    ? healed.get("health").getAsDouble() : -1.0;
         }
-        assertTrue("a scenario must start at full health as the CLIENT renders it, or a"
-                + " damage-observing scenario measures the previous one's leftovers; client"
-                + " reports " + health, health >= 19.5);
+        // And when it still fails, the message names WHAT hurt him rather than only how much is
+        // left: `living_hurt` carries the source and the amount per hit, so a scenario left dying in
+        // a vacuum, one taking fall damage off a deck and a client merely slow to render the heal
+        // are three different texts instead of one number. Read after the poll so the window covers
+        // it; an empty list with the health still short is itself the diagnosis — nothing hit him
+        // here, so the shortfall arrived before this reset and the previous scenario owns it.
+        //
+        // The SERVER's own view goes in beside it, and it answers a different question: `living_hurt`
+        // says what happened to him, this says WHO is wrong. "The client is stale" and "the player
+        // really is hurt" need opposite fixes and are indistinguishable from the client's number
+        // alone. Both are read only on the failing path, so a healthy scenario pays for neither.
+        if (health < FULL_HEALTH_BAR) {
+            org.junit.Assert.fail("a scenario must start at full health as the CLIENT renders it, or"
+                    + " a damage-observing scenario measures the previous one's leftovers; client"
+                    + " reports " + health
+                    + "; server reports "
+                    + String.join("\n", serverClient().execute("artest player health"))
+                    + "\n  damage taken during this reset: "
+                    + events().since(hurtMark, "living_hurt"));
+        }
 
         // The world the CLIENT actually renders, asserted rather than inferred from the teleport
         // having been issued: the plot check above reads X and Z only, so without this a scenario
@@ -378,6 +669,27 @@ public abstract class AbstractSharedClientE2ETest {
         scenario.record("plot", plot)
                 .record("resetCleared", cleared)
                 .record("heldAtStart", state.has("heldItem") ? state.get("heldItem").getAsString() : "?");
+    }
+
+    /**
+     * The account every client harness launches under. The server keys his player data by it, and the
+     * probes that answer ABOUT a player take it by name.
+     */
+    private static final String HARNESS_ACCOUNT = "ForgeTestClient";
+
+    /**
+     * Which world the SERVER is ticking the harness player in, or {@code fallback} when it cannot
+     * say.
+     *
+     * <p>A fallback that equals the caller's expectation is deliberate: an unreadable answer must not
+     * trigger a dimension transfer on a guess. The transfer that follows is verified, so a wrong
+     * fallback fails loudly there instead of quietly moving a body nobody located.</p>
+     */
+    private int playerDimOnTheServer(int fallback) throws Exception {
+        String reply = exec("artest oxygen player " + HARNESS_ACCOUNT);
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
+        return Reply.of("artest oxygen player", reply).integerOr("dim", fallback);
     }
 
     /**
@@ -402,13 +714,17 @@ public abstract class AbstractSharedClientE2ETest {
         StringBuilder trail = new StringBuilder();
         boolean arrived = false;
         JsonObject last = null;
-        for (int sample = 0; sample < 6 && !arrived; sample++) {
+        // WINDOW: one that DECIDES NOTHING — it runs after a verdict has already been lost, and its
+        // only product is the trail a failure message prints. There is no link to take because
+        // there is no claim being made here, and it runs its full length (it used to stop on the
+        // first point inside the plot, which cut the trail at the one sample worth continuing past).
+        // What it cannot see: where the body went between two samples — which is why the trail
+        // prints every point rather than the last.
+        for (int sample = 0; sample < 6; sample++) {
             last = bot().reportState();
             trail.append(' ').append(describePlayerPoint(last));
-            arrived = isInsidePlot(last, plot);
-            if (!arrived) {
-                bot().waitTicks(5);
-            }
+            arrived |= isInsidePlot(last, plot);
+            bot().waitTicks(5);
         }
         // WHO OWNS THIS BODY, asked of the server on a scenario that has already lost its verdict —
         // so the chat markers these commands echo can no longer disturb anything.
@@ -418,25 +734,43 @@ public abstract class AbstractSharedClientE2ETest {
         // A ship where the BODY actually is means the opposite and is far worse: the body is being
         // carried, so a capture outlived the scenario that made it and the teleport is being undone
         // every tick by whatever re-projects him onto his deck point. The deck capture answers which.
-        String shipOnPlot = askServer("artest vs ship-info " + plot.dim
-                + " " + plot.centerX() + " " + Plot.DEFAULT_Y + " " + plot.centerZ() + " 64");
+        // Asked with `ships-at`, which is CONTAINMENT and a COUNT — the right shape for "is a hull
+        // here at all". The bounded nearest lookup this replaced answered with a winner and a
+        // distance, so "one ship, 60 blocks away" and "two ships, both containing the point" printed
+        // the same way, and a reader of the failure could not tell them apart.
+        String shipOnPlot = askServer("artest vs ships-at " + plot.dim
+                + " " + plot.centerX() + " " + Plot.DEFAULT_Y + " " + plot.centerZ());
         String shipOnBody = last != null && last.has("playerX")
-                ? askServer("artest vs ship-info " + plot.dim
+                ? askServer("artest vs ships-at " + plot.dim
                         + " " + (int) Math.round(last.get("playerX").getAsDouble())
                         + " " + (int) Math.round(last.get("playerY").getAsDouble())
-                        + " " + (int) Math.round(last.get("playerZ").getAsDouble()) + " 256")
+                        + " " + (int) Math.round(last.get("playerZ").getAsDouble()))
                 : "(no player point to ask about)";
         String capture = askServer("artest vs deck-capture");
         // AND THE CLIENT'S OWN RESOLVER, because the server's answer is only half the question. A body
         // travelling at a CONSTANT delta per tick with its own motion at zero is not being moved by its
         // physics — it is being carried by a rigid transform. When the server then reports no capture
-        // and no ship within 256 blocks, the only remaining carrier is the client's own ship-frame
-        // resolution continuing in a frame the server has already let go of. These counters say whether
-        // it is resolving at all, which is the difference between that and a fourth explanation.
-        String clientResolver = readClientCounters(
-                "zmaster587.advancedRocketry.integration.vs.ShipFrameTravel",
-                "resolvedTicks", "declinedTicks", "externalMoveDrops",
-                "lastBodyLocalX", "lastBodyLocalY", "lastBodyLocalZ");
+        // and no ship containing the body's point, the only remaining carrier is the client's own ship-frame
+        // resolution continuing in a frame the server has already let go of. What is dumped below says
+        // whether it is resolving at all, which is the difference between that and a fourth explanation.
+        //
+        // The resolver's half is its own RECORDS rather than its lifetime counters. `resolvedTicks`
+        // and `declinedTicks` were cumulative and JVM-global, so on a shared client they carried
+        // every body this side ever touched and a reader could not tell this one's story out of
+        // them. The whole ring is asked for (`since(0)`), because a diagnostic wants the tail it can
+        // get and each record names its body, its ship and where on the deck it landed.
+        // No externalMoveDrops column either, and for the same reason plus one: it was a lifetime
+        // count of guard drops over every body, and the releases it was counting are printed in full
+        // on the next line — each naming its body and the gate's whole reason.
+        String clientResolver =
+                "client deck commits (whole ring): " + clientEvents().since(0, "deck_entered")
+                + "\n  client deck releases (whole ring): " + clientEvents().since(0, "deck_released")
+                // The body's own ship-frame point, per tick, instead of the three statics that used
+                // to be sampled here: those held whatever the LAST resolved body left in them, which
+                // on a shared client is not necessarily the body this diagnostic is about. The `B=`
+                // column of each line is the same number, attributed.
+                + "\n  client per-tick resolution: "
+                + Events.fieldLines(clientEvents().since(0, "ship_frame_tick"), "line");
         return "\n  readings taken AFTER the verdict, oldest first:" + trail
                 + "\n  reached its plot while being watched: " + arrived
                 + (arrived
@@ -444,27 +778,55 @@ public abstract class AbstractSharedClientE2ETest {
                           + " this is a round-trip budget, not a stray writer."
                         : " — the body never arrived at all; a second writer owns it, or the"
                           + " teleport never reached this client.")
-                + "\n  a ship within 64 blocks of the PLOT centre: " + shipOnPlot
-                + "\n  a ship within 256 blocks of where the BODY ended up: " + shipOnBody
+                + "\n  every POSITION WRITE since the teleport, with the caller that made it — this"
+                + " is the only line here that NAMES a writer instead of listing candidates: "
+                + positionWritesSinceTheTeleport()
+                + "\n  ships CONTAINING the PLOT centre: " + shipOnPlot
+                + "\n  ships CONTAINING where the BODY ended up: " + shipOnBody
                 + "\n  its deck capture, as the SERVER sees it: " + capture
                 + "\n  the CLIENT's own ship-frame resolver: " + clientResolver
                 + "\n  client world=" + bot().reportWeather()
                 + " riding=" + bot().reportRidingEntity();
     }
 
-    /** Client statics read from a diagnostic: a field that is absent says so and costs nothing else. */
-    private String readClientCounters(String className, String... fields) {
-        StringBuilder out = new StringBuilder();
-        for (String field : fields) {
-            out.append(out.length() == 0 ? "" : " ").append(field).append('=');
-            try {
-                JsonObject read = bot().readStaticField(className, field);
-                out.append(read != null && read.has("value") ? read.get("value").getAsString() : read);
-            } catch (Exception unreadable) {
-                out.append("(unreadable)");
-            }
+    /** The event-log sequence taken immediately BEFORE the between-scenario teleport. Negative when
+     *  the recorder could not be marked — and {@link #plotMarkFailure} then says why, because an
+     *  empty log from a recorder that was never running is not evidence of anything. */
+    private long plotMark = -1L;
+    private String plotMarkFailure = "";
+
+    /** Take the mark, or remember why it could not be taken. Never throws: this runs before every
+     *  scenario in a shared class, and a harness-side gap must not present as a scenario failure. */
+    private void markThePositionRecorder() {
+        plotMark = -1L;
+        plotMarkFailure = "";
+        // The REFUSING mark: both honesty flags are read there, because they fail independently —
+        // the bus recorder may be unsubscribed, or the launch-time coremod may never have queued the
+        // test-only mixin that records a position write, and their silences are identical. It
+        // refuses rather than asserts because a harness-side gap must not present as this
+        // scenario's failure, which is the whole reason this method existed in longhand.
+        Events.MarkOrWhyNot mark;
+        try {
+            mark = events().markIfInstrumented();
+        } catch (Exception unreachable) {
+            plotMarkFailure = "the event log could not be marked: " + unreachable;
+            return;
         }
-        return out.toString();
+        if (mark.usable()) {
+            plotMark = mark.seq;
+        } else {
+            plotMarkFailure = "position-write recorder unusable at the mark: " + mark.refusal;
+        }
+    }
+
+    /** Every recorded position WRITE since the pre-teleport mark, with the caller trail that names
+     *  the writer — or a sentence saying why there is none to show. */
+    private String positionWritesSinceTheTeleport() {
+        if (plotMark < 0) {
+            return "(not asked: " + (plotMarkFailure.isEmpty() ? "no mark was taken" : plotMarkFailure)
+                    + ")";
+        }
+        return askServer("artest events since " + plotMark + " pos_jump");
     }
 
     /** A server probe asked from a diagnostic: its own failure must never replace the one being told. */
@@ -500,6 +862,226 @@ public abstract class AbstractSharedClientE2ETest {
                 + "," + Math.round(state.get("playerZ").getAsDouble()) + motion + ")";
     }
 
+    /**
+     * What counts as "the scenario starts at full health", in half-hearts.
+     *
+     * <p>Vanilla full is 20.0 and the reset writes exactly that, so the half-heart of slack is not
+     * for the value — it is for a client that has applied a regeneration or absorption tick between
+     * the write and the read. Below it, something hurt him.</p>
+     */
+    private static final double FULL_HEALTH_BAR = 19.5D;
+
+    /**
+     * How long the client is given to be TOLD about the reset's heal, in ticks.
+     *
+     * <p>A deadline for a packet, not a stand-in for it: the write has already happened on the
+     * server when this starts, so what is being waited for is one round trip. The old poll's own
+     * ceiling was 40 ticks and this keeps it — what changed is that the budget now bounds a wait for
+     * a RECORD instead of forty ticks of asking a field how it looks.</p>
+     */
+    private static final int HEALTH_LINK_BUDGET_TICKS = 40;
+
+    /**
+     * How long the client is given to FOLLOW a between-scenario dimension transfer, in ticks.
+     *
+     * <p>Same kind of number as {@link #HEALTH_LINK_BUDGET_TICKS} and it is worth naming the kind:
+     * the server has already performed the transfer when this starts, so what is bounded is one
+     * round trip plus the client tearing down a world and building another. It is a ceiling on a
+     * thing that HAPPENS — an expiry here says the client never arrived, which is news — rather
+     * than a guess at how long arriving takes.</p>
+     */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * How long the client is given to APPLY the opening teleport, in ticks.
+     *
+     * <p>A cross-world transfer re-sends the chunks around the destination before the position
+     * packet can be applied, so this is the longer of the two; within one world it returns on the
+     * first record and costs nothing.</p>
+     */
+    private static final int PLACEMENT_LINK_BUDGET_TICKS = 200;
+
+    /** Whether any {@code client_pos_look_applied} in a {@code since} reply put the client inside
+     *  {@code plot} — the coordinates as the CLIENT applied them, which is the same region and the
+     *  same body the plot assertion reads afterwards. A record that carries no finite X/Z (the seam
+     *  writes JSON null for those) answers NaN, and NaN is inside nothing. */
+    private static boolean appliedInsidePlot(String sinceReply, Plot plot) {
+        for (String record : Events.records(sinceReply)) {
+            if (plot.contains(Events.number(record, "x"), Events.number(record, "z"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A BARRIER: return once the server has handled every packet this client sent before the call.
+     *
+     * <p>The bot sends a chat line carrying a fresh nonce and waits for the server's echo of it.
+     * The server runs a player's movement, click and chat packets from ONE queue on its main
+     * thread, in arrival order ({@code PacketThreadUtil.checkThreadAndEnqueue} in each handler), and
+     * the connection delivers in the order sent — so the echo cannot come back before everything
+     * queued ahead of the line has run. A mod packet run straight from its channel handler — a
+     * libVulpes machine packet, a pilot's ENGINE_START — runs earlier still. It is the only record
+     * that says "the server has seen everything up to here" about packets that record nothing
+     * themselves.</p>
+     *
+     * <p>SILENT about packets sent AFTER the call, and about anything the server does on its own
+     * clock rather than in answer to a packet.</p>
+     */
+    protected final void fenceWhatTheClientSent(String what) throws Exception {
+        String nonce = "fence-" + System.nanoTime();
+        long mark = clientEvents().mark();
+        bot().sendChat(nonce);
+        clientEvents().awaitMatching(mark, "client_chat_received",
+                seen -> Events.anyRecordFieldContains(seen, "text", nonce),
+                "echoing " + nonce, what, FENCE_LINK_BUDGET_TICKS);
+    }
+
+    /** How long a fence's echo may take: one queued round trip, a deadline and never a settle. */
+    private static final int FENCE_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * Wait until the CLIENT has APPLIED a server placement within one block of {@code x, z}.
+     *
+     * <p>The far side of a teleport, offered here because it is the same wait the prologue makes
+     * and a subclass that hand-rolls it grows the fourth private copy of a shared idea. A stimulus
+     * aimed from where the player stands — a ray-traced right-click, a look-direction command — is
+     * dispatched by the CLIENT from the position the client holds, so "he has been teleported" is a
+     * fact about the wrong process until this returns.</p>
+     *
+     * <p>Matched on WHERE rather than on a record of any kind: the seam re-sends this packet on
+     * every movement rejection, so a bare type wait can close on a rubber-band. The tolerance is a
+     * block because a placement above the surface may settle onto it.</p>
+     *
+     * @param mark the CLIENT's own mark, taken BEFORE the teleport command
+     */
+    protected final void awaitClientPlacedNear(long mark, double x, double z, String what)
+            throws Exception {
+        ClientEvents.awaitPlacedNear(clientEvents(), mark, x, z, what, PLACEMENT_LINK_BUDGET_TICKS);
+    }
+
+    /**
+     * Stand the player at {@code (x, y, z)} on a floor his CLIENT already holds, then wait for the
+     * client to apply the placement ({@link ClientEvents#placeOntoGroundItHolds}, which names why a
+     * single teleport is not enough and why a loop of them was not the answer).
+     */
+    protected final void standOnFloorTheClientHolds(double x, double y, double z, float yaw, float pitch,
+                                                    String what) throws Exception {
+        ClientEvents.placeOntoGroundItHolds(bot(), clientEvents(), this::exec,
+                "tp @a " + x + " " + y + " " + z + " " + yaw + " " + pitch, x, y, z, what,
+                PLACEMENT_LINK_BUDGET_TICKS);
+    }
+
+    /**
+     * Wait until the CLIENT has been respawned into {@code expectedDim} — the far side of a transfer
+     * the server has already ordered ({@link ClientEvents#awaitDim}).
+     *
+     * <p>Offered here for the same reason as {@link #awaitClientPlacedNear}: a subclass that
+     * hand-rolls it grows the sixth private copy of one wait.</p>
+     *
+     * @param mark the CLIENT's own mark, taken BEFORE the command that transfers him
+     */
+    protected final void awaitClientDim(long mark, int expectedDim, String what) throws Exception {
+        ClientEvents.awaitDim(clientEvents(), mark, expectedDim, what, DIM_LINK_BUDGET_TICKS,
+                () -> "last weather report: " + bot().reportWeather());
+    }
+
+    /**
+     * Wait until the CLIENT has APPLIED a server position-look write — for the rotation-only form,
+     * {@code tp @a ~ ~ ~ <yaw> <pitch>}, where there is no destination to match on.
+     *
+     * <p>The packet applies position and rotation together and the record is written after that, so
+     * a record since the mark means the aim the test is about to read is the one the server wrote.
+     * <b>Its blind spot, because it has one:</b> the seam does not record yaw or pitch, so this
+     * proves that <i>a</i> position-look write was applied, not that it was THIS one. A rubber-band
+     * correction arriving inside the same window would also satisfy it — which is why the aiming
+     * form uses it and the moving form does not
+     * ({@link #awaitClientPlacedNear} matches on where the body ended up).</p>
+     *
+     * @param mark the CLIENT's own mark, taken BEFORE the aiming command
+     */
+    protected final void awaitClientLookApplied(long mark, String what) throws Exception {
+        clientEvents().await(mark, "client_pos_look_applied", what, PLACEMENT_LINK_BUDGET_TICKS);
+    }
+
+    /**
+     * Clear the bot's inventory and wait until the CLIENT has been TOLD its hand is empty.
+     *
+     * <p><b>Why this is a link and not a poll.</b> A held stack eats a right-click, so every
+     * boarding and every GUI scenario clears the hand first — and six classes each carried the same
+     * loop, asking {@code report_player_items} up to twenty times whether the hand looked empty
+     * yet. A poll of a field cannot tell "the clear has not arrived" from "the recorder was never
+     * woven", and it answers about a rendering rather than about the packet that set it. The packet
+     * is recorded: {@code handleSetSlot} writes {@code client_slot_set} with {@code item} =
+     * {@code "empty"} for an empty stack.</p>
+     *
+     * <p><b>Its blind spot, because it has one.</b> The record does not say WHICH slot became empty
+     * in a form this wait filters on — {@code clear} empties the whole inventory, so the first
+     * {@code "empty"} record may be for any slot in that burst. That is why the hand itself is read
+     * ONCE afterwards: the link establishes that the clear reached the client, the read establishes
+     * that the HAND is the slot in question, and neither is a poll.</p>
+     */
+    protected final void emptyTheHandOnClient(String what) throws Exception {
+        // SELECT FIRST, then READ, and only then clear. A CONDITIONAL STIMULUS HAS NO RECORD WHEN
+        // IT DOES NOTHING: `clear` on an already-empty hand changes no slot, the recorder gates on
+        // change, and a link on it would then wait out its whole budget for a record production had
+        // no reason to write. Measured 2026-09-21 — the first cut of this helper did exactly that
+        // and reddened six classes, every one of them with `recording:true` and the instrument
+        // present, i.e. the log correctly saying the thing never happened.
+        bot().selectHotbar(0);
+        if (heldIdOnClient().isEmpty()) {
+            return;
+        }
+        long clearMark = clientEvents().mark();
+        exec("clear @a");
+        try {
+            clientEvents().awaitField(clearMark, "client_slot_set", "item", "empty",
+                    what, HAND_LINK_BUDGET_TICKS);
+        } catch (AssertionError never) {
+            // Which silence it was: an empty log from a recorder that never wove says nothing about
+            // the clear, and must not be read as a clear that failed.
+            Events.assertInstrumentRan(clientEvents().since(clearMark, "client_slot_set"),
+                    "client_slot_set", "the client's own slot writes must be observed at all before"
+                            + " an absent one can be read as a clear that never landed");
+            scenario().arrangementFailed(what + " — " + never.getMessage());
+        }
+        String held = heldIdOnClient();
+        scenario().requireArranged(what + " — the clear reached the client, but the HAND still"
+                + " reads " + held + ": " + bot().reportPlayerItems(), held.isEmpty());
+    }
+
+    /** The id the CLIENT renders in the main hand, or {@code "?"} when it reports no hand at all. */
+    private String heldIdOnClient() throws Exception {
+        JsonObject items = bot().reportPlayerItems();
+        return items.has("held") && items.getAsJsonObject("held").has("id")
+                ? items.getAsJsonObject("held").get("id").getAsString() : "?";
+    }
+
+    /** How long the client is given to be TOLD about a cleared hand, in ticks. */
+    private static final int HAND_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * How long the chat fence is given to reach the client, in client ticks: a deadline for one
+     * packet's delivery, the same order as the other single-packet links here — not a settle.
+     */
+    private static final int CHAT_FENCE_TICKS = 200;
+
+    // The POINT form of `appliedInsidePlot` lives in ClientEvents.appliedNear, because the tier has
+    // two class hierarchies — these shared bases and the harness's own AbstractClientE2ETest — and a
+    // wait that belongs to both must not be solved by copying it into each.
+
+    /** Whether any {@code client_health_updated} in a {@code since} reply carries at least {@code
+     *  floor} health — the packet the server sends when it heals him, as the client applied it. */
+    private static boolean anyHealthAtLeast(String sinceReply, double floor) {
+        for (String record : Events.records(sinceReply)) {
+            if (Events.number(record, "health") >= floor) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static double round2(com.google.gson.JsonElement value) {
         return Math.round(value.getAsDouble() * 100.0) / 100.0;
     }
@@ -508,48 +1090,60 @@ public abstract class AbstractSharedClientE2ETest {
      * Clear the CLIENT's chat/overlay immediately before a stimulus, and prove it is clear.
      *
      * <p>The per-scenario reset in {@link #resetBetweenScenarios} is not enough for a scenario that
-     * OBSERVES chat, and the reason is the harness itself: every server command the arrangement
-     * issues echoes a {@code [Server] FORGE_TEST_DONE &lt;uuid&gt;} line into the player's chat.
-     * Measured on this class's first shared run — a six-command arrangement left <b>13 lines</b> in
-     * the backlog by the time the right-click happened. A "the player was told X" assertion that
-     * searches the last N lines is then searching a window it does not control.</p>
+     * OBSERVES chat: this tier shares one client, so an earlier scenario's messages are still in the
+     * backlog, and a "the player was told X" assertion that searches the last N lines is searching a
+     * window it does not control.</p>
      *
-     * <p><b>Issue no SERVER command between this call and the stimulus.</b> Client-side bridge
-     * calls ({@code interactBlock}, {@code setKey}, {@code waitTicks}, every {@code report*}) are
-     * safe — they produce no marker.</p>
+     * <p><b>The harness itself no longer contributes to that backlog.</b> It used to: each server
+     * command was completed by a {@code FORGE_TEST_DONE} sentinel BROADCAST to every player, and a
+     * six-command arrangement measurably left 13 lines in the chat before the stimulus. The server
+     * now answers over its own control socket, and the harness REFUSES to start without one, so a
+     * run that got this far produced no sentinel at all. What is left to clear is the game's own
+     * output, which is reason enough on its own.</p>
      *
      * <p>This clears the chat channel ONLY. It deliberately does not use the full client reset,
      * which closes the open screen: a GUI scenario's stimulus is a click on that screen, so arming
      * the channel with the full reset would destroy the arrangement it was called to protect.</p>
      */
     protected final void armChatObservation() throws Exception {
-        // DRAIN, then clear, then verify — in that order, and repeat until it takes.
+        // FENCE, then clear, then verify — once each, in that order.
         //
         // A server command's completion marker is delivered to the client ASYNCHRONOUSLY: the
         // command channel answers as soon as the server has run it, and the chat packet arrives at
         // the client some ticks later. Clearing the backlog the instant the last arrangement
         // command returns therefore clears everything EXCEPT the marker still in flight, which
         // lands immediately afterwards — measured 2026-08-07, one line, one marker, on a scenario
-        // whose arrangement ended with a server command. Waiting first lets the tail land so the
-        // clear can actually remove it.
-        JsonObject cleared = null;
-        JsonObject chat = null;
-        int remaining = -1;
-        for (int attempt = 0; attempt < 4; attempt++) {
-            bot().waitTicks(5);
-            cleared = bot().clearChat();
-            bot().waitTicks(2);
-            chat = bot().reportChat(20);
-            remaining = chat.has("count") ? chat.get("count").getAsInt() : -1;
-            if (remaining == 0) {
-                break;
-            }
-        }
+        // whose arrangement ended with a server command.
+        //
+        // WHERE that line comes from was never identified, and the fence below does not need it to
+        // be. (Not a harness echo: no code in the harness writes one, whatever an older comment
+        // said. Not vanilla's feedback broadcast either, as far as can be read here: that goes only
+        // to players who `canSendCommands`, and nothing in the harness makes the bot an operator.)
+        //
+        // The loop that stood here slept five ticks, cleared, and read back, up to four times —
+        // a guess that the tail would have landed by then. What it wanted to KNOW is that nothing
+        // is still in flight, and that has an exact answer: the connection delivers packets in the
+        // order they were sent, so once the client has been told a line sent AFTER everything else,
+        // everything else has already arrived. The fence is that line — a nonce sent to this bot
+        // alone — and `client_chat_received` is the client's own record of being told it. It is sent
+        // by `/tellraw`, whose whole effect is `sendMessage` with no `notifyCommandListener` (read
+        // off `CommandMessageRaw.execute` in the decompiled source), so nothing follows the fence
+        // itself. That is the one property the fence needs, and it holds whatever produced the tail:
+        // a command that DID notify would re-create the very tail it was fencing.
+        String nonce = "arm-chat-fence-" + System.nanoTime();
+        long fenceMark = clientEvents().mark();
+        exec("tellraw " + PlayerState.botName(this::exec) + " {\"text\":\"" + nonce + "\"}");
+        clientEvents().awaitField(fenceMark, "client_chat_received", "text", nonce,
+                "the chat fence must reach this client, or nothing can say the backlog has landed",
+                CHAT_FENCE_TICKS);
+        JsonObject cleared = bot().clearChat();
+        JsonObject chat = bot().reportChat(20);
+        int remaining = chat.has("count") ? chat.get("count").getAsInt() : -1;
         scenario.record("armedChatObservation", cleared);
         scenario.requireArranged("the chat channel must be empty at the moment of the stimulus,"
-                + " so a matching line can only have come from THIS stimulus; after four"
-                + " drain-and-clear rounds it still holds " + remaining + " line(s): "
-                + (chat == null ? "?" : chat.get("lines"))
+                + " so a matching line can only have come from THIS stimulus; after the fence landed"
+                + " and the chat was cleared it still holds " + remaining + " line(s): "
+                + chat.get("lines")
                 + " — is a server command running between armChatObservation() and the stimulus?",
                 remaining == 0);
     }
@@ -594,6 +1188,27 @@ public abstract class AbstractSharedClientE2ETest {
         return scenario.plot();
     }
 
+    /**
+     * WHERE THIS SCENARIO'S FIXTURE STANDS. Ask for it; do not choose coordinates.
+     *
+     * <p>Two guarantees arrive together and neither is something a scenario has to get right. The
+     * PLOT is this scenario's own — allocated once per test method on a lane whose stride cannot be
+     * narrower than a plot — so it cannot overlap a sibling's. The HEIGHT is the open-air band,
+     * because {@link zmaster587.advancedRocketry.test.FixtureSite#openAir} has no Y parameter to
+     * pass. And {@code requireClear} then ASSERTS that the volume actually cleared lies inside the
+     * plot, so the non-overlap is checked rather than merely intended.</p>
+     *
+     * <p><b>This did not exist until 2026-09-14, and the hole it closes was costing point bugs.</b>
+     * The allocator above had been here all along, but the ship classes never used it: each scenario
+     * wrote its own {@code bx = 5220, bz = 5220}. Two scenarios of one class built at one site in
+     * one world and each silently levelled the other's leavings with its pre-clear; nothing said so
+     * until the pre-clear became an assertion. A hand-picked coordinate is a promise; this is a
+     * mechanism.</p>
+     */
+    protected final zmaster587.advancedRocketry.test.FixtureSite site() {
+        return plot().site();
+    }
+
     protected final RealDedicatedServerHarness server() {
         return sharedServer;
     }
@@ -611,11 +1226,117 @@ public abstract class AbstractSharedClientE2ETest {
         return String.join("\n", serverClient().execute(command));
     }
 
+    /** This scenario's pilot-input delivery windows, opened by the between-scenario reset. */
+    private SeatDelivery seatDelivery;
+
+    /**
+     * Why a pilot's input did or did not reach the ship, both halves, counted since this scenario
+     * began — for a failure message. See {@link SeatDelivery}.
+     */
+    protected final String seatDelivery() {
+        return seatDelivery == null ? "(no delivery window was opened for this scenario)"
+                : seatDelivery.reading();
+    }
+
+    /** The SERVER half of {@link #seatDelivery()} alone, as its record — for a reader that takes a
+     *  field of it by name. See {@link SeatDelivery#server()}. */
+    protected final String seatDeliveryServer() {
+        return seatDelivery == null ? "(no delivery window was opened for this scenario)"
+                : seatDelivery.server();
+    }
+
+    /**
+     * The server's ordered event log, as a scenario should reach it: {@code mark} before the action,
+     * {@code since}/{@code await} after, and a failure that prints the CHAIN rather than one last
+     * sample.
+     *
+     * <p>Offered here because the alternative is what keeps happening: a scenario that needs one
+     * trace reaches for {@code exec("artest events …")} and a regex of its own. That shape is right
+     * in exactly one place — the between-scenario reset below, which must never fail a whole class
+     * because a recorder was unavailable, and so REMEMBERS an unusable mark instead of throwing.
+     * Copied into a scenario the exemption inverts: a silent empty log becomes "it never happened",
+     * which is the one answer an instrument must not be able to fake. {@link Events#mark} asserts
+     * the recorder is subscribed and {@link Events#markInstrumented} additionally asserts the
+     * test-only mixins were woven — the two independent silences behind an empty position trace.
+     */
+    protected final Events events() {
+        return new Events(this::exec, bot()::waitTicks);
+    }
+
+    /**
+     * The CLIENT's ordered event log, behind the same verbs.
+     *
+     * <p>Offered beside {@link #events()} because the two logs answer different questions and a
+     * scenario picks by SUBJECT, not by convenience: a body released and reclaimed inside a hull is
+     * the client's fact — the server rebases an {@code EntityPlayerMP}'s position instead of
+     * releasing at all, so its probe reports "still tracked" straight through a release the client
+     * really performed — while an assembly or a dimension change is the server's.</p>
+     *
+     * <p>{@link Events#markInstrumented} must never be called on this one: the client reply carries
+     * no {@code mixins} flag. {@link ClientEvents} says why, and what to assert instead.</p>
+     */
+    protected final Events clientEvents() {
+        return ClientEvents.of(bot());
+    }
+
+    /**
+     * Wait until a chat line the player was actually SHOWN contains {@code needle}, and return that
+     * line's own text; or fail naming the link and printing every line the HUD was handed.
+     *
+     * <p>A chat message is the shape a poll can never see: it is handed to the HUD, counted down and
+     * gone, so a reader arriving late cannot tell a message that was shown from one that was never
+     * sent. It is also the half of a "the player is told" contract the server's own log cannot
+     * reach — a {@code chat_message_sent} record says the server composed and dispatched it, not
+     * that it landed on a screen.</p>
+     *
+     * <p><b>Matched without case, deliberately.</b> A chat line is prose, and its capitalisation
+     * belongs to the translation rather than to the contract. A test that pinned the case would fail
+     * on a language file edit that broke nothing.</p>
+     *
+     * <p>Four classes carried a copy of these twenty lines, each saying in its javadoc that it was
+     * written locally only because no shared base offered it.</p>
+     *
+     * @param needle a fragment of the line the player must read, matched ignoring case
+     * @param what   a player-facing sentence for what this message means, used in the failure
+     * @return the {@code text} of the first matching line — the caller asserts on the line itself
+     */
+    protected final String awaitClientChat(long mark, String needle, int tickBudget, String what)
+            throws Exception {
+        String lower = needle.toLowerCase(Locale.ROOT);
+        String reply;
+        try {
+            reply = clientEvents().awaitMatching(mark, "client_chat_received",
+                    seen -> firstChatTextContaining(seen, lower) != null,
+                    "carrying \"" + needle + "\"", what, tickBudget);
+        } catch (AssertionError never) {
+            // Which of the silences it was, as an assertion rather than as prose in a message: an
+            // absent instrument means nobody was looking, and that must not read as "no such line".
+            Events.assertInstrumentRan(clientEvents().since(mark, "client_chat_received"),
+                    "client_chat_events", what);
+            throw never;
+        }
+        return firstChatTextContaining(reply, lower);
+    }
+
+    /** The {@code text} of the first record in a client chat reply containing {@code lowerNeedle},
+     *  or null. The needle is matched against the line's own text, never against the envelope. */
+    private static String firstChatTextContaining(String reply, String lowerNeedle) {
+        for (String record : Events.records(String.valueOf(reply))) {
+            String text = Events.text(record, CHAT_TEXT);
+            if (text != null && text.toLowerCase(Locale.ROOT).contains(lowerNeedle)) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    private static final String CHAT_TEXT = "text";
+
     // ── internals ────────────────────────────────────────────────────────────
 
     /**
      * Liveness ceiling for the failure-path ping. Deliberately NOT the command channel's own
-     * timeout, which is two minutes scaled by the fork factor — six minutes at eight forks. That is
+     * timeout, which is two minutes. That is
      * the right budget for a command and a terrible one for "should the rest of this class run",
      * because a HUNG client (socket open, nobody answering) would cost it once per scenario.
      *
@@ -628,8 +1349,7 @@ public abstract class AbstractSharedClientE2ETest {
         if (sharedClient == null) {
             return false;
         }
-        return sharedClient.bot().isAlive(
-                com.github.stannismod.forge.testing.TestTimeouts.scaledMillis(PING_TIMEOUT_MS));
+        return sharedClient.bot().isAlive(PING_TIMEOUT_MS);
     }
 
     private String renderStateBundle(Scenario s) {

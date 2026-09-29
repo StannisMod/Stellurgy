@@ -79,21 +79,34 @@ public final class HyperspaceVoid {
     public static final DamageSource VOID_OF_HYPERSPACE =
             new DamageSource("arHyperspaceVoid").setDamageBypassesArmor().setDamageIsAbsolute();
 
-    /** Consecutive ticks adrift, per player. An entry exists only while its player is adrift. */
+    /**
+     * Consecutive ticks adrift, per player. An entry exists only while its player is adrift.
+     *
+     * <p><b>NOT moved into the player's bindings capability, by a ruling of 2026-09-15.</b> The
+     * argument for moving it was that a relog resets the countdown; but the countdown is 200 ticks,
+     * so a relog buys ten seconds of falling in the same void - it postpones rather than saves. The
+     * argument against stands, written at {@link #pruneDeparted} below: a returning player is placed
+     * by the login restore, which is *a fresh judgement, not a continuation*, so resuming his
+     * countdown where it stopped asserts something about a situation he may no longer be in.</p>
+     */
     private final Map<UUID, Integer> adriftTicks = new HashMap<>();
 
-    /** How many players the void has taken, cumulatively. Read by the probe; never reset. */
-    public static volatile int killed = 0;
-
-    /** The longest run of adrift ticks seen so far, so a test can tell "nobody was ever adrift"
-     *  from "somebody was adrift and the budget did not expire". A count alone cannot. */
-    public static volatile int longestAdriftRun = 0;
-
-    /** Owned by {@link SpaceDiagnostics#reset()} — see there for why a diagnostic needs an owner. */
-    static void resetDiagnostics() {
-        killed = 0;
-        longestAdriftRun = 0;
+    /**
+     * Let go of the drift this player has accumulated, answering whether there was any.
+     *
+     * <p>A run of adrift ticks counted in hyperspace would otherwise follow him out of it and be
+     * spent on whatever he does next. Called by
+     * {@link zmaster587.advancedRocketry.player.PlayerRelease}.</p>
+     */
+    public boolean releaseDrift(net.minecraft.entity.player.EntityPlayer player) {
+        return adriftTicks.remove(player.getUniqueID()) != null;
     }
+
+    /** Is this player part-way through a run of adrift ticks? */
+    public boolean isDrifting(net.minecraft.entity.player.EntityPlayer player) {
+        return adriftTicks.containsKey(player.getUniqueID());
+    }
+
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
@@ -127,15 +140,11 @@ public final class HyperspaceVoid {
             }
             Integer prior = adriftTicks.get(player.getUniqueID());
             int run = (prior == null ? 0 : prior) + 1;
-            if (run > longestAdriftRun) {
-                longestAdriftRun = run;
-            }
             if (run < GRACE_TICKS) {
                 adriftTicks.put(player.getUniqueID(), run);
                 continue;
             }
             adriftTicks.remove(player.getUniqueID());
-            killed++;
             LOGGER.info("[SPACE] the void of hyperspace took {} - adrift for {} ticks at ({}, {}, {})",
                     player.getName(), run, (int) player.posX, (int) player.posY, (int) player.posZ);
             player.attackEntityFrom(VOID_OF_HYPERSPACE, Float.MAX_VALUE);

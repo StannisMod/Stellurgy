@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.EntityState;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -43,12 +44,18 @@ import static org.junit.Assert.assertTrue;
  */
 public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedServerTest {
 
-    private static final int CX = 5560;
-    private static final int CY = 64;
-    private static final int CZ = 5560;
+    /**
+     * The fall distance that counts as RESET, in blocks.
+     *
+     * <p>The TEST'S OWN: production sets it to zero, so half a block is float noise. The same
+     * number read the other way is what says the out-of-radius entity was NOT touched — it still
+     * carries the ~7.5 it accumulated.</p>
+     */
+    private static final double FALL_DISTANCE_RESET_BLOCKS = 0.5;
 
-    private static final Pattern FALL_DIST =
-            Pattern.compile("\"fallDistance\":(-?[0-9.eE+-]+)");
+    private static final int CX = 5560;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
+    private static final int CZ = 5560;
 
     @Test
     public void controllerResetsFallDistanceInsideRadiusOnly() throws Exception {
@@ -63,7 +70,7 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
         ok("artest fixture multiblock gravity-controller 0 " + CX + " " + CY + " " + CZ);
         String complete = exec("artest machine try-complete 0 " + CX + " " + CY + " " + CZ);
         assertTrue("controller must validate: " + complete,
-                complete.contains("\"isComplete\":true"));
+                Reply.of(complete).bool("isComplete"));
 
         // 2) Power the plug below the controller + enable the machine.
         //    isRunning() = getMachineEnabled() && isStateActive(...); a freshly
@@ -96,31 +103,38 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
         assertTrue("controller must reset fallDistance of the IN-radius entity "
                         + "to 0 (the 'no fall damage in gravity field' contract); "
                         + "in=" + in + " out=" + out,
-                in < 0.5);
+                in < FALL_DISTANCE_RESET_BLOCKS);
         assertTrue("controller must NOT touch the OUT-of-radius entity "
                         + "(spatial gate); it should still read ~7.5 — which also "
                         + "confirms set-fall-distance took effect; "
                         + "in=" + in + " out=" + out,
-                out > 0.5);
+                out > FALL_DISTANCE_RESET_BLOCKS);
     }
 
     private int spawnPinnedStand(double x, double y, double z) throws Exception {
         String resp = exec("artest entity spawn 0 " + x + " " + y + " " + z
                 + " minecraft:armor_stand");
-        assertTrue("entity spawn must succeed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = Pattern.compile("\"entityId\":(-?\\d+)").matcher(resp);
-        assertTrue("spawn must report entityId: " + resp, m.find());
-        int id = Integer.parseInt(m.group(1));
+        assertTrue("entity spawn must succeed: " + resp, Reply.of(resp).ok());
+        Reply mReply = Reply.of(resp);
+        assertTrue("spawn must report entityId: " + resp, mReply.has("entityId"));
+        int id = mReply.integer("entityId");
         // Pin it in mid-air so neither falling nor landing mutates fallDistance.
         ok("artest entity set-no-gravity 0 " + id + " true");
         return id;
     }
 
+    /**
+     * How far entity {@code id} has fallen without landing.
+     *
+     * <p>The reader REFUSES an entity the world no longer holds, which is what the has-check stood
+     * for and could not do: an absent {@code fallDistance} parses as nothing, and the value this
+     * test's subject PRODUCES is zero — so "the stand is gone" and "the controller reset it" were
+     * one reading.</p>
+     */
     private double readFallDistance(int id) throws Exception {
-        String resp = exec("artest entity info 0 " + id);
-        Matcher m = FALL_DIST.matcher(resp);
-        assertTrue("entity info must include fallDistance: " + resp, m.find());
-        return Double.parseDouble(m.group(1));
+        return EntityState.byId(this::exec, 0, id)
+                .requireAlive("the pinned stand must still exist to have a fall distance")
+                .fallDistance();
     }
 
     private String exec(String cmd) throws Exception {
@@ -130,6 +144,6 @@ public class AreaGravityControllerFallDistanceResetTest extends AbstractSharedSe
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 }

@@ -1,12 +1,17 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -26,16 +31,25 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern STATUS = Pattern.compile("\"status\":\"([A-Z_]+)\"");
+    /**
+     * The smallest storage chunk that can ENCLOSE the placed components, in blocks.
+     *
+     * <p>Both are the test's own, and both are readings of the fixture rather than tunings: the
+     * craft it builds is three blocks across and five tall, so a storage chunk smaller than this
+     * has cut something off.</p>
+     */
+    private static final int FIXTURE_FOOTPRINT_BLOCKS = 3;
+    /** @see #FIXTURE_FOOTPRINT_BLOCKS */
+    private static final int FIXTURE_HEIGHT_BLOCKS = 5;
+
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String STATUS = "status";
 
     @Test
     public void fixtureRocketAssemblesToLiveEntity() throws Exception {
-        int entityId = buildAndAssemble(500, 64, 500, "simple");
-        String rocketInfo = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertTrue("rocket info missing hasStorage=true: " + rocketInfo,
-                rocketInfo.contains("\"hasStorage\":true"));
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 500, 500), "simple");
+        RocketInfo info = rocketInfo(entityId);
+        assertTrue("rocket info missing hasStorage=true: " + info.raw(), info.hasStorage);
     }
 
     /**
@@ -47,19 +61,20 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void rocketStorageChunkMatchesScanFootprint() throws Exception {
-        int entityId = buildAndAssemble(540, 64, 500, "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        int sx = extractInt(info, "\"storageSizeX\":(-?\\d+)");
-        int sy = extractInt(info, "\"storageSizeY\":(-?\\d+)");
-        int sz = extractInt(info, "\"storageSizeZ\":(-?\\d+)");
-        int volume = extractInt(info, "\"storageChunkSize\":(-?\\d+)");
-        assertTrue("storage size axes must all be positive: " + info,
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 540, 500), "simple");
+        RocketInfo info = rocketInfo(entityId);
+        int sx = info.storageSizeX();
+        int sy = info.storageSizeY();
+        int sz = info.storageSizeZ();
+        assertTrue("storage size axes must all be positive: " + info.raw(),
                 sx > 0 && sy > 0 && sz > 0);
-        assertEquals("storageChunkSize must equal sx*sy*sz", sx * sy * sz, volume);
+        assertEquals("storageChunkSize must equal sx*sy*sz", sx * sy * sz, info.storageChunkSize());
         // Fixture geometry: rocket spans dx∈[-1,+1], dy∈[0,4], dz==0; bbCache
         // covers the pad — so the chunk encloses at least the placed blocks.
-        assertTrue("storage chunk must enclose the placed components (sx>=3): " + info, sx >= 3);
-        assertTrue("storage chunk must enclose the vertical extent (sy>=5): " + info, sy >= 5);
+        assertTrue("storage chunk must enclose the placed components (sx>=3): " + info.raw(),
+                sx >= FIXTURE_FOOTPRINT_BLOCKS);
+        assertTrue("storage chunk must enclose the vertical extent (sy>=5): " + info.raw(),
+                sy >= FIXTURE_HEIGHT_BLOCKS);
     }
 
     /**
@@ -72,23 +87,16 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void statsRocketIsCalculatedFromComponents() throws Exception {
-        int entityId = buildAndAssemble(580, 64, 500, "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        int thrust = extractInt(info, "\"thrust\":(-?\\d+)");
-        assertTrue("thrust must be positive after assembling with 2 engines: " + info, thrust > 0);
-        // Dry mass is serialised as a float, in kilograms; match a generous regex.
-        Matcher wm = Pattern.compile("\"dry_mass_kg\":(\\d+(?:\\.\\d+)?)").matcher(info);
-        assertTrue("dry_mass_kg field missing: " + info, wm.find());
-        double dryMass = Double.parseDouble(wm.group(1));
-        assertTrue("dry_mass_kg must be > 0 with 6 tanks + 2 engines + guidance: " + info,
-                dryMass > 0);
-        // At least one fuel type must have non-zero capacity (6 fuel tanks).
-        // jsonMap serialises nested maps via Map.toString() (capacity=N) rather
-        // than nested JSON ("capacity":N), so accept both spellings.
-        Matcher cm = Pattern.compile("capacity[=:](\\d+)").matcher(info);
-        long totalCap = 0;
-        while (cm.find()) totalCap += Long.parseLong(cm.group(1));
-        assertTrue("aggregate fuel capacity across types must be > 0: " + info, totalCap > 0);
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 580, 500), "simple");
+        RocketInfo info = rocketInfo(entityId);
+        assertTrue("thrust must be positive after assembling with 2 engines: " + info.raw(),
+                info.thrust > 0);
+        assertTrue("dry_mass_kg must be > 0 with 6 tanks + 2 engines + guidance: " + info.raw(),
+                info.dryMassKg > 0);
+        // At least one fuel type must have non-zero capacity (6 fuel tanks). The fuel types are the
+        // registry's, so the reader is asked for the aggregate rather than for a type by name.
+        assertTrue("aggregate fuel capacity across types must be > 0: " + info.raw(),
+                info.fuelCapacityTotal() > 0);
     }
 
     /**
@@ -97,10 +105,10 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void seatCountMatchesFixturePlacement() throws Exception {
-        int entityId = buildAndAssemble(620, 64, 500, "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertEquals("simple fixture must produce a 1-seat rocket: " + info,
-                1, extractInt(info, "\"seatCount\":(-?\\d+)"));
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 620, 500), "simple");
+        RocketInfo info = rocketInfo(entityId);
+        assertEquals("simple fixture must produce a 1-seat rocket: " + info.raw(),
+                1, info.seatCount);
     }
 
     /**
@@ -109,10 +117,9 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void engineDetectionFindsAllEngines() throws Exception {
-        int entityId = buildAndAssemble(660, 64, 500, "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertEquals("simple fixture has 2 engines: " + info,
-                2, extractInt(info, "\"engineCount\":(-?\\d+)"));
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 660, 500), "simple");
+        RocketInfo info = rocketInfo(entityId);
+        assertEquals("simple fixture has 2 engines: " + info.raw(), 2, info.engineCount);
     }
 
     /**
@@ -121,10 +128,9 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void fuelTankDetectionFindsAllTanks() throws Exception {
-        int entityId = buildAndAssemble(700, 64, 500, "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertEquals("simple fixture has 6 fuel tanks: " + info,
-                6, extractInt(info, "\"fuelTankCount\":(-?\\d+)"));
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 700, 500), "simple");
+        RocketInfo info = rocketInfo(entityId);
+        assertEquals("simple fixture has 6 fuel tanks: " + info.raw(), 6, info.fuelTankCount);
     }
 
     /**
@@ -138,12 +144,12 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void guidanceComputerSlotPopulatedAfterChipInsert() throws Exception {
-        int entityId = buildAndAssemble(740, 64, 500, "simple");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertTrue("guidance computer block must be present after assembly: " + info,
-                info.contains("\"guidanceComputerPresent\":true"));
-        assertTrue("guidance chip slot is empty in the bare fixture: " + info,
-                info.contains("\"guidanceComputerSlotOccupied\":false"));
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 740, 500), "simple");
+        RocketInfo info = rocketInfo(entityId);
+        assertTrue("guidance computer block must be present after assembly: " + info.raw(),
+                info.guidanceComputerPresent);
+        assertFalse("guidance chip slot is empty in the bare fixture: " + info.raw(),
+                info.guidanceComputerSlotOccupied);
     }
 
     /**
@@ -153,26 +159,25 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void invalidRocketMissingEngineFailsAssemblyWithReason() throws Exception {
-        int baseX = 780, baseY = 64, baseZ = 500;
-        // Same pre-clear as buildAndAssemble — keeps the scan deterministic.
-        client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air");
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " invalid-no-engine"));
-        assertTrue("invalid-no-engine fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("invalid fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        final FixtureSite site = FixtureSite.openAir(0, 780, 500);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link, and the same one buildAndAssemble takes: the volume is EMPTY. In open air
+        // this ASSERTS rather than digs, and the assertion is what was missing here — the fill
+        // this replaces was fired and its answer thrown away.
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                "invalid-no-engine", 2, 10,
+                "the engineless build the scan must reject stands in this volume");
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble of engineless rocket must fail: " + assemble,
-                assemble.contains("\"error\""));
-        Matcher sm = STATUS.matcher(assemble);
-        assertTrue("error response must surface scan status name: " + assemble, sm.find());
-        String status = sm.group(1);
+                Reply.of(assemble).has("error"));
+        Reply smReply = Reply.of(assemble);
+        String status = smReply.text(STATUS);
         assertTrue("status for engineless rocket must indicate missing thrust "
                         + "(NOENGINES expected, got " + status + "): " + assemble,
                 "NOENGINES".equals(status) || "INVALIDBLOCK".equals(status));
@@ -191,79 +196,61 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      */
     @Test
     public void seatlessRocketStillAssemblesButReportsZeroSeats() throws Exception {
-        int entityId = buildAndAssemble(820, 64, 500, "invalid-no-seat");
-        String info = String.join("\n", client().execute("artest rocket info " + entityId));
-        assertEquals("seatless fixture must report 0 seats: " + info,
-                0, extractInt(info, "\"seatCount\":(-?\\d+)"));
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 820, 500), "invalid-no-seat");
+        RocketInfo info = rocketInfo(entityId);
+        assertEquals("seatless fixture must report 0 seats: " + info.raw(), 0, info.seatCount);
         // The rocket must still have engines + tanks + guidance.
-        assertEquals("engines unchanged: " + info,
-                2, extractInt(info, "\"engineCount\":(-?\\d+)"));
-        assertEquals("fuel tanks unchanged: " + info,
-                6, extractInt(info, "\"fuelTankCount\":(-?\\d+)"));
-        assertTrue("guidance still present: " + info,
-                info.contains("\"guidanceComputerPresent\":true"));
+        assertEquals("engines unchanged: " + info.raw(), 2, info.engineCount);
+        assertEquals("fuel tanks unchanged: " + info.raw(), 6, info.fuelTankCount);
+        assertTrue("guidance still present: " + info.raw(), info.guidanceComputerPresent);
     }
 
     /**
      * Helper: build + assemble the requested fixture variant and return the
      * spawned EntityRocket's entity id. Asserts everything along the way.
      *
-     * <p>Pre-clears the area above the pad with air — natural overworld
-     * terrain (trees, hills) that pokes into the bbCache volume would
-     * otherwise inflate the storage chunk and confuse scanRocket's
-     * "passable block above seat" check, making per-component counts
-     * dependent on the chosen baseX coordinate's biome.</p>
+     * <p><b>The site is in OPEN AIR, and that is what this javadoc used to describe the other way
+     * round.</b> It said the pre-clear existed because "natural overworld terrain (trees, hills)
+     * that pokes into the bbCache volume would otherwise inflate the storage chunk and confuse
+     * scanRocket's passable-block-above-seat check, making per-component counts dependent on the
+     * chosen baseX coordinate's biome" — an accurate description of a test whose results depended
+     * on which biome its X landed in, and of a warmup added because the scan flaked ~1/10 runs when
+     * cross-chunk tree population landed after the fill. None of that is a property of the subject;
+     * all of it is a property of standing in the landscape. Above the band there is no terrain to
+     * poke in, no populate to race, and no biome for the counts to depend on.</p>
      */
-    private int buildAndAssemble(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        // Warmup chunks under (and around) the fill area BEFORE clearing,
-        // so cross-chunk populate() (trees / leaves) has already landed
-        // and gets cleared by fill — instead of populating AFTER fill and
-        // silently re-placing blocks above the seat. Without this step
-        // the "passable above seat" scan in scanRocket flakes ~1/10 runs
-        // under the shared harness. (See chunk-anchor probe in TestProbeCommand.)
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        String warmup = String.join("\n", client().execute(
-                "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
-
-        // bbCache from getRocketPadBounds spans (baseX..baseX+5, baseY+1..
-        // baseY+maxTowerSize-1, baseZ..baseZ+5). Clear that volume + a small
-        // halo so any pre-existing terrain (or detritus from a prior fixture
-        // in the same JVM) doesn't leak into the scan.
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+    private int buildAndAssemble(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, and the air fill's own `placed` is the measurement. The
+        // box covers what getRocketPadBounds scans — (baseX..baseX+5, baseY+1..baseY+maxTowerSize-1,
+        // baseZ..baseZ+5) — plus a halo, so detritus from a prior fixture in the same JVM is caught
+        // here rather than inside the scan. It force-loads every chunk in the box on the way, which
+        // is what the warmup it replaces was for.
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
+                "the craft this scenario assembles and reads back stands in this volume");
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble (" + variant + ") failed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         String rocketList = String.join("\n", client().execute("artest rocket list 0"));
         // Pick the last id reported — rocket list grows as fixtures stack up
         // in the same JVM, so the most recently spawned rocket sits at the
         // end of the rocket array.
-        Matcher rim = ROCKET_LIST_ID.matcher(rocketList);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list yielded no ids after assemble: " + rocketList, lastId >= 0);
+        java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
+        assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
+        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
         return lastId;
     }
 
-    private static int extractInt(String haystack, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
     }
 }

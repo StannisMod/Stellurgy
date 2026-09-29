@@ -1,9 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MissionCompletion;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -31,45 +35,44 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionOreCompletionTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern MISSION_ID = Pattern.compile("\"missionId\":(-?\\d+)");
+    /**
+     * How many entries a zero-drilling-power mission may return.
+     *
+     * <p>The TEST'S OWN: the refill chip is the only entry the contract expects, and the allowance
+     * of one more is there because a sibling test's rocket can contribute a duplicate in the shared
+     * world. Anything above that is the mission handing out ore it never mined.</p>
+     */
+    private static final int MAX_ZERO_POWER_ENTRIES = 2;
+
+    private static final String MISSION_ID = "missionId";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
     private int buildAndAssembleRocket(int baseX) throws Exception {
-        int baseY = 64;
-        int baseZ = 700;
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-        ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
+        final FixtureSite site = FixtureSite.openAir(0, baseX, 700);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     private long startOreMission(int rocketId, long duration, float drillingPower) throws Exception {
         String start = ok(client().execute(
                 "artest mission start-ore 0 " + rocketId + " " + duration + " " + drillingPower));
-        assertFalse("start-ore must not error: " + start, start.contains("\"error\""));
-        Matcher mm = MISSION_ID.matcher(start);
-        assertTrue("missing missionId in start response: " + start, mm.find());
-        return Long.parseLong(mm.group(1));
+        assertFalse("start-ore must not error: " + start, Reply.of(start).has("error"));
+        Reply mmReply = Reply.of(start);
+        assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
+        return Long.parseLong(mmReply.text(MISSION_ID));
     }
 
     /** Whether drillingPower is zero or not, the mission UNCONDITIONALLY
@@ -81,13 +84,13 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     public void oreCompletionAlwaysRefillsGuidanceWithBlankAsteroidChip() throws Exception {
         int rid = buildAndAssembleRocket(9000);
         long mid = startOreMission(rid, 1000, 1.0f);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         // Refilled chip lands in the respawned rocket's guidance
         // computer (storage chunk inventory tile). It's a fresh chip
         // with no NBT — registry name match is enough.
-        assertTrue("respawned rocket must carry an asteroid chip post-completion: " + cargo,
-                cargo.contains("advancedrocketry:asteroidchip"));
+        assertTrue("respawned rocket must carry an asteroid chip post-completion: " + cargo.raw(),
+                cargo.carriesItem("advancedrocketry:asteroidchip"));
     }
 
     /** Production gate: with {@code drillingPower == 0f} the entire
@@ -98,20 +101,18 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     public void oreCompletionSkipsHarvestWhenDrillingPowerZero() throws Exception {
         int rid = buildAndAssembleRocket(9100);
         long mid = startOreMission(rid, 1000, 0.0f);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         // The blank refill chip (line 118) is the only item expected
         // — extract a count and pin upper bound. Tolerant of the
         // respawn-coords search returning multiple rockets if a prior
         // test in the same JVM placed one nearby (different Z origin
         // 700 keeps them apart but allow ≤ 2 for safety).
-        Matcher m = Pattern.compile("\"itemEntries\":(\\d+)").matcher(cargo);
-        assertTrue("itemEntries field missing in cargo: " + cargo, m.find());
-        int entries = Integer.parseInt(m.group(1));
+        int entries = cargo.itemEntries;
         assertTrue("drillingPower=0 -> only the refill chip (≤ 2 entries to allow "
                         + "a duplicate from a sibling test rocket); got " + entries
-                        + "; resp=" + cargo,
-                entries >= 1 && entries <= 2);
+                        + "; resp=" + cargo.raw(),
+                entries >= 1 && entries <= MAX_ZERO_POWER_ENTRIES);
     }
 
     /** The ore-mining completion path spawns a plain EntityRocket (line
@@ -125,10 +126,10 @@ public class MissionOreCompletionTest extends AbstractSharedServerTest {
     public void oreCompletionRespawnsRocketInLaunchDim() throws Exception {
         int rid = buildAndAssembleRocket(9200);
         long mid = startOreMission(rid, 1000, 1.0f);
-        String cargo = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + cargo, cargo.contains("\"error\""));
+        MissionCompletion cargo = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
         assertTrue("at least one rocket entity must exist near launch coords after ore completion: "
-                        + cargo,
-                cargo.contains("\"rocketCount\":") && !cargo.contains("\"rocketCount\":0"));
+                        + cargo.raw(),
+                cargo.rocketCount > 0);
     }
 }

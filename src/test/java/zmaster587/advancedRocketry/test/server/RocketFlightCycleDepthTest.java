@@ -1,9 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -44,52 +48,43 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern AR_DIMS_ARRAY =
-            Pattern.compile("\"arDimensions\":\\[([^]]*)]");
-    private static final Pattern LAUNCH_COUNT = Pattern.compile("\"launch\":(-?\\d+)");
-    private static final Pattern ORBIT_COUNT = Pattern.compile("\"orbitReached\":(-?\\d+)");
-    private static final Pattern DISMANTLE_COUNT = Pattern.compile("\"dismantle\":(-?\\d+)");
-    private static final Pattern TICKS_EXISTED = Pattern.compile("\"ticksExisted\":(-?\\d+)");
+    /** The orbit-reached delta the probe may report: one event, or the two a shared world can
+     *  produce when a sibling craft reaches orbit in the same window. */
+    private static final int ORBIT_REACHED_DELTA_MAX = 2;
+
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String AR_DIMS_ARRAY = "arDimensions";
+    private static final String LAUNCH_COUNT = "launch";
+    private static final String ORBIT_COUNT = "orbitReached";
+    private static final String DISMANTLE_COUNT = "dismantle";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private static int parseGroup(Pattern p, String s, String label) {
-        Matcher m = p.matcher(s);
-        if (!m.find()) throw new AssertionError("could not parse " + label + " from: " + s);
-        return Integer.parseInt(m.group(1));
+    private static int parseGroup(String field, String s, String label) {
+        Reply reply = Reply.of(s);
+        assertTrue("could not parse " + label + ": " + s, reply.has(field));
+        return reply.integer(field);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-
-        String assemble = ok(client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+                "simple", 2, 10,
+                "the craft is built and flown in this volume");
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     @Test
@@ -99,13 +94,13 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // present (initial 0); the assertion below pins JSON structure.
         String counts = ok(client().execute("artest rocket event-counts"));
         assertTrue("event-counts response must expose launch field: " + counts,
-                counts.contains("\"launch\":"));
+                Reply.of(counts).has("launch"));
         assertTrue("event-counts response must expose orbitReached field: " + counts,
-                counts.contains("\"orbitReached\":"));
+                Reply.of(counts).has("orbitReached"));
         assertTrue("event-counts response must expose dismantle field: " + counts,
-                counts.contains("\"dismantle\":"));
+                Reply.of(counts).has("dismantle"));
         assertTrue("event-counts response must expose preLaunch field: " + counts,
-                counts.contains("\"preLaunch\":"));
+                Reply.of(counts).has("preLaunch"));
     }
 
     @Test
@@ -115,19 +110,19 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // EntityRocketBase.onOrbitReached BEFORE any dispatch branch). If
         // a regression moves the post() after a conditional branch that
         // doesn't always execute, this test surfaces it.
-        int id = buildAndAssemble(3000, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3000, 500));
 
         String before = ok(client().execute("artest rocket event-counts"));
         int orbitBefore = parseGroup(ORBIT_COUNT, before, "orbitReached before");
 
         String resp = ok(client().execute("artest rocket force-orbit-reached " + id));
         assertTrue("force-orbit-reached must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         // Inline-delta check: the probe reports orbitReachedEventDelta in
         // its response; must be >= 1 (event fired during the call).
         assertTrue("force-orbit-reached must report a non-zero orbitReachedEventDelta: "
-                + resp, resp.contains("\"orbitReachedEventDelta\":1")
-                    || resp.contains("\"orbitReachedEventDelta\":2"));
+                + resp, (Reply.of(resp).integer("orbitReachedEventDelta") == 1)
+                    || (Reply.of(resp).integer("orbitReachedEventDelta") == ORBIT_REACHED_DELTA_MAX));
 
         String after = ok(client().execute("artest rocket event-counts"));
         int orbitAfter = parseGroup(ORBIT_COUNT, after, "orbitReached after");
@@ -137,15 +132,15 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
 
     @Test
     public void dismantleFiresRocketDismantleEvent() throws Exception {
-        int id = buildAndAssemble(3100, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3100, 500));
 
         String before = ok(client().execute("artest rocket event-counts"));
         int dismantleBefore = parseGroup(DISMANTLE_COUNT, before, "dismantle before");
 
         String resp = ok(client().execute("artest rocket dismantle " + id));
-        assertTrue("dismantle must succeed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("dismantle must succeed: " + resp, Reply.of(resp).ok());
         assertTrue("dismantle inline delta must be 1: " + resp,
-                resp.contains("\"dismantleEventDelta\":1"));
+                (Reply.of(resp).integer("dismantleEventDelta") == 1));
 
         String after = ok(client().execute("artest rocket event-counts"));
         int dismantleAfter = parseGroup(DISMANTLE_COUNT, after, "dismantle after");
@@ -162,18 +157,15 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // in isInFlight but would skip mission/advancement subscribers.
         // Need a destination dim for the real launch path to succeed.
         String dimList = ok(client().execute("artest dim list"));
-        Matcher arM = AR_DIMS_ARRAY.matcher(dimList);
-        org.junit.Assume.assumeTrue(arM.find());
+        Reply listed = Reply.of("artest dim list", dimList);
+        org.junit.Assume.assumeTrue(listed.has(AR_DIMS_ARRAY));
         int destDim = -1;
-        for (String part : arM.group(1).split(",")) {
-            String t = part.trim();
-            if (t.isEmpty()) continue;
-            int d = Integer.parseInt(t);
+        for (int d : listed.intArray(AR_DIMS_ARRAY)) {
             if (d != 0) { destDim = d; break; }
         }
         org.junit.Assume.assumeTrue(destDim != -1);
 
-        int id = buildAndAssemble(3200, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3200, 500));
         ok(client().execute("artest rocket set-destination " + id + " " + destDim));
 
         String before = ok(client().execute("artest rocket event-counts"));
@@ -192,7 +184,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // Counter-test: an unrouteable rocket (no chip programmed) bails
         // in launch() with setError("cannotGetThere") BEFORE the
         // RocketLaunchEvent post. So the counter must NOT advance.
-        int id = buildAndAssemble(3300, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3300, 500));
 
         String before = ok(client().execute("artest rocket event-counts"));
         int launchBefore = parseGroup(LAUNCH_COUNT, before, "launch before");
@@ -216,26 +208,26 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // contract here (the field is exposed and >= 0); the advancing
         // assertion belongs in the testClient e2e harness, where a
         // real player keeps the chunk hot.
-        int id = buildAndAssemble(3400, 64, 500);
-        String info = ok(client().execute("artest rocket info " + id));
-        assertTrue("rocket info must expose ticksExisted field: " + info,
-                info.contains("\"ticksExisted\":"));
-        int t = parseGroup(TICKS_EXISTED, info, "ticksExisted");
-        assertTrue("ticksExisted must be non-negative: " + t, t >= 0);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3400, 500));
+        // The reader REFUSES a report without `ticksExisted` — a field the verb always writes —
+        // so constructing it is the "the field is exposed" half of this pin.
+        RocketInfo info = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
+        assertTrue("ticksExisted must be non-negative: " + info.ticksExisted,
+                info.ticksExisted >= 0);
     }
 
     @Test
     public void forceOrbitReachedOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket force-orbit-reached 9999999"));
         assertTrue("unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
     @Test
     public void dismantleOnUnknownRocketReturnsError() throws Exception {
         String resp = ok(client().execute("artest rocket dismantle 9999999"));
         assertTrue("unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
     @Test
@@ -245,9 +237,9 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
         // "simple" rocket fixture has guidance computer + seat -> the
         // reachSpaceManned branch fires. Pin that this branch doesn't
         // crash on a rocket with no programmed chip.
-        int id = buildAndAssemble(3500, 64, 500);
+        int id = buildAndAssemble(FixtureSite.openAir(0, 3500, 500));
         String resp = ok(client().execute("artest rocket force-orbit-reached " + id));
         assertTrue("orbit-reached on un-programmed rocket must succeed (no crash): "
-                + resp, resp.contains("\"ok\":true"));
+                + resp, Reply.of(resp).ok());
     }
 }

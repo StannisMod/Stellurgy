@@ -1,23 +1,20 @@
 package zmaster587.advancedRocketry.test.client;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.ShipInfo;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -47,7 +44,9 @@ import static org.junit.Assert.assertTrue;
  * mis-attributed. So the test asserts (1) the crosshair is on a block, (2) that block is the PILOT
  * SEAT in the client's own world, (3) at the seat's SUBSPACE position - the physics mod's raytrace
  * returning a subspace position is the whole reason a world-position shortcut could never work - and
- * only then presses, and finally asserts (4) the CLIENT reports itself riding the seat's mount, with
+ * only then presses, and finally asserts (4) the server's own ordered log carries the click and then
+ * the mount ({@code right_click_block} &rarr; {@code mount}, which tells a press the server never
+ * saw from one the seat refused), and (5) the CLIENT reports itself riding the seat's mount, with
  * the server's own view cross-checked.</p>
  *
  * <p><b>The recipe, for any test that wants to board an assembled ship for real.</b> Empty the hand
@@ -57,18 +56,23 @@ import static org.junit.Assert.assertTrue;
  * {@code setLook} computed from the CLIENT's own eye position; confirm the crosshair with
  * {@code reportMouseOver} before pressing; then {@code setKey(-99, true)} / wait / release.</p>
  *
- * <p>Manual server + client lifecycle rather than the shared base class, matching the other
- * ship-boarding e2e tests. Gated on real Valkyrien Skies - run with {@code -PwithVS}.</p>
+ * <p>On the shared VS client base. It ran its own server + client pair per method until 2026-08-23,
+ * "matching the other ship-boarding e2e tests" — a reason to resemble its neighbours, never a reason
+ * to boot: its root was a fresh empty temp dir handed to a harness that makes one of those itself,
+ * and nothing was written into it before the server started. Off the shared base an arrangement
+ * failure here could not be TYPED as one either, and that is the half that mattered.</p>
  */
-public class VSAssembledShipRealRightClickBoardingE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSAssembledShipRealRightClickBoardingE2ETest extends AbstractSharedVsClientE2ETest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern SEAT_SUB = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern SHIP_WORLD = Pattern.compile(
-            "\"shipWorldX\":(-?[0-9.E\\-]+),\"shipWorldY\":(-?[0-9.E\\-]+),\"shipWorldZ\":(-?[0-9.E\\-]+)");
+    @Override
+    protected String subsystem() {
+        return "vs-assembled-ship-right-click-boarding";
+    }
+
+
+    /** This scenario's ship, by identity — captured at its build site before anything moves. */
+    private String shipUuid;
 
     /**
      * The decked variant, because the pilot must stand NEXT TO the seat rather than squint up at it
@@ -80,7 +84,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
      * blocks. The seat block itself is identical in both variants.
      */
     private static final String VARIANT = "with-pilot-deck";
-    private static final int BX = 2800, BY = 64, BZ = 2800;
 
     /**
      * The use key's code. Mouse buttons enter {@code KeyBinding} as {@code -100 + button}, so RMB is
@@ -89,8 +92,6 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
      */
     private static final int KEY_USE_ITEM = -99;
 
-    /** Where the fixture puts the seat before assembly; assembly carries it into the ship's subspace. */
-    private static final int BUILD_SEAT_X = BX + 3, BUILD_SEAT_Y = BY + 5, BUILD_SEAT_Z = BZ + 3;
 
     /**
      * Where the bot stands to board, as an offset from the seat's LIVE world position: on the deck
@@ -106,144 +107,120 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
     /** The server drops a block interaction beyond (reach + 3), so the bot must observably be closer. */
     private static final double MAX_INTERACT_DIST_SQ = 64.0;
 
-    private Path root;
-    private RealDedicatedServerHarness serverHarness;
-    private RealClientHarness clientHarness;
-
-    @Before
-    public void startBoth() throws Exception {
-        Assume.assumeTrue("Server harness disabled - set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        Assume.assumeTrue("Client harness disabled - set -D" + AbstractClientE2ETest.PROP_CLIENT_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
-
-        root = Files.createTempDirectory("forge-realclick-boarding-");
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
-        try {
-            clientHarness = RealClientHarness.start(serverHarness);
-        } catch (Exception startFailed) {
-            serverHarness.close();
-            serverHarness = null;
-            throw startFailed;
-        }
-    }
-
-    @After
-    public void stopBoth() throws Exception {
-        Exception first = null;
-        if (clientHarness != null) {
-            try {
-                clientHarness.close();
-            } catch (Exception e) {
-                first = e;
-            }
-            clientHarness = null;
-        }
-        if (serverHarness != null) {
-            try {
-                serverHarness.close();
-            } catch (Exception e) {
-                if (first == null) {
-                    first = e;
-                } else {
-                    first.addSuppressed(e);
-                }
-            }
-            serverHarness = null;
-        }
-        if (first != null) {
-            throw first;
-        }
-    }
-
+    /**
+     * A real use-key press at an assembled ship's seat boards the pilot.
+     *
+     * <p>red-witnessed: with the vendored {@code MixinWorld.preRayTraceBlocks} ({@code MixinWorld:376},
+     * Valkyrien Skies) no longer intercepting the ray, so it passes through the ship: "HOP 1 (aim):
+     * the client's crosshair must resolve to a BLOCK", 2026-09-28. The two waits before it are
+     * arrangement links (the ship usable, the client standing at the seat).</p>
+     */
     @Test
     public void aRealUseKeyPressOnAnAssembledShipsSeatBoardsThePilot() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
-        int budget = (int) (40 * TestTimeouts.factor());
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
+        int budget = 40;
 
         // ---- ARRANGEMENT: build, assemble, and get the ship LOADED with the client present. ------
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
-        bot().waitTicks(10);
-        String assemble = assembleFixture(BX, BY, BZ, VARIANT);
-        assertTrue("ARRANGEMENT: a " + VARIANT + " build must route to a ship: " + assemble,
-                assemble.contains("\"ok\":true"));
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
+        // the height is the open-air band because the site has no Y to pass.
+        final FixtureSite site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+        // Where the fixture puts the seat before assembly; assembly carries it into the ship's
+        // subspace. Derived from the allocated base, never written as an address.
+        final int buildSeatX = bx + 3, buildSeatY = by + 5, buildSeatZ = bz + 3;
+        long awayMark = clientEvents().mark();
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 8) + " " + (BZ + 0.5) + " 0 0");
-        bot().waitTicks(20);
-        double yRest = Double.NaN;
-        for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
-            bot().waitTicks(5);
-            Matcher m = POS_Y.matcher(shipInfoAtBase());
-            if (m.find()) {
-                yRest = Double.parseDouble(m.group(1));
-            }
-        }
-        assertTrue("ARRANGEMENT: the ship must LOAD with the client present: " + shipInfoAtBase(),
-                !Double.isNaN(yRest));
+        // The mark is taken BEFORE the assembly is queued, so the registry record that follows is
+        // THIS scenario's ship by construction and never a neighbour's on a shared world. It also
+        // splits the wait below in two: the ship COMING INTO EXISTENCE is an event the registry
+        // itself records, and only what is left — the client-present LOAD — is a state worth polling
+        // for. A red now says which of the two never happened.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
+        String assemble = assembleFixture(site, VARIANT);
+        scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
+                Reply.of(assemble).ok());
+        shipUuid = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in the"
+                + " queryable registry before anything can be aimed at it (the spawn is asynchronous)");
+
+        long approachMark = clientEvents().mark();
+        exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what loads the ship here, so the settle below is measuring"
+                        + " a craft only an arrived client can have brought into being");
+        // The LOAD is production's own record (`ship_usable`, later than every unload of the ship),
+        // from the pre-assembly mark; then ONE read confirming it is loaded now.
+        awaitShipUsable(events, spawnMark, shipUuid, budget * 5);
+        String atBase = shipInfoAtBase();
+        scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
+                ShipInfo.isLoaded(atBase));
 
         // The seat's SUBSPACE address (stationary, what the raytrace should report) and its live
         // WORLD position (what the bot has to aim at). Both come from the same probe reading.
-        String found = findSeat();
-        Matcher sm = SEAT_SUB.matcher(found);
-        assertTrue("ARRANGEMENT: find-seat must resolve the assembled ship's subspace seat: " + found,
-                sm.find());
-        int seatSubX = Integer.parseInt(sm.group(1));
-        int seatSubY = Integer.parseInt(sm.group(2));
-        int seatSubZ = Integer.parseInt(sm.group(3));
+        PilotSeat seatReply = findSeat()
+                .requireFound("find-seat must resolve the assembled ship's subspace seat");
+        int seatSubX = seatReply.seatX;
+        int seatSubY = seatReply.seatY;
+        int seatSubZ = seatReply.seatZ;
 
         // ---- ARRANGEMENT: an EMPTY hand, or a held stack consumes the press before the block. ----
         // A freshly joined player does not start empty-handed (mods hand out items on first join),
         // so the hand is cleared and then VERIFIED from the client, never assumed.
-        exec("clear @a");
-        bot().selectHotbar(0);
-        JsonObject items = bot().reportPlayerItems();
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            if (isWorldReady(items)) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    break;
-                }
-            }
-            bot().waitTicks(5);
-            items = bot().reportPlayerItems();
-        }
-        assertTrue("ARRANGEMENT: the bot's main hand must be EMPTY so the use press reaches the seat "
-                + "block rather than being consumed by a held item. held=" + heldId + " items=" + items,
-                heldId != null && heldId.isEmpty());
+        emptyTheHandOnClient("the bot's main hand must be EMPTY so the use press reaches the seat"
+                + " block rather than being consumed by a held item");
 
         // ---- HOP 1-3: put the crosshair on the seat, and PROVE it landed there. ------------------
         // Re-derived every attempt from the seat's LIVE world position: a freshly assembled ship
         // settles for a while, so an aim computed once against a stale pose misses by design.
+        //
+        // CLASSIFIED, and it stays a loop: each pass PERFORMS the stand and the aim against a pose
+        // that has moved since the last one, then reads back what the crosshair hit. Delete it and
+        // the standing and aiming stop HAPPENING; and no link could replace it, because nothing in
+        // production decides that a crosshair is on a block. The order inside the iteration is
+        // load-bearing — teleport first, aim last — since a teleport arrives as a pos-look packet
+        // that vanilla applies with setPositionAndRotation, overwriting any aim set before it.
         JsonObject aim = null;
+        PilotSeat pose = null;
         double[] seatWorld = null;
         double distSq = Double.POSITIVE_INFINITY;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
+        long lastStandMark = -1L;
+        // STIMULUS: each pass stands and aims against the ship's live pose, and ends on the crosshair
+        // resting on the seat — the argument is above.
         for (int attempt = 0; attempt < budget; attempt++) {
-            found = findSeat();
-            Matcher wm = SHIP_WORLD.matcher(found);
-            if (!wm.find()) {
-                bot().waitTicks(5);
-                continue;
-            }
-            seatWorld = new double[]{Double.parseDouble(wm.group(1)),
-                    Double.parseDouble(wm.group(2)), Double.parseDouble(wm.group(3))};
+            pose = findSeat();
+            // A READ, not a wait. This branch used to sleep five ticks and retry, as if the ship
+            // might not have a world pose yet — but the seat was resolved above this loop, off the
+            // same ship, before any aiming began. A seat that resolves and then has no pose is a
+            // ship whose transform went away mid-arrangement, and that is news, not a pause.
+            scenario().requireArranged("the seat resolved before aiming began, so the ship must still"
+                    + " report its world pose on attempt " + attempt + ": " + pose.raw(),
+                    !Double.isNaN(pose.shipWorldX));
+            seatWorld = new double[]{pose.shipWorldX, pose.shipWorldY, pose.shipWorldZ};
 
             // Put the bot on the deck beside the seat, re-derived from the seat's LIVE position: a
             // freshly assembled ship settles for a while, and a stand computed once against a stale
             // pose leaves the bot in mid-air beside a ship that has since moved.
-            exec("tp @a " + (seatWorld[0] + STAND_OFF_X) + " " + (seatWorld[1] + 1.0)
-                    + " " + seatWorld[2] + " 0 0");
-            bot().waitTicks(20);
+            // The stand REACHING the client is a link: the reading below is of where he was put, and
+            // twenty ticks stood here as a guess at the trip.
+            long standMark = clientEvents().mark();
+            lastStandMark = standMark;
+            double standX = seatWorld[0] + STAND_OFF_X;
+            double standZ = seatWorld[2];
+            exec("tp @a " + standX + " " + (seatWorld[1] + 1.0) + " " + standZ + " 0 0");
+            awaitClientPlacedNear(standMark, standX, standZ,
+                    "the stand beside the seat must reach the client before he aims from it");
             JsonObject state = bot().reportState();
-            if (!isWorldReady(state)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            // A READ, not a wait: the teleport stays in this world, so the client cannot have lost
+            // it, and a client that reports no world here is a finding rather than a reason to retry.
+            scenario().requireArranged("a same-world teleport must leave the client's world ready: "
+                    + state, isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
@@ -256,8 +233,10 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
             float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D);
             float pitch = (float) (-Math.toDegrees(Math.atan2(dy, horizontal)));
             bot().setLook(yaw, pitch);
-            // The raytrace is refreshed once per client tick (Minecraft.runTick), so the new
-            // rotation needs at least one tick before objectMouseOver can reflect it.
+            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
+            // pick. MEASURED that one is not enough (2026-09-23: deterministic red, with the stand's
+            // own pos-look the only move applied, and still red with twenty ticks after the stand);
+            // the mechanism is NOT established.
             bot().waitTicks(5);
 
             aim = bot().reportMouseOver();
@@ -266,13 +245,19 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
             }
         }
 
-        String aimDiag = " observedPlayer=(" + px + "," + py + "," + pz + ")"
+        // Every server-driven move the client applied since the LAST stand, in order: a correction
+        // landing after the aim carries the server's copy of the rotation and overwrites the look,
+        // and this is the only reading that shows one did.
+        String movesSinceStand = lastStandMark < 0 ? "(no stand)"
+                : clientEvents().since(lastStandMark, "client_pos_look_applied");
+        String aimDiag = " movesSinceLastStand=" + movesSinceStand
+                + " observedPlayer=(" + px + "," + py + "," + pz + ")"
                 + " seatWorld=" + java.util.Arrays.toString(seatWorld)
                 + " seatSubspace=(" + seatSubX + "," + seatSubY + "," + seatSubZ + ")"
-                + " buildSeat=(" + BUILD_SEAT_X + "," + BUILD_SEAT_Y + "," + BUILD_SEAT_Z + ")"
-                + " distSq=" + distSq + " mouseOver=" + aim + " findSeat=" + found;
+                + " buildSeat=(" + buildSeatX + "," + buildSeatY + "," + buildSeatZ + ")"
+                + " distSq=" + distSq + " mouseOver=" + aim + " findSeat=" + pose;
 
-        assertTrue("ARRANGEMENT: the bot must OBSERVABLY stand within the server's interaction reach "
+        scenario().requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "
                 + "of the seat, or the press is discarded before the seat block ever sees it."
                 + aimDiag, distSq < MAX_INTERACT_DIST_SQ);
 
@@ -297,23 +282,52 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
                         && aim.get("blockZ").getAsInt() == seatSubZ);
 
         // ---- HOP 4: press the real use key, exactly as the human's right mouse button does. ------
+        // The mark goes BEFORE the press. A use press is over inside a tick, so a poll arriving
+        // afterwards cannot tell "the click never reached the server" from "it did and something
+        // undid it"; taken first, nothing between the two can be missed. markInstrumented, because
+        // the mount half is recorded by a test-only mixin, and an un-woven one answers with exactly
+        // the empty log a refused click does.
+        long pressMark = events.markInstrumented();
+        // The CLIENT's own mark beside it. His client PERFORMS the mount when the server tells it
+        // who is riding what, so the replication half below is a record on this log — and with the
+        // mark taken here it cannot be missed however the two sides interleave.
+        long pressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-        }
+        // The two links a boarding IS, in the order the game commits them: Forge fires
+        // RightClickBlock inside processRightClickBlock BEFORE the block's own activation runs, and
+        // the seat's activation is what mounts the player. Their SEPARATION is the diagnosis this
+        // class exists to make and the one a riding poll can never report - NO right_click_block at
+        // all means the server dropped the press before the seat ever saw it (the reach check, an
+        // unconfirmed teleport, a held stack), while a right_click_block with no mount means the
+        // seat itself refused the boarding. The physics mod routes a ship click through the ordinary
+        // packet handler with the player transformed for the call, so the subspace address changes
+        // nothing about which links fire.
+        events.assertChain(pressMark, "a real use-key press aimed at an ASSEMBLED ship's pilot seat "
+                        + "must reach the server and board the player - the crosshair was proven to "
+                        + "be on that very seat block, so a break here is the interaction itself, "
+                        + "not a missed aim." + aimDiag,
+                5 * budget, "right_click_block", "mount");
 
+        // The replication, as the LINK it is: his client performing the mount. A poll of
+        // `reportRidingEntity` stood here, and it could only ever sample the state the record
+        // announces — a read that lands in the gap between the tear-down and the rebuild answers
+        // `riding:false` for a pilot who is about to be seated.
+        JsonObject riding = awaitClientMount(pressOnClient,
+                "the CLIENT must mount the player after a boarding the SERVER has already recorded"
+                        + " (the chain above), or the pilot sees himself standing on a deck he is in"
+                        + " fact strapped into", 5 * budget,
+                " serverMountRecord=" + events.since(pressMark, "mount") + aimDiag);
         String serverRiding = exec("artest player riding-entity");
         String boardDiag = " clientRiding=" + riding + " serverRiding=" + serverRiding
                 + " mouseOverAfter=" + bot().reportMouseOver() + aimDiag;
 
-        assertTrue("a real use-key press aimed at an ASSEMBLED ship's pilot seat must board the "
-                + "player - the crosshair was proven to be on that very seat block, so a failure "
-                + "here is the interaction itself being refused, not a missed aim." + boardDiag,
+        // ...and he is still on it, read ONCE now that the link above has established the mount.
+        assertTrue("the pilot must still be aboard when the seat is read — his client mounted him"
+                + " (the link above) and must not have taken him off again." + boardDiag,
                 isRiding(riding));
 
         assertTrue("the client must be riding the SEAT's mount, not some other entity it happened "
@@ -322,28 +336,30 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
                         && riding.get("entityClass").getAsString().endsWith("EntityDummy"));
 
         // The server's own view, so a client-only ghost mount cannot pass for a boarding.
-        assertTrue("the SERVER must agree the player is riding the seat's mount - a client-side-only "
+        // The class, read off the field that carries it and compared as a name — the same shape
+        // the client's own reading uses two lines above. As a substring it was satisfied by the
+        // name appearing anywhere in the reply, and by a class merely ENDING in it.
+        // the producer always writes `ridingEntityClass`; it is empty for a player riding
+        // nothing, which is a reading and not an absence.
+        assertEquals("the SERVER must agree the player is riding the seat's mount - a client-side-only "
                 + "mount would render a pilot who is not aboard anything." + boardDiag,
-                serverRiding.contains("EntityDummy"));
+                "EntityDummy", Reply.of("artest player riding-entity", serverRiding)
+                        .simpleClassName("ridingEntityClass"));
     }
 
     // ---- helpers -------------------------------------------------------------------------------
 
-    private ClientBot bot() {
-        return clientHarness.bot();
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverHarness.client().execute(cmd));
-    }
-
+    /**
+     * THIS scenario's ship, by name — used by the arrangement's load poll, which is a question about
+     * time and not about which craft is being waited for.
+     */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        return exec("artest vs ship-info 0 id " + shipUuid);
     }
 
-    /** The seat's subspace address + live world position, resolved from the craft's build site. */
-    private String findSeat() throws Exception {
-        return exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
+    /** The seat's subspace address + live world position, resolved from the craft's IDENTITY. */
+    private PilotSeat findSeat() throws Exception {
+        return PilotSeat.byId(this::exec, 0, shipUuid);
     }
 
     private static boolean isWorldReady(JsonObject report) {
@@ -363,21 +379,14 @@ public class VSAssembledShipRealRightClickBoardingE2ETest {
                 && aim.get("blockZ").getAsInt() == seatZ;
     }
 
-    private String assembleFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
-                exec("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("ARRANGEMENT: fixture (" + variant + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+    private String assembleFixture(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs, and
+        // it matters for a RIGHT-CLICK subject in particular: a player on a pit's rim aims over the
+        // block he means, and the miss reads as the interaction path refusing him.
+        return RocketFixture.assembleAt(site, this::exec, variant, 2, 16,
+                "the hull, and the air the player stands and right-clicks in beside its seat");
     }
 }

@@ -84,7 +84,23 @@ public final class AbsolutePos {
         // The cell's own grid position, and ONLY that: a name denotes a CELL. Where something stands
         // inside that cell is carried separately, by the frame's law, and adding it here would count
         // the offset twice for every body in the game.
-        return new AbsolutePos(name.sectorX(), name.sectorY(), name.sectorZ(), 0L, 0L, 0L);
+        if (name.zone() == null) {
+            return new AbsolutePos(name.sectorX(), name.sectorY(), name.sectorZ(), 0L, 0L, 0L);
+        }
+        // A ZONED name counts its sectors in its zone's own lattice, which is four orders of
+        // magnitude finer than the galactic one — Earth's zone cell is ~7 200 blocks against
+        // 32 000 000. Reading the triple as galactic sectors would put a moon a couple of hundred
+        // MILLION blocks from its planet while the number on the page looked like a 1. So the zone's
+        // static position is resolved first (recursively: a zone key may itself be zoned) and the
+        // triple is added as an offset at the zone's width.
+        long width = name.cellBlocks();
+        if (width <= 0L) {
+            throw new IllegalStateException("the static position of zoned cell '" + name.cellKey()
+                    + "' needs its zone's cell width, which a key does not carry. Re-attach it with "
+                    + "GalacticCoord.inLattice(long) from the zone's own body.");
+        }
+        AbsolutePos zoneOrigin = ofCellName(GalacticCoord.fromCellKey(name.zone()));
+        return zoneOrigin.plus(name.sectorX() * width, name.sectorY() * width, name.sectorZ() * width);
     }
 
     public long sectorX() { return sectorX; }

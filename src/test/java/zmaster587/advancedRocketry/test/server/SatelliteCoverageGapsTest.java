@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -41,11 +40,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern BLOCK = Pattern.compile("\"block\":\"([^\"]*)\"");
-    private static final Pattern BIOME = Pattern.compile("\"biome\":\"([^\"]*)\"");
-    private static final Pattern TICKING_IDS = Pattern.compile("\"ids\":\\[([^\\]]*)\\]");
-    private static final Pattern CAN_TICK = Pattern.compile("\"canTick\":(true|false)");
+    private static final String ID = "id";
+    private static final String BLOCK = "block";
+    private static final String BIOME = "biome";
+    private static final String TICKING_IDS = "ids";
+    private static final String CAN_TICK = "canTick";
 
     /** Pin: WeatherController mode 1 (drain) — a queued water-block
      *  position becomes air after one tick. */
@@ -151,7 +150,10 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
     @Test
     public void biomeChangerEventuallyTerraformsAllQueuedPositions() throws Exception {
         long satId = createSat("biomeChanger", 100, 10_000, 1000);
-        int baseX = 5500, y = 70, z = 5500;
+        // The band. A biome is a property of the COLUMN in 1.12, so the Y this reads and terraforms
+        // at never mattered — which is exactly why it sat at a hard-coded 70 until 2026-09-14,
+        // inheriting whatever the seed put there for no reason at all.
+        int baseX = 5500, y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, z = 5500;
         int n = 5;
 
         // Pre-load chunks at the synthetic test positions.
@@ -198,7 +200,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
     @Test
     public void biomeChangerWithoutConfiguredBiomeLeavesWorldUnchanged() throws Exception {
         long satId = createSat("biomeChanger", 100, 10_000, 1000);
-        int x = 5600, y = 70, z = 5600;
+        int x = 5600, y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, z = 5600;
 
         client().execute("artest fill 0 " + (x - 1) + " " + (y - 1) + " " + (z - 1) + " "
                 + (x + 1) + " " + (y + 1) + " " + (z + 1) + " minecraft:air");
@@ -243,10 +245,10 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
     public void satelliteWithCanTickFalseIsNotAddedToTickingList() throws Exception {
         String resp = String.join("\n", client().execute(
                 "artest satellite create-spy-telescope 0"));
-        assertTrue("create-spy-telescope failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("could not extract id from create response: " + resp, m.find());
-        long spyId = Long.parseLong(m.group(1));
+        assertTrue("create-spy-telescope failed: " + resp, Reply.of(resp).ok());
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
+        long spyId = Long.parseLong(mReply.text(ID));
         assertEquals("SpyTelescope MUST report canTick=false (the registration "
                 + "gate that protects DimensionProperties.tick from ticking "
                 + "non-ticking satellites); " + resp,
@@ -255,13 +257,15 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
         // The SpyTelescope must be in the satellites lifecycle list...
         String lifecycle = String.join("\n", client().execute(
                 "artest satellite list 0"));
-        assertTrue("SpyTelescope must be in the lifecycle satellites map: " + lifecycle,
-                lifecycle.contains("\"id\":" + spyId));
+        Reply.of(lifecycle).element("satellites", "id", String.valueOf(spyId));
 
         // ...but NOT in the tickingSatellites map.
         String ticking = String.join("\n", client().execute(
                 "artest satellite ticking-list 0"));
-        String ids = stringField(TICKING_IDS, ticking, "ids");
+        // The field is a JSON ARRAY; its text comes back bracketed and the reader below asks whether
+        // an id is IN it, so the brackets go rather than being matched around.
+        String ids = String.valueOf(stringField(TICKING_IDS, ticking, "ids"))
+                .replace("[", "").replace("]", "");
         // ids is a comma-joined list of longs (or empty). Match the
         // exact id as a token to avoid false positives via substring.
         boolean inTicking = (',' + ids + ',').contains("," + spyId + ",");
@@ -284,7 +288,7 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
                 "artest satellite info 0 " + satId));
         assertTrue("freshly-created satellite must be queryable via "
                 + "satellite info; resp=" + pre,
-                pre.contains("\"id\":" + satId));
+                String.valueOf(satId).equals(Reply.of(pre).text("id")));
 
         // Mark dead + drive one DimensionProperties.tick() so the
         // production removal branch fires synchronously (instead of
@@ -294,9 +298,11 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
 
         String post = String.join("\n", client().execute(
                 "artest satellite info 0 " + satId));
+        // absence is the answer: a reply with NO `error` is the success shape, and "the
+        // verb refused, with this reason" is exactly what this claim measures.
         assertTrue("dead satellite must no longer be queryable by id; "
                 + "info should report not-found, got=" + post,
-                post.contains("\"error\":\"satellite not found\""));
+                "satellite not found".equals(Reply.of(post).textOr("error", null)));
     }
 
     // -- helpers ----------------------------------------------------------
@@ -306,15 +312,15 @@ public class SatelliteCoverageGapsTest extends AbstractSharedServerTest {
                 "artest satellite create 0 " + type + " " + powerGen + " "
                         + powerStorage + " " + maxData));
         assertTrue("satellite create (" + type + ") failed: " + resp,
-                resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("could not extract id from create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+                Reply.of(resp).ok());
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not extract id from create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
-    private String stringField(Pattern p, String src, String name) {
-        Matcher m = p.matcher(src);
-        assertTrue("field " + name + " missing in: " + src, m.find());
-        return m.group(1);
+    private String stringField(String field, String src, String name) {
+        Reply reply = Reply.of(src);
+        assertTrue("field " + name + " missing in: " + src, reply.has(field));
+        return reply.text(field);
     }
 }

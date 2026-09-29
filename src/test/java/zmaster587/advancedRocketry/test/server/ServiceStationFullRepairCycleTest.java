@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -60,20 +61,20 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern PARTS_COUNT = Pattern.compile("\"partsToRepairCount\":(-?\\d+)");
-    private static final Pattern INITIAL_COUNT =
-            Pattern.compile("\"initialPartToRepairCount\":(-?\\d+)");
-    private static final Pattern ASM_COUNT = Pattern.compile("\"assemblersCount\":(-?\\d+)");
-    private static final Pattern PROC_COUNT = Pattern.compile("\"partsProcessingCount\":(-?\\d+)");
-    private static final Pattern OUTPUT_POS_LIST =
-            Pattern.compile("\"outputPositions\":\\[\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
+    private static final String ENTITY_ID = "entityId";
+    private static final String PARTS_COUNT = "partsToRepairCount";
+    private static final String INITIAL_COUNT = "initialPartToRepairCount";
+    private static final String ASM_COUNT = "assemblersCount";
+    private static final String PROC_COUNT = "partsProcessingCount";
+    private static final String OUTPUT_POS_LIST = "outputPositions";
 
     // Use an isolated lane far from existing service-station tests so
     // parallel-fork chunk shuffling can't cross-contaminate.
-    private static final int FIXTURE_CY  = 70;
+    /**
+     * The one anchor every Y in this class is derived from — the precision assembler, the
+     * service station beside it and the craft in its own lane. A hard-coded 70 until 2026-09-21.
+     */
+    private static final int FIXTURE_CY  = FixtureSite.OPEN_AIR_Y;
     private static final int FIXTURE_CZ  = 15500;
     private static final int FIXTURE_CX  = 16100;
     private static final int ROCKET_CX   = 16080; // builderPos lands 6 east of cx
@@ -95,37 +96,34 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String asmResp = exec("artest fixture machine precision-assembler 0 "
                 + FIXTURE_CX + " " + FIXTURE_CY + " " + FIXTURE_CZ);
         assertTrue("precision-assembler fixture must build: " + asmResp,
-                asmResp.contains("\"ok\":true"));
-        Matcher outM = OUTPUT_POS_LIST.matcher(asmResp);
+                Reply.of(asmResp).ok());
+        int[][] outputs = Reply.of("artest fixture multiblock", asmResp)
+                .blockPosArray(OUTPUT_POS_LIST);
         assertTrue("fixture response must include outputPositions: " + asmResp,
-                outM.find());
-        int outX = Integer.parseInt(outM.group(1));
-        int outY = Integer.parseInt(outM.group(2));
-        int outZ = Integer.parseInt(outM.group(3));
+                outputs.length > 0);
+        int outX = outputs[0][0];
+        int outY = outputs[0][1];
+        int outZ = outputs[0][2];
 
         // Build + assemble rocket in its own lane so its launchpad
         // doesn't overlap the assembler footprint.
-        exec("artest fill 0 " + (ROCKET_CX - 2) + " " + (FIXTURE_CY + 1) + " "
-                + (ROCKET_CZ - 2) + " " + (ROCKET_CX + 12) + " " + (FIXTURE_CY + 10)
-                + " " + (ROCKET_CZ + 7) + " minecraft:air");
-        String fix = exec("artest fixture rocket 0 " + ROCKET_CX + " "
-                + FIXTURE_CY + " " + ROCKET_CZ + " simple");
-        assertTrue("rocket fixture must build: " + fix,
-                fix.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fix);
-        assertTrue("fixture missing builderPos: " + fix, bp.find());
-        String assemble = exec("artest rocket assemble 0 " + bp.group(1) + " "
-                + bp.group(2) + " " + bp.group(3));
+        // FIRST link, ASSERTING where the fill DUG and threw its own answer away. Halo 7, because
+        // the old volume reached `ROCKET_CX+12` to keep the craft's own lane clear of the assembler
+        // footprint this scenario stands beside it.
+        String assemble = RocketFixture.assembleAt(
+                FixtureSite.openAir(0, ROCKET_CX, ROCKET_CZ),
+                cmd -> exec(cmd), "simple", 7, 10,
+                "the craft the repair cycle works on, in its own lane beside the assembler");
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId: " + assemble, eim.find());
-        int rocketId = Integer.parseInt(eim.group(1));
+                Reply.of(assemble).ok());
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
+        int rocketId = Integer.parseInt(eimReply.text(ENTITY_ID));
 
         // Mark one of the rocket's advRocketmotor TileBrokenParts as
         // stage 5.
         String inject = exec("artest infra inject-broken-part " + rocketId + " 5");
-        assertTrue("inject must succeed: " + inject, inject.contains("\"ok\":true"));
+        assertTrue("inject must succeed: " + inject, Reply.of(inject).ok());
 
         // Place service station within 5 blocks of the assembler
         // controller (scanForAssemblers' radius). Controller is at
@@ -139,11 +137,11 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String place = exec("artest place 0 " + sx + " " + sy + " " + sz
                 + " advancedrocketry:serviceStation");
         assertTrue("service station place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
         String link = exec("artest infra link 0 " + sx + " " + sy + " " + sz
                 + " " + rocketId);
         assertTrue("infra link must succeed: " + link,
-                link.contains("\"ok\":true"));
+                Reply.of(link).ok());
 
         // Apply redstone power (performFunction requires
         // getEquivalentPower=true).
@@ -167,7 +165,7 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String pf1 = exec("artest infra service-perform-function 0 "
                 + sx + " " + sy + " " + sz);
         assertTrue("performFunction call #1 must succeed: " + pf1,
-                pf1.contains("\"ok\":true"));
+                Reply.of(pf1).ok());
 
         String mid = exec("artest infra service-state 0 " + sx + " " + sy + " " + sz);
         assertEquals("phase 1: assembler must be discovered: " + mid,
@@ -189,12 +187,12 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         String fillOut = exec("artest hatch fill 0 " + outX + " " + outY + " " + outZ
                 + " 0 advancedrocketry:advrocketmotor 1");
         assertTrue("hatch fill on assembler output must succeed: " + fillOut,
-                fillOut.contains("\"ok\":true"));
+                Reply.of(fillOut).ok());
 
         String pf2 = exec("artest infra service-perform-function 0 "
                 + sx + " " + sy + " " + sz);
         assertTrue("performFunction call #2 must succeed: " + pf2,
-                pf2.contains("\"ok\":true"));
+                Reply.of(pf2).ok());
 
         String end = exec("artest infra service-state 0 " + sx + " " + sy + " " + sz);
         assertEquals("phase 2: partsProcessing must be cleared by "
@@ -215,12 +213,12 @@ public class ServiceStationFullRepairCycleTest extends AbstractSharedServerTest 
         assertTrue("post-cycle inject must succeed — rocket storage must still "
                         + "contain at least one stage-0 TileBrokenPart, proving "
                         + "the repaired part was restored (not lost): " + reInject,
-                reInject.contains("\"ok\":true"));
+                Reply.of(reInject).ok());
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

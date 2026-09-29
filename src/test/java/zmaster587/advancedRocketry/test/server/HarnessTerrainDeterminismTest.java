@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -11,8 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -26,6 +25,10 @@ import static org.junit.Assert.assertTrue;
  * run and inside a hillside on the next — a test that "flakes" while the code under test is
  * perfectly deterministic. One such case cost a full investigation: a player suffocating inside
  * terrain read as a space suit failing to grant vacuum immunity.</p>
+ *
+ * <p><b>Never give this class {@code requiresFlatTerrain()}.</b> On a flat world terrain is
+ * identical whatever the seed is, so this test would pass on an unpinned seed too — it would stop
+ * guarding the one thing it exists for.</p>
  *
  * <p>This pins the property that makes those fixtures reproducible: same coordinates, same
  * ground, every run. It compares the sampled surface of several chunks — including the columns
@@ -42,9 +45,9 @@ public class HarnessTerrainDeterminismTest {
             {25, 18},
     };
 
-    private static final Pattern TOP_Y = Pattern.compile("\"topY\":(-?\\d+)");
-    private static final Pattern TOP_BLOCK = Pattern.compile("\"topBlock\":\"([^\"]+)\"");
-    private static final Pattern BIOME = Pattern.compile("\"biome\":\"([^\"]+)\"");
+    private static final String TOP_Y = "topY";
+    private static final String TOP_BLOCK = "topBlock";
+    private static final String BIOME = "biome";
 
     private Path firstDir;
     private Path secondDir;
@@ -99,11 +102,11 @@ public class HarnessTerrainDeterminismTest {
     }
 
     private static String surfaceOf(String resp, int[] chunk) {
-        Matcher y = TOP_Y.matcher(resp);
-        Matcher block = TOP_BLOCK.matcher(resp);
-        Matcher biome = BIOME.matcher(resp);
+        Reply yReply = Reply.of(resp);
+        Reply blockReply = Reply.of(resp);
+        Reply biomeReply = Reply.of(resp);
         assertTrue("sample of chunk [" + chunk[0] + "," + chunk[1] + "] malformed: " + resp,
-                y.find() && block.find() && biome.find());
-        return y.group(1) + "|" + block.group(1) + "|" + biome.group(1);
+                yReply.has(TOP_Y) && blockReply.has(TOP_BLOCK) && biomeReply.has(BIOME));
+        return yReply.text(TOP_Y) + "|" + blockReply.reported(TOP_BLOCK) + "|" + biomeReply.reported(BIOME);
     }
 }

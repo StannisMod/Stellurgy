@@ -1,14 +1,16 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -36,7 +38,11 @@ import static org.junit.Assert.assertTrue;
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final String CLIENT_PROXY = "zmaster587.advancedRocketry.client.ClientProxy";
+    /** A deadline for the mute's own client tick, which is one of the first the client runs. Kept at
+     *  the 200 ticks the readback poll it replaces allowed. */
+    private static final int MUTE_BUDGET_TICKS = 200;
+
+    private static final String MASTER = "master";
 
     @Override
     protected String subsystem() {
@@ -47,10 +53,16 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
     @Test
     public void clientReportsStateOverBridge() throws Exception {
         scenario().asserting("the client answers report_state over the bridge");
+        // ARRANGEMENT GATE (harness): the bridge answers before the world exists, so a report read
+        // without this would describe a client that has not joined anything yet.
         bot().waitForWorld();
         JsonObject state = bot().reportState();
-        assertNotNull("client reportState returned null", state);
         assertTrue("client reportState missing 'ok' key: " + state, state.has("ok"));
+        // The handshake must round-trip a PLAYER view, which is what the smoke test was named for.
+        // The old assertion here was assertNotNull on the reply, which cannot fail: ClientBot
+        // throws on a failed reply rather than returning null.
+        assertTrue("the bridge answered, but not about a client that is in a world: " + state,
+                state.has("worldReady") && state.get("worldReady").getAsBoolean());
     }
 
     /**
@@ -103,28 +115,39 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
      * where the sound handler is up, gated on the {@code -Dforge.test.client=true} marker that every
      * {@code RealClientHarness} client carries (and a manual {@code runClient} does not).</p>
      *
-     * <p>This observes the REAL client state: the proxy publishes the master level it read back from
-     * {@code GameSettings} after muting, and this asserts that value is 0 — so it fails if the mute
-     * is removed, mis-gated, or clamped, not merely if the code path is skipped.</p>
+     * <p>This observes the REAL client state as an EVENT: {@code test_client_muted} is recorded by a
+     * test-only mixin at the one return production reaches only after it has written the level, and
+     * its {@code master} payload is what {@code GameSettings} reports at that instant. So the mute
+     * RUNNING and the level it LEFT are one record, and this fails if the mute is removed, mis-gated
+     * or clamped — not merely if the code path is skipped. Production keeps no field for any of it.</p>
      */
     @Test
     public void harnessTestClientHasMasterSoundMuted() throws Exception {
         scenario().asserting("the harness client's master sound level is 0");
         bot().waitForWorld();
 
-        // The mute lands on the first client tick with the sound handler up; poll until the
-        // proxy has published the applied master level (NaN until then).
-        String raw = "NaN";
-        for (int i = 0; i < 40 && "NaN".equalsIgnoreCase(raw); i++) {
-            bot().waitTicks(5);
-            raw = bot().readStaticField(CLIENT_PROXY, "testClientMasterVolume")
-                    .get("value").getAsString();
-        }
-        scenario().record("testClientMasterVolume", raw);
+        // Read from sequence 0, NOT from a mark: the mute lands on one of the client's first END
+        // ticks, before any scenario in this class can take a mark, so a since(mark) window would
+        // be empty however long it waited. Nothing can have evicted the record — the ring is bounded
+        // PER TYPE and production reaches this seam at most once per client session, so this type
+        // cannot overrun its own ring whatever the rest of the log is doing.
+        // The TYPE is the whole claim: production reaches this seam only when it mutes, so every
+        // record of it is the mute happening. The needle that stood here asked for the field the
+        // record always carries and narrowed nothing — and the level it carries is read below, where
+        // it is asserted, rather than being smuggled into the wait as a filter.
+        String mutes = clientEvents().await(0L, "test_client_muted",
+                "a harness-spawned client must mute its master sound level on the first client tick"
+                        + " with the sound handler up (instrument: client_proxy_events)",
+                MUTE_BUDGET_TICKS);
+        String muted = Events.lastRecord(mutes);
 
-        assertNotNull("proxy must publish the applied master volume", raw);
-        float master = Float.parseFloat(raw);
+        Reply mReply = Reply.of(muted);
+        assertTrue("a test_client_muted record must carry the level the mute left behind: " + muted,
+                mReply.has(MASTER));
+        float master = Float.parseFloat(mReply.text(MASTER));
+        scenario().record("testClientMasterVolume", master);
         assertEquals("a harness test client must have master sound muted to 0",
                 0.0f, master, 1e-6f);
     }
+
 }

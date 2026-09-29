@@ -6,7 +6,9 @@ import com.google.gson.JsonObject;
 import org.junit.Test;
 import org.lwjgl.input.Keyboard;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +16,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -87,11 +91,14 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
 
     private static final int OVERWORLD = 0;
     /** Well above sea level: 2M and 16M are both ocean, and a delivery into water measures the water. */
-    private static final int FLOOR_Y = 140;
+    private static final int FLOOR_Y = FixtureSite.OPEN_AIR_Y;
     private static final int STAND_Y = FLOOR_Y + 1;
 
     /** The corridor runs +X from the player; the wall's near face is this many blocks ahead. */
     private static final int WALL_OFFSET = 16;
+
+    /** The block the arena is built out of, spelled once — the fill above lays exactly this. */
+    private static final String STONE = "minecraft:stone";
     private static final int WALK_TICKS = 40;
     private static final int RAM_TICKS = 160;
 
@@ -101,8 +108,8 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
     private static final double Y_TOLERANCE = 0.05d;
     private static final double SYNC_TOLERANCE = 0.5d;
     private static final double ARRIVAL_TOLERANCE = 1.0d;
-    /** How many (deliver, settle) rounds a rung gets before it is called undeliverable. */
-    private static final int DELIVERY_ATTEMPTS = 4;
+    /** A deadline for each of a delivery's two records (the chunk, the placement) — not a settle. */
+    private static final int DELIVERY_LINK_BUDGET_TICKS = 200;
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", serverClient().execute(cmd));
@@ -160,7 +167,7 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
             }
             // Park him back near the origin so the next case starts from a known place.
             exec("artest player far-tp 0.5 200 0.5");
-            ServerTicks.await(serverClient(), OVERWORLD, 20);
+            GameTicks.advanceWorld(serverClient(), OVERWORLD, 20);
         }
 
         StringBuilder out = new StringBuilder("[SPIKE far-coordinate delivery boundary]\n");
@@ -288,8 +295,8 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
                 exec("artest chunk forceload " + OVERWORLD + " " + cx + " " + cz);
             }
         }
-        ServerTicks.await(serverClient(), OVERWORLD, 60);
-
+        // No advance around the fills: each loads the chunks it writes, on the server thread,
+        // before it answers, and the reads that check the arena are the server's.
         int x1 = x - 4;
         int x2 = x + WALL_OFFSET + 4;
         exec("artest fill " + OVERWORLD + " " + x1 + " " + FLOOR_Y + " " + (ARENA_Z - 6) + " "
@@ -297,7 +304,6 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
         // Hollow out everything up to (but not including) the wall plane at x+WALL_OFFSET.
         exec("artest fill " + OVERWORLD + " " + (x1 + 1) + " " + STAND_Y + " " + (ARENA_Z - 5) + " "
                 + (x + WALL_OFFSET - 1) + " " + (FLOOR_Y + 5) + " " + (ARENA_Z + 5) + " minecraft:air");
-        ServerTicks.await(serverClient(), OVERWORLD, 20);
     }
 
     /**
@@ -316,69 +322,88 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
         for (int dx : new int[] {0, 1, 2, 5, 10, WALL_OFFSET - 2}) {
             String at = exec("artest block at " + OVERWORLD + " " + (x + dx) + " " + STAND_Y + " "
                     + ARENA_Z);
-            if (!at.contains("minecraft:air")) {
+            // The probe answers the question directly — `isAir` — instead of being searched for
+            // the id. The substring form was also satisfied by a `minecraft:air` value sitting
+            // in some other field of the reply.
+            // The refusing read is right here and the producer always writes both `block` and
+            // `isAir` for a loaded dimension: the one shape that omits them is `world not
+            // loaded`, and this asks about the overworld.
+            if (!Reply.of(at).bool("isAir")) {
                 return "the corridor is not air at x+" + dx + " (" + oneLine(at) + ")";
             }
         }
         for (int dx : new int[] {0, 8, WALL_OFFSET - 1}) {
             String at = exec("artest block at " + OVERWORLD + " " + (x + dx) + " " + FLOOR_Y + " "
                     + ARENA_Z);
-            if (!at.contains("stone")) {
+            // The id, compared. `contains("stone")` is satisfied by cobblestone, sandstone,
+            // stonebrick and redstone_block — so an arena the fill laid wrong read as sound,
+            // which is exactly what this control exists to catch. Refusing, because the producer
+            // always writes `block` for a loaded dimension and this asks about the overworld.
+            if (!STONE.equals(Reply.of(at).text("block"))) {
                 return "the floor is not stone at x+" + dx + " (" + oneLine(at) + ")";
             }
         }
         String wall = exec("artest block at " + OVERWORLD + " " + (x + WALL_OFFSET) + " " + STAND_Y
                 + " " + ARENA_Z);
-        if (!wall.contains("stone")) {
+        // the producer always writes `block` for a loaded dimension, as above.
+        if (!STONE.equals(Reply.of(wall).text("block"))) {
             return "the wall is not stone (" + oneLine(wall) + ")";
         }
         return null;
     }
 
     /**
-     * Delivers the player into the arena and does not return until he is STANDING in it.
+     * Delivers the player into the arena onto a floor his CLIENT holds, and reports whether he is
+     * STANDING in it.
      *
-     * <p>One delivery is not enough and the first run proved it: the chunks are force-loaded on the
-     * server but the CLIENT has not received them yet, so client-side physics see air, he falls
-     * through the floor, and the server accepts his movement packets. Delivering again once the
-     * chunks have arrived is what makes him stay. The loop converges rather than guessing a settle
-     * time, and reports which of the two conditions it never met.</p>
+     * <p>One blind delivery is not enough and the first run proved it: the chunks are force-loaded on
+     * the server but the CLIENT has not received them yet, so client-side physics see air, he falls
+     * through the floor, and the server accepts his movement packets. That used to be answered by
+     * re-delivering in a loop until he stayed; it is now the two named steps of
+     * {@link ClientEvents#placeOntoGroundItHolds} — the chunk's arrival and the placement are records
+     * — and one reading after.</p>
      *
      * @return {@code null} once he is standing, or a reason string for the INCONCLUSIVE list
      */
     private String deliverAndStand(int x) throws Exception {
-        double lastX = Double.NaN;
-        double lastY = Double.NaN;
-        String lastReply = "";
-        for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
-            lastReply = exec("artest player far-tp " + fmt(x + 0.5d) + " " + STAND_Y + " "
-                    + fmt(ARENA_Z + 0.5d));
-            ServerTicks.await(serverClient(), OVERWORLD, 40);
-            bot().waitTicks(30);
-            lastX = serverX();
-            lastY = serverY();
-            if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE
-                    && Math.abs(lastY - STAND_Y) < Y_TOLERANCE) {
-                return null;
-            }
+        String place = "artest player far-tp " + fmt(x + 0.5d) + " " + STAND_Y + " "
+                + fmt(ARENA_Z + 0.5d);
+        try {
+            ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot()), this::exec, place,
+                    x + 0.5d, STAND_Y, ARENA_Z + 0.5d,
+                    "the player must be delivered onto the arena floor at x=" + x, DELIVERY_LINK_BUDGET_TICKS);
+        } catch (AssertionError notPlaced) {
+            return "the player was never placed at x=" + x + " - arrangement, not the coordinate: "
+                    + oneLine(notPlaced.getMessage());
+        }
+        // EXPERIMENT: forty server ticks and thirty client ticks standing on the delivered floor —
+        // a floor the client does not hold drops him well inside that — and the reading after is
+        // whether he stayed.
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, 40);
+        // EXPERIMENT: the client half of the same dose.
+        bot().waitTicks(30);
+        double lastX = serverX();
+        double lastY = serverY();
+        if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE
+                && Math.abs(lastY - STAND_Y) < Y_TOLERANCE) {
+            return null;
         }
         boolean arrived = Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE;
         return (arrived
                 ? "he arrived but would not stand (posY=" + fmt(lastY) + ", floor top " + STAND_Y
-                        + ") - he is falling through a floor the client has not received"
-                : "the player never arrived (server posX=" + lastX + ", wanted " + (x + 0.5d) + ")")
-                + " after " + DELIVERY_ATTEMPTS + " deliveries - arrangement, not the coordinate."
-                + " lastReply=" + oneLine(lastReply);
+                        + ") on a floor his client was sent"
+                : "the player was placed and then was not there (server posX=" + lastX + ", wanted "
+                        + (x + 0.5d) + ")") + " - arrangement, not the coordinate.";
     }
 
     // ─── instruments ────────────────────────────────────────────────────────────
 
     private double serverX() throws Exception {
-        return field(exec("artest player health"), "posX");
+        return PlayerState.read(this::exec).x;
     }
 
     private double serverY() throws Exception {
-        return field(exec("artest player health"), "posY");
+        return PlayerState.read(this::exec).y;
     }
 
     private double clientX() throws Exception {
@@ -387,9 +412,10 @@ public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
     }
 
     private static double field(String json, String key) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"" + key + "\"\\s*:\\s*([-0-9.eE]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        // NaN on absence is deliberate and CHECKED by the callers, which grade a rung and must be
+        // able to say "not measured" apart from "measured zero" — at a far coordinate those are the
+        // two outcomes the whole spike exists to tell apart.
+        return Reply.of(json).number(key);
     }
 
     /** One rung's four numbers plus the verdict they earn against the origin control. */

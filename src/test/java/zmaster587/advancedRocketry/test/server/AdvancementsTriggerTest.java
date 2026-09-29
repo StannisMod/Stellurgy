@@ -1,18 +1,18 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -33,10 +33,13 @@ import static org.junit.Assert.assertTrue;
  */
 public class AdvancementsTriggerTest {
 
+    /** World the advancement is given to fire in - the old 15 s ceiling, said in ticks. */
+    private static final int GRANT_TICKS = 300;
+
     private static final int DIM_LUNA = 9511;
     private static final int DIM_OTHER = 9512;
     private static final String ADV_WENT = "advancedrocketry:normal/wenttothemoon";
-    private static final Pattern IS_DONE = Pattern.compile("\"isDone\":(true|false)");
+    private static final String IS_DONE = "isDone";
 
     private Path workDir;
     private RealDedicatedServerHarness harness;
@@ -86,6 +89,10 @@ public class AdvancementsTriggerTest {
         if (harness != null) harness.close();
     }
 
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", harness.client().execute(cmd));
     }
@@ -96,40 +103,53 @@ public class AdvancementsTriggerTest {
      *  world and its clock never crosses the %20 trigger window. */
     private void stationAndTick(int dim, double x, double y, double z, int ticks) throws Exception {
         String fake = exec("artest player ensure-fake " + dim + " " + x + " " + y + " " + z);
-        assertTrue("ensure-fake must succeed: " + fake, fake.contains("\"ok\":true"));
+        assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
         exec("artest chunk forceload " + dim + " " + (((int) x) >> 4) + " " + (((int) z) >> 4));
         assertTrue("tick-living must succeed",
-                exec("artest player tick-living " + ticks).contains("\"ok\":true"));
-        // Wait OFF the server thread: a console command runs ON the server thread, so a probe that
-        // sleeps there blocks ticking entirely. The wait belongs in the test jvm — and it OBSERVES
-        // the world's clock rather than hoping for it, so a world that is not ticking says so.
-        ServerTicks.await(harness.client(), dim, ticks + 10);
+                Reply.of(exec("artest player tick-living " + ticks)).ok());
+        // EXPERIMENT: the dose is `ticks` living updates, and the callers' assertions are about what
+        // that many did (a name gate, a distance gate: "none of them granted it"). The ticker posts
+        // one update per SERVER tick and stops at `ticks`; this world's clock can only advance on a
+        // server tick, so `ticks + 10` of it deliver every update, and cross the same %20 windows
+        // the updates are judged against. Overshoot adds no updates — the dose is capped by the
+        // ticker, not by this wait — so the verdict does not move with the box's speed. Measured
+        // on the world's clock so a world that is not ticking fails here, naming itself.
+        GameTicks.advanceWorld(harness.client(), dim, ticks + 10);
     }
 
     private boolean isDone(String src) {
-        Matcher m = IS_DONE.matcher(src);
-        assertTrue("isDone field missing in: " + src, m.find());
-        return Boolean.parseBoolean(m.group(1));
+        Reply mReply = Reply.of(src);
+        assertTrue("isDone field missing in: " + src, mReply.has(IS_DONE));
+        return Boolean.parseBoolean(mReply.text(IS_DONE));
     }
 
     /** Standing on Luna within the distance gate grants WENT_TO_THE_MOON
      *  within 1–2 %20-tick trigger windows. Baseline asserted first. */
     @Test
     public void standingNearLanderOnLunaFiresWentToTheMoon() throws Exception {
-        stationAndTick(DIM_LUNA, 2347, 95, 67, 0 + 1); // station only, 1 tick
+        // Station only, with NO living update: this spot is already inside the distance gate, so a
+        // single update that happened to land on a %20 window granted the very advancement the
+        // baseline below says is not granted yet — about one run in twenty.
+        stationAndTick(DIM_LUNA, 2347, 95, 67, 0);
         assertEquals("baseline: WENT_TO_THE_MOON must not be granted yet",
                 false, isDone(exec("artest player advancement " + ADV_WENT)));
 
+        // Marked BEFORE the ticks that can grant it: the grant is announced once, and a mark taken
+        // after it would be waiting for a second one that will never come.
+        long grantMark = events.mark();
         // Δy=15 from (2347,80,67) -> distSq=225 < 512 ✓. 60 ticks ≥ 3 windows.
-        assertTrue(exec("artest player tick-living 60").contains("\"ok\":true"));
-        // Poll off-thread — the server free-runs while the test JVM sleeps.
-        boolean done = false;
-        for (int waited = 0; waited < 15_000 && !done; waited += 1000) {
-            Thread.sleep(1000L);
-            done = isDone(exec("artest player advancement " + ADV_WENT));
-        }
-        assertEquals("standing near (2347,80,67) on Luna must grant WENT_TO_THE_MOON",
-                true, done);
+        assertTrue(Reply.of(exec("artest player tick-living 60")).ok());
+
+        // Linked on the grant Forge publishes. Vanilla posts AdvancementEvent from
+        // PlayerAdvancements.grantCriterion inside `if (!flag1 && progress.isDone())` — once, on
+        // the tick it becomes done — so this ends on the moment the advancement was EARNED. The
+        // poll it replaces asked "is it done yet" one reading at a time, which answers about
+        // whenever it happened to look and needs a budget to say how long it is willing to keep
+        // looking.
+        events.awaitField(grantMark, "advancement_granted", "id", ADV_WENT,
+                "standing near (2347,80,67) on Luna must grant WENT_TO_THE_MOON", GRANT_TICKS);
+        assertEquals("the advancement was announced as granted, so the player's own record must"
+                        + " agree", true, isDone(exec("artest player advancement " + ADV_WENT)));
     }
 
     /** Name gate: an AR dim NOT named "Luna" never fires, same coords. */

@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -9,8 +10,8 @@ import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -38,12 +39,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class WirelessTransceiverRestartTest {
 
-    private static final Pattern NET_ID = Pattern.compile("\"networkID\":(-?\\d+)");
-    private static final Pattern SHARED_ID = Pattern.compile("\"sharedNetworkId\":(-?\\d+)");
-    private static final Pattern MODE = Pattern.compile("\"mode\":\"(extract|inject)\"");
-    private static final Pattern ENABLED = Pattern.compile("\"enabled\":(true|false)");
-    private static final Pattern IS_SOURCE = Pattern.compile("\"isSource\":(true|false)");
-    private static final Pattern IS_SINK = Pattern.compile("\"isSink\":(true|false)");
+    private static final String NET_ID = "networkID";
+    private static final String SHARED_ID = "sharedNetworkId";
+    private static final String MODE = "mode";
+    private static final String ENABLED = "enabled";
+    private static final String IS_SOURCE = "isSource";
+    private static final String IS_SINK = "isSink";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -52,7 +53,7 @@ public class WirelessTransceiverRestartTest {
     private static final int DIM = 0;
     private static final int X_A = 1100;
     private static final int X_B = 1125;
-    private static final int Y = 65;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z = 1100;
 
     @Before
@@ -121,7 +122,7 @@ public class WirelessTransceiverRestartTest {
         String r = String.join("\n", h.client().execute(
                 "artest place " + DIM + " " + x + " " + Y + " " + Z
                         + " advancedrocketry:wirelessTransciever"));
-        assertTrue("place failed at x=" + x + ": " + r, r.contains("\"placed\":true"));
+        assertTrue("place failed at x=" + x + ": " + r, Reply.of(r).bool("placed"));
     }
 
     private static int pair(RealDedicatedServerHarness h, int xA, int xB) throws Exception {
@@ -129,7 +130,7 @@ public class WirelessTransceiverRestartTest {
                 "artest pipe wireless-pair " + DIM + " "
                         + xA + " " + Y + " " + Z + " "
                         + xB + " " + Y + " " + Z));
-        assertTrue("pair failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("pair failed: " + r, Reply.of(r).ok());
         return extractInt(SHARED_ID, r);
     }
 
@@ -142,31 +143,31 @@ public class WirelessTransceiverRestartTest {
         String r = String.join("\n", h.client().execute(
                 "artest pipe wireless-set-mode " + DIM + " "
                         + x + " " + Y + " " + Z + " " + mode));
-        assertTrue("set-mode failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("set-mode failed: " + r, Reply.of(r).ok());
     }
 
     private static void setEnabled(RealDedicatedServerHarness h, int x, boolean enabled) throws Exception {
         String r = String.join("\n", h.client().execute(
                 "artest pipe wireless-set-enabled " + DIM + " "
                         + x + " " + Y + " " + Z + " " + enabled));
-        assertTrue("set-enabled failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("set-enabled failed: " + r, Reply.of(r).ok());
     }
 
     private static String extractMode(String haystack) {
-        Matcher m = MODE.matcher(haystack);
-        if (!m.find()) throw new AssertionError("no mode in: " + haystack);
-        return m.group(1);
+        Reply mReply = Reply.of(haystack);
+        if (!mReply.has(MODE)) throw new AssertionError("no mode in: " + haystack);
+        return mReply.text(MODE);
     }
 
-    private static int extractInt(Pattern p, String haystack) {
-        Matcher m = p.matcher(haystack);
-        if (!m.find()) throw new AssertionError("pattern " + p + " did not match: " + haystack);
-        return Integer.parseInt(m.group(1));
+    private static int extractInt(String field, String haystack) {
+        Reply reply = Reply.of(haystack);
+        assertTrue("probe response missing `" + field + "`: " + haystack, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static boolean extractBool(Pattern p, String haystack) {
-        Matcher m = p.matcher(haystack);
-        if (!m.find()) throw new AssertionError("pattern " + p + " did not match: " + haystack);
-        return Boolean.parseBoolean(m.group(1));
+    private static boolean extractBool(String field, String haystack) {
+        Reply reply = Reply.of(haystack);
+        assertTrue("probe response missing `" + field + "`: " + haystack, reply.has(field));
+        return reply.bool(field);
     }
 }

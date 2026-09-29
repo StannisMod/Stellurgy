@@ -4,7 +4,8 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.Reply;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -15,6 +16,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -42,8 +45,10 @@ import static org.junit.Assert.assertTrue;
  * <ol>
  *   <li><b>The capture must contain a scene.</b> A framebuffer enabled at RUNTIME receives the HUD
  *       pass and not the world pass, so every capture comes back as the clear colour — which reads
- *       exactly like "the renderer drew nothing". The client must be started with
- *       {@code -PclientFbo=true}, and the first frame is checked for being more than one flat colour.</li>
+ *       exactly like "the renderer drew nothing". This test therefore declares
+ *       {@code requiresFramebufferAtLaunch()}, so its own client starts with the FBO on whatever the
+ *       invocation passes, and the first frame is still checked for being more than one flat
+ *       colour.</li>
  *   <li><b>The scene must be STATIC.</b> Two captures with no motion between them must be identical.
  *       If they are not, something in the frame is animating and "frames differ" can no longer mean
  *       "the camera moved" — the run is inconclusive and says so rather than producing a number.</li>
@@ -62,7 +67,43 @@ import static org.junit.Assert.assertTrue;
  * <p>Designed to come back NO: if every coordinate shows zero repeats, the render is not the ceiling
  * and the cell bound has to be justified by something else or dropped.</p>
  */
+@org.junit.Ignore("RETIRED 2026-09-16, answered. The render does not quantize out to 24M (measured"
+        + " 2026-08-12: frames compared clean at every rung). Kept rather than deleted"
+        + " because that table cites this class as its evidence. Un-ignoring is removing this"
+        + " annotation and nothing else: do it if the cell bound moves or the render path changes.")
 public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
+
+    // RETIRED 2026-09-16 — maintainer: "Он же отработал, теперь пусть игнорируется. Он не проверяет
+    // механики." And on why the file stays: "Ну да, и поэтому мы его не удаляем" — `space-model.md`
+    // cites this class as the evidence for its far-coordinate table, and a citation needs a target.
+    //
+    // IT ANSWERED ITS QUESTION. Measured 2026-08-12: the camera walked 0.05 blocks a step and frames
+    // compared CLEAN at every rung out to 24M: the render does not quantize, and neither does the
+    // wire. That measurement stands; this class re-establishing it
+    // every run buys nothing and costs a client boot and five screenshots.
+    //
+    // NOT converted into a contract test, which is the usual first ending for a spike that has
+    // answered its question, because it proved a NEGATIVE about the renderer at coordinates the game does not put players
+    // at yet. There is no mechanic to pin. The second ending — @Ignore — is honest here for the one
+    // condition that makes it honest: un-ignoring is removing the annotation and nothing else. The
+    // instrument is complete, both its controls included.
+
+    /**
+     * This spike measures WORLD pixels, so its client is launched with the framebuffer already on.
+     *
+     * <p><b>Declared here rather than asked of the operator</b>, which is what the base class's hook
+     * exists for and what this test did not use until 2026-09-16. It relied on {@code -PclientFbo=true}
+     * being remembered at the command line; a full-tier run does not pass it, so on every such run
+     * this spike reported its own control as INCONCLUSIVE and had to be re-run alone and its result
+     * merged in by hand. Measured that day: 184 passed, 2 failed, and this was one of the two — a red
+     * that said nothing about the subject and everything about the invocation.</p>
+     *
+     * <p>Zero tests overrode this hook before this one, and its javadoc already said why it is there.</p>
+     */
+    @Override
+    protected boolean requiresFramebufferAtLaunch() {
+        return true;
+    }
 
     /**
      * The origin is carried as the CONTROL in the same run: "zero repeats at 16M" means nothing until
@@ -83,11 +124,11 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
     private static final int STEPS = 12;
     /** How many 20-tick waits the frame gets to stop changing on its own before a teleport. */
     private static final int SETTLE_ATTEMPTS = 15;
-    /** How many (deliver, settle) rounds a rung gets before it is called undeliverable. */
-    private static final int DELIVERY_ATTEMPTS = 4;
+    /** A deadline for each of a delivery's two records (the chunk, the placement) — not a settle. */
+    private static final int DELIVERY_LINK_BUDGET_TICKS = 200;
 
     private static final int OVERWORLD = 0;
-    private static final int FLOOR_Y = 140;
+    private static final int FLOOR_Y = FixtureSite.OPEN_AIR_Y;
     private static final int EYE_Y = FLOOR_Y + 1;
 
     private Path outDir;
@@ -114,10 +155,9 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
         exec("time set 6000");
 
         String health = exec("artest player health");
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"player\"\\s*:\\s*\"([^\"]+)\"").matcher(health);
-        assertTrue("player health must echo the player name: " + health, m.find());
-        botName = m.group(1);
+        Reply healthReply = Reply.of("artest player health", health);
+        assertTrue("player health must echo the player name: " + health, healthReply.has("player"));
+        botName = healthReply.text("player");
 
         JsonObject fb = bot().setFramebuffer(true);
         assertTrue("this client's GL must support the framebuffer capture path: " + fb,
@@ -166,32 +206,31 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
             BufferedImage first = capture("jitter_" + x + "_ctrl_a");
             if (isFlat(first)) {
                 inconclusive.add("x=" + x + " capture is one flat colour " + describe(first)
-                        + " - the framebuffer is not receiving the world pass (start with -PclientFbo=true)");
+                        + " - the framebuffer is not receiving the world pass. This class declares"
+                        + " requiresFramebufferAtLaunch(), so the FBO is not the operator's to"
+                        + " remember: if this fires, the launch-time enable itself did not take"
+                        + " (a driver that refuses the FBO path, or the hook not reaching this"
+                        + " client) and the GL support check above is the next thing to read.");
                 continue;
             }
             // SETTLE. The first run said the scene was not static and it was right: chunk streaming,
             // lighting propagation and the client's own catch-up keep changing pixels for a while
             // after a teleport. Wait for the frame to stop moving ON ITS OWN before asking whether
             // MOTION moves it — an unsettled scene answers "the frame changed" to every question.
-            BufferedImage second = null;
-            int settleAttempts = 0;
-            int lastDelta = Integer.MAX_VALUE;
-            BufferedImage previousSettle = first;
-            while (settleAttempts < SETTLE_ATTEMPTS) {
-                settleAttempts++;
-                bot().waitTicks(20);
-                BufferedImage now = capture("jitter_" + x + "_settle" + settleAttempts);
-                lastDelta = differingPixels(previousSettle, now);
-                previousSettle = now;
-                if (lastDelta == 0) {
-                    second = now;
-                    break;
-                }
-            }
-            if (second == null) {
-                inconclusive.add("x=" + x + " the frame never stopped changing on its own after "
-                        + settleAttempts + " attempts (last delta " + lastDelta + "px) - the scene is "
-                        + "not static, so frame differences cannot be attributed to camera motion");
+            // EXPERIMENT: SETTLE_ATTEMPTS * 20 ticks — the ceiling the settle loop this replaced was
+            // given — for the scene to stop moving on its own; derived, not measured. It used to
+            // capture every twenty ticks and stop on the first identical pair, which is a poll.
+            bot().waitTicks(SETTLE_ATTEMPTS * 20);
+            BufferedImage settled = capture("jitter_" + x + "_settled");
+            // WINDOW: two captures twenty ticks apart; the verdict names the pixel count between them.
+            bot().waitTicks(20);
+            BufferedImage second = capture("jitter_" + x + "_settled2");
+            int lastDelta = differingPixels(settled, second);
+            if (lastDelta != 0) {
+                inconclusive.add("x=" + x + " the frame was still changing on its own after "
+                        + (SETTLE_ATTEMPTS * 20) + " ticks (delta " + lastDelta + "px over twenty"
+                        + " more) - the scene is not static, so frame differences cannot be"
+                        + " attributed to camera motion");
                 continue;
             }
 
@@ -200,6 +239,11 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
             int maxRun = 0;
             int run = 0;
             BufferedImage previous = second;
+            // STIMULUS: a stimulus window — each step teleports the body further out and compares the frame
+            // with the one before, so the loop is what produces the motion being measured. Its
+            // results — how many steps repeated a frame, and the longest RUN of repeats — are
+            // statistics over the sweep, which no record could carry. What it cannot see: a frame
+            // between two steps.
             for (int step = 1; step <= STEPS; step++) {
                 double px = x + 0.5d + step * STEP_BLOCKS;
                 exec("tp " + botName + " " + fmt(px) + " " + EYE_Y + " " + fmt(ARENA_Z + 0.5d));
@@ -276,27 +320,29 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
 
     /**
      * Puts the camera at {@code (x + 0.5, y, ARENA_Z + 0.5)} through the long-jump path and returns
-     * the server's own reading of where he ended up. Retried, because the chunks are force-loaded on
-     * the SERVER while the client has not received them yet — the first delivery of a rung routinely
-     * lands in a world the client cannot see.
+     * the server's own reading of where he ended up. The chunks are force-loaded on the SERVER while
+     * the client has not received them yet — the first delivery of a rung routinely lands in a world
+     * the client cannot see — so the chunk's arrival and the placement are the two named steps of
+     * {@link ClientEvents#placeOntoGroundItHolds}. It used to re-deliver in a loop until the server
+     * held him near the rung.
      */
     private double deliver(int x, int y) throws Exception {
-        double actualX = Double.NaN;
-        for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
-            exec("artest player far-tp " + fmt(x + 0.5d) + " " + y + " " + fmt(ARENA_Z + 0.5d));
-            ServerTicks.await(serverClient(), OVERWORLD, 60);
-            bot().waitTicks(20);
-            actualX = posXOf(exec("artest player health"));
-            if (Math.abs(actualX - (x + 0.5d)) < 2d) {
-                break;
-            }
-        }
-        return actualX;
+        ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot()), this::exec,
+                "artest player far-tp " + fmt(x + 0.5d) + " " + y + " " + fmt(ARENA_Z + 0.5d),
+                x + 0.5d, y, ARENA_Z + 0.5d, "the camera must be delivered to the rung at x=" + x,
+                DELIVERY_LINK_BUDGET_TICKS);
+        // EXPERIMENT: sixty server ticks and twenty client ticks for the rung's scene to render
+        // around him before the frames are compared; the reading is the server's own.
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, 60);
+        // EXPERIMENT: the client half of the same dose.
+        bot().waitTicks(20);
+        return posXOf(exec("artest player health"));
     }
 
     private BufferedImage capture(String name) throws Exception {
         bot().setHudHidden(true);
-        bot().waitTicks(4);
+        // `screenshot` captures at the end of the next frame the client renders, which is drawn
+        // after the HUD was hidden: nothing to advance for.
         JsonObject shot = bot().screenshot(name);
         assertTrue("screenshot must land on disk: " + shot, shot.get("exists").getAsBoolean());
         Path dst = outDir.resolve(name + ".png");
@@ -344,9 +390,10 @@ public class SpikeFarCoordinateRenderJitterTest extends AbstractClientE2ETest {
 
     /** The server's own reading of where the player is, so the stimulus can be shown to have landed. */
     private static double posXOf(String healthJson) {
-        java.util.regex.Matcher m = java.util.regex.Pattern
-                .compile("\"posX\"\\s*:\\s*([-0-9.eE]+)").matcher(healthJson);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        // NaN on absence is deliberate and is CHECKED by every caller: this reading is used to show
+        // that a stimulus landed, and "the probe did not report posX" is not a position. It is not a
+        // plausible substitute for one either, which is the property a zero would not have had.
+        return Reply.of("artest player health", healthJson).number("posX");
     }
 
     /** The report is the deliverable, so it also lands on disk and survives a truncated console. */

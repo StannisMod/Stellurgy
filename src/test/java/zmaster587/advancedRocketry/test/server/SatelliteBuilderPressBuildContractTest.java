@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -57,15 +58,15 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServerTest {
 
-    private static final Pattern CHASSIS_EMPTY = Pattern.compile("\"chassisEmpty\":(true|false)");
-    private static final Pattern OUTPUT_EMPTY = Pattern.compile("\"outputEmpty\":(true|false)");
-    private static final Pattern HOLDING_ITEM = Pattern.compile("\"holdingItem\":\"([^\"]*)\"");
-    private static final Pattern CHIP_ITEM = Pattern.compile("\"chipItem\":\"([^\"]*)\"");
-    private static final Pattern HOLDING_SAT_ID = Pattern.compile("\"holdingSatId\":(-?\\d+)");
-    private static final Pattern CHIP_SAT_ID = Pattern.compile("\"chipSatId\":(-?\\d+)");
-    private static final Pattern PRIMARY_META = Pattern.compile("\"primaryMeta\":(-?\\d+)");
+    private static final String CHASSIS_EMPTY = "chassisEmpty";
+    private static final String OUTPUT_EMPTY = "outputEmpty";
+    private static final String HOLDING_ITEM = "holdingItem";
+    private static final String CHIP_ITEM = "chipItem";
+    private static final String HOLDING_SAT_ID = "holdingSatId";
+    private static final String CHIP_SAT_ID = "chipSatId";
+    private static final String PRIMARY_META = "primaryMeta";
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 9700;
     private static final int CX_OPTICAL = 10100;
     private static final int CX_WEATHER = 10500;
@@ -80,11 +81,11 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:satelliteBuilder");
         assertTrue("satellite builder place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         String resp = exec("artest satellite-builder press-build 0 "
                 + x + " " + y + " " + z + " optical");
-        assertTrue("press-build must succeed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("press-build must succeed: " + resp, Reply.of(resp).ok());
 
         // Per-type resolution: optical must map to a primary-function meta.
         assertNotEquals("optical must resolve to a valid primary-function meta",
@@ -138,15 +139,19 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
         String place = exec("artest place 0 " + x + " " + y + " " + z
                 + " advancedrocketry:satelliteBuilder");
         assertTrue("satellite builder place failed: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         String resp = exec("artest satellite-builder press-build 0 "
                 + x + " " + y + " " + z + " weatherController");
         // Probe must surface the canAssemble-false branch as an error
         // (not crash, not silently succeed).
+        // Read OF THE FIELD: the producer writes a tail onto this one ("… after slot load"), so
+        // a prefix is the reading and the rendering around it is not searched.
+        Reply refusal = Reply.of("artest satellite-builder press-build", resp);
         assertTrue("expected canAssembleSatellite=false error for default chip + "
                         + "weatherController: " + resp,
-                resp.contains("canAssembleSatellite returned false"));
+                refusal.refused()
+                        && refusal.error().startsWith("canAssembleSatellite returned false"));
         // Primary-meta resolution must still succeed — the rejection is
         // about the chip slot, not the registry scan.
         assertNotEquals("weatherController must still resolve a primary meta even "
@@ -154,17 +159,16 @@ public class SatelliteBuilderPressBuildContractTest extends AbstractSharedServer
                 -1, extractInt(resp, PRIMARY_META));
     }
 
-    private static String extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return m.group(1);
+    private static String extract(String src, String field) {
+        String value = Reply.of(src).text(field);
+        return value;
     }
 
-    private static int extractInt(String src, Pattern pattern) {
-        return Integer.parseInt(extract(src, pattern));
+    private static int extractInt(String src, String field) {
+        return Integer.parseInt(extract(src, field));
     }
 
-    private static long extractLong(String src, Pattern pattern) {
-        return Long.parseLong(extract(src, pattern));
+    private static long extractLong(String src, String field) {
+        return Long.parseLong(extract(src, field));
     }
 }

@@ -1,9 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MissionCompletion;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -36,53 +40,52 @@ import static org.junit.Assert.assertTrue;
  */
 public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern MISSION_ID = Pattern.compile("\"missionId\":(-?\\d+)");
-    private static final Pattern PROGRESS = Pattern.compile("\"progress\":(-?\\d+\\.?\\d*(?:[eE]-?\\d+)?)");
+    /**
+     * The progress an advance of 2500 against a duration of 1000 must reach.
+     *
+     * <p>Not a threshold but the arrangement's own arithmetic: 2500/1000 is 2.5, so progress must
+     * be at least 2. Named so the two numbers above and the expectation cannot drift apart.</p>
+     */
+    private static final double MIN_PROGRESS_AFTER_ADVANCE = 2.0;
+
+    private static final String ROCKET_LIST_ID = "id";
+    private static final String MISSION_ID = "missionId";
+    private static final String PROGRESS = "progress";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
     private long buildRocketAndStartGasMission(int baseX, long duration) throws Exception {
-        int baseY = 64;
-        int baseZ = 500;
-        // Clear airspace so the assembler can scan a clean pad column.
-        ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-        ok(client().execute("artest rocket assemble 0 " + bx + " " + by + " " + bz));
+        final FixtureSite site = FixtureSite.openAir(0, baseX, 500);
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)), "simple", 2, 10,
+                "the craft is built and flown in this volume");
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("no rocket after assemble: " + list, lastId >= 0);
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("no rocket after assemble: " + list, !built.isEmpty());
+        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
 
         String start = ok(client().execute(
                 "artest mission start-gas 0 " + lastId + " " + duration + " water"));
-        assertFalse("start-gas must not error: " + start, start.contains("\"error\""));
-        Matcher mm = MISSION_ID.matcher(start);
-        assertTrue("missing missionId in start response: " + start, mm.find());
-        return Long.parseLong(mm.group(1));
+        assertFalse("start-gas must not error: " + start, Reply.of(start).has("error"));
+        Reply mmReply = Reply.of(start);
+        assertTrue("missing missionId in start response: " + start, mmReply.has(MISSION_ID));
+        return Long.parseLong(mmReply.text(MISSION_ID));
     }
 
     private double progressFromAdvance(long missionId, long ticks) throws Exception {
         String r = ok(client().execute("artest mission advance " + missionId + " " + ticks));
-        assertFalse("advance must not error: " + r, r.contains("\"error\""));
-        Matcher pm = PROGRESS.matcher(r);
-        assertTrue("missing progress in advance response: " + r, pm.find());
-        return Double.parseDouble(pm.group(1));
+        assertFalse("advance must not error: " + r, Reply.of(r).has("error"));
+        Reply pmReply = Reply.of(r);
+        assertTrue("missing progress in advance response: " + r, pmReply.has(PROGRESS));
+        return Double.parseDouble(pmReply.text(PROGRESS));
     }
 
     /** Progress fraction matches the (now - start) / duration ratio at
@@ -110,7 +113,7 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
         long mid = buildRocketAndStartGasMission(7100, 1000);
         double p = progressFromAdvance(mid, 2500);
         assertTrue("after advance 2500 / duration 1000, progress must be ≥ 2.0; got " + p,
-                p >= 2.0);
+                p >= MIN_PROGRESS_AFTER_ADVANCE);
     }
 
     /** Below progress=1.0 the mission is not yet completable — verify
@@ -129,14 +132,14 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     @Test
     public void completionFiresAtProgressOne() throws Exception {
         long mid = buildRocketAndStartGasMission(7300, 1000);
-        String resp = ok(client().execute("artest mission complete-now " + mid));
-        assertFalse("complete-now must not error: " + resp, resp.contains("\"error\""));
-        assertTrue("complete-now must report transition (wasDeadBefore=false): " + resp,
-                resp.contains("\"wasDeadBefore\":false"));
-        assertTrue("complete-now must mark mission dead: " + resp,
-                resp.contains("\"isDeadAfter\":true"));
-        assertTrue("complete-now must report completion fired: " + resp,
-                resp.contains("\"completed\":true"));
+        MissionCompletion resp = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("complete-now must report transition (wasDeadBefore=false): " + resp.raw(),
+                !resp.wasDeadBefore);
+        assertTrue("complete-now must mark mission dead: " + resp.raw(),
+                resp.isDeadAfter);
+        assertTrue("complete-now must report completion fired: " + resp.raw(),
+                resp.completed);
     }
 
     /** After completion, the DimensionProperties.tick loop removes the
@@ -150,16 +153,19 @@ public class MissionLifecyclePyramidTest extends AbstractSharedServerTest {
     @Test
     public void completionPrunesMissionFromSatelliteRegistry() throws Exception {
         long mid = buildRocketAndStartGasMission(7400, 1000);
-        String complete = ok(client().execute("artest mission complete-now " + mid));
-        assertTrue("complete-now must succeed: " + complete,
-                complete.contains("\"completed\":true"));
+        MissionCompletion complete = MissionCompletion.now(
+                cmd -> ok(client().execute(cmd)), mid);
+        assertTrue("complete-now must succeed: " + complete.raw(),
+                complete.completed);
 
         String state = "n/a";
         boolean pruned = false;
         for (int attempt = 0; attempt < 30; attempt++) {
             ok(client().execute("artest satellite force-tick-dim 0"));
             state = ok(client().execute("artest mission state " + mid));
-            if (state.contains("\"error\":\"mission not found\"")) {
+            // absence is the answer: a mission that still EXISTS answers no `error` at all,
+            // so "no error" is the not-yet-pruned state this loop is waiting out.
+            if ("mission not found".equals(Reply.of(state).textOr("error", null))) {
                 pruned = true;
                 break;
             }

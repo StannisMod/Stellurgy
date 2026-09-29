@@ -1,11 +1,16 @@
 package zmaster587.advancedRocketry.test.server;
 
 // migrated to AbstractSharedServerTest
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationPads;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -46,50 +51,40 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern STATION_ID_FROM_CREATE =
-            Pattern.compile("\"id\":(-?\\d+),\"orbitingBody\":");
+    private static final String ROCKET_LIST_ID = "id";
+    /** The station's own id. The regex this replaces anchored on the NEXT field so as not to match
+     *  some other {@code id}; reading by name needs no such anchor. */
+    private static final String STATION_ID_FROM_CREATE = "id";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    private int buildAndAssemble(int baseX, int baseY, int baseZ) throws Exception {
-        String fillAir = ok(client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fixture = ok(client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " simple"));
-        assertTrue("fixture failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1));
-        int by = Integer.parseInt(bp.group(2));
-        int bz = Integer.parseInt(bp.group(3));
-
-        String assemble = ok(client().execute(
-                "artest rocket assemble 0 " + bx + " " + by + " " + bz));
-        assertTrue("assemble failed: " + assemble, assemble.contains("\"ok\":true"));
+    private int buildAndAssemble(FixtureSite site) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        String assemble = RocketFixture.assembleAt(site, cmd -> ok(client().execute(cmd)),
+                "simple", 2, 10,
+                "the craft is built and flown in this volume");
+        assertTrue("assemble failed: " + assemble, Reply.of(assemble).ok());
 
         String list = ok(client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(list);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list empty after assemble: " + list, lastId >= 0);
-        return lastId;
+        java.util.List<RocketList.Entry> built = RocketList.of(list);
+        assertTrue("rocket list empty after assemble: " + list, !built.isEmpty());
+        return built.get(built.size() - 1).id;
     }
 
     private int createStation() throws Exception {
         String resp = ok(client().execute("artest station create 0"));
-        assertTrue("station create failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = STATION_ID_FROM_CREATE.matcher(resp);
-        assertTrue("could not parse station id: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("station create failed: " + resp, Reply.of(resp).ok());
+        Reply created = Reply.of("artest station create", resp);
+        assertTrue("could not parse station id: " + resp, created.has(STATION_ID_FROM_CREATE));
+        return created.integer(STATION_ID_FROM_CREATE);
     }
 
     @Test
@@ -100,13 +95,13 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         ok(client().execute("artest station set-autoland " + stationId + " 50 50 true"));
 
         // Sanity: pad starts free.
-        String padsBefore = ok(client().execute("artest station pads " + stationId));
-        assertTrue("pad alpha must start free: " + padsBefore,
-                padsBefore.contains("\"x\":50") && padsBefore.contains("\"occupied\":false"));
+        // Asked of PAD ALPHA. The `x`-and-`occupied` substring pair this replaces is satisfied by
+        // pad alpha being occupied as long as SOME other pad is free.
+        assertFalse("pad alpha must start free", pads(stationId).at(50, 50).occupied);
 
         // Build a rocket. The rocket itself stays on overworld; we just
         // need its guidance computer to invoke overrideLandingStation.
-        int rocketId = buildAndAssemble(2000, 64, 500);
+        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2000, 500));
 
         // Production cause-effect under test:
         //   gc.overrideLandingStation(station)
@@ -116,16 +111,15 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         String override = ok(client().execute(
                 "artest rocket override-landing " + rocketId + " " + stationId));
         assertTrue("override-landing probe must succeed: " + override,
-                override.contains("\"ok\":true"));
+                Reply.of(override).ok());
 
         // STATION-side observable: alpha must now be occupied. If a
         // regression moved or removed the setOccupied call in
         // getStationLocation, this fails — even though SpaceStationDockUndockTest
         // (which talks to setPadStatus directly) still passes.
-        String padsAfter = ok(client().execute("artest station pads " + stationId));
-        assertTrue("after override-landing, pad alpha MUST be occupied=true: " + padsAfter,
-                padsAfter.contains("\"x\":50")
-                        && padsAfter.contains("\"occupied\":true"));
+        StationPads.Pad alpha = pads(stationId).at(50, 50);
+        assertTrue("after override-landing, pad alpha MUST be occupied=true: " + alpha.raw(),
+                alpha.occupied);
     }
 
     @Test
@@ -138,16 +132,15 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         ok(client().execute("artest station add-pad " + stationId + " 60 60 beta"));
         // intentionally NOT calling set-autoland — pad stays opt-out.
 
-        int rocketId = buildAndAssemble(2100, 64, 500);
+        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2100, 500));
         ok(client().execute("artest rocket override-landing " + rocketId + " " + stationId));
 
-        String padsAfter = ok(client().execute("artest station pads " + stationId));
         // Pad beta must STILL be occupied=false because no auto-land
         // candidate was available.
-        assertTrue("override-landing on station with no auto-land pads must NOT "
-                        + "mark beta occupied: " + padsAfter,
-                padsAfter.contains("\"x\":60")
-                        && padsAfter.contains("\"occupied\":false"));
+        StationPads.Pad beta = pads(stationId).at(60, 60);
+        assertFalse("override-landing on station with no auto-land pads must NOT "
+                        + "mark beta occupied: " + beta.raw(),
+                beta.occupied);
     }
 
     @Test
@@ -162,28 +155,34 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
             ok(client().execute("artest station set-autoland " + stationId + " 70 " + z + " true"));
         }
 
-        int rocketId = buildAndAssemble(2200, 64, 500);
+        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2200, 500));
         ok(client().execute("artest rocket override-landing " + rocketId + " " + stationId));
 
-        String pads = ok(client().execute("artest station pads " + stationId));
-        // Count occupied=true occurrences within the pads array. The
-        // probe's output format is stable enough for a substring count
-        // to be a reliable proxy.
-        int occupiedCount = countSubstring(pads, "\"occupied\":true");
-        assertTrue("exactly one pad must flip occupied — observed " + occupiedCount
-                        + " in: " + pads,
-                occupiedCount == 1);
+        // Counted over the PARSED pads. What stood here counted the substring `"occupied":true`
+        // in the reply text and said so out loud — "the probe's output format is stable enough for
+        // a substring count to be a reliable proxy" — which is a count of renderings, and it is
+        // also the number a pad NAMED "occupied" would change.
+        StationPads pads = pads(stationId);
+        int occupiedCount = 0;
+        for (StationPads.Pad pad : pads.all()) {
+            if (pad.occupied) {
+                occupiedCount++;
+            }
+        }
+        assertEquals("exactly one pad must flip occupied — observed " + occupiedCount
+                        + " in: " + pads.raw(),
+                1, occupiedCount);
     }
 
     @Test
     public void overrideLandingStationOnUnknownStationProbeReturnsError() throws Exception {
         // Probe-API contract: bogus station id must produce a clean error,
         // not silently no-op against whatever happens to be in the registry.
-        int rocketId = buildAndAssemble(2300, 64, 500);
+        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2300, 500));
         String resp = ok(client().execute(
                 "artest rocket override-landing " + rocketId + " 9999999"));
         assertTrue("override-landing on unknown station must error: " + resp,
-                resp.contains("\"error\":\"station not found\""));
+                "station not found".equals(Reply.of(resp).text("error")));
     }
 
     @Test
@@ -202,16 +201,11 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         String resp = ok(client().execute(
                 "artest rocket override-landing 9999999 " + stationId));
         assertTrue("override-landing on unknown rocket must error: " + resp,
-                resp.contains("\"error\":\"rocket not found\""));
+                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
-    private static int countSubstring(String haystack, String needle) {
-        int count = 0;
-        int idx = 0;
-        while ((idx = haystack.indexOf(needle, idx)) != -1) {
-            count++;
-            idx += needle.length();
-        }
-        return count;
+    /** Every landing pad the station holds, addressable by position. */
+    private StationPads pads(int stationId) throws Exception {
+        return StationPads.byId(cmd -> ok(client().execute(cmd)), stationId);
     }
 }

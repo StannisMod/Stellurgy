@@ -122,6 +122,10 @@ public class TileAdvancedFlightComputer extends TileEntity
      */
     private boolean entryLatched = false;
 
+    /** Whether this computer has already said that its ledger row cannot answer a distance. Once per
+     *  tile: the scan runs every tick, and the condition persists until the row is rewritten. */
+    private boolean descentScanUnusableReported = false;
+
     /**
      * Said once per tile, not once per tick: a ship sitting against its cell's boundary would
      * otherwise report it twenty times a second. Not persisted — a fresh tile after a relocation
@@ -233,8 +237,15 @@ public class TileAdvancedFlightComputer extends TileEntity
     /**
      * The pilot's body-frame velocity setpoint (blocks/s) while Flight Assist is on - the ship's
      * cruise control. Holding a throttle ramps it; RELEASING LEAVES IT (the ship keeps cruising);
-     * cut (X) or brake (Shift) zero it. Live state only: not persisted, and re-captured from the
-     * ship's actual velocity whenever the pilot switches Flight Assist back on.
+     * cut (X) or brake (Shift) zero it, and it is re-captured from the ship's actual velocity
+     * whenever the pilot switches Flight Assist back on.
+     *
+     * <p><b>PERSISTED in this tile's NBT</b> ({@link #writeToNBT}/{@link #readFromNBT}), and so
+     * carried by every move that carries tile NBT: a craft under way stays under way across leaving
+     * a planet, landing on one, and crossing from one region of space to the next. That is the
+     * design, not an accident of the save format. The tile is also reconstructed by any chunk cycle
+     * under the ship, which is routine for a craft parked far from any player - so a cruise held
+     * only in memory would silently stop such a craft with nothing to show for it.</p>
      */
     private double[] velocitySetpoint = new double[]{0.0, 0.0, 0.0};
 
@@ -298,7 +309,8 @@ public class TileAdvancedFlightComputer extends TileEntity
      * {@code null} for "nothing commanded on that channel"; any attitude hold is dropped, since a
      * rate command and a pose command are different intentions and the pose would outrank the rate.
      *
-     * <p>Re-issued per tick by its callers, the way a real pilot's client re-sends his input.</p>
+     * <p>The command STANDS until {@link #clearProbeCommand} or another probe command replaces it; it
+     * lives on this tile instance, so a tile the chunk re-creates starts without one.</p>
      */
     public void commandProbeVelocity(double[] worldVelocity, double[] worldAngVel) {
         this.probeVelocity = worldVelocity;
@@ -397,14 +409,6 @@ public class TileAdvancedFlightComputer extends TileEntity
     private static final double TICKS_PER_SECOND = 20.0;
 
     /**
-     * What the force controller last did, written from the PHYSICS thread and read by a test probe.
-     * The controller runs where no breakpoint and no log line is welcome, so without this the only way
-     * to tell an under-powered brake from a mis-framed torque is to guess.
-     * {@code {dt, alphaX, alphaY, alphaZ, omegaX, omegaY, omegaZ, errorAngle}}
-     */
-    public static volatile double[] debugControllerState = null;
-
-    /**
      * Set (or clear) the seated pilot's Free Flight input for this computer. Server-side; called
      * by the pilot seat when a control packet arrives, and with {@code null} when the pilot
      * leaves. A {@code null} pilotInput lets {@link #update()} fall back to the static bring-up
@@ -467,17 +471,6 @@ public class TileAdvancedFlightComputer extends TileEntity
         // Same reasoning for the drive readout: a pilot mid-jump is exactly the pilot whose HUD must
         // keep saying something, and every gate below can decline to run for a ship in hyperspace.
         refreshHudDrive(world.getTotalWorldTime());
-        // Flight recorder, server-tick channel. Taken here, BEFORE every gate below, because the
-        // quantity it exists to measure is the interval between this tile's ticks: a tick the server
-        // never got round to is exactly the case in which every gate below would have skipped the
-        // sample. The command and setpoint recorded are last tick's published values - this sample
-        // describes the state the tick STARTS from, which is also the state the physics thread has
-        // been chasing since.
-        zmaster587.advancedRocketry.util.MotionTrace.game(
-                zmaster587.advancedRocketry.util.MotionTrace.keyOf(
-                        world.provider.getDimension(),
-                        getPos().getX(), getPos().getY(), getPos().getZ()),
-                pilotInput != null, magnitude(commandedVelocity), magnitude(velocitySetpoint));
         // BEFORE the physics gate below, and that is the whole point of its position here: this ship's
         // NAME is a property of its registry record, not of whether anybody is standing near enough
         // for the physics mod to simulate it. Left after the gate, a craft that is parked, unattended
@@ -490,6 +483,7 @@ public class TileAdvancedFlightComputer extends TileEntity
         // event can catch them and there is nothing to subscribe to; a cadence is the only honest
         // answer. Cheap enough at this period: one pass over the hull every few seconds per ship.
         tickMassRound();
+        announceLiveOnce();
         FreeFlightPhysics.Quat attitude = VSIntegration.getShipAttitude(world, getPos());
         if (attitude == null) {
             return; // not on a physics ship (or physics mod absent)
@@ -515,13 +509,19 @@ public class TileAdvancedFlightComputer extends TileEntity
         // no per-tick VS ship enumeration is ever needed — symmetric with the ascent ceiling read.
         if (world.provider instanceof zmaster587.advancedRocketry.space.WorldProviderSpaceSlot
                 && shipId != null) {
-            zmaster587.advancedRocketry.space.ShipLedger ledger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            String cellKey = zmaster587.advancedRocketry.space.SpaceSlotPool
-                    .cellKeyFor(world.provider.getDimension());
+            // ONE read of the server's space subsystem for this whole block: the seam carry below is
+            // asked of the same stack whose ledger then takes the position report.
+            zmaster587.advancedRocketry.space.SpaceSubsystem stack =
+                    zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
+            // THE CELL THIS SLOT IS, asked of the pool — never rebuilt from the slot's NAME. A
+            // coordinate recovered from a key carries no lattice width (a key cannot spell one), and
+            // this report is written straight into the ledger row that the descent scan below then
+            // does arithmetic on. Rebuilding here destroyed the width of every zoned cell one tick
+            // after a ship settled in it, and the scan took the server down on the next.
             zmaster587.advancedRocketry.space.GalacticCoord cell =
-                    zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(cellKey);
-            if (ledger != null && cell != null) {
+                    zmaster587.advancedRocketry.space.SpaceSlotPool
+                            .cellCoordFor(world.provider.getDimension());
+            if (stack != null && cell != null) {
                 double[] pose = VSIntegration.getShipWorldPosition(world, getPos());
                 if (pose != null) {
                     // FLYING OUT OF THE CELL. A ship far enough past its face is carried into the
@@ -531,9 +531,7 @@ public class TileAdvancedFlightComputer extends TileEntity
                     // the carry is asked BEFORE the position is reported, because a report that
                     // saturates is what a ship gets when the carry was refused, not what it gets while
                     // one is available.
-                    zmaster587.advancedRocketry.space.CellCrossingController seamCtl =
-                            zmaster587.advancedRocketry.space.SpaceSubsystem.cellCrossings();
-                    if (seamCtl != null && seamCtl.requestCarry(world.provider.getDimension(),
+                    if (stack.cellCrossings.requestCarry(world.provider.getDimension(),
                             getPos(), shipId, cell, pose)) {
                         return;
                     }
@@ -542,14 +540,14 @@ public class TileAdvancedFlightComputer extends TileEntity
                     // is bound to and the ledger row that protects that cell from collection, and none
                     // of those follow a pose over a cell face on their own. So a pose outside the local
                     // range is saturated - wrong by the overshoot, but naming a cell that exists.
-                    ledger.updatePosition(shipId, zmaster587.advancedRocketry.space.CellWorldMapper
+                    stack.ledger.updatePosition(shipId, zmaster587.advancedRocketry.space.CellWorldMapper
                             .coordOfPoseWithin(cell, pose[0], pose[1], pose[2]));
                     // Only a SETTLED ship can be at its cell's edge by flying there. A ship mid-crossing
                     // sits in the paste band — far below the cell's own pose range — for the few ticks
                     // between the paste and the settle, which reads as an escape on every single
                     // arrival. Reporting it there would spend this tile's one report on a ship that has
                     // not moved a block, and the real edge would then pass in silence.
-                    zmaster587.advancedRocketry.space.ShipLedger.Entry settledHere = ledger.get(shipId);
+                    zmaster587.advancedRocketry.space.ShipLedger.Entry settledHere = stack.ledger.get(shipId);
                     if (!cellEdgeReported
                             && settledHere != null
                             && settledHere.state == zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED
@@ -561,7 +559,7 @@ public class TileAdvancedFlightComputer extends TileEntity
                                         + "into the neighbour - its position is held at the boundary. "
                                         + "Either it has not yet passed the carry margin, or the carry was "
                                         + "refused (no free slot); the seam logs a refusal when it is one.",
-                                shipId, cellKey, pose[0], pose[1], pose[2]);
+                                shipId, cell.cellKey(), pose[0], pose[1], pose[2]);
                     }
                 }
             }
@@ -588,19 +586,38 @@ public class TileAdvancedFlightComputer extends TileEntity
         // planet dim. Proximity reads the ledger coord (self-reported above) + the body POIs of
         // the ship's own cell — no VS enumeration. Only planets/moons with a real dim are targets.
         if (!onPlanetSide && shipId != null) {
-            zmaster587.advancedRocketry.space.DescentController descentCtl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.descent();
-            zmaster587.advancedRocketry.space.ShipLedger descentLedger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
+            zmaster587.advancedRocketry.space.SpaceSubsystem descentStack =
+                    zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
             net.minecraft.server.MinecraftServer server = world.getMinecraftServer();
-            if (descentCtl != null && descentLedger != null && server != null) {
-                zmaster587.advancedRocketry.space.ShipLedger.Entry settled = descentLedger.get(shipId);
+            if (descentStack != null && server != null) {
+                zmaster587.advancedRocketry.space.ShipLedger.Entry settled = descentStack.ledger.get(shipId);
                 if (settled != null
                         && settled.state == zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED) {
                     zmaster587.advancedRocketry.universe.UniverseRegistry reg =
                             zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
-                    if (reg != null) {
-                        zmaster587.advancedRocketry.space.GalacticCoord shipCoord = settled.coord;
+                    zmaster587.advancedRocketry.space.GalacticCoord shipCoord = settled.coord;
+                    // A LEDGER ROW THAT CANNOT DO ARITHMETIC DOES NOT TAKE THE SERVER WITH IT.
+                    // Every distance method on a coordinate refuses a width-less one rather than
+                    // multiplying by a stand-in — correct, and fatal here: this runs inside
+                    // World.updateEntities, where vanilla turns any throw into a crash report and
+                    // stops the server. So the proximity scan asks first, says once what it is not
+                    // doing, and leaves the craft flyable; the pilot keeps full control and simply
+                    // gets no automatic descent while the row is unusable.
+                    if (shipCoord != null && !shipCoord.knowsItsLattice()) {
+                        if (!descentScanUnusableReported) {
+                            descentScanUnusableReported = true;
+                            zmaster587.advancedRocketry.AdvancedRocketry.logger.warn(
+                                    "[SPACE] ship {} is ledgered at '{}', a cell whose lattice width "
+                                            + "is unknown, so its descent proximity cannot be "
+                                            + "computed and NO descent will be offered here. This is "
+                                            + "not 'no body is close enough' - nothing was measured. "
+                                            + "The row was written without a width; a cell recovered "
+                                            + "from its key cannot carry one.",
+                                    shipId, shipCoord.cellKey());
+                        }
+                        shipCoord = null;
+                    }
+                    if (reg != null && shipCoord != null) {
                         long radius = zmaster587.advancedRocketry.space.ShipEntryController.DESCENT_RADIUS_BLOCKS;
                         for (zmaster587.advancedRocketry.universe.SystemBody body
                                 : descendTargetsIn(reg, shipCoord)) {
@@ -620,14 +637,16 @@ public class TileAdvancedFlightComputer extends TileEntity
                             // descend. The scan above must never allocate a dimension.
                             int targetDim = body.dimId();
                             if (targetDim == zmaster587.advancedRocketry.api.Constants.INVALID_PLANET) {
+                                // The BODY, not its cell: a moon shares its planet's address, so a
+                                // cell names a family and only the body says which of them was flown to.
                                 targetDim = zmaster587.advancedRocketry.universe.PlanetRealizer
-                                        .realize(server, body.name());
+                                        .realize(server, body);
                                 if (targetDim
                                         == zmaster587.advancedRocketry.api.Constants.INVALID_PLANET) {
                                     continue; // nothing landable here after all
                                 }
                             }
-                            if (descentCtl.requestDescent(world.provider.getDimension(),
+                            if (descentStack.descent.requestDescent(world.provider.getDimension(),
                                             getPos(), shipId, targetDim)) {
                                 // The crossing started: this tile was cut out of the slot world - stop
                                 // publishing from a stale tick. The re-assembled ship resumes planet-side.
@@ -653,14 +672,14 @@ public class TileAdvancedFlightComputer extends TileEntity
         }
 
         if (onPlanetSide) {
-            zmaster587.advancedRocketry.space.ShipEntryController entryCtl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.entry();
+            zmaster587.advancedRocketry.space.SpaceSubsystem entryStack =
+                    zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
             double[] shipPos = VSIntegration.getShipWorldPosition(world, getPos());
             int ceiling = entryCeiling();
-            if (entryCtl != null && shipPos != null && !entryLatched
+            if (entryStack != null && shipPos != null && !entryLatched
                     && zmaster587.advancedRocketry.space.ShipEntryController
                             .shouldTriggerEntry(false, shipPos[1], ceiling)
-                    && entryCtl.requestEntry(world.provider.getDimension(), getPos(),
+                    && entryStack.entry.requestEntry(world.provider.getDimension(), getPos(),
                             getOrCreateShipId())) {
                 // The crossing started: this tile has just been cut out of the world - do not
                 // publish commands from a stale tick. The re-assembled ship's own computer
@@ -975,11 +994,11 @@ public class TileAdvancedFlightComputer extends TileEntity
         // cannot say - it does not own this ship, or it is keyed differently - the honest answer is
         // still that the flight is under way.
         if (shipId != null) {
-            zmaster587.advancedRocketry.space.ShipTransitManager transit =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.transit();
-            if (transit != null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem stack =
+                    zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
+            if (stack != null) {
                 zmaster587.advancedRocketry.space.ShipTransitManager.Phase refined =
-                        transit.phaseOf(shipId.toString());
+                        stack.transit.phaseOf(shipId.toString());
                 if (refined != zmaster587.advancedRocketry.space.ShipTransitManager.Phase.NONE) {
                     return refined;
                 }
@@ -1125,6 +1144,27 @@ public class TileAdvancedFlightComputer extends TileEntity
     }
 
     /**
+     * Give this computer a NEW durable id, abandoning the one it carried.
+     *
+     * <p>For one case only: this computer is about to assemble a craft while a LIVE ship already
+     * holds the id it carries. That happens when the tile itself was duplicated — a cloned or
+     * copied flight computer carries the original's id in its NBT — and the duplicate is a different
+     * craft that has inherited a name it has no claim to. Re-minting here is what lets the assembly
+     * proceed under the invariant that a ship's identity is one value: the duplicate becomes its own
+     * ship, which is what a player who copied a computer expects, and the original keeps everything
+     * keyed on its name.</p>
+     *
+     * <p>Not a general setter, and deliberately not one: everything durable about a craft — the
+     * ledger row, the transit, every aboard tag — is keyed on this value, so re-minting outside that
+     * one case orphans the craft's whole history.</p>
+     */
+    public java.util.UUID mintNewShipId() {
+        shipId = java.util.UUID.randomUUID();
+        markDirty();
+        return shipId;
+    }
+
+    /**
      * Whether this craft's ship record already carries our durable id. Not persisted on purpose: a
      * tile is re-created whenever its ship is re-assembled, and that is exactly when the binding has
      * to be made again, against a possibly NEW ship record.
@@ -1209,6 +1249,36 @@ public class TileAdvancedFlightComputer extends TileEntity
         } catch (IllegalArgumentException notAUuid) {
             durableIdBound = true; // nothing here will ever parse; stop asking
         }
+    }
+
+    /** Whether THIS instance has already announced itself; see {@link #announceLiveOnce()}. */
+    private boolean announcedLive = false;
+
+    /**
+     * Say once, on the bus, that this computer can now be found in this world by its durable id.
+     *
+     * <p><b>The fact a waiting consumer actually needs, and the one nothing published.</b> Resolving
+     * a durable ship id means finding THIS tile among the world's loaded ones, so a consumer holding
+     * such an id — a login restore putting a crew member back on his deck, a jump resolving its
+     * craft — is waiting for the tile, not for the craft's physics. Those two are the same moment
+     * for a craft that loads while somebody watches, and come apart for one that was kept loaded
+     * while nobody was: its physics readiness edge passed long ago, and the arrival of its blocks
+     * moves no flag at all. A consumer subscribed to the readiness edge then waits for a transition
+     * that has been and gone, which is a wait that never ends.</p>
+     *
+     * <p>Announced from the tick loop rather than from {@code validate()} on purpose: a tile is
+     * constructed before it is bound to a ship and before its chunk is ticking, and an announcement
+     * made there would name an id this computer does not yet carry. Here it is one flag test per
+     * tick after the first, and the claim is exactly what the name says.</p>
+     */
+    private void announceLiveOnce() {
+        if (announcedLive || shipId == null) {
+            return;
+        }
+        announcedLive = true;
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                new zmaster587.advancedRocketry.api.event.ShipEvent.FlightComputerLiveEvent(
+                        world, shipId.toString(), getPos()));
     }
 
     /** Flight Assist on/off — the one piece of flight state the ship remembers.
@@ -1519,14 +1589,6 @@ public class TileAdvancedFlightComputer extends TileEntity
             tx = torque.x; ty = torque.y; tz = torque.z;
         }
 
-        debugControllerState = new double[]{
-                dt,
-                angAccel == null ? 0.0 : angAccel[0],
-                angAccel == null ? 0.0 : angAccel[1],
-                angAccel == null ? 0.0 : angAccel[2],
-                w.x, w.y, w.z,
-                angAccel == null ? -1.0 : 1.0};
-
         // Flight recorder, physics-thread channel: one sample per physics step. This is the clock
         // the ship's velocity actually integrates on, and it is NOT the game tick - an interval
         // that wanders here is the physics loop failing to hold its rate, which no server-side tick
@@ -1543,10 +1605,16 @@ public class TileAdvancedFlightComputer extends TileEntity
         double accelMag = calc.getMass() <= 0.0 ? 0.0
                 : Math.sqrt(fx * fx + fy * fy + fz * fz) / calc.getMass();
         BlockPos here = getPos();
-        zmaster587.advancedRocketry.util.MotionTrace.phys(
-                zmaster587.advancedRocketry.util.MotionTrace.keyOf(
+        zmaster587.advancedRocketry.command.test.MotionTrace.phys(
+                zmaster587.advancedRocketry.command.test.MotionTrace.keyOf(
                         physo.getWorld().provider.getDimension(),
                         here.getX(), here.getY(), here.getZ()),
+                // The WORLD tick this physics step ran against, read across the thread boundary as
+                // a plain long. This loop runs on the physics thread at its own rate, so several
+                // steps share one world tick and the healthy reading is that every tick got at
+                // least one - never that each carried exactly one. A counter incremented here
+                // would count steps and call them ticks, and could not show a missed tick at all.
+                physo.getWorld().getTotalWorldTime(),
                 // WHO drove this step, and on WHICH ship. A block's flight computer is one object on
                 // one ship, so a window carrying two of either is a state to go and look at rather
                 // than a number to average - and the two cases have different causes: two

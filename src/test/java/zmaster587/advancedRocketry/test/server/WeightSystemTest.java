@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -28,27 +27,31 @@ import static org.junit.Assert.assertTrue;
  */
 public class WeightSystemTest extends AbstractSharedServerTest {
 
-    private static final Pattern WEIGHT = Pattern.compile("\"weight\":(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)");
+    /** The sentinel the override test installs. The baseline must DIFFER from it, or the override
+     *  leg would pass without overriding anything. */
+    private static final double OVERRIDE_SENTINEL = 99.0;
+
+    private static final String WEIGHT = "weight";
 
     private void reset() throws Exception {
         String r = String.join("\n", client().execute("artest weight reset"));
-        assertTrue("weight reset failed: " + r, r.contains("\"ok\":true"));
+        assertTrue("weight reset failed: " + r, Reply.of(r).ok());
     }
 
     private double itemWeight(String id, int count) throws Exception {
         String r = String.join("\n", client().execute("artest weight item " + id + " " + count));
-        assertTrue("item " + id + " not registered: " + r, r.contains("\"registered\":true"));
-        Matcher m = WEIGHT.matcher(r);
-        assertTrue("no weight field for " + id + ": " + r, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("item " + id + " not registered: " + r, Reply.of(r).bool("registered"));
+        Reply mReply = Reply.of(r);
+        assertTrue("no weight field for " + id + ": " + r, mReply.has(WEIGHT));
+        return Double.parseDouble(mReply.text(WEIGHT));
     }
 
     private double fluidWeight(String name, int amount) throws Exception {
         String r = String.join("\n", client().execute("artest weight fluid " + name + " " + amount));
-        assertTrue("fluid " + name + " not registered: " + r, r.contains("\"registered\":true"));
-        Matcher m = WEIGHT.matcher(r);
-        assertTrue("no weight field for fluid " + name + ": " + r, m.find());
-        return Double.parseDouble(m.group(1));
+        assertTrue("fluid " + name + " not registered: " + r, Reply.of(r).bool("registered"));
+        Reply mReply = Reply.of(r);
+        assertTrue("no weight field for fluid " + name + ": " + r, mReply.has(WEIGHT));
+        return Double.parseDouble(mReply.text(WEIGHT));
     }
 
     @Test
@@ -77,10 +80,10 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     public void individualOverrideBeatsMaterial() throws Exception {
         reset();
         double material = itemWeight("minecraft:stone", 1);
-        assertTrue("baseline material weight must differ from the override sentinel", material != 99.0);
+        assertTrue("baseline material weight must differ from the override sentinel", material != OVERRIDE_SENTINEL);
 
         String set = String.join("\n", client().execute("artest weight set minecraft:stone 99.0"));
-        assertTrue("weight set failed: " + set, set.contains("\"ok\":true"));
+        assertTrue("weight set failed: " + set, Reply.of(set).ok());
 
         assertEquals("explicit individual override must win over the material table",
                 99.0, itemWeight("minecraft:stone", 1), 1e-4);
@@ -90,12 +93,12 @@ public class WeightSystemTest extends AbstractSharedServerTest {
     public void regexBeatsMaterialButIndividualBeatsRegex() throws Exception {
         reset();
         String reg = String.join("\n", client().execute("artest weight set-regex minecraft:gla.* 3.0"));
-        assertTrue("set-regex failed: " + reg, reg.contains("\"ok\":true"));
+        assertTrue("set-regex failed: " + reg, Reply.of(reg).ok());
         assertEquals("regex rule must win over the material table",
                 3.0, itemWeight("minecraft:glass", 1), 1e-4);
 
         String set = String.join("\n", client().execute("artest weight set minecraft:glass 50.0"));
-        assertTrue("weight set failed: " + set, set.contains("\"ok\":true"));
+        assertTrue("weight set failed: " + set, Reply.of(set).ok());
         assertEquals("individual override must win over a matching regex rule",
                 50.0, itemWeight("minecraft:glass", 1), 1e-4);
     }
@@ -107,7 +110,7 @@ public class WeightSystemTest extends AbstractSharedServerTest {
         assertTrue("fluid weight must be positive: " + base, base > 0);
 
         String sc = String.join("\n", client().execute("artest weight fuel-scale 2.0"));
-        assertTrue("fuel-scale failed: " + sc, sc.contains("\"ok\":true"));
+        assertTrue("fuel-scale failed: " + sc, Reply.of(sc).ok());
 
         assertEquals("fluid weight must scale by fuelMassScale",
                 2 * base, fluidWeight("water", 1000), 1e-4);

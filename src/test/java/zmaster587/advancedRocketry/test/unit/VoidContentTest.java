@@ -41,6 +41,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class VoidContentTest {
 
+    /** The temperature, in kelvin, below which a world is colder than anything a star lights.
+     *  The TEST'S OWN: the coldest lit world in the shipped table is well above it. */
+    private static final int STARLESS_KELVIN = 200;
+
     private static final long SEED = 0x5EEDF00DL;
     private static final int SPACING = GalaxyGenConfig.DEFAULT_MIN_SPACING;
 
@@ -242,7 +246,7 @@ public class VoidContentTest {
 
         assertEquals(SystemBodyKind.ROGUE_PLANET, profile.kind());
         assertTrue("a starless world is colder than anything a star lights: " + profile.temperatureKelvin()
-                + " K", profile.temperatureKelvin() < 200);
+                + " K", profile.temperatureKelvin() < STARLESS_KELVIN);
         assertTrue("but it is not at absolute zero either", profile.temperatureKelvin() > 0);
         assertFalse("free oxygen is biology AND a gas; a world whose air is ice on the ground has neither",
                 profile.hasOxygen());

@@ -104,11 +104,13 @@ public class DriveLadderTest {
         // not change the bill for a trip, only how fast it is paid. If this ever stops holding, size
         // has started buying part of the efficiency and the two knobs have blurred into one.
         double distance = blocksForLightYears(10d);
-        double small = JumpSpeed.routeEnergy(distance, DriveTuning.BASELINE_SHIP_MASS,
+        // Two byte-identical `routeEnergy` calls stood here under the message "route energy must not
+        // read drive power at all", compared to each other. Nothing varied between them, so the claim
+        // was asserted by a tautology — and drive power is not a parameter of routeEnergy, so no pair
+        // of calls to it can carry that claim. The flight measurement below can, and does: it varies
+        // the power from BASELINE to MAX and requires the bill to agree within 2%.
+        double interstellar = JumpSpeed.routeEnergy(distance, DriveTuning.BASELINE_SHIP_MASS,
                 DriveTier.INTERSTELLAR);
-        double large = JumpSpeed.routeEnergy(distance, DriveTuning.BASELINE_SHIP_MASS,
-                DriveTier.INTERSTELLAR);
-        assertEquals("route energy must not read drive power at all", small, large, 0d);
 
         // And the same claim measured THROUGH the speed law rather than off the closed form, because the
         // closed form is where the cancellation could be true while the flight disagreed.
@@ -121,7 +123,7 @@ public class DriveLadderTest {
         // A later generation is CHEAPER per unit distance — that is what efficiency means.
         assertTrue("a galactic drive must cost less energy for the same leg",
                 JumpSpeed.routeEnergy(distance, DriveTuning.BASELINE_SHIP_MASS, DriveTier.GALACTIC)
-                        < small);
+                        < interstellar);
     }
 
     /** The bill as actually flown: the per-tick draw times the ticks the speed law produces. */

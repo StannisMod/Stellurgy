@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -9,8 +10,6 @@ import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -26,7 +25,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteIdChipPersistenceTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
+    /** The power this scenario stores before the restart, read back after it. Not a threshold. */
+    private static final int STORED_POWER = 4000;
+
+    private static final String ID = "id";
 
     private Path workDir;
     private RealDedicatedServerHarness firstBoot;
@@ -54,15 +56,15 @@ public class SatelliteIdChipPersistenceTest {
         String create = String.join("\n", firstBoot.client().execute(
                 "artest satellite create 0 composition 200 4000 2048"));
         assertTrue("satellite create failed on first boot: " + create,
-                create.contains("\"ok\":true"));
-        Matcher m = ID.matcher(create);
-        assertTrue("create response missing satellite id: " + create, m.find());
-        long satId = Long.parseLong(m.group(1));
+                Reply.of(create).ok());
+        Reply mReply = Reply.of(create);
+        assertTrue("create response missing satellite id: " + create, mReply.has(ID));
+        long satId = Long.parseLong(mReply.text(ID));
 
         String preStop = String.join("\n", firstBoot.client().execute(
                 "artest satellite info 0 " + satId));
         assertTrue("pre-stop satellite info must report composition: " + preStop,
-                preStop.contains("\"type\":\"composition\""));
+                "composition".equals(Reply.of(preStop).text("type")));
 
         firstBoot.close();
         firstBoot = null;
@@ -71,8 +73,8 @@ public class SatelliteIdChipPersistenceTest {
         String postBoot = String.join("\n", secondBoot.client().execute(
                 "artest satellite info 0 " + satId));
         assertTrue("satellite must survive restart and resolve by id "
-                + satId + ": " + postBoot, postBoot.contains("\"type\":\"composition\""));
+                + satId + ": " + postBoot, "composition".equals(Reply.of(postBoot).text("type")));
         assertTrue("powerStorage must persist across restart: " + postBoot,
-                postBoot.contains("\"powerStorage\":4000"));
+                (Reply.of(postBoot).integer("powerStorage") == STORED_POWER));
     }
 }

@@ -1,12 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.LedgerEntry;
+import zmaster587.advancedRocketry.test.MaterializedCell;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Test;
 
 import zmaster587.advancedRocketry.universe.GalaxyGenConfig;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -65,6 +66,11 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
     /** A body a few thousand blocks out, i.e. the geometry a pilot has to fly at to descend. */
     private static final String BODY_LOCAL = "2900 0 -1200";
 
+    /** The feed, as the probe reports it straight off the production packet: one entry per cell. */
+    private static final String FEED = "feed";
+    private static final String SLOT_DIM = "slotDim";
+    private static final String BODY_COUNT = "bodyCount";
+
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
@@ -80,12 +86,12 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
     @Test
     public void aLiveCellWithNoShipInItIsStillToldWhatIsAroundIt() throws Exception {
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // Hold the cell live with an occupant refcount and NO ship anywhere in the ledger.
-        String occupy = exec("artest space occupy " + CELL_NO_SHIP);
-        assertTrue("occupy must materialize the cell: " + occupy, occupy.contains("\"ok\":true"));
-        int slotDim = jsonInt(occupy, "slotDim");
+        int slotDim = MaterializedCell.at(this::exec, CELL_NO_SHIP)
+                .requireMaterialized("occupy must materialize the cell")
+                .slotDim();
 
         // CONTROL: the cell is live and its feed entry exists, but it holds nothing yet. A later
         // non-zero count is then attributable to the POI and to nothing else.
@@ -95,7 +101,7 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
 
         String poi = exec("artest space add-poi " + CELL_NO_SHIP + " " + BODY_LOCAL + " PLANET 0 7");
         assertTrue("add-poi must register a descend target: " + poi,
-                poi.contains("\"ok\":true") && poi.contains("\"descendTarget\":true"));
+                Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget"));
 
         String after = exec("artest space bodies");
         assertEquals("the cell's own body must reach the feed with no ship in the cell at all; "
@@ -108,16 +114,16 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
     @Test
     public void aLiveCellWhoseOnlyShipIsMidJumpIsStillToldWhatIsAroundIt() throws Exception {
         String setup = exec("artest space entry-setup 2");
-        assertTrue("entry setup failed: " + setup, setup.contains("\"ok\":true"));
+        assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         String poi = exec("artest space add-poi " + CELL_MID_JUMP + " " + BODY_LOCAL + " MOON 0 7");
         assertTrue("add-poi must register a descend target: " + poi,
-                poi.contains("\"ok\":true") && poi.contains("\"descendTarget\":true"));
+                Reply.of(poi).ok() && Reply.of(poi).bool("descendTarget"));
 
         // A settled ship first: this is the state the feed already handled, and it is the control that
         // proves the arrangement can produce a body at all.
         String settle = exec("artest space ledger-settle " + CELL_MID_JUMP + " -1");
-        assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
+        assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
         int slotDim = jsonInt(settle, "slotDim");
         String shipId = jsonString(settle, "shipId");
         String settled = exec("artest space bodies");
@@ -128,13 +134,18 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
         // slot, still holds its body, and whoever is standing in it is still looking at it.
         String transit = exec("artest space ledger-transit " + CELL_MID_JUMP + " " + shipId);
         assertTrue("ledger-transit must record the ship as in transit: " + transit,
-                transit.contains("\"state\":\"IN_TRANSIT\""));
+                "IN_TRANSIT".equals(Reply.of(transit).text("state")));
 
         String bodies = exec("artest space bodies");
-        assertTrue("the arrangement must really have a non-settled ship in this cell; " + bodies,
-                bodies.contains("\"state\":\"IN_TRANSIT\""));
+        // THIS scenario's ship, by the uuid it was ledgered under, and its state read off that row.
+        // Addressing the row by the STATE asks the feed "is anything in transit", which every other
+        // scenario's leftover jump answers — and would answer with this ship missing entirely.
+        assertEquals("the feed must carry this ship as the one in transit: " + bodies,
+                "IN_TRANSIT",
+                Reply.of("artest space bodies", bodies)
+                        .element("ships", "ship", shipId).text("state"));
         assertEquals("the cell is still bound to the same slot world; " + bodies,
-                slotDim, jsonInt(exec("artest space ledger-get " + shipId), "slotDim"));
+                slotDim, LedgerEntry.forShip(this::exec, shipId).slotDim());
         assertEquals("a cell's bodies must not vanish from its sky because a ship in it is mid-jump; "
                 + bodies, 1, feedBodyCount(bodies, slotDim));
     }
@@ -147,20 +158,24 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
      * world is not in the feed" are the two halves a blank sky splits into.
      */
     private static int feedBodyCount(String json, int slotDim) {
-        Matcher m = Pattern.compile("\\{\"slotDim\":" + slotDim + ",\"bodyCount\":(\\d+)")
-                .matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        for (String entry : Reply.of("the system-bodies feed", json).objectArray(FEED)) {
+            Reply cell = Reply.of("one feed entry", entry);
+            // absence is the answer: this walks a LIST looking for one cell, and an entry
+            // that carries no slot dim is not the one being looked for.
+            if (cell.integerOr(SLOT_DIM, Integer.MIN_VALUE) == slotDim) {
+                return cell.integer(BODY_COUNT);
+            }
+        }
+        return -1;
     }
 
     private static int jsonInt(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(-?\\d+)").matcher(json);
-        assertTrue("probe response carries no numeric \"" + field + "\": " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).integer(field);
     }
 
     private static String jsonString(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":\"([^\"]*)\"").matcher(json);
-        assertTrue("probe response carries no string \"" + field + "\": " + json, m.find());
-        return m.group(1);
+        assertTrue("probe response carries no string \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).text(field);
     }
 }

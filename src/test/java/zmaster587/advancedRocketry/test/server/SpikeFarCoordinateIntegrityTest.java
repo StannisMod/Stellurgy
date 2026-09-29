@@ -3,10 +3,14 @@ package zmaster587.advancedRocketry.test.server;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.EntityState;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.Reply;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -37,7 +41,12 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
     private static final int[] X_LADDER = {2_000_000, 8_000_000, 16_000_000, 28_000_000};
 
     private static final int OVERWORLD = 0;
-    private static final int PLACE_Y = 100;
+    private static final int PLACE_Y = FixtureSite.OPEN_AIR_Y;
+
+    /** The two ids this control is about, and the field the sampler reports the column's top in. */
+    private static final String TOP_BLOCK = "topBlock";
+    private static final String AIR = "minecraft:air";
+    private static final String DIAMOND = "minecraft:diamond_block";
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
@@ -53,15 +62,22 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
             exec("artest chunk forceload " + OVERWORLD + " " + chunkX + " 0");
             // Generation at a fresh, distant chunk is not instant; give the server real ticks rather
             // than reading an empty chunk and calling it a ceiling.
-            ServerTicks.await(client(), OVERWORLD, 40);
+            GameTicks.advanceWorld(client(), OVERWORLD, 40);
 
             String sample = exec("artest worldgen sample " + OVERWORLD + " " + chunkX + " 0");
             String placed = exec("artest place " + OVERWORLD + " " + x + " " + PLACE_Y + " 0 "
                     + "minecraft:diamond_block");
             String readBack = exec("artest block at " + OVERWORLD + " " + x + " " + PLACE_Y + " 0");
 
-            boolean terrainOk = !sample.contains("\"error\"") && !sample.contains("minecraft:air");
-            boolean storageOk = readBack.contains("diamond_block");
+            // The sample's own fields, not its rendering: `contains("minecraft:air")` was
+            // satisfied by the id appearing anywhere in the sample — including in a neighbouring
+            // column it also reports — so a chunk that generated as pure air could read as sound.
+            Reply sampled = Reply.of("artest worldgen sample", sample);
+            boolean terrainOk = !sampled.refused() && !AIR.equals(sampled.text(TOP_BLOCK));
+            // And the id, compared: `contains("diamond_block")` also accepts a block whose own
+            // name merely ends in it, which is the reading this control exists to make exact.
+            // the producer always writes `block` for a loaded dimension, and this is dim 0.
+            boolean storageOk = DIAMOND.equals(Reply.of("artest block at", readBack).text("block"));
             report.add("x=" + x + " terrain=" + (terrainOk ? "ok" : "FAIL") + " storage="
                     + (storageOk ? "ok" : "FAIL") + " sample=" + oneLine(sample)
                     + " placed=" + oneLine(placed) + " readBack=" + oneLine(readBack));
@@ -100,7 +116,7 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
         List<String> broken = new ArrayList<>();
         for (int x : X_LADDER) {
             exec("artest chunk forceload " + OVERWORLD + " " + (x >> 4) + " 0");
-            ServerTicks.await(client(), OVERWORLD, 40);
+            GameTicks.advanceWorld(client(), OVERWORLD, 40);
 
             String near = spawnAndRead(x + 0.5500d);
             String far = spawnAndRead(x + 0.6000d);
@@ -137,15 +153,15 @@ public class SpikeFarCoordinateIntegrityTest extends AbstractHeadlessServerTest 
     private String spawnAndRead(double x) throws Exception {
         String spawned = exec("artest vs drop-stand " + OVERWORLD + " "
                 + String.format(java.util.Locale.ROOT, "%.4f", x) + " 150 0.5");
-        java.util.regex.Matcher idm = java.util.regex.Pattern
-                .compile("\"entityId\"\\s*:\\s*(-?\\d+)").matcher(spawned);
-        if (!idm.find()) {
+        Reply drop = Reply.of("artest vs drop-stand", spawned);
+        if (!drop.has("entityId")) {
             return "NO-SPAWN:" + oneLine(spawned);
         }
-        String info = exec("artest entity info " + OVERWORLD + " " + idm.group(1));
-        java.util.regex.Matcher xm = java.util.regex.Pattern
-                .compile("\"posX\"\\s*:\\s*([-0-9.eE]+)").matcher(info);
-        return xm.find() ? xm.group(1) : ("UNREADABLE:" + oneLine(info));
+        EntityState stand = EntityState.byId(this::exec, OVERWORLD, drop.integer("entityId"));
+        if (!stand.alive) {
+            return "UNREADABLE:" + oneLine(stand.raw());
+        }
+        return String.valueOf(stand.posX());
     }
 
     private static String oneLine(String s) {

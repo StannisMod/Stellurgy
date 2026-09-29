@@ -1,11 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -44,11 +45,11 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
 
-    private static final Pattern CFG_VALUE = Pattern.compile("\"value\":(-?\\d+)");
-    private static final Pattern ATM_TYPE  = Pattern.compile("\"type\":\"([^\"]*)\"");
+    private static final String CFG_VALUE = "value";
+    private static final String ATM_TYPE = "type";
 
     private static final int DIM = 0;
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 2800;
     /** Two patches, X-spread far apart so the two blobs never interact. */
     private static final int CX_WITHIN = 2800;
@@ -111,14 +112,14 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
 
     private int readConfigInt(String key) throws Exception {
         String resp = exec("artest config get " + key);
-        Matcher m = CFG_VALUE.matcher(resp);
-        assertTrue("could not read config " + key + ": " + resp, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("could not read config " + key + ": " + resp, mReply.has(CFG_VALUE));
+        return Integer.parseInt(mReply.text(CFG_VALUE));
     }
 
     private void setConfig(String key, int value) throws Exception {
         String resp = exec("artest config set " + key + " " + value);
-        assertTrue("could not set config " + key + ": " + resp, resp.contains("\"ok\":true"));
+        assertTrue("could not set config " + key + ": " + resp, Reply.of(resp).ok());
     }
 
     /** A fully enclosed 1×1×len air tube running +X from the vent, wrapped
@@ -133,11 +134,11 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
     private void sealVent(int cx) throws Exception {
         String resp = exec("artest place " + DIM + " " + cx + " " + CY + " " + CZ
                 + " advancedrocketry:oxygenVent");
-        assertTrue("vent place failed: " + resp, resp.contains("\"placed\":true"));
+        assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed"));
         String e = exec("artest energy inject " + DIM + " " + cx + " " + CY + " " + CZ + " 1000000");
-        assertTrue("energy inject failed: " + e, e.contains("\"ok\":true"));
+        assertTrue("energy inject failed: " + e, Reply.of(e).ok());
         String o = exec("artest fluid inject " + DIM + " " + cx + " " + CY + " " + CZ + " oxygen 16000");
-        assertTrue("oxygen inject failed: " + o, o.contains("\"ok\":true"));
+        assertTrue("oxygen inject failed: " + o, Reply.of(o).ok());
         exec("artest tile force-tick " + DIM + " " + cx + " " + CY + " " + CZ + " 1");
         exec("artest vent reseal " + DIM + " " + cx + " " + CY + " " + CZ);
         exec("artest tile force-tick " + DIM + " " + cx + " " + CY + " " + CZ + " 5");
@@ -145,8 +146,8 @@ public class OxygenVentBoundedByBlobCapTest extends AbstractSharedServerTest {
 
     private String atmosphereTypeAt(int x, int y, int z) throws Exception {
         String info = exec("artest atmosphere get " + DIM + " " + x + " " + y + " " + z);
-        Matcher m = ATM_TYPE.matcher(info);
-        assertTrue("atmosphere type not found in: " + info, m.find());
-        return m.group(1);
+        Reply mReply = Reply.of(info);
+        assertTrue("atmosphere type not found in: " + info, mReply.has(ATM_TYPE));
+        return mReply.text(ATM_TYPE);
     }
 }

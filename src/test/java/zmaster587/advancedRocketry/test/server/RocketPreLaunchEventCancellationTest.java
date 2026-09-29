@@ -1,12 +1,16 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.After;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
+import zmaster587.advancedRocketry.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
@@ -51,15 +55,11 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern LAUNCH_COUNTER =
-            Pattern.compile("\"launchCounter\":(-?\\d+)");
-    private static final Pattern OBSERVED = Pattern.compile("\"observed\":(-?\\d+)");
-    private static final Pattern CANCELLED = Pattern.compile("\"cancelled\":(-?\\d+)");
+    private static final String ENTITY_ID = "entityId";
+    private static final String OBSERVED = "observed";
+    private static final String CANCELLED = "cancelled";
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     /** Two well-separated rocket fixtures so the cancel test and the
      *  no-cancel test each have their own pad — same shared harness,
      *  different geometry, no cross-state. */
@@ -83,22 +83,21 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
             // the event; the test listener cancels it.
             String arm = exec("artest rocket arm-prelaunch-cancel");
             assertTrue("arm probe failed: " + arm,
-                    arm.contains("\"armed\":true"));
+                    Reply.of(arm).bool("armed"));
 
             String launch = exec("artest rocket launch " + entityId + " true prepare");
             assertTrue("rocket launch (prepare mode) must not error even when "
                             + "cancelled: " + launch,
-                    launch.contains("\"ok\":true") || launch.contains("\"entityId\":"));
+                    Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
-            String info = exec("artest rocket info " + entityId);
-            int counter = extract(info, LAUNCH_COUNTER);
+            RocketInfo info = RocketInfo.byId(WorldCommandFixtures::exec, entityId);
             assertEquals("cancelled prepareLaunch must leave LAUNCH_COUNTER "
                             + "at its default (-1) — countdown must NOT have "
-                            + "started: " + info,
-                    -1, counter);
-            assertTrue("isInFlight must remain false after cancelled launch: "
-                            + info,
-                    info.contains("\"isInFlight\":false"));
+                            + "started: " + info.raw(),
+                    -1, info.launchCounter);
+            assertFalse("isInFlight must remain false after cancelled launch: "
+                            + info.raw(),
+                    info.inFlight);
 
             // The listener must have observed the event and cancelled it —
             // proves the test toggle actually wired through.
@@ -122,47 +121,35 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
         String launch = exec("artest rocket launch " + entityId + " true prepare");
         assertTrue("rocket launch (prepare mode) must succeed when not cancelled: "
                         + launch,
-                launch.contains("\"ok\":true") || launch.contains("\"entityId\":"));
+                Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
-        String info = exec("artest rocket info " + entityId);
-        int counter = extract(info, LAUNCH_COUNTER);
+        RocketInfo info = RocketInfo.byId(WorldCommandFixtures::exec, entityId);
         assertEquals("uncancelled prepareLaunch must seed LAUNCH_COUNTER to 200 "
-                        + "(the countdown tick budget): " + info,
-                200, counter);
+                        + "(the countdown tick budget): " + info.raw(),
+                200, info.launchCounter);
     }
 
     // ─── helpers ───────────────────────────────────────────────────────
 
     private int buildAndAssemble(int baseX) throws Exception {
-        // Reproduces RocketAssemblySmokeTest.buildAndAssemble's hygiene
-        // without depending on its package-private helper.
-        int cx1 = (baseX - 2) >> 4, cz1 = (CZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (CZ + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (baseX - 2) + " " + (CY + 1) + " " + (CZ - 2)
-                + " " + (baseX + 7) + " " + (CY + 10) + " " + (CZ + 7)
-                + " minecraft:air");
-
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY + " " + CZ
-                + " simple");
-        assertTrue("fixture build failed: " + fixture,
-                fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture missing builderPos: " + fixture, bp.find());
-
-        String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        // FIRST link, and it ASSERTS where the pair it replaces DUG. The comment that stood here
+        // said it "reproduces RocketAssemblySmokeTest's hygiene without depending on its helper" —
+        // which is the copied-idiom shape exactly: the copy came over, the reason stayed behind,
+        // and both fills threw away the one number they measured. There is a shared builder now.
+        String assemble = RocketFixture.assembleAt(FixtureSite.openAir(0, baseX, CZ),
+                cmd -> exec(cmd), "simple", 2, 10,
+                "the craft whose pre-launch event this scenario cancels stands in this volume");
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId in assemble response: " + assemble, eim.find());
-        return Integer.parseInt(eim.group(1));
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId in assemble response: " + assemble, eimReply.has(ENTITY_ID));
+        return Integer.parseInt(eimReply.text(ENTITY_ID));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

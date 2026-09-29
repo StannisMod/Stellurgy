@@ -1,9 +1,14 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
+import zmaster587.advancedRocketry.test.FixtureSite;
+
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -39,7 +44,7 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
      * row far from other test patches. Position-isolated from MachineDomainSmokeSuite
      * (x ≥ 700, peaking at 2200).
      */
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int Z_ROCKET = 2600;
     private static final int Z_UV     = 2600;
     private static final int X_ROCKET = 2500;
@@ -52,28 +57,28 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
                 "artest place 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET
                         + " advancedrocketry:rocketBuilder"));
         assertTrue("rocketBuilder place failed: " + placeRocket,
-                placeRocket.contains("\"placed\":true"));
+                Reply.of(placeRocket).bool("placed"));
 
         String rocketInfo = join(client().execute(
                 "artest machine info 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET));
         // TileRocketAssemblingMachine is the production target — pin it.
-        assertTrue("rocketBuilder must report TileRocketAssemblingMachine: " + rocketInfo,
-                rocketInfo.contains("TileRocketAssemblingMachine"));
+        assertEquals("rocketBuilder must report TileRocketAssemblingMachine: " + rocketInfo,
+                "TileRocketAssemblingMachine", MachineInfo.of(rocketInfo).tileSimpleName());
         // It must NOT report the UV class.
-        assertTrue("rocketBuilder unexpectedly reported the UV class: " + rocketInfo,
-                !rocketInfo.contains("TileUnmannedVehicleAssembler"));
+        assertNotEquals("rocketBuilder unexpectedly reported the UV class: " + rocketInfo,
+                "TileUnmannedVehicleAssembler", MachineInfo.of(rocketInfo).tileSimpleName());
 
         // ─── Place the UV / deployable rocket assembler ──────────────────
         String placeUv = join(client().execute(
                 "artest place 0 " + X_UV + " " + Y + " " + Z_UV
                         + " advancedrocketry:deployableRocketBuilder"));
         assertTrue("deployableRocketBuilder place failed: " + placeUv,
-                placeUv.contains("\"placed\":true"));
+                Reply.of(placeUv).bool("placed"));
 
         String uvInfo = join(client().execute(
                 "artest machine info 0 " + X_UV + " " + Y + " " + Z_UV));
-        assertTrue("deployableRocketBuilder must report TileUnmannedVehicleAssembler: " + uvInfo,
-                uvInfo.contains("TileUnmannedVehicleAssembler"));
+        assertEquals("deployableRocketBuilder must report TileUnmannedVehicleAssembler: " + uvInfo,
+                "TileUnmannedVehicleAssembler", MachineInfo.of(uvInfo).tileSimpleName());
 
         // ─── Class-identity pin ──────────────────────────────────────────
         // Extract the tileClass JSON values and assert they differ. A
@@ -89,24 +94,30 @@ public class UvAssemblerDivergesFromRocketAssemblerTest extends AbstractHeadless
         // is a real, independent tile-entity — not a shared-state pun).
         String rocketRefetch = join(client().execute(
                 "artest machine info 0 " + X_ROCKET + " " + Y + " " + Z_ROCKET));
-        assertTrue("rocketBuilder must remain queryable after UV placement: " + rocketRefetch,
-                rocketRefetch.contains("TileRocketAssemblingMachine"));
-        assertTrue("rocketBuilder must NOT be mutated by UV placement: " + rocketRefetch,
-                !rocketRefetch.contains("TileUnmannedVehicleAssembler"));
+        assertEquals("rocketBuilder must remain queryable after UV placement: " + rocketRefetch,
+                "TileRocketAssemblingMachine", MachineInfo.of(rocketRefetch).tileSimpleName());
+        assertNotEquals("rocketBuilder must NOT be mutated by UV placement: " + rocketRefetch,
+                "TileUnmannedVehicleAssembler", MachineInfo.of(rocketRefetch).tileSimpleName());
     }
 
     private static String join(java.util.List<String> resp) {
         return String.join("\n", resp);
     }
 
-    /** Pull the tileClass JSON value out of an {@code /artest machine info}
-     *  response. Returns the raw class name (FQN) or empty string on miss. */
+    /**
+     * The {@code tileClass} an {@code artest machine info} reply reports, refusing when it carries
+     * none.
+     *
+     * <p>It used to slice the reply by index off the needle {@code "\"tileClass\":\""} and answer
+     * {@code ""} on a miss. Two classes being "different" is this test's whole claim, and two
+     * empty strings are EQUAL — so a reply that stopped carrying the field at all would have made
+     * the assertion fail for a reason that has nothing to do with the two blocks, while printing
+     * both replies and looking like a real verdict.</p>
+     */
     private static String extractTileClass(String response) {
-        String needle = "\"tileClass\":\"";
-        int start = response.indexOf(needle);
-        if (start < 0) return "";
-        start += needle.length();
-        int end = response.indexOf('"', start);
-        return end < 0 ? "" : response.substring(start, end);
+        // No `requireOk` here, and that is not an omission: `artest machine info` reports a flat
+        // object with no `ok` field at all, so demanding one refuses every healthy reply. Measured
+        // — the first version of this line did exactly that.
+        return Reply.of("artest machine info", response).text("tileClass");
     }
 }

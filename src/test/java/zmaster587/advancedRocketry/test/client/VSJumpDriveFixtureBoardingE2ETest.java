@@ -1,26 +1,22 @@
 package zmaster587.advancedRocketry.test.client;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
-import com.github.stannismod.forge.testing.client.ClientBot;
-import com.github.stannismod.forge.testing.client.RealClientHarness;
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.google.gson.JsonObject;
 
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
 import zmaster587.advancedRocketry.hyperdrive.DriveTuning;
+import zmaster587.advancedRocketry.test.DriveInfo;
+import zmaster587.advancedRocketry.test.NavStatus;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipInfo;
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertTrue;
 
@@ -48,34 +44,62 @@ import static org.junit.Assert.assertTrue;
  *       flight computer.</li>
  *   <li><b>Both consoles answer a real key press</b> — the same aim-and-press the human performs,
  *       through the same code path, with the crosshair confirmed on the intended block before every
- *       press so a red names the hop that failed rather than merely the outcome.</li>
+ *       press so a red names the hop that failed rather than merely the outcome. Each press is
+ *       measured on the ordered logs either side of it rather than by polling for its result: the
+ *       seat as {@code right_click_block} &rarr; {@code mount} on the server, the console as the
+ *       server's {@code right_click_block} and the client's own {@code client_gui_opened} — which
+ *       is what separates a press the server never received from one the block declined to
+ *       answer.</li>
  * </ol>
  *
- * <p>Assembly here is ARRANGEMENT, not subject: it is driven by the probe. Manual server + client
- * lifecycle, matching the other ship-boarding e2e tests. Gated on real Valkyrien Skies — run with
- * {@code -PwithVS}.</p>
+ * <p>Assembly here is ARRANGEMENT, not subject: it is driven by the probe.</p>
+ *
+ * <p>On the shared VS client base. It ran its own server + client pair per method until 2026-08-23,
+ * "matching the other ship-boarding e2e tests" — a reason to resemble its neighbours, never a reason
+ * to boot: its root was a fresh empty temp dir handed to a harness that makes one of those itself,
+ * and nothing was written into it before the server started. Off the shared base an arrangement
+ * failure here could not be TYPED as one either, and that is the half that mattered.</p>
  */
-public class VSJumpDriveFixtureBoardingE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2ETest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_Y = Pattern.compile("\"posY\":(-?[0-9.E\\-]+)");
-    private static final Pattern SEAT_SUB = Pattern.compile(
-            "\"seatX\":(-?\\d+),\"seatY\":(-?\\d+),\"seatZ\":(-?\\d+)");
-    private static final Pattern AFC_SUB = Pattern.compile(
-            "\"afcX\":(-?\\d+),\"afcY\":(-?\\d+),\"afcZ\":(-?\\d+)");
-    private static final Pattern SHIP_WORLD = Pattern.compile(
-            "\"shipWorldX\":(-?[0-9.E\\-]+),\"shipWorldY\":(-?[0-9.E\\-]+),\"shipWorldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern TO_WORLD = Pattern.compile(
-            "\"worldX\":(-?[0-9.E\\-]+),\"worldY\":(-?[0-9.E\\-]+),\"worldZ\":(-?[0-9.E\\-]+)");
-    private static final Pattern BLOCK_ID = Pattern.compile("\"block\":\"([^\"]*)\"");
-    private static final Pattern IS_AIR = Pattern.compile("\"isAir\":(true|false)");
+    /**
+     * How far two readings of the SAME point may differ, in blocks, when one is mapped through the
+     * ship's transform and the other read off the seat probe.
+     *
+     * <p>The TEST'S OWN, and it is float noise rather than a tolerance: both describe one block's
+     * centre, so half a block is already generous.</p>
+     */
+    private static final double SAME_POINT_BLOCKS = 0.5;
+
+    @Override
+    protected String subsystem() {
+        return "vs-jump-drive-boarding";
+    }
+
+    /** Field-name PREFIXES: each names a triple the probe writes as {@code <prefix>X/Y/Z}. */
+    private static final String SEAT_SUB = "seat";
+    private static final String AFC_SUB = "afc";
+    private static final String SHIP_WORLD = "shipWorld";
+    private static final String TO_WORLD = "world";
+    private static final String BLOCK_ID = "block";
+    private static final String IS_AIR = "isAir";
+    /** The client event log's envelope count. It is emitted before the records, so the FIRST match
+     *  in a reply is always the envelope's and never a record's own field. */
+    private static final String CLIENT_EVENT_COUNT = "count";
 
     private static final String VARIANT = "with-jump-drive";
-    private static final int BX = 2900, BY = 64, BZ = 2900;
+
+    /**
+     * The craft THIS scenario assembled, from the registry's own record of the add. Every lookup in
+     * the class is addressed to it: the base coordinates locate the fixture, never the ship.
+     */
+    private String scenarioShipId;
+    /** This scenario's site, from its own plot. Bound at the top of the test, never chosen here. */
+    private FixtureSite site;
 
     /** The craft's own centre column on the pad, and the deck level the pilot walks on. */
-    private static final int CRAFT_X = BX + 3, CRAFT_Y = BY + 1, CRAFT_Z = BZ + 3;
+    private int craftX, craftY, craftZ;
 
     /**
      * Every block of the craft, as an offset from the FLIGHT COMPUTER. The flight computer is the
@@ -112,89 +136,69 @@ public class VSJumpDriveFixtureBoardingE2ETest {
      */
     private static final int KEY_USE_ITEM = -99;
 
-    private Path root;
-    private RealDedicatedServerHarness serverHarness;
-    private RealClientHarness clientHarness;
-
-    @Before
-    public void startBoth() throws Exception {
-        Assume.assumeTrue("Server harness disabled - set -D" + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        Assume.assumeTrue("Client harness disabled - set -D" + AbstractClientE2ETest.PROP_CLIENT_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractClientE2ETest.PROP_CLIENT_ENABLED, "false")));
-
-        root = Files.createTempDirectory("forge-jumpdrive-boarding-");
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
-        try {
-            clientHarness = RealClientHarness.start(serverHarness);
-        } catch (Exception startFailed) {
-            serverHarness.close();
-            serverHarness = null;
-            throw startFailed;
-        }
-    }
-
-    @After
-    public void stopBoth() throws Exception {
-        Exception first = null;
-        if (clientHarness != null) {
-            try {
-                clientHarness.close();
-            } catch (Exception e) {
-                first = e;
-            }
-            clientHarness = null;
-        }
-        if (serverHarness != null) {
-            try {
-                serverHarness.close();
-            } catch (Exception e) {
-                if (first == null) {
-                    first = e;
-                } else {
-                    first.addSuppressed(e);
-                }
-            }
-            serverHarness = null;
-        }
-        if (first != null) {
-            throw first;
-        }
-    }
-
+    /**
+     * A jump craft assembles whole, and both its consoles answer a real key press.
+     *
+     * <p>red-witnessed: with the vendored {@code ShipBlockPosFinder.isValidExpansion}
+     * ({@code ShipBlockPosFinder:18}, Valkyrien Skies) refusing the navigation computer's block: "the
+     * navigation computer must have joined the ship: the flood fill out of the flight computer
+     * decides what comes along", 2026-09-28. The other two waits the rewrite touched are arrangement
+     * links (the ship usable, the client standing at the console).</p>
+     */
     @Test
     public void aJumpCraftAssemblesWholeAndBothItsConsolesAnswerARealKeyPress() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the classpath (run with -PwithVS)",
-                exec("artest vs available").contains("\"available\":true"));
 
-        int budget = (int) (40 * TestTimeouts.factor());
+        // THE MULTIPLIER STAYS. What it waits on is VS building the ship on its OWN thread, off the
+        // game loop: that work finishes in wall-clock time, so a busy box genuinely needs more game
+        // ticks to elapse before it is done. Measured at 8 forks on the sibling gate test.
+        int budget = 40;
 
         // ---- ARRANGEMENT: build the craft and let the assembler turn it into a ship. -------------
-        exec("tp @a " + (BX + 600) + " 120 " + (BZ + 600) + " 0 0");
-        bot().waitTicks(10);
-        String assemble = assembleFixture();
-        assertTrue("ARRANGEMENT: a " + VARIANT + " build must route to a ship: " + assemble,
-                assemble.contains("\"ok\":true"));
+        // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN: the plot is this scenario's own, and
+        // the height is the open-air band because the site has no Y to pass.
+        site = site();
+        final int bx = site.x, by = site.y, bz = site.z;
+        craftX = bx + 3;
+        craftY = by + 1;
+        craftZ = bz + 3;
+        long awayMark = clientEvents().mark();
+        exec("tp @a " + (bx + 600) + " 120 " + (bz + 600) + " 0 0");
+        awaitClientPlacedNear(awayMark, bx + 600, bz + 600,
+                "the assembly below must run with no observer near it, and the observer is a client");
 
-        exec("tp @a " + (BX + 0.5) + " " + (BY + 10) + " " + (BZ + 0.5) + " 0 0");
-        bot().waitTicks(20);
-        double yRest = Double.NaN;
-        for (int attempt = 0; attempt < budget && Double.isNaN(yRest); attempt++) {
-            bot().waitTicks(5);
-            Matcher m = POS_Y.matcher(shipInfoAtBase());
-            if (m.find()) {
-                yRest = Double.parseDouble(m.group(1));
-            }
-        }
-        assertTrue("ARRANGEMENT: the ship must LOAD with the client present: " + shipInfoAtBase(),
-                !Double.isNaN(yRest));
+        // Marked BEFORE the assembly is queued, so the registry's own record of a ship being added
+        // is THIS craft's by construction. It also splits the wait below in two: the ship coming
+        // into EXISTENCE is an event, and only the client-present LOAD is left to poll for - where
+        // one loop reported "no altitude" for a spawn that faulted and for a chunk that never
+        // arrived alike.
+        Events events = events();
+        long spawnMark = events.markInstrumented();
+        String assemble = assembleFixture();
+        scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
+                Reply.of(assemble).ok());
+        // The id is KEPT. It was being discarded, and every lookup below then went back to the base
+        // coordinates to find the craft again — a question a neighbour's ship answers in the same
+        // shape on a world this class shares.
+        scenarioShipId = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship in"
+                + " the queryable registry before any of its consoles can be aimed at (the spawn is"
+                + " asynchronous)");
+
+        long approachMark = clientEvents().mark();
+        exec("tp @a " + (bx + 0.5) + " " + (by + 10) + " " + (bz + 0.5) + " 0 0");
+        awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
+                "the client's ARRIVAL is what loads this craft, so the settle below is measuring a"
+                        + " ship only an arrived client can have brought into being");
+        // The LOAD is production's own record (`ship_usable`, later than every unload of the ship),
+        // from the pre-assembly mark; then ONE read confirming it is loaded now.
+        awaitShipUsable(events, spawnMark, scenarioShipId, budget * 5);
+        String atBase = shipInfoAtBase();
+        scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
+                ShipInfo.isLoaded(atBase));
 
         String found = findSeat();
         int[] seatSub = readTriple(found, SEAT_SUB);
         int[] afcSub = readTriple(found, AFC_SUB);
-        assertTrue("ARRANGEMENT: find-seat must resolve the ship's pilot seat AND the flight computer "
+        scenario().requireArranged("find-seat must resolve the ship's pilot seat AND the flight computer "
                         + "it was linked to — the whole layout below is addressed from the computer: "
                         + found,
                 seatSub != null && afcSub != null);
@@ -202,7 +206,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         // The subspace copy is a RIGID relocation of the pad build, so the seat must sit at exactly
         // the offset it was built at. Without this control every derived address below is a guess,
         // and a component read as "missing" could just as easily be one read at the wrong cell.
-        assertTrue("ARRANGEMENT CONTROL: the ship's subspace copy must preserve the build's own "
+        scenario().requireArranged("CONTROL: the ship's subspace copy must preserve the build's own "
                         + "geometry — seat minus flight computer should be "
                         + describe(OFF_SEAT) + " but is "
                         + describe(new int[]{seatSub[0] - afcSub[0], seatSub[1] - afcSub[1],
@@ -227,19 +231,21 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         // A block that rode into subspace but never got welded to the flight computer is invisible to
         // its own ship: the drive resolves its machines from the computer outward, so this leg is
         // what says the assembler did its welding rather than merely its moving.
-        String drive = exec("artest drive info 0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
+        DriveInfo drive = DriveInfo.at(this::exec,
+                "0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
         assertTrue("the assembled ship must have a FIELD GENERATOR aboard — drivePower is measured "
-                        + "off the generator, so a zero here is a generator the ship cannot see: " + drive,
-                readLong(drive, "drivePower") > 0L);
+                        + "off the generator, so a zero here is a generator the ship cannot see: "
+                        + drive.raw(),
+                drive.drivePower > 0L);
         assertTrue("…a CAPACITOR standing against that generator — a bank counts only while it "
                         + "touches the generator's footprint, so this also pins that the two arrived "
-                        + "adjacent: " + drive,
-                readLong(drive, "capacitors") >= 1L);
-        assertTrue("…a HULL EMITTER: " + drive, readLong(drive, "emitters") >= 1L);
+                        + "adjacent: " + drive.raw(),
+                drive.capacitors >= 1);
+        assertTrue("…a HULL EMITTER: " + drive.raw(), drive.emitters >= 1);
         assertTrue("…and a measured HULL — the assembler is the only thing that ever measures the "
                         + "craft's extent, so an unmeasured hull means the ship route did not run: "
-                        + drive,
-                drive.contains("\"hullMeasured\":true"));
+                        + drive.raw(),
+                drive.hullMeasured);
         // The heat sinks have no tile entity of their own, so nothing links them and nothing counts
         // them by name: what says they are aboard is that the bank they cool recovers FASTER than a
         // bare controller could. Drain it and read the recovery rate back out of the cooldown, then
@@ -247,9 +253,10 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         // no balance number pinned on either side of the comparison.
         String emptied = exec("artest drive charge 0 " + afcSub[0] + " " + afcSub[1] + " "
                 + afcSub[2] + " empty");
-        String cooled = exec("artest drive info 0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
-        long cooldown = readLong(cooled, "cooldownTicks");
-        long burst = readLong(cooled, "burstCost");
+        DriveInfo cooled = DriveInfo.at(this::exec,
+                "0 " + afcSub[0] + " " + afcSub[1] + " " + afcSub[2]);
+        long cooldown = cooled.cooldownTicks;
+        long burst = cooled.burstCost;
         // The cooldown is now burst / the bank's ACCEPT rate — a best case at full inflow — and heat
         // sinks are what raise that ceiling. So the shape under test is unchanged: read the implied
         // throughput back out and compare it against what a bare controller alone would allow.
@@ -258,7 +265,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
                         + "at " + observedRate + "/tick (burst " + burst + " over " + cooldown
                         + " ticks) is what an uncooled controller alone allows — the sinks rode into "
                         + "subspace but the bank is not walking to them. emptied=" + emptied
-                        + " info=" + cooled,
+                        + " info=" + cooled.raw(),
                 cooldown >= 0L && burst > 0L
                         && observedRate > DriveTuning.CAPACITOR_BASE_ACCEPT_RATE * 2L);
 
@@ -266,12 +273,12 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         assertTrue("the ship must find its own NAVIGATION COMPUTER from the flight computer. That "
                         + "search is by the console's stored link back to this computer and adopts "
                         + "nothing, so it is the assembler's welding that is under test here: " + gate,
-                gate.contains("\"navComputer\":true"));
+                Reply.of(gate).bool("navComputer"));
 
         int[] navSub = add(afcSub, OFF_NAV);
-        String navStatus = exec("artest nav status 0 " + navSub[0] + " " + navSub[1] + " " + navSub[2]);
-        assertTrue("and the console itself must report that link: " + navStatus,
-                navStatus.contains("\"linked\":true"));
+        NavStatus navStatus = NavStatus.at(this::exec, 0, navSub[0], navSub[1], navSub[2]);
+        assertTrue("and the console itself must report that link: " + navStatus.raw(),
+                navStatus.linked);
 
         // ---- ARRANGEMENT: an EMPTY hand, or a held stack consumes the press before the block. ----
         emptyTheHand();
@@ -282,30 +289,51 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         // seat, whose world position a dedicated probe reports independently, before trusting it.
         double[] seatWorld = readTripleD(findSeat(), SHIP_WORLD);
         double[] seatMapped = toWorld(seatWorld, seatSub, 0.5, 0.2, 0.5);
-        assertTrue("ARRANGEMENT CONTROL: mapping the seat's own subspace cell through the ship's "
+        scenario().requireArranged("CONTROL: mapping the seat's own subspace cell through the ship's "
                         + "transform must land where the seat probe says the seat is; otherwise the "
                         + "console's aim point below is computed by an instrument that does not work."
                         + " probe=" + java.util.Arrays.toString(seatWorld)
                         + " mapped=" + java.util.Arrays.toString(seatMapped),
-                seatMapped != null && horizontalDistance(seatWorld, seatMapped) < 0.5);
+                seatMapped != null && horizontalDistance(seatWorld, seatMapped) < SAME_POINT_BLOCKS);
 
         // ---- 2a) Board the PILOT SEAT with a real use-key press. ---------------------------------
         Aim seatAim = aimAt(afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
         assertAimed(seatAim, seatSub, "pilot seat", "pilotseat");
 
+        // The mark goes BEFORE the press: a use press is over inside a tick, and a poll that arrives
+        // after it cannot tell a click the server never saw from one it saw and refused.
+        long seatPressMark = events.markInstrumented();
+        // The CLIENT's own mark beside it: his client PERFORMS the mount when the server tells it
+        // who is riding what, so the replication half below is a record on this log.
+        long seatPressOnClient = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
-        JsonObject riding = bot().reportRidingEntity();
-        for (int attempt = 0; attempt < budget && !isRiding(riding); attempt++) {
-            bot().waitTicks(5);
-            riding = bot().reportRidingEntity();
-        }
-        assertTrue("a real use-key press aimed at the deck ship's PILOT SEAT must seat the pilot — "
-                        + "the crosshair was proven to be on that very block, so a failure here is "
-                        + "the interaction being refused, not a missed aim. clientRiding=" + riding
-                        + " serverRiding=" + exec("artest player riding-entity") + seatAim.diagnosis,
+        // The two links a boarding IS, in the order the game commits them: Forge fires
+        // RightClickBlock inside processRightClickBlock BEFORE the block's own activation runs, and
+        // the seat's activation is what mounts the pilot. NO right_click_block at all means the
+        // press was dropped before the seat ever saw it (reach, an unconfirmed teleport, a held
+        // stack); a right_click_block with no mount means the seat refused the boarding.
+        events.assertChain(seatPressMark, "a real use-key press aimed at the deck ship's PILOT SEAT "
+                        + "must reach the server and seat the pilot - the crosshair was proven to be "
+                        + "on that very block, so a break here is the interaction, not a missed aim."
+                        + seatAim.diagnosis,
+                5 * budget, "right_click_block", "mount");
+
+        // The replication, as the LINK it is: his client performing the mount. The poll that stood
+        // here could only sample the state this record announces, and a read landing between the
+        // tear-down and the rebuild answers `riding:false` for a pilot who is about to be seated.
+        JsonObject riding = awaitClientMount(seatPressOnClient,
+                "the CLIENT must mount the pilot after a boarding the SERVER has already recorded"
+                        + " (the chain above)", 5 * budget,
+                " serverRiding=" + exec("artest player riding-entity")
+                        + " serverMountRecord=" + events.since(seatPressMark, "mount")
+                        + seatAim.diagnosis);
+        assertTrue("the pilot must still be aboard when the seat is read — his client mounted him"
+                        + " (the link above) and must not have taken him off again. clientRiding="
+                        + riding + seatAim.diagnosis,
                 isRiding(riding));
 
         // ---- ARRANGEMENT: leave the seat again, the way a pilot does. ----------------------------
@@ -315,20 +343,43 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         Aim navAim = aimAt(afcSub, navSub, OFF_STAND, 0.5, 0.5, 0.5, budget);
         assertAimed(navAim, navSub, "navigation console", "navigationcomputer");
 
+        // BOTH logs are marked before the press, because opening a console is a two-sided link and a
+        // single "what screen is up" poll cannot say which half never happened: the click has to
+        // reach the SERVER (its own record), and the CLIENT has then to be told to display a screen
+        // (its record). The server's `gui_container_served` is deliberately NOT awaited here - this
+        // block is a libVulpes BlockTile and opens its GUI on the libVulpes mod instance, so the
+        // request never reaches AR's own gui handler, which is the only one that seam observes.
+        long navMark = events.markInstrumented();
+        long navClientMark = clientEvents().mark();
         bot().setKey(KEY_USE_ITEM, true);
+        // STIMULUS: the use key held down across client ticks, as a mouse button is.
         bot().waitTicks(5);
         bot().setKey(KEY_USE_ITEM, false);
 
-        String screen = "";
-        for (int attempt = 0; attempt < budget && screen.isEmpty(); attempt++) {
-            bot().waitTicks(5);
-            screen = ClientGuiTestSupport.screenOf(bot().reportState());
-        }
+        events.await(navMark, "right_click_block", "the use press aimed at the NAVIGATION CONSOLE "
+                        + "must reach the server at all - an aim this test has already proven, with "
+                        + "no click recorded, is a press discarded upstream of the block (reach, an "
+                        + "unconfirmed teleport, a held stack)." + navAim.diagnosis,
+                5 * budget);
+        String opened = clientEvents().await(navClientMark, "client_gui_opened",
+                "the console press reached the server, so the CLIENT must be asked to display a "
+                        + "screen for it - nothing here is a console that swallowed the press."
+                        + navAim.diagnosis,
+                5 * budget);
+
+        // WHICH screen is up is a state, read ONCE after the link above — there is no gap here to
+        // poll. Checked in the vanilla source rather than assumed: Minecraft.displayGuiScreen
+        // posts GuiOpenEvent (which is what the record above is taken off) and assigns
+        // currentScreen sixteen lines later in the same call, so a client that recorded the open
+        // and has answered one probe round-trip since has the screen up. The one case that leaves
+        // currentScreen alone is a CANCELLED open, and the record carries `cancelled` — printed
+        // below, where the old fifty-tick poll could only report an empty string.
+        String screen = ClientGuiTestSupport.screenOf(bot().reportState());
         assertTrue("a real use-key press aimed at the assembled ship's NAVIGATION CONSOLE must open "
                         + "its GUI on the client. This is the second block a jump-capable craft asks "
                         + "the pilot to touch, and unlike the seat its whole answer IS the screen — a "
                         + "console that swallows the press leaves the pilot with no way to aim the "
-                        + "ship at all. screen=\"" + screen + "\""
+                        + "ship at all. screen=\"" + screen + "\" clientGuiOpens=" + opened
                         + " serverSideModuleBuild=" + exec("artest nav modules 0 " + navSub[0] + " "
                                 + navSub[1] + " " + navSub[2])
                         + navAim.diagnosis,
@@ -351,6 +402,15 @@ public class VSJumpDriveFixtureBoardingE2ETest {
      * itself confirms the pick. Both the stand and the aim are re-derived from the ship's live pose
      * every attempt: a freshly assembled ship settles for a while, and a position computed once
      * against a stale pose leaves the bot in mid-air beside a ship that has since moved.
+     *
+     * <p>CLASSIFIED, and it stays a loop: each pass PERFORMS two stimuli — a teleport onto the
+     * recomputed stand and an aim at the recomputed target — and then reads back what the crosshair
+     * hit. Delete it and the standing and aiming stop HAPPENING, not merely stop being watched, and
+     * no link could replace it: nothing in production decides that a crosshair is on a block.</p>
+     *
+     * <p>The order INSIDE the iteration is load-bearing: teleport first, aim last. A server teleport
+     * arrives as a pos-look packet which vanilla applies with {@code setPositionAndRotation}, so an
+     * aim set before it would be silently overwritten by it.</p>
      */
     private Aim aimAt(int[] afcSub, int[] targetSub, int[] standOffset,
                       double tx, double ty, double tz, int budget) throws Exception {
@@ -361,28 +421,34 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         double[] targetWorld = null;
         double px = Double.NaN, py = Double.NaN, pz = Double.NaN;
 
+        // STIMULUS: each pass stands and aims against the ship's live pose, and ends on the
+        // crosshair resting on the target — the argument is in the javadoc above.
         for (int attempt = 0; attempt < budget; attempt++) {
+            // READS, not waits — all three of the checks below used to sleep five ticks and retry.
+            // The ship was resolved before this method was called (its computer's subspace address
+            // is an argument), so a ship that then has no world pose, or whose points will not map
+            // to world coordinates, went away mid-arrangement; and a same-world teleport cannot cost
+            // the client its world. Each of those is news about the arrangement, not a pause.
             shipAnchor = readTripleD(findSeat(), SHIP_WORLD);
-            if (shipAnchor == null) {
-                bot().waitTicks(5);
-                continue;
-            }
+            scenario().requireArranged("the ship was resolved before aiming began, so it must still"
+                    + " report a world pose on attempt " + attempt, shipAnchor != null);
             // The floor of the stand cell is the deck's top surface, so the feet go at its y with a
             // sliver of clearance rather than at its centre.
             standWorld = toWorld(shipAnchor, standSub, 0.5, 0.05, 0.5);
             targetWorld = toWorld(shipAnchor, targetSub, tx, ty, tz);
-            if (standWorld == null || targetWorld == null) {
-                bot().waitTicks(5);
-                continue;
-            }
+            scenario().requireArranged("the ship's stand and target points must map to world"
+                    + " coordinates off its reported pose " + java.util.Arrays.toString(shipAnchor),
+                    standWorld != null && targetWorld != null);
+            // The stand REACHING the client is a link: the reading below is of where he was put, and
+            // twenty ticks stood here as a guess at the trip.
+            long standMark = clientEvents().mark();
             exec("tp @a " + standWorld[0] + " " + standWorld[1] + " " + standWorld[2] + " 0 0");
-            bot().waitTicks(20);
+            awaitClientPlacedNear(standMark, standWorld[0], standWorld[2],
+                    "the stand on the deck square must reach the client before he aims from it");
 
             JsonObject state = bot().reportState();
-            if (!isWorldReady(state)) {
-                bot().waitTicks(5);
-                continue;
-            }
+            scenario().requireArranged("a same-world teleport must leave the client's world ready: "
+                    + state, isWorldReady(state));
             px = state.get("playerX").getAsDouble();
             py = state.get("playerY").getAsDouble();
             pz = state.get("playerZ").getAsDouble();
@@ -394,8 +460,9 @@ public class VSJumpDriveFixtureBoardingE2ETest {
             double horizontal = Math.sqrt(dx * dx + dz * dz);
             bot().setLook((float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D),
                     (float) (-Math.toDegrees(Math.atan2(dy, horizontal))));
-            // The raytrace is refreshed once per client tick (Minecraft.runTick), so the new
-            // rotation needs at least one tick before objectMouseOver can reflect it.
+            // STIMULUS: the controller's step — five client ticks between the aim and the read of the
+            // pick. MEASURED that one is not enough (2026-09-23: deterministic red, the pick read
+            // back from a look tens of degrees off the aim); the mechanism is NOT established.
             bot().waitTicks(5);
 
             aim.mouseOver = bot().reportMouseOver();
@@ -414,7 +481,7 @@ public class VSJumpDriveFixtureBoardingE2ETest {
 
     /** Every hop of the aim, asserted separately, so a red says which one broke. */
     private void assertAimed(Aim aim, int[] targetSub, String what, String blockNeedle) {
-        assertTrue("ARRANGEMENT: the bot must OBSERVABLY stand within the server's interaction reach "
+        scenario().requireArranged("the bot must OBSERVABLY stand within the server's interaction reach "
                 + "of the " + what + ", or the press is discarded before the block ever sees it."
                 + aim.diagnosis, aim.distSq < MAX_INTERACT_DIST_SQ);
         assertTrue("HOP 1 (aim at the " + what + "): the client's crosshair must resolve to a BLOCK. "
@@ -472,101 +539,105 @@ public class VSJumpDriveFixtureBoardingE2ETest {
     }
 
     /** Where a component sits on the pad after the assembler's one-block lift, in world coordinates. */
-    private static int[] liftedBuildPos(int[] offsetFromAfc) {
-        // The flight computer is built at (CRAFT_X - 1, CRAFT_Y + 4, CRAFT_Z); the assembler cuts the
+    private int[] liftedBuildPos(int[] offsetFromAfc) {
+        // The flight computer is built at (craftX - 1, craftY + 4, craftZ); the assembler cuts the
         // craft out and pastes it one block higher before handing it to the physics mod.
-        return new int[]{CRAFT_X - 1 + offsetFromAfc[0], CRAFT_Y + 5 + offsetFromAfc[1],
-                CRAFT_Z + offsetFromAfc[2]};
+        return new int[]{craftX - 1 + offsetFromAfc[0], craftY + 5 + offsetFromAfc[1],
+                craftZ + offsetFromAfc[2]};
     }
 
     // ---- helpers --------------------------------------------------------------------------------
 
-    private ClientBot bot() {
-        return clientHarness.bot();
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverHarness.client().execute(cmd));
-    }
-
+    /** This scenario's own craft, reported by name rather than by what stands near its base. */
     private String shipInfoAtBase() throws Exception {
-        return exec("artest vs ship-info 0 " + BX + " " + BY + " " + BZ);
+        return exec("artest vs ship-info 0 id " + scenarioShipId);
     }
 
     /** The seat's subspace address, its flight computer's, and the ship's live world position. */
     private String findSeat() throws Exception {
-        return exec("artest vs find-seat 0 " + BX + " " + (BY + 5) + " " + BZ);
+        return exec("artest vs find-seat 0 id " + scenarioShipId);
     }
 
     /**
-     * A subspace point mapped into the world through the ship's own transform. {@code shipAnchor} is
-     * any world point aboard that ship — the seat's live position serves.
+     * A subspace point mapped into the world through the ship's own transform.
+     *
+     * <p>{@code shipAnchor} no longer selects the ship — the id does — but it is still required: a
+     * null anchor means the caller never resolved the craft's live pose, and mapping a subspace point
+     * for a craft whose seat lookup failed would answer with numbers about nothing.</p>
      */
     private double[] toWorld(double[] shipAnchor, int[] sub, double dx, double dy, double dz)
             throws Exception {
         if (shipAnchor == null) {
             return null;
         }
-        String mapped = exec("artest vs to-world 0 " + shipAnchor[0] + " " + shipAnchor[1] + " "
-                + shipAnchor[2] + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
+        // Mapped through THIS ship's transform. The positional form asks which hulls contain the
+        // anchor and maps through the first of them, and ships do not collide — so a point inside two
+        // craft produces a plausible world position through the wrong one.
+        String mapped = exec("artest vs to-world 0 id " + scenarioShipId
+                + " " + (sub[0] + dx) + " " + (sub[1] + dy) + " " + (sub[2] + dz));
         return readTripleD(mapped, TO_WORLD);
     }
 
     /** Server-side clear plus a client-observed empty hand (a held stack eats the use press). */
     private void emptyTheHand() throws Exception {
-        exec("clear @a");
-        bot().selectHotbar(0);
-        String heldId = null;
-        for (int attempt = 0; attempt < 20; attempt++) {
-            JsonObject items = bot().reportPlayerItems();
-            if (isWorldReady(items) && items.has("held")) {
-                heldId = items.getAsJsonObject("held").get("id").getAsString();
-                if (heldId.isEmpty()) {
-                    return;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        assertTrue("ARRANGEMENT: the bot's main hand must be EMPTY so the use press reaches the "
-                + "block rather than being consumed by a held item; held=" + heldId,
-                heldId != null && heldId.isEmpty());
+        emptyTheHandOnClient("the bot's main hand must be EMPTY so the use press reaches the block"
+                + " rather than being consumed by a held item");
     }
 
-    /** Sneak off the seat the way a pilot does, falling back to the probe if the key path misses. */
+    /**
+     * Get the pilot out of the seat before he reaches for the console.
+     *
+     * <p><b>This ARRANGES a dismount; it does not test the sneak key.</b> The sneak route is tried
+     * first because it is what a player does, but when it misses the probe dismount takes over and
+     * the scenario continues — so a shipped regression in "shift leaves a pilot seat" would never
+     * red here. Which route actually worked is recorded, so a green run still says it; a test for
+     * the key itself would have to assert the first route and is not written.</p>
+     */
     private void leaveTheSeat(int budget) throws Exception {
-        boolean off = false;
+        // Mark the CLIENT log first: whichever route gets him off the seat, his own
+        // `dismountRidingEntity` is the record, and one mark covers both attempts.
+        long clientMark = clientEvents().mark();
+        // The sneak route gets a WINDOW, not a wait-until: it is best-effort by design (see the
+        // javadoc), so its expiry must not fail — and a poll-until-off cannot express "give the key
+        // this long and then read what happened", which is what this actually wants.
         bot().holdKey(Keyboard.KEY_LSHIFT);
-        for (int attempt = 0; attempt < budget && !off; attempt++) {
-            bot().waitTicks(2);
-            off = !isRiding(bot().reportRidingEntity());
-        }
+        // STIMULUS: a best-effort sneak held for a fixed stretch; its expiry is not a failure, and
+        // the guaranteed route below is linked.
+        bot().waitTicks(2 * budget);
         bot().releaseKey(Keyboard.KEY_LSHIFT);
-        if (!off) {
+        boolean bySneak = !Events.records(clientEvents().since(clientMark, "dismount")).isEmpty();
+        scenario().record("leftSeatBy", bySneak ? "sneak-key" : "probe-fallback");
+        if (!bySneak) {
+            // The guaranteed route, and here the link is REQUIRED: a probe dismount that produces
+            // no client dismount is an arrangement that did not happen, not a slow one.
             exec("artest player dismount");
-            bot().waitTicks(5);
-            off = !isRiding(bot().reportRidingEntity());
+            awaitClientDismount(clientMark, "the pilot must leave the seat before reaching for the"
+                    + " console — a seated player's use press goes to the ship, not to the block he"
+                    + " is looking at. Neither the sneak key nor the probe dismount got him off it.",
+                    2 * budget);
         }
-        assertTrue("ARRANGEMENT: the pilot must leave the seat before reaching for the console — a "
-                + "seated player's use press goes to the ship, not to the block he is looking at.",
-                off);
+        scenario().requireArranged("...and he must still be off it when the console is clicked: "
+                + bot().reportRidingEntity(), !isRiding(bot().reportRidingEntity()));
     }
+
+    /**
+     * Wait for one CLIENT event of {@code type} recorded at or after {@code mark}, and answer the
+     * whole reply.
+     *
+     * <p>Written here rather than taken from a base class on purpose: {@link Events} reads the
+     * SERVER's ordered log through the probe, and the client's own log is reached through the bot's
+     * bridge instead — no shared base owns that shape yet. A failure prints everything the client
+     * recorded since the mark, the executed observation points included, so "nothing happened" and
+     * "nobody was listening" cannot arrive as the same sentence.</p>
+     */
 
     private String assembleFixture() throws Exception {
-        int cx1 = (BX - 2) >> 4, cz1 = (BZ - 2) >> 4;
-        int cx2 = (BX + 7) >> 4, cz2 = (BZ + 7) >> 4;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
-                exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2)
-                        .contains("\"ok\":true"));
-        assertTrue("ARRANGEMENT: pre-clear failed",
-                exec("artest fill 0 " + (BX - 2) + " " + (BY + 1) + " " + (BZ - 2)
-                        + " " + (BX + 7) + " " + (BY + 12) + " " + (BZ + 7) + " minecraft:air")
-                        .contains("\"ok\":true"));
-        String fixture = exec("artest fixture rocket 0 " + BX + " " + BY + " " + BZ + " " + VARIANT);
-        assertTrue("ARRANGEMENT: fixture (" + VARIANT + ") failed: " + fixture,
-                fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
-        return exec("artest rocket assemble 0 " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        // FIRST link: the volume is EMPTY, measured by the air fill's own `placed` — the number the
+        // pre-clear it replaces was throwing away. Open air, so this ASSERTS rather than digs.
+        // The height goes past this fixture's 12: the jump-drive variant is the tallest in the
+        // catalogue and the pilot walks its deck, so the envelope is the hull plus the room above it.
+        return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 20,
+                "the jump-drive hull, and the deck the pilot boards it across");
     }
 
     // ---- tiny parsing ---------------------------------------------------------------------------
@@ -592,31 +663,34 @@ public class VSJumpDriveFixtureBoardingE2ETest {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    private static int[] readTriple(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        if (!m.find()) {
+    /**
+     * The coordinate triple a probe writes as {@code <prefix>X} / {@code <prefix>Y} /
+     * {@code <prefix>Z}, or {@code null} when the reply carries none of it.
+     *
+     * <p>Read by NAME rather than by one expression spanning all three: matched as a run, the three
+     * have to stay adjacent and in that order forever, and a writer that inserts a fourth field
+     * between them turns the read into an absence.</p>
+     */
+    private static int[] readTriple(String json, String prefix) {
+        Reply reply = Reply.of(json);
+        if (!reply.has(prefix + "X")) {
             return null;
         }
-        return new int[]{Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)),
-                Integer.parseInt(m.group(3))};
+        return new int[]{reply.integer(prefix + "X"), reply.integer(prefix + "Y"),
+                reply.integer(prefix + "Z")};
     }
 
-    private static double[] readTripleD(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        if (!m.find()) {
+    /** The same triple read as doubles. */
+    private static double[] readTripleD(String json, String prefix) {
+        Reply reply = Reply.of(json);
+        if (!reply.has(prefix + "X")) {
             return null;
         }
-        return new double[]{Double.parseDouble(m.group(1)), Double.parseDouble(m.group(2)),
-                Double.parseDouble(m.group(3))};
+        return new double[]{reply.number(prefix + "X"), reply.number(prefix + "Y"),
+                reply.number(prefix + "Z")};
     }
 
-    private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Long.parseLong(m.group(1)) : Long.MIN_VALUE;
-    }
-
-    private static String readGroup(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        return m.find() ? m.group(1) : "";
+    private static String readGroup(String json, String field) {
+        return Reply.of(json).text(field);
     }
 }

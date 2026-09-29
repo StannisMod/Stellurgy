@@ -177,9 +177,6 @@ public final class ShipInertiaWriter {
 
     @Nullable
     private static ShipInertiaData recordOf(World world, UUID shipId) {
-        if (!VSIntegration.isAvailable()) {
-            return null;
-        }
         ShipData ship = VSBridge.shipDataByUuid(world, shipId);
         return ship == null ? null : ship.getInertiaData();
     }

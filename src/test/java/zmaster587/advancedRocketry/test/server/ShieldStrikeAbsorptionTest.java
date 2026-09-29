@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -28,10 +30,10 @@ import static org.junit.Assert.assertTrue;
 public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
     private static final double RADIUS = 4.0D;
-    private static final Pattern STORED = Pattern.compile("\"shieldStored\":(-?\\d+)");
+    private static final String STORED = "shieldStored";
 
     @Test
     public void chargedShieldFullyAbsorbsACooperativeStrike() throws Exception {
@@ -42,8 +44,8 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         for (int i = 0; i < 15; i++) {
             chargeIteration(gx, gz);
         }
-        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).contains("\"powered\":true"));
-        long storedBefore = readStored(read(ex, gz));
+        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).powered());
+        long storedBefore = read(ex, gz).shieldStored();
 
         // A RADIANT beam of 2000 declared energy, fired from outside the +Z shell straight inward. At the
         // default absorption rate 1.0, kind multiplier 1.0 (bias 0.5) and Tier 0 efficiency, cost == 2000
@@ -51,12 +53,12 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         int impactEnergy = 2000;
         String result = strike(ex, gz, impactEnergy, "RADIANT");
         assertTrue("a charged shield did not intercept a cheap cooperative strike:\n" + result,
-                result.contains("\"intercepted\":true"));
+                Reply.of(result).bool("intercepted"));
         assertTrue("the strike was not fully absorbed (residual passed through a shield that could pay):\n"
-                + result, result.contains("\"fullyAbsorbed\":true"));
-        assertTrue("expected zero residual on a full absorb:\n" + result, result.contains("\"residual\":0"));
+                + result, Reply.of(result).bool("fullyAbsorbed"));
+        assertTrue("expected zero residual on a full absorb:\n" + result, (Reply.of(result).integer("residual") == 0));
 
-        long storedAfter = readStored(read(ex, gz));
+        long storedAfter = read(ex, gz).shieldStored();
         long drop = storedBefore - storedAfter;
         // Corroborate energy actually moved (anti false-green), and that a cheap strike spent only a
         // fraction — NOT the whole reserve (that would be the graceful-penetration case, not a full pay).
@@ -70,7 +72,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         exec("artest shield charge " + DIM + " " + ex + " " + Y + " " + gz + " 0");
         String downResult = strike(ex, gz, impactEnergy, "RADIANT");
         assertTrue("a down shield still intercepted the strike — it must be a barrier only while charged:\n"
-                + downResult, downResult.contains("\"intercepted\":false"));
+                + downResult, (!Reply.of(downResult).bool("intercepted")));
     }
 
     @Test
@@ -82,17 +84,17 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         for (int i = 0; i < 15; i++) {
             chargeIteration(gx, gz);
         }
-        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).contains("\"powered\":true"));
-        long storedBefore = readStored(read(ex, gz));
+        assertTrue("emitter never powered:\n" + read(ex, gz), read(ex, gz).powered());
+        long storedBefore = read(ex, gz).shieldStored();
 
         // A strike whose cost is triple the stored charge: the shield spends all it has, the remainder
         // passes, and the coil drops toward zero (graceful penetration, "shields fall").
         int impactEnergy = (int) (storedBefore * 3L);
         String result = strike(ex, gz, impactEnergy, "RADIANT");
         assertTrue("an overmatching strike was not intercepted at all:\n" + result,
-                result.contains("\"intercepted\":true"));
+                Reply.of(result).bool("intercepted"));
         assertTrue("an overmatching strike was reported fully absorbed — the shield cannot afford it:\n"
-                + result, result.contains("\"fullyAbsorbed\":false"));
+                + result, (!Reply.of(result).bool("fullyAbsorbed")));
         long residual = readLong(result, "residual");
         long absorbed = readLong(result, "absorbed");
         assertTrue("no residual impact passed a shield that could not fully pay:\n" + result, residual > 0);
@@ -103,7 +105,7 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + storedBefore + "): an overmatching strike must drain what the coil holds.",
                 absorbed > storedBefore / 2L && absorbed <= storedBefore);
 
-        long storedAfter = readStored(read(ex, gz));
+        long storedAfter = read(ex, gz).shieldStored();
         assertTrue("the coil was not drained toward zero by the overmatching strike (after=" + storedAfter
                 + " before=" + storedBefore + "):\n" + result, storedAfter < storedBefore / 4L);
     }
@@ -115,14 +117,14 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + " 0 0 -1 10 " + impactEnergy + " " + kind);
     }
 
-    private String read(int x, int z) throws Exception {
-        return exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed"));
     }
 
     private void chargeIteration(int gx, int gz) throws Exception {
@@ -132,15 +134,14 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
     }
 
     private static long readStored(String json) {
-        Matcher m = STORED.matcher(json);
-        assertTrue("no shieldStored field in probe response: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(json);
+        assertTrue("no shieldStored field in probe response: " + json, mReply.has(STORED));
+        return Long.parseLong(mReply.text(STORED));
     }
 
     private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     private static String exec(String command) throws Exception {

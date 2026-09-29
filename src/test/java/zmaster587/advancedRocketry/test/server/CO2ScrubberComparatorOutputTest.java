@@ -1,9 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -31,11 +32,10 @@ import static org.junit.Assert.assertTrue;
 public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
 
     private static final int PX = 6400;
-    private static final int PY = 65;
+    private static final int PY = FixtureSite.OPEN_AIR_Y;
     private static final int PZ = 6400;
 
-    private static final Pattern VALUE_PAT =
-            Pattern.compile("\"value\":(-?\\d+)");
+    private static final String VALUE_PAT = "value";
 
     @Test
     public void emptyScrubberReportsZeroComparatorOutput() throws Exception {
@@ -45,7 +45,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
         String resp = exec("artest infra comparator-override 0 "
                 + x + " " + y + " " + z);
         assertTrue("comparator-override must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         int value = extract(resp);
         assertTrue("empty CO2 scrubber must report comparator = 0; "
                         + "actual=" + value + " resp=" + resp,
@@ -64,7 +64,7 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
         String resp = exec("artest infra comparator-override 0 "
                 + x + " " + y + " " + z);
         assertTrue("comparator-override must succeed: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         int value = extract(resp);
         assertTrue("CO2 scrubber with fresh cartridge must report "
                         + "comparator > 0 (the player-visible 'has "
@@ -80,12 +80,12 @@ public class CO2ScrubberComparatorOutputTest extends AbstractSharedServerTest {
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
     }
 
     private static int extract(String src) {
-        Matcher m = VALUE_PAT.matcher(src);
-        assertTrue("value missing in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(src);
+        assertTrue("value missing in: " + src, mReply.has(VALUE_PAT));
+        return Integer.parseInt(mReply.text(VALUE_PAT));
     }
 }

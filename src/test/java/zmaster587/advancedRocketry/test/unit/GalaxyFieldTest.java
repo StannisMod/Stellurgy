@@ -39,6 +39,37 @@ import static org.junit.Assert.assertTrue;
  */
 public class GalaxyFieldTest {
 
+    // ---- SAMPLE BARS: how many observations a statistic below needs before it may speak. All are
+    // THE TEST'S OWN; the generator publishes no minimum sample, and a clean result taken under one
+    // of these lines would be describing the sweep rather than the subject.
+
+    /** Galaxies a sweep must find before a per-galaxy statistic is read. */
+    private static final int MIN_GALAXIES_CHECKED = 10;
+    /** The same bar for the sweeps that read a presence rather than a spread. */
+    private static final int MIN_SWEEP = 5;
+    /** The smallest sweep any claim in this class is read from. */
+    private static final int MIN_SMALL_SWEEP = 3;
+
+    /**
+     * How much room the galaxy lattice must leave inside the sector space, as a FACTOR.
+     *
+     * <p>The TEST'S OWN, and it is headroom rather than a fit: a thousand times means the lattice
+     * cannot be brought near the coordinate space's edge by any configuration a player can set.</p>
+     */
+    private static final double MIN_LATTICE_HEADROOM = 1000d;
+
+    /**
+     * The band a home galaxy's system count must fall in.
+     *
+     * <p>Both ends are the test's own, and the upper one is anchored OUTSIDE the project: the
+     * largest galaxy any catalogue lists holds about 10^14 stars, so a generator answering past
+     * that is describing nothing real. The lower end is the same claim from below — a "galaxy" of
+     * under a billion systems is a cluster.</p>
+     */
+    private static final double MIN_HOME_GALAXY_SYSTEMS = 1e9d;
+    /** @see #MIN_HOME_GALAXY_SYSTEMS */
+    private static final double MAX_HOME_GALAXY_SYSTEMS = 3e14d;
+
     private static GalaxyGenConfig cfg(double galaxyDensity) {
         return new GalaxyGenConfig(GalaxyGenConfig.DEFAULT_MIN_SPACING, 0.9d,
                 GalaxyGenConfig.DEFAULT_GALAXY_SPACING, galaxyDensity, null, null);
@@ -193,7 +224,7 @@ public class GalaxyFieldTest {
                 }
             }
         }
-        assertTrue("the sweep must find galaxies", checked > 10);
+        assertTrue("the sweep must find galaxies", checked > MIN_GALAXIES_CHECKED);
     }
 
     private static void assertInsideCell(String axis, long centre, long index, long spacing,
@@ -224,7 +255,7 @@ public class GalaxyFieldTest {
                 checked++;
             }
         }
-        assertTrue(checked > 10);
+        assertTrue(checked > MIN_GALAXIES_CHECKED);
     }
 
     @Test
@@ -306,7 +337,7 @@ public class GalaxyFieldTest {
                 "galaxy cube %d cells (%.3e ly), diagonal %.3e cells, sector headroom %.2ex",
                 spacing, UniverseScale.lightYearsForCells(spacing), diagonal, headroom));
         assertTrue("the galaxy lattice must fit the sector space with room to spare — headroom is only "
-                        + String.format("%.2f", headroom) + "x", headroom >= 1000d);
+                        + String.format("%.2f", headroom) + "x", headroom >= MIN_LATTICE_HEADROOM);
     }
 
     @Test
@@ -429,10 +460,10 @@ public class GalaxyFieldTest {
             System.out.println("seed " + seed + " home " + home + ": ~"
                     + String.format("%.3e", systems) + " systems");
             assertTrue("seed " + seed + "'s home galaxy holds only " + (long) systems + " systems",
-                    systems > 1e9d);
+                    systems > MIN_HOME_GALAXY_SYSTEMS);
             assertTrue("seed " + seed + "'s home galaxy holds " + String.format("%.3e", systems)
                     + " systems, past the largest galaxy a catalogue has (~10^14 stars)",
-                    systems < 3e14d);
+                    systems < MAX_HOME_GALAXY_SYSTEMS);
         }
     }
 
@@ -477,7 +508,7 @@ public class GalaxyFieldTest {
                 }
             }
         }
-        assertTrue("the sweep must find galaxies", checked > 10);
+        assertTrue("the sweep must find galaxies", checked > MIN_GALAXIES_CHECKED);
         assertTrue("the sweep must find at least one galaxy that HAS a retinue, or this proves"
                 + " nothing about satellites at all", giantsWithRetinue > 0);
     }
@@ -731,7 +762,7 @@ public class GalaxyFieldTest {
                 checked++;
             }
         }
-        assertTrue(checked > 5);
+        assertTrue(checked > MIN_SWEEP);
         System.out.println("worst galaxy drift over the horizon: "
                 + String.format("%.3e", worstFraction) + " of its available room");
     }
@@ -752,7 +783,7 @@ public class GalaxyFieldTest {
                     speed <= UniverseScale.lightYearsPerTick(600d) * 1.000001d);
             checked++;
         }
-        assertTrue(checked > 3);
+        assertTrue(checked > MIN_SMALL_SWEEP);
     }
 
     @Test

@@ -1,9 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -41,75 +45,63 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketAssemblerMiningDrillStatTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    /** drillingPower is serialised as a float — accept "drillingPower":0.0,
-     *  "drillingPower":0.02, etc. */
-    private static final Pattern DRILLING_POWER =
-            Pattern.compile("\"drillingPower\":(-?\\d+(?:\\.\\d+)?(?:E-?\\d+)?)");
+    private static final String ROCKET_LIST_ID = "id";
+    /** What the server says about one craft, read through the verb's own reader. */
+    private RocketInfo rocketInfo(int id) throws Exception {
+        return RocketInfo.byId(cmd -> String.join("\n", client().execute(cmd)), id);
+    }
 
     @Test
     public void rocketWithMiningDrillBlockAccumulatesDrillingPower() throws Exception {
         // Baseline — same fixture geometry minus the drill block. Pin
         // drillingPower == 0 so the with-drill assertion below isn't
         // attributable to some other latent stat source on the chassis.
-        int baselineId = buildAndAssemble(1500, 64, 500, "simple");
-        String baselineInfo = String.join("\n",
-                client().execute("artest rocket info " + baselineId));
-        double baselineDp = extractDouble(baselineInfo, DRILLING_POWER);
-        assertEquals("simple fixture must produce drillingPower=0: " + baselineInfo,
-                0.0, baselineDp, 0.0);
+        int baselineId = buildAndAssemble(FixtureSite.openAir(0, 1500, 500), "simple");
+        RocketInfo baselineInfo = rocketInfo(baselineId);
+        assertEquals("simple fixture must produce drillingPower=0: " + baselineInfo.raw(),
+                0.0, baselineInfo.drillingPower, 0.0);
 
         // With drill — should flip to > 0.
-        int withDrillId = buildAndAssemble(1600, 64, 500, "with-mining-drill");
-        String drillInfo = String.join("\n",
-                client().execute("artest rocket info " + withDrillId));
-        double drillDp = extractDouble(drillInfo, DRILLING_POWER);
+        int withDrillId = buildAndAssemble(FixtureSite.openAir(0, 1600, 500), "with-mining-drill");
+        RocketInfo drillInfo = rocketInfo(withDrillId);
         assertTrue("with-mining-drill fixture must produce drillingPower > 0: "
-                        + drillInfo, drillDp > 0.0);
+                        + drillInfo.raw(), drillInfo.drillingPower > 0.0);
     }
 
     /** Mirror of RocketAssemblySmokeTest#buildAndAssemble — warmup chunks,
      *  pre-clear the bbCache volume with air, run fixture + assemble,
      *  return the spawned entity id. */
-    private int buildAndAssemble(int baseX, int baseY, int baseZ, String variant) throws Exception {
+    private int buildAndAssemble(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the
+        // body below unchanged, so what moved is visible in one place.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
         int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
         int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
         String warmup = String.join("\n", client().execute(
                 "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
 
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+        // FIRST link: the volume this craft is built and flown in is EMPTY. The site
+        // stands in open air, so this ASSERTS rather than digs - anything standing here
+        // means the arrangement is wrong, and it is said now instead of arriving many
+        // links later wearing some mechanic's name.
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
+                "the craft is built and flown in this volume");
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble (" + variant + ") failed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         String rocketList = String.join("\n", client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(rocketList);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list yielded no ids after assemble: " + rocketList, lastId >= 0);
+        java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
+        assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
+        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
         return lastId;
     }
 
-    private static double extractDouble(String haystack, Pattern pattern) {
-        Matcher m = pattern.matcher(haystack);
-        assertTrue("pattern not found in: " + haystack, m.find());
-        return Double.parseDouble(m.group(1));
-    }
 }

@@ -1,11 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
 import org.junit.Test;
+import zmaster587.advancedRocketry.test.Reply;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -30,13 +29,20 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.plane
  */
 public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServerTest {
 
-    private static final Pattern DIM_LINE = Pattern.compile("DIM(\\d+):");
-
+    /**
+     * The AR dimensions in the registry right now.
+     *
+     * <p>Every test in this class asks about the REGISTRY — "adds exactly one entry", "removes an
+     * entry", "names the new dimension from the arg" — so {@code ar planet list} was never the
+     * subject here, only a place the ids could be read off. It is asked of {@code artest dim list}
+     * now; both enumerate {@code DimensionManager.getInstance().getRegisteredDimensions()}
+     * ({@code PlanetListCommand:28}).</p>
+     */
     private static Set<Integer> dimIds() throws Exception {
-        String list = exec("ar planet list");
         Set<Integer> ids = new HashSet<>();
-        Matcher m = DIM_LINE.matcher(list);
-        while (m.find()) ids.add(Integer.parseInt(m.group(1)));
+        for (int dim : Reply.of("artest dim list", exec("artest dim list")).intArray("arDimensions")) {
+            ids.add(dim);
+        }
         return ids;
     }
 

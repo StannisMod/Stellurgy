@@ -1,5 +1,9 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.DimWeather;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
+
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -123,6 +127,14 @@ public class WeatherCommandRedirectE2ETest {
         if (deferred != null) throw deferred;
     }
 
+    /**
+     * <p>red-witnessed: one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand:85} not
+     * setting the flag: "no `planet_weather_changed` carrying dim = 9304 and raining = true". CLEAR —
+     * the clear branch ({@code WeatherCommand:74}) writing nothing: "… raining = false was recorded
+     * within 200 ticks". Dropping only its {@code setRaining(false)} stays GREEN: the
+     * {@code setRainTime(0)} beside it makes vanilla's weather cycle flip the flag off on the next
+     * tick, so each write suffices alone.</p>
+     */
     @Test
     public void slashWeatherOnPlanetRainsThePlanetNotTheOverworld() throws Exception {
         clientHarness.bot().waitForWorld();
@@ -135,102 +147,127 @@ public class WeatherCommandRedirectE2ETest {
         // load + pin the planet dim before the teleport.
         serverHarness.client().execute("artest weather set 0 clear 12000");
         serverHarness.client().execute("artest weather set " + DIM + " clear 12000");
-        String before = String.join("\n",
-                serverHarness.client().execute("artest weather get " + DIM));
-        assertTrue("planet must be wrapped before the command test: " + before,
-                before.contains("ARDimensionWorldInfo"));
-        assertFalse("planet must start clear: " + before,
-                before.contains("\"isRaining\":true"));
+        DimWeather before = serverWeather(DIM);
+        assertTrue("planet must be wrapped before the command test: " + before.raw(),
+                before.usesARWorldInfo());
+        assertFalse("planet must start clear: " + before.raw(), before.raining);
 
+        long transferMark = clientEvents().mark();
         serverHarness.client().execute("artest tp " + DIM);
-        waitForClientDim(DIM);
+        awaitClientDim(transferMark, DIM);
 
-        // The player — standing on the planet — types vanilla /weather rain.
+        // The player — standing on the planet — types vanilla /weather rain. Both logs are marked
+        // first: the server's for the planet's own sky changing, the client's for being told.
+        Events server = serverEvents();
+        long rainMark = server.markInstrumented();
+        long clientRainMark = clientEvents().mark();
         clientHarness.bot().sendChat("/weather rain 600");
 
-        // Server truth: the PLANET's per-dim state flips to raining...
-        JsonObject planetAfter = waitForServerRaining(DIM, true);
+        // Server truth: the PLANET's per-dim state flips to raining — a LINK on that planet's own
+        // weather cycle announcing the edge, then one read of the state it announced.
+        awaitPlanetSky(server, rainMark, true, "the player's /weather rain on a planet must start"
+                + " rain on THAT planet (redirect to /advancedrocketry weather missing?)");
+        DimWeather planetAfter = serverWeather(DIM);
         assertTrue("planet did not start raining after player /weather rain "
-                        + "(redirect to /advancedrocketry weather missing?): " + planetAfter,
-                planetAfter.get("raw").getAsString().contains("\"isRaining\":true"));
+                        + "(redirect to /advancedrocketry weather missing?): " + planetAfter.raw(),
+                planetAfter.raining);
 
         // ...and the OVERWORLD stays clear. Without the redirect vanilla
         // CommandWeather writes to server.worlds[0] — this is the assertion
         // that fails on the unfixed build.
-        String overworld = String.join("\n",
-                serverHarness.client().execute("artest weather get 0"));
+        DimWeather overworld = serverWeather(0);
         assertFalse("player /weather rain on a planet leaked to the overworld "
-                        + "(vanilla worlds[0] path, redirect not applied): " + overworld,
-                overworld.contains("\"isRaining\":true"));
+                        + "(vanilla worlds[0] path, redirect not applied): " + overworld.raw(),
+                overworld.raining);
 
-        // Player truth: the client in the planet dim renders the rain the
-        // command asked for. Strength streams per tick (code 7); the
-        // begin-raining FLAG (code 1) is only broadcast when the server-side
-        // strength crosses the isRaining() threshold (> 0.2), so wait past
-        // that before asserting the flag.
-        JsonObject onPlanet = waitForClientRainStrengthAtLeast(0.25f);
+        // Player truth: the client in the planet dim renders the rain the command asked for. Strength
+        // streams per tick (code 7); the begin-raining FLAG (code 1) is only broadcast when the
+        // server-side strength crosses the isRaining() threshold (> 0.2). Both are packets the
+        // client records applying, so the wait is for BOTH to have arrived — past that threshold —
+        // and the report is read once after it.
+        String told = clientEvents().awaitMatching(clientRainMark, "client_game_state_changed",
+                seen -> !Events.recordsWhere(seen, "state", ClientEvents.BEGIN_RAINING_STATE).isEmpty()
+                        && ClientEvents.toldRainStrengthAtLeast(seen, 0.25),
+                "telling the client it is raining, at a strength of at least 0.25",
+                "the client standing on the planet must be told the rain its command started",
+                RAIN_LINK_BUDGET_TICKS);
+        JsonObject onPlanet = clientHarness.bot().reportWeather();
         assertTrue("client should still be in the planet dim: " + onPlanet,
                 onPlanet.has("dim") && onPlanet.get("dim").getAsInt() == DIM);
         assertTrue("client-visible isRaining must flip true on the planet: " + onPlanet,
                 onPlanet.get("isRaining").getAsBoolean());
-        assertTrue("client rainStrength must start climbing on the planet: " + onPlanet,
-                onPlanet.get("rainStrength").getAsFloat() > 0f);
+        assertTrue("client rainStrength must start climbing on the planet; what it was told: "
+                + told, onPlanet.get("rainStrength").getAsFloat() > 0f);
 
         // Reverse direction: /weather clear from the same spot clears the
         // planet (and the overworld stays untouched — still clear).
+        long clearMark = server.markInstrumented();
         clientHarness.bot().sendChat("/weather clear 600");
-        waitForServerRaining(DIM, false);
-        String overworldAfterClear = String.join("\n",
-                serverHarness.client().execute("artest weather get 0"));
+        awaitPlanetSky(server, clearMark, false, "the player's /weather clear on a planet must end"
+                + " the rain on THAT planet");
+        DimWeather overworldAfterClear = serverWeather(0);
         assertFalse("overworld must remain clear after planet /weather clear: "
-                + overworldAfterClear, overworldAfterClear.contains("\"isRaining\":true"));
+                + overworldAfterClear.raw(), overworldAfterClear.raining);
     }
 
-    /** Polls until the client world reports the expected dimension (~10 s cap). */
-    private void waitForClientDim(int expectedDim) throws Exception {
-        for (int waited = 0; waited < 200; waited += 10) {
-            clientHarness.bot().waitTicks(10);
-            JsonObject w = clientHarness.bot().reportWeather();
-            if (w != null && w.has("dim") && w.get("dim").getAsInt() == expectedDim) {
-                return;
-            }
-        }
-        throw new AssertionError("client never reached dim " + expectedDim
-                + " (last weather report: " + clientHarness.bot().reportWeather() + ")");
+    /** What the SERVER says one world's sky is doing, as opposed to what the client is shown. */
+    private DimWeather serverWeather(int dim) throws Exception {
+        return DimWeather.forDim(
+                        cmd -> String.join("\n", serverHarness.client().execute(cmd)), dim)
+                .requireDim(dim);
     }
 
     /**
-     * Polls the SERVER-side wrapped weather flag of {@code dim} until it equals
-     * {@code raining} (~10 s cap) — the chat command travels client &rarr; server and
-     * lands on the next tick, so a one-shot read would race it. Returns a JSON
-     * object with the final raw probe output under {@code raw}.
+     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there —
+     * {@link ClientEvents#awaitDim}, which is where the wait and its narrative live.
+     *
+     * @param transferMark the CLIENT's own mark, taken BEFORE the command that transfers him
      */
-    private JsonObject waitForServerRaining(int dim, boolean raining) throws Exception {
-        String raw = "";
-        for (int waited = 0; waited < 200; waited += 10) {
-            raw = String.join("\n",
-                    serverHarness.client().execute("artest weather get " + dim));
-            if (raw.contains("\"isRaining\":" + raining)) {
-                JsonObject out = new JsonObject();
-                out.addProperty("raw", raw);
-                return out;
-            }
-            clientHarness.bot().waitTicks(10);
-        }
-        throw new AssertionError("server dim " + dim + " never reached isRaining="
-                + raining + "; last probe: " + raw);
+    private void awaitClientDim(long transferMark, int expectedDim) throws Exception {
+        ClientEvents.awaitDim(clientEvents(), transferMark, expectedDim,
+                "he must be standing on the planet before he types the command this test is about,"
+                        + " since the redirect is keyed to the world he is IN",
+                DIM_LINK_BUDGET_TICKS,
+                () -> "last weather report: " + clientHarness.bot().reportWeather());
     }
 
-    /** Polls until client-visible rainStrength reaches {@code minStrength} (~10 s cap, soft). */
-    private JsonObject waitForClientRainStrengthAtLeast(float minStrength) throws Exception {
-        JsonObject latest = clientHarness.bot().reportWeather();
-        for (int waited = 0; waited < 200; waited += 10) {
-            if (latest.has("rainStrength") && latest.get("rainStrength").getAsFloat() >= minStrength) {
-                return latest;
-            }
-            clientHarness.bot().waitTicks(10);
-            latest = clientHarness.bot().reportWeather();
-        }
-        return latest; // soft wait — caller asserts and prints the report
+    /** The CLIENT's own event log, behind the shared verbs. */
+    private Events clientEvents() {
+        return ClientEvents.of(clientHarness.bot());
     }
+
+    /** How long the client is given to FOLLOW a transfer the server has already performed. */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * The SERVER's ordered event log, stepped on the server's own clock — this class runs its own
+     * harness pair, so it builds the reader the shared bases would have handed it.
+     */
+    private Events serverEvents() {
+        return new Events(cmd -> String.join("\n", serverHarness.client().execute(cmd)),
+                ticks -> GameTicks.advance(serverHarness.client(), GameTicks.server(), ticks));
+    }
+
+    /**
+     * Wait for the PLANET's own weather cycle to announce that its sky became {@code raining} since
+     * {@code mark} ({@code planet_weather_changed}, edge-only, keyed by dimension).
+     *
+     * <p>It replaced a poll of the server flag, whose own note said "the fix is a recorder on the
+     * weather write, not a longer budget" — written when no weather record existed. One exists now,
+     * on the cycle's tick, and a command's write is announced by the next one. What it cannot see:
+     * a sky that flipped and flipped back inside one cycle tick, which the cycle cannot either.</p>
+     */
+    private void awaitPlanetSky(Events server, long mark, boolean raining, String what)
+            throws Exception {
+        server.awaitRecordWithFields(mark, "planet_weather_changed", what, SKY_LINK_BUDGET_TICKS,
+                "dim", String.valueOf(DIM), "raining", String.valueOf(raining));
+    }
+
+    /** How long a player's command may take to reach the planet's sky — the 200 ticks the poll it
+     *  replaced was capped at. */
+    private static final int SKY_LINK_BUDGET_TICKS = 200;
+
+    /** How long the rain may take to reach the client once the planet is raining — the 200 ticks
+     *  the poll it replaced was capped at (twenty reads ten apart). */
+    private static final int RAIN_LINK_BUDGET_TICKS = 200;
 }

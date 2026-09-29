@@ -26,7 +26,8 @@ import net.minecraft.util.math.BlockPos;
  *       ceiling), then hands the momentary crossing + async settle to the shared
  *       {@link ShipCrossingService};</li>
  *   <li>on settle, rigid-teleports the pose to the honest-3D realization of the entry coordinate
- *       (world Y &asymp; local Y + HALF_CELL + band) and settles the ship in the {@link ShipLedger}.</li>
+ *       (the cell is centred on the world origin, so world position = local position on every
+ *       axis) and settles the ship in the {@link ShipLedger}.</li>
  * </ol>
  *
  * <p>Crossing + re-assembly are asynchronous, so the settle runs over several ticks with retries
@@ -275,7 +276,7 @@ public final class ShipEntryController {
 
         // Capture only now, with the cell GRANTED — the last refusal is behind — and still before
         // the cut: the crossing cuts the seat blocks, and a post-cut capture finds nothing.
-        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(launchDimId, afcPos, shipPos);
+        final List<CrewTransfer.Crew> crew = crossing.ops().captureCrew(launchDimId, afcPos, shipPos, shipId);
 
         int lane = (laneCounter++ % ENTRY_LANE_COUNT);
         double[] pose = CellWorldMapper.poseWorldOf(entryCoord);
@@ -288,6 +289,20 @@ public final class ShipEntryController {
                         crossing.ops().messageCrew(crew, "msg.shipentry.arrived");
                         LOGGER.info("[SPACE] entry settled: ship {} at {} (slot {})",
                                 id, entryCoord, slotDim);
+                        // The trip is announced once, on completion, and named for its planet side:
+                        // the craft LEFT a planet and is now in space. `world` is where it ended up.
+                        net.minecraft.world.World arrivedIn = net.minecraftforge.common
+                                .DimensionManager.getWorld(slotDim);
+                        if (arrivedIn == null) {
+                            LOGGER.warn("[SPACE] entry of ship {} not announced: slot dim {} is not"
+                                    + " loaded", id, slotDim);
+                            return;
+                        }
+                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                                new zmaster587.advancedRocketry.api.event.ShipCrossingEvent
+                                        .LeftPlanet(arrivedIn, id == null ? null : id.toString(),
+                                        CellCrossingController.playersOf(crew),
+                                        launchDimId, slotDim, entryCoord));
                     }
 
                     @Override
@@ -322,14 +337,79 @@ public final class ShipEntryController {
         return decided(Decision.STARTED, shipId, now);
     }
 
-    /** The launch body's address + spawn ring, or the config home anchor when unplaced. The ring
+    /** The launch body's position + spawn ring, or the config home anchor when unplaced. The ring
      *  direction is derived from the ship id, so simultaneous entries at one body spread out. */
     private GalacticCoord resolveEntryCoord(int launchDimId, UUID shipId) {
         GalacticCoord body = coordResolver.launchBodyAddress(launchDimId);
         if (body == null) {
             body = GalacticCoord.ORIGIN;
         }
-        return StandoffRing.pointAround(body, entryRingAround(body), shipId.hashCode());
+        return StandoffRing.pointAround(aimAt(launchDimId, body), entryRingAround(body),
+                shipId.hashCode());
+    }
+
+    /**
+     * Where the launch body actually IS at this tick, as the point the spawn ring is drawn around.
+     *
+     * <p><b>The address is a name, not a place.</b> A body's {@link GalacticCoord} is its durable
+     * name and it does not move; where the body stands comes from its own frame and ephemeris. Ringing
+     * the NAME therefore puts a ship beside the place a planet is called after rather than beside the
+     * planet, and the gap is the whole orbital offset — measured at Earth as 5 657 554 blocks, which
+     * is 26 hours of flight at the Flight Assist ceiling. This aims at the body instead.</p>
+     *
+     * <p><b>Matched on the launch DIMENSION, not on the address.</b> A moon shares its parent's name,
+     * so an address can hold several bodies that are in quite different places; the one a ship is
+     * leaving is the one whose dimension it launched from.</p>
+     *
+     * <p><b>When nothing resolves the address is used, and that is REPORTED, never silent.</b> The
+     * fallback IS the defect this method exists to remove: it puts a ship beside a name while the
+     * body may be an orbit away, and a ship placed there reads as a working arrival right up until the
+     * pilot looks out of a window. Two callers reach it legitimately — an unplaced launch and the
+     * config home anchor, where there is no body and so no position to prefer — but a LAUNCH BODY
+     * that failed to resolve is a broken universe, not a configuration, and it says so in the log.</p>
+     *
+     * <p>NOTE: this places an ARRIVAL correctly and nothing more. A ship parked beside a body is not
+     * carried by that body's orbit, so it is left behind the moment it stops thrusting — at Earth,
+     * roughly 119 blocks per second. Making a parking orbit hold is a separate change.</p>
+     */
+    private GalacticCoord aimAt(int launchDimId, GalacticCoord address) {
+        return aimPoint(zmaster587.advancedRocketry.universe.UniverseRegistry.bodiesAtOnServer(address),
+                launchDimId, clock.getAsLong(), address);
+    }
+
+    /**
+     * The decision {@link #aimAt} makes, as arithmetic on a body list — so it can be driven by a test
+     * without a server standing behind the registry.
+     *
+     * <p>Kept separate deliberately: with no server the registry answers an EMPTY list, so a test
+     * exercising the whole method would take the fallback every time and pass while proving nothing
+     * about the case the change exists for.</p>
+     */
+    public static GalacticCoord aimPoint(
+            java.util.List<zmaster587.advancedRocketry.universe.SystemBody> atAddress,
+            int launchDimId, long tick, GalacticCoord address) {
+        if (atAddress == null) {
+            return address;
+        }
+        for (zmaster587.advancedRocketry.universe.SystemBody b : atAddress) {
+            if (b == null || b.dimId() != launchDimId) {
+                continue;
+            }
+            AbsolutePos at = b.absoluteAt(tick);
+            return GalacticCoord.ofSectorLocal(at.sectorX(), at.sectorY(), at.sectorZ(),
+                    at.localX(), at.localY(), at.localZ());
+        }
+        if (atAddress.isEmpty()) {
+            // Nothing stands at this address at all: an unplaced launch or the config home anchor.
+            // There is no body, so there is no position that would be better than the name.
+            return address;
+        }
+        LOGGER.warn("[SPACE] launch dimension {} has no body at its own address {} — {} body(ies) "
+                + "are there and none of them is it. Aiming the entry at the NAME, which is where "
+                + "this body would be only if it never moved; if it orbits, the ship is being put "
+                + "beside a place the planet has left.",
+                launchDimId, address.cellKey(), atAddress.size());
+        return address;
     }
 
     /** Advance every in-flight entry one tick (the shared crossing settle loop). */

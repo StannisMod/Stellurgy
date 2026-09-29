@@ -1,12 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Assume;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -35,8 +35,8 @@ import static org.junit.Assert.assertTrue;
 public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServerTest {
 
     private static final int SPACE_DIM = -2;
-    private static final Pattern AR_DIMS = Pattern.compile("\"arDimensions\":\\[([^\\]]*)\\]");
-    private static final Pattern BURN = Pattern.compile("\"burn\":(-?\\d+)");
+    private static final String AR_DIMS = "arDimensions";
+    private static final String BURN = "burn";
 
     @Test
     public void offSlotPlanetLaunchBurnInSpaceDimDegradesToBaseBurn() throws Exception {
@@ -48,29 +48,35 @@ public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServ
         // A station exists somewhere (models 'the player has a station'); it does
         // NOT occupy the off-slot cell we launch from.
         String create = exec("artest station create 0");
-        assertTrue("station must create: " + create, create.contains("\"ok\":true"));
+        assertTrue("station must create: " + create, Reply.of(create).ok());
 
         // Off-station: an empty grid cell far from the created station. After the C076
         // grid-mapping fix, getSpaceStationFromBlockCoords(4608,·,4608) reverse-maps to grid
         // (2,2) → spiral index 18 → no station → null (the created station sits at index 1).
-        int x = 4608, y = 100, z = 4608;
+        // The band. This stands in the SPACE dimension, which is void, so the lift is not about
+        // escaping terrain — it is about one definition of where a fixture stands instead of a 100
+        // nobody chose. The X and Z are load-bearing (they reverse-map to an empty grid cell); the
+        // Y is not, and now says so.
+        int x = 4608, y = zmaster587.advancedRocketry.test.FixtureSite.OPEN_AIR_Y, z = 4608;
         ok(exec("artest fill " + SPACE_DIM + " " + (x - 1) + " " + (y - 1) + " " + (z - 1)
                 + " " + (x + 1) + " " + (y + 1) + " " + (z + 1) + " minecraft:air"));
         String place = exec("artest place " + SPACE_DIM + " " + x + " " + y + " " + z
                 + " advancedrocketry:guidanceComputer");
         assertTrue("guidance computer must place: " + place,
-                place.contains("\"ok\":true") || place.contains("\"placed\":true"));
+                Reply.of(place).ok() || Reply.of(place).bool("placed"));
 
         String r = exec("artest guidance launch-seq " + SPACE_DIM + " " + x + " " + y + " " + z + " " + destDim);
-        assertTrue("probe must run: " + r, r.contains("\"ok\":true"));
-        assertTrue("launch position must be off any station (proves the null path): " + r,
-                r.contains("\"stationAtPos\":null"));
+        assertTrue("probe must run: " + r, Reply.of(r).ok());
+        // `has` is false for an absent field AND for a JSON null, which is the claim; the needle
+        // was one rendering of it and also matched the string inside any other field.
+        assertFalse("launch position must be off any station (proves the null path): " + r,
+                Reply.of("artest guidance launch-seq", r).has("stationAtPos"));
         assertTrue("chip must be programmed to the real planet dim so the INVALID_PLANET short-circuit "
                         + "is bypassed and the guarded null-station path is reached: " + r,
-                r.contains("\"chipDim\":" + destDim));
+                String.valueOf(destDim).equals(Reply.of(r).text("chipDim")));
         assertTrue("L2 null-station guard: off-slot in-space launch-burn must NOT throw — "
                         + "TileGuidanceComputer folds a null currentSpaceStation into the early return. Got: " + r,
-                r.contains("\"threw\":false"));
+                (!Reply.of(r).bool("threw")));
         int burn = extractInt(BURN, r);
         assertTrue("a real burn must be returned (not the probe's Integer.MIN_VALUE 'did not run' sentinel), "
                         + "and it must be non-negative — the base launch-clearance burn with no trans-body "
@@ -79,22 +85,16 @@ public class TileGuidanceComputerOffSlotBurnNpeTest extends AbstractHeadlessServ
         assertTrue("server survives", client().isAlive());
     }
 
-    private static int extractInt(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " not found in: " + s, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extractInt(String field, String s) {
+        Reply reply = Reply.of(s);
+        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
+        return reply.integer(field);
     }
 
     private int firstPlanetDim() throws Exception {
         String list = exec("artest dim list");
-        Matcher m = AR_DIMS.matcher(list);
-        if (m.find()) {
-            for (String s : m.group(1).split(",")) {
-                s = s.trim();
-                if (s.isEmpty()) continue;
-                int d = Integer.parseInt(s);
-                if (d != 0 && d != -1 && d != SPACE_DIM) return d;
-            }
+        for (int d : Reply.of("artest dim list", list).intArray(AR_DIMS)) {
+            if (d != 0 && d != -1 && d != SPACE_DIM) return d;
         }
         return Integer.MIN_VALUE;
     }

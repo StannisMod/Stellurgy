@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.unit;
 
+import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +50,36 @@ public class TelescopeConeSurveyTest {
     private static final long SEED = 0xC0FFEEL;
     private static final long STEP = GalaxyGenConfig.DEFAULT_MIN_SPACING;
 
+    /**
+     * The aperture edge, in light years, that the cloud test straddles.
+     *
+     * <p>The TEST'S OWN, and it is the arrangement's own number read back: the star is placed just
+     * inside this in clear sky, and the claim is that a cloud puts the SAME star outside it. Both
+     * sides of the comparison cite it, so the pair cannot drift.</p>
+     */
+    private static final double APERTURE_EDGE_LY = 10d;
+
+    /** Looks a pointing must hold before it is worth walking — more than its own axis. */
+    private static final int MIN_LOOKS_WORTH_WALKING = 40;
+
+    /** How many STEPS out the walk's reach is measured against. @see #MIN_LOOKS_WORTH_WALKING */
+    private static final int REACH_STEPS = 40;
+
+    /** How many STEPS deep the walk must actually get, which is the pointing's own depth. */
+    private static final int DEPTH_STEPS = 29;
+
+    /** The range, in light years, at which a sun-like star at the shipped aperture is USEFUL. */
+    private static final double USEFUL_REACH_LY = 100d;
+
+    /** The range that makes an aperture absurd — the arrangement of the ceiling test. */
+    private static final double ABSURD_REACH_LY = 100_000d;
+
+    /** The ceiling a survey must fit under, in cells. The claim is that it is BOUNDED. */
+    private static final int SURVEY_CELL_CEILING = 5_000;
+
+    /** How long the walk may take, in ms. The TEST'S OWN: "well under a second of CPU". */
+    private static final long WALK_BUDGET_MS = 2_000L;
+
     private double previousMargin;
 
     @org.junit.Before
@@ -63,7 +94,7 @@ public class TelescopeConeSurveyTest {
     @After
     public void resetSeams() {
         ARConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes = previousMargin;
-        UniverseRegistry.setGenerator(null);
+        UniverseRegistry.detachGenerator();
         UniverseRegistry.setStarLookup(null);
     }
 
@@ -137,7 +168,7 @@ public class TelescopeConeSurveyTest {
         // the other. The bracket is what makes the sum above a MECHANIC rather than arithmetic.
         assertTrue("a star inside the aperture in clear sky must be outside it behind a cloud: "
                         + clear + " -> " + dusty,
-                clear < 10d && dusty > 10d);
+                clear < APERTURE_EDGE_LY && dusty > APERTURE_EDGE_LY);
     }
 
     @Test
@@ -167,7 +198,7 @@ public class TelescopeConeSurveyTest {
         double halfAngle = Math.toRadians(15d);
         ConeWalk cone = ConeWalk.aimed(HOME, 1, 0, 0, halfAngle, 40 * STEP, STEP);
 
-        assertTrue("a pointing worth walking must hold more than its axis", cone.totalLooks() > 40);
+        assertTrue("a pointing worth walking must hold more than its axis", cone.totalLooks() > MIN_LOOKS_WORTH_WALKING);
         for (int i = 0; i < cone.totalLooks(); i++) {
             GalacticCoord look = cone.lookAt(i);
             double axial = look.sectorX();
@@ -179,7 +210,7 @@ public class TelescopeConeSurveyTest {
             assertTrue("a look must lie inside the cone: " + look.cellKey() + " is "
                             + Math.toDegrees(Math.atan2(across, axial)) + " degrees off axis",
                     across <= axial * Math.tan(halfAngle) + STEP);
-            assertTrue("and inside the reach", axial <= 40 * STEP);
+            assertTrue("and inside the reach", axial <= REACH_STEPS * STEP);
         }
     }
 
@@ -210,7 +241,7 @@ public class TelescopeConeSurveyTest {
                     + " after " + deepestSoFar, depth >= deepestSoFar);
             deepestSoFar = depth;
         }
-        assertTrue("the walk must reach the pointing's own depth", deepestSoFar >= 29 * STEP);
+        assertTrue("the walk must reach the pointing's own depth", deepestSoFar >= DEPTH_STEPS * STEP);
     }
 
     @Test
@@ -235,7 +266,7 @@ public class TelescopeConeSurveyTest {
 
     /** A registry holding one star of a stated bulk, seated {@code lightYears} away along +X. */
     private static UniverseRegistry oneStarAt(double lightYears, float sizeSuns, int temperature) {
-        UniverseRegistry.setGenerator(new EmptyGalaxyGenerator());
+        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry.setStarLookup(id -> starOf(id, sizeSuns, temperature));
 
         UniverseRegistry registry = new UniverseRegistry();
@@ -257,7 +288,7 @@ public class TelescopeConeSurveyTest {
         double sunLike = StellarMagnitude.luminositySuns(1.15d, 100);
         double reach = StellarMagnitude.detectionRangeLightYears(sunLike, 8d);
         assertTrue("arrangement: a sun-like star at the shipped aperture must reach a useful way",
-                reach > 100d);
+                reach > USEFUL_REACH_LY);
 
         UniverseRegistry near = oneStarAt(reach * 0.5d, 1.15f, 100);
         assertEquals("a star well inside the aperture must register", 1,
@@ -306,7 +337,7 @@ public class TelescopeConeSurveyTest {
         // Physics the mechanic inherits rather than a rule someone wrote: an unbound world emits
         // nothing, so no aperture registers one. Finding a rogue planet is a thing you do by GOING
         // there, and that is what makes the void worth flying into rather than surveying from home.
-        UniverseRegistry.setGenerator(new EmptyGalaxyGenerator());
+        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry.setStarLookup(id -> null);
         UniverseRegistry registry = new UniverseRegistry();
         GalacticCoord seat = cell(UniverseScale.cellsForLightYears(20d), 0, 0);
@@ -474,7 +505,7 @@ public class TelescopeConeSurveyTest {
         // the second — and the only way to state that is to count.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
         SplitCountingGenerator counting = new SplitCountingGenerator(config);
-        UniverseRegistry.setGenerator(counting);
+        UniverseRegistry.attachGenerator(counting);
         UniverseRegistry.setStarLookup(id -> starOf(id, 1f, 100));
         UniverseRegistry registry = new UniverseRegistry();
         registry.bindWorldSeed(SEED);
@@ -526,7 +557,7 @@ public class TelescopeConeSurveyTest {
         // aperture must hold under 200 000 looks, register a number of systems a crystal can carry,
         // and cost well under a second of CPU spread over its steps.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        UniverseRegistry.setGenerator(new ClusteredGalaxyGenerator(config));
+        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(config));
         UniverseRegistry.setStarLookup(id -> starOf(id, 1f, 100));
         UniverseRegistry registry = new UniverseRegistry();
         registry.bindWorldSeed(SEED);
@@ -575,7 +606,7 @@ public class TelescopeConeSurveyTest {
         assertTrue("arrangement: a pointing that finds nothing would pass every bound above",
                 detections > 0);
         assertTrue("and the walk must cost well under a second of CPU: " + elapsedMs + " ms",
-                elapsedMs < 2_000L);
+                elapsedMs < WALK_BUDGET_MS);
     }
 
     @Test
@@ -586,12 +617,12 @@ public class TelescopeConeSurveyTest {
         RegionScan.Tuning greedy = new RegionScan.Tuning(25d, archetypes(), Math.toRadians(5d),
                 5_000, 20, 100, STEP);
         assertTrue("arrangement: this aperture must reach absurdly far",
-                greedy.maxRangeLightYears() > 100_000d);
+                greedy.maxRangeLightYears() > ABSURD_REACH_LY);
 
         RegionScan scan = RegionScan.directed(HOME, 1, 0, 0, greedy.maxRangeSteps(), 0L, greedy);
 
         assertTrue("the survey must fit under the ceiling: " + scan.totalCells(),
-                scan.totalCells() <= 5_000);
+                scan.totalCells() <= SURVEY_CELL_CEILING);
         assertTrue("and must still be a survey rather than a single look", scan.totalCells() > 1);
         assertTrue("its reach must have been SHORTENED, which is what a budget can do to a horizon",
                 scan.distanceCells() < greedy.maxRangeSteps() * STEP);
@@ -606,5 +637,67 @@ public class TelescopeConeSurveyTest {
         assertEquals("an aperture pointed at a sky with no star types reaches nothing", 0d,
                 empty.maxRangeLightYears(), 0d);
         assertEquals("which is still a pointing, of one territory", 1, empty.maxRangeSteps());
+    }
+
+    // ── what a look may teach the ground it was made from ─────────────────────
+
+    @Test
+    public void aLookReportsOnlyTheBodiesItActuallyMadeOut() {
+        // The coupling that lets an observatory teach the world underneath it: the instrument may
+        // pass on a body only when it RESOLVED one. A star has no dimension of its own, so of the
+        // fixture's two objects exactly one can ever be taught.
+        double sunLike = StellarMagnitude.luminositySuns(1.15d, 100);
+        double near = StellarMagnitude.detectionRangeLightYears(sunLike, 12d - 6.5d) / 2d;
+        UniverseRegistry registry = oneStarAt(near, 1.15f, 100);
+        List<TelescopeScan.Detection> hits = TelescopeScan.detect(registry, seatAt(near), HOME, 12d);
+        assertEquals("arrangement: one system to look at", 1, hits.size());
+        assertTrue("arrangement: and it must be resolvable at this distance", hits.get(0).resolvable());
+
+        List<Integer> taught = new ArrayList<>();
+        TelescopeScan.characterise(registry, hits.get(0), new CrystalMemory(), 1_000L,
+                id -> "Body-" + id, true, taught::add);
+
+        assertEquals("exactly the planet, and not the star that has no world: " + taught,
+                Collections.singletonList(701), taught);
+    }
+
+    @Test
+    public void aLookThatOnlyREGISTEREDTeachesNothing() {
+        // Inside the aperture, outside what it can make out. The crystal still gets the address -
+        // that is the whole mechanic - but nothing about the system may reach the ground, because
+        // nothing about it was learned.
+        double sunLike = StellarMagnitude.luminositySuns(1.15d, 100);
+        double detectReach = StellarMagnitude.detectionRangeLightYears(sunLike, 12d);
+        double resolveReach = StellarMagnitude.detectionRangeLightYears(sunLike, 12d - 6.5d);
+        double far = (detectReach + resolveReach) / 2d;
+        UniverseRegistry registry = oneStarAt(far, 1.15f, 100);
+        List<TelescopeScan.Detection> hits = TelescopeScan.detect(registry, seatAt(far), HOME, 12d);
+        assertEquals("arrangement: it must still register", 1, hits.size());
+        assertFalse("arrangement: and must not be resolvable", hits.get(0).resolvable());
+
+        CrystalMemory memory = new CrystalMemory();
+        List<Integer> taught = new ArrayList<>();
+        TelescopeScan.characterise(registry, hits.get(0), memory, 1_000L, id -> "Body-" + id,
+                true, taught::add);
+
+        assertTrue("a point of light teaches the ground nothing: " + taught, taught.isEmpty());
+        assertEquals("but the address is still written down", 1, memory.size());
+    }
+
+    @Test
+    public void recordingPositionsOnlyTeachesNothingEither() {
+        // The operator's own choice, not the aperture's limit. Asking for less must also GIVE less
+        // to the ground, or "positions only" would quietly be a full survey for tier-1.
+        double sunLike = StellarMagnitude.luminositySuns(1.15d, 100);
+        double near = StellarMagnitude.detectionRangeLightYears(sunLike, 12d - 6.5d) / 2d;
+        UniverseRegistry registry = oneStarAt(near, 1.15f, 100);
+        List<TelescopeScan.Detection> hits = TelescopeScan.detect(registry, seatAt(near), HOME, 12d);
+        assertTrue("arrangement: the aperture must not be what limits this", hits.get(0).resolvable());
+
+        List<Integer> taught = new ArrayList<>();
+        TelescopeScan.characterise(registry, hits.get(0), new CrystalMemory(), 1_000L,
+                id -> "Body-" + id, false, taught::add);
+
+        assertTrue("an operator recording addresses teaches no world: " + taught, taught.isEmpty());
     }
 }

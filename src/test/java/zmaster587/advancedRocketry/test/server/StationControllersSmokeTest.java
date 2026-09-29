@@ -1,6 +1,10 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.MachineInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
@@ -37,7 +41,7 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class StationControllersSmokeTest extends AbstractSharedServerTest {
 
-    private static final int CY = 64;
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 9000;
     private static final int CX_ORIENT  = 9000;
     private static final int CX_GRAV    = 9100;
@@ -69,25 +73,25 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
         String place = exec("artest place 0 " + cx + " " + CY + " " + CZ
                 + " " + registryName);
         assertTrue("block " + registryName + " must place: " + place,
-                place.contains("\"placed\":true"));
+                Reply.of(place).bool("placed"));
 
         String info = exec("artest machine info 0 " + cx + " " + CY + " " + CZ);
         assertTrue("block " + registryName + " must produce tile "
                         + tileSimpleName + ": " + info,
-                info.contains(tileSimpleName));
+                MachineInfo.of(info).isTile(tileSimpleName));
 
         // 40 force-ticks — enough for any % N == 0 gate to fire at least
         // once. Pure smoke: must not throw, tile must remain queryable.
         String tick = exec("artest tile force-tick 0 " + cx + " " + CY + " " + CZ
                 + " 40");
         assertTrue("force-tick on " + registryName + " must succeed: " + tick,
-                tick.contains("\"ok\":true"));
+                Reply.of(tick).ok());
 
         // Re-query — proves the tile survived the tick burst (no
         // unregister, no replace).
         String postInfo = exec("artest machine info 0 " + cx + " " + CY + " " + CZ);
         assertTrue("tile must remain " + tileSimpleName + " after ticking: "
                         + postInfo,
-                postInfo.contains(tileSimpleName));
+                MachineInfo.of(postInfo).isTile(tileSimpleName));
     }
 }

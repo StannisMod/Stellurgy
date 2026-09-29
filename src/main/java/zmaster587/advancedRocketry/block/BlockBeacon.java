@@ -22,11 +22,32 @@ public class BlockBeacon extends BlockMultiblockMachine {
         super(tileClass, guiId);
     }
 
+    /**
+     * Unregisters this beacon's POSITION, which is the whole of what the registry holds about it.
+     *
+     * <p>The removal used to be gated on {@code world.getTileEntity(pos) instanceof TileBeacon} — a
+     * value the removal itself never reads. When that gate was false the block went away and its
+     * registry entry stayed, and it stayed FOREVER: the only other unregister is
+     * {@code TileBeacon.setMachineEnabled(false)}, which needs the tile that no longer exists.
+     * Nothing said so. Removing a position the registry does not hold is a no-op, so asking about
+     * the tile could only ever cost cleanups, never save one.</p>
+     *
+     * <p>The remaining condition — a created dimension — has to stay: without one there is no
+     * registry to remove from. It keeps a log line because a beacon that survives its own block IS
+     * a degradation a player can suffer and would otherwise never hear about. What does NOT live
+     * here is the diagnosis: whether either condition ever fires is a question for a TEST, and a
+     * test cannot read this process's log. That observation is a mixin event instead.</p>
+     */
     @Override
     public void breakBlock(World world, BlockPos pos, IBlockState state) {
-        TileEntity tile = world.getTileEntity(pos);
-        if (tile instanceof TileBeacon && DimensionManager.getInstance().isDimensionCreated(world.provider.getDimension())) {
-            DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).removeBeaconLocation(world, new HashedBlockPosition(pos));
+        int dim = world.provider.getDimension();
+        if (DimensionManager.getInstance().isDimensionCreated(dim)) {
+            DimensionManager.getInstance().getDimensionProperties(dim)
+                    .removeBeaconLocation(world, new HashedBlockPosition(pos));
+        } else {
+            AdvancedRocketry.logger.warn("[BEACON] a beacon block at {} was broken in dim {}, which "
+                    + "reports itself as not created, so nothing was unregistered; it will stay in "
+                    + "no registry and the block is gone", pos, dim);
         }
         super.breakBlock(world, pos, state);
     }

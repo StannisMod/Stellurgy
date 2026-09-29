@@ -32,6 +32,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class NebulaTest {
 
+    /** Clouds a sample must contain before its statistics may speak — the test's own sample bar. */
+    private static final int MIN_CLOUDS = 5;
+
     private static final long SEED = 0xC10DDL;
 
     private static ClusteredGalaxyGenerator gen() {
@@ -119,7 +122,7 @@ public class NebulaTest {
                     break;
             }
         }
-        assertTrue("the sample must contain clouds", seen > 5);
+        assertTrue("the sample must contain clouds", seen > MIN_CLOUDS);
         assertTrue("every DARK cloud must be thicker than every EMISSION one",
                 thinnestDark > darkestEmission);
         assertTrue("and every EMISSION one thicker than every REFLECTION one",

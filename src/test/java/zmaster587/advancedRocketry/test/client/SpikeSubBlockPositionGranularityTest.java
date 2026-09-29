@@ -4,13 +4,15 @@ import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 
 import org.junit.Test;
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.PlayerState;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -76,15 +78,15 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
 
     private static final int OVERWORLD = 0;
     /** Well above sea level: 2M and 16M are both ocean, and a delivery into water measures the water. */
-    private static final int FLOOR_Y = 140;
+    private static final int FLOOR_Y = FixtureSite.OPEN_AIR_Y;
     private static final int STAND_Y = FLOOR_Y + 1;
 
     private static final double SERVER_TOLERANCE = 0.001d;
     private static final double CLIENT_TOLERANCE = 0.05d;
     private static final double ARRIVAL_TOLERANCE = 1.0d;
     private static final double Y_TOLERANCE = 0.05d;
-    /** How many (deliver, settle) rounds a rung gets before it is called undeliverable. */
-    private static final int DELIVERY_ATTEMPTS = 4;
+    /** A deadline for each of a delivery's two records (the chunk, the placement) — not a settle. */
+    private static final int DELIVERY_LINK_BUDGET_TICKS = 200;
 
     private String botName;
 
@@ -103,10 +105,7 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
         exec("weather clear");
         bot().setRenderDistance(4);
 
-        String health = exec("artest player health");
-        Matcher nm = Pattern.compile("\"player\"\\s*:\\s*\"([^\"]+)\"").matcher(health);
-        assertTrue("player health must echo the player name: " + health, nm.find());
-        botName = nm.group(1);
+        botName = PlayerState.botName(this::exec);
 
         List<String> report = new ArrayList<>();
         List<String> inconclusive = new ArrayList<>();
@@ -142,7 +141,7 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
             for (double offset : OFFSETS) {
                 double target = x + 0.5d + offset;
                 exec("tp " + botName + " " + fmt(target) + " " + STAND_Y + " " + fmt(ARENA_Z + 0.5d));
-                ServerTicks.await(serverClient(), OVERWORLD, 6);
+                GameTicks.advanceWorld(serverClient(), OVERWORLD, 6);
                 bot().waitTicks(6);
 
                 double gotServer = serverX();
@@ -200,8 +199,9 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
     // ─── arrangement ────────────────────────────────────────────────────────────
 
     private void buildFloor(int x) throws Exception {
+        // No advance after the ticket: the fill below loads the chunk itself, on the server thread,
+        // before it answers.
         exec("artest chunk forceload " + OVERWORLD + " " + (x >> 4) + " " + (ARENA_Z >> 4));
-        ServerTicks.await(serverClient(), OVERWORLD, 20);
         exec("artest fill " + OVERWORLD + " " + (x - 4) + " " + FLOOR_Y + " " + (ARENA_Z - 4) + " "
                 + (x + 4) + " " + FLOOR_Y + " " + (ARENA_Z + 4) + " minecraft:stone");
         exec("artest fill " + OVERWORLD + " " + (x - 4) + " " + STAND_Y + " " + (ARENA_Z - 4) + " "
@@ -213,12 +213,19 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
         for (int dx : new int[] {0, 1, 2}) {
             String at = exec("artest block at " + OVERWORLD + " " + (x + dx) + " " + FLOOR_Y + " "
                     + ARENA_Z);
-            if (!at.contains("stone")) {
+            // The id, compared, and the air question asked of the field that answers it.
+            // `contains("stone")` is satisfied by cobblestone, sandstone and redstone_block, so
+            // a floor the fill laid wrong read as sound — which is what this control is for.
+            // Both reads refuse, and the producer always writes `block` and `isAir` for a loaded
+            // dimension: the one shape that omits them is `world not loaded`, and this asks
+            // about the overworld.
+            if (!"minecraft:stone".equals(Reply.of(at).text("block"))) {
                 return "the floor is not stone at x+" + dx + " (" + oneLine(at) + ")";
             }
             String above = exec("artest block at " + OVERWORLD + " " + (x + dx) + " " + STAND_Y + " "
                     + ARENA_Z);
-            if (!above.contains("minecraft:air")) {
+            // the producer always writes `isAir`, as above.
+            if (!Reply.of(above).bool("isAir")) {
                 return "the standing space is not air at x+" + dx + " (" + oneLine(above) + ")";
             }
         }
@@ -226,45 +233,51 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
     }
 
     /**
-     * Delivers the player into the arena and does not return until he is STANDING in it. One delivery
-     * is not enough: the chunks are force-loaded on the SERVER but the client has not received them
-     * yet, so client-side physics see air and he falls through the floor. The loop converges rather
-     * than guessing a settle time, and reports which of the two conditions it never met.
+     * Delivers the player into the arena onto a floor his CLIENT holds — the chunks are force-loaded
+     * on the SERVER before the client has them, and a blind delivery drops him through the floor —
+     * via the two named steps of {@link ClientEvents#placeOntoGroundItHolds}, then reads ONCE whether
+     * he is standing. It used to re-deliver in a loop until he stayed.
      *
      * @return {@code null} once he is standing, or a reason string for the INCONCLUSIVE list
      */
     private String deliverAndStand(int x) throws Exception {
-        double lastX = Double.NaN;
-        double lastY = Double.NaN;
-        String lastReply = "";
-        for (int attempt = 1; attempt <= DELIVERY_ATTEMPTS; attempt++) {
-            lastReply = exec("artest player far-tp " + fmt(x + 0.5d) + " " + STAND_Y + " "
-                    + fmt(ARENA_Z + 0.5d));
-            ServerTicks.await(serverClient(), OVERWORLD, 40);
-            bot().waitTicks(30);
-            lastX = serverX();
-            lastY = serverY();
-            if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE
-                    && Math.abs(lastY - STAND_Y) < Y_TOLERANCE) {
-                return null;
-            }
+        String place = "artest player far-tp " + fmt(x + 0.5d) + " " + STAND_Y + " "
+                + fmt(ARENA_Z + 0.5d);
+        try {
+            ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot()), this::exec, place,
+                    x + 0.5d, STAND_Y, ARENA_Z + 0.5d,
+                    "the player must be delivered onto the arena floor at x=" + x, DELIVERY_LINK_BUDGET_TICKS);
+        } catch (AssertionError notPlaced) {
+            return "the player was never placed at x=" + x + " - arrangement, not the coordinate: "
+                    + oneLine(notPlaced.getMessage());
+        }
+        // EXPERIMENT: forty server ticks and thirty client ticks standing on the delivered floor — a
+        // floor the client does not hold drops him well inside that — and the reading after is
+        // whether he stayed.
+        GameTicks.advanceWorld(serverClient(), OVERWORLD, 40);
+        // EXPERIMENT: the client half of the same dose.
+        bot().waitTicks(30);
+        double lastX = serverX();
+        double lastY = serverY();
+        if (Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE
+                && Math.abs(lastY - STAND_Y) < Y_TOLERANCE) {
+            return null;
         }
         boolean arrived = Math.abs(lastX - (x + 0.5d)) < ARRIVAL_TOLERANCE;
         return (arrived
                 ? "he arrived but would not stand (posY=" + fmt(lastY) + ", floor top " + STAND_Y + ")"
-                : "the player never arrived (server posX=" + lastX + ", wanted " + (x + 0.5d) + ")")
-                + " after " + DELIVERY_ATTEMPTS + " deliveries - arrangement, not the coordinate."
-                + " lastReply=" + oneLine(lastReply);
+                : "the player was placed and then was not there (server posX=" + lastX + ", wanted "
+                        + (x + 0.5d) + ")") + " - arrangement, not the coordinate.";
     }
 
     // ─── instruments ────────────────────────────────────────────────────────────
 
     private double serverX() throws Exception {
-        return field(exec("artest player health"), "posX");
+        return PlayerState.read(this::exec).x;
     }
 
     private double serverY() throws Exception {
-        return field(exec("artest player health"), "posY");
+        return PlayerState.read(this::exec).y;
     }
 
     /** The CLIENT's own record of where it thinks it is — the far end of the round trip. */
@@ -274,8 +287,7 @@ public class SpikeSubBlockPositionGranularityTest extends AbstractClientE2ETest 
     }
 
     private static double field(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*([-0-9.eE]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NaN;
+        return Reply.of(json).number(key);
     }
 
     /** The report is the deliverable, so it also lands on disk and survives a truncated console. */

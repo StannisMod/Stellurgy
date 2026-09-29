@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -13,6 +14,10 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import zmaster587.advancedRocketry.test.DimInfo;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -57,8 +62,8 @@ public class SpawnPointReachesClientE2ETest {
     // (8,64,8). Choosing Y outside that makes "the client holds the value we
     // installed" a guarantee rather than a probability — which matters because
     // the harness generates a random world seed on every boot.
-    private static final int SPAWN_A_X = 1337, SPAWN_A_Y = 71, SPAWN_A_Z = -424;
-    private static final int SPAWN_B_X = -2048, SPAWN_B_Y = 79, SPAWN_B_Z = 777;
+    private static final int SPAWN_A_X = 1337, SPAWN_A_Y = FixtureSite.OPEN_AIR_Y, SPAWN_A_Z = -424;
+    private static final int SPAWN_B_X = -2048, SPAWN_B_Y = FixtureSite.OPEN_AIR_Y, SPAWN_B_Z = 777;
 
     private Path workDir;
     private RealDedicatedServerHarness serverHarness;
@@ -165,17 +170,18 @@ public class SpawnPointReachesClientE2ETest {
         // list that broadcast reaches nobody, so the login path is left as the
         // only possible carrier of this value to the client.
         String set = exec("setworldspawn " + SPAWN_A_X + " " + SPAWN_A_Y + " " + SPAWN_A_Z);
-        String oracle = exec("artest dim info 0");
+        DimInfo oracle = DimInfo.forDim(this::exec, 0);
         assertTrue("server-side overworld spawn must be the value we set"
-                        + " (setworldspawn output=" + set + "): " + oracle,
-                oracle.contains("\"spawnX\":" + SPAWN_A_X)
-                        && oracle.contains("\"spawnY\":" + SPAWN_A_Y)
-                        && oracle.contains("\"spawnZ\":" + SPAWN_A_Z));
+                        + " (setworldspawn output=" + set + "): " + oracle.raw(),
+                oracle.spawnX() == SPAWN_A_X
+                        && oracle.spawnY() == SPAWN_A_Y
+                        && oracle.spawnZ() == SPAWN_A_Z);
 
         startClient();
         clientHarness.bot().waitForWorld();
 
-        JsonObject spawn = waitForClientSpawn(SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
+        // Mark 0: the spawn packet rides in with the join, before any mark this test could take.
+        JsonObject spawn = waitForClientSpawn(0L, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
         assertEquals("client should be in the overworld: " + spawn, 0, spawn.get("dim").getAsInt());
         assertSpawnEquals("client world spawn after login", spawn,
                 SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
@@ -196,6 +202,12 @@ public class SpawnPointReachesClientE2ETest {
      * dimension's spawn point — so the compass in the destination points there
      * rather than at a placeholder left over from a freshly constructed client
      * world.
+     *
+     * <p>red-witnessed: with {@code MixinPlayerList} cancelling {@code updateTimeAndWeatherForPlayer}
+     * at HEAD — the pre-fix shape, whose copy dropped vanilla's spawn packet: "the client must be TOLD
+     * the world spawn — no `client_spawn_set` carrying x = -2048 …" at the wait after the transfer,
+     * with the positive control before it green, 2026-09-28. The lines the wait rewrite touched are
+     * an arrangement read, the probe's own silence and the client's dimension.</p>
      */
     @Test
     public void transferredPlayerIsToldTheDestinationDimensionSpawnPoint() throws Exception {
@@ -205,25 +217,22 @@ public class SpawnPointReachesClientE2ETest {
         // Positive control: force a known-good client state through vanilla's
         // own broadcast. If this fails, the probe or the client is broken and
         // nothing below would mean anything.
+        long broadcast = clientEvents().mark();
         exec("setworldspawn " + SPAWN_A_X + " " + SPAWN_A_Y + " " + SPAWN_A_Z);
-        JsonObject synced = waitForClientSpawn(SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
+        JsonObject synced = waitForClientSpawn(broadcast, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
         assertSpawnEquals("POSITIVE CONTROL: a broadcast SPacketSpawnPosition must reach the"
                         + " client (a failure here is the probe or the client, not AR)",
                 synced, SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
 
         // Now move the spawn SILENTLY — no packet. The client must still hold A.
+        long silentMark = clientEvents().mark();
         String silent = exec("artest dim set-spawn 0 "
                 + SPAWN_B_X + " " + SPAWN_B_Y + " " + SPAWN_B_Z);
         assertTrue("silent set-spawn must have taken effect server-side: " + silent,
-                silent.contains("\"ok\":true")
-                        && silent.contains("\"spawnX\":" + SPAWN_B_X)
-                        && silent.contains("\"spawnY\":" + SPAWN_B_Y)
-                        && silent.contains("\"spawnZ\":" + SPAWN_B_Z));
-        clientHarness.bot().waitTicks(20);
-        assertSpawnEquals("silent set-spawn must NOT have pushed a packet — if the client"
-                        + " already reads B here the arrange leaked and the assertion below"
-                        + " would be vacuous",
-                clientHarness.bot().reportSpawn(), SPAWN_A_X, SPAWN_A_Y, SPAWN_A_Z);
+                Reply.of(silent).ok()
+                        && String.valueOf(SPAWN_B_X).equals(Reply.of(silent).text("spawnX"))
+                        && String.valueOf(SPAWN_B_Y).equals(Reply.of(silent).text("spawnY"))
+                        && String.valueOf(SPAWN_B_Z).equals(Reply.of(silent).text("spawnZ")));
 
         // An AR planet's WorldInfo delegates spawn to the overworld, so the
         // destination's spawn is B. Assert it rather than assume it — which
@@ -231,63 +240,98 @@ public class SpawnPointReachesClientE2ETest {
         // read a spawn point from.
         String load = exec("artest dim load " + PLANET_DIM);
         assertTrue("destination dim must load before it can be inspected: " + load,
-                load.contains("\"ok\":true") || load.contains("\"loaded\":true"));
-        String destOracle = exec("artest dim info " + PLANET_DIM);
-        assertTrue("destination server-side spawn must be B: " + destOracle,
-                destOracle.contains("\"spawnX\":" + SPAWN_B_X)
-                        && destOracle.contains("\"spawnY\":" + SPAWN_B_Y)
-                        && destOracle.contains("\"spawnZ\":" + SPAWN_B_Z));
+                Reply.of(load).bool("loaded"));
+        DimInfo destOracle = DimInfo.forDim(this::exec, PLANET_DIM);
+        assertTrue("destination server-side spawn must be B: " + destOracle.raw(),
+                destOracle.spawnX() == SPAWN_B_X
+                        && destOracle.spawnY() == SPAWN_B_Y
+                        && destOracle.spawnZ() == SPAWN_B_Z);
 
         // Real cross-dimension transfer through PlayerList.transferPlayerToDimension.
+        long toPlanet = clientEvents().mark();
         exec("artest tp " + PLANET_DIM);
-        waitForClientDim(PLANET_DIM);
+        awaitClientDim(toPlanet, PLANET_DIM);
 
-        JsonObject onPlanet = waitForClientSpawn(SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
+        JsonObject onPlanet = waitForClientSpawn(toPlanet, SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
+        // The silent set-spawn must NOT have pushed a packet, or the B above could be the leak and
+        // not the transfer. No window is needed to see a leak: one connection delivers in order,
+        // so a packet sent by the set-spawn lands BEFORE the respawn the later tp sends, and any
+        // B record ordered before the dimension change is that packet.
+        String dimChange = clientEvents().since(toPlanet, "client_dimension_changed");
+        double dimChangeSeq = Events.number(Events.records(dimChange).get(0), "seq");
+        for (String told : Events.recordsWhereAll(clientEvents().since(silentMark, "client_spawn_set"),
+                "x", String.valueOf(SPAWN_B_X), "y", String.valueOf(SPAWN_B_Y),
+                "z", String.valueOf(SPAWN_B_Z))) {
+            assertTrue("silent set-spawn must NOT have pushed a packet: the client was told B before"
+                    + " it changed dimension, so the B read above is the leak and not the transfer."
+                    + " Leaked record " + told + " | dimension change " + dimChange,
+                    Events.number(told, "seq") > dimChangeSeq);
+        }
         assertEquals("client should be on the planet: " + onPlanet,
                 PLANET_DIM, onPlanet.get("dim").getAsInt());
         assertSpawnEquals("client world spawn after cross-dim transfer", onPlanet,
                 SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
 
         // Same contract in the opposite direction.
+        long toOverworld = clientEvents().mark();
         exec("artest tp 0");
-        waitForClientDim(0);
+        awaitClientDim(toOverworld, 0);
         assertSpawnEquals("client world spawn after transferring back to the overworld",
-                waitForClientSpawn(SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z),
+                waitForClientSpawn(toOverworld, SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z),
                 SPAWN_B_X, SPAWN_B_Y, SPAWN_B_Z);
     }
 
     /**
-     * Polls ~10 s for the expected triple and returns the LAST sample either
-     * way — a soft wait, so the caller's assertion carries the full JSON into
-     * the failure message.
+     * Wait until the CLIENT has been TOLD this spawn triple, then read what it holds ONCE.
+     *
+     * <p>This replaced a poll of {@code report_spawn}, which sampled the value the packet sets and
+     * could not tell "not sent yet" from "sent and overwritten between two reads". The record is
+     * {@code client_spawn_set}, written at the tail of {@code handleSpawnPosition} — added to the
+     * harness on 2026-09-21 for exactly this wait, because until then there was nothing to link
+     * on and a longer budget was the only lever.</p>
+     *
+     * @param mark a mark on the CLIENT log taken BEFORE whatever changes the spawn; {@code 0} for
+     *             a login, where the packet arrives with the join and precedes any mark a test
+     *             could take
      */
-    private JsonObject waitForClientSpawn(int x, int y, int z) throws Exception {
-        JsonObject latest = clientHarness.bot().reportSpawn();
-        for (int waited = 0; waited < 200; waited += 10) {
-            if (latest != null && latest.has("spawnX")
-                    && latest.get("spawnX").getAsInt() == x
-                    && latest.get("spawnY").getAsInt() == y
-                    && latest.get("spawnZ").getAsInt() == z) {
-                return latest;
-            }
-            clientHarness.bot().waitTicks(10);
-            latest = clientHarness.bot().reportSpawn();
+    private JsonObject waitForClientSpawn(long mark, int x, int y, int z) throws Exception {
+        try {
+            clientEvents().awaitRecordWithFields(mark, "client_spawn_set",
+                    "the client must be TOLD the world spawn", SPAWN_LINK_BUDGET_TICKS,
+                    "x", String.valueOf(x), "y", String.valueOf(y), "z", String.valueOf(z));
+        } catch (AssertionError never) {
+            Events.assertInstrumentRan(clientEvents().since(mark, "client_spawn_set"),
+                    "client_spawn_set", "the client's own spawn writes must be observed at all"
+                            + " before an absent one can be read as a spawn that never reached it");
+            throw new AssertionError(never.getMessage() + " | the client currently holds "
+                    + clientHarness.bot().reportSpawn(), never);
         }
-        return latest;
+        return clientHarness.bot().reportSpawn();
     }
 
-    /** Polls until the client reports the expected dim, capped at ~10 seconds. */
-    private void waitForClientDim(int expectedDim) throws Exception {
-        for (int waited = 0; waited < 200; waited += 10) {
-            clientHarness.bot().waitTicks(10);
-            JsonObject s = clientHarness.bot().reportSpawn();
-            if (s != null && s.has("dim") && s.get("dim").getAsInt() == expectedDim) {
-                return;
-            }
-        }
-        throw new AssertionError("client never reached dim " + expectedDim
-                + " (last spawn report: " + clientHarness.bot().reportSpawn() + ")");
+    /** How long the client is given to be TOLD a world spawn, in ticks. */
+    private static final int SPAWN_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * The client is IN {@code expectedDim}, waited for as the RESPAWN packet that puts it there —
+     * {@link ClientEvents#awaitDim}, which is where the wait and its narrative live.
+     *
+     * @param transferMark the CLIENT's own mark, taken BEFORE the command that transfers him
+     */
+    private void awaitClientDim(long transferMark, int expectedDim) throws Exception {
+        ClientEvents.awaitDim(clientEvents(), transferMark, expectedDim,
+                "the spawn read below is otherwise the world he LEFT", DIM_LINK_BUDGET_TICKS,
+                () -> "last spawn report: " + clientHarness.bot().reportSpawn());
     }
+
+    /** The CLIENT's own event log, behind the shared verbs. */
+    private Events clientEvents() {
+        return ClientEvents.of(clientHarness.bot());
+    }
+
+    /** How long the client is given to FOLLOW a transfer the server has already performed — one
+     *  round trip plus a world teardown and rebuild. The old poll's own ceiling. */
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
 
     private static void assertSpawnEquals(String what, JsonObject s, int x, int y, int z) {
         assertEquals(what + " — X: " + s, x, s.get("spawnX").getAsInt());

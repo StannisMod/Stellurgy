@@ -1,5 +1,6 @@
 package zmaster587.advancedRocketry.test.client;
 
+import zmaster587.advancedRocketry.test.Reply;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -9,6 +10,10 @@ import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
+
+import zmaster587.advancedRocketry.test.DimWeather;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -138,6 +143,28 @@ public class WeatherClientSyncE2ETest {
                 + "        </planet>\n";
     }
 
+    /**
+     * Each planet keeps its own weather through a real client, and a fresh planet never inherits the
+     * overworld's rain.
+     *
+     * <p>red-witnessed: the fresh-dim packet verdicts and the overworld control, 2026-09-28, one
+     * inversion per verdict; the told-rain link on A has not been reddened and the reason is measured
+     * below. THE OVERWORLD CONTROL — dim C's wrap clearing the overworld's own rain flag: "overworld
+     * should still be raining". THE TOLD-RAIN LINK ON A — the rain reaches an arriving client by more
+     * paths than any one inversion can remove: with {@code PlanetWeatherManager.syncToPlayer} returning
+     * at once (every AR sender goes through it), the transfer's weather gate in {@code MixinPlayerList}
+     * never syncing, and the planet's strength ramp in {@code WorldProviderPlanet.updateWeather} frozen,
+     * all at once, the link still passed — a strength of 0.15 reached the client — and the test fell
+     * at the client-visible flag after it. The path still delivering it was not found.
+     * NEVER TOLD IT IS RAINING —
+     * {@code PlanetWeatherManager.wrapWorldInfoIfNeeded} no longer re-seeding the rain strength after
+     * wrapping, the phantom-rain defect: "client must never be told it is raining on fresh clear dim
+     * C". NEVER TOLD A STRENGTH — the re-seed ({@code PlanetWeatherManager:204}) leaving dim C at 0.15,
+     * under the 0.2 at which vanilla calls a world raining: "client must never be told a rain strength
+     * above 0 on fresh dim C". (At 1.0 the begin-raining verdict fell first.) The two end-of-window
+     * reads after them cannot go red alone: the client learns rain only from those packets, so any
+     * state that fails them was told first. The client-in-dim reads are the teleport's arrangement.</p>
+     */
     @Test
     public void weatherIsolatedAcrossDimsThroughRealClient() throws Exception {
         clientHarness.bot().waitForWorld();
@@ -147,46 +174,49 @@ public class WeatherClientSyncE2ETest {
         // on AR planets is our ARDimensionWorldInfo wrapper.
         String setA = String.join("\n", serverHarness.client().execute(
                 "artest weather set " + DIM_A + " rain 12000"));
-        assertTrue("set rain on dim A failed: " + setA, setA.contains("\"ok\":true"));
+        assertTrue("set rain on dim A failed: " + setA, Reply.of(setA).ok());
         String setB = String.join("\n", serverHarness.client().execute(
                 "artest weather set " + DIM_B + " clear 12000"));
-        assertTrue("set clear on dim B failed: " + setB, setB.contains("\"ok\":true"));
+        assertTrue("set clear on dim B failed: " + setB, Reply.of(setB).ok());
 
         // Confirm the wrapper is in place on BOTH AR dims — without this the
         // isolation assertion below could pass for the wrong reason (e.g.
         // vanilla shared weather happened to differ on the two dims this
         // sample tick).
-        String getA = String.join("\n",
-                serverHarness.client().execute("artest weather get " + DIM_A));
-        String getB = String.join("\n",
-                serverHarness.client().execute("artest weather get " + DIM_B));
-        assertTrue("dim A WorldInfo class should be ARDimensionWorldInfo: " + getA,
-                getA.contains("ARDimensionWorldInfo"));
-        assertTrue("dim B WorldInfo class should be ARDimensionWorldInfo: " + getB,
-                getB.contains("ARDimensionWorldInfo"));
-        assertTrue("dim A should be raining after explicit set: " + getA,
-                getA.contains("\"isRaining\":true"));
-        assertFalse("dim B should NOT be raining after explicit clear: " + getB,
-                getB.contains("\"isRaining\":true"));
+        DimWeather getA = serverWeather(DIM_A);
+        DimWeather getB = serverWeather(DIM_B);
+        assertTrue("dim A WorldInfo class should be ARDimensionWorldInfo: " + getA.raw(),
+                getA.usesARWorldInfo());
+        assertTrue("dim B WorldInfo class should be ARDimensionWorldInfo: " + getB.raw(),
+                getB.usesARWorldInfo());
+        assertTrue("dim A should be raining after explicit set: " + getA.raw(), getA.raining);
+        assertFalse("dim B should NOT be raining after explicit clear: " + getB.raw(),
+                getB.raining);
 
         // Teleport the client to dim A. Vanilla 1.12 /tp doesn't cross dims,
         // and /advancedrocketry goto needs an Entity sender (unreachable from
         // the harness server console). /artest tp picks the connected player
         // and calls PlayerList.transferPlayerToDimension directly — same path
         // commandGoto uses internally, but driveable from the console.
+        Events clientLog = clientEvents();
+        long toA = clientLog.mark();
         serverHarness.client().execute("artest tp " + DIM_A);
-        waitForClientDim(DIM_A);
+        awaitClientDim(clientLog, toA, DIM_A);
 
-        // The client now SEES dim A's wrapped weather. rainStrength is
-        // server-driven via SPacketChangeGameState (begin/end raining +
-        // strength edges), so it ramps up over a handful of ticks before
-        // settling near 1.0. Poll a short window.
-        JsonObject onA = waitForClientRainStrengthAtLeast(0.05f);
+        // The client now SEES dim A's wrapped weather. rainStrength is server-driven: the client
+        // world does not lerp its own, and every step of the ramp arrives as a strength packet the
+        // client applies. So the rain REACHING him is a link on his own record of being told, and
+        // the report is read once after it.
+        String toldA = clientLog.awaitMatching(toA, "client_game_state_changed",
+                seen -> ClientEvents.toldRainStrengthAtLeast(seen, 0.05),
+                "telling the client a rain strength of at least 0.05",
+                "the client arriving in raining dim A must be told its rain", RAIN_LINK_BUDGET_TICKS);
+        JsonObject onA = clientHarness.bot().reportWeather();
         assertTrue("client should be in dim A after goto: " + onA,
                 onA.has("dim") && onA.get("dim").getAsInt() == DIM_A);
         assertTrue("client-visible isRaining must be true on dim A: " + onA,
                 onA.get("isRaining").getAsBoolean());
-        assertTrue("client rainStrength must climb above 0 on dim A: " + onA,
+        assertTrue("client rainStrength must climb above 0 on dim A; what it was told: " + toldA,
                 onA.get("rainStrength").getAsFloat() > 0f);
 
         // Teleport to dim B. This is the path that fires
@@ -194,8 +224,9 @@ public class WeatherClientSyncE2ETest {
         // pushing the new dim's weather via SPacketChangeGameState. The
         // explicit end-raining packet should drop client-visible rain
         // immediately.
+        long toB = clientLog.mark();
         serverHarness.client().execute("artest tp " + DIM_B);
-        waitForClientDim(DIM_B);
+        awaitClientDim(clientLog, toB, DIM_B);
 
         JsonObject onB = clientHarness.bot().reportWeather();
         assertTrue("client should be in dim B after goto: " + onB,
@@ -210,12 +241,11 @@ public class WeatherClientSyncE2ETest {
                 0f, onB.get("rainStrength").getAsFloat(), 0f);
 
         // Server-side wrapper guarantees on dim B persist too.
-        String getBAgain = String.join("\n",
-                serverHarness.client().execute("artest weather get " + DIM_B));
-        assertTrue("dim B wrapper must persist across teleports: " + getBAgain,
-                getBAgain.contains("ARDimensionWorldInfo"));
-        assertFalse("server-side dim B must remain clear: " + getBAgain,
-                getBAgain.contains("\"isRaining\":true"));
+        DimWeather getBAgain = serverWeather(DIM_B);
+        assertTrue("dim B wrapper must persist across teleports: " + getBAgain.raw(),
+                getBAgain.usesARWorldInfo());
+        assertFalse("server-side dim B must remain clear: " + getBAgain.raw(),
+                getBAgain.raining);
 
         // ── Phantom-fade regression: fresh world constructed under overworld
         // rain. Vanilla /weather (and our artest equivalent) flags the
@@ -226,74 +256,88 @@ public class WeatherClientSyncE2ETest {
         // post-wrap reseed the client renders a ~5 s rain fade on arrival.
         String setOver = String.join("\n", serverHarness.client().execute(
                 "artest weather set 0 rain 12000"));
-        assertTrue("set rain on overworld failed: " + setOver, setOver.contains("\"ok\":true"));
+        assertTrue("set rain on overworld failed: " + setOver, Reply.of(setOver).ok());
 
+        long toC = clientLog.mark();
         serverHarness.client().execute("artest tp " + DIM_C);
-        waitForClientDim(DIM_C);
+        awaitClientDim(clientLog, toC, DIM_C);
 
-        // Sample across the would-be fade window (~5 s = 100 ticks): the
-        // client-visible strength must hold at exactly 0 the whole time. A
-        // single non-zero sample means the seeded strength leaked to the
-        // client (either via the transfer sync or the per-tick
-        // SPacketChangeGameState(7) stream from the server lerp).
-        for (int sample = 0; sample < 6; sample++) {
-            JsonObject onC = clientHarness.bot().reportWeather();
-            assertTrue("client should be in dim C (sample " + sample + "): " + onC,
-                    onC.has("dim") && onC.get("dim").getAsInt() == DIM_C);
-            assertFalse("client must not see rain on fresh clear dim C (sample "
-                            + sample + "): " + onC,
-                    onC.get("isRaining").getAsBoolean());
-            assertEquals("client rainStrength must hold at 0 on fresh dim C (sample "
-                            + sample + "): " + onC,
-                    0f, onC.get("rainStrength").getAsFloat(), 0f);
-            clientHarness.bot().waitTicks(20);
-        }
+        // The would-be fade window (~5 s = 100 ticks): the client-visible strength must hold at
+        // exactly 0 the whole time. A seeded strength leaking to the client arrives as packets —
+        // through the transfer sync or the per-tick strength stream from the server's lerp — and the
+        // client records every one it applies. So the claim is over ALL of them, not over six samples
+        // of their result, which could straddle a short leak.
+        // WINDOW: from the arrival mark to the log read below, FADE_WINDOW_TICKS of dim C's own
+        // clock — the lerp that would send the leak runs on that world's ticks. What it cannot see:
+        // a packet sent in the window's last tick and not yet applied when the log is read.
+        GameTicks.advanceWorld(serverHarness.client(), DIM_C, FADE_WINDOW_TICKS);
+        String toldC = clientLog.since(toC, "client_game_state_changed");
+        Events.assertInstrumentRan(toldC, "client_game_state_changed",
+                "the client's weather packets must be observed at all before their absence on dim C"
+                        + " can be read as dry");
+        assertTrue("client must never be told it is raining on fresh clear dim C; game-state packets"
+                        + " since the arrival: " + toldC,
+                Events.recordsWhere(toldC, "state", ClientEvents.BEGIN_RAINING_STATE).isEmpty());
+        assertFalse("client must never be told a rain strength above 0 on fresh dim C; game-state"
+                        + " packets since the arrival: " + toldC,
+                ClientEvents.toldRainStrengthAtLeast(toldC, Double.MIN_VALUE));
+        JsonObject onC = clientHarness.bot().reportWeather();
+        assertTrue("client should be in dim C at the end of the window: " + onC,
+                onC.has("dim") && onC.get("dim").getAsInt() == DIM_C);
+        assertFalse("client must not see rain on fresh clear dim C: " + onC,
+                onC.get("isRaining").getAsBoolean());
+        assertEquals("client rainStrength must be 0 on fresh dim C at the end of the window: " + onC,
+                0f, onC.get("rainStrength").getAsFloat(), 0f);
 
         // The overworld itself must still be raining — dim C staying dry must
         // come from per-dim isolation, not from the rain set having failed.
-        String overAfter = String.join("\n",
-                serverHarness.client().execute("artest weather get 0"));
-        assertTrue("overworld should still be raining: " + overAfter,
-                overAfter.contains("\"isRaining\":true"));
+        DimWeather overAfter = serverWeather(0);
+        assertTrue("overworld should still be raining: " + overAfter.raw(), overAfter.raining);
+    }
+
+    /** What the SERVER says one world's sky is doing, as opposed to what the client is shown. */
+    private DimWeather serverWeather(int dim) throws Exception {
+        return DimWeather.forDim(
+                        cmd -> String.join("\n", serverHarness.client().execute(cmd)), dim)
+                .requireDim(dim);
+    }
+
+    // ── the CLIENT's own event log ────────────────────────────────────────────
+    //
+    // The three crossings this test drives are observed on the CLIENT: the far side of a transfer is
+    // the respawn the player's own client performs. It runs its own harness rather than the shared
+    // base's, so it reaches {@link ClientEvents} directly instead of through {@code clientEvents()}.
+
+    private Events clientEvents() {
+        return ClientEvents.of(clientHarness.bot());
     }
 
     /**
-     * Polls until {@code bot.reportWeather().dim} matches the expected dim,
-     * capped at ~10 seconds. On a successful goto the client briefly
-     * disconnects from the source dim and re-spawns into the target — once
-     * {@code mc.world.provider.getDimension()} == expected, the client is
-     * settled.
+     * Wait for the CLIENT to be respawned into {@code expectedDim} — the far side of the transfer,
+     * read off its own record rather than sampled ({@link ClientEvents#awaitDim}).
+     *
+     * <p>{@code mark} is taken BEFORE the transfer is ordered, which is the whole point.</p>
      */
-    private void waitForClientDim(int expectedDim) throws Exception {
-        for (int waited = 0; waited < 200; waited += 10) {
-            clientHarness.bot().waitTicks(10);
-            JsonObject w = clientHarness.bot().reportWeather();
-            if (w != null && w.has("dim") && w.get("dim").getAsInt() == expectedDim) {
-                return;
-            }
-        }
-        throw new AssertionError("client never reached dim " + expectedDim
-                + " (last weather report: " + clientHarness.bot().reportWeather() + ")");
+    private void awaitClientDim(Events events, long mark, int expectedDim) throws Exception {
+        ClientEvents.awaitDim(events, mark, expectedDim,
+                "the weather these scenarios read is the weather of the world he is IN",
+                DIM_LINK_BUDGET_TICKS,
+                () -> "last weather report: " + clientHarness.bot().reportWeather());
     }
 
     /**
-     * The client does NOT lerp weather itself in 1.12.2
-     * ({@code WorldClient.updateWeather()} is an empty override) — the
-     * client-visible ramp is the SERVER's lerp streamed one
-     * {@code SPacketChangeGameState(7)} per tick to in-dim players. Poll
-     * briefly so the test isn't flaky on the exact tick of the snapshot —
-     * settling above {@code minStrength} confirms the rain packets actually
-     * reach and apply client-side.
+     * How long a dimension transfer's far side may take to reach the client — a deadline for a
+     * discrete event, the same 200 ticks the poll it replaces was capped at.
      */
-    private JsonObject waitForClientRainStrengthAtLeast(float minStrength) throws Exception {
-        JsonObject latest = clientHarness.bot().reportWeather();
-        for (int waited = 0; waited < 200; waited += 10) {
-            if (latest.has("rainStrength") && latest.get("rainStrength").getAsFloat() >= minStrength) {
-                return latest;
-            }
-            clientHarness.bot().waitTicks(10);
-            latest = clientHarness.bot().reportWeather();
-        }
-        return latest; // let the caller decide; this is a soft wait
-    }
+    private static final int DIM_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * How long the rain may take to reach the client once he is in a raining world — a deadline for
+     * a packet, the same 200 ticks the poll it replaced was capped at (twenty reads ten apart).
+     */
+    private static final int RAIN_LINK_BUDGET_TICKS = 200;
+
+    /** The phantom fade this class guards against ran for about five seconds: 100 ticks of the world
+     *  it would run in, the stretch the six samples it replaced covered. */
+    private static final int FADE_WINDOW_TICKS = 100;
 }

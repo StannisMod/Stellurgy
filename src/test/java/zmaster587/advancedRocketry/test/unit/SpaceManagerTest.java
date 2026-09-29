@@ -23,6 +23,14 @@ import static org.junit.Assert.fail;
  */
 public class SpaceManagerTest {
 
+    /** The pool slots this scenario offers. Not thresholds: the arrangement's own dimension ids. */
+    private static final int POOL_SLOT_A = 10;
+    /** @see #POOL_SLOT_A */
+    private static final int POOL_SLOT_B = 11;
+
+    /** How many unloads the binder must have seen — one per slot it bound. */
+    private static final int EXPECTED_UNLOADS = 2;
+
     /** A cell coordinate in sector {@code (s,0,0)} (each distinct s => a distinct cell). */
     private static GalacticCoord cell(long s) {
         return GalacticCoord.ofSectorLocal(s, 0L, 0L, 0L, 0L, 0L);
@@ -57,7 +65,16 @@ public class SpaceManagerTest {
          */
         final java.util.Set<Integer> worldRemovedBehindOurBack = new java.util.LinkedHashSet<>();
 
-        @Override public void load(int dimId, String cellKey) {
+        /**
+         * The recorded loads stay keyed by the cell's KEY, which is what this controller's own
+         * bookkeeping is keyed by and what every assertion below reads. What changed under it is that
+         * the seam now carries the whole coordinate: the key is derived here rather than handed in,
+         * so a caller that lost the cell's lattice width upstream can no longer reach this fake at
+         * all — it would not compile.
+         */
+        @Override public void load(int dimId,
+                zmaster587.advancedRocketry.space.GalacticCoord cell) {
+            String cellKey = cell.cellKey();
             loads.add(dimId + ":" + cellKey);
             bound.put(dimId, cellKey);
             worldRemovedBehindOurBack.remove(dimId); // a load builds the world back
@@ -119,7 +136,7 @@ public class SpaceManagerTest {
 
         int dim = m.materialize(cell(5));
 
-        assertTrue("must bind one of the pool slots", dim == 10 || dim == 11);
+        assertTrue("must bind one of the pool slots", dim == POOL_SLOT_A || dim == POOL_SLOT_B);
         assertEquals(1, binder.loads.size());
         assertEquals(dim + ":" + cell(5).cellKey(), binder.loads.get(0));
         assertTrue(m.isLoaded(cell(5)));
@@ -374,7 +391,7 @@ public class SpaceManagerTest {
 
         assertTrue("its on-disk copy is kept", m.storedCellCount() >= 1);
         // The last eviction of the unchanged cell1 kept the store (unload), never discarded it.
-        assertTrue(binder.unloads.size() >= 2);
+        assertTrue(binder.unloads.size() >= EXPECTED_UNLOADS);
     }
 
     // -- garbage collection --------------------------------------------------

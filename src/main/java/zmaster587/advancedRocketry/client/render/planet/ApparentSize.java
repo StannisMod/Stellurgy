@@ -1,5 +1,7 @@
 package zmaster587.advancedRocketry.client.render.planet;
 
+import zmaster587.advancedRocketry.util.AstronomicalBodyHelper;
+
 /**
  * How big a fed body is drawn in the cell sky, given how far away it is <b>and how big it is</b>.
  *
@@ -83,11 +85,30 @@ public final class ApparentSize {
     }
 
     /**
-     * A distance rendered the way a pilot reads it: whole blocks under 10 km, then km, then Mm, then
-     * Gm. The label has to be legible at a glance across six decades, and "1183472901 m" is not.
+     * A distance in CHART BLOCKS, rendered the way a pilot reads it.
+     *
+     * <p>This is the one a sky label wants, because every length the body feed carries is a chart
+     * length. One chart block is {@link AstronomicalBodyHelper#METRES_PER_CHART_BLOCK} metres, so
+     * printing the block count itself under a unit of length understates the range by that whole
+     * factor — Earth at 5 657 554 blocks read as "6 Mm" where the truth is 1.41 Gm, and a pilot
+     * deciding whether a burn is worth making was reading a number 250 times too small.</p>
      */
-    public static String formatDistance(double distanceBlocks) {
-        double d = Math.max(0d, distanceBlocks);
+    public static String formatChartDistance(double distanceChartBlocks) {
+        return formatDistance(Math.max(0d, distanceChartBlocks)
+                * AstronomicalBodyHelper.METRES_PER_CHART_BLOCK);
+    }
+
+    /**
+     * A distance IN METRES, rendered the way a pilot reads it: whole metres under 10 km, then km,
+     * then Mm, then Gm. The label has to be legible at a glance across six decades, and
+     * "1183472901 m" is not.
+     *
+     * <p>Takes metres and not blocks on purpose: the two metrics are never added and a formatter that
+     * accepted either would be the place they got confused. A caller holding a chart length wants
+     * {@link #formatChartDistance}.</p>
+     */
+    public static String formatDistance(double distanceMetres) {
+        double d = Math.max(0d, distanceMetres);
         if (d < 10_000d) {
             return Math.round(d) + " m";
         }

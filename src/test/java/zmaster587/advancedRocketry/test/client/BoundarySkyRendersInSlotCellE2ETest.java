@@ -1,10 +1,17 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import zmaster587.advancedRocketry.client.render.planet.ApparentSize;
+import zmaster587.advancedRocketry.test.NebulaSearch;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.SkyNebulae;
+import zmaster587.advancedRocketry.test.PlayerState;
+import zmaster587.advancedRocketry.test.CellInfo;
+import zmaster587.advancedRocketry.test.Events;
 import org.junit.After;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -15,8 +22,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -58,11 +63,15 @@ import static org.junit.Assert.assertTrue;
  *       at 2, so without this the sky renderer never runs and every frame is honestly empty for the
  *       wrong reason. 8 also puts the sky far plane at 256, clear of the ~100-unit sky geometry.</li>
  *   <li>{@code setFramebuffer(true)} — without the FBO a capture reads a back buffer the driver may
- *       already have discarded. <b>Run this test with {@code -PclientFbo=true}</b>: enabling the FBO at
- *       RUNTIME is not enough, because the recreated framebuffer receives only the HUD pass and not the
- *       world pass, so every capture comes back as the framebuffer's own white clear colour. The
- *       liveness control below is what makes that failure loud instead of a false accusation against the
- *       renderer.</li>
+ *       already have discarded. Enabling it at RUNTIME is not enough: the recreated framebuffer receives
+ *       only the HUD pass and not the world pass, so every capture comes back as the framebuffer's own
+ *       white clear colour. So this class asks for the FBO at CLIENT LAUNCH
+ *       ({@link #clientNeedsFramebuffer()}, which the shared base reads while setting the child's
+ *       start-time properties, BEFORE the client is started) rather than depending on the invocation
+ *       passing {@code -PclientFbo=true} — a requirement carried in a launch flag is one an ordinary
+ *       suite run does not carry, and this class spent months failing its own liveness control for
+ *       exactly that reason. The runtime call below is kept so the frames are captured under a framebuffer this test
+ *       has positively asserted, and so the state is restored the same way as the others.</li>
  *   <li>{@code setHudHidden(true)} — the HUD is not part of the subject and actively corrupts it. The
  *       chat overlay carries the harness's own per-command completion markers, which sit across the
  *       middle of the frame and CHANGE between two captures. Hiding also drains toasts, which vanilla
@@ -93,7 +102,8 @@ import static org.junit.Assert.assertTrue;
  *       the cell (chosen by geometry, not by hope) must NOT gain a billboard when the bodies are
  *       registered, and must not look like the aimed frames do.</li>
  *   <li><b>The atmosphere boundary, by exact count</b> — one per DESCEND TARGET and none for anything
- *       else, read off the renderer's own per-frame counter. The fixture is what makes it a real
+ *       else, read off the renderer's own record of one NAMED frame ({@code sky_frame_drawn}, whose
+ *       payload says what that frame drew and in which world). The fixture is what makes it a real
  *       measurement: six bodies of which five are descend targets, so "one per body" reads 6 and
  *       "none drawn" reads 0, and only the correct renderer reads 5.</li>
  *   <li><b>Starfield</b> — pixels differing from the background in the upper part of the empty-bearing
@@ -107,15 +117,41 @@ import static org.junit.Assert.assertTrue;
  * producer has, not which object, frame or lifecycle stage the renderer reads — the renderer is fed
  * through the identical production broadcast — so the rendering path under test is the real one.
  */
-public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2ETest {
 
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
+    @Override
+    protected String subsystem() {
+        return "cell-sky";
+    }
+
+    /**
+     * This class MEASURES PIXELS, so its client is started with the framebuffer object rather than
+     * having one switched on mid-session — the difference between reading the world and reading the
+     * buffer's clear colour. See {@code clientNeedsFramebuffer} on the base for what that cost.
+     */
+    @Override
+    protected boolean clientNeedsFramebuffer() {
+        return true;
+    }
+
+    /**
+     * The cell entry this class installs is the family channel it must close: a scenario left
+     * bound to a slot hands the next one a world it never entered, and the shared reset reads
+     * the dimension the CLIENT renders. It runs here rather than in an {@code @After} because
+     * the base's own transfer back to dim 0 happens immediately after this hook.
+     */
+    @Override
+    protected void resetFamilyStateBeforeTeleport() throws Exception {
+        exec("artest space entry-clear");
+    }
+
     /** The slot the settle actually bound the cell to — the one place that decides it. */
-    private static final Pattern BOUND_DIM = Pattern.compile("\"slotDim\":(-?\\d+)");
-    private static final String CLIENT_BODIES_CLASS =
-            "zmaster587.advancedRocketry.network.PacketSystemBodiesSync";
-    private static final String SKY_CLASS =
-            "zmaster587.advancedRocketry.client.render.planet.BoundarySky";
+    private static final String BOUND_DIM = "slotDim";
+    /** The feed, as the probe reports it straight off the production packet: one entry per cell. */
+    private static final String FEED = "feed";
+    private static final String SLOT_DIM = "slotDim";
+    private static final String BODY_COUNT = "bodyCount";
 
     /**
      * Cell the ship settles in — FOUND at run time, never written down. See {@link #findEmptyCell()}.
@@ -145,7 +181,15 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
             {"-30108", "-13988", "11037", "MOON", "0", "0.27"},       // ~34 985
             {"7644", "34614", "-16382", "GAS_GIANT", "-1", "11.0"},   // ~39 050 - not a descend target
             {"-42912", "-23517", "-24475", "MOON", "0", "0.27"},      // ~54 713
-            {"-39818", "28442", "-33418", "MOON", "0", "0.27"},       // ~59 255
+            // Placed where the LAW can express a difference, not where a tidy system would put a
+            // moon. Apparent size is clamped to its maximum for every angular size at or above
+            // NEAR_RATIO (0.1), and a 0.27-Earth moon subtends that out to ~68 900 chart blocks —
+            // so at the ~59 255 this used to sit at it was drawn at exactly the same size as the
+            // body twenty times nearer, and the size leg below could not tell them apart however
+            // correct the renderer was. The DIRECTION is unchanged, so every bearing-aimed leg
+            // still works; only the range is, chosen so the ratio lands mid-band and the drawn
+            // half-size is about half the maximum instead of exactly it.
+            {"-14601261", "10429681", "-12254381", "MOON", "0", "0.27"}, // ~21 729 000
     };
 
     /** A body's radius in Earth radii, as the fixture states it — the sixth column above. */
@@ -188,6 +232,64 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
     private static final int DIFF = 24;
 
     /**
+     * Pixels of the OVERWORLD zenith that must differ from its background before this class's
+     * instrument is trusted at all.
+     *
+     * <p>The TEST'S OWN, and it is a HARNESS control rather than a contract: the overworld sky is a
+     * starfield, so a capture of it that is nearly uniform means the client is not running the sky
+     * pass — and every measurement below would then be reading a black frame.</p>
+     */
+    private static final int OVERWORLD_STARFIELD_PIXELS = 200;
+
+    /**
+     * The smallest frame a capture may be and still be A FRAME, in pixels.
+     *
+     * <p>The TEST'S OWN: what this refuses is a zero-sized or stub image, not a particular
+     * resolution. The numbers are the smallest window the harness ever opens.</p>
+     */
+    private static final int MIN_FRAME_WIDTH = 320;
+    /** @see #MIN_FRAME_WIDTH */
+    private static final int MIN_FRAME_HEIGHT = 240;
+
+    /**
+     * How much of the frame CENTRE may change at a bearing with no body in it, as a fraction.
+     *
+     * <p>The TEST'S OWN: the control's whole point is that nothing is drawn there, so the honest
+     * statement is zero and this is the noise of two captures of the same sky. Compare
+     * {@link #BILLBOARD_COVERS_CENTRE}, which is eight times it — the gap between the two is what
+     * makes the pair a measurement.</p>
+     */
+    private static final double EMPTY_BEARING_CENTRE_CHANGE = 0.05;
+
+    /**
+     * Pixels of an orbit cell's sky that must differ from its background, so the cell is not a void.
+     *
+     * <p>The TEST'S OWN sensitivity bar on "the sky carries stars": far above the handful that
+     * compression noise produces and far below a full starfield.</p>
+     */
+    private static final int ORBIT_CELL_STAR_PIXELS = 25;
+
+    /**
+     * How much of the frame centre a billboard must cover when the camera is on its bearing, as a
+     * fraction.
+     *
+     * <p>The TEST'S OWN, and the claim is a body filling the middle of the view rather than an
+     * exact area: 0.40 is far above {@link #EMPTY_BEARING_CENTRE_CHANGE} and reachable by any body
+     * actually drawn there.</p>
+     */
+    private static final double BILLBOARD_COVERS_CENTRE = 0.40;
+
+    /**
+     * How far the client's actual look may sit from the commanded one when a frame is captured, in
+     * degrees.
+     *
+     * <p>The TEST'S OWN, and tight on purpose: the aim is SET and nothing follows it, so a wrong
+     * look here is not a race but a command that did not take. Half a degree is the float
+     * round-trip of a yaw through the client.</p>
+     */
+    private static final float LOOK_LANDED_DEG = 0.5f;
+
+    /**
      * Render distance held while capturing. Must be >= 4 or vanilla skips the sky pass entirely; it also
      * sets the sky projection's far plane to twice this many blocks, which has to clear the ~100-unit
      * radius the sky geometry is drawn at.
@@ -207,18 +309,6 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
     private Path outDir;
     private String botName;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
-
-    @After
-    public void tearDownStack() {
-        try {
-            exec("artest space entry-clear");
-        } catch (Exception ignored) {
-        }
-    }
-
     @Test
     public void aPilotInASlotCellSeesTheBodiesAndStars() throws Exception {
         outDir = Paths.get(System.getProperty("forge.test.client.screenshotDir", "build/test-screenshots"))
@@ -235,10 +325,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         exec("weather clear");
         exec("time set 6000");
 
-        String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        botName = nameM.group(1);
+        botName = PlayerState.botName(this::exec);
 
         JsonObject rd = bot().setRenderDistance(SKY_RENDER_DISTANCE);
         int previousRenderDistance = rd.get("previous").getAsInt();
@@ -248,6 +335,20 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         boolean previousFbo = fb.get("previous").getAsBoolean();
         assertTrue("this client's GL must support the framebuffer capture path: " + fb,
                 fb.get("supported").getAsBoolean());
+        // THE INSTRUMENT'S OWN PRECONDITION, and it is the whole of a bug this class has been
+        // carrying since 2026-08-14. `previous` says whether the client was STARTED with the
+        // framebuffer, and only then does the world pass land in the buffer a capture reads. Turned
+        // on mid-session it receives the HUD pass and nothing else, so every frame below comes back
+        // as the buffer's own clear colour - opaque WHITE - and this class's harness control then
+        // reports "the client is not running the sky pass at all". The renderer is innocent; the
+        // capture path was never given a world. The base declares the option (clientNeedsFramebuffer)
+        // and this reads back that it took, because a declaration nobody checks is indistinguishable
+        // from no declaration.
+        scenario().requireArranged("the client must have been STARTED with the framebuffer, or a"
+                + " capture reads the buffer's clear colour instead of the world and every pixel"
+                + " count below is about an empty instrument. The class declares this through"
+                + " clientNeedsFramebuffer(); the client says previous=" + previousFbo + " (" + fb
+                + ")", previousFbo);
         boolean previousHud = bot().setHudHidden(true).get("previous").getAsBoolean();
 
         BufferedImage overworldZenith;
@@ -277,25 +378,40 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
                     + " sky at altitude " + OVERWORLD_CAPTURE_Y + " must be a starfield, but only " + owSky
                     + "px differ from the background " + rgb(owBackground) + " " + describe(overworldZenith)
                     + ". Nothing below this line could mean anything. renderDistance=" + rd
-                    + " (" + outDir.resolve("overworld_zenith.png") + ")", owSky >= 200);
+                    + " (" + outDir.resolve("overworld_zenith.png") + ")", owSky >= OVERWORLD_STARFIELD_PIXELS);
 
             // Arrange the space stack, then settle a ship in the cell. The settle MATERIALIZES the cell,
             // and the slot it lands in is the answer this test uses everywhere below: the feed is keyed
             // with it and the pilot is put into it.
             String setup = exec("artest space entry-setup 1");
-            assertTrue("entry-setup must install the stack: " + setup, setup.contains("\"ok\":true"));
+            assertTrue("entry-setup must install the stack: " + setup, Reply.of(setup).ok());
             cell = findEmptyCell();
             String settle = exec("artest space ledger-settle " + cell + " 0");
-            assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
-            Matcher boundM = BOUND_DIM.matcher(settle);
-            assertTrue("the settle must report which slot the cell was bound to: " + settle, boundM.find());
-            slotDim = Integer.parseInt(boundM.group(1));
+            assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
+            Reply boundMReply = Reply.of(settle);
+            assertTrue("the settle must report which slot the cell was bound to: " + settle, boundMReply.has(BOUND_DIM));
+            slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // Night, so the cell's fog clear is dark and a white starfield can be seen against it.
             exec("time set 18000");
 
+            // ONE mark for this cell, taken BEFORE the transfer: the arrival and every sky frame are
+            // read from it. It has to precede the transfer for a second reason — the renderer records
+            // a frame only when what it drew CHANGED, or when it RESUMED in a different world, so the
+            // record this cell is guaranteed to produce is the resume on its first frame in the world
+            // the transfer builds. A mark taken after that would be waiting for a change a steady sky
+            // never makes.
+            long cellMark = clientMark();
             seat(slotDim, CELL_CAPTURE_Y);
-            bot().waitTicks(20);
+            // The LINK, not a tick budget: the respawn packet that rebuilds the client's world names
+            // the dimension it rebuilt it for, and its tail is the first instant "this client is in
+            // the slot the settle bound the cell to" is true. The fixed 20-tick wait this replaces
+            // was the only gate before the assertion below, so under load a slow respawn read as
+            // "the client renders the wrong world".
+            ClientEvents.awaitDim(clientEvents(), cellMark, slotDim,
+                    "no frame can be about the cell the settle bound this client to until he is IN"
+                            + " that world",
+                    DIM_CHANGE_BUDGET_TICKS);
 
             JsonObject clientWorld = bot().reportWeather();
             assertTrue("client must have a world after the transfer",
@@ -313,11 +429,20 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
             // below a reading about THIS cell rather than about the overworld frame before it. It also
             // supplies the frame dimensions the size sanity check uses.
             slotFirstFrame = capture(slotDim, CELL_CAPTURE_Y, 90f, 0f, "slot_first_frame");
-            // How many body labels the client's LAST FRAME wrote, with no body in the cell yet. The
-            // control for the label leg: a counter that is non-zero here is counting something other
-            // than this cell's bodies.
-            labelsWithNoBodies = labelsDrawn();
-            boundariesWithNoBodies = boundariesDrawn();
+            // What that frame drew, off the renderer's own record of it. The wait is for the FRAME —
+            // a link — and the counts are read out of it, so "the sky labelled nothing" and "the sky
+            // never ran" can no longer produce the same zero: assertInstrumentRan is what separates
+            // them, and the dim needle is what makes it a statement about THIS cell.
+            String emptySky = awaitClientLog(cellMark, "sky_frame_drawn",
+                    reply -> anyRecord(reply, null, 0, dimNeedle(slotDim)),
+                    "the sky renderer must draw a frame in the slot world before its per-frame counts"
+                            + " can be read as a statement about this cell",
+                    SKY_FRAME_BUDGET_TICKS);
+            Events.assertInstrumentRan(emptySky, "sky_frame_events",
+                    "no body is registered yet, so the sky can have labelled nothing");
+            String emptyFrame = lastRecordWith(emptySky, dimNeedle(slotDim));
+            labelsWithNoBodies = lastInt(emptyFrame, "labels");
+            boundariesWithNoBodies = lastInt(emptyFrame, "boundaries");
             // A before-frame on each body's bearing, plus one on the empty bearing. Only the two aimed
             // bodies are measured, but capturing all of them costs one frame each and makes a later
             // "which body failed" question answerable from the artefacts.
@@ -327,26 +452,34 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
             }
             emptyBefore = capture(slotDim, CELL_CAPTURE_Y, EMPTY_YAW, EMPTY_PITCH, "before_empty");
 
+            // Before the registrations, so the broadcast they cause cannot land between two reads.
+            long feedMark = clientMark();
             for (String[] body : SYSTEM) {
                 // The radius is stated, not implied: since 2026-08-16 the sky sizes a body by the
                 // ANGLE it subtends, so a fixture that named no radius would draw six identical
                 // markers and the size legs below would be measuring nothing.
                 String poi = exec("artest space add-poi " + cell + " " + body[0] + " " + body[1] + " "
                         + body[2] + " " + body[3] + " " + body[4] + " 7 " + body[5]);
-                assertTrue("add-poi must register the body: " + poi, poi.contains("\"ok\":true"));
+                assertTrue("add-poi must register the body: " + poi, Reply.of(poi).ok());
             }
 
-            // The whole set has to reach the client's own store before any frame can be blamed on the
-            // renderer. Gated on the COUNT, so a partially-arrived feed is not read as a drawing bug.
-            String bodies = null;
-            boolean got = false;
-            for (int i = 0; i < 24 && !got; i++) {
-                bot().waitTicks(5);
-                bodies = clientBodies();
-                got = countBodies(bodies, slotDim) == SYSTEM.length;
-            }
-            assertTrue("the client must have all " + SYSTEM.length + " bodies of the cell before it can"
-                    + " be asked to draw them, got: " + bodies, got);
+            // The whole set has to reach the client before any frame can be blamed on the renderer,
+            // and the ARRIVAL is what is waited for: the packet's own handler clears the client store
+            // and refills it with the payload, so its record IS the store. A size poll of that store
+            // could not tell a feed that never came from one that came empty, and could not say which
+            // broadcast filled it.
+            String feedArrived = awaitClientLog(feedMark, "system_bodies_received",
+                    reply -> anyRecord(reply, "bodies", SYSTEM.length),
+                    "the client must be SENT all " + SYSTEM.length + " bodies of the cell before it"
+                            + " can be asked to draw them", FEED_BUDGET_TICKS);
+            Events.assertInstrumentRan(feedArrived, "system_bodies_sync_events",
+                    "the client was sent the cell's bodies");
+            // And the arrival must have been for THIS slot: the record counts bodies across every dim
+            // it carries, so the store is asked which dim they landed under.
+            String bodies = clientBodies();
+            assertTrue("the client must hold all " + SYSTEM.length + " bodies UNDER THE SLOT the cell"
+                    + " is bound to (" + slotDim + "), got: " + bodies + " | arrival: " + feedArrived,
+                    countBodies(bodies, slotDim) == SYSTEM.length);
 
             // Cross-side oracle: the SERVER's own feed, for this slot dim, carries exactly these bodies
             // on exactly these bearings. Everything below aims with the server's numbers.
@@ -367,8 +500,18 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
                 after[i] = capture(slotDim, CELL_CAPTURE_Y, aim[0], aim[1], "after_body" + i);
             }
             emptyAfter = capture(slotDim, CELL_CAPTURE_Y, EMPTY_YAW, EMPTY_PITCH, "after_empty");
-            labelsWithBodies = labelsDrawn();
-            boundariesWithBodies = boundariesDrawn();
+            // The frame the label / boundary legs are about: one drawn in this cell that attempted
+            // every body the feed carries. The counter this replaces was whatever the LAST frame
+            // happened to be, whichever world it was drawn in; here the frame is named.
+            String bodiedSky = awaitClientLog(cellMark, "sky_frame_drawn",
+                    reply -> anyRecord(reply, "bodies", SYSTEM.length, dimNeedle(slotDim)),
+                    "the sky must attempt every body the cell's feed carries before its label and"
+                            + " boundary counts can be read as a statement about them",
+                    SKY_FRAME_BUDGET_TICKS);
+            String bodiedFrame = lastRecordWith(bodiedSky, dimNeedle(slotDim),
+                    "\"bodies\":" + SYSTEM.length + ",");
+            labelsWithBodies = lastInt(bodiedFrame, "labels");
+            boundariesWithBodies = lastInt(bodiedFrame, "boundaries");
         } finally {
             bot().setHudHidden(previousHud);
             bot().setFramebuffer(previousFbo);
@@ -377,7 +520,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
 
         int w = slotFirstFrame.getWidth();
         int h = slotFirstFrame.getHeight();
-        assertTrue("captures must be a real frame, got " + w + "x" + h, w >= 320 && h >= 240);
+        assertTrue("captures must be a real frame, got " + w + "x" + h, w >= MIN_FRAME_WIDTH && h >= MIN_FRAME_HEIGHT);
 
         // ------------------------------------------- Leg 2: each aimed body, by exact cancellation.
         // Same camera, same starfield, same ring - only the body data changed, so any pixel that differs
@@ -406,6 +549,20 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         // thing that can differ is the disc. Counted inside a box sized on the NEARER body's own
         // expected disc and centred on the aim, which the far body's smaller disc cannot fill and
         // which no other body reaches - the fixture spreads them 45 degrees apart at least.
+        // ARRANGEMENT, computed from the LAW rather than assumed: the two bodies must land at
+        // different half-sizes, or the pixel comparison below is asking the renderer for a
+        // distinction the law does not make. Both bodies used to sit above NEAR_RATIO, where every
+        // angular size is drawn at the maximum — so the leg asserted a difference that could not
+        // exist, and its red read as a render regression when nothing was rendering wrongly.
+        float nearHalf = ApparentSize.halfSizeFor(radiusBlocks(NEAREST), distanceOf(NEAREST));
+        float farHalf = ApparentSize.halfSizeFor(radiusBlocks(FARTHEST), distanceOf(FARTHEST));
+        scenario().requireArranged("the law must draw these two at clearly different sizes before their"
+                + " pixels can be compared — nearHalf=" + nearHalf + " farHalf=" + farHalf
+                + " (angular sizes " + (radiusBlocks(NEAREST) / distanceOf(NEAREST)) + " and "
+                + (radiusBlocks(FARTHEST) / distanceOf(FARTHEST)) + " against NEAR_RATIO "
+                + ApparentSize.NEAR_RATIO + ", above which everything is drawn at the maximum)",
+                nearHalf > farHalf * 1.2f);
+
         int sizeBox = (int) Math.ceil(discRadiusOf(NEAREST) * h);
         long nearArea = diffCount(before[NEAREST], after[NEAREST],
                 w / 2 - sizeBox, w / 2 + sizeBox, h / 2 - sizeBox, h / 2 + sizeBox);
@@ -430,7 +587,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         assertTrue("a bearing with no body within 100 degrees must not gain one; centre="
                 + pct(emptyCentre) + " frame=" + pct(emptyFrame)
                 + " (" + outDir.resolve("before_empty.png") + " vs "
-                + outDir.resolve("after_empty.png") + ")", emptyCentre <= 0.05);
+                + outDir.resolve("after_empty.png") + ")", emptyCentre <= EMPTY_BEARING_CENTRE_CHANGE);
 
         // ------------------------------------------------------------------------ Leg 4: the starfield.
         // The empty-bearing frame holds no body and nothing else is drawn in a cell sky, so anything
@@ -440,15 +597,17 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         long stars = differsCount(emptyAfter, 0, w, 0, starTop, starBackground);
         assertTrue("an orbit cell must not be an empty void - the sky must carry stars; differing="
                 + stars + "px against background " + rgb(starBackground) + " " + describe(emptyAfter)
-                + " (" + outDir.resolve("after_empty.png") + ")", stars >= 25);
+                + " (" + outDir.resolve("after_empty.png") + ")", stars >= ORBIT_CELL_STAR_PIXELS);
 
         // ------------------------------------------ Leg 5: every body says what it is - the sky
         // writes each body's name and its distance under the billboard, one label per body, on by
-        // default. Read off the CLIENT's own per-frame counter rather than off pixels, because
-        // "is that text or is it a star" is not a question a pixel count can answer - and because
-        // the rule is "one label per body", which a count states exactly. The before-sample is the
-        // control: with no body in the cell the counter must be zero, so a non-zero after-sample is
-        // attributable to the bodies and to nothing else.
+        // default. Read off the renderer's own record of a NAMED frame rather than off pixels,
+        // because "is that text or is it a star" is not a question a pixel count can answer - and
+        // because the rule is "one label per body", which a count states exactly. The before-sample
+        // is the control: with no body in the cell the frame must have labelled nothing, so a
+        // non-zero after-sample is attributable to the bodies and to nothing else. Both samples come
+        // from a frame the log says was drawn in THIS cell, with the instrument asserted to have run
+        // beside them - so neither zero can mean "nobody was looking".
         assertEquals("no body is registered yet, so the sky can have labelled nothing",
                 0, labelsWithNoBodies);
         assertEquals("the sky must label every body it draws, by default and with no configuration",
@@ -485,9 +644,15 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
      * <p><b>Counted, not photographed, and that is deliberate.</b> A nebula is haze whose alpha falls to
      * zero at its rim; a pixel-difference test would be measuring the tuning of {@code NEBULA_MAX_ALPHA}
      * as much as the feed, and would go red the first time the haze was made subtler. The renderer's own
-     * per-frame counter answers "did a cloud reach the rasterizer" exactly. It is read BESIDE
-     * {@code skyFramesDrawn}, because a zero means "no cloud was drawn" only if the sky renderer ran at
-     * all — the two are different questions and one counter cannot tell them apart.</p>
+     * record of a frame ({@code sky_frame_drawn}) answers "did a cloud reach the rasterizer" exactly.</p>
+     *
+     * <p><b>Three questions, asked separately, because one number could not tell them apart.</b> Was
+     * the cell's sky SENT to this client ({@code system_bodies_received} carrying a cloud)? Did the
+     * renderer run in THIS cell at all (a {@code sky_frame_drawn} for the settled slot, since a mark
+     * this scenario took — where the cumulative frame counter it replaces was already non-zero from
+     * the scenario before on a shared client, and so could never come back "no")? And did a frame
+     * drawn there emit a cloud? The old form folded all three into one poll of two statics, so a
+     * broadcast that never came was reported as a renderer that draws nothing.</p>
      *
      * <p><b>Where the cloud is comes from the SERVER, not from this test.</b> A cloud's position is a
      * fact about the seed; a hard-coded cell would pin this test to one world's generation and would
@@ -500,60 +665,74 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         int previousRenderDistance = rd.get("previous").getAsInt();
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
-        String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        botName = nameM.group(1);
+        botName = PlayerState.botName(this::exec);
         try {
             String setup = exec("artest space entry-setup 1");
-            assertTrue("entry-setup must install the stack: " + setup, setup.contains("\"ok\":true"));
+            assertTrue("entry-setup must install the stack: " + setup, Reply.of(setup).ok());
 
             // A universe with clusters in it. Without <galaxyGen> a world has no galaxies, hence no
             // clusters, hence no gas — and an empty sky would be honest for the wrong reason.
             String gen = exec("artest space gen-install 0.9 8");
-            assertTrue("the procedural generator must install: " + gen, gen.contains("\"ok\":true"));
+            assertTrue("the procedural generator must install: " + gen, Reply.of(gen).ok());
 
-            String found = exec("artest space nebula-find 512 64");
-            assertTrue("the generator must be able to name a cell with a cloud in reach: " + found,
-                    found.contains("\"found\":true"));
-            Matcher sectorM = Pattern.compile("\"sectorX\":(-?\\d+)").matcher(found);
-            assertTrue("the find must report the cell it found: " + found, sectorM.find());
-            String cloudCell = sectorM.group(1) + " 0 0";
+            // The reader refuses a walk that found nothing, and refuses to answer a sector for one
+            // — which is what the two checks this replaces each stood for.
+            NebulaSearch found = NebulaSearch.walk(this::exec, 512, 64)
+                    .requireFound("the generator must be able to name a cell with a cloud in reach");
+            String cloudCell = found.sectorX() + " 0 0";
 
             String settle = exec("artest space ledger-settle " + cloudCell + " 0");
-            assertTrue("ledger-settle must succeed: " + settle, settle.contains("\"ok\":true"));
-            Matcher boundM = BOUND_DIM.matcher(settle);
+            assertTrue("ledger-settle must succeed: " + settle, Reply.of(settle).ok());
+            Reply boundMReply = Reply.of(settle);
             assertTrue("the settle must report which slot the cell was bound to: " + settle,
-                    boundM.find());
-            int slotDim = Integer.parseInt(boundM.group(1));
+                    boundMReply.has(BOUND_DIM));
+            int slotDim = Integer.parseInt(boundMReply.text(BOUND_DIM));
 
             // The server's own answer for that cell, as the cross-side oracle: what it will send.
-            String feed = exec("artest space nebulae " + cloudCell);
-            Matcher drawnM = Pattern.compile("\"drawn\":(\\d+)").matcher(feed);
-            assertTrue("the probe must report the cell's sky: " + feed, drawnM.find());
-            int serverClouds = Integer.parseInt(drawnM.group(1));
-            assertTrue("the cell the finder chose must actually have a cloud in its sky: " + feed,
-                    serverClouds >= 1);
+            SkyNebulae feed = SkyNebulae.at(this::exec, found.sectorX(), 0, 0);
+            int serverClouds = feed.drawn;
+            assertTrue("the cell the finder chose must actually have a cloud in its sky: "
+                    + feed.raw(), serverClouds >= 1);
 
             exec("time set 18000");
+            long cloudMark = clientMark();
             seat(slotDim, CELL_CAPTURE_Y);
+            ClientEvents.awaitDim(clientEvents(), cloudMark, slotDim,
+                    "no frame can be about the cell the finder chose until he is IN that world",
+                    DIM_CHANGE_BUDGET_TICKS);
 
-            // Gate on the FEED reaching the client, then on a frame being drawn after it did. Waiting
-            // a fixed number of ticks would make a slow broadcast read as a renderer that draws nothing.
-            int drawn = 0;
-            long frames = 0L;
-            for (int attempt = 0; attempt < 30 && drawn == 0; attempt++) {
-                bot().waitTicks(10);
-                frames = Long.parseLong(bot().readStaticField(SKY_CLASS, "skyFramesDrawn")
-                        .get("value").getAsString().trim());
-                drawn = skyCounter("nebulaeDrawnLastFrame");
-            }
+            // Link 1, and this scenario never had it: the cell's sky REACHED this client. Without it
+            // the single loop below folded "the broadcast never came" into "the renderer drew
+            // nothing" — the very conflation the comment it replaces said it wanted to avoid.
+            String arrival = awaitClientLog(cloudMark, "system_bodies_received",
+                    reply -> anyRecord(reply, "nebulae", 1),
+                    "the server has " + serverClouds + " cloud(s) in this cell's sky, and the client"
+                            + " must be SENT them before a frame can be blamed for not drawing them",
+                    FEED_BUDGET_TICKS);
+            Events.assertInstrumentRan(arrival, "system_bodies_sync_events",
+                    "the cell's clouds reached this client");
 
-            assertTrue("HARNESS CONTROL: the sky renderer never ran, so nothing below could mean"
-                    + " anything (frames=" + frames + ")", frames > 0L);
-            assertTrue("the server had " + serverClouds + " cloud(s) in this cell's sky and the client"
-                    + " drew " + drawn + ": a landmark that reaches the feed and not the frame is a"
-                    + " landmark nobody can navigate by", drawn >= 1);
+            // CONTROL, and now a per-scenario one: a sky frame drawn in THIS cell since the mark. The
+            // counter it replaces (a cumulative frame total, never reset) was already non-zero from
+            // the scenario before on this shared client, so it could not come back "no" — which is
+            // not a control at all.
+            String frames = awaitClientLog(cloudMark, "sky_frame_drawn",
+                    reply -> anyRecord(reply, null, 0, dimNeedle(slotDim)),
+                    "CONTROL: the sky renderer never drew a frame in the cell this scenario settled"
+                            + " in (dim " + slotDim + "), so nothing below could mean anything",
+                    SKY_FRAME_BUDGET_TICKS);
+            Events.assertInstrumentRan(frames, "sky_frame_events",
+                    "the sky renderer ran in this cell");
+
+            // THE CONTRACT: a landmark that reaches the feed and not the frame is a landmark nobody
+            // can navigate by. Counted, not photographed — see the class note — and read off the
+            // renderer's own record of the frame rather than off a last-frame static, so the number
+            // belongs to a frame drawn in this cell after the clouds arrived.
+            awaitClientLog(cloudMark, "sky_frame_drawn",
+                    reply -> anyRecord(reply, "nebulae", 1, dimNeedle(slotDim)),
+                    "the server had " + serverClouds + " cloud(s) in this cell's sky and no frame the"
+                            + " client drew in dim " + slotDim + " emitted one",
+                    SKY_FRAME_BUDGET_TICKS);
         } finally {
             try {
                 exec("artest space gen-reset");
@@ -584,13 +763,13 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
     private String findEmptyCell() throws Exception {
         StringBuilder tried = new StringBuilder();
         for (long sy = 4096L; sy > 0L && sy <= Integer.MAX_VALUE; sy *= 2L) {
-            String info = exec("artest space cell-info 0 " + sy + " 0");
-            assertTrue("cell-info must answer about the very cell it was asked about, or the sector"
+            CellInfo info = CellInfo.atSector(this::exec, 0L, sy, 0L);
+            assertEquals("cell-info must answer about the very cell it was asked about, or the sector"
                             + " overflowed the probe's int parse and it silently answered about the"
-                            + " origin: " + info,
-                    info.contains("\"cellKey\":\"0_" + sy + "_0\""));
-            int system = intField(info, "systemBodies");
-            int here = intField(info, "bodiesAt");
+                            + " origin: " + info.raw(),
+                    "0_" + sy + "_0", info.cellKey);
+            int system = info.systemBodyCount;
+            int here = info.bodiesAtCount;
             tried.append(" 0/").append(sy).append("/0=").append(system).append('+').append(here);
             if (system == 0 && here == 0) {
                 return "0 " + sy + " 0";
@@ -602,26 +781,98 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
     }
 
     private static int intField(String json, String name) {
-        Matcher m = Pattern.compile("\"" + name + "\":(\\d+)").matcher(json);
-        assertTrue("cell-info must report " + name + ": " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("cell-info must report " + name + ": " + json, Reply.of(json).has(name));
+        return Reply.of(json).integer(name);
     }
 
-    /** How many body labels the client's last rendered frame wrote. */
-    private int labelsDrawn() throws Exception {
-        return skyCounter("labelsDrawnLastFrame");
+    // ------------------------------------------------- the CLIENT's own ordered event log ---------
+    //
+    // Every link this class waits for happens on the CLIENT — a world rebuilt, a sky packet applied,
+    // a frame drawn — so the log read here is the client's, reached through the harness bot rather
+    // than through the server probe the shared `events()` helper wraps. The three reads below are
+    // local on purpose: the shared client base is not this group's to edit.
+
+    /** How long a client dimension change is given. A world teardown + rebuild, not a value settling. */
+    private static final int DIM_CHANGE_BUDGET_TICKS = 400;
+    /** How long one sky broadcast is given to reach this client after the registration that causes it. */
+    private static final int FEED_BUDGET_TICKS = 400;
+    /** How long the renderer is given to draw a frame that differs from the one before it. */
+    private static final int SKY_FRAME_BUDGET_TICKS = 400;
+
+    /** How long a teleport this test issues is given to reach the CLIENT and be applied there. */
+    private static final int POS_LOOK_BUDGET_TICKS = 200;
+
+    /**
+     * The client event log's sequence, taken BEFORE the stimulus — and refused unless a recorder is
+     * actually subscribed, because an empty log afterwards would otherwise read as "it never
+     * happened" when the truth is "nobody was listening".
+     */
+    private long clientMark() throws Exception {
+        return clientEvents().mark();
     }
 
-    /** How many atmosphere boundaries the client's last rendered frame drew. */
-    private int boundariesDrawn() throws Exception {
-        return skyCounter("boundariesDrawnLastFrame");
+    /** Every client record of {@code type} at or after {@code mark}, in order, as the raw reply. */
+    private String clientRecords(long mark, String type) throws Exception {
+        return clientEvents().since(mark, type);
     }
 
-    private int skyCounter(String field) throws Exception {
-        JsonObject sf = bot().readStaticField(SKY_CLASS, field);
-        assertTrue("the sky renderer must expose its per-frame counter " + field + ": " + sf,
-                !sf.get("isNull").getAsBoolean());
-        return Integer.parseInt(sf.get("value").getAsString().trim());
+    /**
+     * Wait until the client log since {@code mark} satisfies {@code holds}, or fail naming the link
+     * and printing what the client DID record.
+     *
+     * <p>Every link here is a predicate over the whole reply rather than a substring — a frame drawn
+     * in one particular dim, a feed that carries every body of a system, a count at a floor — which
+     * is what {@link Events#awaitMatching} is for. This stays as a named local because the budget and
+     * the {@code holds}/{@code what} pair are how the eight call sites below read.</p>
+     *
+     * @param what a player-facing sentence for what this link means, used in the failure
+     */
+    private String awaitClientLog(long mark, String type, Events.Condition holds, String what,
+                                  int budgetTicks) throws Exception {
+        return clientEvents().awaitMatching(mark, type, holds, "matching this link", what,
+                budgetTicks);
+    }
+
+    /** The payload fragment that pins a sky record to one dimension. */
+    private static String dimNeedle(int dim) {
+        return "\"dim\":" + dim + ",";
+    }
+
+    /**
+     * Whether any RECORD in a {@code since} reply carries every one of {@code needles} and, when
+     * {@code field} is non-null, an integer {@code field} at or above {@code atLeast}.
+     *
+     * <p>The records come from {@link Events#recordsContainingAll}, which reads the reply's parsed
+     * {@code events} array — so an envelope key ({@code count}, {@code from}, {@code dropped}) can
+     * never be mistaken for a payload one. This class used to split the reply itself and skip the
+     * leading chunk by hand; six other copies of that loop had no such guard.</p>
+     */
+    private static boolean anyRecord(String sinceReply, String field, int atLeast,
+                                     String... needles) {
+        for (String record : Events.recordsContainingAll(sinceReply, needles)) {
+            if (field == null) {
+                return true;
+            }
+            double value = Events.number(record, field);
+            if (!Double.isNaN(value) && value >= atLeast) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The LAST record of a {@code since} reply carrying every one of {@code needles}, or "" when
+     *  none does. Records are in order, and a sky frame is recorded only when what it drew CHANGED,
+     *  so the last one is what the client is drawing now. */
+    private static String lastRecordWith(String sinceReply, String... needles) {
+        java.util.List<String> matching = Events.recordsContainingAll(sinceReply, needles);
+        return matching.isEmpty() ? "" : matching.get(matching.size() - 1);
+    }
+
+    /** The integer {@code field} of one record, or -1 when it carries none. */
+    private static int lastInt(String record, String field) {
+        double value = Events.number(String.valueOf(record), field);
+        return Double.isNaN(value) ? -1 : (int) value;
     }
 
     // ------------------------------------------------------------------------------------ helpers
@@ -659,12 +910,12 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
                 w / 2 - box, w / 2 + box, h / 2 - box, h / 2 + box);
         assertTrue("the billboard must cover the frame centre when the camera is on the bearing the"
                 + " SERVER reports for " + where + "; centre=" + pct(centreChanged),
-                centreChanged >= 0.40);
+                centreChanged >= BILLBOARD_COVERS_CENTRE);
 
         double vsEmpty = diffFraction(afterFrame, emptyFrame,
                 w / 2 - box, w / 2 + box, h / 2 - box, h / 2 + box);
         assertTrue("aiming at " + where + " must not look like aiming at empty sky; centre difference="
-                + pct(vsEmpty), vsEmpty >= 0.40);
+                + pct(vsEmpty), vsEmpty >= BILLBOARD_COVERS_CENTRE);
     }
 
     /**
@@ -723,20 +974,31 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
 
     /** How many bodies the SERVER's own feed carries for {@code slotDim}; -1 when the dim is absent. */
     private static int feedBodyCount(String json, int slotDim) {
-        Matcher m = Pattern.compile("\\{\"slotDim\":" + slotDim + ",\"bodyCount\":(\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
+        for (String entry : Reply.of("the system-bodies feed", json).objectArray(FEED)) {
+            Reply cell = Reply.of("one feed entry", entry);
+            // absence is the answer: this walks a LIST looking for one cell, and an entry
+            // that carries no slot dim is not the one being looked for.
+            if (cell.integerOr(SLOT_DIM, Integer.MIN_VALUE) == slotDim) {
+                return cell.integer(BODY_COUNT);
+            }
+        }
+        return -1;
     }
 
     /** Put the player at a known altitude in {@code dim} through the production transfer path. */
     private void seat(int dim, int y) throws Exception {
         String enter = exec("artest space enter " + botName + " " + dim + " 0.5 " + y + " 0.5");
-        assertTrue("space enter must succeed: " + enter, enter.contains("\"ok\":true"));
+        assertTrue("space enter must succeed: " + enter, Reply.of(enter).ok());
     }
 
-    /** The client's OWN copy of the render feed, read on the client thread. */
+    /**
+     * The client's OWN copy of the render feed: what the store held after the last packet it took.
+     * Each packet replaces the store wholesale, so the latest arrival record IS the store's content;
+     * "" when this client has taken none.
+     */
     private String clientBodies() throws Exception {
-        JsonObject sf = bot().readStaticField(CLIENT_BODIES_CLASS, "CLIENT_BODIES");
-        return sf.get("isNull").getAsBoolean() ? "" : sf.get("value").getAsString();
+        String rec = Events.lastRecord(clientEvents().since(0, "system_bodies_received"));
+        return rec == null ? "" : Events.text(rec, "stored");
     }
 
     /**
@@ -744,35 +1006,56 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
      * is deleted at teardown). Gates on the MEASURED look, never on elapsed ticks.
      */
     private BufferedImage capture(int dim, int y, float yaw, float pitch, String name) throws Exception {
-        seat(dim, y);
-        bot().waitTicks(5);
-        bot().setLook(yaw, pitch);
-        boolean aimed = false;
-        for (int i = 0; i < 20 && !aimed; i++) {
-            bot().waitTicks(2);
-            JsonObject state = bot().reportState();
-            aimed = Math.abs(state.get("playerPitch").getAsFloat() - pitch) < 0.5f
-                    && Math.abs(wrapDegrees(state.get("playerYaw").getAsFloat() - yaw)) < 0.5f;
-        }
-        assertTrue("the client must actually be looking at " + yaw + "/" + pitch
-                + " before the frame is captured, got " + bot().reportState(), aimed);
-
-        // Re-seat AFTER the aim converged, and gate on the CLIENT's own reported altitude. The player is
-        // in free fall the whole time, and how far it has fallen is not fixed: aiming takes a variable
-        // number of polls. Altitude is not cosmetic here - the overworld sky is drawn against the
+        // ORDERED, not polled — and the ordering is the whole of it. Vanilla's
+        // `NetHandlerPlayClient.handlePlayerPosLook` ends in `setPositionAndRotation`, so a teleport
+        // packet still in flight OVERWRITES the client's yaw and pitch, and `seat()` is a teleport.
+        // Both of the loops that used to stand here were written for that race and neither could
+        // survive it: `setLook` is never re-sent, so a packet arriving after it left the aim poll
+        // re-reading a rotation nothing was going to change again, and the altitude poll would have
+        // accepted any reading inside a 21-block band. What handles the race is putting the
+        // teleport's own arrival BEFORE the aim, which is a link and cannot be missed.
+        //
+        // Measured 2026-09-13, ten captures in one unloaded run: exactly ONE pos-look applied per
+        // `seat()`, already applied before either loop's first read, and both loops exited on poll
+        // one every time. So the variability the old comment described was not reproduced here, and
+        // what the loops were actually doing was hiding this dependency rather than handling it.
+        // The altitude matters as much as the look: the overworld sky is drawn against the
         // atmosphere density AT the viewer's height, so an unpinned altitude silently changes the
-        // control frame from "thin air, dark sky, stars" to "thick air, bright noon sky". That drift is
-        // what made an earlier version of this test pass and fail on identical code.
+        // control frame from "thin air, dark sky, stars" to "thick air, bright noon sky". That drift
+        // is what made an earlier version of this test pass and fail on identical code.
+        long seatMark = clientMark();
         seat(dim, y);
-        double clientY = Double.NaN;
-        boolean seated = false;
-        for (int i = 0; i < 20 && !seated; i++) {
-            bot().waitTicks(2);
-            clientY = bot().reportState().get("playerY").getAsDouble();
-            seated = clientY > y - 20 && clientY <= y + 1;
-        }
+        clientEvents().await(seatMark, "client_pos_look_applied",
+                "the capture teleport must be APPLIED on the client before the look is set — a"
+                        + " pos-look still in flight overwrites the aim", POS_LOOK_BUDGET_TICKS);
+        // AIM LAST, and that ordering is the finding, not a tidy-up. The old shape aimed, polled
+        // until the rotation read back right, and only THEN re-seated — and the re-seat's own
+        // pos-look carries the SERVER's copy of the rotation, which is whatever the client last
+        // reported. Putting a teleport after the aim therefore un-aims it unless the client has
+        // already told the server where it is looking, and what bought that was nothing in the
+        // comment: it was the two ticks the first poll iteration happened to spend. Written out on
+        // the run that measured it: with the polls removed and the order left alone, the zenith
+        // capture came back looking at `0.0/-0.0` against a wanted `0.0/-90.0` — the horizon
+        // instead of straight up — while the old aim assertion, standing above the re-seat, had
+        // passed. With nothing following the aim, no packet can overwrite it.
+        bot().setLook(yaw, pitch);
+
+        // ONE read, of both things, after the last thing that can change either.
+        JsonObject state = bot().reportState();
+        float gotPitch = state.get("playerPitch").getAsFloat();
+        float gotYaw = state.get("playerYaw").getAsFloat();
+        double clientY = state.get("playerY").getAsDouble();
+        System.out.println("[boundarysky] " + name + " dim=" + dim + " y=" + y
+                + " look=" + gotYaw + "/" + gotPitch + " (wanted " + yaw + "/" + pitch + ")"
+                + " clientY=" + clientY);
+        assertTrue("the client must actually be looking at " + yaw + "/" + pitch
+                        + " when the frame is captured — the teleport landed before the aim was"
+                        + " set and nothing follows it, so a wrong look here is not a race. got "
+                        + state,
+                Math.abs(gotPitch - pitch) < LOOK_LANDED_DEG
+                        && Math.abs(wrapDegrees(gotYaw - yaw)) < LOOK_LANDED_DEG);
         assertTrue("the client must be back at the capture altitude " + y + " before the frame is taken,"
-                + " got " + clientY, seated);
+                + " got " + clientY, clientY > y - 20 && clientY <= y + 1);
         // Re-hide immediately before the capture: a toast can arrive at any tick, and vanilla draws
         // toasts outside the hideGUI gate, so only a fresh drain guarantees a clean frame.
         bot().setHudHidden(true);
@@ -782,8 +1065,10 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractClientE2ETest {
         JsonObject gate = bot().setRenderDistance(SKY_RENDER_DISTANCE);
         assertEquals("the sky pass gate must be open when the frame is captured: " + gate,
                 SKY_RENDER_DISTANCE, gate.get("renderDistance").getAsInt());
-        bot().waitTicks(6);
-
+        // No advance before the capture: what is wanted is that at least one frame ran with the final
+        // settings, and `screenshot` captures at the END of the next frame the client renders — drawn
+        // after both settings above were applied. (The sky's own event is an EDGE and could not have
+        // served: a steady sky draws frame after frame and records none of them.)
         JsonObject shot = bot().screenshot(name);
         assertTrue("screenshot must land on disk: " + shot, shot.get("exists").getAsBoolean());
         assertTrue("screenshot must come from the framebuffer, not an undefined back buffer: " + shot,

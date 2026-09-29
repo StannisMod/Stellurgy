@@ -5,7 +5,6 @@ import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.github.stannismod.forge.testing.TestTimeouts;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
@@ -339,7 +338,7 @@ public class VSAssembledShipBlockEditE2ETest {
     // ---- helpers -------------------------------------------------------------------------------
 
     private static int budget() {
-        return (int) (40 * TestTimeouts.factor());
+        return 40;
     }
 
     private ClientBot bot() {

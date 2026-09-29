@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -32,8 +31,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTest {
 
-    private static final Pattern ID = Pattern.compile("\"id\":(\\d+)");
-    private static final Pattern LIST_AFTER = Pattern.compile("\"listSizeAfter\":(-?\\d+)");
+    private static final String ID = "id";
+    private static final String LIST_AFTER = "listSizeAfter";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -41,10 +40,10 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
 
     private long createWeatherSat() throws Exception {
         String resp = ok(client().execute("artest satellite create 0 weatherController 100 1000 1000"));
-        assertTrue("weather satellite create failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = ID.matcher(resp);
-        assertTrue("no id in create response: " + resp, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("weather satellite create failed: " + resp, Reply.of(resp).ok());
+        Reply mReply = Reply.of(resp);
+        assertTrue("no id in create response: " + resp, mReply.has(ID));
+        return Long.parseLong(mReply.text(ID));
     }
 
     /**
@@ -61,15 +60,20 @@ public class WeatherControllerUnloadedDimTickTest extends AbstractSharedServerTe
 
         String resp = ok(client().execute("artest satellite weather-tick-unloaded 0 " + satId));
 
+        // An NPE reaches a caller as a REFUSAL: the command's top-level catch renders it as
+        // `{"error":"NullPointerException: …"}`. So the claim is made against that field. The
+        // substring over the whole rendering was also satisfied by the words appearing in any
+        // other field — a class name, a message echoed back — and said nothing about where.
+        Reply ticked = Reply.of("artest satellite weather-tick-unloaded", resp);
         assertFalse("ticking a weather controller with an unloaded world must not "
                         + "NPE (C062): " + resp,
-                resp.contains("NullPointerException"));
+                ticked.refused() && ticked.error().startsWith("NullPointerException"));
         assertTrue("weather-tick-unloaded must succeed post-fix: " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
 
-        Matcher m = LIST_AFTER.matcher(resp);
-        assertTrue("listSizeAfter missing: " + resp, m.find());
-        int after = Integer.parseInt(m.group(1));
+        Reply mReply = Reply.of(resp);
+        assertTrue("listSizeAfter missing: " + resp, mReply.has(LIST_AFTER));
+        int after = Integer.parseInt(mReply.text(LIST_AFTER));
         assertEquals("the null-world guard must return before consuming any queued "
                         + "position (the queue drains when the world reloads): " + resp,
                 1, after);

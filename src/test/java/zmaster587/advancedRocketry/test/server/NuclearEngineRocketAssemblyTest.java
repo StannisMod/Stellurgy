@@ -1,9 +1,13 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.RocketList;
+import zmaster587.advancedRocketry.test.RocketInfo;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -61,27 +65,23 @@ import static org.junit.Assert.assertTrue;
  */
 public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS = Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ROCKET_LIST_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern THRUST = Pattern.compile("\"thrust\":(-?\\d+)");
-    private static final Pattern ENGINE_COUNT = Pattern.compile("\"engineCount\":(-?\\d+)");
+    private static final String ROCKET_LIST_ID = "id";
 
     @Test
     public void nuclearCoreAboveMotorContributesNuclearThrust() throws Exception {
-        int entityId = buildAndAssemble(1700, 64, 500, "with-nuclear-stack");
-        String info = String.join("\n",
-                client().execute("artest rocket info " + entityId));
+        int entityId = buildAndAssemble(FixtureSite.openAir(0, 1700, 500), "with-nuclear-stack");
+        RocketInfo info = RocketInfo.byId(
+                cmd -> String.join("\n", client().execute(cmd)), entityId);
         // Both nuclear motors must register in engineCount via the
         // IRocketEngine + air-below scan branch (BlockNuclearRocketMotor
         // extends BlockRocketMotor; with-nuclear-stack overrides BOTH
         // engine positions with nuclear motors).
-        assertEquals("with-nuclear-stack must register both nuclear motors: " + info,
-                2, extractInt(info, ENGINE_COUNT));
+        assertEquals("with-nuclear-stack must register both nuclear motors: " + info.raw(),
+                2, info.engineCount);
         // Positive-thrust contract — the cohesion check found cores above
         // motors, so nuclearReactorLimit > 0 and nuclearTotal > 0.
-        int thrust = extractInt(info, THRUST);
         assertTrue("nuclear stack with cohesion must yield thrust > 0: "
-                + info, thrust > 0);
+                + info.raw(), info.thrust > 0);
     }
 
     @Test
@@ -90,8 +90,8 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         // REJECTS the rocket entirely. The probe surfaces the scan status
         // when not SUCCESS, mirroring the chat / GUI error the player
         // sees when they hit "Build" without proper engine wiring.
-        int baseX = 1800, baseY = 64, baseZ = 500;
-        String assemble = setupAndAttemptAssemble(baseX, baseY, baseZ, "with-nuclear-misplaced");
+        String assemble = setupAndAttemptAssemble(
+                FixtureSite.openAir(0, 1800, 500), "with-nuclear-misplaced");
         // Player-visible contract — nuclear motor with core misplaced
         // (no IRocketEngine or IRocketNuclearCore below) leaves
         // thrustNuclearReactorLimit=0 -> nuclearTotalLimit=0 ->
@@ -99,71 +99,54 @@ public class NuclearEngineRocketAssemblyTest extends AbstractSharedServerTest {
         // TileRocketAssemblingMachine line 457 (getThrust() <=
         // getNeededThrust()) fires -> status NOENGINES.
         assertTrue("misplaced-core assemble must NOT succeed: " + assemble,
-                assemble.contains("\"error\""));
+                Reply.of(assemble).has("error"));
         assertTrue("misplaced-core scan must surface NOENGINES status: " + assemble,
-                assemble.contains("\"status\":\"NOENGINES\""));
+                "NOENGINES".equals(Reply.of(assemble).text("status")));
     }
 
     /** Run fixture + assemble but DON'T assert SUCCESS — returns the raw
      *  assemble response so the caller can pin a specific error status
      *  (e.g. NOENGINES) on the failure path. */
-    private String setupAndAttemptAssemble(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        client().execute("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        client().execute("artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7) + " minecraft:air");
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+    private String setupAndAttemptAssemble(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this build stands in is EMPTY. The site is in open air, so this
+        // ASSERTS rather than digs, and its fill force-loads every chunk in the box — the warmup it
+        // replaces lost nothing. Nothing flies here: the subject is the assembly scan's REFUSAL.
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
+                "the build the assembly scan must reject stands in this volume");
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
         return String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
     }
 
-    /** Mirror of RocketAssemblySmokeTest#buildAndAssemble (chunk warmup,
-     *  air pre-clear, fixture, assemble, return last spawned rocket id). */
-    private int buildAndAssemble(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (baseZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (baseZ + 7) >> 4;
-        String warmup = String.join("\n", client().execute(
-                "artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
-
-        String fillAir = String.join("\n", client().execute(
-                "artest fill 0 " + (baseX - 2) + " " + (baseY + 1) + " " + (baseZ - 2)
-                        + " " + (baseX + 7) + " " + (baseY + 10) + " " + (baseZ + 7)
-                        + " minecraft:air"));
-        assertTrue("pre-clear failed: " + fillAir, fillAir.contains("\"ok\":true"));
-
-        String fixture = String.join("\n", client().execute(
-                "artest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant));
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        int bx = Integer.parseInt(bp.group(1)),
-                by = Integer.parseInt(bp.group(2)),
-                bz = Integer.parseInt(bp.group(3));
+    /** Mirror of RocketAssemblySmokeTest#buildAndAssemble (clear-site check,
+     *  fixture, assemble, return last spawned rocket id). */
+    private int buildAndAssemble(FixtureSite site, String variant) throws Exception {
+        // The site owns the coordinates; these aliases keep the body below unchanged.
+        final int baseX = site.x, baseY = site.y, baseZ = site.z;
+        // FIRST link: the volume this craft is built in is EMPTY. Open air, so it ASSERTS rather
+        // than digs, and the fill inside it force-loads every chunk in the box.
+        int[] bp = RocketFixture.placeAt(site, cmd -> String.join("\n", client().execute(cmd)),
+                variant, 2, 10,
+                "the craft whose thrust is read stands in this volume");
+        int bx = bp[0],
+                by = bp[1],
+                bz = bp[2];
 
         String assemble = String.join("\n", client().execute(
                 "artest rocket assemble 0 " + bx + " " + by + " " + bz));
         assertTrue("assemble (" + variant + ") failed: " + assemble,
-                assemble.contains("\"ok\":true"));
+                Reply.of(assemble).ok());
 
         String rocketList = String.join("\n", client().execute("artest rocket list 0"));
-        Matcher rim = ROCKET_LIST_ID.matcher(rocketList);
-        int lastId = -1;
-        while (rim.find()) lastId = Integer.parseInt(rim.group(1));
-        assertTrue("rocket list yielded no ids after assemble: " + rocketList, lastId >= 0);
+        java.util.List<RocketList.Entry> built = RocketList.of(rocketList);
+        assertTrue("rocket list yielded no ids after assemble: " + rocketList, !built.isEmpty());
+        int lastId = built.isEmpty() ? -1 : built.get(built.size() - 1).id;
         return lastId;
     }
 
-    private static int extractInt(String haystack, Pattern pattern) {
-        Matcher m = pattern.matcher(haystack);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
-    }
 }

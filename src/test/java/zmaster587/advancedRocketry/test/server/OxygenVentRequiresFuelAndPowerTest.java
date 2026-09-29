@@ -1,12 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
 
@@ -45,9 +45,9 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest {
 
-    private static final Pattern VENT_SEALED = Pattern.compile("\"isSealed\":(true|false)");
-    private static final Pattern VENT_BLOB_SIZE = Pattern.compile("\"blobSize\":(-?\\d+)");
-    private static final Pattern VENT_ENERGY = Pattern.compile("\"energyStored\":(-?\\d+)");
+    private static final String VENT_SEALED = "isSealed";
+    private static final String VENT_BLOB_SIZE = "blobSize";
+    private static final String VENT_ENERGY = "energyStored";
 
     private static final int CY_BASE = 64;
     private static final int CZ_BASE = 2000;
@@ -83,11 +83,11 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
         String info = ventInfo(CX_NO_FLUID);
         assertTrue("vent without oxygen must report hasFluid:false after the "
                         + "drain-fail branch fires: " + info,
-                info.contains("\"hasFluid\":false"));
+                (!Reply.of(info).bool("hasFluid")));
         assertFalse("vent without oxygen must NOT report PRESSURIZEDAIR — the "
                         + "atmosphere should have reverted to the dim baseline: "
                         + info,
-                info.contains("\"blobAtmosphere\":\"PRESSURIZEDAIR\""));
+                "PRESSURIZEDAIR".equals(Reply.of(info).text("blobAtmosphere")));
     }
 
     /** Vent + oxygen, NO energy &rarr; {@code hasEnoughEnergy} guard fails at
@@ -164,19 +164,19 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
     private void placeVent(int cx) throws Exception {
         String resp = exec("artest place 0 " + cx + " " + CY_BASE + " " + CZ_BASE
                 + " advancedrocketry:oxygenVent");
-        assertTrue("vent place failed: " + resp, resp.contains("\"placed\":true"));
+        assertTrue("vent place failed: " + resp, Reply.of(resp).bool("placed"));
     }
 
     private void injectEnergy(int cx, int amount) throws Exception {
         String resp = exec("artest energy inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
                 + " " + amount);
-        assertTrue("energy inject failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("energy inject failed: " + resp, Reply.of(resp).ok());
     }
 
     private void injectOxygen(int cx, int amount) throws Exception {
         String resp = exec("artest fluid inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
                 + " oxygen " + amount);
-        assertTrue("oxygen inject failed: " + resp, resp.contains("\"ok\":true"));
+        assertTrue("oxygen inject failed: " + resp, Reply.of(resp).ok());
     }
 
     /** Wakes the vent from "first run" state into its operating loop and
@@ -193,16 +193,15 @@ public class OxygenVentRequiresFuelAndPowerTest extends AbstractSharedServerTest
         return exec("artest vent info 0 " + cx + " " + CY_BASE + " " + CZ_BASE);
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 
-    private static String matchOrFail(Pattern pattern, String src) {
-        Matcher m = pattern.matcher(src);
-        assertFalse("pattern " + pattern.pattern() + " not found in: " + src,
-                !m.find());
-        return m.group(1);
+    private static String matchOrFail(String field, String src) {
+        String value = Reply.of(src).text(field);
+        assertNotNull("field `" + field + "` not found in: " + src, value);
+        return value;
     }
 }

@@ -6,6 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
+import zmaster587.advancedRocketry.test.Events;
 
 import java.io.IOException;
 
@@ -35,37 +36,32 @@ final class ClientGuiTestSupport {
      * click each attempt. Returns the open screen's class, or {@code ""} if no
      * GUI opened across all attempts.
      */
-    static String openGuiByRightClick(ClientBot bot, int x, int y, int z) throws IOException {
-        for (int attempt = 0; attempt < 6; attempt++) {
-            String already = screenOf(bot.reportState());
-            if (!already.isEmpty()) {
-                return already;
-            }
-            bot.rightClickBlock(x, y, z, EnumFacing.UP, EnumHand.MAIN_HAND);
-            // Poll a short window for this click to take effect before retrying.
-            for (int waited = 0; waited < 60; waited += 10) {
-                bot.waitTicks(10);
-                String screen = screenOf(bot.reportState());
-                if (!screen.isEmpty()) {
-                    return screen;
-                }
-            }
+    static String openGuiByRightClick(ClientBot bot, Events clientEvents, int x, int y, int z)
+            throws Exception {
+        String already = screenOf(bot.reportState());
+        if (!already.isEmpty()) {
+            return already;
         }
-        return "";
-    }
-
-    /**
-     * Polls {@code report_state} until no GUI screen is open or the budget is
-     * exhausted. Returns the final screen class ({@code ""} when released).
-     */
-    static String waitForNoScreen(ClientBot bot, int maxTicks) throws IOException {
-        for (int waited = 0; waited < maxTicks; waited += 5) {
-            String screen = screenOf(bot.reportState());
-            if (screen.isEmpty()) {
-                return "";
-            }
-            bot.waitTicks(5);
-        }
+        long mark = clientEvents.mark();
+        // The click is the STIMULUS and `client_gui_opened` is the link: the recorder sits on
+        // GuiOpenEvent at LOWEST with receiveCanceled, so a CANCELLED open is recorded too and a
+        // test that finds one has learned exactly what it needed. `gui` is "none" when a screen
+        // CLOSES, which is why the condition asks for a record that is not one of those.
+        //
+        // The click is re-issued every 60 ticks while the log is read every 5. A single
+        // rightClickBlock is occasionally a no-op — the interaction lands a tick before the chunk
+        // or the player has settled — and no amount of READING recovers a click that never
+        // registered, which is what makes the re-click a stimulus rather than patience.
+        //
+        // It THROWS rather than answering "": an open that never happened is news, and the wait's
+        // own failure names what the client WAS told. The caller's assertion is a different
+        // question — whether the screen is still open and is the one it meant.
+        clientEvents.awaitMatching(mark, "client_gui_opened",
+                reply -> Events.records(reply).size()
+                        > Events.recordsWhere(reply, "gui", "none").size(),
+                "opening any screen",
+                "the right-click at " + x + "," + y + "," + z + " must open a GUI", 360,
+                () -> bot.rightClickBlock(x, y, z, EnumFacing.UP, EnumHand.MAIN_HAND), 60);
         return screenOf(bot.reportState());
     }
 

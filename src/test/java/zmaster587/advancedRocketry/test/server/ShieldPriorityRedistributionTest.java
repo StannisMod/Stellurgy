@@ -1,10 +1,12 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.ShieldTile;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
 
@@ -25,9 +27,9 @@ import static org.junit.Assert.assertTrue;
 public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
-    private static final int Y = 64;
+    private static final int Y = FixtureSite.OPEN_AIR_Y;
     private static final int FE_PER_ITERATION = 4000;
-    private static final Pattern STORED = Pattern.compile("\"shieldStored\":(-?\\d+)");
+    private static final String STORED = "shieldStored";
 
     @Test
     public void underDeficitTheHigherPriorityEmitterIsFedAndFollowsTheSetting() throws Exception {
@@ -59,15 +61,15 @@ public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
 
     private void assertPoweredAndStarved(String fedName, int fedX, String starvedName, int starvedX, int z)
             throws Exception {
-        String fed = read(fedX, z);
-        String starved = read(starvedX, z);
-        long fedStored = readStored(fed);
-        long starvedStored = readStored(starved);
+        ShieldTile fed = read(fedX, z);
+        ShieldTile starved = read(starvedX, z);
+        long fedStored = fed.shieldStored();
+        long starvedStored = starved.shieldStored();
         assertTrue("the higher-priority emitter " + fedName + " was not powered under the deficit — the "
-                + "scarce supply did not go to it first:\n" + fed, fed.contains("\"powered\":true"));
+                + "scarce supply did not go to it first:\n" + fed.raw(), fed.powered());
         assertTrue("the lower-priority emitter " + starvedName + " should starve while " + fedName
                 + " is fed (fed=" + fedStored + " starved=" + starvedStored + "): priority did not "
-                + "redistribute the deficit:\n" + starved, fedStored > starvedStored + 15_000L);
+                + "redistribute the deficit:\n" + starved.raw(), fedStored > starvedStored + 15_000L);
     }
 
     private void chargeBoth(int gx, int gz, int iterations) throws Exception {
@@ -81,23 +83,23 @@ public class ShieldPriorityRedistributionTest extends AbstractSharedServerTest {
     private void setPriority(int x, int z, int value) throws Exception {
         String resp = exec("artest shield priority " + DIM + " " + x + " " + Y + " " + z + " " + value);
         assertTrue("failed to set priority " + value + " at " + x + ": " + resp,
-                resp.contains("\"priority\":" + value));
+                String.valueOf(value).equals(Reply.of(resp).text("priority")));
     }
 
-    private String read(int x, int z) throws Exception {
-        return exec("artest shield read " + DIM + " " + x + " " + Y + " " + z);
+    private ShieldTile read(int x, int z) throws Exception {
+        return ShieldTile.at(cmd -> exec(cmd), DIM, x, Y, z);
     }
 
     private void place(String block, int x, int z) throws Exception {
         String resp = exec("artest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed"));
     }
 
     private static long readStored(String json) {
-        Matcher m = STORED.matcher(json);
-        assertTrue("no shieldStored in probe response: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        Reply mReply = Reply.of(json);
+        assertTrue("no shieldStored in probe response: " + json, mReply.has(STORED));
+        return Long.parseLong(mReply.text(STORED));
     }
 
     private static String exec(String command) throws Exception {

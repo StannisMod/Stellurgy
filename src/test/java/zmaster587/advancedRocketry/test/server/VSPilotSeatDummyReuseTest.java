@@ -1,9 +1,11 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.SeatMount;
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -20,39 +22,34 @@ import static org.junit.Assert.assertTrue;
  */
 public class VSPilotSeatDummyReuseTest extends AbstractSharedServerTest {
 
-    private static final Pattern DUMMY_ID = Pattern.compile("\"dummyId\":(-?\\d+)");
+    private static final String DUMMY_ID = "dummyId";
 
     @Test
     public void theSeatMountProbeReusesTheSeatsSingleDummy() throws Exception {
-        int x = 3000, y = 70, z = 3000;
+        int x = 3000, y = FixtureSite.OPEN_AIR_Y, z = 3000;
         String warmup = String.join("\n", client().execute(
                 "artest chunk warmup 0 " + (x >> 4) + " " + (z >> 4) + " " + (x >> 4) + " " + (z >> 4)));
-        assertTrue("chunk warmup failed: " + warmup, warmup.contains("\"ok\":true"));
+        assertTrue("chunk warmup failed: " + warmup, Reply.of(warmup).ok());
         String place = String.join("\n", client().execute("artest fill 0 "
                 + x + " " + y + " " + z + " " + x + " " + y + " " + z
                 + " advancedrocketry:pilotSeat"));
-        assertTrue("placing the pilot seat failed: " + place, place.contains("\"ok\":true"));
+        assertTrue("placing the pilot seat failed: " + place, Reply.of(place).ok());
 
-        String first = String.join("\n", client().execute("artest vs seat-mount 0"));
-        assertTrue("seat-mount must find the pilot seat: " + first,
-                first.contains("\"seatFound\":true"));
-        int firstId = dummyId(first);
+        // The bare form is right here and nowhere else: this test PLACES the only pilot seat in the
+        // world two statements above, and the reader's seat count is what says so in a failure.
+        SeatMount first = SeatMount.firstLoadedSeat(
+                cmd -> String.join("\n", client().execute(cmd)), 0);
+        first.requireSeatFound("seat-mount must find the pilot seat just placed");
 
-        String second = String.join("\n", client().execute("artest vs seat-mount 0"));
-        assertTrue("seat-mount must find the pilot seat again: " + second,
-                second.contains("\"seatFound\":true"));
-        int secondId = dummyId(second);
+        SeatMount second = SeatMount.firstLoadedSeat(
+                cmd -> String.join("\n", client().execute(cmd)), 0);
+        second.requireSeatFound("seat-mount must find that same pilot seat again");
 
         assertEquals("a second mount on the same seat must REUSE its bound dummy, not spawn a "
-                        + "twin (first=" + first + " second=" + second + ")",
-                firstId, secondId);
-        assertTrue("the second response must say the dummy was reused: " + second,
-                second.contains("\"reused\":true"));
+                        + "twin (first=" + first.raw() + " second=" + second.raw() + ")",
+                first.requireDummyId(), second.requireDummyId());
+        assertTrue("the second response must say the dummy was reused: " + second.raw(),
+                second.reused);
     }
 
-    private int dummyId(String json) {
-        Matcher m = DUMMY_ID.matcher(json);
-        assertTrue("expected a dummyId in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
-    }
 }

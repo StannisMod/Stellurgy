@@ -47,20 +47,20 @@ public class DimensionManagerProgressionFlagResetTest {
             sol.setTemperature(100);
             DimensionManager.getInstance().addStar(sol);
         }
-        DimensionManager.hasReachedMoon = false;
-        DimensionManager.hasReachedWarp = false;
+        DimensionManager.getInstance().setReachedMoon(false);
+        DimensionManager.getInstance().setReachedWarp(false);
     }
 
     @Test
     public void onServerStoppedClearsProgressionFlags() {
-        DimensionManager.hasReachedMoon = true;
-        DimensionManager.hasReachedWarp = true;
+        DimensionManager.getInstance().setReachedMoon(true);
+        DimensionManager.getInstance().setReachedWarp(true);
 
         DimensionManager.getInstance().onServerStopped();
 
         assertFalse("hasReachedMoon must reset on world teardown (no cross-world leak)",
-                DimensionManager.hasReachedMoon);
+                DimensionManager.getInstance().hasReachedMoon());
         assertFalse("hasReachedWarp must reset on world teardown (no cross-world leak)",
-                DimensionManager.hasReachedWarp);
+                DimensionManager.getInstance().hasReachedWarp());
     }
 }

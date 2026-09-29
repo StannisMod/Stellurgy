@@ -1,16 +1,16 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.CellInfo;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * The filed defect's own repro, at the server tier, against the real universe registry: <b>a body does not
+ * A recorded defect's own repro, at the server tier, against the real universe registry: <b>a body does not
  * leave its cell because time passed.</b>
  *
  * <p>The measured defect was a pilot sitting still in a cell that held six bodies and watching all six
@@ -61,31 +61,40 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
     @Test
     public void aBodyStaysInItsOwnCellAcrossAVeryLongDwell() throws Exception {
         // Where the registry says the body is, and what its cell holds — as of now.
-        String cellKey = dimCell(exec("artest space cell-info 0 0 0 " + WATCHED_DIM));
+        String cellKey = CellInfo.atSector(this::exec, 0, 0, 0, WATCHED_DIM).requireDimCell();
+
+        CellInfo before = CellInfo.atKey(this::exec, cellKey, WATCHED_DIM);
+        int bodiesBefore = before.bodiesAtCount;
+        assertTrue("the fixture must actually have a body in this cell to lose: " + before.raw(),
+                bodiesBefore > 0);
+        // Asked of the AT-CELL list, which is this test's whole subject. The substring this
+        // replaces — `"dim":N,"kind"` — scanned the WHOLE reply, so the SYSTEM-wide list satisfied
+        // it too: a body that had left its cell but stayed in its system passed. It also pinned
+        // that `dim` is written immediately before `kind`, which is the writer's formatting.
+        assertTrue("...and it must be the watched dimension: " + before.raw(),
+                standsInThisCell(before));
+
+        // `space frame` takes a SECTOR TRIPLE, not a cell key — a different verb with a different
+        // argument form — so the key is split here and nowhere else. Asserted rather than assumed:
+        // a key that stops being a triple would otherwise hand this verb two arguments and the
+        // control below would be measuring a frame nobody asked for.
         String[] sectors = cellKey.split("_");
         assertEquals("a cell key is a sector triple: " + cellKey, 3, sectors.length);
         String cellArgs = sectors[0] + " " + sectors[1] + " " + sectors[2];
 
-        String before = exec("artest space cell-info " + cellArgs + " " + WATCHED_DIM);
-        int bodiesBefore = jsonInt(before, "bodiesAt");
-        assertTrue("the fixture must actually have a body in this cell to lose: " + before,
-                bodiesBefore > 0);
-        assertTrue("...and it must be the watched dimension: " + before,
-                before.contains("\"dim\":" + WATCHED_DIM + ",\"kind\""));
-
         String frameBefore = exec("artest space frame " + cellArgs);
         long clockBefore = jsonLong(frameBefore, "clock");
 
-        String after;
+        CellInfo after;
         String frameAfter;
-        String reDerived;
+        CellInfo reDerived;
         try {
             String set = exec("artest space set-clock " + (clockBefore + AGE_TICKS));
-            assertTrue("the clock must move: " + set, set.contains("\"ok\":true"));
+            assertTrue("the clock must move: " + set, Reply.of(set).ok());
             assertEquals("the space subsystem must read the clock that was set: " + set,
                     clockBefore + AGE_TICKS, jsonLong(set, "spaceClock"));
 
-            after = exec("artest space cell-info " + cellArgs + " " + WATCHED_DIM);
+            after = CellInfo.atKey(this::exec, cellKey, WATCHED_DIM);
             frameAfter = exec("artest space frame " + cellArgs);
 
             // Now take away the SECOND reason the name could be stable. A recorded name wins over
@@ -97,8 +106,8 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
             // authored orbital elements — and never from the clock.
             String forget = exec("artest space forget-name " + WATCHED_DIM);
             assertTrue("the registry must have been holding a recorded name to forget: " + forget,
-                    forget.contains("\"held\":true"));
-            reDerived = exec("artest space cell-info " + cellArgs + " " + WATCHED_DIM);
+                    Reply.of(forget).bool("held"));
+            reDerived = CellInfo.atKey(this::exec, cellKey, WATCHED_DIM);
         } finally {
             // Hand the shared server back the clock it had. A test that ages the universe by eleven
             // days and leaves it there is a test that breaks somebody else's.
@@ -120,21 +129,21 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
                 Math.abs(movedX) > zmaster587.advancedRocketry.space.GalacticCoord.CELL);
 
         // THE CLAUSE. Same cell key, same occupants, same count.
-        assertEquals("a body's own cell may not change because time passed: " + after,
-                cellKey, dimCell(after));
+        assertEquals("a body's own cell may not change because time passed: " + after.raw(),
+                cellKey, after.requireDimCell());
         assertEquals("...and the cell must still report the same number of bodies standing in it: "
-                + before + " -> " + after, bodiesBefore, jsonInt(after, "bodiesAt"));
-        assertTrue("...including the watched dimension itself: " + after,
-                after.contains("\"dim\":" + WATCHED_DIM + ",\"kind\""));
+                + before.raw() + " -> " + after.raw(), bodiesBefore, after.bodiesAtCount);
+        assertTrue("...including the watched dimension itself: " + after.raw(),
+                standsInThisCell(after));
 
         // And the same again with the store's protection REMOVED: a name derived fresh at the aged
         // clock is the same name. This is the leg that fails if the derivation ever reads a clock.
         assertEquals("a name derived fresh, eleven days later, must still be the same cell — the"
                 + " layout decides a name, from the system anchor and the authored orbit, and the"
-                + " clock has no part in it: " + reDerived,
-                cellKey, dimCell(reDerived));
-        assertTrue("...and the body must still be standing in it: " + reDerived,
-                reDerived.contains("\"dim\":" + WATCHED_DIM + ",\"kind\""));
+                + " clock has no part in it: " + reDerived.raw(),
+                cellKey, reDerived.requireDimCell());
+        assertTrue("...and the body must still be standing in it: " + reDerived.raw(),
+                standsInThisCell(reDerived));
     }
 
     // --- helpers ---------------------------------------------------------------------------------
@@ -155,17 +164,23 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
 
     /** Element {@code index} of a numeric JSON array field. */
     private static long jsonArrayElement(String json, String field, int index) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":\\[([^\\]]*)\\]").matcher(json);
-        assertTrue("probe response carries no \"" + field + "\" array: " + json, m.find());
-        String[] parts = m.group(1).split(",");
-        assertTrue("\"" + field + "\" has no element " + index + ": " + json, parts.length > index);
-        return Long.parseLong(parts[index].trim());
+        Reply reply = Reply.of(json);
+        assertTrue("probe response carries no \"" + field + "\" array: " + json, reply.has(field)
+                || reply.intArray(field).length > 0);
+        int[] values = reply.intArray(field);
+        assertTrue("\"" + field + "\" has no element " + index + ": " + json, values.length > index);
+        return values[index];
     }
 
-    private static String dimCell(String json) {
-        Matcher m = Pattern.compile("\"dimCell\":\"([^\"]+)\"").matcher(json);
-        assertTrue("probe response carries no \"dimCell\": " + json, m.find());
-        return m.group(1);
+    /** Whether the watched dimension's body stands AT this cell — not merely somewhere in its
+     *  system, which is the weaker claim the substring this replaced also accepted. */
+    private static boolean standsInThisCell(CellInfo info) {
+        for (CellInfo.Body body : info.cellBodies) {
+            if (body.dim == WATCHED_DIM) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int jsonInt(String json, String field) {
@@ -173,8 +188,7 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
     }
 
     private static long jsonLong(String json, String field) {
-        Matcher m = Pattern.compile("\"" + Pattern.quote(field) + "\":(-?\\d+)").matcher(json);
-        assertTrue("probe response carries no numeric \"" + field + "\": " + json, m.find());
-        return Long.parseLong(m.group(1));
+        assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
+        return Reply.of(json).integer(field);
     }
 }

@@ -66,20 +66,35 @@ public final class PlanetRealizer {
      * only entry point, so that "one body, one world" cannot be true in one caller and false in
      * another.</p>
      */
-    public static int realize(MinecraftServer server, GalacticCoord bodyCell) {
-        if (server == null || bodyCell == null) {
+    public static int realize(MinecraftServer server, SystemBody approached) {
+        if (server == null || approached == null) {
             return Constants.INVALID_PLANET;
         }
         UniverseRegistry registry = UniverseRegistry.get(server);
         if (registry == null) {
             return Constants.INVALID_PLANET;
         }
+        GalacticCoord bodyCell = approached.name();
 
         // Pin FIRST. A touch is what freezes a procedural system into the save, and by the time this
         // body has a dimension its surroundings must already be unable to drift away from under it.
         registry.pinSystem(bodyCell);
 
-        OptionalInt existing = registry.realizedDimAt(bodyCell);
+        // THE KIND IS REFUSED BEFORE THE WORLD IS LOOKED UP. This entry point is a DESCENT, and a body
+        // nobody can stand on is not one whatever it holds - a gas giant now has a dimension of its own
+        // (its moons need a parent to hang off), so the idempotent "already realized" answer below
+        // would otherwise hand a caller the giant's world and read as permission to land on it.
+        if (!approached.kind().canDescend()) {
+            return Constants.INVALID_PLANET;
+        }
+
+        OptionalInt variantOpt = registry.variantOf(approached);
+        if (!variantOpt.isPresent()) {
+            return Constants.INVALID_PLANET; // not a body of that cell, or nothing landable
+        }
+        int variant = variantOpt.getAsInt();
+
+        OptionalInt existing = registry.realizedDimAt(bodyCell, variant);
         if (existing.isPresent()) {
             return existing.getAsInt();
         }
@@ -90,36 +105,97 @@ public final class PlanetRealizer {
         }
         GalacticCoord anchor = anchorOpt.get();
 
-        List<SystemBody> here = registry.bodiesAt(bodyCell);
-        SystemBody target = null;
-        SystemBody parentBody = null;
-        int variant = 0;
-        int seen = 0;
-        for (SystemBody body : here) {
-            if (body.kind() == SystemBodyKind.STAR || body.kind() == SystemBodyKind.STATION_SLOT
-                    || body.kind() == SystemBodyKind.ASTEROID_BELT) {
-                continue;
-            }
-            // A moon shares its parent's cell, and the scan below can only reach one once the parent
-            // already HAS a dimension (an unrealized parent would be picked as the target first), so
-            // the parent found here is always realizable into a link.
-            if (parentBody == null && body.kind() != SystemBodyKind.MOON) {
-                parentBody = body;
-            }
-            // The variant is a body's rank among the worlds SHARING this cell, and it must be counted
-            // exactly the way the generator assigned it — a planet is 0 and its moons follow — or a
-            // realized moon would materialize a different world than the one that was scanned.
-            if (target == null && body.kind().canDescend()
-                    && body.dimId() == Constants.INVALID_PLANET) {
-                target = body;
-                variant = seen;
-            }
-            seen++;
-        }
-        if (target == null) {
+        List<SystemBody> here = registry.realizableBodiesAt(bodyCell);
+        if (variant >= here.size()) {
             return Constants.INVALID_PLANET;
         }
+        SystemBody target = here.get(variant);
+        if (!target.kind().canDescend() || target.dimId() != Constants.INVALID_PLANET) {
+            return Constants.INVALID_PLANET;
+        }
+        // The parent a moon hangs off, and it is in ANOTHER CELL: a moon is named inside its parent's
+        // ZONE, whose key IS the parent's cell, so the lookup follows the name rather than searching
+        // the moon's own neighbourhood. It searched the moon's own cell while the two shared one —
+        // and that search silently found nothing the moment they stopped, refusing to realize any
+        // moon in the galaxy while reporting only "nothing landable in that cell".
+        //
+        // The zone-less branch is not dead code: a body whose parent states no mass has no zone to
+        // divide, and its moons fall back to sharing its cell (announced by SystemContent). There the
+        // family really is right here, and the old search is the right one.
+        GalacticCoord parentCell = bodyCell.zone() == null
+                ? bodyCell : GalacticCoord.fromCellKey(bodyCell.zone());
+        List<SystemBody> parentFamily = parentCell == null || parentCell.sameCell(bodyCell)
+                ? here : registry.realizableBodiesAt(parentCell);
+        SystemBody parentBody = null;
+        int parentVariant = -1;
+        for (int i = 0; i < parentFamily.size(); i++) {
+            if (parentFamily.get(i).kind() != SystemBodyKind.MOON) {
+                parentBody = parentFamily.get(i);
+                parentVariant = i;
+                break;
+            }
+        }
+        // A moon whose parent cannot be found cannot be built: the family is what gives it its star,
+        // its orbit and its sky.
+        if (parentBody == null && target.kind() == SystemBodyKind.MOON) {
+            LOGGER.error("[UNIVERSE] not realizing the moon at {}: its zone {} names no body that "
+                    + "could be its parent, so it has nothing to hang off", bodyCell.cellKey(),
+                    bodyCell.zone());
+            return Constants.INVALID_PLANET;
+        }
+        if (parentCell == null) {
+            parentCell = bodyCell;
+        }
 
+        // A MOON NEEDS ITS PARENT TO EXIST AS A PLACE. Moon-ness is carried by a parent dimension id,
+        // so a moon realized while its parent has none is written down as a PLANET standing at the
+        // parent's own distance from the star - silently, and permanently, because nothing re-parents
+        // it when the parent is realized afterwards. There are two ways in and only one of them is an
+        // ordering accident: a ship reaches a moon before its rocky parent (a moon orbits at a few
+        // parent radii, so it is often the nearer body), and a GAS GIANT is not a descent target at
+        // all, so its up-to-five moons would take that path every single time.
+        // Realizing the parent here does not break rule 1 above. That rule bounds minting by what a
+        // player LANDS on, and this is bounded by the same thing - at most one parent per moon-first
+        // landing, never a sweep. A parent nobody can stand on costs less still: registerDim gives a
+        // gas giant its properties and no Forge dimension, because it has no surface.
+        if (target.kind() == SystemBodyKind.MOON
+                && parentBody.dimId() == Constants.INVALID_PLANET) {
+            // Minted in the PARENT's cell, at the parent's own variant in that cell's family.
+            int parentDim = materializeVariant(registry, anchor, parentCell, parentVariant,
+                    parentBody, null);
+            if (parentDim == Constants.INVALID_PLANET) {
+                LOGGER.error("[UNIVERSE] not realizing the moon at {}: its parent could not be given "
+                        + "a world, and a parentless moon is written down as a planet at the parent's "
+                        + "orbit with every moon path dead for it", bodyCell.cellKey());
+                return Constants.INVALID_PLANET;
+            }
+            // Both lists are SNAPSHOTS: the parent inside them still carries INVALID_PLANET. Re-read
+            // both, so the parent handed to materialize is the one that now has a world.
+            here = registry.realizableBodiesAt(bodyCell);
+            parentFamily = parentCell.sameCell(bodyCell) ? here
+                    : registry.realizableBodiesAt(parentCell);
+            if (variant >= here.size() || parentVariant >= parentFamily.size()) {
+                return Constants.INVALID_PLANET;
+            }
+            target = here.get(variant);
+            parentBody = parentFamily.get(parentVariant);
+        }
+
+        return materializeVariant(registry, anchor, bodyCell, variant, target, parentBody);
+    }
+
+    /**
+     * Mint the world for one body of a cell, whatever its kind - the half of {@link #realize} that runs
+     * once the body has been identified and the descent rules have had their say.
+     *
+     * <p>Separate from {@code realize} because it is also how a MOON's parent is given a place to be:
+     * that call must not be refused for a body nobody can land on, since a gas giant is exactly such a
+     * body and its moons need it. The "can you descend into this" question therefore belongs to the
+     * caller, and this method asks only whether the body can be MATERIALIZED.</p>
+     */
+    private static int materializeVariant(UniverseRegistry registry, GalacticCoord anchor,
+                                          GalacticCoord bodyCell, int variant, SystemBody target,
+                                          SystemBody parentBody) {
         Optional<StellarBody> starOpt = registry.starAt(bodyCell);
         if (!starOpt.isPresent()) {
             LOGGER.warn("[UNIVERSE] cannot realize the body at {}: its system has no star", bodyCell.cellKey());
@@ -136,7 +212,7 @@ public final class PlanetRealizer {
             star = DimensionManager.getInstance().getStar(star.getId());
         }
 
-        int dimId = DimensionManager.getInstance().getNextFreeDim(DimensionManager.dimOffset);
+        int dimId = DimensionManager.getInstance().getNextFreeDim(DimensionManager.getInstance().getDimOffset());
         if (dimId == Constants.INVALID_PLANET) {
             LOGGER.error("[UNIVERSE] no free dimension id left to realize the body at {}", bodyCell.cellKey());
             return Constants.INVALID_PLANET;
@@ -153,7 +229,7 @@ public final class PlanetRealizer {
             return Constants.INVALID_PLANET;
         }
         star.addPlanet(props);
-        if (!registry.realizeBody(bodyCell, dimId)) {
+        if (!registry.realizeBody(bodyCell, variant, dimId)) {
             LOGGER.error("[UNIVERSE] realized dimension {} for {} but the body could not be rewritten - "
                     + "the world exists and nothing points at it", dimId, bodyCell.cellKey());
             return Constants.INVALID_PLANET;
@@ -179,14 +255,18 @@ public final class PlanetRealizer {
         // A MOON must be realized as a moon. Without this it became a planet standing at its parent's
         // exact orbit forever, and every moon-specific path — the parent-mass period law, the moon sky,
         // the moon branch of orbitThetaAt — was dead for it, because isMoon() answered false.
-        // Its own distance from the parent lives in its ephemeris; profile.orbitalDistance() is the
+        // Its own distance from the parent lives in the law its CELL rides — a moon's cell rides the
+        // moon, so that law IS the moon's orbit about its parent. profile.orbitalDistance() is the
         // PARENT's distance from the star, which is what its climate is derived from and must stay.
+        // (Read off `offsetLaw()` until 2026-09-05, which was right while a moon moved inside its
+        // parent's cell and became a silent zero the moment it stopped: every moon in the galaxy
+        // would have been realized at MIN_DISTANCE, i.e. inside its parent.)
         if (body != null && body.kind() == SystemBodyKind.MOON && parentBody != null
                 && parentBody.dimId() != Constants.INVALID_PLANET) {
             DimensionProperties parentProps =
                     DimensionManager.getInstance().getDimensionProperties(parentBody.dimId());
             if (parentProps != null) {
-                int localOrbit = (int) Math.round(body.offsetLaw().distUnits());
+                int localOrbit = (int) Math.round(body.frame().law().distUnits());
                 props.orbitalDist = Math.max(DimensionProperties.MIN_DISTANCE, localOrbit);
                 props.setParentPlanet(parentProps);
             } else {
@@ -195,11 +275,13 @@ public final class PlanetRealizer {
             }
         }
         // The orbital angle is taken from the body's own law, so the planet the sky shows and the
-        // planet the orbital elements describe are in the same place. A planet's angle lives in the
-        // FRAME its cell rides; a moon's lives in its own offset law, because a moon shares its
-        // parent's frame and going through that would hand it its parent's angle instead of its own.
-        BodyEphemeris ownLaw = body.kind() == SystemBodyKind.MOON
-                ? body.offsetLaw() : body.frame().law();
+        // planet the orbital elements describe are in the same place. A body's own law is the law
+        // its CELL rides, at every level: a planet's cell rides the planet round its star and a
+        // moon's rides the moon round its planet. This used to branch on MOON and read the offset
+        // law instead, because a moon then shared its parent's frame and going through it would
+        // have handed the moon its parent's angle; the branch had one answer once a moon got a cell
+        // of its own, and keeping it would have handed every moon an angle of zero.
+        BodyEphemeris ownLaw = body.frame().law();
         props.baseOrbitTheta = ownLaw.baseTheta();
         props.orbitTheta = props.baseOrbitTheta;
 

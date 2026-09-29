@@ -10,7 +10,6 @@ import net.minecraft.world.WorldProvider;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Loader;
 import org.apache.commons.io.FileUtils;
-import org.apache.logging.log4j.Logger;
 import zmaster587.advancedRocketry.AdvancedRocketry;
 import zmaster587.advancedRocketry.api.*;
 import zmaster587.advancedRocketry.api.dimension.IDimensionProperties;
@@ -44,6 +43,7 @@ import java.util.zip.GZIPOutputStream;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static zmaster587.advancedRocketry.AdvancedRocketry.logger;
 import static zmaster587.advancedRocketry.dimension.DimensionProperties.proxylists;
 
 
@@ -56,19 +56,36 @@ public class DimensionManager implements IGalaxy {
     public static final DimensionType spaceDimensionType = DimensionType.register("space", "space", 3, WorldProviderSpace.class, false);
     public static final DimensionType AsteroidDimensionType = DimensionType.register("asteroid", "asteroid", 4, WorldProviderAsteroid.class, false);
     public static final int GASGIANT_DIMID_OFFSET = 0x100; //Offset by 256
-    public static Logger logger = AdvancedRocketry.logger;
-    public static int dimOffset = 0;
-    public static String prevBuild;
-    //Stat tracking
-    public static boolean hasReachedMoon;
-    public static boolean hasReachedWarp;
+    /**
+     * Lowest dimension id a planet may take, and the cursor the planet loader advances past the
+     * dimensions it has just claimed.
+     *
+     * <p>OWNER: the SERVER; LIFETIME: one server. Seeded from the configured {@code minDimension}
+     * when the configuration loads and again when a server stops, and moved during a load — which is
+     * why it is state and not a constant. On the INSTANCE because that is what it describes: the
+     * dimensions of the save this manager is managing, not something true of the process.</p>
+     */
+    private int dimOffset = 0;
+    /**
+     * Progression the SAVE records: whether this world's players have reached the moon, and warp.
+     *
+     * <p>OWNER: the SERVER; LIFETIME: one server. Written to the save's stat NBT, read back on load,
+     * and reset in {@link #onServerStopped()} — a freshly created world early-returns before the stat
+     * read, so without that reset it would inherit the previous world's progression in the same JVM
+     * (single-player, where client and integrated server share one process).</p>
+     *
+     * <p>On the INSTANCE for the same reason as the cursor above: these are facts about one save.
+     * They were public statics, which is what made the JVM-inheritance defect representable.</p>
+     */
+    private boolean hasReachedMoon;
+    private boolean hasReachedWarp;
     //Reference to the worldProvider for any dimension created through this system, normally WorldProviderPlanet, set in AdvancedRocketry.java in preinit
     public static Class<? extends WorldProvider> planetWorldProvider;
     //The default properties belonging to the overworld
     public static DimensionProperties overworldProperties;
     //the default property for any dimension created in space, normally, space over earth
     public static DimensionProperties defaultSpaceDimensionProperties;
-    private static DimensionManager instance = (DimensionManager) (AdvancedRocketryAPI.dimensionManager = new DimensionManager());
+    private static DimensionManager instance = new DimensionManager();
     private static long nextSatelliteId;
     public Set<Integer> knownPlanets;
     private Random random;
@@ -79,21 +96,9 @@ public class DimensionManager implements IGalaxy {
     public DimensionManager() {
         dimensionList = new HashMap<>();
         starList = new HashMap<>();
-        StellarBody sol = new StellarBody();
-        sol.setTemperature(100);
-        sol.setId(0);
-        sol.setName("Sol");
 
         overworldProperties = new DimensionProperties(0);
-        overworldProperties.setAtmosphereDensityDirect(100);
-        //Temperature in Kelvin, 286 is 13 Degrees C
-        overworldProperties.setAverageTemp(286);
-        overworldProperties.gravitationalMultiplier = 1f;
-        overworldProperties.orbitalDist = 100;
-        overworldProperties.skyColor = new float[]{1f, 1f, 1f};
-        overworldProperties.setName("Earth");
-        overworldProperties.isNativeDimension = false;
-        overworldProperties.setStar(sol);
+        seedEarthDefaults(overworldProperties);
 
         defaultSpaceDimensionProperties = new DimensionProperties(SpaceObjectManager.WARPDIMID, false);
         defaultSpaceDimensionProperties.setAtmosphereDensityDirect(0);
@@ -107,6 +112,79 @@ public class DimensionManager implements IGalaxy {
 
         random = new Random(System.currentTimeMillis());
         knownPlanets = new HashSet<>();
+    }
+
+    /**
+     * Give the loaded OVERWORLD the unit bulk when its planet file states none, and say so.
+     *
+     * <p>A save written while {@link #overworldProperties} was blank (see {@link #seedEarthDefaults})
+     * carries a dim-0 planet with no mass and no radius, because the writer emits bulk only for a body
+     * that has it. Nothing later restores it: the planet file is authoritative when present, so dim 0
+     * comes from the file and never from the static above, and the world stays sizeless in processes
+     * that no longer have the defect that made it.</p>
+     *
+     * <p>It is a REPAIR of the one body whose bulk is a definition rather than a measurement — Earth
+     * masses and Earth radii are the units the whole catalogue is stated in — and it is announced,
+     * because a body silently gaining a radius is indistinguishable from one that always had it. A
+     * pack that wants a different overworld states its own and this never fires.</p>
+     */
+    private static void repairOverworldBulk(DimensionProperties properties) {
+        if (properties == null || properties.getId() != 0 || properties.hasBulkProperties()) {
+            return;
+        }
+        properties.setBulk(1d, 1d);
+        logger.warn("The overworld's planet entry states no mass and no radius; applying the unit"
+                + " bulk (1 Earth mass, 1 Earth radius) it is DEFINED as. A body with no radius draws"
+                + " at the marker size at every range and carries the flat 512-block proximity shell"
+                + " instead of an atmosphere. Written by a version that blanked the overworld's"
+                + " defaults on world teardown; state <mass>/<radius> in planetDefs.xml to silence"
+                + " this.");
+    }
+
+    /**
+     * Earth's catalogue entry, STATED onto {@code earth} — the home world's shipped properties.
+     *
+     * <p>It is a method rather than a run of lines in the constructor because it has to be
+     * re-applicable. {@link DimensionProperties#resetProperties()} restores the GENERIC defaults of a
+     * planet (gravity 1, 100 K, no mass, no radius), and the overworld's defaults are not generic; it
+     * is called on {@link #overworldProperties} at every world teardown, while this object is a
+     * JVM-lifetime static seeded exactly once. So without a re-seed the first world opened in a
+     * process had an Earth and every world opened after a return to the title screen had a nameless
+     * 100-kelvin body of no size — and because the planet file writes bulk only when a body HAS it,
+     * that world's {@code planetDefs.xml} then recorded an Earth with no radius permanently.</p>
+     *
+     * <p>What a missing radius costs, measured 2026-08-23 from a live flight: the sky renderer draws
+     * the body at the marker size at every range (so Earth is invisible from orbit, behind the Moon)
+     * and the descent shell falls back to the flat 512-block proximity sphere meant for belts —
+     * 1/50 of this world.</p>
+     */
+    private static void seedEarthDefaults(DimensionProperties earth) {
+        StellarBody sol = new StellarBody();
+        sol.setTemperature(100);
+        sol.setId(0);
+        sol.setName("Sol");
+
+        earth.setAtmosphereDensityDirect(100);
+        //Temperature in Kelvin, 286 is 13 Degrees C
+        earth.setAverageTemp(286);
+        earth.gravitationalMultiplier = 1f;
+        // Earth's bulk, and it is a DEFINITION rather than a choice: the Earth mass and the Earth
+        // radius are the units the whole catalogue is stated in, so this body is 1.0 of each.
+        // Without it nothing ever states one — the only writers of bulk are the procedural realizer
+        // and an admin command, and the overworld passes through neither — so getRadius() stays
+        // BULK_UNSET.
+        // The gravity above is STATED, so it is marked authored and setBulk leaves it alone; here the
+        // derived value happens to agree, and that agreement is not what the mark is for.
+        earth.setGravityAuthored(true);
+        earth.setBulk(1d, 1d);
+        earth.orbitalDist = 100;
+        earth.skyColor = new float[]{1f, 1f, 1f};
+        earth.setName("Earth");
+        earth.isNativeDimension = false;
+        // The star is the throwaway Sol above rather than the registered one on purpose: this runs
+        // from the constructor (no instance to ask yet) and from teardown (the star registry has
+        // just been cleared), and in both the registry has no Sol to hand back.
+        earth.setStar(sol);
     }
 
     public static DimensionManager getInstance() {
@@ -379,10 +457,49 @@ public class DimensionManager implements IGalaxy {
         return hasBeenInitialized;
     }
 
+    /** The lowest dimension id a planet may take right now. */
+    public int getDimOffset() {
+        return dimOffset;
+    }
+
+    /** Seed the cursor: from the configured minimum, or back to where a load found it. */
+    public void setDimOffset(int dimOffset) {
+        this.dimOffset = dimOffset;
+    }
+
+    /** Move the cursor past dimensions a planet load has just claimed. */
+    public void advanceDimOffset(int claimed) {
+        this.dimOffset += claimed;
+    }
+
+    /** Whether this save's players have reached the moon. */
+    public boolean hasReachedMoon() {
+        return hasReachedMoon;
+    }
+
+    /** Whether this save's players have reached warp. */
+    public boolean hasReachedWarp() {
+        return hasReachedWarp;
+    }
+
+    /** Record moon progression for this save. */
+    public void setReachedMoon(boolean reached) {
+        hasReachedMoon = reached;
+    }
+
+    /** Record warp progression for this save. */
+    public void setReachedWarp(boolean reached) {
+        hasReachedWarp = reached;
+    }
+
     public void onServerStopped() {
         unregisterAllDimensions();
         knownPlanets.clear();
+        // CLEAR MEANS RESTORE. resetProperties() puts back the GENERIC defaults of a planet, and the
+        // overworld's are Earth's — so the reset alone leaves this JVM-lifetime static holding a
+        // nameless, sizeless body for every world opened after this one.
         overworldProperties.resetProperties();
+        seedEarthDefaults(overworldProperties);
         hasBeenInitialized = false;
         // C126: progression flags are process-global statics read from a world's
         // "stat" NBT on load. Reset them on teardown so a freshly-created world
@@ -672,7 +789,7 @@ public class DimensionManager implements IGalaxy {
     public void createAndLoadDimensions(boolean resetFromXml) {
         //Load planet files
         //Note: loading this modifies dimOffset
-        int dimOffset = DimensionManager.dimOffset;
+        int savedDimOffset = this.dimOffset;
         DimensionPropertyCoupling dimCouplingList = null;
         XMLPlanetLoader loader = null;
         boolean loadedFromXML = false;
@@ -716,7 +833,7 @@ public class DimensionManager implements IGalaxy {
             // report (diagnosable) instead of the old silent FMLCommonHandler.exitJava.
             // Recoverable per-planet config mistakes are skipped inside readAllPlanets.
             dimCouplingList = loader.loadPlanetsOrThrow(file);
-            DimensionManager.dimOffset += dimCouplingList.dims.size();
+            this.dimOffset += dimCouplingList.dims.size();
         }
         //End load planet files
 
@@ -765,7 +882,7 @@ public class DimensionManager implements IGalaxy {
                 sol.addPlanet(DimensionManager.overworldProperties);
 
                 if (zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId == Constants.INVALID_PLANET)
-                    zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId = DimensionManager.getInstance().getNextFreeDim(dimOffset);
+                    zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId = DimensionManager.getInstance().getNextFreeDim(savedDimOffset);
 
 
                 //Register the moon
@@ -773,10 +890,37 @@ public class DimensionManager implements IGalaxy {
                     DimensionProperties dimensionProperties = new DimensionProperties(zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().MoonId);
                     dimensionProperties.setAtmosphereDensityDirect(0);
                     dimensionProperties.setAverageTemp(20);
-                    dimensionProperties.rotationalPeriod = 128000;
+                    // TIDALLY LOCKED TO ITS PARENT, expressed the way this codebase expresses it:
+                    // `getParentPlanetThetaFromMoon` moves the parent across a moon's sky by
+                    // (orbitalPeriod / rotationalPeriod − 1), so a rotation equal to the orbit holds
+                    // Earth still — which is what standing on the Moon looks like.
+                    //
+                    // NOT `setTidallyLocked(true)`: that flag says a world keeps one face to its
+                    // STAR and removes the day/night cycle altogether. The Moon keeps one face to
+                    // EARTH and still has a day and a night, so the flag would describe a different
+                    // body. The period below is its own orbit — 27.32 days, 655 680 ticks.
+                    dimensionProperties.rotationalPeriod = (int) Math.round(
+                            zmaster587.advancedRocketry.util.AstronomicalBodyHelper.DAYS_PER_LUNAR_MONTH
+                                    * 24000d);
                     dimensionProperties.gravitationalMultiplier = .166f; //Actual moon value
+                    // The Moon's measured bulk, in the same units: 7.342e22 kg is 0.0123 Earth
+                    // masses and 1 737.4 km is 0.2727 Earth radii. The gravity above is the stated
+                    // one and stays stated — deriving it from these would give 0.1654 and silently
+                    // move a shipped number for no reason. What was missing is the RADIUS: without
+                    // it this body draws at the marker size and carries the flat 512-block shell.
+                    dimensionProperties.setGravityAuthored(true);
+                    dimensionProperties.setBulk(0.0123d, 0.2727d);
                     dimensionProperties.setName("Luna");
-                    dimensionProperties.orbitalDist = 150;
+                    // 384 400 km, in the moon-unit the layout measures a moon's orbit in (200 chart
+                    // blocks each, 250 m per block): 1 537 600 blocks / 200 = 7 688 units. The 150
+                    // this replaces meant 7 500 km — 51 times too small, close enough to Earth's own
+                    // 6 378 km radius that the two bodies' neighbourhoods overlapped, which is why
+                    // "which body is this craft's frame" had no answer worth giving.
+                    //
+                    // The field is an int and always was, so the real value was expressible from the
+                    // start; nothing about the model stood in the way of it.
+                    dimensionProperties.orbitalDist =
+                            zmaster587.advancedRocketry.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS;
                     dimensionProperties.addBiome(AdvancedRocketryBiomes.moonBiome);
                     dimensionProperties.addBiome(AdvancedRocketryBiomes.moonBiomeDark);
 
@@ -848,10 +992,11 @@ public class DimensionManager implements IGalaxy {
 
             }
         }
-        //Maybe add this back one day when we have a version of AR that needs it
-		/*else {
-			VersionCompat.upgradeDimensionManagerPostLoad(DimensionManager.prevBuild);
-		}*/
+        // The save's previous version string is written on every save and read by nobody. A
+        // commented-out legacy-upgrade call used to be the reason it was kept in a field; 3.0.0
+        // does not load pre-3.0.0 saves at all, so that call has no version to migrate from and the
+        // field is gone. The stamp itself stays: a save that says which build wrote it is worth
+        // having whether or not this code ever reads it back.
 
         //Attempt to load ore config from adv planet XML
         if (dimCouplingList != null) {
@@ -909,13 +1054,22 @@ public class DimensionManager implements IGalaxy {
             // (resetFromXml, or a re-copied config) this loop re-ran and accreted
             // duplicate random planets every load. Gate on the true first-run
             // discriminator: only generate randoms when no persisted dims exist.
-            if (!loadedFromXML && loadedPlanets.isEmpty()) {
-                // Carry each system's body count into the universe layer instead of spending it on a
-                // second world-making model here — see the sibling site above.
-                for (StellarBody star : dimCouplingList.stars) {
-                    star.setMaxRetinueBodies(loader.getMaxNumPlanets(star)
-                            + loader.getMaxNumGasGiants(star));
+            // Carry each system's body count into the universe layer instead of spending it on a
+            // second world-making model here — see the sibling site above.
+            //
+            // NOT gated on the first run. The gate above exists because this loop USED to generate
+            // random planets, and re-running that accreted duplicates every load; carrying a count is
+            // idempotent and has no such hazard. Left under the gate it meant a star's retinue size
+            // was known only in the session that created the world — every reload started it at zero,
+            // `withDerivedRetinue` then returned the authored list untouched, and a system that had
+            // shown its whole retinue came back holding only what was explicitly written down.
+            for (StellarBody star : dimCouplingList.stars) {
+                StellarBody registered = DimensionManager.getInstance().getStar(star.getId());
+                int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);
+                if (registered != null) {
+                    registered.setMaxRetinueBodies(retinue);
                 }
+                star.setMaxRetinueBodies(retinue);
             }
 
             // Buffer authored galactic anchor coords for the Layer-1 universe registry. Worlds are not
@@ -928,15 +1082,18 @@ public class DimensionManager implements IGalaxy {
         // property of the SAVE (its schema stamp) and the save is not reachable here — worlds are not
         // loaded yet. The pack states the parameters; the world states the version.
         //
-        // The provisional install below keeps this window behaving exactly as it did before the stamp
-        // existed: the generator is a JVM-global, so it is reset every load and a world without
-        // <galaxyGen> never inherits a previous world's generator. populate() then replaces it with the
-        // generator the save is actually owed, before anything derives.
+        // Stage the pack's <galaxyGen> for populate() to pair with the save's schema stamp. NO
+        // generator is installed here: this runs at serverAboutToStart, and the save's model is not
+        // resolved until populate() at serverStarting, so anything installed in that window would be
+        // the CURRENT model rather than the one this world is owed. A provisional install used to sit
+        // here, justified by a comment saying nothing derives before populate replaces it - and if
+        // that is true it did nothing, while if it is false it answered an old save with the newest
+        // model. Where the save carries no stamp, reconcileSchema adopts the current schema at the
+        // one install point, loudly and with a stamp written; that is the same outcome without the
+        // window.
         zmaster587.advancedRocketry.universe.GalaxyGenConfig galaxyGenConfig =
                 (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig : null;
         zmaster587.advancedRocketry.universe.UniverseRegistry.stageGalaxyConfig(galaxyGenConfig);
-        zmaster587.advancedRocketry.universe.UniverseRegistry.setGenerator(
-                zmaster587.advancedRocketry.universe.UniverseSchemas.current().generator(galaxyGenConfig));
         // C129: registration authority on load was planetDefs.xml only (the loop
         // above), while per-dim persisted state lives in temp.dat (loadedPlanets).
         // A dim present in temp.dat but absent from a hand-edited / restored /
@@ -960,10 +1117,15 @@ public class DimensionManager implements IGalaxy {
                 dimCouplingList == null ? null : dimCouplingList.planetTypes);
 
         // make sure to set dim offset back to original to make things consistant
-        DimensionManager.dimOffset = dimOffset;
+        this.dimOffset = savedDimOffset;
 
         DimensionManager.getInstance().knownPlanets.addAll(zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig().initiallyKnownPlanets);
 
+
+        // Whatever path dim 0 arrived by — the planet file, temp.dat, or the shipped defaults — it is
+        // the overworld and it has a size. Here rather than in one of the loops above because there
+        // are three of them and only the LAST writer decides what the world runs with.
+        repairOverworldBulk(dimensionList.get(0));
 
         // Run all sanity checks now
         //Try to fix invalid objects
@@ -1061,7 +1223,6 @@ public class DimensionManager implements IGalaxy {
             SpaceObjectManager.getSpaceManager().readFromNBT(nbtTag);
         }
 
-        prevBuild = nbt.getString("prevVersion");
         nbt.setString("prevVersion", AdvancedRocketry.version);
 
         return loadedDimProps;

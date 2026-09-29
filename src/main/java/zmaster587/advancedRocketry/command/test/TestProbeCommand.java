@@ -53,6 +53,14 @@ import java.util.Map;
  */
 public class TestProbeCommand extends CommandBase {
 
+    /**
+     * The event types that make up a position-writer timeline: who moved a body, who seated it and
+     * who stood it up. Named once, because two verbs read the same slice for the same reason.
+     */
+    // A body can be moved by being PLACED or by being handed a velocity, and a report that counts
+    // only the first reads as "nothing moved it" for the second.
+    private static final String[] WRITER_EVENTS = {"pos_jump", "vel_jump", "mount", "dismount"};
+
     @Override
     @Nonnull
     public String getName() {
@@ -79,6 +87,9 @@ public class TestProbeCommand extends CommandBase {
         }
         try {
             switch (args[0].toLowerCase()) {
+                case "clock":
+                    handleClock(server, sender);
+                    break;
                 case "registry":
                     handleRegistry(sender, tail(args));
                     break;
@@ -151,6 +162,9 @@ public class TestProbeCommand extends CommandBase {
                 case "infra":
                     handleInfra(server, sender, tail(args));
                     break;
+                case "invoke-static":
+                    handleInvokeStatic(sender, tail(args));
+                    break;
                 case "place":
                     handlePlace(server, sender, tail(args));
                     break;
@@ -222,6 +236,9 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "player":
                     handlePlayer(server, sender, tail(args));
+                    break;
+                case "events":
+                    handleEvents(sender, tail(args));
                     break;
                 case "seal-detector":
                     handleSealDetector(server, sender, tail(args));
@@ -658,17 +675,15 @@ public class TestProbeCommand extends CommandBase {
     // Valkyrien Skies integration probes ----------------------------------
 
     /**
-     * {@code vs available} — reports whether the SERVER sees Valkyrien Skies
-     * installed (the same gate the tier-2 assembly fork consults). Lets a test
-     * decide, from the server's point of view, whether to exercise the VS ship
-     * path or the no-VS fallback. Uses only the AR-side gate class, no VS types.
+     * The {@code vs} probe family.
+     *
+     * <p>There is no {@code vs available} verb. It reported whether the server saw the physics
+     * substrate installed, for a test deciding between the ship path and a no-substrate fallback —
+     * and the substrate is compiled into this jar, so the answer was a constant and the fallback it
+     * chose between does not exist. Its callers were three silent {@code Assume} skips on a
+     * condition that could never be false; they went with it on 2026-09-22.</p>
      */
     private void handleVs(ICommandSender sender, String[] args) {
-        if (args.length >= 1 && "available".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"available\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.isAvailable() + "}");
-            return;
-        }
         // motion-trace reset — drop every recorded ring, so a leg starts from an empty recorder.
         // motion-trace <dim> <afcX> <afcY> <afcZ> [windowMs] — the flight recorder's account of how
         // SMOOTHLY the ship driven by that flight computer moved over the trailing window: the
@@ -681,7 +696,7 @@ public class TestProbeCommand extends CommandBase {
         // four clocks, and they are not fixed by the same thing.
         if (args.length >= 1 && "motion-trace".equalsIgnoreCase(args[0])) {
             if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                zmaster587.advancedRocketry.util.MotionTrace.reset();
+                zmaster587.advancedRocketry.command.test.MotionTrace.reset();
                 send(sender, "{\"ok\":true,\"reset\":true}");
                 return;
             }
@@ -690,16 +705,16 @@ public class TestProbeCommand extends CommandBase {
                         + " [windowMs] | vs motion-trace reset\"}");
                 return;
             }
-            long key = zmaster587.advancedRocketry.util.MotionTrace.keyOf(
+            long key = zmaster587.advancedRocketry.command.test.MotionTrace.keyOf(
                     parseIntOr(args[1], Integer.MIN_VALUE), parseIntOr(args[2], 0),
                     parseIntOr(args[3], 0), parseIntOr(args[4], 0));
             long windowMs = args.length >= 6 ? parseIntOr(args[5], 10000) : 10000;
             send(sender, "{\"ok\":true,\"windowMs\":" + windowMs
                     + ",\"serverChunkLoads\":"
-                    + zmaster587.advancedRocketry.util.MotionTrace.serverChunkLoads
-                    + "," + zmaster587.advancedRocketry.util.MotionTrace.serverSummary(key, windowMs)
+                    + zmaster587.advancedRocketry.command.test.MotionTrace.serverChunkLoads
+                    + "," + zmaster587.advancedRocketry.command.test.MotionTrace.serverSummary(key, windowMs)
                     + ",\"client\":"
-                    + zmaster587.advancedRocketry.util.MotionTrace.clientSummary() + "}");
+                    + zmaster587.advancedRocketry.command.test.MotionTrace.clientSummary() + "}");
             return;
         }
         // mass-drift reset — forget every recorded recompute and disagreement.
@@ -757,14 +772,60 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         // ship-count <dim> — number of loaded VS ships (poll for async assembly).
+        // ships-registered <dim> — every ship in the REGISTRY, loaded or not, each with its durable
+        // name, its block count, whether anything has it loaded and whether it has been declared
+        // finished.
+        //
+        // The half no instrument could see. `ship-count`, `ships-loaded` and `shipIdsAt` are all
+        // about LOADED ships, so a blockless craft nothing had loaded was invisible to the whole
+        // tree while still answering position lookups and holding a lane — which meant "remnants do
+        // not accumulate" was not a measured claim on either side. `blocks:0` is a remnant;
+        // `loaded:false` beside it means no destroy pass was ever going to ask about it.
+        if (args.length >= 2 && "ships-registered".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.List<java.util.Map<String, Object>> ships =
+                    zmaster587.advancedRocketry.integration.vs.VSIntegration.registeredShips(world);
+            int blockless = 0;
+            StringBuilder out = new StringBuilder("{\"count\":").append(ships.size())
+                    .append(",\"ships\":[");
+            for (int i = 0; i < ships.size(); i++) {
+                if (i > 0) out.append(',');
+                java.util.Map<String, Object> one = ships.get(i);
+                if (Integer.valueOf(0).equals(one.get("blocks"))) {
+                    blockless++;
+                }
+                out.append(jsonMap(one));
+            }
+            // Counted here rather than left to the caller: the number a remnant question actually
+            // wants is "how many own nothing", and a caller deriving it from the list would be
+            // re-implementing the predicate at every call site.
+            send(sender, out.append("],\"blockless\":").append(blockless).append("}").toString());
+            return;
+        }
         if (args.length >= 2 && "ship-count".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            send(sender, "{\"count\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.loadedShipCount(world) + "}");
+            // The ids beside the count. A caller that establishes "this cell holds exactly one ship"
+            // still cannot say WHICH without them, and the shape that followed — one count, then a
+            // nearest-ship lookup — is an identification by position wearing a count's clothes.
+            java.util.List<String> loaded = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .loadedShipIds(world);
+            StringBuilder counted = new StringBuilder("{\"count\":")
+                    .append(zmaster587.advancedRocketry.integration.vs.VSIntegration
+                            .loadedShipCount(world))
+                    .append(",\"ships\":[");
+            for (int i = 0; i < loaded.size(); i++) {
+                if (i > 0) counted.append(',');
+                counted.append('"').append(escapeJson(loaded.get(i))).append('"');
+            }
+            send(sender, counted.append("]}").toString());
             return;
         }
         // ship-count-all <dim> — total ships loaded OR not (distinguishes created-but-
@@ -784,6 +845,34 @@ public class TestProbeCommand extends CommandBase {
                     + "\"}");
             return;
         }
+        // strand-blockless-record <dim> <x> <y> <z> — TEST-ONLY fault injection: register a
+        // blockless, unloaded ship record, the garbage a hull cut out of a world leaves behind when
+        // nothing loaded remains for the destroy pass to walk. `countAfterAdd` is measured on this
+        // call, before any tick: a second probe command is separated from this one by a whole world
+        // pass, so a count read there would already be post-collection and could not tell a working
+        // sweep from a plant that never happened.
+        if (args.length >= 5 && "strand-blockless-record".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            String[] planted = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .strandBlocklessRecord(world, new net.minecraft.util.math.BlockPos(
+                            parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0)));
+            if (planted == null) {
+                send(sender, "{\"error\":\"valkyrien skies not available\"}");
+                return;
+            }
+            send(sender, "{\"ok\":true,\"uuid\":\"" + planted[0] + "\""
+                    + ",\"countAfterAdd\":" + planted[1] + "}");
+            return;
+        }
+        // `empty-nearest-and-look` IS GONE. Its whole subject was the unbounded nearest-ship
+        // lookup — it emptied a hull and asked that lookup what it then answered — and the lookup
+        // was removed on 2026-09-14: a ship's blocks live in its subspace, so in the world it has a
+        // pose and no extent a distance could be measured to. A fault injector outlives its fault
+        // only as a way to keep the fault.
         // load-ships <dim> — force all known ships loaded + physics-enabled (a headless
         // server has no player near a ship to auto-load it).
         if (args.length >= 2 && "load-ships".equalsIgnoreCase(args[0])) {
@@ -792,8 +881,31 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            send(sender, "{\"requested\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.loadAllShips(world) + "}");
+            int[] loads = zmaster587.advancedRocketry.integration.vs.VSIntegration.loadAllShips(world);
+            if (loads == null) {
+                // `loadAllShips` answers null for a null world, and no longer for "the substrate is
+                // absent" — that branch is gone, because the substrate is compiled into this jar.
+                send(sender, "{\"error\":\"no world\"}");
+                return;
+            }
+            // BOTH halves: a zero `requested` beside a non-zero `alreadyLoaded` is "nothing needed
+            // doing", and beside a zero it is "this world holds no ships" — the same number, two
+            // answers, and a caller that sees only the first cannot tell them apart.
+            send(sender, "{\"requested\":" + loads[0] + ",\"alreadyLoaded\":" + loads[1] + "}");
+            return;
+        }
+        // destroy-ships <dim> — mark every registered ship in this world as finished, so the
+        // substrate collects them on its next tick. A scenario's own cleanup: a craft left behind is
+        // not inert any more (it is held loaded, it still ticks, and it is still flying wherever it
+        // was last pointed), so leaving one is leaving a moving object in the next scenario's world.
+        if (args.length >= 2 && "destroy-ships".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            int marked = zmaster587.advancedRocketry.integration.vs.VSIntegration.markAllShipsDead(world);
+            send(sender, "{\"ok\":" + (marked >= 0) + ",\"marked\":" + marked + "}");
             return;
         }
         // seat-yard <dim> <x> <y> <z> [shipUuid] — how many pilot-seat tiles the ARRIVAL's own seat
@@ -823,9 +935,68 @@ public class TestProbeCommand extends CommandBase {
             m.put("seats", zmaster587.advancedRocketry.space.CrewTransfer.countSeatsOfShip(
                     world, new net.minecraft.util.math.BlockPos(qx, qy, qz), want));
             m.put("askedShip", want == null ? "BY-POSITION" : want.toString());
-            m.put("nearest", zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .describeShipAt(world, qx, qy, qz));
+            // The `nearest` field that stood here is GONE with the lookup behind it (2026-09-14). It
+            // named whichever hull a distance happened to reach, and a distance to a craft whose
+            // blocks live in its subspace measures nothing. A caller that wants to know WHICH ship
+            // this count is about passes its uuid, which is what `askedShip` then reports.
             send(sender, jsonMap(m));
+            return;
+        }
+        // ship-uuid <dim> <durableShipId> — the PHYSICS id of the craft whose flight computer carries
+        // the durable id <durableShipId>, or null.
+        //
+        // <p>The one honest bridge between the two identities a tier-2 craft has. A test that BUILT a
+        // ship knows its durable id — the assembler mints it on the pad and returns it — but every
+        // `vs` verb is keyed on the physics id, which the physics mod mints asynchronously and which a
+        // crossing REPLACES. Without this the only way across was `ship-info <dim> <x> <y> <z>`, a
+        // proximity lookup: it answers with a neighbour the moment a world holds two craft, and it
+        // reads identically when it does.
+        //
+        // <p>Resolved through the registry by name (`shipUuidOfDurableId`), never by distance. It
+        // answers `null` rather than a guess — a caller that gets null has an arrangement problem it
+        // can see, instead of a stranger's ship it cannot.
+        if (args.length >= 3 && "ship-uuid".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID vsId = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .shipUuidOfDurableId(world, args[2]);
+            send(sender, "{\"ok\":true,\"durableId\":\"" + escapeJson(args[2]) + "\""
+                    + ",\"found\":" + (vsId != null)
+                    + ",\"id\":" + (vsId == null ? "null" : "\"" + vsId + "\"") + "}");
+            return;
+        }
+        // ship-name <dim> <x> <y> <z> — the DURABLE ship id carried by the flight computer AT THAT
+        // EXACT BLOCK, or null when no computer stands there.
+        //
+        // <p>The other direction from `ship-uuid`, and the one a caller needs before its craft has
+        // ever crossed: the assembler mints the durable id into the computer's NBT, and the reverse
+        // index on the physics side is written by the first crossing — so asking "what is this hull's
+        // name" through that index answers null for a ship still sitting on its pad. The tile's own
+        // NBT is the canonical copy and it is readable immediately.
+        //
+        // <p>A block address is an identity: it names exactly one tile, unlike "the ship nearest a
+        // point". The caller gets that address from `find-seat` (afcX/afcY/afcZ), which it asked by
+        // identity in the first place.
+        if (args.length >= 5 && "ship-name".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            net.minecraft.util.math.BlockPos afcPos = new net.minecraft.util.math.BlockPos(
+                    parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+            world.getChunkProvider().provideChunk(afcPos.getX() >> 4, afcPos.getZ() >> 4);
+            TileEntity nameTe = world.getTileEntity(afcPos);
+            java.util.UUID durable = nameTe instanceof zmaster587.advancedRocketry.tile
+                    .TileAdvancedFlightComputer
+                    ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) nameTe)
+                            .getOrCreateShipId()
+                    : null;
+            send(sender, "{\"ok\":true,\"found\":" + (durable != null)
+                    + ",\"shipId\":" + (durable == null ? "null" : "\"" + durable + "\"") + "}");
             return;
         }
         // ship-info <dim> id <shipId> — the ship report keyed on the ship's own IDENTITY. There is
@@ -850,65 +1021,124 @@ public class TestProbeCommand extends CommandBase {
             }
             double[] omega = zmaster587.advancedRocketry.integration.vs.VSIntegration
                     .shipAngularVelocityById(world, shipId);
-            send(sender, jsonMap(shipInfoMap(shipId, s, omega)));
+            int[] gates = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .shipPhysicsGatesById(world, shipId);
+            java.util.Map<String, Object> info = shipInfoMap(shipId, s, omega, gates);
+            // WHAT THE HULL IS MADE OF, beside where it is. A pose answers "the craft is here" and
+            // says nothing about whether anything of it is; a loaded craft with no blocks is a
+            // registry remnant that answers position lookups exactly like a real one. Every reader
+            // of this verb already prints the reply, so putting the count here is what makes a whole
+            // tier's logs carry it. Added 2026-09-16, after a body over a deck was refused by
+            // containment and nothing in the reply could say whether the craft was empty.
+            info.put("blocks", blockCountOf(world, shipId));
+            send(sender, jsonMap(info));
             return;
         }
-        // ship-info <dim> <x> <y> <z> [maxDist] — state of the loaded ship NEAREST to (x,y,z).
+        // THE POSITIONAL `ship-info <dim> <x> <y> <z>` IS GONE, removed 2026-09-14.
         //
-        // maxDist bounds the lookup: without it, on a world holding several ships, the answer is a
-        // NEIGHBOUR the moment the intended ship unloads or flies off, and it looks identical
-        // either way. But the bound is a mitigation and not an identity, and the distance it
-        // compares is the full 3-D one — so a bound sized against how far apart ships are BUILT
-        // says nothing about how far one of them then CLIMBS. Use this form to capture "id" once,
-        // then ask by id.
-        if (args.length >= 5 && "ship-info".equalsIgnoreCase(args[0])) {
-            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
-            if (world == null) {
-                send(sender, "{\"error\":\"world not loaded\"}");
-                return;
-            }
-            double maxDist = args.length >= 6
-                    ? parseDoubleOr(args[5], Double.POSITIVE_INFINITY) : Double.POSITIVE_INFINITY;
-            double[] s = zmaster587.advancedRocketry.integration.vs.VSIntegration.nearestShipState(
-                    world, parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0),
-                    parseDoubleOr(args[4], 0), maxDist);
-            if (s == null) {
-                send(sender, "{\"managed\":false}");
-                return;
-            }
-            // WHICH ship answered. Without it the reply is unattributable by construction: two
-            // ships produce the same shape of report and nothing in it says which one this is.
-            String shipId = zmaster587.advancedRocketry.integration.vs.VSIntegration.nearestShipId(
-                    world, parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0),
-                    parseDoubleOr(args[4], 0), maxDist);
-            // Angular velocity (rad/s): without it a test cannot tell "the pilot centred the flight
-            // cursor and the ship stopped turning" from "it is still turning, slowly".
-            double[] omega = zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .nearestShipAngularVelocity(world, parseDoubleOr(args[2], 0),
-                            parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0), maxDist);
-            send(sender, jsonMap(shipInfoMap(shipId, s, omega)));
-            return;
-        }
+        // It answered with the loaded ship NEAREST the query point, and that is not a question about
+        // a ship: a ship's blocks live in its subspace, so in the world it has a pose and no extent
+        // for a distance to be measured to. Unbounded it could not fail, and so could not warn; the
+        // `maxDist` that was offered as a mitigation is a threshold on the same meaningless number,
+        // and it is a full 3-D distance, so a bound sized against how far apart two craft are BUILT
+        // says nothing about how far one of them then CLIMBS.
+        //
+        // Ask `ship-info <dim> id <shipUuid>` instead. A diagnostic of the form "did my craft end up
+        // where I put it" resolves the craft by id FIRST and reads its pose second; there is no
+        // other order in which the answer means anything.
         // to-world <dim> <x> <y> <z> <subX> <subY> <subZ> — map a SUBSPACE point of the ship whose
         // grown world AABB contains (x,y,z) through THIS side's (the server's) transform. Paired
         // with the client-side skew statics it measures cross-side pose divergence: the same
         // subspace point mapped by each side's own transform.
-        if (args.length >= 8 && "to-world".equalsIgnoreCase(args[0])) {
+        // ships-loaded <dim> — every LOADED ship in that world, each with its own pose, in ONE reply.
+        //
+        // <p>For a caller asking about a PLACE — "is any ship's own pose at this spot" — which is a
+        // real question and not an identification. The shape it replaces is a nearest lookup followed
+        // by a pose comparison: that filters the ONE craft the lookup chose, so a hull sitting exactly
+        // at the spot is invisible whenever the lookup preferred another.
+        //
+        // <p><b>One call on purpose.</b> The obvious form — list the ids, then ask each for its pose —
+        // costs a probe round-trip per ship, and a caller polling a world where nothing holds ships
+        // loaded reads a ship that is resident for about a tick after its load pump. An extra
+        // round-trip inside that gap is enough to miss it every time (measured 2026-09-06: it turned
+        // `VSCrossingOutOfAnUnloadedSourceE2ETest` red, with the reply saying `loaded=0`).
+        if (args.length >= 2 && "ships-loaded".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            java.util.List<String> ids = zmaster587.advancedRocketry.integration.vs.VSIntegration
+            java.util.List<String> resident = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .loadedShipIds(world);
+            StringBuilder out = new StringBuilder("{\"ok\":true,\"count\":")
+                    .append(resident.size()).append(",\"ships\":[");
+            for (int i = 0; i < resident.size(); i++) {
+                double[] pose = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                        .shipStateById(world, resident.get(i));
+                if (i > 0) out.append(',');
+                out.append("{\"id\":\"").append(escapeJson(resident.get(i))).append('"');
+                if (pose != null) {
+                    out.append(",\"posX\":").append(pose[0])
+                            .append(",\"posY\":").append(pose[1])
+                            .append(",\"posZ\":").append(pose[2]);
+                }
+                out.append('}');
+            }
+            send(sender, out.append("]}").toString());
+            return;
+        }
+        // ships-at <dim> <x> <y> <z> — EVERY loaded ship whose world box CONTAINS that point, and how
+        // many there are.
+        //
+        // <p>Not an identification and never used as one: it is the honest instrument for the
+        // question "is a hull here at all", which a diagnostic on a failure path asks and a
+        // nearest-ship lookup answers badly. Containment rather than distance, and a LIST rather than
+        // a winner — ships do not collide, so one point can be inside several of them, and a reader
+        // who is told which is nearest learns nothing about how many there were.
+        if (args.length >= 5 && "ships-at".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.List<String> here = zmaster587.advancedRocketry.integration.vs.VSIntegration
                     .shipIdsAt(world, parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0),
                             parseDoubleOr(args[4], 0));
+            StringBuilder at = new StringBuilder("{\"ok\":true,\"count\":")
+                    .append(here.size()).append(",\"ships\":[");
+            for (int i = 0; i < here.size(); i++) {
+                if (i > 0) at.append(',');
+                at.append('"').append(escapeJson(here.get(i))).append('"');
+            }
+            send(sender, at.append("]}").toString());
+            return;
+        }
+        // PREFER `to-world <dim> id <shipId> <subX> <subY> <subZ>`. The positional form asks which
+        // ships CONTAIN (x,y,z) and maps through the FIRST of them — and ships do not collide, so a
+        // point can be inside several. The reply reports how many contained it (`shipsHere`), because
+        // a mapping through the wrong hull is a plausible number and nothing else in the answer says
+        // which transform produced it.
+        boolean toWorldById = args.length >= 7 && "to-world".equalsIgnoreCase(args[0])
+                && "id".equalsIgnoreCase(args[2]);
+        if (toWorldById || (args.length >= 8 && "to-world".equalsIgnoreCase(args[0]))) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.List<String> ids = toWorldById
+                    ? java.util.Collections.singletonList(args[3])
+                    : zmaster587.advancedRocketry.integration.vs.VSIntegration
+                            .shipIdsAt(world, parseDoubleOr(args[2], 0), parseDoubleOr(args[3], 0),
+                                    parseDoubleOr(args[4], 0));
             if (ids.isEmpty()) {
                 send(sender, "{\"error\":\"no ship at point\"}");
                 return;
             }
+            int sub = toWorldById ? 4 : 5;
             double[] w = zmaster587.advancedRocketry.integration.vs.VSIntegration.toWorldFrameFor(
-                    world, ids.get(0), parseDoubleOr(args[5], 0), parseDoubleOr(args[6], 0),
-                    parseDoubleOr(args[7], 0));
+                    world, ids.get(0), parseDoubleOr(args[sub], 0), parseDoubleOr(args[sub + 1], 0),
+                    parseDoubleOr(args[sub + 2], 0));
             if (w == null) {
                 send(sender, "{\"error\":\"ship not loaded\",\"shipId\":\"" + ids.get(0) + "\"}");
                 return;
@@ -916,27 +1146,56 @@ public class TestProbeCommand extends CommandBase {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("ok", true);
             m.put("shipId", ids.get(0));
+            m.put("shipsHere", toWorldById ? 1 : ids.size());
             m.put("worldX", w[0]);
             m.put("worldY", w[1]);
             m.put("worldZ", w[2]);
             send(sender, jsonMap(m));
             return;
         }
-        // ship-repack <dim> <sx> <sy> <sz> <dstX> <dstY> <dstZ> — the per-ship "crossing":
-        // snapshot the ship's subspace SHIPYARD blocks (+TileEntities) at visible pos (sx,sy,sz) via
-        // StorageChunk, deregister the ship, paste the blocks at (dstX,dstY,dstZ), and re-assemble them
-        // into a fresh VS ship. Proves a VS ship + its linked-TE state survive a pack/paste round-trip and
-        // re-VS. Any EntityDummy within 8 blocks of the source is carried to the destination.
-        if (args.length >= 8 && "ship-repack".equalsIgnoreCase(args[0])) {
+        // ship-repack <dim> id <shipId> <sx> <sy> <sz> <dstX> <dstY> <dstZ>
+        //   | ship-repack <dim> <sx> <sy> <sz> <dstX> <dstY> <dstZ> — the per-ship "crossing":
+        // snapshot the ship's subspace SHIPYARD blocks (+TileEntities) via StorageChunk, deregister
+        // the ship, paste the blocks at (dstX,dstY,dstZ), and re-assemble them into a fresh VS ship.
+        // Proves a VS ship + its linked-TE state survive a pack/paste round-trip and re-VS. Any
+        // EntityDummy within 8 blocks of the source is carried to the destination.
+        //
+        // PREFER THE ID FORM. This verb CUTS a ship, and the positional form resolves the yard through
+        // shipyardBoundsAt — "whatever craft is nearest, with no distance bound" — so on a world
+        // holding a second craft, or a blockless remnant of one, it cuts a stranger. Production's own
+        // crossing has taken an identity since the jump departure was fixed; the caller says which
+        // craft it means and the source coordinates are then only WHERE, for the riders and the log.
+        boolean repackById = args.length >= 10 && "ship-repack".equalsIgnoreCase(args[0])
+                && "id".equalsIgnoreCase(args[2]);
+        if (repackById || (args.length >= 8 && "ship-repack".equalsIgnoreCase(args[0]))) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            double sx = parseDoubleOr(args[2], 0), sy = parseDoubleOr(args[3], 0), sz = parseDoubleOr(args[4], 0);
-            int dstX = parseIntOr(args[5], 0), dstY = parseIntOr(args[6], 0), dstZ = parseIntOr(args[7], 0);
-            if (zmaster587.advancedRocketry.integration.vs.VSIntegration.shipyardBoundsAt(world, sx, sy, sz) == null) {
-                send(sender, "{\"error\":\"no ship at source\"}");
+            java.util.UUID repackShip = null;
+            if (repackById) {
+                try {
+                    repackShip = java.util.UUID.fromString(args[3]);
+                } catch (IllegalArgumentException notAUuid) {
+                    send(sender, "{\"error\":\"ship-repack id needs a well-formed uuid\"}");
+                    return;
+                }
+            }
+            int a = repackById ? 4 : 2;
+            double sx = parseDoubleOr(args[a], 0), sy = parseDoubleOr(args[a + 1], 0),
+                    sz = parseDoubleOr(args[a + 2], 0);
+            int dstX = parseIntOr(args[a + 3], 0), dstY = parseIntOr(args[a + 4], 0),
+                    dstZ = parseIntOr(args[a + 5], 0);
+            net.minecraft.util.math.AxisAlignedBB repackYard = repackShip == null
+                    ? zmaster587.advancedRocketry.integration.vs.VSIntegration
+                            .shipyardBoundsAt(world, sx, sy, sz)
+                    : zmaster587.advancedRocketry.integration.vs.VSIntegration
+                            .shipyardBoundsOf(world, repackShip);
+            if (repackYard == null) {
+                send(sender, repackShip == null
+                        ? "{\"error\":\"no ship at source\"}"
+                        : "{\"error\":\"no such ship loaded here\",\"shipId\":\"" + repackShip + "\"}");
                 return;
             }
             try {
@@ -948,7 +1207,7 @@ public class TestProbeCommand extends CommandBase {
                 // Production crossing recipe (same world here; VSIntegration.crossShip supports cross-world).
                 zmaster587.advancedRocketry.integration.vs.VSIntegration.CrossResult res =
                         zmaster587.advancedRocketry.integration.vs.VSIntegration.crossShip(
-                                world, sx, sy, sz, world, dstX, dstY, dstZ);
+                                world, sx, sy, sz, repackShip, world, dstX, dstY, dstZ);
                 net.minecraft.util.math.BlockPos anchor = res.anchor;
                 boolean anchorSolid = res.ok();
                 if (anchorSolid) {
@@ -972,6 +1231,67 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, jsonMap(m));
             } catch (Throwable t) {
                 send(sender, "{\"error\":\"repack-failed\",\"ex\":\"" + t.getClass().getSimpleName() + "\"}");
+            }
+            return;
+        }
+        // teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ> — the same rigid teleport, aimed at
+        // ONE craft by identity. The positional form below resolves "whichever registered ship is
+        // nearest the source point", which is exact only while the world holds one candidate — and a
+        // scenario that teleports a ship is by definition one whose ship does not stay where it was.
+        // The riders it carries are still gathered around the ship's CURRENT pose, because being
+        // aboard is a spatial fact and not an identity one.
+        if (args.length >= 6 && "teleport-ship-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID uuid;
+            try {
+                uuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"ok\":false,\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            // The REGISTERED pose, so this works for a ship nobody is standing near: the riders are
+            // gathered around where the ship actually is, not around where the caller guesses.
+            double[] before = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .registeredShipPoses(world).get(uuid);
+            if (before == null) {
+                send(sender, "{\"ok\":false,\"error\":\"no registered ship with that id\"}");
+                return;
+            }
+            double dstX = parseDoubleOr(args[3], 0), dstY = parseDoubleOr(args[4], 0),
+                    dstZ = parseDoubleOr(args[5], 0);
+            // Through PRODUCTION's own rider-carrying teleport, not a copy of it. This verb used to
+            // gather EntityDummy inside a fixed 8-block box around the ship's pose and shift them by
+            // the delta itself — the same recipe production carried, minus the seated player, so a
+            // probe teleport and a crossing could carry different sets and only the crossing's was
+            // ever fixed. The anchor it takes is a BlockPos, and the ship's current pose is the one
+            // point a caller can always name for a craft it has just looked up by identity.
+            boolean ok = new zmaster587.advancedRocketry.space.VSShipCrossingOps()
+                    .teleportShipAndEveryoneAboard(world, uuid, before[0], before[1], before[2],
+                            dstX, dstY, dstZ);
+            send(sender, "{\"ok\":" + ok
+                    + ",\"fromX\":" + before[0] + ",\"fromY\":" + before[1]
+                    + ",\"fromZ\":" + before[2] + "}");
+            return;
+        }
+        // unpark-by-id <dim> <shipId> — re-enable physics on the ship NAMED by shipId, after a
+        // teleport that left it parked. The identity-keyed twin of `unpark` below: a ship that has
+        // just been moved is precisely the one a position lookup is least able to find.
+        if (args.length >= 3 && "unpark-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            try {
+                boolean ok = zmaster587.advancedRocketry.integration.vs.VSIntegration.unparkShip(
+                        world, java.util.UUID.fromString(args[2]));
+                send(sender, "{\"ok\":" + ok + "}");
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"ok\":false,\"error\":\"shipId is not a uuid\"}");
             }
             return;
         }
@@ -1110,6 +1430,53 @@ public class TestProbeCommand extends CommandBase {
         // outlives a pilot. This is how an arrangement puts a deck in motion with NOBODY at the controls
         // — the state production itself flies an unmanned ship on — rather than through an input, which
         // a riderless seat correctly clears every tick.
+        // ff-cruise-read-by-id <dim> <shipId> — the READ-ONLY twin of `ff-cruise-by-id`.
+        //
+        // The cruise setpoint is the thing that outlives a pilot, so it is a state a scenario
+        // routinely needs to ASK about: did the climb leave one behind, did a crossing carry it,
+        // is the craft under way or merely drifting. Until this verb existed the only way to see
+        // it was to SET it and read the reply — an observation that destroys what it observes, so
+        // a test could establish the cruise was zero only by making it zero.
+        //
+        // `velY` off `ship-info` is not a substitute and must not be read as one: that is the
+        // hull's actual velocity, which lags the setpoint, is opposed by drag and station-keeping,
+        // and is zero for a whole moment after a crossing rebuilds the body while the setpoint is
+        // very much alive.
+        //
+        // ABSENCE IS A VALUE HERE, and it is emitted as `null` rather than as 0: a zero cruise is
+        // the commonest REAL answer there is (it means hover), so a zero standing in for "no
+        // computer resolved" would be indistinguishable from the mechanic working. A consumer
+        // parsing a number gets NaN and propagates it; one reading `afcResolved` gets the truth.
+        if (args.length >= 3 && "ff-cruise-read-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer readWorld =
+                    vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (readWorld == null) {
+                send(sender, "{\"ok\":false,\"afcResolved\":false,\"error\":\"world not loaded\""
+                        + ",\"cruiseForward\":null,\"cruiseRight\":null,\"cruiseUp\":null}");
+                return;
+            }
+            java.util.UUID readShip;
+            try {
+                readShip = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException e) {
+                send(sender, "{\"ok\":false,\"afcResolved\":false,\"error\":\"shipId is not a uuid\""
+                        + ",\"cruiseForward\":null,\"cruiseRight\":null,\"cruiseUp\":null}");
+                return;
+            }
+            BlockPos readAfc = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .flightComputerOf(readWorld, readShip);
+            TileEntity readTe = readAfc == null ? null : readWorld.getTileEntity(readAfc);
+            if (!(readTe instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer)) {
+                send(sender, "{\"ok\":false,\"afcResolved\":false"
+                        + ",\"cruiseForward\":null,\"cruiseRight\":null,\"cruiseUp\":null}");
+                return;
+            }
+            double[] held = ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) readTe)
+                    .commandedCruise();
+            send(sender, "{\"ok\":true,\"afcResolved\":true,\"cruiseForward\":" + held[0]
+                    + ",\"cruiseRight\":" + held[1] + ",\"cruiseUp\":" + held[2] + "}");
+            return;
+        }
         if (args.length >= 6 && "ff-cruise-by-id".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
@@ -1219,6 +1586,18 @@ public class TestProbeCommand extends CommandBase {
                 m.put("pilotCmdVel", diagAfc.commandedVelocity == null ? "null"
                         : diagAfc.commandedVelocity[0] + "," + diagAfc.commandedVelocity[1] + ","
                                 + diagAfc.commandedVelocity[2]);
+                // The ANGULAR channel, beside the linear one it has always been reported without.
+                // MOTION-2: a hold is a mode and not the law, so "is an attitude target published at
+                // all?" is a question about the craft's behaviour and not an implementation detail —
+                // and until this line it could not be asked from a test at any tier. A `null` here is
+                // the contract-conforming answer for a craft with no hold engaged; a quaternion means
+                // something is steering it.
+                m.put("pilotCmdAtt", diagAfc.targetAttitude == null ? "null"
+                        : diagAfc.targetAttitude[0] + "," + diagAfc.targetAttitude[1] + ","
+                                + diagAfc.targetAttitude[2] + "," + diagAfc.targetAttitude[3]);
+                m.put("pilotCmdAngVel", diagAfc.commandedAngVel == null ? "null"
+                        : diagAfc.commandedAngVel[0] + "," + diagAfc.commandedAngVel[1] + ","
+                                + diagAfc.commandedAngVel[2]);
             }
             send(sender, jsonMap(m));
             return;
@@ -1278,8 +1657,8 @@ public class TestProbeCommand extends CommandBase {
         // by POSITION — which inherits `shipyardBoundsAt`'s own documented hazard: the position-keyed
         // box answers for whatever craft is nearest with no distance bound, so on a shared harness the
         // scan finds a stranger's flight computer and writes to it. That returns success and moves the
-        // wrong ship, which is a FLAKE GENERATOR rather than a bug you can see. Same ruling as ledger
-        // #190 for the production crossing path: resolve the ship you mean, never the nearest one.
+        // wrong ship, which is a FLAKE GENERATOR rather than a bug you can see. Same ruling the
+        // production crossing path got: resolve the ship you mean, never the nearest one.
         //
         // Reports `afcResolved` and the resulting `input` state, both load-bearing: a miss must not read
         // as an arrangement that happened. A ship whose blocks are cut (a crossing) loses this input
@@ -1375,58 +1754,63 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"seatFound\":false}");
                 return;
             }
-            zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer afc = seat.getFlightComputer();
-            if (afc != null) {
-                afc.setPilotInput(new zmaster587.advancedRocketry.api.FreeFlightInput(
-                        (float) parseDoubleOr(args[2], 0), (float) parseDoubleOr(args[3], 0),
-                        (float) parseDoubleOr(args[4], 0), (float) parseDoubleOr(args[5], 0),
-                        (float) parseDoubleOr(args[6], 0), (float) parseDoubleOr(args[7], 0),
-                        0f, false));
-            }
-            BlockPos sp = seat.getPos();
-            BlockPos ap = seat.getFlightComputerPos();
-            StringBuilder sb = new StringBuilder("{\"seatFound\":true");
-            sb.append(",\"seatLinked\":").append(seat.isLinked());
-            sb.append(",\"afcResolved\":").append(afc != null);
-            sb.append(",\"seatX\":").append(sp.getX()).append(",\"seatY\":").append(sp.getY())
-                    .append(",\"seatZ\":").append(sp.getZ());
-            if (ap != null) {
-                sb.append(",\"afcX\":").append(ap.getX()).append(",\"afcY\":").append(ap.getY())
-                        .append(",\"afcZ\":").append(ap.getZ());
-            }
-            sb.append("}");
-            send(sender, sb.toString());
+            probeApplySeatInput(sender, seat, args, 2);
             return;
         }
-        // seat-delivery - read the SERVER JVM's pilot-input delivery diagnostics (the ungated
-        // statics on TilePilotSeat): how many control packets arrived, how many passed both server
-        // gates, the last packet's gate verdict, and what the server's own last rider resolution
-        // saw. Read-only, no waits; the client-side halves of the same chain are read reflectively
-        // from the client JVM by the test.
-        if (args.length >= 1 && "seat-delivery".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"ok\":true"
-                    + ",\"received\":" + zmaster587.advancedRocketry.tile.TilePilotSeat.pilotInputPacketsReceived
-                    + ",\"delivered\":" + zmaster587.advancedRocketry.tile.TilePilotSeat.pilotInputPacketsDelivered
-                    + ",\"commandsReceived\":" + zmaster587.advancedRocketry.tile.TilePilotSeat.pilotCommandPacketsReceived
-                    + ",\"lastVerdict\":\"" + zmaster587.advancedRocketry.tile.TilePilotSeat.lastPilotInputVerdict + "\""
-                    + ",\"riderResolveCount\":" + zmaster587.advancedRocketry.tile.TilePilotSeat.riderResolveCount
-                    + ",\"lastRiderResolve\":\"" + zmaster587.advancedRocketry.tile.TilePilotSeat.lastRiderResolve + "\""
-                    + ",\"rebindEnqueued\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.enqueuedCount
-                    + ",\"rebindRebound\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.reboundCount
-                    + ",\"rebindExpired\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.expiredCount
-                    + ",\"rebindCancelled\":" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.cancelledCount
-                    + ",\"rebindLastOutcome\":\"" + zmaster587.advancedRocketry.space.AssemblyCrewRebind.lastOutcome + "\""
-                    + "}");
+        // seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll> — the same
+        // seat->AFC drive, aimed at ONE craft by identity. The unaddressed form above takes
+        // whichever pilot seat the world happens to list first, which is only ever right in a world
+        // holding a single ship; a scenario sharing its world with other craft must say which one it
+        // means, exactly as `point-by-id` does. The computer is resolved from the ship, then the
+        // SEAT LINKED TO THAT COMPUTER — so the seat->AFC hop this verb exists to exercise is still
+        // the thing under test, rather than being short-circuited by the lookup.
+        if (args.length >= 9 && "seat-input-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer target =
+                    probeTargetComputer(sender, world, args[2]);
+            if (target == null) {
+                return;
+            }
+            zmaster587.advancedRocketry.tile.TilePilotSeat seat = null;
+            for (TileEntity te : world.loadedTileEntityList) {
+                if (te instanceof zmaster587.advancedRocketry.tile.TilePilotSeat
+                        && target.getPos().equals(((zmaster587.advancedRocketry.tile.TilePilotSeat) te)
+                                .getFlightComputerPos())) {
+                    seat = (zmaster587.advancedRocketry.tile.TilePilotSeat) te;
+                    break;
+                }
+            }
+            if (seat == null) {
+                BlockPos ap = target.getPos();
+                send(sender, "{\"seatFound\":false,\"shipFound\":true,\"afcResolved\":true"
+                        + ",\"afcX\":" + ap.getX() + ",\"afcY\":" + ap.getY()
+                        + ",\"afcZ\":" + ap.getZ() + "}");
+                return;
+            }
+            probeApplySeatInput(sender, seat, args, 3);
             return;
         }
-        // arrival-trace - dump the SERVER JVM's position-writer timeline around ship crossings
-        // (the ungated ring on ArrivalTrace): every tagged write site, per-tick jump samples and
-        // mount/dismount call stacks. Read-only, no waits; the client half of the timeline is read
-        // from the client JVM via readStaticField(ArrivalTrace.CLIENT).
+        // arrival-trace - the SERVER JVM's position-writer timeline around ship crossings, as one
+        // readable line: every deliberate placement, mount and dismount, each naming the code that
+        // did it. Read-only, no waits; the client half is read from the client JVM through its own
+        // event log (`event_since` on the bridge).
+        //
+        // The records come from the event log, which test-only mixins feed. They used to come from
+        // ungated statics in the production tree: eleven hand-tagged call sites plus a per-tick
+        // sampler, all of them building formatted strings on the position-writer path of every
+        // crossing in a shipped game, for nobody. An observation a test wants belongs to the test
+        // side; the mixins that record these live in the test source set and a released jar carries
+        // none of them.
         if (args.length >= 1 && "arrival-trace".equalsIgnoreCase(args[0])) {
             send(sender, "{\"ok\":true"
-                    + ",\"count\":" + zmaster587.advancedRocketry.space.ArrivalTrace.SERVER.size()
-                    + ",\"events\":\"" + zmaster587.advancedRocketry.space.ArrivalTrace.dumpServer() + "\""
+                    + ",\"recording\":" + TestEventLog.isRecording()
+                    + ",\"mixins\":" + TestEventLog.areMixinsInstalled()
+                    + ",\"count\":" + TestEventLog.count(WRITER_EVENTS)
+                    + ",\"events\":\"" + TestEventLog.dump(WRITER_EVENTS) + "\""
                     // Why the last re-seat did NOT seat everyone, in the re-seat's own words: whether a
                     // ship claims the arrival point, how many seat tiles the scan reached, and per seat
                     // the three things the match discriminates on. Empty means the last re-seat seated
@@ -1447,11 +1831,12 @@ public class TestProbeCommand extends CommandBase {
                     + "}");
             return;
         }
-        // seat-mount <dim> [near <x> <y> <z> [maxDist]] — spawn the pilot seat's dummy mount and
-        // return its entity id, so a test bot can `player mount-entity <id>` and become the ship's
-        // pilot. Mirrors BlockPilotSeat.onBlockActivated server-side (the bot cannot right-click a
-        // ship block). Without "near" the FIRST loaded seat answers, which is only defensible on a
-        // world holding one ship — the reply carries "seatsLoaded" so a caller can see when it is not.
+        // seat-mount <dim> [id <shipUuid> | near <x> <y> <z> [maxDist]] — spawn the pilot seat's dummy
+        // mount and return its entity id, so a test bot can `player mount-entity <id>` and become the
+        // ship's pilot. Mirrors BlockPilotSeat.onBlockActivated server-side (the bot cannot right-click
+        // a ship block). Without a qualifier the FIRST loaded seat answers, which is only defensible on
+        // a world holding one ship — the reply carries "seatsLoaded" so a caller can see when it is not,
+        // and measured 2026-09-06 not one of the twelve bare call sites in the suite read it.
         if (args.length >= 2 && "seat-mount".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
@@ -1472,17 +1857,14 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             String wantShipId = null;
-            if (args.length >= 6 && "near".equalsIgnoreCase(args[2])) {
-                double maxDist = args.length >= 7
-                        ? parseDoubleOr(args[6], Double.POSITIVE_INFINITY) : Double.POSITIVE_INFINITY;
-                wantShipId = zmaster587.advancedRocketry.integration.vs.VSIntegration.nearestShipId(
-                        world, parseDoubleOr(args[3], 0), parseDoubleOr(args[4], 0),
-                        parseDoubleOr(args[5], 0), maxDist);
-                if (wantShipId == null) {
-                    send(sender, "{\"seatFound\":false,\"reason\":\"no loaded ship near that point\""
-                            + ",\"seatsLoaded\":" + seats.size() + "}");
-                    return;
-                }
+            // seat-mount <dim> id <shipUuid> — the only form there is, because it is the only one
+            // that NAMES a craft. A `near <x> <y> <z> [maxDist]` form stood here until 2026-09-14
+            // and resolved through a nearest-ship lookup: a caller that meant one particular hull
+            // was trusting a distance to a thing that has no extent in the world. The seat is
+            // matched through the ship's own chunk CLAIM (shipIdOwningBlock), so the seat found
+            // belongs to that hull or none is returned.
+            if (args.length >= 4 && "id".equalsIgnoreCase(args[2])) {
+                wantShipId = args[3];
             }
             zmaster587.advancedRocketry.tile.TilePilotSeat seat = null;
             for (zmaster587.advancedRocketry.tile.TilePilotSeat candidate : seats) {
@@ -1511,7 +1893,14 @@ public class TestProbeCommand extends CommandBase {
                 dummy = new zmaster587.advancedRocketry.entity.EntityDummy(
                         world, sp.getX() + 0.5, sp.getY() + 0.2, sp.getZ() + 0.5);
                 dummy.setSeatPos(sp); // bind to the seat so the client resolves it despite VS subspace
-                world.spawnEntity(dummy);
+                // The third copy of the declined-spawn trap; see seat-mount-at. `spawnEntity` loads
+                // no chunk and answers false, and a seat block lives in the ship's subspace shipyard.
+                world.getChunkProvider().provideChunk(sp.getX() >> 4, sp.getZ() >> 4);
+                if (!world.spawnEntity(dummy)) {
+                    send(sender, "{\"error\":\"world declined the dummy spawn\",\"seat\":\""
+                            + sp.getX() + "," + sp.getY() + "," + sp.getZ() + "\"}");
+                    return;
+                }
             }
             send(sender, "{\"seatFound\":true,\"dummyId\":" + dummy.getEntityId()
                     + ",\"reused\":" + reused
@@ -1534,11 +1923,25 @@ public class TestProbeCommand extends CommandBase {
             zmaster587.advancedRocketry.entity.EntityDummy dummy =
                     zmaster587.advancedRocketry.block.BlockPilotSeat.boundDummyAt(world, sp);
             boolean reused = dummy != null;
+            boolean spawned = true;
             if (dummy == null) {
                 dummy = new zmaster587.advancedRocketry.entity.EntityDummy(
                         world, sp.getX() + 0.5, sp.getY() + 0.2, sp.getZ() + 0.5);
                 dummy.setSeatPos(sp); // EntityDummy.onUpdate glues it to the seat's live world position next tick
-                world.spawnEntity(dummy);
+                // LOAD THE CHUNK, then believe the world's answer. `World.spawnEntity` returns FALSE
+                // and adds NOTHING when the target chunk is not loaded - it does not load one - and a
+                // seat block lives in the ship's own SUBSPACE shipyard, which is exactly the region
+                // nothing keeps resident. Without this the probe answered ok:true holding an entity
+                // object the world had declined: it has an id, `mount-entity` will happily seat a
+                // player on it, and the client is never told about an entity that is not in the
+                // world. Same trap as the crossing's cargo spawn (fixed 2026-09-06).
+                world.getChunkProvider().provideChunk(sp.getX() >> 4, sp.getZ() >> 4);
+                spawned = world.spawnEntity(dummy);
+            }
+            if (!spawned) {
+                send(sender, "{\"error\":\"world declined the dummy spawn\",\"seat\":\""
+                        + sp.getX() + "," + sp.getY() + "," + sp.getZ() + "\"}");
+                return;
             }
             send(sender, "{\"ok\":true,\"dummyId\":" + dummy.getEntityId()
                     + ",\"reused\":" + reused + "}");
@@ -1563,7 +1966,17 @@ public class TestProbeCommand extends CommandBase {
                 dummy = new zmaster587.advancedRocketry.entity.EntityDummy(
                         world, sp.getX() + 0.5, sp.getY() + 0.2, sp.getZ() + 0.5);
                 dummy.setSeatPos(sp);
-                world.spawnEntity(dummy);
+                // The same declined-spawn trap as seat-mount-at above, in the copy that was made of
+                // it: `spawnEntity` loads no chunk and answers false, and a seat block is in the
+                // ship's own subspace shipyard. An occupant nobody can see is worse here than there,
+                // because this verb exists to make a REFUSAL happen and would report the refusal
+                // arranged while the seat stood empty.
+                world.getChunkProvider().provideChunk(sp.getX() >> 4, sp.getZ() >> 4);
+                if (!world.spawnEntity(dummy)) {
+                    send(sender, "{\"error\":\"world declined the dummy spawn\",\"seat\":\""
+                            + sp.getX() + "," + sp.getY() + "," + sp.getZ() + "\"}");
+                    return;
+                }
             }
             if (!dummy.getPassengers().isEmpty()) {
                 send(sender, "{\"error\":\"seat already occupied\"}");
@@ -1576,6 +1989,10 @@ public class TestProbeCommand extends CommandBase {
             boolean mounted = occupant.startRiding(dummy, true);
             send(sender, "{\"ok\":true,\"dummyId\":" + dummy.getEntityId()
                     + ",\"occupantId\":" + occupant.getEntityId()
+                    // The DURABLE identity. An entity id is reassigned when its chunk reloads — which
+                    // is what happens to a seat whose only player logs out and back in — so a test
+                    // that recognises the occupant by id later finds a stranger with his name.
+                    + ",\"occupantUuid\":\"" + occupant.getUniqueID() + "\""
                     + ",\"spawned\":" + spawned
                     + ",\"mounted\":" + mounted
                     + ",\"passengers\":" + dummy.getPassengers().size()
@@ -1698,6 +2115,7 @@ public class TestProbeCommand extends CommandBase {
                 }
                 firstP = false;
                 sb.append("{\"id\":").append(p.getEntityId())
+                        .append(",\"uuid\":\"").append(p.getUniqueID()).append('"')
                         .append(",\"class\":\"").append(p.getClass().getSimpleName())
                         .append("\",\"name\":\"").append(escapeJson(p.getName())).append("\"}");
             }
@@ -1740,7 +2158,7 @@ public class TestProbeCommand extends CommandBase {
         // which ship they mean. The positional form resolves the yard through shipyardBoundsAt, whose own
         // contract is "whatever craft is nearest that point": exact while the world holds one candidate and
         // silently wrong the moment it holds two. The transit fixtures make two the ORDINARY case — every
-        // transit-setup call binds its origin cell to the same pool slot (a fresh cell controller's binding
+        // transit-setup-* call binds its origin cell to the same pool slot (a fresh cell controller's binding
         // map is empty, so it always takes the first slot dim) and every scenario builds at the same anchor
         // in it, so the Nth scenario shares a dimension with N-1 predecessors' leavings.
         //
@@ -1777,28 +2195,7 @@ public class TestProbeCommand extends CommandBase {
                             world, seatShipUuid)
                     : zmaster587.advancedRocketry.integration.vs.VSIntegration.shipyardBoundsAt(
                             world, ax + 0.5, ay + 0.5, az + 0.5);
-            net.minecraft.util.math.BlockPos seatSub = null;
-            if (yard != null) {
-                int minX = (int) yard.minX, maxX = (int) yard.maxX;
-                int minZ = (int) yard.minZ, maxZ = (int) yard.maxZ;
-                for (int cx = minX >> 4; cx <= (maxX >> 4); cx++) {
-                    for (int cz = minZ >> 4; cz <= (maxZ >> 4); cz++) {
-                        world.getChunkProvider().provideChunk(cx, cz);
-                    }
-                }
-                outer:
-                for (int bx = minX; bx < maxX; bx++) {
-                    for (int by = 0; by < 256; by++) {
-                        for (int bz = minZ; bz < maxZ; bz++) {
-                            net.minecraft.util.math.BlockPos p = new net.minecraft.util.math.BlockPos(bx, by, bz);
-                            if (world.getTileEntity(p) instanceof zmaster587.advancedRocketry.tile.TilePilotSeat) {
-                                seatSub = p;
-                                break outer;
-                            }
-                        }
-                    }
-                }
-            }
+            net.minecraft.util.math.BlockPos seatSub = pilotSeatInYard(world, yard);
             // The bot's spawn point: the SEAT's live world position (keyed by its subspace block - the world
             // anchor is not a managed block, so getShipWorldPosition/getSeatWorldPosition need the subspace pos).
             double[] shipWorld = seatSub == null ? null
@@ -1821,6 +2218,19 @@ public class TestProbeCommand extends CommandBase {
                 }
             } else {
                 sb.append(",\"seatFound\":false");
+            }
+            // The BOX that was searched, on every reply. A `seatFound:false` is otherwise one word
+            // for three different worlds: the ship resolved no chunk claim at all (yard null), the
+            // claim is there but its blocks have not been written into the subspace yet (a yard with
+            // a plausible box and nothing in it), or the craft genuinely carries no pilot seat. A
+            // caller retrying this verb cannot tell which of those it is waiting out, and the first
+            // two are arrangement faults that look exactly like the third.
+            if (yard == null) {
+                sb.append(",\"yard\":null");
+            } else {
+                sb.append(",\"yard\":[").append((int) yard.minX).append(',').append((int) yard.minZ)
+                        .append(',').append((int) yard.maxX).append(',').append((int) yard.maxZ)
+                        .append(']');
             }
             if (shipWorld != null) {
                 sb.append(",\"shipWorldX\":").append(shipWorld[0])
@@ -1962,31 +2372,32 @@ public class TestProbeCommand extends CommandBase {
         // terrain near a ship (its box overlaps the ship's world AABB) from being dropped through the
         // floor into the ship's empty subspace.
         // spawn-diag [reset] — READ-ONLY snapshot (or reset) of the VS spawn diagnostics
-        // (VSIntegration.spawn* statics, written by the ship manager itself). Localises where a
+        // (SpawnDiag statics, written by the test-only MixinWorldServerShipManagerDiag, so they stay
+        // at zero in a run that does not load the test mixins). Localises where a
         // queued+named tier-2 ship dies: spawnNewShipsRuns=0 -> never processed;
         // runs>0 & maxShips=0 -> processed but addShip skipped/threw; maxShips>=1 -> registered then destroyed.
         if (args.length >= 1 && "spawn-diag".equalsIgnoreCase(args[0])) {
             if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                zmaster587.advancedRocketry.integration.vs.VSIntegration.resetSpawnDiag();
+                SpawnDiag.reset();
                 send(sender, "{\"ok\":true,\"reset\":true}");
                 return;
             }
             send(sender, "{\"ok\":true,\"spawnNewShipsRuns\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.spawnNewShipsRuns
+                    + SpawnDiag.spawnNewShipsRuns
                     + ",\"spawnNewShipsReturns\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.spawnNewShipsReturns
+                    + SpawnDiag.spawnNewShipsReturns
                     + ",\"lastSpawnQueueSize\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastSpawnQueueSize
+                    + SpawnDiag.lastSpawnQueueSize
                     + ",\"maxShips\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.spawnDiagMaxShips
+                    + SpawnDiag.spawnDiagMaxShips
                     + ",\"lastFoundSetSize\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastFoundSetSize
+                    + SpawnDiag.lastFoundSetSize
                     + ",\"lastCleanHouse\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastCleanHouse
+                    + SpawnDiag.lastCleanHouse
                     + ",\"lastBlacklistSize\":"
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastBlacklistSize
+                    + SpawnDiag.lastBlacklistSize
                     + ",\"floodShape\":\""
-                    + zmaster587.advancedRocketry.integration.vs.VSIntegration.lastFloodShape + "\"}");
+                    + SpawnDiag.lastFloodShape + "\"}");
             return;
         }
         if (args.length >= 3 && "would-take-over".equalsIgnoreCase(args[0])) {
@@ -2107,10 +2518,6 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(m));
             return;
         }
-        // shipframe-stats - READ-ONLY. Whether the ship-frame movement hook is actually running, and
-        // whether its deck-frame sweep is finding the deck. A mixin that failed to apply and a mixin
-        // that applied and declined every entity look identical from outside the JVM; these counters
-        // tell them apart, and a resolved tick that saw zero obstacles means bodies fall through decks.
         // afc-clear - release every per-tile PROBE command channel on the server (`force-vel-by-id`,
         // `force-rot-by-id`, `point-by-id` and their `-at` twins).
         //
@@ -2141,28 +2548,6 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"clearedComputers\":" + clearedComputers + "}");
             return;
         }
-        // afc-debug - READ-ONLY. What the flight controller last commanded, from the physics thread.
-        if (args.length >= 1 && "afc-debug".equalsIgnoreCase(args[0])) {
-            double[] s = zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer.debugControllerState;
-            if (s == null || s.length < 8) {
-                send(sender, "{\"ran\":false}");
-                return;
-            }
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("ran", true);
-            m.put("dt", s[0]);
-            m.put("alphaX", s[1]);
-            m.put("alphaY", s[2]);
-            m.put("alphaZ", s[3]);
-            m.put("alpha", Math.sqrt(s[1] * s[1] + s[2] * s[2] + s[3] * s[3]));
-            m.put("omegaX", s[4]);
-            m.put("omegaY", s[5]);
-            m.put("omegaZ", s[6]);
-            m.put("omega", Math.sqrt(s[4] * s[4] + s[5] * s[5] + s[6] * s[6]));
-            m.put("angularEngaged", s[7] > 0.0);
-            send(sender, jsonMap(m));
-            return;
-        }
         // ship-frame-check [<dim> <entityId>] - READ-ONLY. For the ship the subject (default: first
         // player) is aboard, whether the MOVEMENT vector-rotate and the CAMERA attitude quaternion
         // describe the SAME rotation (upDisagreement/fwdDisagreement ~0 = consistent), plus the world<->
@@ -2187,73 +2572,14 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(tc));
             return;
         }
-        if (args.length >= 1 && "shipframe-stats".equalsIgnoreCase(args[0])) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("resolvedTicks",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.resolvedTicks);
-            m.put("declinedTicks",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.declinedTicks);
-            m.put("lastObstacleCount",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastObstacleCount);
-            m.put("lastOnDeck",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastOnDeck);
-            m.put("lastTcUpDisagreement",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastTcUpDisagreement);
-            m.put("lastTcFwdDisagreement",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastTcFwdDisagreement);
-            m.put("lastShipUpY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastShipUpY);
-            m.put("externalMoveDrops",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.externalMoveDrops);
-            m.put("lastDropReason",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropReason);
-            m.put("lastDropGapTicks",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropGapTicks);
-            m.put("declinedNoLocalOrMotion",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.declinedNoLocalOrMotion);
-            m.put("declinedTransformGone",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.declinedTransformGone);
-            m.put("worldMoveApplies",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.worldMoveApplies);
-            m.put("lastWorldMove",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastWorldMove);
-            m.put("lastGuardFrameStep",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastGuardFrameStep);
-            m.put("lastGuardAllowed",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastGuardAllowed);
-            m.put("lastGuardCarry",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastGuardCarry);
-            m.put("lastDropFrameMovedY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropFrameMovedY);
-            m.put("lastDropEntityMovedY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropEntityMovedY);
-            m.put("lastDropAllowed",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastDropAllowed);
-            m.put("dragSuppressions",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.dragSuppressions);
-            // The no-input-drift discriminator: the ship-RELATIVE motion the last resolved tick was
-            // handed, the walk inputs that came with it, and the carry that tick held. A body that
-            // creeps along a deck with lastInStrafe/lastInForward at 0 is being moved by one of
-            // these two, and which one is nonzero names the writer.
-            m.put("lastInStrafe",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastInStrafe);
-            m.put("lastInForward",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastInForward);
-            m.put("lastMotionShipX",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastMotionShipX);
-            m.put("lastMotionShipY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastMotionShipY);
-            m.put("lastMotionShipZ",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastMotionShipZ);
-            m.put("lastCarryX",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastCarryX);
-            m.put("lastCarryY",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastCarryY);
-            m.put("lastCarryZ",
-                    zmaster587.advancedRocketry.integration.vs.ShipFrameTravel.lastCarryZ);
-            send(sender, jsonMap(m));
-            return;
-        }
+        // The `shipframe-stats` verb is GONE (2026-09-08). It published up to twenty-eight statics
+        // of the ship-frame resolver, and its defect was structural rather than a matter of which
+        // fields it carried: the reply named no body and no tick, so every number in it described
+        // whichever resolution this side had performed last. On a shared client that is routinely
+        // another scenario's body. Each of its columns is now a record that names its subject —
+        // `ship_frame_tick`, `ship_frame_walk`, `deck_guard_pass`, `deck_released`,
+        // `ship_frame_world_move` — and the live frame-consistency question the last three columns
+        // answered is `ship-frame-check`, which computes it on demand for a NAMED subject.
         if (args.length >= 1 && "player-ship-data".equalsIgnoreCase(args[0])) {
             net.minecraft.server.MinecraftServer server = sender.getServer();
             // Optional "<dim> <entityId>" reports any entity instead of the first player, so a
@@ -2283,6 +2609,13 @@ public class TestProbeCommand extends CommandBase {
             m.put("playerY", subject.posY);
             m.put("playerZ", subject.posZ);
             m.put("playerOnGround", subject.onGround);
+            // The body's OWN motion, beside the velocity the substrate holds for it. Both halves are
+            // reported because a body can be moving for either reason and the two are cleared by
+            // different things: an inherited velocity dies when the body lands, its own motion does
+            // not. Reading only one of them is how a drifting body gets attributed to the wrong cause.
+            m.put("motionX", subject.motionX);
+            m.put("motionY", subject.motionY);
+            m.put("motionZ", subject.motionZ);
             send(sender, jsonMap(m));
             return;
         }
@@ -2317,7 +2650,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"entityId\":" + item.getEntityId() + ",\"armed\":" + armed + "}");
             return;
         }
-        send(sender, "{\"error\":\"usage: vs available|ship-count <dim>"
+        send(sender, "{\"error\":\"usage: vs ship-count <dim>|ships-registered <dim>"
                 + "|ship-info <dim> <x> <y> <z> [maxDist]|ship-info <dim> id <shipId>"
                 + "|push-ship-by-id <dim> <shipId> <vx> <vy> <vz>"
                 + "|spin-ship-by-id <dim> <shipId> <wx> <wy> <wz>"
@@ -2326,8 +2659,12 @@ public class TestProbeCommand extends CommandBase {
                 + "|ff-cruise-at|force-vel-at <dim> <x> <y> <z> <a> <b> <c>"
                 + "|point-at <dim> <x> <y> <z> <qw> <qx> <qy> <qz>"
                 + "|phys-diag <dim> <shipId> <afcX> <afcY> <afcZ>"
-                + "|seat-input <dim> <fwd> <vert> <strafe> <yaw> <pitch> <roll>|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|seat-delivery|arrival-trace"
-                + "|player-ship-data|shipframe-stats|would-take-over|deck-capture [<dim> <id>]"
+                + "|seat-input <dim> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
+                + "|seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
+                + "|teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ>"
+                + "|unpark-by-id <dim> <shipId>"
+                + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|arrival-trace"
+                + "|player-ship-data|would-take-over|deck-capture [<dim> <id>]"
                 + "|subspace-census [<dim> <id>]\"}");
     }
 
@@ -2348,9 +2685,24 @@ public class TestProbeCommand extends CommandBase {
      * forms cannot drift into two different shapes — a caller that switches from the first to the
      * second must not have to re-learn the reply.
      */
-    private static Map<String, Object> shipInfoMap(String shipId, double[] s, double[] omega) {
+    private static Map<String, Object> shipInfoMap(String shipId, double[] s, double[] omega,
+                                                   int[] gates) {
         Map<String, Object> m = new LinkedHashMap<>();
+        // LOADED, and it says only that: this method is reached once a PhysicsObject for the id was
+        // found in this world's ship manager, and the not-found paths answer `managed:false` before
+        // getting here. It is NOT "ready to be flown" — see `ready` below, which is the question
+        // three tests read this field as answering (they polled it, then flew, spun or dropped the
+        // craft) until they were moved onto the `ship_usable` event.
         m.put("managed", true);
+        // READY: the substrate's initial-ticks delay is over and its resolver has the surrounding
+        // chunks — the same two conjuncts the physics loop selects on, and the pair
+        // `ShipLoadedAnnouncer` publishes `ShipEvent.ShipLoadedEvent` for. `false` here on a
+        // `managed:true` ship is a craft that exists and does not move yet, which is exactly the
+        // state a caller that means "I can fly this now" must not mistake for success.
+        //
+        // A READING, not a wait: readiness is an EDGE and the event above is how a test should wait
+        // for it. This field is for a report that has to say which side of that edge it is on.
+        m.put("ready", gates != null && gates.length >= 3 && gates[0] == 1 && gates[2] == 1);
         m.put("id", shipId == null ? "" : shipId);
         m.put("posX", s[0]);
         m.put("posY", s[1]);
@@ -2396,6 +2748,27 @@ public class TestProbeCommand extends CommandBase {
         return n;
     }
 
+    /**
+     * How many blocks the registry says the ship named {@code shipId} owns, or {@code -1} when this
+     * world's registry does not know it.
+     *
+     * <p>Read off the same registry row {@code ships-registered} reports, so the two verbs cannot
+     * disagree about one craft. {@code -1} is deliberately not {@code 0}: "the registry has no row
+     * for this id" and "this craft owns nothing" are different findings, and a zero would merge
+     * them.</p>
+     */
+    private static int blockCountOf(net.minecraft.world.WorldServer world, String shipId) {
+        for (java.util.Map<String, Object> row
+                : zmaster587.advancedRocketry.integration.vs.VSIntegration.registeredShips(world)) {
+            if (String.valueOf(shipId).equals(String.valueOf(row.get("id")))
+                    || String.valueOf(shipId).equals(String.valueOf(row.get("durableId")))) {
+                Object blocks = row.get("blocks");
+                return blocks instanceof Number ? ((Number) blocks).intValue() : -1;
+            }
+        }
+        return -1;
+    }
+
     private static net.minecraft.world.WorldServer vsWorld(ICommandSender sender, int dim) {
         if (net.minecraftforge.common.DimensionManager.getWorld(dim) == null) {
             net.minecraftforge.common.DimensionManager.initDimension(dim);
@@ -2434,6 +2807,41 @@ public class TestProbeCommand extends CommandBase {
             return null;
         }
         return (zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) te;
+    }
+
+    /**
+     * Shared body of {@code seat-input} / {@code seat-input-by-id}: set the pilot input on the
+     * computer the seat is linked to, reading six axes from {@code args} starting at {@code base}.
+     *
+     * <p>The seat's and the computer's POSITIONS are in the reply on purpose. {@code afcResolved} says
+     * only that the seat found ITS computer, which is true of every seat in the world; a caller whose
+     * world holds more than one craft can tell a delivered command from a misdelivered one only by
+     * reading where this one landed.</p>
+     */
+    private static void probeApplySeatInput(ICommandSender sender,
+                                            zmaster587.advancedRocketry.tile.TilePilotSeat seat,
+                                            String[] args, int base) {
+        zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer afc = seat.getFlightComputer();
+        if (afc != null) {
+            afc.setPilotInput(new zmaster587.advancedRocketry.api.FreeFlightInput(
+                    (float) parseDoubleOr(args[base], 0), (float) parseDoubleOr(args[base + 1], 0),
+                    (float) parseDoubleOr(args[base + 2], 0), (float) parseDoubleOr(args[base + 3], 0),
+                    (float) parseDoubleOr(args[base + 4], 0), (float) parseDoubleOr(args[base + 5], 0),
+                    0f, false));
+        }
+        BlockPos sp = seat.getPos();
+        BlockPos ap = seat.getFlightComputerPos();
+        StringBuilder sb = new StringBuilder("{\"seatFound\":true");
+        sb.append(",\"seatLinked\":").append(seat.isLinked());
+        sb.append(",\"afcResolved\":").append(afc != null);
+        sb.append(",\"seatX\":").append(sp.getX()).append(",\"seatY\":").append(sp.getY())
+                .append(",\"seatZ\":").append(sp.getZ());
+        if (ap != null) {
+            sb.append(",\"afcX\":").append(ap.getX()).append(",\"afcY\":").append(ap.getY())
+                    .append(",\"afcZ\":").append(ap.getZ());
+        }
+        sb.append("}");
+        send(sender, sb.toString());
     }
 
     /** Shared body of {@code force-vel-by-id} / {@code force-rot-by-id}: resolve, then command. */
@@ -2492,13 +2900,31 @@ public class TestProbeCommand extends CommandBase {
     /** The last exported transit records (the persist e2e simulates a restart by rebuilding from these). */
     private static java.util.List<zmaster587.advancedRocketry.space.TransitRecord> transitExport;
 
-    // --- Entry e2e state (the entry-on-ramp probe stack; installed into SpaceSubsystem so the
-    //     PRODUCTION trigger path runs; cleared by entry-clear).
-    private static zmaster587.advancedRocketry.space.SpaceManager entryMgr;
-    private static zmaster587.advancedRocketry.space.ShipLedger entryLedger;
+    // --- Entry e2e state. The manager and the ledger used to be remembered here too, as the SERVER's
+    //     own pair, "so the fixture's verbs need not look them up again" — and what that bought was a
+    //     read-only verb answering about the probe's memory instead of about the world. Every verb
+    //     resolves them from `liveStack()` now; what remains below is the only entry state a fixture
+    //     genuinely OWNS, because the scenario created it and nothing else can give it back.
+    /** The scratch slot worlds `entry-setup` appended to the pool; unloaded by `entry-clear`. */
     private static int[] entrySlotDims;
-    /** The way BACK from the entry stack's install; closed by {@code entry-clear}. */
-    private static zmaster587.advancedRocketry.space.SpaceSubsystem.Handle entryInstall;
+
+    /**
+     * The chunk tickets `chunk hold` is holding. Probe-local fixture state, written and read only by
+     * this command class, and CUMULATIVE: a scenario that follows a ship across a crossing has to
+     * hold both sides at once — the deck it departs from and the deck it arrives on are in different
+     * worlds, and the second must be held before the arrival, not after it. `chunk release` drops
+     * them all, which is what keeps "cumulative" from meaning "forgotten".
+     */
+    private static final java.util.List<net.minecraftforge.common.ForgeChunkManager.Ticket>
+            heldChunks = new java.util.ArrayList<>();
+
+    /** Drop every held ticket. Idempotent — an {@code @After} may call it blind. */
+    private static void releaseHeldChunks() {
+        for (net.minecraftforge.common.ForgeChunkManager.Ticket t : heldChunks) {
+            net.minecraftforge.common.ForgeChunkManager.releaseTicket(t);
+        }
+        heldChunks.clear();
+    }
 
     /**
      * A {@link zmaster587.advancedRocketry.space.SlotBinder} that carries every world operation out
@@ -2537,8 +2963,8 @@ public class TestProbeCommand extends CommandBase {
             }
 
             @Override
-            public void load(int dimId, String cellKey) {
-                real.load(dimId, cellKey);
+            public void load(int dimId, zmaster587.advancedRocketry.space.GalacticCoord cell) {
+                real.load(dimId, cell);
             }
 
             @Override
@@ -2682,11 +3108,54 @@ public class TestProbeCommand extends CommandBase {
                     zmaster587.advancedRocketry.api.AdvancedRocketryItems.itemMemoryCrystal);
             // A deliberately BLANK crystal: the starter addresses would make every count a test
             // asserts depend on the world's planet list rather than on what the scan resolved.
-            zmaster587.advancedRocketry.item.ItemMemoryCrystal.writeMemory(stack,
-                    new zmaster587.advancedRocketry.navigation.CrystalMemory());
+            zmaster587.advancedRocketry.navigation.CrystalMemory seeded =
+                    new zmaster587.advancedRocketry.navigation.CrystalMemory();
+            // ...unless a caller names ONE world it must hold. A test that needs the deposit to be
+            // the only possible source of a piece of knowledge cannot use a crystal the survey
+            // filled, because the survey teaches this world as it goes.
+            if (args.length >= 6) {
+                int namedDim = parseIntOr(args[5], zmaster587.advancedRocketry.api.Constants.INVALID_PLANET);
+                if (namedDim != zmaster587.advancedRocketry.api.Constants.INVALID_PLANET) {
+                    seeded.record(new zmaster587.advancedRocketry.navigation.CrystalEntry(
+                            zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
+                                    7000L, 0L, 0L, 0L, 0L, 0L),
+                            "probe-named-" + namedDim,
+                            zmaster587.advancedRocketry.universe.SystemBodyKind.PLANET,
+                            zmaster587.advancedRocketry.universe.InfoTier.TELESCOPE, 1L, namedDim));
+                }
+            }
+            zmaster587.advancedRocketry.item.ItemMemoryCrystal.writeMemory(stack, seeded);
             scope.setInventorySlotContents(
                     zmaster587.advancedRocketry.tile.multiblock.TileObservatory.SLOT_CRYSTAL, stack);
             send(sender, "{\"ok\":true,\"addresses\":" + crystalAddresses(scope) + "}");
+            return;
+        }
+
+        if ("deposit".equalsIgnoreCase(verb)) {
+            // The Deposit button's own path: read the crystal in the machine into what THIS world
+            // knows. Reported as landed/total because an address of a world nobody has landed on has
+            // nothing for tier-1 to fly to and is skipped.
+            java.util.List<Integer> before = new java.util.ArrayList<>();
+            for (zmaster587.advancedRocketry.navigation.CrystalEntry entry
+                    : zmaster587.advancedRocketry.item.ItemMemoryCrystal.memoryOf(
+                            scope.getStackInSlot(
+                                    zmaster587.advancedRocketry.tile.multiblock.TileObservatory
+                                            .SLOT_CRYSTAL)).list()) {
+                if (entry.namesBody()) {
+                    before.add(entry.dimId());
+                }
+            }
+            int[] result = scope.uploadCrystalHere();
+            StringBuilder dims = new StringBuilder("[");
+            for (int i = 0; i < before.size(); i++) {
+                if (i > 0) dims.append(',');
+                dims.append(before.get(i));
+            }
+            dims.append(']');
+            // The dims are reported, not just the count: a test that could only read "3 landed" would
+            // have to guess WHICH worlds a pad here may now be aimed at.
+            send(sender, "{\"ok\":true,\"landed\":" + result[0] + ",\"total\":" + result[1]
+                    + ",\"dims\":" + dims + "}");
             return;
         }
 
@@ -2772,6 +3241,10 @@ public class TestProbeCommand extends CommandBase {
                 .append(",\"origin\":").append(origin == null ? "null" : "\"" + origin.cellKey() + "\"")
                 .append(",\"scanning\":").append(scan != null)
                 .append(",\"addresses\":").append(crystalAddresses(scope))
+                // WHICH worlds the crystal holds, read without touching anything. A test that had to
+                // call `deposit` to find out would have deposited them, and could no longer show
+                // that pressing the button is what teaches this world.
+                .append(",\"crystalDims\":").append(crystalDims(scope))
                 .append(",\"lastDiscoveries\":").append(scope.getLastScanDiscoveries())
                 // Where the OPERATOR has the instrument pointed — the tile's own pick, which is what
                 // a GUI click changes and what the next scan will use. Distinct from the region a
@@ -2834,6 +3307,29 @@ public class TestProbeCommand extends CommandBase {
             return -1;
         }
         return zmaster587.advancedRocketry.item.ItemMemoryCrystal.memoryOf(stack).size();
+    }
+
+    /** The dimensions the crystal in that slot names, as a JSON array. Reads nothing into anything. */
+    private String crystalDims(zmaster587.advancedRocketry.tile.multiblock.TileObservatory scope) {
+        net.minecraft.item.ItemStack stack = scope.getStackInSlot(
+                zmaster587.advancedRocketry.tile.multiblock.TileObservatory.SLOT_CRYSTAL);
+        if (!zmaster587.advancedRocketry.item.ItemMemoryCrystal.isCrystal(stack)) {
+            return "[]";
+        }
+        StringBuilder out = new StringBuilder("[");
+        boolean first = true;
+        for (zmaster587.advancedRocketry.navigation.CrystalEntry entry
+                : zmaster587.advancedRocketry.item.ItemMemoryCrystal.memoryOf(stack).list()) {
+            if (!entry.namesBody()) {
+                continue;
+            }
+            if (!first) {
+                out.append(',');
+            }
+            out.append(entry.dimId());
+            first = false;
+        }
+        return out.append(']').toString();
     }
 
     private zmaster587.advancedRocketry.tile.multiblock.TileObservatory observatoryAt(
@@ -2964,6 +3460,11 @@ public class TestProbeCommand extends CommandBase {
             zmaster587.advancedRocketry.navigation.JumpGate.Verdict verdict =
                     zmaster587.advancedRocketry.navigation.JumpGate.check(nav);
             Map<String, Object> info = new LinkedHashMap<>();
+            // Whether there is a SHIP at the position asked about at all. Without it every field
+            // below answers a well-formed zero for an empty block — no drive, no bank, no cooldown,
+            // nothing outside the window — which is indistinguishable from a real craft that has
+            // been built badly, and is the stronger-looking of the two readings.
+            info.put("afc", afcTe instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer);
             info.put("drivePower", stats.drivePower());
             info.put("inFlightDraw", stats.inFlightDraw());
             info.put("burstCost", stats.burstCost());
@@ -3240,18 +3741,31 @@ public class TestProbeCommand extends CommandBase {
             String targetKind = "null";
             String descend = "false";
             boolean slotWorld = false;
-            // Where the aim points INSIDE its cell, and where the aimed body actually is right now.
-            // The cell key alone cannot answer "did the aim land on the body": a moon shares its
-            // parent's cell name and carries its own live offset inside it, so a badly-timed aim
-            // keeps the right cell and misses the body by tens of thousands of blocks. The MISS is
-            // reported together with both offsets it was computed from, so a caller can see WHICH
-            // component moved rather than only that a magnitude changed.
+            // Where the aim points and where the aimed body actually is, at the space clock — as
+            // ABSOLUTE positions, and that is the whole reading. The in-cell offsets beside them are
+            // components, kept so a caller can see WHICH one moved rather than only that a magnitude
+            // changed; they are not the miss and must never be differenced as though they were.
+            //
+            // They were, and it was right while a moon moved inside its parent's cell. A moon's cell
+            // now RIDES the moon, so both offsets are identically zero at every tick and their
+            // difference is zero on a broken build and a working one alike — an instrument that
+            // cannot report the defect it exists for. The aim's absolute position still moves with
+            // the clock, because its CELL does.
             String targetLocal = "null";
             String bodyNowLocal = "null";
+            String targetAbs = "null";
+            String bodyNowAbs = "null";
             String aimMissNow = "null";
+            long navClock = zmaster587.advancedRocketry.space.SpaceSubsystem.spaceClock();
+            zmaster587.advancedRocketry.space.AbsolutePos aimAt = null;
             if (nav.getTarget() != null) {
                 targetLocal = "[" + nav.getTarget().localX() + "," + nav.getTarget().localY()
                         + "," + nav.getTarget().localZ() + "]";
+                aimAt = zmaster587.advancedRocketry.space.SpaceSubsystem
+                        .cellFrameOriginAt(nav.getTarget(), navClock)
+                        .plus(nav.getTarget().localX(), nav.getTarget().localY(),
+                                nav.getTarget().localZ());
+                targetAbs = absTriple(aimAt);
             }
             if (targetDim != zmaster587.advancedRocketry.api.Constants.INVALID_PLANET) {
                 slotWorld = zmaster587.advancedRocketry.space.SpaceSlotPool.slotDims().contains(targetDim);
@@ -3265,14 +3779,14 @@ public class TestProbeCommand extends CommandBase {
                         if (b.dimId() == targetDim) {
                             targetKind = "\"" + b.kind() + "\"";
                             descend = Boolean.toString(b.isDescendTarget());
-                            long clockNow = zmaster587.advancedRocketry.space.SpaceSubsystem.spaceClock();
-                            zmaster587.advancedRocketry.space.BlockDelta here = b.inCellOffsetAt(clockNow);
+                            zmaster587.advancedRocketry.space.BlockDelta here =
+                                    b.inCellOffsetAt(navClock);
                             bodyNowLocal = "[" + here.dx() + "," + here.dy() + "," + here.dz() + "]";
-                            if (nav.getTarget() != null) {
-                                aimMissNow = Double.toString(zmaster587.advancedRocketry.space.BlockDelta
-                                        .of(nav.getTarget().localX() - here.dx(),
-                                                nav.getTarget().localY() - here.dy(),
-                                                nav.getTarget().localZ() - here.dz()).length());
+                            zmaster587.advancedRocketry.space.AbsolutePos bodyAt =
+                                    b.absoluteAt(navClock);
+                            bodyNowAbs = absTriple(bodyAt);
+                            if (aimAt != null) {
+                                aimMissNow = Double.toString(aimAt.distanceTo(bodyAt));
                             }
                             break;
                         }
@@ -3293,6 +3807,8 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"armed\":" + nav.isArmed()
                     + ",\"targetLocal\":" + targetLocal
                     + ",\"bodyNowLocal\":" + bodyNowLocal
+                    + ",\"targetAbs\":" + targetAbs
+                    + ",\"bodyNowAbs\":" + bodyNowAbs
                     + ",\"aimMissNow\":" + aimMissNow
                     // Both clocks, so a caller measures the INPUT of an aim rather than only its
                     // outcome: an aim that agrees with the body proves nothing if the two clocks
@@ -3547,7 +4063,8 @@ public class TestProbeCommand extends CommandBase {
         // --- PRODUCTION-wiring probes. Unlike every other verb here these deliberately touch the real
         //     SpaceSubsystem rather than a probe-local stack, so a restart test can prove the shipped
         //     server-start / world-save path actually persists and restores. They are only useful when
-        //     the subsystem registered (enableSpaceSubsystem, plus Valkyrien Skies present).
+        //     the subsystem registered, which since 2026-09-18 is every working install: the config
+        //     flag is gone and the one remaining reason to stand down is a stripped classpath.
 
         // bodies: what the sky in a slot world is BEING TOLD to draw, read from the server side.
         //
@@ -3557,12 +4074,12 @@ public class TestProbeCommand extends CommandBase {
         // anyone), the registry (a cell with genuinely nothing in it), or the drawing. This reports
         // the first two exactly, so "I see no planet" stops being a guess. Read-only.
         if (args.length >= 1 && "bodies".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (led == null) {
-                send(sender, "{\"error\":\"space subsystem not registered - see enableSpaceSubsystem\"}");
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
             zmaster587.advancedRocketry.universe.UniverseRegistry reg =
                     zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
             StringBuilder out = new StringBuilder("{\"ok\":true,\"ships\":[");
@@ -3576,11 +4093,7 @@ public class TestProbeCommand extends CommandBase {
                 if (shipCount++ > 0) {
                     out.append(',');
                 }
-                zmaster587.advancedRocketry.space.SpaceManager bodiesMgr =
-                        zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-                int shipSlot = bodiesMgr == null
-                        ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
-                        : bodiesMgr.slotDimOf(e.coord);
+                int shipSlot = spaceStack.manager.slotDimOf(e.coord);
                 out.append("{\"ship\":\"").append(shipEntry.getKey())
                         .append("\",\"state\":\"").append(e.state)
                         .append("\",\"slotDim\":").append(slotDimJson(shipSlot))
@@ -3614,22 +4127,24 @@ public class TestProbeCommand extends CommandBase {
                                 // "bearing", not "dir": the feed below already emits a "dir" per
                                 // body, measured from the CELL's observer for the sky, and a reader
                                 // matching on the substring could not tell the two apart.
-                                // Taken as a sector delta plus an offset delta, never as the
-                                // difference of two whole-block absolutes: those cannot express the
-                                // coordinates the sector grid can name.
-                                .append(",\"bearing\":[")
-                                .append(zmaster587.advancedRocketry.space.AbsolutePos
-                                        .ofCellName(bodyAt).minus(
-                                                zmaster587.advancedRocketry.space.AbsolutePos
-                                                        .ofCellName(e.coord)).dx()).append(',')
-                                .append(zmaster587.advancedRocketry.space.AbsolutePos
-                                        .ofCellName(bodyAt).minus(
-                                                zmaster587.advancedRocketry.space.AbsolutePos
-                                                        .ofCellName(e.coord)).dy()).append(',')
-                                .append(zmaster587.advancedRocketry.space.AbsolutePos
-                                        .ofCellName(bodyAt).minus(
-                                                zmaster587.advancedRocketry.space.AbsolutePos
-                                                        .ofCellName(e.coord)).dz()).append(']')
+                                // The LOCAL offset delta, because these bodies are by contract in the
+                                // ship's own cell (`bodiesAt` returns the bodies whose cell IS this
+                                // one), so the sector delta is zero and the offsets are the whole of
+                                // it — the same terms `staticFrameDistanceSqTo` sums for "distance".
+                                // It used to be `AbsolutePos.ofCellName(a).minus(ofCellName(b))`,
+                                // under a comment claiming an offset delta, and `ofCellName` is the
+                                // cell's grid position ONLY: every ship read [0,0,0] to a body in its
+                                // own cell at any range, and a pilot steering by it flew away.
+                                .append(",\"bearing\":")
+                                .append(bodyAt.sectorX() == e.coord.sectorX()
+                                        && bodyAt.sectorY() == e.coord.sectorY()
+                                        && bodyAt.sectorZ() == e.coord.sectorZ()
+                                        ? "[" + (bodyAt.localX() - e.coord.localX()) + ","
+                                                + (bodyAt.localY() - e.coord.localY()) + ","
+                                                + (bodyAt.localZ() - e.coord.localZ()) + "]"
+                                        // announced, never a zero: a body outside the ship's cell
+                                        // breaks the premise above and has no bearing from here.
+                                        : "null,\"bearingRefused\":\"body not in the ship's cell\"")
                                 .append(",\"distance\":")
                                 .append((long) Math.sqrt(e.coord.staticFrameDistanceSqTo(bodyAt)))
                                 // "distance" is to the body's CENTRE — what the descent trigger
@@ -3710,10 +4225,10 @@ public class TestProbeCommand extends CommandBase {
 
         // subsystem-status: is the production subsystem live, and what does it hold?
         if (args.length >= 1 && "subsystem-status".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack == null ? null : spaceStack.ledger;
             zmaster587.advancedRocketry.space.ShipTransitManager tm =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.transit();
+                    spaceStack == null ? null : spaceStack.transit;
             // The slot dim IDS, not just how many: they are minted from whatever dimension ids happen
             // to be free at registration, so a restart can hand the pool a DIFFERENT set. Anything
             // that persisted a slot id across the restart (a ledger entry, a saved player) has to be
@@ -3742,7 +4257,7 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             send(sender, "{\"registered\":"
-                    + (zmaster587.advancedRocketry.space.SpaceSubsystem.space() != null)
+                    + (spaceStack != null)
                     + ",\"pool\":" + zmaster587.advancedRocketry.space.SpaceSlotPool.slotDims().size()
                     + ",\"slotDims\":[" + slots + "]"
                     + ",\"slotDimsAlsoBodies\":[" + collisions + "]"
@@ -3764,12 +4279,12 @@ public class TestProbeCommand extends CommandBase {
         // occupant with no ship — the refcount alone). Lets a test fill a small seeded pool and
         // observe a REFUSED entry against real pool pressure without flying N extra ships.
         if (args.length >= 4 && "occupy".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceManager mgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (mgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceManager mgr = spaceStack.manager;
             zmaster587.advancedRocketry.space.GalacticCoord coord =
                     zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
@@ -3804,12 +4319,12 @@ public class TestProbeCommand extends CommandBase {
         // positive control for the opposite assertion - "a held slot keeps its world" measures nothing
         // unless the same sequence is shown to remove an unheld one.
         if (args.length >= 4 && "release".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceManager mgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (mgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceManager mgr = spaceStack.manager;
             zmaster587.advancedRocketry.space.GalacticCoord coord =
                     zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
@@ -3840,12 +4355,12 @@ public class TestProbeCommand extends CommandBase {
         // slot the manager has it bound to, whether the manager counts it as loaded, and whether a world
         // for that slot actually exists. A test polls this to watch them come apart.
         if (args.length >= 4 && "cell-slot".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceManager mgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (mgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceManager mgr = spaceStack.manager;
             zmaster587.advancedRocketry.space.GalacticCoord coord =
                     zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
@@ -3869,6 +4384,15 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 2 && "aboard-tag".equalsIgnoreCase(args[0])) {
             net.minecraft.entity.player.EntityPlayerMP target =
                     server.getPlayerList().getPlayerByUsername(args[1]);
+            // HEADLESS TIER: the connected-player list is the wrong and only place this used to
+            // look, so on a server test — where the player comes from `player ensure-fake` and is
+            // never in that list — the witness answered "player not found" about a player that
+            // exists. Measured 2026-09-14 by a release contract test whose INDEPENDENT leg could
+            // not see its own subject. The fake is matched by name like any other.
+            if (target == null && fakePlayer != null
+                    && fakePlayer.getName().equals(args[1])) {
+                target = fakePlayer;
+            }
             if (target == null) {
                 send(sender, "{\"error\":\"player not found\",\"player\":\""
                         + escapeJson(args[1]) + "\"}");
@@ -3914,14 +4438,13 @@ public class TestProbeCommand extends CommandBase {
         // to no slot is a state production never reaches, and a probe that manufactured one would let
         // a restart test read back a slot binding no real ship could ever have had.
         if (args.length >= 8 && "ledger-settle".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            zmaster587.advancedRocketry.space.SpaceManager settleMgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (led == null || settleMgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
+            zmaster587.advancedRocketry.space.SpaceManager settleMgr = spaceStack.manager;
             int settledSlot;
             zmaster587.advancedRocketry.space.GalacticCoord settleCoord;
             try {
@@ -3950,12 +4473,12 @@ public class TestProbeCommand extends CommandBase {
         // reported side by side because the interesting failure is not "no world": it is a slot dim
         // that resolves to a world holding somebody else's cell, which reads as success everywhere.
         if (args.length >= 2 && "ledger-get".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (led == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
             zmaster587.advancedRocketry.space.ShipLedger.Entry e;
             try {
                 e = led.get(java.util.UUID.fromString(args[1]));
@@ -3967,11 +4490,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"found\":false}");
                 return;
             }
-            zmaster587.advancedRocketry.space.SpaceManager getMgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            int attributed = getMgr == null
-                    ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
-                    : getMgr.slotDimOf(e.coord);
+            int attributed = spaceStack.manager.slotDimOf(e.coord);
             String boundTo = zmaster587.advancedRocketry.space.SpaceSlotPool.cellKeyFor(attributed);
             send(sender, "{\"found\":true,\"cell\":\"" + e.cellKey() + "\",\"state\":\"" + e.state
                     + "\",\"slotDim\":" + slotDimJson(attributed)
@@ -3994,12 +4513,12 @@ public class TestProbeCommand extends CommandBase {
         // player has to be told about - he comes back aboard something the server has no record of -
         // which is otherwise only reachable by damaging the durable store.
         if (args.length >= 2 && "ledger-forget".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (led == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
             java.util.UUID forgetId;
             try {
                 forgetId = java.util.UUID.fromString(args[1]);
@@ -4038,7 +4557,7 @@ public class TestProbeCommand extends CommandBase {
         // server running; the real failure behind that promise is a class that will not load, which no
         // fixture can arrange from outside, so it is armed here instead.
         if (args.length >= 1 && "save-fault-once".equalsIgnoreCase(args[0])) {
-            if (zmaster587.advancedRocketry.space.SpaceSubsystem.ledger() == null) {
+            if (liveStack() == null) {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
@@ -4063,74 +4582,47 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
 
-        // transit-setup: build an isolated transit stack (pool of 2 + hyperspace) and assemble a ship in a
-        // fresh origin cell. The test then waits for the origin ship to load, calls transit-begin, and
-        // polls transit-tick until arrival.
-        if (args.length >= 1 && "transit-setup".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
-            // Register hyperspace upfront too, mirroring the production start order. Idempotent, so it
-            // costs nothing when the server-start hook has already registered it.
-            zmaster587.advancedRocketry.space.HyperspaceWorld.register();
-            // Through the PRODUCTION factory, overriding only the two knobs this fixture needs: its
-            // own clock and a manager that never collects. Everything else — the ledger, the arrival
-            // standoff, the offline-progress policy and the world's shared lane allocator — arrives
-            // by construction. Built by hand, this stack diverged from production on four axes at
-            // once, and the fresh lane allocator among them is what parked two ships in one lane.
-            transitStack = new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                    null,
-                    () -> (long) server.getTickCounter(),
-                    new zmaster587.advancedRocketry.space.SpaceManager.Config(
-                            zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
-            transitMgr = transitStack.manager;
-            transitTm = transitStack.transit;
-            transitOrigin = zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(7000, 0, 0, 0, 0, 0);
-            transitTarget = zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(7001, 0, 0, 0, 0, 0);
-            int originDim = transitMgr.materialize(transitOrigin);
-            net.minecraft.world.WorldServer w = net.minecraftforge.common.DimensionManager.getWorld(originDim);
-            if (w == null) {
-                send(sender, "{\"error\":\"origin cell world not loaded\"}");
-                return;
-            }
-            // A small stone cube floating in the void origin cell, assembled into a VS ship.
-            net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
-            for (int dx = 0; dx < 3; dx++) {
-                for (int dy = 0; dy < 3; dy++) {
-                    for (int dz = 0; dz < 3; dz++) {
-                        w.setBlockState(new net.minecraft.util.math.BlockPos(dx, 64 + dy, dz), stone);
-                    }
-                }
-            }
-            // This fixture is a bare cube with no flight computer, so it has no durable id to depart
-            // under. CLEARED rather than left: the field is a static that outlives the scenario before
-            // it, and an inherited value would name that scenario's ship.
-            transitDurableId = null;
-            // Reported, like the piloted setup's, so a caller can ask about THIS ship by name instead
-            // of by the anchor every transit fixture shares.
-            java.util.UUID cubeShip =
-                    zmaster587.advancedRocketry.integration.vs.VSIntegration.assembleTier2Ship(
-                            w, new net.minecraft.util.math.BlockPos(1, 65, 1));
-            send(sender, "{\"ok\":true,\"originDim\":" + originDim
-                    + ",\"anchorX\":1,\"anchorY\":65,\"anchorZ\":1"
-                    + ",\"shipId\":\"" + (cubeShip == null ? "" : cubeShip) + "\"}");
-            return;
-        }
+        // `transit-setup` lived here and is GONE. It built a bare 3x3x3 stone cube and assembled it:
+        // no flight computer, therefore no durable id, therefore not a craft a player could sit in,
+        // command or be carried aboard. It was a shape that flew, not a ship.
+        //
+        // A fixture that cannot be NAMED stopped being merely unrealistic once the crossing began
+        // refusing to cut a craft it cannot resolve by identity: `VSShipCrosser.identifyShipToCut`
+        // has no positional answer left, so a jump begun on this fixture returns `began:false` and
+        // three e2e classes went red on a mechanic that was working. That is the general case, not an
+        // accident of one commit — every path that moves a ship now asks WHICH, and a fixture with no
+        // answer can only be refused.
+        //
+        // Its three callers use `transit-setup-piloted`, which builds the same stack around a real
+        // craft: a deck, a flight computer, a pilot seat linked to it, a durable id minted on the pad
+        // and a ledger row settled the way the entry on-ramp would leave one. A test needing a craft
+        // that can actually FLY builds the catalogue's `with-pilot-seat` fixture through the real
+        // assembler in the cell `transit-setup-empty` leaves behind.
+        //
         // transit-setup-empty: the transit STACK alone (pool of 2 + hyperspace + manager), origin cell
         // materialized but EMPTY. For tests whose subject needs a flyable ship: the piloted setup's bare
         // 3x3 deck has no propulsion (it can neither hold station nor climb), so a test that must FLY
         // builds the real with-pilot-seat fixture in the empty origin cell with the real assembler.
         if (args.length >= 1 && "transit-setup-empty".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
+            int[] transitSlots = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
-            // Through the PRODUCTION factory, overriding only the two knobs this fixture needs: its
-            // own clock and a manager that never collects. Everything else — the ledger, the arrival
-            // standoff, the offline-progress policy and the world's shared lane allocator — arrives
-            // by construction. Built by hand, this stack diverged from production on four axes at
-            // once, and the fresh lane allocator among them is what parked two ships in one lane.
-            transitStack = new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                    null,
-                    () -> (long) server.getTickCounter(),
-                    new zmaster587.advancedRocketry.space.SpaceManager.Config(
-                            zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
+            // THE SERVER'S OWN SUBSYSTEM. This fixture used to construct a second one — its own
+            // clock, its own manager, a binder narrowed so the two could not fight over the pool —
+            // and the server never ticked it, so every transit e2e had to drive the jump by hand
+            // through `transit-tick`. Those tests then proved what ShipTransitManager DOES and
+            // nothing about production driving it: a jump the server stopped ticking would have left
+            // them green.
+            //
+            // The four reasons that stack argued for itself do not survive being asked. A manager
+            // that never collects is a config (`spaceCellGcPolicy`). The narrowed binder and the
+            // shared lane allocator were treatments for two stacks sharing one pool — with one owner
+            // there is nothing to narrow against. And its own clock is unnecessary because the knob
+            // for time already exists and touches no world: `artest space set-clock`.
+            transitStack = liveStack();
+            if (transitStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
+                return;
+            }
             transitMgr = transitStack.manager;
             transitTm = transitStack.transit;
             transitOrigin = zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(7000, 0, 0, 0, 0, 0);
@@ -4151,18 +4643,25 @@ public class TestProbeCommand extends CommandBase {
         // a bot and carry it through the jump. Returns the ship anchor, the ship's world position (for
         // `space enter`), and the pilot seat's post-assembly subspace position (for `seat-mount-at`).
         if (args.length >= 1 && "transit-setup-piloted".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
+            int[] transitSlots = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(2);
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
-            // Through the PRODUCTION factory, overriding only the two knobs this fixture needs: its
-            // own clock and a manager that never collects. Everything else — the ledger, the arrival
-            // standoff, the offline-progress policy and the world's shared lane allocator — arrives
-            // by construction. Built by hand, this stack diverged from production on four axes at
-            // once, and the fresh lane allocator among them is what parked two ships in one lane.
-            transitStack = new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                    null,
-                    () -> (long) server.getTickCounter(),
-                    new zmaster587.advancedRocketry.space.SpaceManager.Config(
-                            zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
+            // THE SERVER'S OWN SUBSYSTEM. This fixture used to construct a second one — its own
+            // clock, its own manager, a binder narrowed so the two could not fight over the pool —
+            // and the server never ticked it, so every transit e2e had to drive the jump by hand
+            // through `transit-tick`. Those tests then proved what ShipTransitManager DOES and
+            // nothing about production driving it: a jump the server stopped ticking would have left
+            // them green.
+            //
+            // The four reasons that stack argued for itself do not survive being asked. A manager
+            // that never collects is a config (`spaceCellGcPolicy`). The narrowed binder and the
+            // shared lane allocator were treatments for two stacks sharing one pool — with one owner
+            // there is nothing to narrow against. And its own clock is unnecessary because the knob
+            // for time already exists and touches no world: `artest space set-clock`.
+            transitStack = liveStack();
+            if (transitStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
+                return;
+            }
             transitMgr = transitStack.manager;
             transitTm = transitStack.transit;
             transitOrigin = zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(7000, 0, 0, 0, 0, 0);
@@ -4206,14 +4705,33 @@ public class TestProbeCommand extends CommandBase {
             transitDurableId = afcTe instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
                     ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) afcTe).getOrCreateShipId()
                     : null;
-            net.minecraft.util.math.BlockPos anchor = new net.minecraft.util.math.BlockPos(1, 64, 1);
             // The assembler RETURNS this ship's identity, and the reply carries it. Every scenario of a
             // class shares one origin slot dim and one anchor, so an arrangement that asks about "the ship
             // at (1,64,1)" gets whichever craft that lookup happens to reach - in practice the first ship
             // ever assembled there, long since departed and holding an empty yard. The caller that BUILT
             // the ship is the one caller that never has to guess.
+            // The FOOTPRINT: the 3x3 deck at y=64 and the computer + seat standing on it at y=65.
+            // This used to pass `anchor` = (1,64,1), a STONE BLOCK of the deck, while the flight
+            // computer sat at (0,65,0) — so the craft was assembled with no name and took a
+            // substrate-minted id, and this reply then carried TWO ids for one ship. The footprint
+            // form cannot express that mistake.
+            // CUT AND PASTE, the way the rocket assembler does it. The fixture used to hand the
+            // assembly a bare anchor; the assembly now takes the SNAPSHOT that was pasted, which is
+            // what production always had and this fixture never did. Pasted back at the same origin
+            // rather than lifted: production lifts one block to sever the craft from its pad, and
+            // this build stands in void with no pad, so a lift would only move every coordinate the
+            // tests address.
+            zmaster587.advancedRocketry.util.StorageChunk pilotedBuild =
+                    zmaster587.advancedRocketry.util.StorageChunk.cutWorldBB(w,
+                            new net.minecraft.util.math.AxisAlignedBB(0, 64, 0, 3, 66, 3));
+            if (pilotedBuild == null) {
+                send(sender, "{\"error\":\"could not cut the piloted fixture build\"}");
+                return;
+            }
+            pilotedBuild.pasteInWorld(w, 0, 64, 0);
             java.util.UUID pilotedShip =
-                    zmaster587.advancedRocketry.integration.vs.VSIntegration.assembleTier2Ship(w, anchor);
+                    zmaster587.advancedRocketry.integration.vs.VSIntegration.assembleTier2Ship(
+                            w, pilotedBuild, 0, 64, 0);
             // SETTLE the ship in this stack's own ledger, the way the entry on-ramp would have. Without
             // it the fixture is a ship that is nowhere: production never has a craft sitting in a cell
             // with no ledger row, and anything that asks the ledger where this ship IS - a short jump,
@@ -4222,7 +4740,8 @@ public class TestProbeCommand extends CommandBase {
             if (transitDurableId != null) {
                 transitStack.ledger.settle(transitDurableId, transitOrigin);
             }
-            // Assembly is ASYNC (queued on the physics thread), so the seat + ship world pos are NOT queryable
+            // Assembly is DEFERRED, not threaded: `queueShipSpawn` only enqueues, and the manager's
+            // own tick drains that queue. So the seat + ship world pos are NOT queryable
             // yet. The caller polls `vs ship-count-all`/`load-ships`/`ship-count` for the ship, then reads the
             // post-assembly pilot-seat subspace pos + ship world pos via `vs find-seat <dim> id <shipId>`.
             send(sender, "{\"ok\":true,\"originDim\":" + originDim
@@ -4231,7 +4750,8 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"durableId\":\"" + (transitDurableId == null ? "" : transitDurableId) + "\"}");
             return;
         }
-        // transit-begin <originDim> <ax> <ay> <az> <speedBlocksPerTick>: start the jump.
+        // transit-begin <originDim> <ax> <ay> <az> <speedBlocksPerTick> [body <dim>]: start the jump —
+        // to the fixture's empty neighbour cell, or, with `body`, to that dimension's launch address.
         //
         // The speed is REQUIRED, and it used to default to 5M. That default was harmless while there
         // was one mechanism and it only sized the park; it stopped being harmless the moment the
@@ -4243,6 +4763,40 @@ public class TestProbeCommand extends CommandBase {
         // The arithmetic a caller needs: ticks = ceil(4M / speed), and a jump of at most
         // ShipTransitManager.DIRECT_CROSSING_MAX_TICKS ticks is performed as one crossing. So
         // speed >= 25_000 is a direct hop and speed <= 20_000 is a real flight with a park in it.
+        // transit-name <dim> <vsShipUuid>: tell the transit stack WHICH craft the next jump is about,
+        // for a fixture the stack did not build itself. `transit-setup-piloted` mints the durable id
+        // on its own pad; a scenario that assembles a flyable ship with the real assembler has a
+        // computer that minted one too, but the stack never heard of it, and `transit-begin` then
+        // departs under the synthetic "t" — a jump production never performs, because its caller IS
+        // the flight computer. Measured 2026-09-05 on two client scenarios: the nameless capture found
+        // no computer at the anchor, carried nobody, and the ledger — which never saw "t" — sent the
+        // relogging pilot to spawn as SHIP_UNKNOWN. Resolved by IDENTITY: the physics id names the
+        // shipyard, the computer in it names the craft.
+        if (args.length >= 3 && "transit-name".equalsIgnoreCase(args[0])) {
+            if (transitTm == null) {
+                send(sender, "{\"error\":\"transit not set up\"}");
+                return;
+            }
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer w = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            java.util.UUID vsUuid = null;
+            try {
+                vsUuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException ignored) {
+                // reported below as afcFound:false
+            }
+            net.minecraft.util.math.BlockPos afcPos = w == null || vsUuid == null ? null
+                    : zmaster587.advancedRocketry.integration.vs.VSIntegration.flightComputerOf(w, vsUuid);
+            net.minecraft.tileentity.TileEntity afcTe = afcPos == null ? null : w.getTileEntity(afcPos);
+            transitDurableId = afcTe instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer
+                    ? ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) afcTe).getOrCreateShipId()
+                    : null;
+            send(sender, "{\"ok\":true,\"afcFound\":" + (afcTe != null)
+                    + ",\"durableId\":\"" + (transitDurableId == null ? "" : transitDurableId) + "\""
+                    + (afcPos == null ? "" : ",\"afcX\":" + afcPos.getX() + ",\"afcY\":" + afcPos.getY()
+                            + ",\"afcZ\":" + afcPos.getZ()) + "}");
+            return;
+        }
         if (args.length >= 6 && "transit-begin".equalsIgnoreCase(args[0])) {
             if (transitTm == null) {
                 send(sender, "{\"error\":\"transit not set up\"}");
@@ -4272,6 +4826,20 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             long speed = Math.max(1L, Long.parseLong(args[5]));
+            // `body <dim>` aims the jump AT A BODY — the production launch address of that dimension,
+            // the same resolution `launch-cell` reports — instead of the fixture's empty neighbour
+            // cell. An empty cell has nothing to stand off from, so an arrival there cannot tell a
+            // standoff from its absence; this is the target that can.
+            if (args.length >= 8 && "body".equalsIgnoreCase(args[6])) {
+                zmaster587.advancedRocketry.space.GalacticCoord bodyAddress =
+                        zmaster587.advancedRocketry.space.SpaceSubsystem.launchBodyAddress(
+                                parseIntOr(args[7], Integer.MIN_VALUE));
+                if (bodyAddress == null) {
+                    send(sender, "{\"error\":\"no launch address for dim " + args[7] + "\"}");
+                    return;
+                }
+                transitTarget = bodyAddress;
+            }
             // Depart under the fixture's own DURABLE id, so the crossing resolves the ship it was told
             // about instead of whatever craft is nearest an anchor every scenario here reuses. The
             // synthetic "t" remains for fixtures that assembled nothing to name.
@@ -4294,8 +4862,34 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"inTransit\":" + transitTm.inTransitCount() + "}");
             return;
         }
-        // transit-tick: advance the transit one tick; report in-transit count and (once arrived) the
-        // target cell's slot dim so the test can confirm the ship is VS-managed there.
+        // transit-status: the same report `transit-tick` produces, WITHOUT advancing anything.
+        //
+        // The two were one verb until 2026-09-08, and that conflation was the defect: a caller who
+        // only wanted to read `hyperDim` or `inTransit` had to drive the jump to get it, which for a
+        // test whose subject is a jump still being IN FLIGHT pushes its own subject towards the exit.
+        // Since the fixture runs on the server's own subsystem the jump advances on the server tick
+        // anyway, so reading and driving had no reason left to be the same call.
+        //
+        // WHY THIS ONE KEEPS THE SCAFFOLD GATE, where `entry-status` gave its up. Half of this report
+        // is not a world fact: `poseX/Y/Z`, `shipY`, `poseDist` and `targetDim` all describe the cell
+        // the SCENARIO aimed its jump at (`transitTarget`), and `crossing` is about the ship IT named.
+        // `liveStack()` cannot supply either — there is no such thing as "the server's target cell" —
+        // so a report built without the setup would answer about a coordinate nobody chose. The world
+        // question this verb is often ASKED instead — is any jump in the air — belongs to
+        // `subsystem-status`, which reads `transits` straight off the live stack and needs no fixture.
+        if (args.length >= 1 && "transit-status".equalsIgnoreCase(args[0])) {
+            if (transitTm == null) {
+                send(sender, "{\"error\":\"transit not set up\"}");
+                return;
+            }
+            sendTransitReport(sender);
+            return;
+        }
+        // transit-tick: advance the transit, then report exactly what `transit-status` reports.
+        //
+        // An ACCELERATOR, no longer the thing that moves a jump: the server ticks the transit like
+        // any other subsystem. It stays because a long leg is still faster to compress than to wait
+        // out, and it repeats the SAME tick -- it does not change what a tick does.
         if (args.length >= 1 && "transit-tick".equalsIgnoreCase(args[0])) {
             if (transitTm == null) {
                 send(sender, "{\"error\":\"transit not set up\"}");
@@ -4319,72 +4913,7 @@ public class TestProbeCommand extends CommandBase {
             // controller, not by the transit map. Ticking only one of them would make "advance the
             // jump" mean different things depending on which mechanism the speed selected — and the
             // arrival acceptance is meant to be SHARED between them, not written twice.
-            int crossing = transitStack != null && transitDurableId != null
-                    && transitStack.cellCrossings.isCarrying(transitDurableId) ? 1 : 0;
-            int inTransit = transitTm.inTransitCount();
-            int targetDim = -1;
-            if (inTransit == 0 && transitMgr.isLoaded(transitTarget)) {
-                targetDim = transitMgr.materialize(transitTarget);
-                transitMgr.dematerialize(transitTarget);
-            }
-            // Where the arrived ship ACTUALLY is, as the two answers that can disagree. An arrival is
-            // only complete when the ship sits on the world pose realizing its target coordinate; if it
-            // is still in the paste band, its address inverts through the pose mapping into a
-            // NEIGHBOURING cell. Both are asked through the queryable registry (shipBlockAt), which
-            // answers for an UNLOADED ship too - so a test can observe this without force-loading
-            // anything, and therefore without supplying the very state the arrival is supposed to
-            // establish for itself.
-            double[] pose = zmaster587.advancedRocketry.space.CellWorldMapper.poseWorldOf(transitTarget);
-            long shipY = Long.MIN_VALUE, poseDist = -1L;
-            net.minecraft.world.WorldServer tw = targetDim < 0 ? null
-                    : net.minecraftforge.common.DimensionManager.getWorld(targetDim);
-            if (tw != null) {
-                // Ask for the ship's OWN transform position, not "is a ship near this point": the
-                // nearest-ship lookup underneath shipBlockAt is UNBOUNDED, so asking it about two
-                // different points in a world that holds one ship answers yes to both. A pair of such
-                // questions looks like a discriminator and is not one.
-                net.minecraft.util.math.BlockPos sub = zmaster587.advancedRocketry.integration.vs
-                        .VSIntegration.shipBlockAt(tw, pose[0], pose[1], pose[2]);
-                double[] sp = sub == null ? null : zmaster587.advancedRocketry.integration.vs
-                        .VSIntegration.getShipWorldPosition(tw, sub);
-                if (sp != null) {
-                    shipY = (long) sp[1];
-                    double dx = sp[0] - pose[0], dy = sp[1] - pose[1], dz = sp[2] - pose[2];
-                    poseDist = (long) Math.sqrt(dx * dx + dy * dy + dz * dz);
-                }
-            }
-            // Point-free witness: where the ships in this world actually ARE. Without it, a null from the
-            // point-keyed lookup above cannot be told from "the ship is not where I asked".
-            String ships = tw == null ? "" : zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .queryableShipPositions(tw);
-            // Where the crew of the in-flight ship BELONGS while it is parked, and the world that holds
-            // it. `crewDim` is the subsystem's own answer (-1 once the jump is over, or for a transit
-            // restored from a snapshot, which has no physical ship anywhere); `hyperDim` is the raw id of
-            // the shared parking world. A crew-side test compares the CLIENT's dimension against these
-            // rather than hardcoding an id that is minted per boot.
-            send(sender, "{\"ok\":true,\"inTransit\":" + inTransit + ",\"targetDim\":" + targetDim
-                    // Which mechanism is actually running, emitted in every state so "neither" is a
-                    // pair of zeros rather than a missing field: `inTransit` is the hyperspace flight,
-                    // `crossing` is the direct cell-to-cell settle. A test that wants to know WHICH
-                    // one its speed selected reads these instead of inferring it from timing.
-                    + ",\"crossing\":" + crossing
-                    + ",\"poseX\":" + (long) pose[0] + ",\"poseY\":" + (long) pose[1]
-                    + ",\"poseZ\":" + (long) pose[2]
-                    + ",\"shipY\":" + shipY + ",\"poseDist\":" + poseDist
-                    // Asked under the SAME name the departure used. This read was hard-coded to the
-                    // synthetic "t" and answered -1 for every jump the moment departures started
-                    // naming their ship, which reads as "the crew belongs nowhere" rather than as a
-                    // probe asking about a transit that does not exist under that key.
-                    + ",\"crewDim\":" + transitTm.crewDimensionOf(
-                            transitDurableId == null ? "t" : transitDurableId.toString())
-                    + ",\"hyperDim\":" + zmaster587.advancedRocketry.space.HyperspaceWorld.dimId()
-                    // How many arrived ships are still retrying their crew re-seat. This tells a
-                    // never-seated crew apart from a re-seat that RAN OUT of retries: >0 means the
-                    // loop is still trying (the caller simply stopped ticking), 0 with an unseated
-                    // crew means it either succeeded or gave up - and the arrival leg gives up
-                    // without a word, so nothing else distinguishes the two.
-                    + ",\"reseating\":" + transitTm.reseatingCount()
-                    + ",\"ships\":\"" + ships + "\"}");
+            sendTransitReport(sender);
             return;
         }
         // loose-body <dim> <x> <y> <z>: drop ONE item entity at a world point, and
@@ -4425,7 +4954,12 @@ public class TestProbeCommand extends CommandBase {
                 aboard = stay != null && local != null && stay.contains(
                         new net.minecraft.util.math.Vec3d(local[0], local[1], local[2]));
             }
+            // BOTH identities, and the uuid is the one that survives. A crossing stows an aboard body
+            // to NBT, kills it, and re-creates it on the far side (`AboardBodies`), so the int
+            // entityId is re-minted from the JVM counter while the uuid round-trips through the NBT.
+            // A caller that followed a body by entityId across a crossing would be told it is gone.
             send(sender, "{\"ok\":true,\"entityId\":" + body.getEntityId()
+                    + ",\"uuid\":\"" + body.getUniqueID() + "\""
                     + ",\"aboard\":" + aboard + "}");
             return;
         }
@@ -4487,6 +5021,87 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(loose));
             return;
         }
+        // loose-body-find <uuid> <dim> [vsShipId]: is the body NAMED by <uuid> in <dim>, where is it,
+        // and does production still call it aboard <vsShipId>.
+        //
+        // <p>THE CALLER NAMES THE WORLD. It knows which one it means — the slot its ship was in, or the
+        // slot its ship arrived in — and a sweep over "whatever is loaded" would be a lookup answering
+        // about wherever it happened to find something. It also cannot work here: a slot world with no
+        // player in it unloads, and a sweep then reports the body missing when what is missing is the
+        // world. Measured 2026-08-25: `searched:[0,3]` for a body dropped into a slot dim, one command
+        // earlier, on a ship production had just called aboard.
+        //
+        // <p>The named world is brought up if it is down (the same `vsWorld` every other verb here
+        // uses), and with a ship id the ship's own footprint is loaded first — an entity is restored
+        // with ITS CHUNK, so a world that is merely up holds nothing yet. What that buys is a
+        // `found:false` that means "not on that ship", which is the reading the caller wants, rather
+        // than "nothing is loaded there", which is a statement about the harness.
+        //
+        // <p>BY UUID, not by entityId. A crossing stows an aboard body to NBT, kills it and re-creates
+        // it on the far side, so the int id is re-minted while the uuid round-trips (`Entity`'s NBT
+        // carries it). Following a body by entityId across the very crossing under test would report
+        // it lost every time.
+        //
+        // <p>It replaces `loose-body-count` for anything past a cell face: that walks CHUNKS through
+        // `getEntitiesWithinAABB`, and a carried ship sits at a pose around 16M blocks out where none
+        // are loaded — measured as 0 immediately after a drop, and still 0 after 200 ticks.
+        if (args.length >= 3 && "loose-body-find".equalsIgnoreCase(args[0])) {
+            java.util.UUID wanted;
+            try {
+                wanted = java.util.UUID.fromString(args[1]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"body id is not a uuid\"}");
+                return;
+            }
+            int dim = parseIntOr(args[2], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer w = vsWorld(sender, dim);
+            if (w == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            String vsShipId = args.length >= 4 ? args[3] : null;
+            // The ship's own chunks FIRST. A body that was carried is standing on that ship, so this is
+            // where it comes back from disk; without it the uuid map is empty and every answer is
+            // `false` for reasons that have nothing to do with the crossing.
+            double[] shipPos = vsShipId == null ? null
+                    : zmaster587.advancedRocketry.integration.vs.VSIntegration.shipStateById(w, vsShipId);
+            if (shipPos != null) {
+                int cx = ((int) shipPos[0]) >> 4, cz = ((int) shipPos[2]) >> 4;
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        w.getChunkProvider().provideChunk(cx + dx, cz + dz);
+                    }
+                }
+            }
+            net.minecraft.entity.Entity body = w.getEntityFromUuid(wanted);
+            if (body == null) {
+                // ABSENCE AS A VALUE, and beside it what the search actually covered: whether the world
+                // was up, and whether the ship it was asked about resolved at all. "not found" with
+                // `shipResolved:false` is a broken arrangement; with `shipResolved:true` it is the
+                // finding.
+                send(sender, "{\"ok\":true,\"found\":false,\"dim\":" + dim
+                        + ",\"shipResolved\":" + (vsShipId == null ? "null" : shipPos != null) + "}");
+                return;
+            }
+            // Whether production would STILL call this body aboard. Reported beside the position
+            // because "it arrived" and "it arrived on the deck" are different claims, and a crossing
+            // can satisfy the first while failing the second.
+            String aboardJson = "null";
+            if (vsShipId != null) {
+                net.minecraft.util.math.AxisAlignedBB stay = zmaster587.advancedRocketry.integration.vs
+                        .VSIntegration.subspaceStayRegion(w, vsShipId, 1.0);
+                double[] local = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                        .toShipFrameFor(w, vsShipId, body.posX, body.posY, body.posZ);
+                aboardJson = Boolean.toString(stay != null && local != null && stay.contains(
+                        new net.minecraft.util.math.Vec3d(local[0], local[1], local[2])));
+            }
+            send(sender, "{\"ok\":true,\"found\":true,\"dim\":" + dim
+                    + ",\"entityId\":" + body.getEntityId()
+                    + ",\"x\":" + body.posX + ",\"y\":" + body.posY + ",\"z\":" + body.posZ
+                    + ",\"shipResolved\":" + (vsShipId == null ? "null" : shipPos != null)
+                    + ",\"aboard\":" + aboardJson + "}");
+            return;
+        }
         // transit-refresh: run the periodic re-cut of every parked ship's block snapshot, on demand.
         //
         // `refreshed` is how many transits actually got a FRESH cut from hyperspace this call, and it is
@@ -4528,8 +5143,9 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"transit not set up\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceSubsystem prodStack = liveStack();
             zmaster587.advancedRocketry.space.ShipTransitManager prod =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.transit();
+                    prodStack == null ? null : prodStack.transit;
             if (prod == null) {
                 send(sender, "{\"error\":\"production transit manager is not up\"}");
                 return;
@@ -4567,38 +5183,75 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"inTransit\":" + transitTm.inTransitCount() + "}");
             return;
         }
-        // entry-setup [poolN]: build the entry-on-ramp stack — the PRODUCTION stack, built by the
-        // production factory, differing only in the two knobs this probe genuinely needs (its own
-        // narrowed slot binder and its own clock) — and INSTALL it over whatever is live, keeping the
-        // way BACK. `entry-clear` closes that handle, which RESTORES the previous occupant; it used
-        // to assign five nulls, which left the production subsystem dead for the rest of the boot.
+        // entry-setup [needSlots]: ARRANGE the server's own entry on-ramp for a scenario — make sure
+        // hyperspace is registered, check the server's slot pool can hold what the scenario is about
+        // to ask of it, and report the pool.
+        //
+        // <p>{@code needSlots} is a REQUIREMENT, not a growth command: it says how many cells this
+        // scenario expects to be live at once, and a pool smaller than that is refused loudly here
+        // rather than surfacing later as a cell that would not materialize. It used to APPEND that
+        // many fresh dimensions to the pool on every call — see the note at the registration below
+        // for why that is gone.
+        //
+        // <p>It builds NOTHING. It used to construct a second subsystem and install it over the
+        // server's, on the reasoning that a scenario wants its own clock, its own GC policy and a
+        // binder narrowed to its own slots. What that actually bought was two live subsystems whose
+        // relative visibility depended on which accessor a verb happened to use, and the narrowing
+        // was a defence against a problem only the second subsystem created: ONE manager tracks its
+        // own bindings, so no scenario can be handed a slot another one is still using. The remaining
+        // two knobs are not worth a second stack — the production GC thresholds (24 h, 4096 cells)
+        // cannot fire inside a scenario, and the space clock is the server's and is settable through
+        // `set-clock`.
         if (args.length >= 1 && "entry-setup".equalsIgnoreCase(args[0])) {
-            int n = args.length >= 2 ? parseIntOr(args[1], 2) : 2;
-            entrySlotDims = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(n);
-            // Narrowed to the slots THIS setup just registered — see ownSlotsOnly. A plain
-            // PoolSlotBinder lets this stack bind any slot in the whole pool, including every earlier
-            // consumer's, so the slot a scenario's cell lands in would depend on how many scenarios ran
-            // before it in this JVM while the report below still names only its own two.
-            zmaster587.advancedRocketry.space.SpaceSubsystem probeStack =
-                    new zmaster587.advancedRocketry.space.SpaceSubsystem(
-                            ownSlotsOnly(entrySlotDims),
-                            () -> (long) server.getTickCounter(),
-                            new zmaster587.advancedRocketry.space.SpaceManager.Config(
-                                    zmaster587.advancedRocketry.space.SpaceManager.GcPolicy.NEVER, 0L, 0));
-            entryMgr = probeStack.manager;
-            entryLedger = probeStack.ledger;
-            // The entry, descent and transit controllers all come from the factory above, on the SAME
-            // manager and ledger — so one e2e can enter a ship through this stack, JUMP it to another
-            // cell and descend it again. Nothing is wired by hand here any more: the arrival standoff
-            // and the offline-progress policy used to be re-attached at this point with a comment
-            // explaining that forgetting them makes the whole suite "quietly measure a different
-            // game", and forgetting them is now impossible rather than merely discouraged. (The
-            // `transit-setup` probe still builds a SEPARATE stack with its own cells and manual
-            // ticking; that one cannot touch a ship this stack put into space.) Registering
-            // hyperspace upfront mirrors the production start — idempotent, no world loads until a
-            // first jump.
+            zmaster587.advancedRocketry.space.SpaceSubsystem live = liveStack();
+            if (live == null) {
+                // Not survivable-and-quiet: with no subsystem the production on-ramp this fixture
+                // exists to drive is not there at all, and every assertion downstream would be
+                // measuring its absence.
+                send(sender, "{\"error\":\"the server has no space subsystem\"}");
+                return;
+            }
+            // THE SERVER'S OWN POOL, and nothing appended to it.
+            //
+            // This used to call `registerAdditionalSlots(n)`, whose own javadoc calls it "the
+            // non-idempotent primitive: each call grows the pool" — two FRESH Forge dimensions minted
+            // per call, 19 call sites across 9 classes, and never given back: `entry-clear` unloads
+            // the WORLDS and leaves the ids in the pool for the rest of the boot.
+            //
+            // The reason written beside it — "so a scenario's scratch worlds cannot collide with the
+            // pool the server already owns" — died when this verb stopped installing a second
+            // subsystem. The paragraph above says so itself: the narrowing was a defence against a
+            // problem only that second stack created, and ONE manager tracks its own bindings, so no
+            // scenario can be handed a slot another one is still using. The defence outlived the
+            // threat, and what it left behind was a per-scenario arrangement quietly growing a global
+            // registry, with the scenario's cells free to bind into slots nobody pumps.
+            //
+            // `spaceCellPoolSize` (10 by default) is the number a server runs on, so it is the number
+            // a scenario should be arranged against too: a fixture that needs a bigger pool than
+            // production has is testing a world the player never gets.
+            java.util.List<Integer> pool = zmaster587.advancedRocketry.space.SpaceSlotPool.slotDims();
+            entrySlotDims = new int[pool.size()];
+            for (int i = 0; i < entrySlotDims.length; i++) {
+                entrySlotDims[i] = pool.get(i);
+            }
+            if (entrySlotDims.length == 0) {
+                send(sender, "{\"error\":\"the server's slot pool is empty - the space subsystem "
+                        + "registers it at startup, so this means it never started\"}");
+                return;
+            }
+            int needSlots = args.length >= 2 ? parseIntOr(args[1], 1) : 1;
+            if (entrySlotDims.length < needSlots) {
+                send(sender, "{\"error\":\"the scenario needs " + needSlots + " live cells and the "
+                        + "server's pool holds " + entrySlotDims.length + " - raise spaceCellPoolSize"
+                        + " rather than minting scratch dimensions\",\"pool\":" + entrySlotDims.length
+                        + ",\"needSlots\":" + needSlots + "}");
+                return;
+            }
+            // Registering hyperspace upfront mirrors the production start — idempotent, and no world
+            // loads until a first jump. (The `transit-setup-*` probes arrange the SAME server stack;
+            // they hold their own handles to it only because their report describes a target cell the
+            // SCENARIO chose, which no world reader can supply.)
             zmaster587.advancedRocketry.space.HyperspaceWorld.register();
-            entryInstall = zmaster587.advancedRocketry.space.SpaceSubsystem.install(probeStack);
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"dims\":[");
             for (int i = 0; i < entrySlotDims.length; i++) {
                 if (i > 0) sb.append(',');
@@ -4607,65 +5260,134 @@ public class TestProbeCommand extends CommandBase {
             send(sender, sb.append("]}").toString());
             return;
         }
-        // auto-takeoff <dim> [toggle|status]: drive/read the auto-takeoff autopilot on the loaded pilot
-        // seat's AFC (the production seat->AFC path server-side) — the client keybind's server effect,
-        // bisected from the keybind/packet layer. `toggle` (default) flips it; `status` reads only.
-        // Reports afcResolved + engaged.
+        // auto-takeoff <dim> id <shipUuid> [toggle|status] | auto-takeoff <dim> [toggle|status]: drive/read
+        // the auto-takeoff autopilot on a pilot seat's AFC (the production seat->AFC path server-side) —
+        // the client keybind's server effect, bisected from the keybind/packet layer. `toggle` (default)
+        // flips it; `status` reads only. Reports afcResolved + engaged, and the seat it acted through.
+        //
+        // PREFER THE ID FORM. The bare form takes the FIRST TilePilotSeat in the world's
+        // loadedTileEntityList, which is an arrival order and not an identity: on a world holding two
+        // craft it engages a stranger's autopilot and answers {"engaged":true} for it, while the caller's
+        // ship sits still and every later altitude assertion reads a ship nobody commanded. The id form
+        // resolves the seat inside THAT ship's own subspace shipyard, so a wrong ship is unreachable
+        // rather than merely unlikely. <shipUuid> is the PHYSICS id (what `ship-info`/`find-seat` speak);
+        // a caller holding a durable AR id crosses with `vs ship-uuid <dim> <durableId>`.
         if (args.length >= 2 && "auto-takeoff".equalsIgnoreCase(args[0])) {
             net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
             if (world == null) {
                 send(sender, "{\"error\":\"world not loaded\"}");
                 return;
             }
-            boolean read = args.length >= 3 && "status".equalsIgnoreCase(args[2]);
+            boolean takeoffById = args.length >= 4 && "id".equalsIgnoreCase(args[2]);
+            int modeArg = takeoffById ? 4 : 2;
+            boolean read = args.length > modeArg && "status".equalsIgnoreCase(args[modeArg]);
             zmaster587.advancedRocketry.tile.TilePilotSeat seat = null;
-            for (TileEntity te : world.loadedTileEntityList) {
-                if (te instanceof zmaster587.advancedRocketry.tile.TilePilotSeat) {
-                    seat = (zmaster587.advancedRocketry.tile.TilePilotSeat) te;
-                    break;
+            net.minecraft.util.math.BlockPos seatPos = null;
+            String takeoffShipId = null;
+            if (takeoffById) {
+                java.util.UUID takeoffShip;
+                try {
+                    takeoffShip = java.util.UUID.fromString(args[3]);
+                } catch (IllegalArgumentException notAUuid) {
+                    send(sender, "{\"error\":\"auto-takeoff id needs a well-formed uuid\"}");
+                    return;
+                }
+                takeoffShipId = takeoffShip.toString();
+                seatPos = pilotSeatInYard(world, zmaster587.advancedRocketry.integration.vs
+                        .VSIntegration.shipyardBoundsOf(world, takeoffShip));
+                TileEntity seatTe = seatPos == null ? null : world.getTileEntity(seatPos);
+                if (seatTe instanceof zmaster587.advancedRocketry.tile.TilePilotSeat) {
+                    seat = (zmaster587.advancedRocketry.tile.TilePilotSeat) seatTe;
+                }
+            } else {
+                for (TileEntity te : world.loadedTileEntityList) {
+                    if (te instanceof zmaster587.advancedRocketry.tile.TilePilotSeat) {
+                        seat = (zmaster587.advancedRocketry.tile.TilePilotSeat) te;
+                        seatPos = te.getPos();
+                        break;
+                    }
                 }
             }
+            String seatWhose = takeoffShipId == null ? "" : ",\"shipId\":\"" + takeoffShipId + "\"";
             if (seat == null) {
-                send(sender, "{\"seatFound\":false}");
+                send(sender, "{\"seatFound\":false" + seatWhose + "}");
                 return;
             }
             zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer afc = seat.getFlightComputer();
             if (afc != null && !read) {
                 afc.toggleAutoTakeoff();
             }
-            send(sender, "{\"seatFound\":true,\"afcResolved\":" + (afc != null) + ",\"engaged\":"
+            send(sender, "{\"seatFound\":true" + seatWhose
+                    + ",\"seatX\":" + seatPos.getX() + ",\"seatY\":" + seatPos.getY()
+                    + ",\"seatZ\":" + seatPos.getZ()
+                    + ",\"afcResolved\":" + (afc != null) + ",\"engaged\":"
                     + (afc != null && afc.isAutoTakeoffEngaged()) + "}");
             return;
         }
-        // entry-status: the entry stack's observable state — pending entries + the first ledgered
-        // ship's record (single-ship tests). Coordinates are reported as cellKey + local offsets.
+        // entry-status [id <durableShipId>]: the entry stack's observable state — pending entries + ONE
+        // ledgered ship's record. Coordinates are reported as cellKey + local offsets.
+        //
+        // PREFER THE ID FORM. The bare form reports whichever row the ledger's iterator hands over
+        // first, which is a HashMap order over every ship the server knows: a caller reading `state`
+        // off it is reading some ship's state, and on a stack that has ledgered two craft nothing in
+        // the reply says whose. The id form reports the row for the ship the caller NAMES and answers
+        // found:false — a loud arrangement failure — rather than describing a neighbour. The key is the
+        // ship's DURABLE id (the ledger is keyed on nothing else); `space find-afc <slotDim>` hands one
+        // back beside the physics id, and `vs ship-uuid` crosses the other way.
+        //
+        // READ-ONLY, AND IT ASKS THE WORLD. Every field below comes from the server's own ledger and
+        // entry controller, so this verb resolves them from `liveStack()` and refuses only when there
+        // is no live stack to ask. It used to gate on `entryLedger` — a static that `entry-setup`
+        // fills with `live.ledger`, i.e. a CACHE of the very object resolved here — and a scenario
+        // that ledgers a craft without running `entry-setup` was then told "entry not set up" about a
+        // ledger that was up and holding its row. A reader cannot tell that from "no such craft", and
+        // the caller measuring an arrival reads three coordinates out of it.
         if (args.length >= 1 && "entry-status".equalsIgnoreCase(args[0])) {
-            if (entryLedger == null) {
-                send(sender, "{\"error\":\"entry not set up\"}");
+            zmaster587.advancedRocketry.space.SpaceSubsystem entryStatusStack = liveStack();
+            zmaster587.advancedRocketry.space.ShipLedger statusLedger =
+                    entryStatusStack == null ? null : entryStatusStack.ledger;
+            if (statusLedger == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
-            zmaster587.advancedRocketry.space.ShipEntryController ctl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.entry();
+            boolean statusById = args.length >= 3 && "id".equalsIgnoreCase(args[1]);
+            java.util.UUID wantedShip = null;
+            if (statusById) {
+                try {
+                    wantedShip = java.util.UUID.fromString(args[2]);
+                } catch (IllegalArgumentException notAUuid) {
+                    send(sender, "{\"error\":\"entry-status id needs a well-formed uuid\"}");
+                    return;
+                }
+            }
+            zmaster587.advancedRocketry.space.ShipEntryController ctl = entryStatusStack.entry;
             StringBuilder sb = new StringBuilder("{\"ok\":true");
             sb.append(",\"pending\":").append(ctl == null ? -1 : ctl.enteringCount());
-            sb.append(",\"ships\":").append(entryLedger.size());
+            sb.append(",\"ships\":").append(statusLedger.size());
             java.util.Map<java.util.UUID, zmaster587.advancedRocketry.space.ShipLedger.Entry> snap =
-                    entryLedger.snapshot();
-            if (!snap.isEmpty()) {
+                    statusLedger.snapshot();
+            java.util.UUID rowId = null;
+            zmaster587.advancedRocketry.space.ShipLedger.Entry row = null;
+            if (statusById) {
+                row = snap.get(wantedShip);
+                rowId = row == null ? null : wantedShip;
+                sb.append(",\"askedShip\":\"").append(wantedShip).append('"');
+                sb.append(",\"found\":").append(row != null);
+            } else if (!snap.isEmpty()) {
                 java.util.Map.Entry<java.util.UUID, zmaster587.advancedRocketry.space.ShipLedger.Entry> first =
                         snap.entrySet().iterator().next();
-                zmaster587.advancedRocketry.space.ShipLedger.Entry e = first.getValue();
-                sb.append(",\"shipId\":\"").append(first.getKey()).append('"');
+                rowId = first.getKey();
+                row = first.getValue();
+            }
+            if (row != null) {
+                zmaster587.advancedRocketry.space.ShipLedger.Entry e = row;
+                sb.append(",\"shipId\":\"").append(rowId).append('"');
                 sb.append(",\"state\":\"").append(e.state).append('"');
                 sb.append(",\"cellKey\":\"").append(e.cellKey()).append('"');
                 sb.append(",\"lx\":").append(e.coord.localX());
                 sb.append(",\"ly\":").append(e.coord.localY());
                 sb.append(",\"lz\":").append(e.coord.localZ());
-                zmaster587.advancedRocketry.space.SpaceManager entryMgrRead =
-                        zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-                int entrySlot = entryMgrRead == null
-                        ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
-                        : entryMgrRead.slotDimOf(e.coord);
+                int entrySlot = entryStatusStack.manager.slotDimOf(e.coord);
                 sb.append(",\"slotDim\":").append(slotDimJson(entrySlot));
                 sb.append(",\"slotBound\":").append(entrySlot
                         != zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT);
@@ -4693,8 +5415,9 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"ok\":false,\"afcResolved\":false,\"error\":\"shipId is not a uuid\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.SpaceSubsystem gateStack = liveStack();
             zmaster587.advancedRocketry.space.ShipEntryController gateCtl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.entry();
+                    gateStack == null ? null : gateStack.entry;
             StringBuilder gate = new StringBuilder("{\"ok\":true");
             // The controller half first: it is answerable whether or not the ship resolves, and
             // "never asked" (decision null) is the reading that separates the two explanations.
@@ -4727,6 +5450,55 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"afcX\":").append(gateAfcPos.getX()).append(",\"afcY\":")
                     .append(gateAfcPos.getY()).append(",\"afcZ\":").append(gateAfcPos.getZ());
             gate.append(",\"planetSide\":").append(gatePlanetSide);
+            // Whether this computer is being TICKED AT ALL, and how many naming attempts it has made
+            // inside those ticks - production's own two counters, read rather than re-derived. Every
+            // other field here describes an INPUT to the trigger, and all of them can be exactly
+            // right while the trigger is never evaluated: the on-ramp lives in the computer's own
+            // tick, and a tile whose chunk is not loaded, or whose update returns before the check
+            // (no attitude, hyperspace, a crossing that cut it), reads identically from outside - no
+            // crossing, nothing ledgered, no line in the log. A census that does not advance between
+            // two reads says which of those two halves to look in.
+            gate.append(",\"tickCensus\":\"").append(gateAfc.tickCensus()).append('"');
+            // WHICH OBJECT this census belongs to. A tile is addressed by position, and vanilla
+            // replaces an invalidated one in place - so "the computer at this position" can be a
+            // different object between two calls, and a census of zero then means "this replacement
+            // is new", not "this craft's computer never ran". The number is meaningless alone and
+            // decisive beside the same number on a tick record.
+            gate.append(",\"afcIdentity\":").append(System.identityHashCode(gateAfc));
+            // The one condition of vanilla's tile-entity tick loop this verb can honestly report.
+            //
+            // The loop tests three things - the chunk is in the world's loaded set, the border
+            // contains the position, the tile is in the ticking list - and only the border is a pure
+            // predicate on coordinates. THE OTHER TWO CANNOT BE READ FROM HERE: resolving this
+            // computer at all walks the shipyard looking for its block and then asks the world for
+            // the tile, and both of those LOAD the chunk, which registers its tiles for ticking. A
+            // reply saying "the chunk is loaded and the tile is tickable" would then be describing
+            // the state this call had just produced - and beside a census of 0/0 it reads as a
+            // contradiction in production rather than as an artefact of the instrument. Measured
+            // 2026-09-12: chunkLoaded:true, tickable:true and tickCensus:"0/0" in one reply, which
+            // is not a thing the game can be doing.
+            //
+            // A caller that needs those two asks something that runs on the game's own tick instead
+            // (the flight computer's readFromNBT is recorded as an event, so a chunk that keeps
+            // being re-loaded says so by how often the tile is deserialized).
+            gate.append(",\"inBorder\":").append(gateWorld.getWorldBorder().contains(gateAfcPos));
+            // The rest of what vanilla's tile-entity loop reads before it calls update(), in the
+            // loop's own order. Two of these are honest here and two carry a caveat, and the caveat
+            // is written down rather than left for the next reader to rediscover:
+            //
+            //   invalid / hasWorld - properties of the OBJECT, unaffected by having resolved it. An
+            //     invalidated tile that is still in the ticking list is skipped forever and looks
+            //     from outside exactly like a computer that declines to act.
+            //   chunkLoaded / tickable - READ AFTER this call resolved the computer, and resolving
+            //     it walks the shipyard and asks the world for the tile, both of which load the
+            //     chunk and register its tiles. So a `true` here does NOT prove the state held when
+            //     the tick loop last ran; only a `false` is decisive. Paired with `afcIdentity`
+            //     across two calls it is still worth reading: one object seen twice is a tile the
+            //     world is keeping, whoever first made it.
+            gate.append(",\"invalid\":").append(gateTe.isInvalid());
+            gate.append(",\"hasWorld\":").append(gateTe.hasWorld());
+            gate.append(",\"chunkLoaded\":").append(gateWorld.isBlockLoaded(gateAfcPos, false));
+            gate.append(",\"tickable\":").append(gateWorld.tickableTileEntities.contains(gateTe));
             gate.append(",\"latched\":").append(gateAfc.isEntryLatched());
             gate.append(",\"ceiling\":").append(gateCeiling);
             // The two numbers the ceiling is derived FROM, beside it: a ceiling that will not be
@@ -4769,24 +5541,35 @@ public class TestProbeCommand extends CommandBase {
             }
             return;
         }
-        // entry-clear: uninstall the probe entry stack and unload its slots (shared-harness
-        // state-leak contract).
+        // entry-clear: give back everything the scenario put INTO the server's subsystem, and unload
+        // the scratch slots it registered (the shared-harness state-leak contract).
+        //
+        // It no longer uninstalls anything — there is nothing to uninstall, because the fixture never
+        // substituted a subsystem. That makes the clean-up this verb's own work rather than a side
+        // effect of throwing a stack away: every ship the scenario ledgered is forgotten and every
+        // cell it materialized is released, or the next scenario in the boot inherits both and the
+        // pool runs out of slots several scenarios later, somewhere else entirely.
         if (args.length >= 1 && "entry-clear".equalsIgnoreCase(args[0])) {
-            // RESTORE, not null. Closing the handle puts back whatever was live when this stack was
-            // installed — production's, in an ordinary boot. The five-nulls form this replaced left
-            // `SpaceSubsystem.space()/.ledger()/.entry()/.transit()/.descent()` answering null for
-            // the rest of the server's life, because the hook that builds them runs once at start.
-            if (entryInstall != null) {
-                entryInstall.close();
-                entryInstall = null;
+            zmaster587.advancedRocketry.space.SpaceSubsystem live = liveStack();
+            if (live != null) {
+                for (java.util.Map.Entry<java.util.UUID,
+                        zmaster587.advancedRocketry.space.ShipLedger.Entry> e
+                        : live.ledger.snapshot().entrySet()) {
+                    zmaster587.advancedRocketry.space.ShipLedger.Entry row = e.getValue();
+                    // FORGET first, release second. A cell is protected from collection while the
+                    // ledger holds a ship in it, so the reverse order asks the manager to drop a cell
+                    // it is still being told to keep.
+                    live.ledger.remove(e.getKey());
+                    if (row != null && row.coord != null) {
+                        live.manager.dematerialize(row.coord);
+                    }
+                }
             }
             if (entrySlotDims != null) {
                 for (int dim : entrySlotDims) {
                     zmaster587.advancedRocketry.space.SpaceSlotPool.unload(dim);
                 }
             }
-            entryMgr = null;
-            entryLedger = null;
             entrySlotDims = null;
             send(sender, "{\"ok\":true}");
             return;
@@ -4794,8 +5577,9 @@ public class TestProbeCommand extends CommandBase {
         // descent-begin <slotDim> <ax> <ay> <az> <shipIdStr> <planetDim>: drive requestDescent for a
         // SETTLED ship, so a descent e2e crosses it from its slot cell into a planet dim.
         if (args.length >= 7 && "descent-begin".equalsIgnoreCase(args[0])) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             zmaster587.advancedRocketry.space.DescentController d =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.descent();
+                    spaceStack == null ? null : spaceStack.descent;
             if (d == null) {
                 send(sender, "{\"error\":\"descent not set up\"}");
                 return;
@@ -4809,23 +5593,34 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"started\":" + started + ",\"pending\":" + d.descendingCount() + "}");
             return;
         }
-        // seam-carry <slotDim>: drive the PRODUCTION cell-seam carry for the settled ship in that slot
-        // world — the counterpart of descent-begin, and for the same reason. The trigger lives in the
-        // flight computer's own tick, which a headless slot world does not run (no player, no ticking
-        // chunks there), so an e2e that waited for it would be measuring chunk-ticking rather than the
-        // crossing. WHEN a carry fires is pinned deterministically by CellSeamTest; this verb exists so
-        // the crossing itself — materialize, cut, paste, settle, ledger handoff — can be exercised on a
-        // real ship. The ship's LIVE pose is used, never the ledger's: past the face the ledger's copy
-        // is saturated, so a lookup from it would miss the ship by the whole overshoot.
+        // seam-carry <slotDim> id <durableShipId> | seam-carry <slotDim>: drive the PRODUCTION cell-seam
+        // carry for a settled ship in that slot world — the counterpart of descent-begin, and for the
+        // same reason. The trigger lives in the flight computer's own tick, which a headless slot world
+        // does not run (no player, no ticking chunks there), so an e2e that waited for it would be
+        // measuring chunk-ticking rather than the crossing. WHEN a carry fires is pinned
+        // deterministically by CellSeamTest; this verb exists so the crossing itself — materialize, cut,
+        // paste, settle, ledger handoff — can be exercised on a real ship. The ship's LIVE pose is used,
+        // never the ledger's: past the face the ledger's copy is saturated, so a lookup from it would
+        // miss the ship by the whole overshoot.
+        //
+        // PREFER `seam-carry <slotDim> id <durableShipId>`. Without an id the verb carries the first
+        // SETTLED row bound to that slot, which is an iteration order over every ship the ledger holds:
+        // a slot that has been used twice hands the carry to whichever craft the map yields first, and
+        // the reply names it in a field nobody reads. The id form carries the ship the caller MEANS and
+        // refuses — loudly, with a reason — when that ship is not settled here.
+        //
+        // The HULL is resolved by identity in both forms: the ledger row names a durable id, that id
+        // names a physics hull, and the hull answers its own pose and its own flight computer. The
+        // pose-then-nearest route this used to take could reach a neighbour parked at the same arrival
+        // depth, and a carry started on it moves the wrong ship out of the cell.
         if (args.length >= 2 && "seam-carry".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.CellCrossingController seamCtl =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.cellCrossings();
-            zmaster587.advancedRocketry.space.ShipLedger seamLedger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (seamCtl == null || seamLedger == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.CellCrossingController seamCtl = spaceStack.cellCrossings;
+            zmaster587.advancedRocketry.space.ShipLedger seamLedger = spaceStack.ledger;
             int slotDim = parseIntOr(args[1], Integer.MIN_VALUE);
             net.minecraft.world.WorldServer slotWorld =
                     net.minecraftforge.common.DimensionManager.getWorld(slotDim);
@@ -4833,50 +5628,116 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"slot world not loaded\",\"slotDim\":" + slotDim + "}");
                 return;
             }
-            for (java.util.Map.Entry<java.util.UUID, zmaster587.advancedRocketry.space.ShipLedger.Entry> e
-                    : seamLedger.snapshot().entrySet()) {
-                zmaster587.advancedRocketry.space.ShipLedger.Entry entry = e.getValue();
-                if (entry.state != zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED
-                        || slotDimOfCell(entry.coord) != slotDim) {
-                    continue;
-                }
-                double[] ledgerPose =
-                        zmaster587.advancedRocketry.space.CellWorldMapper.poseWorldOf(entry.coord);
-                double[] live = zmaster587.advancedRocketry.integration.vs.VSIntegration
-                        .nearestShipState(slotWorld, ledgerPose[0], ledgerPose[1], ledgerPose[2],
-                                zmaster587.advancedRocketry.space.GalacticCoord.CELL);
-                if (live == null) {
-                    send(sender, "{\"ok\":true,\"started\":false,\"reason\":\"no loaded ship near the "
-                            + "ledger pose\",\"shipId\":\"" + e.getKey() + "\"}");
+            boolean carryById = args.length >= 4 && "id".equalsIgnoreCase(args[2]);
+            java.util.UUID carryShip = null;
+            zmaster587.advancedRocketry.space.ShipLedger.Entry carryRow = null;
+            if (carryById) {
+                try {
+                    carryShip = java.util.UUID.fromString(args[3]);
+                } catch (IllegalArgumentException notAUuid) {
+                    send(sender, "{\"error\":\"seam-carry id needs a well-formed uuid\"}");
                     return;
                 }
-                net.minecraft.util.math.BlockPos afc = zmaster587.advancedRocketry.integration.vs
-                        .VSIntegration.flightComputerAt(slotWorld, live[0], live[1], live[2]);
-                if (afc == null) {
-                    send(sender, "{\"ok\":true,\"started\":false,\"reason\":\"ship carries no flight "
-                            + "computer\",\"shipId\":\"" + e.getKey() + "\"}");
+                zmaster587.advancedRocketry.space.ShipLedger.Entry named = ledgerRowOf(carryShip);
+                if (named == null
+                        || named.state != zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED
+                        || slotDimOfCell(named.coord) != slotDim) {
+                    send(sender, "{\"ok\":true,\"started\":false,\"reason\":\"that ship is not settled "
+                            + "in this slot\",\"shipId\":\"" + carryShip + "\""
+                            + ",\"ledgered\":" + (named != null)
+                            + ",\"state\":\"" + (named == null ? "" : named.state) + "\""
+                            + ",\"slotDim\":" + slotDim + "}");
                     return;
                 }
-                boolean wouldCarry = zmaster587.advancedRocketry.space.CellSeam
-                        .shouldCarry(live[0], live[1], live[2]);
-                boolean started = seamCtl.requestCarry(slotDim, afc, e.getKey(), entry.coord,
-                        new double[]{live[0], live[1], live[2]});
-                send(sender, "{\"ok\":true,\"started\":" + started
-                        + ",\"wouldCarry\":" + wouldCarry
-                        + ",\"shipId\":\"" + e.getKey() + "\""
-                        + ",\"fromCell\":\"" + entry.coord.cellKey() + "\""
-                        + ",\"pose\":[" + live[0] + "," + live[1] + "," + live[2] + "]"
-                        + ",\"afc\":[" + afc.getX() + "," + afc.getY() + "," + afc.getZ() + "]}");
+                carryRow = named;
+            } else {
+                for (java.util.Map.Entry<java.util.UUID, zmaster587.advancedRocketry.space.ShipLedger.Entry> e
+                        : seamLedger.snapshot().entrySet()) {
+                    zmaster587.advancedRocketry.space.ShipLedger.Entry entry = e.getValue();
+                    if (entry.state == zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED
+                            && slotDimOfCell(entry.coord) == slotDim) {
+                        carryShip = e.getKey();
+                        carryRow = entry;
+                        break;
+                    }
+                }
+                if (carryRow == null) {
+                    send(sender, "{\"ok\":true,\"started\":false,\"reason\":\"no settled ship in this "
+                            + "slot\",\"slotDim\":" + slotDim + "}");
+                    return;
+                }
+            }
+            // The ship's LIVE pose, taken from the hull the durable id NAMES — never the ledger's copy
+            // (past the face that copy is saturated, so it misses the ship by the whole overshoot) and
+            // never the ship nearest to it.
+            java.util.UUID carryHull = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                    .shipUuidOfDurableId(slotWorld, carryShip.toString());
+            double[] live = carryHull == null ? null
+                    : zmaster587.advancedRocketry.integration.vs.VSIntegration
+                            .shipStateById(slotWorld, carryHull.toString());
+            if (live == null) {
+                send(sender, "{\"ok\":true,\"started\":false,\"reason\":\"no loaded hull carries that "
+                        + "ship's name\",\"shipId\":\"" + carryShip + "\""
+                        + ",\"hullFound\":" + (carryHull != null) + "}");
                 return;
             }
-            send(sender, "{\"ok\":true,\"started\":false,\"reason\":\"no settled ship in this slot\""
-                    + ",\"slotDim\":" + slotDim + "}");
+            net.minecraft.util.math.BlockPos afc = zmaster587.advancedRocketry.integration.vs
+                    .VSIntegration.flightComputerOf(slotWorld, carryHull);
+            if (afc == null) {
+                send(sender, "{\"ok\":true,\"started\":false,\"reason\":\"ship carries no flight "
+                        + "computer\",\"shipId\":\"" + carryShip + "\"}");
+                return;
+            }
+            boolean wouldCarry = zmaster587.advancedRocketry.space.CellSeam
+                    .shouldCarry(live[0], live[1], live[2]);
+            boolean started = seamCtl.requestCarry(slotDim, afc, carryShip, carryRow.coord,
+                    new double[]{live[0], live[1], live[2]});
+            send(sender, "{\"ok\":true,\"started\":" + started
+                    + ",\"wouldCarry\":" + wouldCarry
+                    + ",\"shipId\":\"" + carryShip + "\""
+                    + ",\"vsId\":\"" + carryHull + "\""
+                    + ",\"fromCell\":\"" + carryRow.coord.cellKey() + "\""
+                    + ",\"pose\":[" + live[0] + "," + live[1] + "," + live[2] + "]"
+                    + ",\"afc\":[" + afc.getX() + "," + afc.getY() + "," + afc.getZ() + "]}");
+            return;
+        }
+        // cargo-stash: the loose bodies a CELL-SEAM carry has taken out of a world and not yet put
+        // back, per ship. Read-only.
+        //
+        // <p>A carry stows cargo by removing it from the source world and re-spawning it on the far
+        // side, so between those two moments the body is in NO world. An observer that can only look
+        // in worlds cannot tell that interval from a carry that never picked the cargo up — and those
+        // are failures in different halves of the mechanism. This is the reading that separates them:
+        // a ship named here is holding cargo that has not landed.
+        if (args.length >= 1 && "cargo-stash".equalsIgnoreCase(args[0])) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem cargoStack = liveStack();
+            if (cargoStack == null || cargoStack.cellCrossings == null) {
+                send(sender, "{\"error\":\"no live cell-crossing controller\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.space.VSShipCrossingOps cargoOps =
+                    (zmaster587.advancedRocketry.space.VSShipCrossingOps)
+                            cargoStack.cellCrossings.crossings().ops();
+            java.util.Map<java.util.UUID, Integer> held = cargoOps.stowedCargo();
+            StringBuilder cargo = new StringBuilder("{\"ok\":true,\"lastRelease\":\"")
+                    .append(escapeJson(cargoOps.lastCargoRelease()))
+                    .append("\",\"ships\":")
+                    .append(held.size()).append(",\"held\":[");
+            boolean firstHeld = true;
+            for (java.util.Map.Entry<java.util.UUID, Integer> e : held.entrySet()) {
+                if (!firstHeld) cargo.append(',');
+                firstHeld = false;
+                cargo.append("{\"shipId\":\"").append(e.getKey())
+                        .append("\",\"bodies\":").append(e.getValue()).append('}');
+            }
+            send(sender, cargo.append("]}").toString());
             return;
         }
         // descent-status: the in-flight descent count (settle progress).
         if (args.length >= 1 && "descent-status".equalsIgnoreCase(args[0])) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             zmaster587.advancedRocketry.space.DescentController d =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.descent();
+                    spaceStack == null ? null : spaceStack.descent;
             send(sender, "{\"ok\":true,\"pending\":" + (d == null ? -1 : d.descendingCount()) + "}");
             return;
         }
@@ -4884,7 +5745,7 @@ public class TestProbeCommand extends CommandBase {
         // the LIVE subsystem for the SETTLED ship in <slotDim> (default: the sender's own dimension, i.e. the
         // cell he is standing in).
         //
-        // Why this exists next to transit-setup/transit-begin rather than instead of them: those build an
+        // Why this exists next to transit-setup-*/transit-begin rather than instead of them: those build an
         // ISOLATED stack - their own SpaceManager, their own hard-coded origin/target cells, advanced only by
         // manual transit-tick calls - so they cannot move a ship a player actually flew up into. This drives
         // the real manager, which the server tick already advances, so a jump started here completes on its
@@ -4894,17 +5755,46 @@ public class TestProbeCommand extends CommandBase {
         // Ship + anchor are resolved the same way find-afc resolves them: the settled ledger entry bound to
         // that slot dim, mapped to its world pose, then to the actual ship block. beginTransit captures the
         // seated crew itself, so a pilot in the seat rides along without a second call.
+        //
+        // PREFER `jump id <durableShipId> <sx> <sy> <sz> [slotDim] [speed]`. Without an id the verb jumps
+        // the first SETTLED row bound to the slot — an iteration order, not a choice — so in a cell that
+        // has been settled twice it carries away a ship the caller never named, and the reply describes
+        // that jump as a success. The id form jumps the ship the caller MEANS and refuses when it is not
+        // settled here. In BOTH forms the anchor block comes from the hull the durable id NAMES: the
+        // ledger pose plus "the ship block nearest it" is a proximity lookup, and an arrival depth is
+        // deterministic, so the resident answers it as readily as the newcomer.
         if (args.length >= 4 && "jump".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipTransitManager tm =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.transit();
-            zmaster587.advancedRocketry.space.ShipLedger ledger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (tm == null || ledger == null) {
-                send(sender, "{\"error\":\"space subsystem not registered - see enableSpaceSubsystem\"}");
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
                 return;
             }
-            int slotDim = args.length >= 5
-                    ? parseIntOr(args[4], sender.getEntityWorld().provider.getDimension())
+            zmaster587.advancedRocketry.space.ShipTransitManager tm = spaceStack.transit;
+            zmaster587.advancedRocketry.space.ShipLedger ledger = spaceStack.ledger;
+            boolean jumpById = "id".equalsIgnoreCase(args[1]);
+            if (jumpById && args.length < 6) {
+                // Refused rather than parsed: falling through would read "id" as a sector coordinate,
+                // which parses to 0, and jump a ship to a cell nobody asked for.
+                send(sender, "{\"error\":\"jump id needs <durableShipId> <sx> <sy> <sz> [slotDim] "
+                        + "[speed]\"}");
+                return;
+            }
+            // `id <uuid>` sits between the verb and the sector triple, so everything after it shifts by
+            // two. Named rather than counted so the two forms cannot silently read each other's args.
+            int sectorArg = jumpById ? 3 : 1;
+            int slotArg = sectorArg + 3;
+            int speedArg = slotArg + 1;
+            java.util.UUID jumpShip = null;
+            if (jumpById) {
+                try {
+                    jumpShip = java.util.UUID.fromString(args[2]);
+                } catch (IllegalArgumentException notAUuid) {
+                    send(sender, "{\"error\":\"jump id needs a well-formed uuid\"}");
+                    return;
+                }
+            }
+            int slotDim = args.length > slotArg
+                    ? parseIntOr(args[slotArg], sender.getEntityWorld().provider.getDimension())
                     : sender.getEntityWorld().provider.getDimension();
             net.minecraft.world.WorldServer originWorld =
                     net.minecraftforge.common.DimensionManager.getWorld(slotDim);
@@ -4912,22 +5802,50 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"origin cell world not loaded\",\"slotDim\":" + slotDim + "}");
                 return;
             }
-            long targetSectorX = parseIntOr(args[1], 0);
-            long targetSectorY = parseIntOr(args[2], 0);
-            long targetSectorZ = parseIntOr(args[3], 0);
-            long speed = args.length >= 6 ? Math.max(1L, parseLongOr(args[5], 5_000_000L)) : 5_000_000L;
+            long targetSectorX = parseIntOr(args[sectorArg], 0);
+            long targetSectorY = parseIntOr(args[sectorArg + 1], 0);
+            long targetSectorZ = parseIntOr(args[sectorArg + 2], 0);
+            long speed = args.length > speedArg
+                    ? Math.max(1L, parseLongOr(args[speedArg], 5_000_000L)) : 5_000_000L;
+            java.util.Map<java.util.UUID, zmaster587.advancedRocketry.space.ShipLedger.Entry> candidates;
+            if (jumpById) {
+                zmaster587.advancedRocketry.space.ShipLedger.Entry named = ledger.get(jumpShip);
+                if (named == null
+                        || named.state != zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED
+                        || slotDimOfCell(named.coord) != slotDim) {
+                    send(sender, "{\"ok\":true,\"began\":false,\"reason\":\"that ship is not settled in "
+                            + "this cell\",\"shipId\":\"" + jumpShip + "\""
+                            + ",\"ledgered\":" + (named != null)
+                            + ",\"state\":\"" + (named == null ? "" : named.state) + "\""
+                            + ",\"slotDim\":" + slotDim + "}");
+                    return;
+                }
+                candidates = java.util.Collections.singletonMap(jumpShip, named);
+            } else {
+                candidates = ledger.snapshot();
+            }
             for (java.util.Map.Entry<java.util.UUID, zmaster587.advancedRocketry.space.ShipLedger.Entry> e
-                    : ledger.snapshot().entrySet()) {
+                    : candidates.entrySet()) {
                 zmaster587.advancedRocketry.space.ShipLedger.Entry entry = e.getValue();
                 if (entry.state != zmaster587.advancedRocketry.space.ShipLedger.State.SETTLED
                         || slotDimOfCell(entry.coord) != slotDim) {
                     continue;
                 }
-                double[] pose = zmaster587.advancedRocketry.space.CellWorldMapper.poseWorldOf(entry.coord);
-                net.minecraft.util.math.BlockPos anchor =
-                        zmaster587.advancedRocketry.integration.vs.VSIntegration
-                                .shipBlockAt(originWorld, pose[0], pose[1], pose[2]);
+                // The anchor is A BLOCK OF THIS SHIP, found in the shipyard the ship's own name resolves
+                // to. `shipBlockAt` at the ledger pose would answer with whatever hull is nearest, which
+                // at a shared arrival depth is the ship that got there first.
+                java.util.UUID jumpHull = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                        .shipUuidOfDurableId(originWorld, e.getKey().toString());
+                net.minecraft.util.math.BlockPos anchor = jumpHull == null ? null
+                        : zmaster587.advancedRocketry.integration.vs.VSIntegration
+                                .shipBlockOf(originWorld, jumpHull);
                 if (anchor == null) {
+                    if (jumpById) {
+                        send(sender, "{\"ok\":true,\"began\":false,\"reason\":\"no loaded hull carries "
+                                + "that ship's name\",\"shipId\":\"" + e.getKey() + "\""
+                                + ",\"hullFound\":" + (jumpHull != null) + "}");
+                        return;
+                    }
                     continue;
                 }
                 // The target keeps the ORIGIN's local offsets: "jump to sector S" means the same spot one
@@ -4943,6 +5861,7 @@ public class TestProbeCommand extends CommandBase {
                         target, speed);
                 send(sender, "{\"ok\":true,\"began\":" + began
                         + ",\"shipId\":\"" + e.getKey() + "\""
+                        + ",\"vsId\":\"" + jumpHull + "\""
                         + ",\"fromCell\":\"" + entry.coord.cellKey() + "\""
                         + ",\"toCell\":\"" + target.cellKey() + "\""
                         + ",\"slotDim\":" + slotDim
@@ -4964,14 +5883,13 @@ public class TestProbeCommand extends CommandBase {
         // and whether the two agree, so a probe pool that hands out a different slot shows up in the
         // response instead of silently producing a feed keyed to a world nobody is in.
         if (args.length >= 5 && "ledger-settle".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            zmaster587.advancedRocketry.space.SpaceManager injectMgr =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-            if (led == null || injectMgr == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"ledger not set up\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
+            zmaster587.advancedRocketry.space.SpaceManager injectMgr = spaceStack.manager;
             long sx = parseIntOr(args[1], 0);
             long sy = parseIntOr(args[2], 0);
             long sz = parseIntOr(args[3], 0);
@@ -5002,12 +5920,12 @@ public class TestProbeCommand extends CommandBase {
         // The cell is NOT materialized here: whether it is live is exactly the variable such a test
         // controls, so it is left to the caller (ledger-settle / occupy). Requires an installed stack.
         if (args.length >= 4 && "ledger-transit".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.ShipLedger led =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
-            if (led == null) {
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
+            if (spaceStack == null) {
                 send(sender, "{\"error\":\"ledger not set up\"}");
                 return;
             }
+            zmaster587.advancedRocketry.space.ShipLedger led = spaceStack.ledger;
             java.util.UUID shipId;
             zmaster587.advancedRocketry.space.GalacticCoord target;
             try {
@@ -5224,17 +6142,30 @@ public class TestProbeCommand extends CommandBase {
                     + zmaster587.advancedRocketry.AdvancedRocketry.proxy.getWorldTimeUniversal(0) + "}");
             return;
         }
-        if (args.length >= 4 && "cell-info".equalsIgnoreCase(args[0])) {
+        // cell-info <sx> <sy> <sz>  OR  cell-info <cellKey>
+        //
+        // The KEY form is not a convenience: a sector triple no longer names every cell, because a
+        // body inside a ZONE is counted in that zone's own lattice. Taking a key apart into three
+        // numbers reads it as galactic and asks about a different place entirely.
+        boolean cellInfoByKey = args.length >= 2 && "cell-info".equalsIgnoreCase(args[0])
+                && (args[1].indexOf('_') >= 0 || args[1].indexOf(
+                        zmaster587.advancedRocketry.space.GalacticCoord.ZONE_SEPARATOR) >= 0);
+        if (cellInfoByKey || (args.length >= 4 && "cell-info".equalsIgnoreCase(args[0]))) {
             zmaster587.advancedRocketry.universe.UniverseRegistry reg =
                     zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
             if (reg == null) {
                 send(sender, "{\"error\":\"registry unavailable\"}");
                 return;
             }
-            zmaster587.advancedRocketry.space.GalacticCoord cell =
-                    zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
+            zmaster587.advancedRocketry.space.GalacticCoord cell = cellInfoByKey
+                    ? zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(args[1])
+                    : zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
+            if (cell == null) {
+                send(sender, "{\"error\":\"malformed cell key\"}");
+                return;
+            }
             java.util.Optional<zmaster587.advancedRocketry.space.GalacticCoord> anchor =
                     reg.anchorForCell(cell);
             StringBuilder out = new StringBuilder("{\"ok\":true,\"cellKey\":\"")
@@ -5265,8 +6196,15 @@ public class TestProbeCommand extends CommandBase {
                 appendCellInfoBody(out, b);
             }
             out.append(']');
-            if (args.length >= 5) {
-                int dimId = parseIntOr(args[4], Integer.MIN_VALUE);
+            // WHICH ARGUMENT CARRIES THE DIM DEPENDS ON THE FORM THE CALLER USED, and reading it
+            // from a fixed index is how the by-key form came to drop it silently. `cell-info
+            // <sx> <sy> <sz> [dim]` puts it at args[4]; `cell-info <key> [dim]` puts it at args[2].
+            // Until 2026-09-17 only the first index was read, so `cell-info 19_0_0 14` answered a
+            // reply with no `dimCell` at all -- and a caller asking where the dim sits then had to
+            // conclude the registry places it nowhere. A server-tier test did exactly that.
+            int dimArg = cellInfoByKey ? 2 : 4;
+            if (args.length > dimArg) {
+                int dimId = parseIntOr(args[dimArg], Integer.MIN_VALUE);
                 java.util.Optional<zmaster587.advancedRocketry.space.GalacticCoord> forDim =
                         reg.coordForPlanet(dimId);
                 out.append(",\"dim\":").append(dimId).append(",\"dimCell\":")
@@ -5297,7 +6235,7 @@ public class TestProbeCommand extends CommandBase {
             long seed = args.length >= 4 ? parseLongOr(args[3], 0L) : reg.worldSeed();
             zmaster587.advancedRocketry.universe.GalaxyGenConfig genDefaults =
                     zmaster587.advancedRocketry.universe.GalaxyGenConfig.defaults();
-            zmaster587.advancedRocketry.universe.UniverseRegistry.setGenerator(
+            zmaster587.advancedRocketry.universe.UniverseRegistry.attachGenerator(
                     new zmaster587.advancedRocketry.universe.ClusteredGalaxyGenerator(
                             new zmaster587.advancedRocketry.universe.GalaxyGenConfig(minSpacing, density,
                                     genDefaults.galaxySpacing, genDefaults.galaxyDensity, null, null)));
@@ -5306,7 +6244,7 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if (args.length >= 1 && "gen-reset".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.universe.UniverseRegistry.setGenerator(null);
+            zmaster587.advancedRocketry.universe.UniverseRegistry.detachGenerator();
             send(sender, "{\"ok\":true}");
             return;
         }
@@ -5354,6 +6292,88 @@ public class TestProbeCommand extends CommandBase {
                 }
             }
             send(sender, "{\"ok\":false,\"reason\":\"no unrealized landable body in range\"}");
+            return;
+        }
+        // find-moon <radius> [giant]: the first MOON in range, reported with its own cell and variant
+        // AND its parent's - the identity `realize` takes, so a caller can mint a chosen body instead
+        // of "whatever the cell offers first".
+        // With the literal "giant" the sweep accepts only a GAS GIANT parent: that kind is not a
+        // descent target, so no descent ever realizes it, and its moons are the ones for which "the
+        // parent has no world yet" is a permanent condition rather than an ordering accident.
+        //
+        // TWO CELLS, not one. A moon used to share its parent's cell, so one cell key plus two
+        // variants named the whole family; a moon now has a cell of its own inside its parent's
+        // ZONE, whose key is the parent's cell. Reported as `cellKey` (the moon's, which is what
+        // `realize` is called with) and `parentCellKey` beside it, so a caller that needs the parent
+        // does not have to reconstruct it from a string. The old single-cell form did not merely go
+        // stale: `realizableBodiesAt(moonCell)` no longer holds the parent, so the sweep found no
+        // family at all and reported "no moon in range" for a galaxy full of them.
+        if (args.length >= 2 && "find-moon".equalsIgnoreCase(args[0])) {
+            zmaster587.advancedRocketry.universe.UniverseRegistry reg =
+                    zmaster587.advancedRocketry.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            boolean giantOnly = args.length >= 3 && "giant".equalsIgnoreCase(args[2]);
+            long r = parseIntOr(args[1], 8);
+            long s = Math.max(1L, zmaster587.advancedRocketry.universe.UniverseRegistry.getGenerator()
+                    .minSpacingCells());
+            for (long x = -r; x <= r; x++) {
+                for (long y = -r; y <= r; y++) {
+                    for (long z = -r; z <= r; z++) {
+                        zmaster587.advancedRocketry.space.GalacticCoord probe =
+                                zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
+                                        x * s, y * s, z * s, 0L, 0L, 0L);
+                        for (zmaster587.advancedRocketry.universe.SystemBody b
+                                : reg.systemBodiesAt(probe)) {
+                            if (b.kind() != zmaster587.advancedRocketry.universe.SystemBodyKind.MOON) {
+                                continue;
+                            }
+                            zmaster587.advancedRocketry.space.GalacticCoord cell = b.name();
+                            // The parent is the body whose CELL is this moon's zone: a moon's name
+                            // is a path and contains its parent's, so this is a lookup and not a
+                            // proximity guess.
+                            zmaster587.advancedRocketry.universe.SystemBody parent = null;
+                            int moons = 0;
+                            for (zmaster587.advancedRocketry.universe.SystemBody m
+                                    : reg.systemBodiesAt(probe)) {
+                                if (m.kind() == zmaster587.advancedRocketry.universe.SystemBodyKind.MOON) {
+                                    if (java.util.Objects.equals(m.name().zone(), cell.zone())) {
+                                        moons++;
+                                    }
+                                } else if (m.name().cellKey().equals(cell.zone())) {
+                                    parent = m;
+                                }
+                            }
+                            if (parent == null) {
+                                continue; // a moon whose zone names no body of this system
+                            }
+                            java.util.OptionalInt moonVar = reg.variantOf(b);
+                            java.util.OptionalInt parentVar = reg.variantOf(parent);
+                            if (!moonVar.isPresent() || !parentVar.isPresent()) {
+                                continue; // an identity that does not separate: never guessed
+                            }
+                            boolean giant = parent.kind()
+                                    == zmaster587.advancedRocketry.universe.SystemBodyKind.GAS_GIANT;
+                            if (giantOnly && !giant) {
+                                continue;
+                            }
+                            send(sender, "{\"ok\":true,\"sx\":" + cell.sectorX() + ",\"sy\":"
+                                    + cell.sectorY() + ",\"sz\":" + cell.sectorZ()
+                                    + ",\"cellKey\":\"" + cell.cellKey() + "\",\"parentCellKey\":\""
+                                    + parent.name().cellKey() + "\",\"moonVariant\":"
+                                    + moonVar.getAsInt() + ",\"parentVariant\":"
+                                    + parentVar.getAsInt()
+                                    + ",\"parentKind\":\"" + parent.kind() + "\",\"parentGasGiant\":"
+                                    + giant + ",\"moons\":" + moons + ",\"family\":"
+                                    + reg.realizableBodiesAt(cell).size() + "}");
+                            return;
+                        }
+                    }
+                }
+            }
+            send(sender, "{\"ok\":false,\"reason\":\"no moon in range\"}");
             return;
         }
         // derived <sx> <sy> <sz>: what the DERIVATION says about the body in that cell, without
@@ -5411,12 +6431,43 @@ public class TestProbeCommand extends CommandBase {
         // realize <sx> <sy> <sz>: mint the dimension for the landable body in that cell and report what
         // the world it produced actually carries. The realization path a descent drives, called
         // directly, so the properties can be compared with `derived` without flying anything.
-        if (args.length >= 4 && "realize".equalsIgnoreCase(args[0])) {
-            zmaster587.advancedRocketry.space.GalacticCoord cell =
-                    zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
+        // realize <sx> <sy> <sz> [variant]  OR  realize <cellKey> [variant]
+        //
+        // The KEY form exists because a sector triple no longer names every cell: a moon's is counted
+        // in its parent's ZONE lattice, so `19_0_0.213_0_0` and a bare `213 0 0` are different places
+        // and the second one is somewhere else entirely. A caller with a key must be able to pass it
+        // through unchanged rather than take it apart — taking it apart is exactly how it would be
+        // read as galactic.
+        boolean realizeByKey = args.length >= 2 && "realize".equalsIgnoreCase(args[0])
+                && (args[1].indexOf('_') >= 0 || args[1].indexOf(
+                        zmaster587.advancedRocketry.space.GalacticCoord.ZONE_SEPARATOR) >= 0);
+        if (realizeByKey || (args.length >= 4 && "realize".equalsIgnoreCase(args[0]))) {
+            zmaster587.advancedRocketry.space.GalacticCoord cell = realizeByKey
+                    ? zmaster587.advancedRocketry.space.GalacticCoord.fromCellKey(args[1])
+                    : zmaster587.advancedRocketry.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
-            int dimId = zmaster587.advancedRocketry.universe.PlanetRealizer.realize(server, cell);
+            if (cell == null) {
+                send(sender, "{\"ok\":false,\"reason\":\"malformed cell key\"}");
+                return;
+            }
+            // A cell names a family - a planet and whatever else stands in its address - so the probe
+            // states WHICH of them it means. Default 0, with an optional variant arg; a caller that
+            // wants a particular body has to say so, exactly as a descent does.
+            int variant = realizeByKey
+                    ? (args.length >= 3 ? parseIntOr(args[2], 0) : 0)
+                    : (args.length >= 5 ? parseIntOr(args[4], 0) : 0);
+            java.util.List<zmaster587.advancedRocketry.universe.SystemBody> family =
+                    zmaster587.advancedRocketry.universe.UniverseRegistry.get(server) == null
+                            ? java.util.Collections.<zmaster587.advancedRocketry.universe.SystemBody>emptyList()
+                            : zmaster587.advancedRocketry.universe.UniverseRegistry.get(server)
+                                    .realizableBodiesAt(cell);
+            if (variant < 0 || variant >= family.size()) {
+                send(sender, "{\"ok\":false,\"reason\":\"no body with that variant in the cell\"}");
+                return;
+            }
+            int dimId = zmaster587.advancedRocketry.universe.PlanetRealizer.realize(server,
+                    family.get(variant));
             if (dimId == zmaster587.advancedRocketry.api.Constants.INVALID_PLANET) {
                 send(sender, "{\"ok\":false,\"reason\":\"nothing landable in that cell\"}");
                 return;
@@ -5446,14 +6497,19 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"oxygen\":" + props.hasOxygen + ",\"locked\":" + props.isTidallyLocked()
                     + ",\"metallicity\":" + props.getMetallicity() + ",\"gasGiant\":"
                     + props.isGasGiant() + ",\"terrainSource\":\"" + props.getTerrainSource()
-                    + "\",\"descendTarget\":" + descendTarget + ",\"starId\":" + props.getStarId() + "}");
+                    // Moon-ness, and the dimension it hangs off. Reported because a moon whose parent
+                    // had no world was written down as a PLANET at the parent's own orbit, silently:
+                    // without these two fields the probe answers "ok" for a world that is wrong in the
+                    // one way that matters, and the test cannot tell.
+                    + "\",\"moon\":" + props.isMoon() + ",\"parent\":" + props.getParentPlanet()
+                    + ",\"descendTarget\":" + descendTarget + ",\"starId\":" + props.getStarId() + "}");
             return;
         }
         // find-afc <dim> [shipId]: report a subspace block position + durable ship id of the settled ship
-        // in slot <dim>, so a descent e2e can drive requestDescent for it. Located via the ledger coord
-        // (headless the AFC does not tick, so the coord stays the settle coord) -> world pose -> the
-        // queryable ship registry, NOT a loaded-TE scan (a headless slot ship's blocks are not in
-        // loadedTileEntityList).
+        // in slot <dim>, so a descent e2e can drive requestDescent for it. The ledger names the ship; the
+        // ship's own name resolves the hull (durable id -> physics id -> that ship's shipyard), read
+        // through the queryable ship registry, NOT a loaded-TE scan (a headless slot ship's blocks are
+        // not in loadedTileEntityList). No step of it asks what stands at a coordinate.
         //
         // With shipId given the answer is about THAT ship and no other. Without it, the slot's first
         // settled ship answers — which is the honest form only while the caller's own ship is provably
@@ -5462,8 +6518,9 @@ public class TestProbeCommand extends CommandBase {
             int slotDim = parseIntOr(args[1], Integer.MIN_VALUE);
             String wantShip = args.length >= 3 ? args[2] : null;
             net.minecraft.world.WorldServer w = net.minecraftforge.common.DimensionManager.getWorld(slotDim);
+            zmaster587.advancedRocketry.space.SpaceSubsystem spaceStack = liveStack();
             zmaster587.advancedRocketry.space.ShipLedger ledger =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.ledger();
+                    spaceStack == null ? null : spaceStack.ledger;
             if (w == null || ledger == null) {
                 send(sender, "{\"error\":\"world or ledger not ready\"}");
                 return;
@@ -5476,29 +6533,47 @@ public class TestProbeCommand extends CommandBase {
                         || (wantShip != null && !wantShip.equals(e.getKey().toString()))) {
                     continue;
                 }
-                double[] pose = zmaster587.advancedRocketry.space.CellWorldMapper.poseWorldOf(entry.coord);
-                net.minecraft.util.math.BlockPos block =
-                        zmaster587.advancedRocketry.integration.vs.VSIntegration
-                                .shipBlockAt(w, pose[0], pose[1], pose[2]);
+                // The hull is reached through the ship's OWN NAME: durable id -> physics id -> that
+                // ship's shipyard. The ledger coord is used for nothing but choosing the row now. It
+                // used to give a world pose that the world was asked what stood at, and an arrival
+                // depth is deterministic, so the ship that settled there first answered for every
+                // ship that settled there since.
+                java.util.UUID hull = zmaster587.advancedRocketry.integration.vs.VSIntegration
+                        .shipUuidOfDurableId(w, e.getKey().toString());
+                net.minecraft.util.math.BlockPos block = hull == null ? null
+                        : zmaster587.advancedRocketry.integration.vs.VSIntegration.shipBlockOf(w, hull);
                 if (block != null) {
-                    // `x,y,z` is A block of the ship (first non-air in its shipyard) — what a caller
+                    // `x,y,z` is A block of the ship (first non-air in ITS shipyard) — what a caller
                     // addressing "a ship by one of its blocks" needs. `afc*` is the flight COMPUTER,
-                    // which is a different block and the one a caller commanding the ship needs, and
-                    // it is CHECKED rather than assumed: the scan that finds it is position-keyed, so
-                    // the computer it returns is only this ship's if its own durable id matches the
-                    // ledger key we are answering for. A mismatch reports afcFound:false — a loud
-                    // miss, not a neighbour's computer described as this ship's.
+                    // which is a different block and the one a caller commanding the ship needs. Both
+                    // come from the yard the ship's own name resolves to, so neither can be a
+                    // neighbour's block.
                     net.minecraft.util.math.BlockPos afc = zmaster587.advancedRocketry.integration.vs
-                            .VSIntegration.flightComputerAt(w, pose[0], pose[1], pose[2]);
+                            .VSIntegration.flightComputerOf(w, hull);
+                    // Still CHECKED, and no longer against proximity: the durable id -> physics id
+                    // index is a second copy of a fact whose original lives in this tile's own NBT, and
+                    // two copies of one fact can disagree. A mismatch reports afcFound:false — a loud
+                    // miss — rather than describing a stale binding's craft as this ship's.
                     TileEntity afcTe = afc == null ? null : w.getTileEntity(afc);
                     boolean afcIsOurs = afcTe instanceof zmaster587.advancedRocketry.tile
                             .TileAdvancedFlightComputer
                             && e.getKey().equals(((zmaster587.advancedRocketry.tile
                                     .TileAdvancedFlightComputer) afcTe).shipIdOrNull());
+                    // The PHYSICS mod's id for this ship, so a caller holding a durable AR id can go
+                    // on asking about the same craft through the `vs` verbs — which are keyed by that
+                    // id and by nothing else. It is the missing half of following a NAMED ship across
+                    // a crossing: the crossing re-assembles the hull, so the VS id on the far side is
+                    // a new one, and a caller without this falls back to "the nearest ship", which
+                    // stops being an identity the moment two scenarios settle in one cell.
+                    //
+                    // Reported only when the computer confirmed the name, so a caller never carries
+                    // an id forward from a binding this call could not corroborate.
+                    String vsId = afcIsOurs ? hull.toString() : null;
                     StringBuilder out2 = new StringBuilder("{\"ok\":true,\"found\":true,\"x\":");
                     out2.append(block.getX()).append(",\"y\":").append(block.getY())
                             .append(",\"z\":").append(block.getZ())
                             .append(",\"shipId\":\"").append(e.getKey()).append("\"")
+                            .append(",\"vsId\":").append(vsId == null ? "null" : "\"" + vsId + "\"")
                             .append(",\"afcFound\":").append(afcIsOurs);
                     if (afcIsOurs) {
                         out2.append(",\"afcX\":").append(afc.getX())
@@ -5522,17 +6597,17 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.util.math.BlockPos p2 = new net.minecraft.util.math.BlockPos(1, 64, 1);
             net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
 
-            net.minecraft.world.WorldServer w = zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, "A");
+            net.minecraft.world.WorldServer w = zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, "A");
             w.setBlockState(p1, stone);
             boolean r1 = w.getBlockState(p1).getBlock() == net.minecraft.init.Blocks.STONE;
 
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(slot);
-            w = zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, "B");
+            w = zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, "B");
             boolean r2 = w.getBlockState(p1).getBlock() == net.minecraft.init.Blocks.STONE;
             w.setBlockState(p2, stone);
 
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(slot);
-            w = zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, "A");
+            w = zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, "A");
             boolean r3 = w.getBlockState(p1).getBlock() == net.minecraft.init.Blocks.STONE;
             boolean r4 = w.getBlockState(p2).getBlock() == net.minecraft.init.Blocks.STONE;
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(slot);
@@ -5569,8 +6644,9 @@ public class TestProbeCommand extends CommandBase {
                         }
 
                         @Override
-                        public void load(int dimId, String cellKey) {
-                            real.load(dimId, cellKey);
+                        public void load(int dimId,
+                                zmaster587.advancedRocketry.space.GalacticCoord cell) {
+                            real.load(dimId, cell);
                         }
 
                         @Override
@@ -5653,7 +6729,7 @@ public class TestProbeCommand extends CommandBase {
             String cell = args.length >= 2 ? args[1] : "deep";
             int slot = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
             net.minecraft.world.WorldServer w =
-                    zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, cell);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, cell);
             net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
             for (int dx = 0; dx < 3; dx++) {
                 for (int dy = 0; dy < 3; dy++) {
@@ -5662,10 +6738,28 @@ public class TestProbeCommand extends CommandBase {
                     }
                 }
             }
+            // A stone cube is not a tier-2 craft: it has nothing that could name it, and the
+            // assembly refuses it now rather than minting a substrate-only id. So the fixture puts
+            // the craft's flight computer in the cube, which is what makes it a ship at all.
+            net.minecraft.block.Block afcBlockForCube = net.minecraft.block.Block.REGISTRY.getObject(
+                    new net.minecraft.util.ResourceLocation("advancedrocketry", "advancedFlightComputer"));
+            if (afcBlockForCube != null) {
+                w.setBlockState(new net.minecraft.util.math.BlockPos(1, 65, 1),
+                        afcBlockForCube.getDefaultState());
+            }
+            // Cut and paste, as above and as the assembler does: the assembly takes the snapshot.
+            zmaster587.advancedRocketry.util.StorageChunk cubeBuild =
+                    zmaster587.advancedRocketry.util.StorageChunk.cutWorldBB(w,
+                            new net.minecraft.util.math.AxisAlignedBB(0, 64, 0, 3, 67, 3));
+            if (cubeBuild == null) {
+                send(sender, "{\"error\":\"could not cut the vs-assemble cube\"}");
+                return;
+            }
+            cubeBuild.pasteInWorld(w, 0, 64, 0);
             // The identity is handed back so a caller can ask about THIS ship afterwards rather than
             // about whichever one is nearest a point - the assembly is the one moment it is free.
             java.util.UUID assembled = zmaster587.advancedRocketry.integration.vs.VSIntegration
-                    .assembleTier2Ship(w, new net.minecraft.util.math.BlockPos(1, 65, 1));
+                    .assembleTier2Ship(w, cubeBuild, 0, 64, 0);
             send(sender, "{\"ok\":true,\"slot\":" + slot + ",\"shipUuid\":"
                     + (assembled == null ? "null" : "\"" + assembled + "\"") + "}");
             return;
@@ -5685,7 +6779,7 @@ public class TestProbeCommand extends CommandBase {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(dim);
             net.minecraft.world.WorldServer w =
-                    zmaster587.advancedRocketry.space.SpaceSlotPool.load(dim, args[2]);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(dim, args[2]);
             // Read the queryable ship count SYNCHRONOUSLY here (same server-thread call as the reload,
             // before any tick can auto-unload the world): VS loads its per-world ship registry from
             // the world capability at construction, so a surviving ship shows up immediately.
@@ -5700,7 +6794,7 @@ public class TestProbeCommand extends CommandBase {
             String cell = args.length >= 2 ? args[1] : "vscap";
             int slot = zmaster587.advancedRocketry.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
             net.minecraft.world.WorldServer w =
-                    zmaster587.advancedRocketry.space.SpaceSlotPool.load(slot, cell);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(slot, cell);
             boolean support = zmaster587.advancedRocketry.integration.vs.VSIntegration.hasShipSupport(w);
             zmaster587.advancedRocketry.space.SpaceSlotPool.unload(slot);
             send(sender, "{\"ok\":true,\"slot\":" + slot + ",\"vsShipSupport\":" + support + "}");
@@ -5750,7 +6844,7 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 3 && "load".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             net.minecraft.world.WorldServer w =
-                    zmaster587.advancedRocketry.space.SpaceSlotPool.load(dim, args[2]);
+                    zmaster587.advancedRocketry.space.SpaceSlotPool.loadScratch(dim, args[2]);
             send(sender, "{\"ok\":true,\"present\":" + (w != null) + ",\"folder\":\""
                     + (w != null ? w.provider.getSaveFolder() : "") + "\"}");
             return;
@@ -6072,8 +7166,9 @@ public class TestProbeCommand extends CommandBase {
             // server). The cell sky draws its boundary ring unconditionally, so a keyed entry is not
             // required for the ring to appear — but a dim that is keyed while not being a cell is a
             // defect of its own, and it is worth seeing beside the rest.
+            zmaster587.advancedRocketry.space.SpaceSubsystem hereStack = liveStack();
             zmaster587.advancedRocketry.space.SpaceManager spaceHere =
-                    zmaster587.advancedRocketry.space.SpaceSubsystem.space();
+                    hereStack == null ? null : hereStack.manager;
             here.put("feedKeysThisDim", spaceHere != null
                     && spaceHere.loadedCells().containsValue(dim));
             send(sender, jsonMap(here));
@@ -6182,6 +7277,36 @@ public class TestProbeCommand extends CommandBase {
     // Planet/weather probes ----------------------------------------------
 
     private void handlePlanet(ICommandSender sender, String[] args) {
+        // What a TIER-1 launch pad standing on one world may be aimed at, asked of the production
+        // gate rather than re-derived here: a real rocket in the standing world answers
+        // IPlanetDefiner.isPlanetKnown, and the two halves are reported beside it so a red test says
+        // WHICH of them moved - the pack's floor or what this body has learned.
+        if (args.length >= 3 && "knowledge".equalsIgnoreCase(args[0])) {
+            int standingDim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int targetDim = parseIntOr(args[2], Integer.MIN_VALUE);
+            net.minecraft.world.World here = net.minecraftforge.common.DimensionManager
+                    .getWorld(standingDim);
+            DimensionProperties target = DimensionManager.getInstance()
+                    .getDimensionPropertiesOrNull(targetDim);
+            DimensionProperties standing = DimensionManager.getInstance()
+                    .getDimensionPropertiesOrNull(standingDim);
+            if (here == null || target == null) {
+                send(sender, "{\"error\":\"standing world not loaded or unknown target\"}");
+                return;
+            }
+            zmaster587.advancedRocketry.entity.EntityRocket rocket =
+                    new zmaster587.advancedRocketry.entity.EntityRocket(here);
+            send(sender, "{\"standing\":" + standingDim + ",\"target\":" + targetDim
+                    + ",\"known\":" + rocket.isPlanetKnown(target)
+                    + ",\"global\":" + DimensionManager.getInstance().isPlanetKnown(targetDim)
+                    + ",\"local\":" + (standing != null && standing.isPlanetKnownHere(targetDim))
+                    + ",\"research\":"
+                    + zmaster587.advancedRocketry.api.ARConfiguration.getCurrentConfig()
+                            .planetsMustBeDiscovered
+                    + "}");
+            return;
+        }
+
         if (args.length >= 2 && "info".equalsIgnoreCase(args[0])) {
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(dim);
@@ -6196,6 +7321,12 @@ public class TestProbeCommand extends CommandBase {
             info.put("parent", props.getParentPlanet());
             info.put("atmosphereDensity", props.getAtmosphereDensity());
             info.put("gravity", props.getGravitationalMultiplier());
+            // The body's BULK, in Earth units. Reported because zero is a real state that is
+            // invisible in every other field here: a body with no radius is drawn at the marker size
+            // at every range and carries the flat proximity shell instead of an atmosphere, while its
+            // name, gravity and pressure all read exactly as they should.
+            info.put("mass", props.getMass());
+            info.put("radius", props.getRadius());
             info.put("orbitalDistance", props.orbitalDist);
             info.put("rotationalPeriod", props.rotationalPeriod);
             info.put("hasRings", props.hasRings);
@@ -6388,14 +7519,51 @@ public class TestProbeCommand extends CommandBase {
                     if (!(entity instanceof EntityRocket)) continue;
                     if (!first) builder.append(',');
                     first = false;
+                    // `age` is the discriminator a caller needs when the list answers with MORE
+                    // than one craft and has to say which of them it built: a rocket assembled a
+                    // moment ago carries tens of ticks, one left behind by an earlier scenario
+                    // carries thousands. Position alone cannot separate those, because a craft that
+                    // has moved and a craft built somewhere else look identical in a coordinate.
                     builder.append("{\"id\":").append(entity.getEntityId())
                             .append(",\"uuid\":\"").append(entity.getPersistentID().toString()).append("\"")
                             .append(",\"dim\":").append(world.provider.getDimension())
+                            .append(",\"age\":").append(entity.ticksExisted)
                             .append(",\"pos\":[").append(entity.posX).append(',').append(entity.posY).append(',').append(entity.posZ).append("]}");
                 }
             }
             builder.append("]}");
             send(sender, builder.toString());
+            return;
+        }
+        if ("clear".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /artest rocket clear <dim> — remove every EntityRocket from one world.
+            //
+            // The sibling of `vs destroy-ships`, and it exists for the same measured reason: a craft
+            // a scenario walks away from goes on MOVING. Measured 2026-09-16 in a shared-world
+            // class — a rocket 93 ticks old, 120 blocks up and 80 blocks downrange of where it was
+            // built, standing in the next scenario's patch of world and making that scenario's "how
+            // many craft are here" question ambiguous. A patch of world keeps two scenarios apart
+            // only while what is in it stays put.
+            //
+            // Riders come off first: setDead on a ridden entity leaves the passenger falling from
+            // wherever the craft had got to, and the next scenario then begins with its bot in the
+            // air. What is NOT reclaimed is the rocket's StorageChunk — it is dropped with the
+            // entity and collected with the world, which is a per-class thing here; a caller that
+            // needs that storage back needs a different verb than this one.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer target = server.getWorld(dim);
+            if (target == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            int cleared = 0;
+            for (Entity entity : new java.util.ArrayList<>(target.loadedEntityList)) {
+                if (!(entity instanceof EntityRocket)) continue;
+                entity.removePassengers();
+                entity.setDead();
+                cleared++;
+            }
+            send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"cleared\":" + cleared + "}");
             return;
         }
         if ("assemble".equalsIgnoreCase(args[0]) && args.length >= 4) {
@@ -7840,16 +9008,49 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"scan status not SUCCESS\",\"status\":\"" + statusName + "\"}");
                 return;
             }
-            // 4. Assemble. assembleRocket() re-runs scanRocket internally; if the
+            // 4. Mint this craft's DURABLE ship id while its flight computer is still on the pad, and
+            //    hand it back below. THE CALLER THAT BUILT THE SHIP IS THE ONE CALLER THAT NEVER HAS
+            //    TO GUESS: without this a scenario has to go looking for its own craft afterwards —
+            //    "the first ledgered ship", "the ship nearest the cell centre" — and every one of
+            //    those answers with whatever the lookup reaches first the moment a second scenario
+            //    shares the boot. The same reasoning, and the same line, as the piloted transit
+            //    fixture's own mint.
+            //
+            //    Read HERE and not after: the assembler moves the computer into a subspace shipyard,
+            //    so a scan of the pad afterwards finds nothing. Minting is what production does on
+            //    first use, so this only brings that moment forward.
+            java.util.UUID durableShipId = null;
+            int afcCount = 0;
+            for (TileEntity padTile : new java.util.ArrayList<>(world.loadedTileEntityList)) {
+                if (!(padTile instanceof zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer)
+                        || !bb.contains(new net.minecraft.util.math.Vec3d(
+                                padTile.getPos().getX() + 0.5, padTile.getPos().getY() + 0.5,
+                                padTile.getPos().getZ() + 0.5))) {
+                    continue;
+                }
+                afcCount++;
+                durableShipId = ((zmaster587.advancedRocketry.tile.TileAdvancedFlightComputer) padTile)
+                        .getOrCreateShipId();
+            }
+            // Reported rather than resolved: two computers on one pad is a build the caller did not
+            // mean, and an id picked out of them at random would name one of two craft with nothing
+            // saying which. `afcCount` is beside `shipId` so a caller can refuse it.
+            if (afcCount > 1) {
+                durableShipId = null;
+            }
+            // 5. Assemble. assembleRocket() re-runs scanRocket internally; if the
             //    second scan changes status, abort there too.
             builder.assembleRocket();
             String postStatusName = ((Enum<?>) getStatusMethod.invoke(builder)).name();
-            // 5. Find the spawned rocket inside the pad BB.
+            // 6. Find the spawned rocket inside the pad BB.
             java.util.List<zmaster587.advancedRocketry.entity.EntityRocket> rockets =
                     world.getEntitiesWithinAABB(zmaster587.advancedRocketry.entity.EntityRocket.class, bb);
             int entityId = rockets.isEmpty() ? -1 : rockets.get(0).getEntityId();
             send(sender, "{\"ok\":true,\"status\":\"" + postStatusName
-                    + "\",\"entityId\":" + entityId + ",\"rocketCount\":" + rockets.size() + "}");
+                    + "\",\"entityId\":" + entityId + ",\"rocketCount\":" + rockets.size()
+                    + ",\"afcCount\":" + afcCount
+                    + ",\"shipId\":" + (durableShipId == null ? "null" : "\"" + durableShipId + "\"")
+                    + "}");
         } catch (ReflectiveOperationException e) {
             send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
         } catch (RuntimeException e) {
@@ -11563,6 +12764,40 @@ public class TestProbeCommand extends CommandBase {
         send(sender, "{\"error\":\"unknown subcommand — try get <key> | set <key> <value>\"}");
     }
 
+    /**
+     * {@code /artest clock} — what time it is IN THE GAME.
+     *
+     * <p>The server's own tick counter, plus the overworld's total world time. This exists so that a
+     * test can budget its waiting in TICKS rather than in seconds: a busy machine runs fewer ticks per
+     * second, so a wall-clock budget silently shrinks the experiment and turns load into a red, while
+     * a tick budget asks for the same amount of WORLD every time.</p>
+     *
+     * <p>Two clocks are reported because they can disagree and the difference matters. The tick
+     * counter advances once per server tick whatever the worlds are doing; a world's total time
+     * advances only while that world ticks. A waiter should read {@code tick}.</p>
+     */
+    private void handleClock(MinecraftServer server, ICommandSender sender) {
+        long tick = -1L;
+        try {
+            java.lang.reflect.Field f = MinecraftServer.class.getDeclaredField("tickCounter");
+            f.setAccessible(true);
+            tick = f.getInt(server);
+        } catch (ReflectiveOperationException e) {
+            // Obfuscated or renamed in a fork: fall back to the overworld's clock, which is the same
+            // rate. Reported as -1 only if BOTH are unavailable, so a caller can tell.
+            tick = -1L;
+        }
+        long worldTime = -1L;
+        net.minecraft.world.WorldServer overworld = server.getWorld(0);
+        if (overworld != null) {
+            worldTime = overworld.getTotalWorldTime();
+        }
+        if (tick < 0L) {
+            tick = worldTime;
+        }
+        send(sender, "{\"ok\":true,\"tick\":" + tick + ",\"worldTime\":" + worldTime + "}");
+    }
+
     private static Object parseConfigValue(Class<?> type, String raw) {
         if (type == boolean.class || type == Boolean.class) return Boolean.parseBoolean(raw);
         if (type == int.class || type == Integer.class) {
@@ -11621,8 +12856,41 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"star not found\",\"id\":" + id + "}");
                 return;
             }
+            // planets/planetDims report what is ATTACHED to this star object, which is not the same
+            // question as which dimensions name it. A body carries a starId from the moment it is
+            // parsed, but it enters the star's own map only when setStar resolves a REGISTERED star —
+            // so a catalogue can be full of bodies that name a star none of which the star holds, and
+            // everything downstream that walks getPlanets() (the system body list, the cell sky, the
+            // navigation crystal) sees an almost-empty system. Reporting the two counts side by side
+            // is what makes that state visible instead of merely puzzling.
+            java.util.List<zmaster587.advancedRocketry.api.dimension.IDimensionProperties> attached =
+                    star.getPlanets();
+            StringBuilder dims = new StringBuilder("[");
+            int named = 0;
+            for (int probeDim : DimensionManager.getInstance().getRegisteredDimensions()) {
+                DimensionProperties p = DimensionManager.getInstance().getDimensionProperties(probeDim);
+                if (p != null && p.getStarId() == id) {
+                    named++;
+                }
+            }
+            for (int i = 0; attached != null && i < attached.size(); i++) {
+                if (i > 0) {
+                    dims.append(',');
+                }
+                dims.append(attached.get(i).getId());
+            }
+            dims.append(']');
             send(sender, "{\"ok\":true,\"id\":" + id
                     + ",\"isBlackHole\":" + star.isBlackHole()
+                    + ",\"planets\":" + (attached == null ? 0 : attached.size())
+                    + ",\"numPlanets\":" + star.getNumPlanets()
+                    // How many bodies this system's retinue may hold. Reported because a zero here is
+                    // indistinguishable, from outside, from a system that genuinely has nothing: both
+                    // draw a sky with a star and whatever was authored, and only this field says which
+                    // of the two you are looking at.
+                    + ",\"maxRetinue\":" + star.getMaxRetinueBodies()
+                    + ",\"dimsNamingThisStar\":" + named
+                    + ",\"planetDims\":" + dims
                     + ",\"name\":\"" + escapeJson(String.valueOf(star.getName())) + "\"}");
             return;
         }
@@ -11800,6 +13068,32 @@ public class TestProbeCommand extends CommandBase {
 
     // Worldgen probe -----------------------------------------------------
 
+    /**
+     * The four commonest entries of a histogram, biggest first, as {@code "name xN"} joined by
+     * commas. A survey over four thousand columns would otherwise answer with a wall of ones.
+     */
+    private static String topHistogramString(Map<String, Integer> histogram) {
+        java.util.List<Map.Entry<String, Integer>> entries =
+                new java.util.ArrayList<Map.Entry<String, Integer>>(histogram.entrySet());
+        java.util.Collections.sort(entries, new java.util.Comparator<Map.Entry<String, Integer>>() {
+            @Override
+            public int compare(Map.Entry<String, Integer> a, Map.Entry<String, Integer> b) {
+                return b.getValue() - a.getValue();
+            }
+        });
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < entries.size() && i < 4; i++) {
+            if (i > 0) {
+                out.append(", ");
+            }
+            out.append(entries.get(i).getKey()).append(" x").append(entries.get(i).getValue());
+        }
+        if (entries.size() > 4) {
+            out.append(", +").append(entries.size() - 4).append(" more");
+        }
+        return out.toString();
+    }
+
     private void handleWorldgen(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length >= 3 && "create-asteroid-dim".equalsIgnoreCase(args[0])) {
             // worldgen create-asteroid-dim <newDimId> <templateDimId>
@@ -11964,6 +13258,150 @@ public class TestProbeCommand extends CommandBase {
             info.put("biome", biome.getRegistryName() == null
                     ? "unknown" : biome.getRegistryName().toString());
             info.put("biomeId", Biome.getIdForBiome(biome));
+            send(sender, jsonMap(info));
+            return;
+        }
+        if (args.length >= 6 && "survey".equalsIgnoreCase(args[0])) {
+            // worldgen survey <dim> <x0> <z0> <x1> <z1> [clearance]
+            //
+            // Is this PATCH of world fit to stand a fixture on? `sample` answers for one column at a
+            // chunk's centre, which is the wrong shape for the question: a fixture occupies an AREA,
+            // and the things that break it - a two-block step, a pond, a tree trunk in the assembly
+            // volume - are all invisible to a single column that happens to miss them.
+            //
+            // Every field is reported unconditionally, including the ones that are fine, so a spot
+            // that is rejected says WHICH property rejected it and a spot that is accepted can be
+            // re-checked later against the same numbers.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int x0 = Math.min(parseIntOr(args[2], 0), parseIntOr(args[4], 0));
+            int x1 = Math.max(parseIntOr(args[2], 0), parseIntOr(args[4], 0));
+            int z0 = Math.min(parseIntOr(args[3], 0), parseIntOr(args[5], 0));
+            int z1 = Math.max(parseIntOr(args[3], 0), parseIntOr(args[5], 0));
+            int clearance = args.length >= 7 ? parseIntOr(args[6], 12) : 12;
+            WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            // A survey that quietly loads a thousand chunks is a survey nobody can afford to run in
+            // a gate. Refuse loudly instead of taking minutes.
+            long columns = (long) (x1 - x0 + 1) * (z1 - z0 + 1);
+            if (columns > 40000L) {
+                send(sender, "{\"error\":\"area too large\",\"columns\":" + columns
+                        + ",\"max\":40000}");
+                return;
+            }
+            for (int cx = x0 >> 4; cx <= (x1 >> 4); cx++) {
+                for (int cz = z0 >> 4; cz <= (z1 >> 4); cz++) {
+                    ensureChunkAreaLoaded(world, (cx << 4) + 8, (cz << 4) + 8, 0);
+                }
+            }
+            int minTop = Integer.MAX_VALUE;
+            int maxTop = Integer.MIN_VALUE;
+            Map<Integer, Integer> topHistogram = new LinkedHashMap<Integer, Integer>();
+            Map<String, Integer> blockHistogram = new LinkedHashMap<String, Integer>();
+            Map<String, Integer> biomeHistogram = new LinkedHashMap<String, Integer>();
+            int liquidColumns = 0;
+            int vegetationColumns = 0;
+            int obstructedColumns = 0;
+            int solidObstructedColumns = 0;
+            int obstructingBlocks = 0;
+            String worstColumn = "none";
+            int worstObstruction = 0;
+            for (int x = x0; x <= x1; x++) {
+                for (int z = z0; z <= z1; z++) {
+                    int top = world.getHeight(x, z);
+                    minTop = Math.min(minTop, top);
+                    maxTop = Math.max(maxTop, top);
+                    Integer priorTop = topHistogram.get(top);
+                    topHistogram.put(top, priorTop == null ? 1 : priorTop + 1);
+                    BlockPos surface = new BlockPos(x, Math.max(0, top - 1), z);
+                    IBlockState state = world.getBlockState(surface);
+                    net.minecraft.block.Block block = state.getBlock();
+                    String name = block.getRegistryName() == null
+                            ? "minecraft:air" : block.getRegistryName().toString();
+                    Integer priorBlock = blockHistogram.get(name);
+                    blockHistogram.put(name, priorBlock == null ? 1 : priorBlock + 1);
+                    Biome biome = world.getBiome(surface);
+                    String biomeName = biome.getRegistryName() == null
+                            ? "unknown" : biome.getRegistryName().toString();
+                    Integer priorBiome = biomeHistogram.get(biomeName);
+                    biomeHistogram.put(biomeName, priorBiome == null ? 1 : priorBiome + 1);
+                    if (state.getMaterial().isLiquid()) {
+                        liquidColumns++;
+                    }
+                    if (block instanceof net.minecraft.block.BlockLeaves
+                            || block instanceof net.minecraft.block.BlockLog
+                            || block instanceof net.minecraft.block.BlockBush) {
+                        vegetationColumns++;
+                    }
+                    // What stands in the volume a fixture would occupy. Counted ABOVE the surface,
+                    // because that is the volume an assembly scan walks. Tall grass and flowers are
+                    // counted SEPARATELY from a tree trunk: a fixture places its blocks straight
+                    // through anything replaceable, so counting a daisy as an obstruction rejects
+                    // half a continent of otherwise perfect plain.
+                    int here = 0;
+                    int hereSolid = 0;
+                    for (int y = top; y < top + clearance; y++) {
+                        BlockPos above = new BlockPos(x, y, z);
+                        if (world.isAirBlock(above)) {
+                            continue;
+                        }
+                        here++;
+                        IBlockState aboveState = world.getBlockState(above);
+                        if (!aboveState.getBlock().isReplaceable(world, above)) {
+                            hereSolid++;
+                        }
+                    }
+                    if (here > 0) {
+                        obstructedColumns++;
+                        obstructingBlocks += here;
+                    }
+                    if (hereSolid > 0) {
+                        solidObstructedColumns++;
+                        if (hereSolid > worstObstruction) {
+                            worstObstruction = hereSolid;
+                            worstColumn = "[" + x + "," + top + "," + z + "]";
+                        }
+                    }
+                }
+            }
+            int modeTop = minTop;
+            int modeCount = 0;
+            for (Map.Entry<Integer, Integer> e : topHistogram.entrySet()) {
+                if (e.getValue() > modeCount) {
+                    modeCount = e.getValue();
+                    modeTop = e.getKey();
+                }
+            }
+            Map<String, Object> info = new LinkedHashMap<String, Object>();
+            info.put("ok", true);
+            info.put("dim", dim);
+            info.put("x0", x0);
+            info.put("z0", z0);
+            info.put("x1", x1);
+            info.put("z1", z1);
+            info.put("columns", columns);
+            info.put("clearance", clearance);
+            info.put("minTopY", minTop);
+            info.put("maxTopY", maxTop);
+            info.put("relief", maxTop - minTop);
+            info.put("modeTopY", modeTop);
+            info.put("modeTopShare", modeCount / (double) columns);
+            info.put("liquidColumns", liquidColumns);
+            info.put("vegetationColumns", vegetationColumns);
+            info.put("obstructedColumns", obstructedColumns);
+            info.put("solidObstructedColumns", solidObstructedColumns);
+            info.put("obstructingBlocks", obstructingBlocks);
+            info.put("worstColumn", worstColumn);
+            info.put("worstObstruction", worstObstruction);
+            info.put("surfaces", topHistogramString(blockHistogram));
+            info.put("biomes", topHistogramString(biomeHistogram));
+            // The verdict, spelled out rather than left to the caller to re-derive: flat enough to
+            // stand on, no liquid, nothing growing, nothing in the air above.
+            info.put("flat", maxTop - minTop <= 1);
+            info.put("dry", liquidColumns == 0);
+            info.put("clear", solidObstructedColumns == 0 && vegetationColumns == 0);
             send(sender, jsonMap(info));
             return;
         }
@@ -13822,6 +15260,50 @@ public class TestProbeCommand extends CommandBase {
             for (int dz = -radiusChunks; dz <= radiusChunks; dz++) {
                 world.getChunkProvider().provideChunk(ccx + dx, ccz + dz);
             }
+        }
+    }
+
+    /**
+     * {@code /artest invoke-static <class> <method> [int...]} — call a static method taking only
+     * {@code int}s on the SERVER thread, and reply with what it returned.
+     *
+     * <p>The server-side twin of the client harness's {@code invoke_static_int}, and it exists for
+     * the same reason: an instrument that accumulates per tick lives in the JVM that ticks, and the
+     * only way a test can create, read and release one there is to call into it. Until this verb, a
+     * client-side window could be opened by a test and a server-side one could not, so an instrument
+     * written for "both sides" armed only the client and every server half printed empty.</p>
+     *
+     * <p>Generic on purpose: this class names no test class, the caller does. A failure — no such
+     * class, no such method, the method threw — is an error reply naming it, never an empty
+     * {@code ok}.</p>
+     */
+    private void handleInvokeStatic(ICommandSender sender, String[] args) {
+        if (args.length < 2) {
+            send(sender, "{\"error\":\"usage: /artest invoke-static <class> <method> [int...]\"}");
+            return;
+        }
+        Class<?>[] types = new Class<?>[args.length - 2];
+        Object[] values = new Object[args.length - 2];
+        for (int i = 2; i < args.length; i++) {
+            types[i - 2] = int.class;
+            try {
+                values[i - 2] = Integer.parseInt(args[i]);
+            } catch (NumberFormatException e) {
+                send(sender, "{\"error\":\"not an int: " + escapeJson(args[i]) + "\"}");
+                return;
+            }
+        }
+        try {
+            java.lang.reflect.Method method = Class.forName(args[0]).getDeclaredMethod(args[1], types);
+            method.setAccessible(true);
+            Object result = method.invoke(null, values);
+            send(sender, "{\"ok\":true,\"returned\":\""
+                    + escapeJson(result == null ? "" : String.valueOf(result)) + "\"}");
+        } catch (Throwable t) {
+            Throwable cause = t instanceof java.lang.reflect.InvocationTargetException
+                    && t.getCause() != null ? t.getCause() : t;
+            send(sender, "{\"error\":\"invoke-static " + escapeJson(args[0] + "#" + args[1])
+                    + " failed: " + escapeJson(String.valueOf(cause)) + "\"}");
         }
     }
 
@@ -15827,12 +17309,155 @@ public class TestProbeCommand extends CommandBase {
                 ? "null" : Integer.toString(slotDim);
     }
 
+    /**
+     * The first {@code TilePilotSeat} inside the subspace shipyard {@code yard}, force-loading that
+     * yard's chunks first, or {@code null} when the box is null or holds no seat.
+     *
+     * <p>"First" is only defensible when {@code yard} came from an IDENTITY
+     * ({@code shipyardBoundsOf}). A box resolved by position is a stranger's yard as readily as the
+     * caller's, and the seat found inside it is then a real pilot seat on the wrong craft — which
+     * every command sent through it obeys, and reports success for.</p>
+     */
+    private static net.minecraft.util.math.BlockPos pilotSeatInYard(
+            net.minecraft.world.WorldServer world, net.minecraft.util.math.AxisAlignedBB yard) {
+        if (yard == null) {
+            return null;
+        }
+        int minX = (int) yard.minX, maxX = (int) yard.maxX;
+        int minZ = (int) yard.minZ, maxZ = (int) yard.maxZ;
+        for (int cx = minX >> 4; cx <= (maxX >> 4); cx++) {
+            for (int cz = minZ >> 4; cz <= (maxZ >> 4); cz++) {
+                world.getChunkProvider().provideChunk(cx, cz);
+            }
+        }
+        for (int bx = minX; bx < maxX; bx++) {
+            for (int by = 0; by < 256; by++) {
+                for (int bz = minZ; bz < maxZ; bz++) {
+                    net.minecraft.util.math.BlockPos p =
+                            new net.minecraft.util.math.BlockPos(bx, by, bz);
+                    if (world.getTileEntity(p) instanceof zmaster587.advancedRocketry.tile.TilePilotSeat) {
+                        return p;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The live ledger row for the ship NAMED by {@code durableShipId}, or {@code null} when the ledger
+     * does not know that name. The ledger's key is the ship's DURABLE id (the one minted at assembly
+     * and carried in the flight computer's NBT), never the physics mod's re-minted ship uuid.
+     *
+     * <p>This is the identity-keyed counterpart of the {@code snapshot()} walks the space verbs used
+     * to open with: "the first SETTLED entry bound to this slot" is a real ship's row whenever a slot
+     * has been used twice, and a caller cannot tell that reply from its own ship's.</p>
+     */
+    private static zmaster587.advancedRocketry.space.ShipLedger.Entry ledgerRowOf(
+            java.util.UUID durableShipId) {
+        zmaster587.advancedRocketry.space.SpaceSubsystem stack = liveStack();
+        return stack == null || stack.ledger == null || durableShipId == null
+                ? null : stack.ledger.get(durableShipId);
+    }
+
     /** The slot world a cell is bound to right now, from the one place that decides it. */
     private static int slotDimOfCell(zmaster587.advancedRocketry.space.GalacticCoord cell) {
-        zmaster587.advancedRocketry.space.SpaceManager mgr =
-                zmaster587.advancedRocketry.space.SpaceSubsystem.space();
-        return mgr == null
-                ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT : mgr.slotDimOf(cell);
+        zmaster587.advancedRocketry.space.SpaceSubsystem stack = liveStack();
+        return stack == null
+                ? zmaster587.advancedRocketry.space.SpaceManager.UNBOUND_SLOT
+                : stack.manager.slotDimOf(cell);
+    }
+
+    /**
+     * The server's space subsystem, or {@code null} — <b>the one route any verb in this file has to
+     * it</b>.
+     *
+     * <p>It exists so that no two verbs can be reading different subsystems. They used to reach six
+     * separate statics on {@code SpaceSubsystem}, and a fixture that had installed a stack of its own
+     * made "the live one" mean different things to different verbs: a ship settled through one was
+     * invisible to another, and that cost an hour of misdiagnosis before the shape itself was named
+     * as the cause. The mod owns the subsystem now and a fixture ARRANGES that one rather than
+     * substituting for it, so this answers with the same object for every verb here.</p>
+     */
+
+    /**
+     * The transit report both {@code transit-status} and {@code transit-tick} answer with.
+     *
+     * <p>ONE builder on purpose. The two verbs differ in whether they advance the jump first
+     * and in nothing else, and two copies of a reply this wide would drift in exactly the way
+     * a reader cannot see: a field present in one and stale in the other.</p>
+     */
+    private static void sendTransitReport(net.minecraft.command.ICommandSender sender) {
+        int crossing = transitStack != null && transitDurableId != null
+                && transitStack.cellCrossings.isCarrying(transitDurableId) ? 1 : 0;
+        int inTransit = transitTm.inTransitCount();
+        int targetDim = -1;
+        if (inTransit == 0 && transitMgr.isLoaded(transitTarget)) {
+            targetDim = transitMgr.materialize(transitTarget);
+            transitMgr.dematerialize(transitTarget);
+        }
+        // Where the arrived ship ACTUALLY is, as the two answers that can disagree. An arrival is
+        // only complete when the ship sits on the world pose realizing its target coordinate; if it
+        // is still in the paste band, its address inverts through the pose mapping into a
+        // NEIGHBOURING cell. Both are asked through the queryable registry (shipBlockAt), which
+        // answers for an UNLOADED ship too - so a test can observe this without force-loading
+        // anything, and therefore without supplying the very state the arrival is supposed to
+        // establish for itself.
+        double[] pose = zmaster587.advancedRocketry.space.CellWorldMapper.poseWorldOf(transitTarget);
+        long shipY = Long.MIN_VALUE, poseDist = -1L;
+        net.minecraft.world.WorldServer tw = targetDim < 0 ? null
+                : net.minecraftforge.common.DimensionManager.getWorld(targetDim);
+        if (tw != null) {
+            // Ask for the ship's OWN transform position, not "is a ship near this point": the
+            // nearest-ship lookup underneath shipBlockAt is UNBOUNDED, so asking it about two
+            // different points in a world that holds one ship answers yes to both. A pair of such
+            // questions looks like a discriminator and is not one.
+            net.minecraft.util.math.BlockPos sub = zmaster587.advancedRocketry.integration.vs
+                    .VSIntegration.shipBlockAt(tw, pose[0], pose[1], pose[2]);
+            double[] sp = sub == null ? null : zmaster587.advancedRocketry.integration.vs
+                    .VSIntegration.getShipWorldPosition(tw, sub);
+            if (sp != null) {
+                shipY = (long) sp[1];
+                double dx = sp[0] - pose[0], dy = sp[1] - pose[1], dz = sp[2] - pose[2];
+                poseDist = (long) Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+        }
+        // Point-free witness: where the ships in this world actually ARE. Without it, a null from the
+        // point-keyed lookup above cannot be told from "the ship is not where I asked".
+        String ships = tw == null ? "" : zmaster587.advancedRocketry.integration.vs.VSIntegration
+                .queryableShipPositions(tw);
+        // Where the crew of the in-flight ship BELONGS while it is parked, and the world that holds
+        // it. `crewDim` is the subsystem's own answer (-1 once the jump is over, or for a transit
+        // restored from a snapshot, which has no physical ship anywhere); `hyperDim` is the raw id of
+        // the shared parking world. A crew-side test compares the CLIENT's dimension against these
+        // rather than hardcoding an id that is minted per boot.
+        send(sender, "{\"ok\":true,\"inTransit\":" + inTransit + ",\"targetDim\":" + targetDim
+                // Which mechanism is actually running, emitted in every state so "neither" is a
+                // pair of zeros rather than a missing field: `inTransit` is the hyperspace flight,
+                // `crossing` is the direct cell-to-cell settle. A test that wants to know WHICH
+                // one its speed selected reads these instead of inferring it from timing.
+                + ",\"crossing\":" + crossing
+                + ",\"poseX\":" + (long) pose[0] + ",\"poseY\":" + (long) pose[1]
+                + ",\"poseZ\":" + (long) pose[2]
+                + ",\"shipY\":" + shipY + ",\"poseDist\":" + poseDist
+                // Asked under the SAME name the departure used. This read was hard-coded to the
+                // synthetic "t" and answered -1 for every jump the moment departures started
+                // naming their ship, which reads as "the crew belongs nowhere" rather than as a
+                // probe asking about a transit that does not exist under that key.
+                + ",\"crewDim\":" + transitTm.crewDimensionOf(
+                        transitDurableId == null ? "t" : transitDurableId.toString())
+                + ",\"hyperDim\":" + zmaster587.advancedRocketry.space.HyperspaceWorld.dimId()
+                // How many arrived ships are still retrying their crew re-seat. This tells a
+                // never-seated crew apart from a re-seat that RAN OUT of retries: >0 means the
+                // loop is still trying (the caller simply stopped ticking), 0 with an unseated
+                // crew means it either succeeded or gave up - and the arrival leg gives up
+                // without a word, so nothing else distinguishes the two.
+                + ",\"reseating\":" + transitTm.reseatingCount()
+                + ",\"ships\":\"" + ships + "\"}");
+    }
+
+    private static zmaster587.advancedRocketry.space.SpaceSubsystem liveStack() {
+        return zmaster587.advancedRocketry.AdvancedRocketry.spaceSubsystem();
     }
 
     /**
@@ -16482,6 +18107,25 @@ public class TestProbeCommand extends CommandBase {
         sender.sendMessage(new TextComponentString(text));
     }
 
+    /**
+     * An absolute position as three block counts from the galactic origin, for a probe line.
+     *
+     * <p>The type deliberately holds a sector triple plus an offset instead of three raw blocks,
+     * because a sector index reaches magnitudes the product cannot express. This flattening is safe
+     * for what a probe reports — everything a test aims at is inside one system, tens of millions of
+     * blocks out at most — and the delta says so itself: a saturated one is reported as
+     * {@code null} rather than as three numbers, so a caller can never difference two clamped
+     * readings and call the result a distance.
+     */
+    private static String absTriple(zmaster587.advancedRocketry.space.AbsolutePos pos) {
+        if (pos == null) {
+            return "null";
+        }
+        zmaster587.advancedRocketry.space.BlockDelta d =
+                pos.minus(zmaster587.advancedRocketry.space.AbsolutePos.ORIGIN);
+        return d.isSaturated() ? "null" : "[" + d.dx() + "," + d.dy() + "," + d.dz() + "]";
+    }
+
     private static void appendItemStackJson(StringBuilder out, net.minecraft.item.ItemStack stack, int slot) {
         ResourceLocation regName = stack.getItem().getRegistryName();
         out.append("{\"slot\":").append(slot)
@@ -16511,6 +18155,14 @@ public class TestProbeCommand extends CommandBase {
                     builder.append(arr[i]);
                 }
                 builder.append(']');
+            } else if (v instanceof Map) {
+                // A nested map is JSON, not a Java toString. Without this branch it fell through
+                // to the quoted-string case below and was emitted as "{A={amount=0, capacity=0}}"
+                // — a reply that says it is JSON while carrying a rendering of a HashMap, which
+                // no JSON reader can read and which a caller could only reach by regex.
+                @SuppressWarnings("unchecked")
+                Map<String, ?> nested = (Map<String, ?>) v;
+                builder.append(jsonMap(nested));
             } else if (v instanceof java.util.List) {
                 builder.append('[');
                 boolean firstItem = true;
@@ -17587,6 +19239,9 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"motionZ\":" + entity.motionZ
                     + ",\"hasNoGravity\":" + entity.hasNoGravity()
                     + ",\"fallDistance\":" + entity.fallDistance
+                    // How many updates the entity has had: the only way to tell an entity that
+                    // SURVIVED its updates from one whose world never updated it.
+                    + ",\"ticksExisted\":" + entity.ticksExisted
                     + ",\"isDead\":" + entity.isDead + "}");
             return;
         }
@@ -17664,6 +19319,40 @@ public class TestProbeCommand extends CommandBase {
             entity.motionX = 0; entity.motionY = 0; entity.motionZ = 0;
             send(sender, "{\"ok\":true,\"entityId\":" + id
                     + ",\"hasNoGravity\":" + entity.hasNoGravity() + "}");
+            return;
+        }
+        if (args.length >= 6 && "set-pos".equalsIgnoreCase(args[0])) {
+            // entity set-pos <dim> <entityId> <x> <y> <z>
+            // relocate ANY entity the way a teleport does: through
+            // setPositionAndUpdate, which writes the position and the
+            // previous-tick position without routing through move(). That
+            // distinction is the point of the verb rather than an accident of
+            // it — move() is where the physics mod re-evaluates which ship an
+            // entity is standing on, so a relocation that goes around it
+            // leaves the entity's ship association exactly as it was, which is
+            // what a vanilla teleport does to a player too. Reports the
+            // position it actually landed at, so a caller can tell a
+            // relocation that took from one the world undid.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            double px = parseDoubleOr(args[3], 0);
+            double py = parseDoubleOr(args[4], 0);
+            double pz = parseDoubleOr(args[5], 0);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (entity == null) {
+                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + id + "}");
+                return;
+            }
+            entity.setPositionAndUpdate(px, py, pz);
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"posX\":" + entity.posX
+                    + ",\"posY\":" + entity.posY
+                    + ",\"posZ\":" + entity.posZ + "}");
             return;
         }
         if (args.length >= 3 && "tick".equalsIgnoreCase(args[0])) {
@@ -18087,6 +19776,73 @@ public class TestProbeCommand extends CommandBase {
      *       (i.e. {@code openContainer != inventoryContainer}).</li>
      * </ul>
      */
+    /**
+     * {@code /artest events mark} and {@code /artest events since <seq>} — the ordered log of what
+     * HAPPENED on this side, so a test can wait for an event rather than sample a value.
+     *
+     * <p>The mark is taken BEFORE the action under test; the read afterwards returns everything since
+     * it, in order. See {@link TestEventLog} for why a poll cannot do this.</p>
+     *
+     * <p>Both replies carry {@code recording} and {@code dropped}: an empty log must never be
+     * confusable with a recorder that was never subscribed, nor with a ring that overflowed.</p>
+     */
+    private void handleEvents(ICommandSender sender, String[] args) {
+        if (args.length >= 1 && "mark".equalsIgnoreCase(args[0])) {
+            send(sender, "{\"ok\":true,\"seq\":" + TestEventLog.mark()
+                    + ",\"recording\":" + TestEventLog.isRecording()
+                    + ",\"mixins\":" + TestEventLog.areMixinsInstalled() + "}");
+            return;
+        }
+        if (args.length >= 2 && "since".equalsIgnoreCase(args[0])) {
+            long from = (long) parseDoubleOr(args[1], 0);
+            String wanted = args.length >= 3 ? args[2] : null;
+            // The records are rendered FIRST and the envelope assembled around them, so that every
+            // envelope key - `count` above all - precedes the records in the reply. A reader takes the
+            // first `"count":` it sees; with the count trailing the array, a record whose payload
+            // carried a `count` field of its own was read as the envelope's, and a chain whose link
+            // HAD been recorded failed as "never recorded" (measured 2026-09-05 on `crew_captured`
+            // with a crew of 0: the payload said count:0, the envelope said count:1, and the reader
+            // believed the payload).
+            StringBuilder records = new StringBuilder();
+            int n = 0;
+            for (TestEventLog.Record r : TestEventLog.since(from)) {
+                if (wanted != null && !wanted.equalsIgnoreCase(r.type)) {
+                    continue;
+                }
+                if (n++ > 0) {
+                    records.append(',');
+                }
+                records.append("{\"seq\":").append(r.seq)
+                        .append(",\"tick\":").append(r.tick)
+                        .append(",\"side\":\"").append(r.side).append('"')
+                        .append(",\"type\":\"").append(r.type).append('"');
+                if (!r.payload.isEmpty()) {
+                    records.append(',').append(r.payload);
+                }
+                records.append('}');
+            }
+            StringBuilder sb = new StringBuilder("{\"ok\":true,\"recording\":")
+                    .append(TestEventLog.isRecording())
+                    .append(",\"mixins\":").append(TestEventLog.areMixinsInstalled())
+                    .append(",\"dropped\":").append(TestEventLog.dropped())
+                    .append(",\"droppedByType\":{").append(TestEventLog.droppedByType()).append('}')
+                    // Which observation points have EXECUTED. Carried on every read because an empty
+                    // `events` list is only an answer once this says somebody was looking.
+                    .append(",\"instruments\":").append(TestEventLog.instrumentsEntered())
+                    .append(",\"from\":").append(from)
+                    .append(",\"count\":").append(n)
+                    .append(",\"events\":[").append(records).append("]}");
+            send(sender, sb.toString());
+            return;
+        }
+        if (args.length >= 1 && "reset".equalsIgnoreCase(args[0])) {
+            TestEventLog.reset();
+            send(sender, "{\"ok\":true}");
+            return;
+        }
+        send(sender, "{\"error\":\"usage: events mark | events since <seq> [type] | events reset\"}");
+    }
+
     private void handlePlayer(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 1) {
             send(sender, "{\"error\":\"usage: /artest player inv-bypass <add|remove|status> | open-container\"}");
@@ -18250,6 +20006,65 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"openContainerClass\":\""
                     + escapeJson(player.openContainer.getClass().getName()) + "\""
                     + ",\"isInventoryContainer\":" + isInventoryContainer + "}");
+            return;
+        }
+        if ("world-check".equals(sub) && args.length >= 4) {
+            // /artest player world-check <x> <y> <z>
+            //
+            // Is the player standing in the SAME World object every other probe writes to?
+            //
+            // Every server-side probe resolves its world with `server.getWorld(dim)`. If a player is
+            // somehow in a different instance carrying the same dimension id, a fill and a read
+            // agree with each other perfectly and both describe a world he is not in — and his
+            // client, which is fed from HIS world, shows something else again. Nothing in the usual
+            // replies can distinguish that from a chunk-packet desync, because `dim` is equal in
+            // both cases.
+            //
+            // So this reports the block from BOTH worlds and whether they are the same object.
+            int wx = parseIntOr(args[1], 0), wy = parseIntOr(args[2], 0), wz = parseIntOr(args[3], 0);
+            net.minecraft.util.math.BlockPos at = new net.minecraft.util.math.BlockPos(wx, wy, wz);
+            int dim = player.world.provider.getDimension();
+            net.minecraft.world.WorldServer byId = server.getWorld(dim);
+            String fromPlayer = String.valueOf(player.world.getBlockState(at).getBlock().getRegistryName());
+            String fromById = byId == null ? "no-world"
+                    : String.valueOf(byId.getBlockState(at).getBlock().getRegistryName());
+            send(sender, "{\"ok\":true,\"dim\":" + dim
+                    + ",\"sameInstance\":" + (byId == player.world)
+                    + ",\"playerWorldId\":" + System.identityHashCode(player.world)
+                    + ",\"serverWorldId\":" + System.identityHashCode(byId)
+                    + ",\"blockFromPlayerWorld\":\"" + escapeJson(fromPlayer) + "\""
+                    + ",\"blockFromServerWorld\":\"" + escapeJson(fromById) + "\""
+                    + ",\"playerChunkLoaded\":" + player.world.isBlockLoaded(at)
+                    + ",\"posX\":" + player.posX + ",\"posY\":" + player.posY
+                    + ",\"posZ\":" + player.posZ
+                    + ",\"onGround\":" + player.onGround
+                    + ",\"motionY\":" + player.motionY + "}");
+            return;
+        }
+        if ("sleeping".equals(sub)) {
+            // /artest player sleeping — is this player IN A BED, and how far through the sleep?
+            //
+            // The discriminator a bed scenario cannot do without. A sleep test that only watches the
+            // world CLOCK can see that no time skip happened and has no way to say why: the click
+            // may have missed, `trySleep` may have refused (mobs near, not night on THIS world, bed
+            // obstructed, player not on the ground), or the sleep may have begun and been broken
+            // before it completed. Those are different bugs and the clock reports them identically.
+            //
+            // Server-side on purpose: `isPlayerSleeping` is authoritative there, and `sleepTimer`
+            // is the count vanilla itself compares against 100 to decide a sleep has COMPLETED — so
+            // "he is in the bed" and "he slept" are reported as the two separate facts they are.
+            net.minecraft.util.math.BlockPos bed = player.bedLocation;
+            send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\""
+                    + ",\"sleeping\":" + player.isPlayerSleeping()
+                    + ",\"sleepTimer\":" + player.sleepTimer
+                    + ",\"fullyAsleep\":" + player.isPlayerFullyAsleep()
+                    + ",\"hasBed\":" + (bed != null)
+                    + (bed == null ? "" : ",\"bedX\":" + bed.getX()
+                            + ",\"bedY\":" + bed.getY() + ",\"bedZ\":" + bed.getZ())
+                    + ",\"onGround\":" + player.onGround
+                    + ",\"dim\":" + player.world.provider.getDimension()
+                    + ",\"worldTime\":" + player.world.getWorldTime()
+                    + ",\"isDaytime\":" + player.world.isDaytime() + "}");
             return;
         }
         if ("health".equals(sub)) {
@@ -18457,6 +20272,96 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"isPlanetaryProvider\":"
                     + (player.world.provider instanceof zmaster587.advancedRocketry.api.IPlanetaryProvider)
                     + ",\"gravityMultiplier\":" + gravity + "}");
+            return;
+        }
+        if ("sleep-state".equals(sub)) {
+            // /artest player sleep-state [<x> <y> <z>]
+            //
+            // READ-ONLY. Every input the bed path consumes, reported unconditionally against
+            // the bed position (default: the player's own). A sleep that produced nothing has
+            // at least four readings - the click never arrived, the provider refused the spot,
+            // vanilla refused the moment, or the sleep completed and the SKIP was declined -
+            // and a probe that reports only one of them cannot tell them apart. So this says
+            // all of them every time and lets the reader do the comparing.
+            net.minecraft.util.math.BlockPos bedPos = args.length >= 4
+                    ? new net.minecraft.util.math.BlockPos(
+                            (int) parseDoubleOr(args[1], player.posX),
+                            (int) parseDoubleOr(args[2], player.posY),
+                            (int) parseDoubleOr(args[3], player.posZ))
+                    : player.getPosition();
+            net.minecraft.world.World sleepWorld = player.world;
+            net.minecraft.block.state.IBlockState bedState = sleepWorld.getBlockState(bedPos);
+            String bedBlock = bedState.getBlock().getRegistryName() == null
+                    ? "?" : bedState.getBlock().getRegistryName().toString();
+            net.minecraft.block.state.IBlockState underState = sleepWorld.getBlockState(
+                    new net.minecraft.util.math.BlockPos(player.posX, player.posY - 0.5D, player.posZ));
+            String underBlock = underState.getBlock().getRegistryName() == null
+                    ? "?" : underState.getBlock().getRegistryName().toString();
+            // What the bed is standing on, and what the player's own column holds at that same
+            // height: a bed hanging in the air over a platform that is not there is a FIXTURE
+            // failure, and it reads exactly like a refused sleep unless the support is said out loud.
+            net.minecraft.block.state.IBlockState bedSupportState =
+                    sleepWorld.getBlockState(bedPos.down());
+            String bedSupport = bedSupportState.getBlock().getRegistryName() == null
+                    ? "?" : bedSupportState.getBlock().getRegistryName().toString();
+            net.minecraft.block.state.IBlockState playerColumnState = sleepWorld.getBlockState(
+                    new net.minecraft.util.math.BlockPos(player.posX, bedPos.getY() - 1, player.posZ));
+            String playerColumnAtBedLevel = playerColumnState.getBlock().getRegistryName() == null
+                    ? "?" : playerColumnState.getBlock().getRegistryName().toString();
+            // The provider gate, which is the one that refuses SILENTLY: BlockBed returns on
+            // DENY without sending the player any message at all.
+            String canSleepAt = sleepWorld.provider.canSleepAt(player, bedPos).name();
+            // Vanilla's own "is it night" gate, asked the way trySleep asks it (Forge replaced
+            // the isDaytime() check with this event).
+            boolean sleepingTimeOk = net.minecraftforge.event.ForgeEventFactory
+                    .fireSleepingTimeCheck(player, bedPos);
+            zmaster587.advancedRocketry.atmosphere.AtmosphereHandler sleepAtm =
+                    zmaster587.advancedRocketry.atmosphere.AtmosphereHandler.getOxygenHandler(
+                            sleepWorld.provider.getDimension());
+            String bedAtmos = sleepAtm == null ? "none"
+                    : sleepAtm.getAtmosphereType(bedPos).getUnlocalizedName();
+            boolean bedBreathable = sleepAtm != null
+                    && sleepAtm.getAtmosphereType(bedPos).isBreathable();
+            // An approximation of trySleep's NOT_SAFE scan: the same box, but without vanilla's
+            // private SleepEnemyPredicate, so a non-zero count here is a candidate rather than a
+            // verdict.
+            int hostilesNearBed = sleepWorld.getEntitiesWithinAABB(
+                    net.minecraft.entity.monster.EntityMob.class,
+                    new net.minecraft.util.math.AxisAlignedBB(
+                            bedPos.getX() - 8.0D, bedPos.getY() - 5.0D, bedPos.getZ() - 8.0D,
+                            bedPos.getX() + 8.0D, bedPos.getY() + 5.0D, bedPos.getZ() + 8.0D)).size();
+            int rotationalPeriod = sleepWorld.provider instanceof zmaster587.advancedRocketry.api.IPlanetaryProvider
+                    ? ((zmaster587.advancedRocketry.api.IPlanetaryProvider) sleepWorld.provider)
+                            .getRotationalPeriod(null) : 24000;
+            send(sender, "{\"ok\":true,\"player\":\"" + escapeJson(player.getName()) + "\""
+                    + ",\"dim\":" + sleepWorld.provider.getDimension()
+                    + ",\"bedPos\":[" + bedPos.getX() + "," + bedPos.getY() + "," + bedPos.getZ() + "]"
+                    + ",\"bedBlock\":\"" + escapeJson(bedBlock) + "\""
+                    // The player's own position, not just the distance: a scalar cannot say WHICH
+                    // axis is wrong, and "too far from the bed" reads identically whether the player
+                    // walked away, fell, or was never put where the fixture thinks it is.
+                    + ",\"playerPos\":[" + player.posX + "," + player.posY + "," + player.posZ + "]"
+                    + ",\"onGround\":" + player.onGround
+                    + ",\"blockUnderPlayer\":\"" + escapeJson(underBlock) + "\""
+                    + ",\"blockUnderBed\":\"" + escapeJson(bedSupport) + "\""
+                    + ",\"playerColumnAtBedLevel\":\"" + escapeJson(playerColumnAtBedLevel) + "\""
+                    + ",\"distanceToBed\":" + Math.sqrt(player.getDistanceSq(bedPos))
+                    + ",\"sleeping\":" + player.isPlayerSleeping()
+                    + ",\"fullyAsleep\":" + player.isPlayerFullyAsleep()
+                    + ",\"sleepTimer\":" + player.sleepTimer
+                    + ",\"allPlayersAsleep\":"
+                    + (sleepWorld instanceof net.minecraft.world.WorldServer
+                            && ((net.minecraft.world.WorldServer) sleepWorld).areAllPlayersAsleep())
+                    + ",\"canSleepAt\":\"" + escapeJson(canSleepAt) + "\""
+                    + ",\"sleepingTimeOk\":" + sleepingTimeOk
+                    + ",\"isDaytime\":" + sleepWorld.isDaytime()
+                    + ",\"bedAtmos\":\"" + escapeJson(bedAtmos) + "\""
+                    + ",\"bedBreathable\":" + bedBreathable
+                    + ",\"hostilesNearBed\":" + hostilesNearBed
+                    + ",\"timeSkipAllowed\":"
+                    + zmaster587.advancedRocketry.world.TimeSkipPolicy.allows(sleepWorld)
+                    + ",\"worldTime\":" + sleepWorld.getWorldTime()
+                    + ",\"rotationalPeriod\":" + rotationalPeriod + "}");
             return;
         }
         if ("try-sleep".equals(sub)) {
@@ -19158,7 +21063,26 @@ public class TestProbeCommand extends CommandBase {
             int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
             net.minecraft.entity.Entity entity = player.world.getEntityByID(entityId);
             if (entity == null) {
-                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + entityId + "}");
+                // WHICH absence, because they ask for opposite investigations: an entity that is
+                // alive in a DIFFERENT world means the caller and the spawn disagree about where the
+                // player is, while one that is in no world at all means it was removed after it was
+                // spawned. "entity not found" plus an id answered neither, and a caller that retries
+                // five times against the wrong world learns nothing five times.
+                int foundInDim = Integer.MIN_VALUE;
+                MinecraftServer srv = net.minecraftforge.fml.common.FMLCommonHandler.instance()
+                        .getMinecraftServerInstance();
+                if (srv != null) {
+                    for (net.minecraft.world.WorldServer w : srv.worlds) {
+                        if (w != null && w.getEntityByID(entityId) != null) {
+                            foundInDim = w.provider.getDimension();
+                            break;
+                        }
+                    }
+                }
+                send(sender, "{\"error\":\"entity not found\",\"entityId\":" + entityId
+                        + ",\"playerDim\":" + player.world.provider.getDimension()
+                        + ",\"foundInDim\":" + foundInDim
+                        + ",\"gone\":" + (foundInDim == Integer.MIN_VALUE) + "}");
                 return;
             }
             boolean mounted = player.startRiding(entity);
@@ -19178,6 +21102,76 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"wasRidingId\":" + wasRidingId
                     + ",\"ridingEntityIdNow\":" + (player.getRidingEntity() == null
                             ? -1 : player.getRidingEntity().getEntityId()) + "}");
+            return;
+        }
+        if ("bindings".equals(sub)) {
+            // /artest player bindings — ask production what this player is currently bound to.
+            // Read-only: the reader and the releaser walk ONE list inside PlayerRelease, so this
+            // cannot drift from what a release would report, and a witness with side effects would
+            // be measuring its own footprint.
+            send(sender, "{\"ok\":true,\"bound\":" + jsonStringArray(
+                    zmaster587.advancedRocketry.AdvancedRocketry.playerRelease().boundTo(player))
+                    + "}");
+            return;
+        }
+        if ("bind-aboard".equals(sub)) {
+            // /artest player bind-aboard <shipUuid> — stamp a REAL aboard record, the same one the
+            // boarding paths write. An ARRANGEMENT verb, deliberately separate from `space
+            // aboard-tag`, which is the read-only witness and must stay one.
+            //
+            // Arranging the binding directly is honest for the release contract: that contract's
+            // subject is "a bound player becomes unbound", not how he came to be bound — which is
+            // another mechanic's contract, pinned by the boarding e2es.
+            if (args.length < 2) {
+                send(sender, "{\"error\":\"usage: player bind-aboard <shipUuid> [spaceborne]\"}");
+                return;
+            }
+            // `spaceborne` gives the record a cell, which is what makes a login treat him as having
+            // been out in space — without one the login restore leaves the record alone.
+            boolean spaceborne = args.length >= 3 && "spaceborne".equals(args[2]);
+            zmaster587.advancedRocketry.space.ShipAboardTag.stamp(player,
+                    zmaster587.advancedRocketry.space.ShipAboardTag.Aboard.standing(
+                            java.util.UUID.fromString(args[1]),
+                            spaceborne ? zmaster587.advancedRocketry.space.GalacticCoord
+                                    .ofSectorLocal(0L, 0L, 0L, 0L, 0L, 0L) : null,
+                            0.0, 0.0, 0.0));
+            send(sender, "{\"ok\":true,\"tagged\":" + (zmaster587.advancedRocketry.space.ShipAboardTag
+                    .of(player) != null) + "}");
+            return;
+        }
+        if ("load-from-file".equals(sub)) {
+            // /artest player load-from-file — post the event a login fires once the player's save
+            // has been read, for THIS player, so the login restore decides about him exactly as it
+            // would on a real join. The headless tier has no join to make; the decision is the
+            // subject, and it is made in the handler of this event.
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                    new net.minecraftforge.event.entity.player.PlayerEvent.LoadFromFile(player,
+                            server.getDataDirectory(), player.getUniqueID().toString()));
+            send(sender, "{\"ok\":true,\"dim\":" + player.dimension + "}");
+            return;
+        }
+        if ("bind-grace".equals(sub)) {
+            // /artest player bind-grace — open the post-transfer suit-check window, exactly as a
+            // rocket dimension transfer does.
+            zmaster587.advancedRocketry.atmosphere.RocketTransferGrace.stamp(
+                    player, player.world.getTotalWorldTime());
+            send(sender, "{\"ok\":true,\"active\":"
+                    + zmaster587.advancedRocketry.atmosphere.RocketTransferGrace.isActive(
+                            player, player.world.getTotalWorldTime()) + "}");
+            return;
+        }
+        if ("release".equals(sub)) {
+            // /artest player release — call production's own PlayerRelease and report what every
+            // subsystem let go of. The mod holds six independent per-player bindings and this is the
+            // operation that undoes them; the probe adds nothing to it, which is the point — a reset
+            // that cleared things only the probe knew about would be a second, private list.
+            //
+            // The dismount is separate and stays the caller's, exactly as PlayerRelease's javadoc
+            // says: a mount is the player's own field rather than state a subsystem holds for him.
+            java.util.List<String> released = zmaster587.advancedRocketry.AdvancedRocketry
+                    .playerRelease().toTheWorld(player);
+            send(sender, "{\"ok\":true,\"releasedCount\":" + released.size()
+                    + ",\"released\":" + jsonStringArray(released) + "}");
             return;
         }
         if ("riding-entity".equals(sub)) {
@@ -19250,6 +21244,43 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"playerPosX\":" + target.posX
                     + ",\"playerPosY\":" + target.posY
                     + ",\"playerPosZ\":" + target.posZ + "}");
+            return;
+        }
+        if ("riding-of".equals(sub) && args.length >= 2) {
+            // /artest player riding-of <playerName> — what the SERVER holds for this player's mount.
+            //
+            // The counterpart to the harness's `report_riding_entity`, which reads
+            // `Minecraft.getMinecraft().player.getRidingEntity()` — the CLIENT's view, and the only
+            // view any scenario here had. A client that says "not riding" is produced BOTH by a
+            // server that dismounted him and by a server that still has him seated on a mount the
+            // client never learned about, and those are different faults: one is a mechanic
+            // releasing a rider, the other is entity tracking. Measured 2026-09-07: the mount
+            // reports success, the client says not riding ten ticks later, and the dummy is alive on
+            // the server — which rules out every AR dismount path (they all kill the dummy) and
+            // leaves exactly this question unanswered.
+            //
+            // Reports the mount's own passenger list too, because "he is not riding it" and "it
+            // carries nobody" can disagree, and a one-sided answer would hide a half-broken ride.
+            String ridingName = args[1];
+            net.minecraft.entity.player.EntityPlayerMP who =
+                    server.getPlayerList().getPlayerByUsername(ridingName);
+            if (who == null) {
+                send(sender, "{\"error\":\"no such player\",\"name\":\""
+                        + escapeJson(ridingName) + "\"}");
+                return;
+            }
+            net.minecraft.entity.Entity ridden = who.getRidingEntity();
+            StringBuilder r = new StringBuilder("{\"ok\":true,\"riding\":")
+                    .append(ridden != null)
+                    .append(",\"playerDim\":").append(who.world.provider.getDimension());
+            if (ridden != null) {
+                r.append(",\"entityId\":").append(ridden.getEntityId())
+                        .append(",\"entityClass\":\"").append(escapeJson(ridden.getClass().getName()))
+                        .append("\",\"entityDead\":").append(ridden.isDead)
+                        .append(",\"entityDim\":").append(ridden.world.provider.getDimension())
+                        .append(",\"passengers\":").append(ridden.getPassengers().size());
+            }
+            send(sender, r.append("}").toString());
             return;
         }
         if ("position-of".equals(sub) && args.length >= 2) {
@@ -20772,6 +22803,66 @@ public class TestProbeCommand extends CommandBase {
             }
             sb.append("]}");
             send(sender, sb.toString());
+            return;
+        }
+        // /artest chunk hold <dim> <x> <y> <z> [radiusChunks]  |  /artest chunk release
+        //
+        // HOLD the chunks around a world position for the rest of the scenario, with a real Forge
+        // ticket — as opposed to `warmup`, which calls provideChunk once and lets everything go again
+        // on the next chunk sweep.
+        //
+        // <p><b>Why a scenario needs this at all.</b> A loose body standing on a tier-2 ship lives at
+        // the SHIP'S WORLD POSE, and that pose is a virtual transform: the ship's blocks are in a
+        // subspace shipyard somewhere else entirely, so nothing holds the chunks the body is actually
+        // standing in. In play the pilot does. Headless nobody does, the chunk goes on the next sweep,
+        // and vanilla removes the entity with it — measured 2026-08-25 as a body that production had
+        // just called {@code aboard:true} being absent from its world's uuid map one command later,
+        // with the world up and the ship still resolving.
+        //
+        // <p>Holds ACCUMULATE and `release` drops them all: following a ship across a crossing means
+        // holding two worlds at once, and the arrival side has to be held BEFORE the arrival — the
+        // crossing spawns what it carried the moment the ship is rebuilt, and an unheld chunk is swept
+        // with everything standing in it. A scenario that forgets to release leaks chunk loaders for
+        // the rest of the boot, which is why `release` is idempotent and cheap enough for an
+        // {@code @After}.
+        if ("hold".equals(sub) && args.length >= 5) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            net.minecraft.world.WorldServer world = vsWorld(sender, dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            int cx = ((int) parseDoubleOr(args[2], 0)) >> 4;
+            int cz = ((int) parseDoubleOr(args[4], 0)) >> 4;
+            int radius = args.length >= 6 ? parseIntOr(args[5], 1) : 1;
+            net.minecraftforge.common.ForgeChunkManager.Ticket ticket =
+                    net.minecraftforge.common.ForgeChunkManager.requestTicket(
+                            zmaster587.advancedRocketry.AdvancedRocketry.instance, world,
+                            net.minecraftforge.common.ForgeChunkManager.Type.NORMAL);
+            if (ticket == null) {
+                // Loud: a refused ticket means the scenario is running without the hold it asked for,
+                // and everything downstream would then fail for a reason that is not its subject.
+                send(sender, "{\"ok\":false,\"error\":\"chunk ticket refused\",\"dim\":" + dim + "}");
+                return;
+            }
+            heldChunks.add(ticket);
+            int forced = 0;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    net.minecraftforge.common.ForgeChunkManager.forceChunk(
+                            ticket, new net.minecraft.util.math.ChunkPos(cx + dx, cz + dz));
+                    world.getChunkProvider().provideChunk(cx + dx, cz + dz);
+                    forced++;
+                }
+            }
+            send(sender, "{\"ok\":true,\"dim\":" + dim + ",\"cx\":" + cx + ",\"cz\":" + cz
+                    + ",\"forced\":" + forced + ",\"holds\":" + heldChunks.size() + "}");
+            return;
+        }
+        if ("release".equals(sub)) {
+            int had = heldChunks.size();
+            releaseHeldChunks();
+            send(sender, "{\"ok\":true,\"released\":" + had + "}");
             return;
         }
         if ("warmup".equals(sub) && args.length >= 6) {

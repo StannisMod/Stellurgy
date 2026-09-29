@@ -1,13 +1,19 @@
 package zmaster587.advancedRocketry.test.server;
 
-import org.junit.Assume;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.TransitSetup;
+import zmaster587.advancedRocketry.test.ShipReadiness;
+import zmaster587.advancedRocketry.test.GameTicks;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
+
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static zmaster587.advancedRocketry.test.AdvancedRocketryTestConstants.HYPERSPACE_JUMP_SPEED;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 /**
  * E2E: can a restored in-flight tier-2 jump rebuild its ship by PASTING a block snapshot into the target
@@ -30,123 +36,113 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Complements {@code VSShipTransitE2ETest} (the LIVE hyperspace crossing) and the deterministic
  * {@code ShipTransitManagerTest} (the restored state machine with a fake crosser). Gated on the server's
- * real VS presence (run with {@code -PwithVS}); skips cleanly otherwise.</p>
+ * real VS presence (run with); skips cleanly otherwise.</p>
  */
 public class VSShipTransitPersistE2ETest extends AbstractSharedServerTest {
 
+    private static final int ARRIVAL_TICKS = 400;
+
     @Test
     public void aRestoredInFlightJumpRebuildsItsShipByPastingItsSnapshotIntoTheTargetCell() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath (run with -PwithVS)", serverHasVs());
 
         // Headless: pin ships loaded so a freshly assembled ship does not auto-unload between probe calls.
-        exec("artest vs permaload true");
 
-        // Build a VS ship in a fresh origin cell (a pool slot world) + the whole transit stack.
-        String setup = exec("artest space transit-setup");
-        assertTrue("transit setup failed: " + setup, setup.contains("\"ok\":true"));
-        int originDim = extractInt(setup, "originDim");
-        int ax = extractInt(setup, "anchorX"), ay = extractInt(setup, "anchorY"), az = extractInt(setup, "anchorZ");
+        // Build a real craft in a fresh origin cell (a pool slot world) + the whole transit stack.
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int originDim = setup.originDim;
+        int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
         assertTrue("origin ship never assembled/loaded in the pool-slot cell (dim " + originDim + ")",
-                waitForLoadedShip(originDim) >= 1);
+                loadedShips(originDim) >= 1);
 
         // Depart into hyperspace. We deliberately do NOT tick the transit yet: it stays parked in hyperspace
         // while we re-cut its snapshot (the save-point cut is of a PARKED ship).
+        // Marked BEFORE the command whose effect is awaited.
+        long transitMark = events.mark();
         String begin = exec("artest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
-        assertTrue("transit did not begin (departure crossing failed): " + begin, begin.contains("\"began\":true"));
+        assertTrue("transit did not begin (departure crossing failed): " + begin, Reply.of(begin).bool("began"));
 
-        // Re-cut the parked ship's block snapshot; retry while the async hyperspace assembly completes
-        // (snapshotShipAt needs the ship's subspace shipyard to be up).
+        // Re-cut the parked ship's block snapshot, ONCE.
         //
-        // Poll the REFRESH's own count, not the export's hasSnapshot. Every transit carries a snapshot
-        // from the instant it departs — the floor cut of the source ship, taken before the departure
-        // crossing so that a save in the pre-assembly window is never snapshot-less — so hasSnapshot is
-        // true on the first iteration whether or not hyperspace was ever read. Waiting on it is waiting
-        // on a condition that is already met: it exits immediately and the assertion that the PARKED
-        // ship was re-cut becomes a statement about a cut that never happened.
-        boolean snapshotCut = false;
-        String lastRefresh = "";
-        for (int i = 0; i < 40; i++) {
-            lastRefresh = exec("artest space transit-refresh");
-            if (extractInt(lastRefresh, "refreshed") >= 1) {
-                snapshotCut = true;
-                break;
-            }
-            Thread.sleep(250);
-        }
+        // Read the REFRESH's own count, not the export's hasSnapshot. Every transit carries a
+        // snapshot from the instant it departs — the floor cut of the source ship, taken before the
+        // departure crossing so that a save in the pre-assembly window is never snapshot-less — so
+        // hasSnapshot is true whether or not hyperspace was ever read, and asserting on it would
+        // make the claim that the PARKED ship was re-cut a statement about a cut that never
+        // happened.
+        //
+        // This used to be a retry loop, described as waiting for "the async hyperspace assembly".
+        // It was not an observation: every iteration PERFORMED the refresh, so the loop retried an
+        // operation rather than waiting for one — and the operation succeeds on its first attempt
+        // (measured across this tier at one fork and at six). A retry around a synchronous command
+        // turns "it failed" into "it failed several times", which is the same verdict later and with
+        // less to say about why.
+        String lastRefresh = exec("artest space transit-refresh");
         assertTrue("the parked hyperspace ship was never re-cut into a persisted snapshot; last="
-                + lastRefresh, snapshotCut);
+                + lastRefresh, extractInt(lastRefresh, "refreshed") >= 1);
 
         String lastExport = exec("artest space transit-export");
         assertTrue("the durable record must carry a block snapshot, or the restore below has no ship to "
-                + "paste: " + lastExport, lastExport.contains("\"hasSnapshot\":true"));
+                + "paste: " + lastExport, Reply.of(lastExport).bool("hasSnapshot"));
 
         // Simulate a restart in-process: rebuild the transit from the exported record alone (the live
         // manager, and its parked hyperspace ship, are thrown away). Note: this reuses the in-memory record;
         // the on-disk NBT round-trip is unit-pinned separately (ShipLedgerDataTest + TransitRecordTest).
         String restore = exec("artest space transit-restore");
         assertTrue("restore did not recreate the in-flight transit: " + restore,
-                restore.contains("\"inTransit\":1"));
+                (Reply.of(restore).integer("inTransit") == 1));
 
-        // Advance the RESTORED transit. With no live hyperspace ship it can only arrive by pasting its
-        // snapshot into the target cell.
-        int targetDim = -1;
-        String lastTick = "";
-        for (int i = 0; i < 80; i++) {
-            lastTick = exec("artest space transit-tick 10");
-            if (extractInt(lastTick, "inTransit") == 0) {
-                targetDim = extractInt(lastTick, "targetDim");
-                break;
-            }
-            Thread.sleep(250);
-        }
-        assertTrue("the restored jump never completed (still in transit after ~20 s); last tick=" + lastTick,
-                targetDim >= 0);
+        // The RESTORED transit arrives on the server's own tick, like any other -- no pump. With no
+        // live hyperspace ship it can only get there by pasting its snapshot into the target cell,
+        // so the arrival production announces IS the proof that path ran.
+        String arrived = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
+                "the restored jump never completed; the durable record now reads "
+                        + exec("artest space transit-export"),
+                ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
+        int targetDim = extractInt(arrived, "dim");
+        assertTrue("the arrival was announced but names no dimension: " + arrived, targetDim >= 0);
 
         // The snapshot-restored ship must load + be VS-managed in the TARGET cell. Restored arrivals paste in
         // the negative-X band (disjoint from live arrivals); the first lands near -64,200,0. This is reachable
         // ONLY through the persisted snapshot — the live ship was discarded.
         assertTrue("the snapshot-restored ship never (re)loaded in the target cell (dim " + targetDim
-                + "); countAll=" + exec("artest vs ship-count-all " + targetDim), waitForLoadedShip(targetDim) >= 1);
-        String dstInfo = exec("artest vs ship-info " + targetDim + " -64 200 0");
-        assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly failed): "
-                + dstInfo, dstInfo.contains("\"managed\":true"));
+                + "); countAll=" + exec("artest vs ship-count-all " + targetDim), loadedShips(targetDim) >= 1);
+        // Named rather than approached: the cell's ship count now carries the ids it counted, so
+        // "exactly one ship is here" and "and this is it" are one reading. The nearest-ship lookup
+        // this replaced would answer in the same shape if the cell held two.
+        String arrivedId = ShipIdentity.theOnlyLoadedShipIn(this::exec, targetDim);
+        assertTrue("the restored ship is not VS-managed in the target cell (snapshot paste/assembly"
+                + " failed); id=" + arrivedId,
+                ShipInfo.loadedIn(this::exec, targetDim, arrivedId));
     }
 
     @org.junit.After
     public void resetPermaload() throws Exception {
-        if (serverHasVs()) {
-            exec("artest vs permaload false");
-        }
     }
 
     // --- helpers (mirror VSShipTransitE2ETest) ------------------------------------------------------
+
+    /** This tier's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
-    /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load). */
-    private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("artest vs ship-count-all " + dim), "count") >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = extractInt(exec("artest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
+    /**
+     * Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces a load).
+     *
+     * <p>On the SERVER's clock, not {@code dim}'s: the world asked about is the one that may not have
+     * started ticking, and budgeting against it would measure the wait with what it waits for.</p>
+     */
+    /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
+     *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */
+    private int loadedShips(int dim) throws Exception {
+        return ShipReadiness.loadedCount(this::exec, dim);
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integer(key);
     }
 }

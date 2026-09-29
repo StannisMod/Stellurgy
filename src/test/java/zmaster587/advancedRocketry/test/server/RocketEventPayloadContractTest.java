@@ -1,11 +1,15 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
 import org.junit.Test;
 
-import zmaster587.advancedRocketry.test.ServerTicks;
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.GameTicks;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.FixtureSite;
+import zmaster587.advancedRocketry.test.RocketFixture;
+import zmaster587.advancedRocketry.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -43,24 +47,30 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
     private static final int DESCENT_TIMER = 40; // mirrors EntityRocket.DESCENT_TIMER
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern ENTITY_ID = Pattern.compile("\"entityId\":(-?\\d+)");
-    private static final Pattern PRELAUNCH_ID = Pattern.compile("\"preLaunchEntityId\":(-?\\d+)");
-    private static final Pattern PRELAUNCH_DIM = Pattern.compile("\"preLaunchDim\":(-?\\d+)");
-    private static final Pattern DISMANTLE_ID = Pattern.compile("\"dismantleEntityId\":(-?\\d+)");
-    private static final Pattern DISMANTLE_DIM = Pattern.compile("\"dismantleDim\":(-?\\d+)");
-    private static final Pattern LANDED_ID = Pattern.compile("\"landedEntityId\":(-?\\d+)");
-    private static final Pattern LANDED_DIM = Pattern.compile("\"landedDim\":(-?\\d+)");
-    private static final Pattern LANDED_COUNT = Pattern.compile("\"landed\":(-?\\d+)");
-    private static final Pattern DEORBIT_ID = Pattern.compile("\"deOrbitingEntityId\":(-?\\d+)");
-    private static final Pattern DEORBIT_DIM = Pattern.compile("\"deOrbitingDim\":(-?\\d+)");
-    private static final Pattern DEORBIT_COUNT = Pattern.compile("\"deOrbiting\":(-?\\d+)");
-    private static final Pattern ORBIT_REACHED_ID = Pattern.compile("\"orbitReachedEntityId\":(-?\\d+)");
-    private static final Pattern ORBIT_REACHED_DIM = Pattern.compile("\"orbitReachedDim\":(-?\\d+)");
-    private static final Pattern ORBIT_REACHED_COUNT = Pattern.compile("\"orbitReached\":(-?\\d+)");
+    /** World ticks the touchdown is given to be announced: a deadline, never spent on a healthy
+     *  run — the fall is one tick onto a plate two blocks below. */
+    private static final int LANDING_TICKS = 100;
 
-    private static final int CY = 64;
+    /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
+    private final Events events =
+            new Events(cmd -> exec(cmd), ticks -> GameTicks.advanceWorld(client(), 0, ticks));
+
+    private static final String ENTITY_ID = "entityId";
+    private static final String PRELAUNCH_ID = "preLaunchEntityId";
+    private static final String PRELAUNCH_DIM = "preLaunchDim";
+    private static final String DISMANTLE_ID = "dismantleEntityId";
+    private static final String DISMANTLE_DIM = "dismantleDim";
+    private static final String LANDED_ID = "landedEntityId";
+    private static final String LANDED_DIM = "landedDim";
+    private static final String LANDED_COUNT = "landed";
+    private static final String DEORBIT_ID = "deOrbitingEntityId";
+    private static final String DEORBIT_DIM = "deOrbitingDim";
+    private static final String DEORBIT_COUNT = "deOrbiting";
+    private static final String ORBIT_REACHED_ID = "orbitReachedEntityId";
+    private static final String ORBIT_REACHED_DIM = "orbitReachedDim";
+    private static final String ORBIT_REACHED_COUNT = "orbitReached";
+
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
     private static final int CZ = 8000;
     private static final int CX_DISMANTLE = 8000;
     private static final int CX_PRELAUNCH = 8400;
@@ -79,7 +89,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // Trigger dismantle — fires RocketDismantleEvent synchronously.
         String dismantle = exec("artest rocket dismantle " + rocketId);
         assertTrue("dismantle probe must succeed: " + dismantle,
-                dismantle.contains("\"ok\":true"));
+                Reply.of(dismantle).ok());
 
         String payloads = exec("artest rocket event-payloads");
         assertEquals("RocketDismantleEvent.getEntity().getEntityId() must equal "
@@ -98,7 +108,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // Call prepareLaunch — fires RocketPreLaunchEvent.
         String launch = exec("artest rocket launch " + rocketId + " true prepare");
         assertTrue("rocket launch (prepare) must succeed: " + launch,
-                launch.contains("\"ok\":true") || launch.contains("\"entityId\":"));
+                Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
         String payloads = exec("artest rocket event-payloads");
         assertEquals("RocketPreLaunchEvent.getEntity().getEntityId() must equal "
@@ -121,6 +131,11 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
      * on planet X" achievements) requires both id + dim to be correct;
      * counter pin alone wouldn't catch a regression that swapped entity
      * references.</p>
+     *
+     * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
+     * ({@code EntityRocket:2153}) removed: "no `rocket_landed` carrying e = … was recorded within 100
+     * ticks", 2026-09-28. The payload verdicts after it read the recorder's last landing and need no
+     * inversion of their own to be reached: they are the same event's fields.</p>
      */
     @Test
     public void rocketLandedEventCarriesRocketEntityAndWorld() throws Exception {
@@ -142,10 +157,15 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
         // orbit+flight gate enters the line-1284 landed branch on the
         // first real tick that move() resolves a downward collision.
+        long mark = events.mark();
         exec("artest rocket set-state " + rocketId
                 + " orbit=true flight=true ticksExisted=" + (DESCENT_TIMER + 5)
                 + " posY=" + (CY + 2) + " motionY=-10");
-        ServerTicks.await(client(), 0, 6);
+        // Linked on the landing Forge publishes, narrowed to this rocket: the payload read below is
+        // the recorder's LAST landing, so it is only this rocket's once this rocket has landed.
+        events.awaitRecordWithFields(mark, "rocket_landed",
+                "the rocket must touch down on the stone floor under real ticking", LANDING_TICKS,
+                "e", String.valueOf(rocketId));
 
         String countsAfter = exec("artest rocket event-counts-full");
         int landedAfter = extract(countsAfter, LANDED_COUNT);
@@ -194,9 +214,19 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
         // onUpdate as the increment (super first, then body) so the
         // tick that bumps the counter to 20 is the one that posts the
         // event.
-        exec("artest rocket set-state " + rocketId
+        String set = exec("artest rocket set-state " + rocketId
                 + " orbit=true flight=false ticksExisted=18 posY=300 motionY=0");
-        ServerTicks.await(client(), 0, 3);
+        // EXPERIMENT: the dose is the rocket's own counter crossing 20, and 3 ticks of its world
+        // carry it from 18 through 20 — one increment per tick of the world it is ticked in. The
+        // gate is an equality, so overshoot adds ticks past 21 where it is shut and cannot fire the
+        // event a second time or hide it. No record of RocketDeOrbitingEvent exists to link on; the
+        // counter read below is what says the dose was delivered.
+        GameTicks.advanceWorld(client(), 0, 3);
+        int ticksAfter = RocketInfo.byId(cmd -> exec(cmd), rocketId).ticksExisted;
+        assertTrue("the rocket's counter must have crossed the deorbit gate at 20, or the event had"
+                        + " no tick to fire on (ticksExisted " + extract(set, "ticksExisted") + " -> "
+                        + ticksAfter + ")",
+                ticksAfter >= 20);
 
         String countsAfter = exec("artest rocket event-counts-full");
         int deOrbitAfter = extract(countsAfter, DEORBIT_COUNT);
@@ -239,7 +269,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
         String orbitResp = exec("artest rocket force-orbit-reached " + rocketId);
         assertTrue("force-orbit-reached probe must succeed: " + orbitResp,
-                orbitResp.contains("\"ok\":true"));
+                Reply.of(orbitResp).ok());
 
         String countsAfter = exec("artest rocket event-counts-full");
         int orbitAfter = extract(countsAfter, ORBIT_REACHED_COUNT);
@@ -278,29 +308,25 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
     }
 
     private int buildAndAssemble(int baseX) throws Exception {
-        int cx1 = (baseX - 2) >> 4, cz1 = (CZ - 2) >> 4;
-        int cx2 = (baseX + 7) >> 4, cz2 = (CZ + 7) >> 4;
-        exec("artest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
-        exec("artest fill 0 " + (baseX - 2) + " " + (CY + 1) + " " + (CZ - 2)
-                + " " + (baseX + 7) + " " + (CY + 10) + " " + (CZ + 7)
-                + " minecraft:air");
-        String fixture = exec("artest fixture rocket 0 " + baseX + " " + CY + " " + CZ
-                + " simple");
-        assertTrue("fixture build failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("no builderPos: " + fixture, bp.find());
-        String assemble = exec("artest rocket assemble 0 "
-                + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
+        // FIRST link, and it ASSERTS where the pair it replaces DUG: a chunk warmup plus an air
+        // fill over CY+1..CY+10 whose own answer — how many blocks were standing there — was
+        // thrown away, and whose two replies were not even read for `ok`. The site is in the band,
+        // and the fill inside the shared builder force-loads every chunk in its box, which is what
+        // the warmup was for.
+        String assemble = RocketFixture.assembleAt(
+                FixtureSite.openAir(0, baseX, CZ),
+                cmd -> exec(cmd), "simple", 2, 10,
+                "the craft whose launch events this contract reads stands in this volume");
         assertTrue("assemble must succeed: " + assemble,
-                assemble.contains("\"ok\":true"));
-        Matcher eim = ENTITY_ID.matcher(assemble);
-        assertTrue("no entityId: " + assemble, eim.find());
-        return Integer.parseInt(eim.group(1));
+                Reply.of(assemble).ok());
+        Reply eimReply = Reply.of(assemble);
+        assertTrue("no entityId: " + assemble, eimReply.has(ENTITY_ID));
+        return Integer.parseInt(eimReply.text(ENTITY_ID));
     }
 
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private static int extract(String src, String field) {
+        Reply reply = Reply.of(src);
+        assertTrue("field `" + field + "` not found in: " + src, reply.has(field));
+        return reply.integer(field);
     }
 }

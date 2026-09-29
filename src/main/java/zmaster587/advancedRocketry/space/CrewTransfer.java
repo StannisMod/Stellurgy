@@ -51,6 +51,9 @@ import zmaster587.advancedRocketry.tile.TilePilotSeat;
  */
 public final class CrewTransfer {
 
+    private static final org.apache.logging.log4j.Logger LOGGER =
+            org.apache.logging.log4j.LogManager.getLogger("advancedrocketry/space");
+
     /** How far (blocks) around the ship's world position riders are enumerated — the proven
      *  rider-carry box of the ship-move probes. */
     private static final double RIDER_RANGE = 8.0;
@@ -294,6 +297,15 @@ public final class CrewTransfer {
         if (crew.isEmpty()) {
             return true;
         }
+        // A caller with no substrate uuid but a DURABLE name has not run out of identity — the name
+        // is indexed beside the uuid on the ship's own record, so the substrate id is one hash probe
+        // away. Resolved here rather than at each caller so no future one can reach the positional
+        // scan while holding the answer: the login-restore path did exactly that, and described
+        // itself as "position-keyed by nature" while carrying the ship's name in the aboard record
+        // it was driven by.
+        if (vsShipUuid == null && expectedShipId != null) {
+            vsShipUuid = VSIntegration.shipUuidOfDurableId(dstWorld, expectedShipId.toString());
+        }
         List<TilePilotSeat> seats = seatsOfShipAt(dstWorld, anchor, vsShipUuid);
         boolean allSeated = true;
         boolean seatLookupBlocked = false;
@@ -331,12 +343,8 @@ public final class CrewTransfer {
                 player.getServer().getPlayerList().transferPlayerToDimension(player,
                         dstWorld.provider.getDimension(),
                         (world, entity, yaw) -> entity.setLocationAndAngles(tx, ty, tz, yaw, 0f));
-                ArrivalTrace.server("reseat.dimTransfer t=" + dstWorld.getTotalWorldTime()
-                        + " p=" + player.getEntityId() + " toY=" + ArrivalTrace.fmt(ty));
             } else {
                 player.setPositionAndUpdate(seatWorld[0], seatWorld[1], seatWorld[2]);
-                ArrivalTrace.server("reseat.setPos t=" + dstWorld.getTotalWorldTime()
-                        + " p=" + player.getEntityId() + " toY=" + ArrivalTrace.fmt(seatWorld[1]));
             }
             // "Already seated" means seated ON THIS SEAT — riding the dummy bound to it, in this
             // world. Any other dummy is a leftover mount, and treating one as proof of a finished
@@ -352,13 +360,10 @@ public final class CrewTransfer {
             if (ridden instanceof EntityDummy && ridden == seatDummy) {
                 continue; // already re-seated by an earlier retry
             }
-            if (ridden instanceof EntityDummy) {
-                // Any OTHER dummy is a stale mount and must not stop the re-seat. The swap needs no
-                // dismount here — the mount below is forced, and a forced startRiding dismounts
-                // first — which is also how the pre-assembly rebind below does it.
-                ArrivalTrace.server("reseat.staleMount t=" + dstWorld.getTotalWorldTime()
-                        + " p=" + player.getEntityId() + " stale=" + ridden.getEntityId());
-            }
+            // Any OTHER dummy is a stale mount and must not stop the re-seat. The swap needs no
+            // dismount here — the mount below is forced, and a forced startRiding dismounts
+            // first — which is also how the pre-assembly rebind below does it.
+            //
             // The BlockPilotSeat mount recipe: a dummy at the seat's live world position, bound
             // to the seat's (new) subspace block, and the player riding it. Reuse the seat's
             // existing bound dummy when one is already there (one seat — one dummy; a second
@@ -383,9 +388,6 @@ public final class CrewTransfer {
                 continue;
             }
             player.startRiding(dummy, true);
-            ArrivalTrace.server("reseat.mount t=" + dstWorld.getTotalWorldTime()
-                    + " p=" + player.getEntityId() + " dummy=" + dummy.getEntityId()
-                    + " y=" + ArrivalTrace.fmt(seatWorld[1]));
         }
         lastReseatBlock = allSeated ? "" : joinBlocks(
                 seatLookupBlocked
@@ -478,8 +480,6 @@ public final class CrewTransfer {
             player.getServer().getPlayerList().transferPlayerToDimension(player,
                     dstWorld.provider.getDimension(),
                     (world, entity, yaw) -> entity.setLocationAndAngles(tx, ty, tz, yaw, 0f));
-            ArrivalTrace.server("deck.dimTransfer t=" + dstWorld.getTotalWorldTime()
-                    + " p=" + player.getEntityId() + " toY=" + ArrivalTrace.fmt(ty));
         } else {
             player.setPositionAndUpdate(deckWorld[0], deckWorld[1], deckWorld[2]);
         }
@@ -495,8 +495,6 @@ public final class CrewTransfer {
                 vsShipUuid == null
                         ? VSIntegration.shipIdManagingBlock(dstWorld, afc.pos) : vsShipUuid.toString(),
                 sub[0], sub[1], sub[2]);
-        ArrivalTrace.server("deck.place t=" + dstWorld.getTotalWorldTime()
-                + " p=" + player.getEntityId() + " y=" + ArrivalTrace.fmt(deckWorld[1]));
         return null;
     }
 
@@ -558,10 +556,6 @@ public final class CrewTransfer {
                                 : "NONE(the crossed ship is not registered here)")
                         : "[" + (int) afc.yard.minX + ".." + (int) afc.yard.maxX + "]x["
                                 + (int) afc.yard.minZ + ".." + (int) afc.yard.maxZ + "]")
-                // What a POSITION lookup would have answered, always — the difference between the
-                // two is what says "we were asking about the wrong ship".
-                .append(" nearestToAnchor=").append(VSIntegration.describeShipAt(world,
-                        anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5))
                 // Which ship in THIS world carries the durable id the filter is comparing against —
                 // the translation between the two identities a jump holds. A refusal count says the
                 // filter said no; this says whether the id it wanted names anything here at all, and
@@ -688,11 +682,6 @@ public final class CrewTransfer {
                                 : "NONE(the crossed ship is not registered here)")
                         : "[" + (int) yard.minX + ".." + (int) yard.maxX + "]x["
                                 + (int) yard.minZ + ".." + (int) yard.maxZ + "]")
-                // What a POSITION lookup would have answered, always — it is the difference between
-                // the two that says "we were asking about the wrong ship", and reconstructing it
-                // afterwards took a scan of the world's region files.
-                .append(" nearestToAnchor=").append(VSIntegration.describeShipAt(world,
-                        anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5))
                 .append(" seatsReached=").append(seats.size())
                 .append(" crew=").append(crew.size())
                 .append(" wantShip=").append(expectedShipId);
@@ -781,9 +770,6 @@ public final class CrewTransfer {
             return RebindOutcome.NOT_ON_STALE_MOUNT; // seat taken while he rode the stale mount
         }
         player.startRiding(dummy, true);
-        ArrivalTrace.server("rebind.swap t=" + world.getTotalWorldTime()
-                + " p=" + player.getEntityId() + " stale=" + staleDummyId
-                + " dummy=" + dummy.getEntityId() + " toY=" + ArrivalTrace.fmt(seatWorld[1]));
         return RebindOutcome.REBOUND;
     }
 
@@ -905,8 +891,12 @@ public final class CrewTransfer {
     /**
      * The seat's single mount dummy, ready to be ridden: reuse the one already bound to
      * {@code seatPos} (moved to the seat's live world position), or spawn a fresh bound one there.
-     * Returns {@code null} when the existing dummy is occupied — the caller must never mount a
-     * second rider onto a taken seat, and must never spawn a second dummy beside it.
+     *
+     * <p>Returns {@code null} for two different reasons, and both are "cannot mount him now" — the
+     * existing dummy is occupied (never double-mount a seat, never spawn a second dummy beside it),
+     * or the world would not take a fresh one. The callers act the same way on either; the LOG is
+     * where they differ, because a caller telling a pilot who holds his chair must not say that when
+     * the chair was never placed.</p>
      */
     private static EntityDummy boundDummyForMount(WorldServer world, BlockPos seatPos,
             double x, double y, double z) {
@@ -921,7 +911,17 @@ public final class CrewTransfer {
         }
         EntityDummy dummy = new EntityDummy(world, x, y, z);
         dummy.setSeatPos(seatPos);
-        world.spawnEntity(dummy);
+        // Through the shared arrival spawn, and the answer is READ. This dropped it: an arriving
+        // ship's world has nobody in it, so the seat's own chunk is exactly the one nothing has
+        // asked for, and `spawnEntity` answers false there without loading it. The dummy was then
+        // handed back as though it were in the world and a crew member was mounted onto a body no
+        // world held. Same hazard the cargo release had, one call away from it.
+        if (!ArrivalSpawn.at(world, dummy, x, y, z)) {
+            LOGGER.error("[SPACE] the seat at {} in dim {} could not be given a mount: the world "
+                            + "refused the dummy. Nobody is seated there this tick.",
+                    seatPos, world.provider.getDimension());
+            return null;
+        }
         return dummy;
     }
 }

@@ -1,9 +1,8 @@
 package zmaster587.advancedRocketry.test.server;
 
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.StationInfo;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
@@ -27,50 +26,62 @@ import static zmaster587.advancedRocketry.test.server.WorldCommandFixtures.exec;
  */
 public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSharedServerTest {
 
+    /**
+     * The altitude below which a target counts as LOW, in blocks.
+     *
+     * <p>The TEST'S OWN, and it is a line between two production behaviours rather than a tuned
+     * number: with redstone on and no signal the controller takes the minimum, which is a handful
+     * of blocks, while the defect floors it to the GUI's own default near 200. Anything under this
+     * is unambiguously the first.</p>
+     */
+    private static final int LOW_ALTITUDE_BLOCKS = 190;
+
     private static final int SPACE_DIM = -2;
-    private static final Pattern STATION_ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern SPAWN_X = Pattern.compile("\"spawnX\":(-?\\d+)");
-    private static final Pattern SPAWN_Z = Pattern.compile("\"spawnZ\":(-?\\d+)");
-    private static final Pattern TARGET_ORBITAL = Pattern.compile("\"targetOrbitalDistance\":(-?\\d+)");
+    private static final String STATION_ID = "id";
 
     @Test
     public void redstoneOnWithNoSignalSelectsLowAltitudeNotFloored190() throws Exception {
         exec("artest dim load " + SPACE_DIM);
 
         String create = exec("artest station create 0");
-        assertTrue("station must create: " + create, create.contains("\"ok\":true"));
+        assertTrue("station must create: " + create, Reply.of(create).ok());
         int stationId = extract(STATION_ID, create);
 
-        String info = exec("artest station info " + stationId);
-        int cx = extract(SPAWN_X, info), cy = 128, cz = extract(SPAWN_Z, info);
+        StationInfo info = station(stationId);
+        int cx = info.spawnX(), cy = 128, cz = info.spawnZ();
 
         exec("artest fill " + SPACE_DIM + " " + (cx - 1) + " " + cy + " " + (cz - 1)
                 + " " + (cx + 1) + " " + cy + " " + (cz + 1) + " minecraft:air");
         String place = exec("artest place " + SPACE_DIM + " " + cx + " " + cy + " " + cz
                 + " advancedrocketry:altitudeController");
-        assertTrue("altitude controller must place: " + place, place.contains("\"placed\":true"));
+        assertTrue("altitude controller must place: " + place, Reply.of(place).bool("placed"));
 
         // Put the controller into redstone-ON mode (default is OFF). With no redstone
         // wiring around it, getStrongPower(pos) == 0.
         String setRs = exec("artest station controller-set-redstone " + SPACE_DIM + " "
                 + cx + " " + cy + " " + cz + " ON");
-        assertTrue("controller-set-redstone must succeed: " + setRs, setRs.contains("\"ok\":true"));
+        assertTrue("controller-set-redstone must succeed: " + setRs, Reply.of(setRs).ok());
 
         // A few ticks: the redstone branch writes targetOrbitalDistance = f(power=0) each tick.
         exec("artest tile force-tick " + SPACE_DIM + " " + cx + " " + cy + " " + cz + " 3");
 
-        String postInfo = exec("artest station info " + stationId);
-        int target = extract(TARGET_ORBITAL, postInfo);
+        StationInfo postInfo = station(stationId);
+        int target = postInfo.targetOrbitalDistance();
 
         assertTrue("C142: with redstone ON and no signal (power 0), the altitude target must be "
                         + "a LOW altitude (Math.min gives 4), not floored to the GUI max 190 by the old "
-                        + "Math.max. Got targetOrbitalDistance=" + target + " info=" + postInfo,
-                target < 190);
+                        + "Math.max. Got targetOrbitalDistance=" + target + " info=" + postInfo.raw(),
+                target < LOW_ALTITUDE_BLOCKS);
     }
 
-    private static int extract(Pattern p, String s) {
-        Matcher m = p.matcher(s);
-        assertTrue("pattern " + p + " not found in: " + s, m.find());
-        return Integer.parseInt(m.group(1));
+    /** What the server says about one station. */
+    private static StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(WorldCommandFixtures::exec, stationId);
+    }
+
+    private static int extract(String field, String s) {
+        Reply reply = Reply.of(s);
+        assertTrue("field `" + field + "` not found in: " + s, reply.has(field));
+        return reply.integer(field);
     }
 }

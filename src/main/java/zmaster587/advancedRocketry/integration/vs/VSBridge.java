@@ -34,9 +34,16 @@ import zmaster587.advancedRocketry.api.event.ShipLifecycleEvent;
 /**
  * The Valkyrien Skies-facing side of the integration. Every reference to an
  * {@code org.valkyrienskies.*} type lives in this package's bridge classes,
- * never in {@link VSIntegration}. The JVM loads this class only when
- * {@link VSIntegration#isAvailable()} is true, so its VS imports never need to
- * resolve on an AR install without VS.
+ * never in {@link VSIntegration}.
+ *
+ * <p><b>This class no longer promises what it used to, and the promise is removed rather than
+ * quietly left standing.</b> It said the JVM loads it only when
+ * {@link VSIntegration#isAvailable()} is true, "so its VS imports never need to resolve on an AR
+ * install without VS". There is no such install — the substrate is compiled into this jar — and as
+ * of 2026-09-22 no caller gates on that method at all, so the sentence described a discipline
+ * nobody was keeping. The split survives because it is a clean seam and a unit test pins it: AR's
+ * own types stay loadable without touching a physics type, which keeps the dependency legible and
+ * keeps one place to look when the substrate's API moves.</p>
  */
 final class VSBridge {
 
@@ -67,71 +74,52 @@ final class VSBridge {
      * runtime behaviour can only be exercised with VS actually installed, not in a
      * headless test.</p>
      */
-    static UUID assembleTier2Ship(World world, BlockPos anchorPos, Logger logger) {
-        return assembleTier2Ship(world, anchorPos, logger, null);
-    }
-
-    /**
-     * The same, for a craft that ALREADY EXISTED and is being re-registered around blocks pasted here
-     * — a crossing, a transit, a reposition. Nothing at the assembly can tell this from a new build,
-     * so the caller who knows says so, and the naming event carries the answer.
-     */
-    static UUID pasteTier2Ship(World world, BlockPos anchorPos, Logger logger, UUID keepUuid,
-                               UUID keepDurableId) {
-        return assembleTier2Ship(world, anchorPos, logger, keepUuid, keepDurableId,
-                ShipLifecycleEvent.Cause.PASTED);
-    }
-
-    /**
-     * The same assembly, KEEPING an identity the caller already holds ({@code keepUuid}), so a ship
-     * that crosses from one world to another comes out the other side as the same ship rather than as
-     * a stranger that has to be re-found by position. {@code null} means "mint a fresh one", which is
-     * what a genuinely new build wants.
-     *
-     * <p>The identity is only kept if it is FREE in {@code world}, and the one thing that can hold it
-     * is this ship's own remnant: a crossing cuts the blocks out of the source world and the physics
-     * mod's registry entry can outlive them, blockless. That remnant IS this ship, so it is adopted —
-     * dropped here so the assembly below re-registers the identity around the blocks that actually
-     * arrived. See {@link #adoptOwnRemnant}.</p>
-     */
-    static UUID assembleTier2Ship(World world, BlockPos anchorPos, Logger logger, UUID keepUuid) {
-        return assembleTier2Ship(world, anchorPos, logger, keepUuid, null);
-    }
-
-    /** @see #assembleTier2Ship(World, BlockPos, Logger, UUID, UUID, ShipLifecycleEvent.Cause) */
-    static UUID assembleTier2Ship(World world, BlockPos anchorPos, Logger logger, UUID keepUuid,
-                                  UUID keepDurableId) {
-        return assembleTier2Ship(world, anchorPos, logger, keepUuid, keepDurableId,
-                ShipLifecycleEvent.Cause.ASSEMBLED);
-    }
-
-    /**
-     * The same assembly, also carrying Advanced Rocketry's DURABLE name for the craft onto the record
-     * it creates.
-     *
-     * <p>Without this the name is lost at every crossing and can only be re-established by the ship's
-     * own flight computer on a tick - which a craft nobody is standing near does not get: a hull
-     * parked in the shared hyperspace world sits in the world's ticking set and is never ticked
-     * (measured: zero ticks over a whole jump). Everything that resolves a ship BY its durable name
-     * then falls back to "whichever craft is nearest", in the one world built to hold many at once.
-     * The name belongs to the ship, so it travels with the ship.</p>
-     */
-    static UUID assembleTier2Ship(World world, BlockPos anchorPos, Logger logger, UUID keepUuid,
-                                  UUID keepDurableId, ShipLifecycleEvent.Cause cause) {
-        UUID identity = adoptOwnRemnant(world, keepUuid, logger);
-        ShipData ship = identity == null
-                ? ValkyrienUtils.createNewShip(world, anchorPos)
-                : ValkyrienUtils.createNewShip(world, anchorPos, identity);
-        if (keepDurableId != null) {
-            // Set WITHOUT touching the index: this record is not in the collection yet, and the
-            // indexing setter would put it there - registering a ship whose blocks have not been
-            // moved in. It is indexed with everything else when the spawn is drained.
-            ship.setArDurableIdBeforeRegistration(keepDurableId);
+    static UUID assembleTier2Ship(World world, BlockPos afcPos, Logger logger, UUID name,
+                                  ShipLifecycleEvent.Cause cause) {
+        // ONE SHIP, ONE IDENTITY, and this signature is the last place it could have been broken.
+        // There used to be three overloads here: one with no identity at all, one with an identity
+        // and no durable name, and one with both as separate values. The first two ASSEMBLED A
+        // NAMELESS SHIP — the substrate minted its own uuid and nothing else in the game could name
+        // the craft — and being package-private made them reachable from anywhere in this package,
+        // which is the whole port. The facade's enforcement (scan the footprint for the flight
+        // computer, take its name) is worth nothing while a door beside it opens on the same room.
+        //
+        // So: ONE form, and the name is REQUIRED. Refused rather than defaulted, because a default
+        // here is precisely the silent divergence the rule exists to abolish.
+        //
+        // `cause` is not an identity and is not defaulted either: it is WHY the craft is appearing,
+        // and only the caller knows it. A paste and a new build arrive here as the same blocks
+        // through the same call, and the ship-was-named announcement must still tell a consumer
+        // whether to mint a durable record for a new vessel or reattach to the one it already had.
+        if (name == null) {
+            logger.error("[SPACE] refusing to assemble a tier-2 ship at {}: no durable name was"
+                    + " given, and a nameless craft takes a substrate-minted id that nothing else"
+                    + " in the game knows. The name comes from the craft's own flight computer.",
+                    afcPos);
+            return null;
         }
+        // The identity IS the name. `adoptOwnRemnant` still runs on it: a crossing cuts the blocks
+        // out of the source world and the substrate's registry entry can outlive them, blockless.
+        // That remnant IS this ship, so it is dropped here and the assembly re-registers the same
+        // identity around the blocks that actually arrived. See {@link #adoptOwnRemnant}.
+        UUID identity = adoptOwnRemnant(world, name, logger);
+        ShipData ship = identity == null
+                ? ValkyrienUtils.createNewShip(world, afcPos)
+                : ValkyrienUtils.createNewShip(world, afcPos, identity);
+        // Set WITHOUT touching the index: this record is not in the collection yet, and the indexing
+        // setter would put it there - registering a ship whose blocks have not been moved in. It is
+        // indexed with everything else when the spawn is drained.
+        //
+        // Written even when `adoptOwnRemnant` refused the identity: the substrate then mints its own
+        // uuid and the two values DIVERGE for this craft, which is a state the durable name must
+        // still describe. It is the one remaining way they can differ, it is logged below, and it is
+        // not reachable from a correct build — a live ship holding this name means the craft's
+        // flight computer was duplicated, which the facade re-mints for before it gets here.
+        ship.setArDurableIdBeforeRegistration(name);
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
-        manager.queueShipSpawn(ship, anchorPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS, cause);
-        logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", anchorPos, ship.getName(),
-                ship.getUuid(), identity == null && keepUuid != null ? ", identity NOT kept" : "");
+        manager.queueShipSpawn(ship, afcPos, BlockFinder.BlockFinderType.FIND_ALL_BLOCKS, cause);
+        logger.info("Queued tier-2 ship assembly at {} (ship '{}', {}{}).", afcPos, ship.getName(),
+                ship.getUuid(), identity == null ? ", identity NOT kept - ids DIVERGE" : "");
         return ship.getUuid();
     }
 
@@ -299,21 +287,6 @@ final class VSBridge {
         return true;
     }
 
-    /** Human-readable identity of the ship a POSITION lookup resolves to, for diagnostics only. */
-    static String describeNearestShip(World world, double x, double y, double z) {
-        ShipData ship = nearestQueryableShip(world, x, y, z);
-        if (ship == null) {
-            return "none";
-        }
-        Vec3d p = ship.getShipTransform().getShipPositionVec3d();
-        AxisAlignedBB yard = claimBounds(ship);
-        return ship.getUuid() + " '" + ship.getName() + "' at ("
-                + (int) p.x + "," + (int) p.y + "," + (int) p.z + ")"
-                + (yard == null ? " yard=NONE"
-                        : " yard=[" + (int) yard.minX + ".." + (int) yard.maxX + "]x["
-                                + (int) yard.minZ + ".." + (int) yard.maxZ + "]");
-    }
-
     /**
      * The body&rarr;world attitude of the ship managing the block at {@code pos}, as
      * an AR-core {@link FreeFlightPhysics.Quat}, or {@code null} if no ship manages
@@ -357,18 +330,23 @@ final class VSBridge {
     }
 
     /**
-     * Raise the physics mod's ship altitude ceiling to AT LEAST {@code required}. The clamp is a
-     * global static applied per physics step; the space cells realize ship poses megablocks above
-     * the stock value, and a ship's own thrust can never carry it past the clamp - so the ceiling
-     * must cover the whole pose band BEFORE the first ship arrives, deterministically, not be
-     * ratcheted up teleport-by-teleport. Never lowers a value the user configured higher; the
-     * raise is per-session (the VS config file is not written back).
+     * Widen the physics mod's ship altitude range so it covers AT LEAST {@code [floor, ceiling]}.
+     * The clamp is a pair of global statics applied per physics step; the space cells realize ship
+     * poses megablocks from the stock values, and a ship's own thrust can never carry it past
+     * either clamp - so the range must cover the whole pose band BEFORE the first ship arrives,
+     * deterministically, not be ratcheted up teleport-by-teleport. Never narrows a range the user
+     * configured wider; the widening is per-session (the VS config file is not written back).
      */
-    static void raiseShipCeilingTo(double required, Logger logger) {
-        if (org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit < required) {
+    static void widenShipAltitudeRange(double floor, double ceiling, Logger logger) {
+        if (org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit < ceiling) {
             logger.info("Raising the physics ship altitude ceiling {} -> {} to cover the space cells.",
-                    org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit, required);
-            org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit = required;
+                    org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit, ceiling);
+            org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit = ceiling;
+        }
+        if (org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit > floor) {
+            logger.info("Lowering the physics ship altitude floor {} -> {} to cover the space cells.",
+                    org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit, floor);
+            org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit = floor;
         }
     }
 
@@ -527,8 +505,170 @@ final class VSBridge {
                 physo.getPhysicsControllersInShip().size()};
     }
 
+    /**
+     * Is {@code uuid} held in {@code world} by a ship that still has BLOCKS — i.e. a real craft
+     * rather than the blockless remnant of one that has left?
+     *
+     * <p>Read-only, and that is the point: {@link #adoptOwnRemnant} asks the same question but
+     * disposes of a remnant as it goes, which a caller deciding what to do BEFORE an assembly cannot
+     * afford. A {@code true} here means the identity is genuinely taken by something alive.</p>
+     */
+    static boolean identityHeldByLiveShip(World world, UUID uuid) {
+        if (world == null || uuid == null) {
+            return false;
+        }
+        ShipData existing = shipByUuid(world, uuid);
+        PhysicsObject loaded = ValkyrienUtils.getServerShipManager(world).getPhysObjectFromUUID(uuid);
+        if (existing == null && loaded == null) {
+            return false;
+        }
+        int blocks = existing == null || existing.getBlockPositions() == null
+                ? -1 : existing.getBlockPositions().size();
+        return blocks != 0;
+    }
+
+    /**
+     * Every ship in {@code world} that is LOADED and past its settling delay, as
+     * {@code substrate uuid -> AR durable id} (the durable id may be null for a craft that has never
+     * been given one).
+     *
+     * <p>Two of the three conjuncts {@link #shipPhysicsGatesById} reports, and the third is left out
+     * deliberately. {@code isPhysicsReady} is the substrate's own initial-ticks delay — it withholds
+     * physics briefly after a load so a freshly placed hull does not fall through the floor — and the
+     * chunk cache is what its resolver needs. Both describe a ship becoming ready to be flown.
+     * {@code isPhysicsEnabled} does not: it is an operational state somebody switches on, so a parked
+     * craft that nobody has commanded is fully loaded with it false. Including it would make this
+     * answer "is anyone flying this", and a caller waiting to BEGIN flying would wait for a state its
+     * own next action causes.</p>
+     *
+     * <p>Applied to the ships we already hold rather than re-looked-up one at a time — this runs on
+     * the server tick, and a lookup per ship per tick would be the expensive part of an otherwise
+     * cheap check. Both ids come straight off the ship's own record, so this asks the substrate
+     * nothing it does not already have in hand, and no substrate type escapes this class.</p>
+     */
+    static Map<String, UUID> shipsReadyForPhysics(World world) {
+        Map<String, UUID> out = new LinkedHashMap<>();
+        for (PhysicsObject physo : ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe()) {
+            if (physo.isPhysicsReady() && physo.getCachedSurroundingChunks() != null) {
+                ShipData data = physo.getShipData();
+                out.put(data.getUuid().toString(), data.getArDurableId());
+            }
+        }
+        return out;
+    }
+
     static int loadedShipCount(World world) {
         return ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe().size();
+    }
+
+    /**
+     * The identities of every LOADED ship in {@code world} — what {@link #loadedShipCount} counted,
+     * named.
+     *
+     * <p>A count says how many; a caller that has established "exactly one" still cannot say WHICH
+     * without this, and "the only one" plus a nearest-lookup is how a cell that briefly held two
+     * ships produced a confident answer about the wrong one.</p>
+     */
+    static java.util.List<String> loadedShipIds(World world) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (PhysicsObject physo : ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe()) {
+            out.add(physo.getShipData().getUuid().toString());
+        }
+        return out;
+    }
+
+    /**
+     * Every LOADED ship in {@code world} as identity → world bounding box, in one pass.
+     *
+     * <p>One pass and one map because the caller's question is about PAIRS: asking per ship would
+     * walk the manager once per craft and could read two boxes a tick apart, which for a question
+     * about whether two hulls overlap is the difference between a meeting and a near miss.</p>
+     */
+    static java.util.Map<String, AxisAlignedBB> loadedShipBoxes(World world) {
+        java.util.Map<String, AxisAlignedBB> out = new java.util.LinkedHashMap<>();
+        for (PhysicsObject physo : ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe()) {
+            AxisAlignedBB box = physo.getShipBoundingBox();
+            if (box != null) {
+                out.put(physo.getShipData().getUuid().toString(), box);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Bring the ship named by {@code shipId} to rest: linear and angular velocity both zeroed.
+     *
+     * <p><b>This is a WRITE, not a brake, and the difference is measured.</b> The substrate
+     * recomputes velocity from forces on every physics step and overwrites what is written here
+     * ({@link #pushShipById} records the measurement: 25 setpoints a tick apart moved a craft by
+     * −0.6 blocks). So a caller that means "stay stopped" has to keep saying it, every tick, for as
+     * long as it means it — which is exactly what the collision module does while two hulls
+     * overlap.</p>
+     */
+    /**
+     * Mark every registered ship in {@code world} for collection, and answer how many were marked.
+     *
+     * <p>Through {@code ShipData.markDead()}, which is the substrate's own "this craft is finished"
+     * — it collects on its next tick, copying nothing back for a blockless hull and deleting the
+     * ship chunks. The alternative, deregistering by hand, requires the caller to know the
+     * substrate's ordering; that knowledge belongs where it is understood.</p>
+     *
+     * <p><b>A scenario's cleanup verb, not a game mechanic.</b> A craft marked here is gone for good
+     * — nothing revives a ship somebody declared finished. Its blocks are DISCARDED, not pasted back
+     * into the world: {@code PhysicsObject.destroyShip} guards the copy-back on {@code !isDead()},
+     * precisely so that retiring a hull does not print a whole craft into the world where it was
+     * floating. Deconstruction is the other disposition and it is a different flag.</p>
+     */
+    static int markAllShipsDead(World world) {
+        int marked = 0;
+        for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
+            if (!ship.isDead()) {
+                ship.markDead();
+                marked++;
+            }
+        }
+        return marked;
+    }
+
+    static boolean haltShipById(World world, String shipId) {
+        PhysicsObject physo = shipById(world, shipId);
+        if (physo == null) {
+            return false;
+        }
+        physo.getPhysicsData().setLinearVelocity(new Vector3d(0.0, 0.0, 0.0));
+        physo.getPhysicsData().setAngularVelocity(new Vector3d(0.0, 0.0, 0.0));
+        return true;
+    }
+
+    /**
+     * Every ship in {@code world}'s REGISTRY, described one per entry: its substrate id, AR's durable
+     * name, how many blocks it owns, whether anything has it loaded, and whether it has been declared
+     * finished.
+     *
+     * <p><b>The registry is the half nothing could see.</b> Every existing reading is about LOADED
+     * ships — {@code ship-count}, {@code ships-loaded}, {@code shipIdsAt} — so a craft that owns no
+     * blocks and nothing has loaded was invisible to every instrument in the tree while still
+     * answering position lookups and holding a lane. "Blockless remnants do not accumulate" was
+     * therefore not a measured claim on either side; it could not be measured at all.</p>
+     *
+     * <p>Each entry is a flat map of primitives, so nothing of the substrate's crosses the gate. The
+     * fields that matter for a remnant are {@code blocks} (0 is one) and {@code loaded} (false means
+     * no destroy pass was ever going to ask about it).</p>
+     */
+    static java.util.List<java.util.Map<String, Object>> registeredShips(World world) {
+        java.util.List<java.util.Map<String, Object>> out = new java.util.ArrayList<>();
+        for (ShipData data : ValkyrienUtils.getQueryableData(world).getShips()) {
+            java.util.Map<String, Object> one = new LinkedHashMap<>();
+            one.put("id", data.getUuid().toString());
+            UUID durable = data.getArDurableId();
+            one.put("durableId", durable == null ? null : durable.toString());
+            one.put("blocks", data.getBlockPositions() == null ? -1 : data.getBlockPositions().size());
+            one.put("loaded", ValkyrienUtils.getServerShipManager(world)
+                    .getPhysObjectFromUUID(data.getUuid()) != null);
+            one.put("dead", data.isDead());
+            out.add(one);
+        }
+        return out;
     }
 
     /**
@@ -538,6 +678,30 @@ final class VSBridge {
      */
     static int queryableShipCount(World world) {
         return ValkyrienUtils.getQueryableData(world).getShips().size();
+    }
+
+    /**
+     * TEST-ONLY FAULT INJECTION: put a registered, blockless, unloaded ship record into {@code world}
+     * and answer with its uuid and the registry size measured immediately after, on this same call.
+     *
+     * <p>This plants exactly the garbage the manager's registry sweep exists to collect: a record in
+     * the registry, owning no blocks, with no physics object and no queue holding it. Production
+     * makes one whenever a hull is cut out of a world and nothing loaded is left for the destroy
+     * pass to walk. It is planted rather than provoked because provoking it means winning a race —
+     * cutting a ship and unloading it inside the same tick — and a garbage collector's test should
+     * be able to state its arrangement rather than hope for it.</p>
+     *
+     * <p><b>The count is taken here, not by a later probe call.</b> Two probe commands are separated
+     * by a complete world pass, so the sweep can have run in between: a test that planted garbage and
+     * then asked a second command how many ships there are would read the state AFTER collection and
+     * could not tell a working sweep from a plant that never happened. The number returned here is
+     * the one that proves the arrangement.</p>
+     */
+    static String[] strandBlocklessRecord(World world, BlockPos anchor) {
+        ShipData stranded = ValkyrienUtils.createNewShip(world, anchor);
+        ValkyrienUtils.getQueryableData(world).addShip(stranded);
+        return new String[] {stranded.getUuid().toString(),
+                Integer.toString(ValkyrienUtils.getQueryableData(world).getShips().size())};
     }
 
     /**
@@ -559,23 +723,60 @@ final class VSBridge {
      * for each. Returns how many ships it requested. (In real play a nearby client loads
      * the ship itself; this is the headless/no-observer equivalent.)
      */
-    static int loadAllShips(World world) {
+    /**
+     * Queue an immediate load for every registered ship in {@code world} that is not loaded yet, and
+     * answer {@code [requested, alreadyLoaded]}.
+     *
+     * <p>BOTH numbers, because {@code requested == 0} has two meanings a caller must be able to tell
+     * apart: nothing needed loading, or there was nothing there at all. The single count this
+     * returned until 2026-09-16 could not, and a test read it as "the ship is loadable" — which it
+     * stopped being the day the server began holding ships loaded and the honest answer became
+     * zero.</p>
+     */
+    static int[] loadAllShipsCounted(World world) {
         WorldServerShipManager manager = ValkyrienUtils.getServerShipManager(world);
         int requested = 0;
+        int alreadyLoaded = 0;
         for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
             ship.setPhysicsEnabled(true);
+            // Only what is not LOADED. Queueing a load for a ship that already has a PhysicsObject
+            // is a request for work that is done — the manager no longer dies of it, but asking is
+            // still wrong, and the count returned below would otherwise report the size of the
+            // registry rather than the number of loads this call actually asked for.
+            //
+            // NOT `isShipInUse`, which also answers true for a ship whose chunks are streaming in
+            // the background. That ship is not loaded yet, and an IMMEDIATE request for it is the
+            // one thing a caller who wants it loaded NOW can do — it is also the exact arrangement
+            // `VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest` is built on, so filtering it here
+            // would quietly disarm the test that guards the crash this verb used to aim at.
+            if (manager.getPhysObjectFromUUID(ship.getUuid()) != null) {
+                alreadyLoaded++;
+                continue;
+            }
             manager.queueShipLoad(ship.getUuid());
             requested++;
         }
-        return requested;
+        return new int[]{requested, alreadyLoaded};
     }
 
     /**
      * The subspace SHIPYARD bounding box (world coordinates, in VS's far-off shipyard region) of the
-     * loaded ship whose world BB contains {@code (x,y,z)}, or {@code null} if no ship is there. VS stores
-     * a ship's blocks in a fixed shipyard keyed by its chunk claim, NOT at the ship's rendered position;
-     * to snapshot a ship's actual blocks you must cut THIS region, not the visible AABB. Spans the claim's
-     * chunks over the full Y column. Only MC types cross back to AR core.
+     * ship NEAREST to {@code (x,y,z)}, or {@code null} if the world holds none. VS stores a ship's
+     * blocks in a fixed shipyard keyed by its chunk claim, NOT at the ship's rendered position; to
+     * snapshot a ship's actual blocks you must cut THIS region, not the visible AABB. Spans the
+     * claim's chunks over the full Y column. Only MC types cross back to AR core.
+     *
+     * <p><b>Nearest, not containing, and with NO distance bound</b> — {@link #nearestQueryableShip}
+     * walks every registered ship and keeps the smallest distance, so this answers for a craft
+     * 51 200 blocks away as readily as for one under the caller's feet, and it answers out of the
+     * REGISTRY, which includes ships that are not loaded and the blockless remnants a crossing
+     * deliberately leaves behind. This javadoc claimed "the loaded ship whose world BB contains
+     * (x,y,z)" until 2026-09-06; the body has never done either of those things, and every caller
+     * that trusted the word "contains" was reading a guarantee that was not there.</p>
+     *
+     * <p>Prefer {@link #shipyardBoundsOf} wherever the caller knows which ship it means. Where a
+     * BLOCK is the question, VS answers it exactly — {@code ValkyrienUtils.getShipManagingBlock}
+     * tests {@code ChunkClaim.containsBlock} — and that is a different question from this one.</p>
      */
     static AxisAlignedBB shipyardBoundsAt(World world, double x, double y, double z) {
         return claimBounds(nearestQueryableShip(world, x, y, z));
@@ -631,6 +832,24 @@ final class VSBridge {
      * not: the boot-time hyperspace reconciliation runs with nobody near any of these ships, which
      * is exactly the state the loaded set is empty in.
      */
+    /**
+     * The WORLD-frame bounding box of the registered ship {@code shipUuid}, or {@code null} when
+     * this world's registry does not know it.
+     *
+     * <p>Asked of {@code ShipData}, which is the registry's own record and outlives every load and
+     * unload — so this answers for a craft nobody is standing near, which is exactly the craft a
+     * crossing is about. It is the hull's ACTUAL extent, not a radius around its pose: a seat block
+     * forty metres down a long hull is inside this box and outside any plausible radius.</p>
+     */
+    static net.minecraft.util.math.AxisAlignedBB shipWorldBoundsOf(World world, UUID shipUuid) {
+        for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
+            if (shipUuid.equals(ship.getUuid())) {
+                return ship.getShipBB();
+            }
+        }
+        return null;
+    }
+
     static java.util.Map<UUID, double[]> registeredShipPoses(World world) {
         java.util.Map<UUID, double[]> out = new java.util.LinkedHashMap<>();
         for (ShipData ship : ValkyrienUtils.getQueryableData(world).getShips()) {
@@ -663,20 +882,29 @@ final class VSBridge {
     }
 
     /**
-     * Deregister {@code uuid} unless the physics mod is still holding it. "Holding" is asked of the
-     * MANAGER as one question, because a ship can be in its hands without being loaded: while its
-     * chunks stream in it has no physics object yet, and deregistering it in that window throws out of
-     * the world tick on the next chunk-provider pass and takes the dedicated server with it. Asking
-     * only "is a physics object loaded" is what leaves that window open.
+     * Declare the craft {@code uuid} FINISHED: it is collected on the next tick of {@code world},
+     * loaded or not.
+     *
+     * <p>This used to deregister by hand, guarded on the physics mod not holding the ship — and the
+     * guard was there because removing a record the substrate is still working with throws out of the
+     * world tick and takes a dedicated server with it. The guard was correct and the shape was not:
+     * it made AR responsible for knowing the substrate's own ordering, and it did nothing at all in
+     * the case it was guarding, so a craft the substrate was mid-way through kept its registry entry
+     * for the life of the world.</p>
+     *
+     * <p>Marking states the intent and leaves the disposal where the ordering is understood. Nothing
+     * here has to ask whether the ship is loaded, in use, or streaming: those are exactly the
+     * distinctions the collector already makes, and it now makes them for unloaded ships too.</p>
      */
     static boolean releaseShipIfNothingLoaded(World world, UUID uuid) {
         if (uuid == null) {
             return false;
         }
-        if (ValkyrienUtils.getServerShipManager(world).isShipInUse(uuid)) {
+        ShipData data = shipByUuid(world, uuid);
+        if (data == null) {
             return false;
         }
-        ValkyrienUtils.getQueryableData(world).removeShip(uuid);
+        data.markDead();
         return true;
     }
 
@@ -762,6 +990,16 @@ final class VSBridge {
             return false;
         }
         ship.setPhysicsEnabled(true);
+        return true;
+    }
+
+    /** PARK the ship NAMED by {@code uuid}. The identity-keyed twin of {@link #parkShipAt}. */
+    static boolean parkShip(World world, UUID uuid) {
+        ShipData ship = shipByUuid(world, uuid);
+        if (ship == null) {
+            return false;
+        }
+        ship.setPhysicsEnabled(false);
         return true;
     }
 
@@ -852,51 +1090,10 @@ final class VSBridge {
     }
 
     /**
-     * State of the loaded ship whose world position is nearest to {@code (x,y,z)}, as a
-     * flat array {@code [posX, posY, posZ, qw, qx, qy, qz, velX, velY, velZ]} (world-frame
-     * position + body&rarr;world attitude + linear velocity), or {@code null} if no ship is
-     * loaded. Only primitive/MC types cross back to AR core.
-     *
-     * <p>{@code maxDist} bounds the search: when the nearest loaded ship is farther than that from
-     * the query point the answer is {@code null} — "no ship here" — rather than a distant one.
-     * Pass {@link Double#POSITIVE_INFINITY} for the unbounded query. A world holding several ships
-     * cannot attribute an unbounded answer to the ship the caller meant: the moment that ship
-     * unloads or flies off, the lookup silently starts describing its neighbour instead, and
-     * nothing in the answer says so.</p>
-     *
-     * <p><b>A bound is a mitigation, not an identity.</b> The distance it compares is the FULL 3-D
-     * one ({@link #nearestShip}), so a bound sized against how far apart two ships are BUILT says
-     * nothing about how far one of them then FLIES: a caller that means one particular ship and
-     * lets it move should capture {@link #nearestShipId} once, while its ship is provably the only
-     * candidate, and use {@link #shipStateById} afterwards.</p>
-     */
-    static double[] nearestShipState(World world, double x, double y, double z, double maxDist) {
-        PhysicsObject physo = nearestShip(world, x, y, z, maxDist);
-        if (physo == null) {
-            return null;
-        }
-        return stateOf(physo);
-    }
-
-    /**
-     * The IDENTITY of the loaded ship nearest to {@code (x,y,z)} within {@code maxDist} — its VS
-     * ship uuid, as a string — or {@code null} when there is none.
-     *
-     * <p>This is the one call in this family that a caller is meant to make at a moment it can
-     * defend: right after its own assembly, when the queried spot provably holds its ship and no
-     * other. Everything afterwards goes through {@link #shipStateById}, which has no distance term
-     * to be wrong about.</p>
-     */
-    static String nearestShipId(World world, double x, double y, double z, double maxDist) {
-        PhysicsObject physo = nearestShip(world, x, y, z, maxDist);
-        return physo == null ? null : physo.getShipData().getUuid().toString();
-    }
-
-    /**
      * The IDENTITY of the ship that owns a SUBSPACE block position — its VS ship uuid as a string —
      * or {@code null} when the position belongs to no loaded ship.
      *
-     * <p>This is the inverse of {@link #nearestShipId}: it answers from the ship's chunk CLAIM, which
+     * <p>It answers from the ship's chunk CLAIM, which
      * contains the block or does not, rather than from a distance that is merely small. A caller
      * holding a block of a ship (a seat, a controller, a hatch) uses this to say WHICH ship it is a
      * block of, on a world where several ships exist and their subspace yards sit side by side.</p>
@@ -908,7 +1105,8 @@ final class VSBridge {
     }
 
     /**
-     * State of the loaded ship with this uuid, in the same layout as {@link #nearestShipState}, or
+     * State of the loaded ship with this uuid, as
+     * {@code [posX,posY,posZ, qw,qx,qy,qz, velX,velY,velZ]}, or
      * {@code null} when the id names no ship that is loaded here (unloaded, deleted, another world,
      * or not a uuid at all). Position-independent: the ship may be anywhere.
      */
@@ -966,9 +1164,16 @@ final class VSBridge {
         if (physo == null) {
             return false;
         }
-        // A bare assembled ship is loaded but has physics disabled by default, so a
-        // velocity setpoint is ignored. Enable physics (a flag, not a load — it does not
-        // trip the spawn/proximity double-load) before applying the setpoint.
+        // A bare assembled ship is loaded but has physics disabled by default, so enable it (a flag,
+        // not a load — it does not trip the spawn/proximity double-load) before writing anything.
+        //
+        // WHAT THIS DOES NOT DO, measured 2026-08-22: it does not drive the ship. The substrate
+        // recomputes velocity from forces on every physics step and overwrites this write, so 25
+        // setpoints of 10 b/s a tick apart moved a craft by −0.6 blocks. Enabling physics is what
+        // makes the write land, not what makes it take effect. Anything that wants a craft to MOVE
+        // goes through its flight computer (commandProbeVelocity), which realizes the command as
+        // force once per physics tick. Kept because a setpoint that is ignored is still worth being
+        // able to write: it is the control leg that tells a working drive from a broken one.
         physo.getShipData().setPhysicsEnabled(true);
         physo.getPhysicsData().setLinearVelocity(new Vector3d(vx, vy, vz));
         return true;
@@ -1097,6 +1302,12 @@ final class VSBridge {
                 physo = loadedPhysoByUuid(entity.world, lastTouched);
             }
             out.put("shipLoaded", physo != null);
+            // WHICH ship, not merely that there is one. `shipLoaded` alone is a claim no reader can
+            // pin to a subject: a caller asserting "he is aboard his ship" gets the same true from a
+            // body aboard somebody else's, and `lastTouchedShip` is null on the path AR resolves
+            // itself, so it cannot stand in. Measured 2026-09-06: 21 test call sites rested on
+            // `shipLoaded` and not one of them could name the craft it had just asserted about.
+            out.put("shipId", physo == null ? null : physo.getShipData().getUuid().toString());
             if (physo != null) {
                 Vec3d local = physo.getShipData().getShipTransform().transform(
                         new Vec3d(entity.posX, entity.posY, entity.posZ), TransformType.GLOBAL_TO_SUBSPACE);
@@ -1238,7 +1449,7 @@ final class VSBridge {
     // ---- Anchored (by-ship-id) frame access -------------------------------------------------
     // A capture EPISODE must keep talking to the ship it was captured on. Resolving the ship by
     // world-AABB containment every call re-picks it, and with several loaded ships whose grown
-    // boxes overlap, first-match can flip mid-episode. These variants take the
+    // boxes overlap, first-match can flip mid-episode — measured twice. These variants take the
     // ship's UUID string (its ShipData identity) and answer for THAT ship or not at all.
 
     /** The loaded ship whose {@code ShipData} UUID string equals {@code shipId}, or null. */
@@ -1410,22 +1621,101 @@ final class VSBridge {
     /** {@link #shipVelocityAtPoint}, but for the anchored ship {@code shipId} instead of a
      *  containment lookup — the guard of an anchored capture must widen by ITS ship's carry.
      *
-     *  <p>On the CLIENT the physics feed does not exist: {@code getPhysicsData()}'s velocities live
-     *  on the server's physics thread and read ZERO here even while the ship's transform visibly
-     *  steps between ticks (network transform updates). Everything built on this value — the
-     *  external-move guard's carry-widening AND the held-carry velocity subtraction — was therefore
-     *  blind client-side, and the client capture thrashed on any fast-moving ship (drop+re-capture
-     *  every tick once the per-tick step crossed the bare 0.2 epsilon; reproduced in-harness on a
-     *  level fast climb). The client instead derives the velocity the only honest way
-     *  it can: MEASURING the observed transform's per-tick delta. */
+     *  <p><b>One expression, both sides, and that is the point.</b> A craft's motion crosses the
+     *  wire with its pose ({@code ShipTransformUpdateMessage}, every tick), so the client evaluates
+     *  the same {@code v + omega x r} against the same declared numbers the server does — nobody
+     *  reconstructs anything.
+     *
+     *  <p>It was not always so, and the history is worth one paragraph because the shape recurs.
+     *  The client's {@code getPhysicsData()} used to read ZERO — the ship index packet carries
+     *  transform, inertia and the physics flag but never the velocities — while the ship's
+     *  transform visibly stepped between ticks. Everything built on the value was blind client-side
+     *  and the capture thrashed on any fast-moving ship (drop + re-capture every tick once the step
+     *  crossed the bare 0.2 epsilon). The client then DERIVED a rate by differencing
+     *  observations, which is a guess wearing a measurement's clothes: it was divided by a count of
+     *  calls rather than by time, and a 0.279 rad/s roll came back as 55.5 rad/s and threw a body a
+     *  kilometre into the sky (#390). A body is not moved by a number only its own client invented;
+     *  the craft says how it is moving, and both sides read the same answer. */
     static double[] shipVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
         try {
             PhysicsObject physo = physoById(world, shipId);
             if (physo == null) {
                 return null;
             }
-            if (world.isRemote) {
-                return measuredVelocityAtPoint(world, physo, x, y, z);
+            // The motion of the pose THIS side is standing on. On the server that is the physics
+            // state the craft declares; on the client it is the pose the interpolator shows, which
+            // follows the declared motion and additionally retires whatever a mispredicted tick left
+            // behind. Taking the declared numbers on the client instead was measured to slide a body
+            // across its own deck: carried at 0.07 blocks/tick while the pose under it stepped 0.5,
+            // and the capture guard read the difference as a teleport.
+            Vector3dc vLin;
+            Vector3dc w;
+            if (world.isRemote && physo.getTransformInterpolator() != null) {
+                org.joml.Vector3d shownLinear = new org.joml.Vector3d();
+                org.joml.Vector3d shownAngular = new org.joml.Vector3d();
+                physo.getTransformInterpolator().getShownVelocity(shownLinear, shownAngular);
+                vLin = shownLinear;
+                w = shownAngular;
+            } else {
+                vLin = physo.getPhysicsData().getLinearVelocity();
+                w = physo.getPhysicsData().getAngularVelocity();
+            }
+            Vec3d c = physo.getShipData().getShipTransform().getShipPositionVec3d();
+            double rx = x - c.x, ry = y - c.y, rz = z - c.z;
+            return new double[]{
+                    vLin.x() + (w.y() * rz - w.z() * ry),
+                    vLin.y() + (w.z() * rx - w.x() * rz),
+                    vLin.z() + (w.x() * ry - w.y() * rx)
+            };
+        } catch (Throwable t) {
+            // ANSWERING NOTHING IS A DEGRADATION AND IT SAYS SO — once per cause, because this runs
+            // every tick for every carried body and a per-tick log would be its own outage.
+            //
+            // The silence this replaces cost a day: a client-side pose source that threw on the
+            // ticks a pose had not arrived made this return null, a body lost its carry entirely on
+            // one tick in six, and the capture guard — whose allowance is three times that carry —
+            // fell to its bare epsilon while the deck stepped half a block. What that looked like
+            // from outside was "the smoothing policy churns the capture", and three different
+            // policies were written and measured against a fault that was never in any of them.
+            reportSuppressed("shipVelocityAtPointFor", t);
+            return null;
+        }
+    }
+
+    /** Causes already reported by {@link #reportSuppressed}, so a per-tick failure says its piece
+     *  once instead of drowning the log it is trying to be visible in. */
+    private static final java.util.Set<String> REPORTED_SUPPRESSED =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
+    /**
+     * Say, once, that this port answered with nothing because something threw.
+     *
+     * <p>Keyed on the operation plus the throwable's own class and site, so two different faults are
+     * two lines and one fault repeated is one. Deliberately not a rethrow: a body losing its carry
+     * for a tick is survivable and crashing the client over it is not, which is exactly why the
+     * catch is there — but a caller that cannot tell "the ship is not moving" from "nobody could
+     * work out whether it is" has been handed a wrong answer rather than none.</p>
+     */
+    /**
+     * The craft's DECLARED velocity at a point — what it says it is doing, rather than what the pose
+     * on this side has just done.
+     *
+     * <p>The two are one statement while a craft's motion is steady and two while it is changing: the
+     * shown pose reports the step it took over the PREVIOUS tick, and a hard-driven craft can change
+     * its rate several fold between two of them. A body's CARRY must be what the deck actually did —
+     * anything else slides it across the deck — but a TOLERANCE has no business being the tighter of
+     * two known numbers, and the capture guard was dropping bodies over exactly that difference:
+     * measured, a deck step of 1.6 blocks judged against an allowance built from 0.2.</p>
+     *
+     * <p>On the server this returns what {@link #shipVelocityAtPointFor} returns; the two can differ
+     * only on the client, which is the side with a pose source standing between the craft and the
+     * body.</p>
+     */
+    static double[] declaredVelocityAtPointFor(World world, String shipId, double x, double y, double z) {
+        try {
+            PhysicsObject physo = physoById(world, shipId);
+            if (physo == null) {
+                return null;
             }
             Vector3dc vLin = physo.getPhysicsData().getLinearVelocity();
             Vector3dc w = physo.getPhysicsData().getAngularVelocity();
@@ -1437,67 +1727,22 @@ final class VSBridge {
                     vLin.z() + (w.x() * ry - w.y() * rx)
             };
         } catch (Throwable t) {
+            reportSuppressed("declaredVelocityAtPointFor", t);
             return null;
         }
     }
 
-    /** Per-side cache of each ship's last OBSERVED transform and the rates derived from its delta:
-     *  {@code [tick, posXYZ, quatWXYZ, vLinXYZ, omegaXYZ]}. Weak keys: an unloading ship takes its
-     *  entry with it. Synchronized only against the two logical sides' threads; entries are
-     *  side-local because each side holds its own {@link PhysicsObject} instances. */
-    private static final Map<PhysicsObject, double[]> OBSERVED_TRANSFORM =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<PhysicsObject, double[]>());
-
-    /** The MEASURED world-frame velocity (blocks/second) of {@code physo}'s transform at the point
-     *  {@code (x,y,z)}: linear rate from the ship position's per-tick delta, angular rate from the
-     *  rotation quaternion's per-tick delta, combined as {@code v + omega x r}. This is the speed
-     *  the deck is ACTUALLY carrying that point as observed on this side — exactly the quantity the
-     *  external-move guard must tolerate — independent of any physics feed. Null until two distinct
-     *  ticks have been observed (one tick of warm-up per ship per side). */
-    private static double[] measuredVelocityAtPoint(World world, PhysicsObject physo,
-                                                    double x, double y, double z) {
-        ShipTransform t = physo.getShipData().getShipTransform();
-        Vec3d c = t.getShipPositionVec3d();
-        Quaterniond q = t.rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
-        long now = world.getTotalWorldTime();
-        double[] prev = OBSERVED_TRANSFORM.get(physo);
-        double[] cur;
-        if (prev != null && (long) prev[0] == now) {
-            cur = prev; // second caller this tick (guard + commit): reuse the derived rates
-        } else {
-            cur = new double[14];
-            cur[0] = now;
-            cur[1] = c.x; cur[2] = c.y; cur[3] = c.z;
-            cur[4] = q.w; cur[5] = q.x; cur[6] = q.y; cur[7] = q.z;
-            if (prev == null || now < (long) prev[0]) {
-                OBSERVED_TRANSFORM.put(physo, cur);
-                return null; // first observation of this ship on this side: no rate yet
-            }
-            double dt = (now - (long) prev[0]) * 0.05;
-            cur[8] = (c.x - prev[1]) / dt;
-            cur[9] = (c.y - prev[2]) / dt;
-            cur[10] = (c.z - prev[3]) / dt;
-            // omega from the rotation delta dq = q * conj(prevQ) (world-frame, left-multiplied)
-            double pw = prev[4], px = prev[5], py = prev[6], pz = prev[7];
-            double dw = q.w * pw + q.x * px + q.y * py + q.z * pz;
-            double dx = -q.w * px + q.x * pw - q.y * pz + q.z * py;
-            double dy = -q.w * py + q.x * pz + q.y * pw - q.z * px;
-            double dz = -q.w * pz - q.x * py + q.y * px + q.z * pw;
-            double s = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (s > 1.0E-12) {
-                if (dw < 0) { dx = -dx; dy = -dy; dz = -dz; } // shortest arc
-                double angle = 2.0 * Math.atan2(s, Math.abs(dw));
-                double k = angle / (s * dt);
-                cur[11] = dx * k; cur[12] = dy * k; cur[13] = dz * k;
-            }
-            OBSERVED_TRANSFORM.put(physo, cur);
+    private static void reportSuppressed(String operation, Throwable t) {
+        StackTraceElement[] trace = t.getStackTrace();
+        String site = trace.length > 0 ? trace[0].toString() : "no frames";
+        String key = operation + "|" + t.getClass().getName() + "|" + site;
+        if (!REPORTED_SUPPRESSED.add(key)) {
+            return;
         }
-        double rx = x - c.x, ry = y - c.y, rz = z - c.z;
-        return new double[]{
-                cur[8] + (cur[12] * rz - cur[13] * ry),
-                cur[9] + (cur[13] * rx - cur[11] * rz),
-                cur[10] + (cur[11] * ry - cur[12] * rx)
-        };
+        zmaster587.advancedRocketry.AdvancedRocketry.logger.warn(
+                "[VS-PORT] " + operation + " answered NOTHING because " + t.getClass().getSimpleName()
+                        + " was thrown at " + site + " — a caller that reads this as \"not moving\""
+                        + " is acting on a wrong answer. Reported once per cause.", t);
     }
 
     /**
@@ -1628,41 +1873,22 @@ final class VSBridge {
     }
 
     /**
-     * The world-frame angular velocity {@code [x,y,z]} (rad/s) of the loaded ship nearest to
-     * {@code (x,y,z)}, or {@code null} if no ship is loaded. Read-only; used by the flight HUD and by
-     * the test probe that pins "a centred flight cursor brings the ship's spin to rest".
+     * Is this record a REMNANT — a ship that owns no blocks — rather than a craft?
+     *
+     * <p>A hull cut out of a world leaves its record behind owning nothing. The manager's registry
+     * sweep collects such a record, but only on its next tick, so between the cut and that tick a
+     * remnant is still in the loaded set and still has a position. It is not a ship, and nothing that
+     * asks "which ship is here" wants it.</p>
+     *
+     * <p><b>A null block set is NOT empty, and the difference decides the answer.</b> Null means the
+     * record does not say. Here that leaves the craft a CANDIDATE — the opposite of what the same
+     * unknown means to the collector, and for the same reason: pick the less self-assured action. A
+     * loaded {@code PhysicsObject} exists because the manager built one, which is better evidence of
+     * a real craft than an unfilled field is of a fake one, so an unreadable set must not hide a ship
+     * that is really there.</p>
      */
-    static double[] nearestShipAngularVelocity(World world, double x, double y, double z,
-                                               double maxDist) {
-        PhysicsObject physo = nearestShip(world, x, y, z, maxDist);
-        if (physo == null) {
-            return null;
-        }
-        Vector3dc w = physo.getPhysicsData().getAngularVelocity();
-        return new double[]{w.x(), w.y(), w.z()};
+    private static boolean isBlocklessRemnant(ShipData data) {
+        return data.getBlockPositions() != null && data.getBlockPositions().isEmpty();
     }
 
-    private static PhysicsObject nearestShip(World world, double x, double y, double z) {
-        return nearestShip(world, x, y, z, Double.POSITIVE_INFINITY);
-    }
-
-    private static PhysicsObject nearestShip(World world, double x, double y, double z,
-                                             double maxDist) {
-        PhysicsObject best = null;
-        double bestDistSq = Double.MAX_VALUE;
-        ImmutableList<PhysicsObject> ships =
-                ValkyrienUtils.getServerShipManager(world).getAllLoadedThreadSafe();
-        for (PhysicsObject physo : ships) {
-            Vec3d pos = physo.getShipData().getShipTransform().getShipPositionVec3d();
-            double distSq = pos.squareDistanceTo(x, y, z);
-            if (distSq < bestDistSq) {
-                bestDistSq = distSq;
-                best = physo;
-            }
-        }
-        if (best != null && Double.isFinite(maxDist) && bestDistSq > maxDist * maxDist) {
-            return null;
-        }
-        return best;
-    }
 }

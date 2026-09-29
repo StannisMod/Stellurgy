@@ -78,9 +78,14 @@ public class WorldCommandPlanetSetGetContractTest extends AbstractSharedServerTe
     public void planetGetEchoesCurrentAtmosphereDensity() throws Exception {
         int probeValue = planetIntField(DIM, "atmosphereDensity");
         String getResp = exec("ar planet get " + DIM + " atmosphereDensity");
-        assertTrue("planet get response must contain current density "
-                        + probeValue + " — got: " + getResp,
-                getResp.contains(String.valueOf(probeValue)));
+        // The chat line IS the contract here — there is no data form for a player command — but
+        // the claim is bounded at both ends instead of hunting for digits. The message is
+        // `%s=%s` (en_US.lang), so the field name bounds it on the left and the end of the line
+        // on the right: the bare needle `50` was answered by a coordinate, a tick count, or a
+        // density of 500 printed anywhere in the same output.
+        assertTrue("planet get response must echo atmosphereDensity=" + probeValue
+                        + " — got: " + getResp,
+                echoesField(getResp, "atmosphereDensity", String.valueOf(probeValue)));
     }
 
     /** {@code /ar planet list} prints one chat line per registered dim
@@ -93,5 +98,24 @@ public class WorldCommandPlanetSetGetContractTest extends AbstractSharedServerTe
         String resp = exec("ar planet list");
         assertTrue("planet list must include DIM0 — got: " + resp,
                 resp.contains("DIM0"));
+    }
+
+    /**
+     * Whether any line of a chat reply ENDS with {@code field=value} — the shape
+     * {@code commands.advancedrocketry.planet.get.success} prints.
+     *
+     * <p>A chat line is the contract for a player command, so it is read as text; what this adds
+     * is BOUNDS. The field name and the {@code =} bound it on the left, the end of the line on
+     * the right, so neither a longer value nor the digits appearing elsewhere in the output can
+     * answer it. The server's own log prefix sits on the left of the line and is why this is an
+     * {@code endsWith} rather than an equality.</p>
+     */
+    private static boolean echoesField(String chatReply, String field, String value) {
+        for (String line : chatReply.split("\\R")) {
+            if (line.trim().endsWith(field + "=" + value)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -1,12 +1,18 @@
 package zmaster587.advancedRocketry.test.client;
 
-import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
-import org.junit.Assume;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import zmaster587.advancedRocketry.test.Events;
+import zmaster587.advancedRocketry.test.PilotSeat;
+import zmaster587.advancedRocketry.test.TransitSetup;
+import zmaster587.advancedRocketry.test.Reply;
+import zmaster587.advancedRocketry.test.ShipReadiness;
+import zmaster587.advancedRocketry.test.ShipIdentity;
+import zmaster587.advancedRocketry.test.ShipInfo;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -48,15 +54,16 @@ import static org.junit.Assert.assertTrue;
  * 24/40 samples unseated with a 36.8-block anchor lag, GREEN with the fix at 0/40 and a 41.0-block
  * lag - i.e. the guard held under a HARDER load than the one that broke it.</p>
  *
- * <p>Gated on real VS - run with {@code -PwithVS}.</p>
  */
-public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractSharedVsClientE2ETest {
 
-    private static final Pattern PLAYER_NAME = Pattern.compile("\"player\":\"([^\"]+)\"");
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-    private static final Pattern POS_X = Pattern.compile("\"posX\":(-?[0-9.E\\-]+)");
-    private static final Pattern POS_Z = Pattern.compile("\"posZ\":(-?[0-9.E\\-]+)");
+    @Override
+    protected String subsystem() {
+        return "vs-rider-mount-at-cruise";
+    }
+
+    private static final String PLAYER_NAME = "player";
 
     /**
      * The mount is registered with a tracking range of 16 blocks and an anchor republished every 20
@@ -69,117 +76,132 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
     /** Commanded cruise, blocks/SECOND (the physics velocity unit): 2 blocks/tick, the reported speed. */
     private static final double COMMANDED_SPEED_BLOCKS_PER_SECOND = 40.0;
 
-    /** Ticks between the two samples a cruise-speed measurement is taken from. */
-    private static final int SETTLE_SAMPLE_TICKS = 10;
+    /** Ticks between the two samples a cruise-speed measurement is taken from — twenty, so a
+     *  reading's quantization is half what a ten-tick one carries (measured below). */
+    private static final int SETTLE_SAMPLE_TICKS = 20;
 
-    /** How close two successive speed samples must be before the cruise counts as STEADY. Loose
-     *  enough to survive physics jitter, tight enough that the telemetry the mount publishes has
-     *  stopped moving - which is the condition the anchor staleness needs. */
-    private static final double STEADY_EPSILON = 0.002;
+    /**
+     * Ticks from the cruise command before its speed is judged. Measured 2026-09-24 in ten-tick
+     * samples: 0.58, 1.63, 2.07, 2.00, 2.07, 2.27, 2.00 blocks/tick — at cruise by the third sample
+     * (~30 ticks), so sixty is twice that.
+     */
+    private static final int CRUISE_RAMP_TICKS = 60;
+
+    /** How long the CLIENT is given to perform a seating or a release the server has already done,
+     *  in ticks — a ceiling on one round trip. */
+    private static final int SEAT_LINK_BUDGET_TICKS = 200;
+
+    /**
+     * How close two successive twenty-tick speed readings must be for the cruise to count as STEADY.
+     * From the same measurement: at cruise, successive ten-tick readings differed by up to 0.27
+     * (sampling quantization — twenty ticks halves it to ~0.13), while the ramp's successive steps
+     * were 1.05 and 0.43. 0.2 sits between the two. The 0.002 it replaced was met only when two
+     * readings happened to come out identical, on the seventh attempt of a loop.
+     */
+    private static final double STEADY_TOLERANCE = 0.2;
 
     /** Four full 20-tick tracking cycles: on the broken build the mount is evicted for roughly half
      *  of every one of them. */
     private static final int OBSERVE_TICKS = 80;
     private static final int POLL_EVERY_TICKS = 2;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", serverClient().execute(cmd));
-    }
-
-    private static double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected " + p.pattern() + " in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+    private static double readDouble(String json, String field) {
+        double value = Reply.of(json).number(field);
+        return value;
     }
 
     private static int readInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected \"" + key + "\" in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
+        assertTrue("expected \"" + key + "\" in: " + json, Reply.of(json).has(key));
+        return Reply.of(json).integer(key);
     }
 
     private static boolean readBool(String json, String key) {
-        return Pattern.compile("\"" + key + "\":true").matcher(json).find();
+        return Reply.of(json).bool(key);
     }
 
     private boolean riding() throws Exception {
         return bot().reportRidingEntity().get("riding").getAsBoolean();
     }
 
-    private boolean serverHasVs() throws Exception {
-        return exec("artest vs available").contains("\"available\":true");
-    }
-
     private static int readIntOr(String json, String key, int fallback) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : fallback;
+        // absence is the answer, and WHICH answer is the CALLER's: this verb takes the
+        // default as an argument, so every call site names what a missing field means there.
+        return Reply.of(json).integerOr(key, fallback);
     }
 
     /** Poll for a loaded VS ship in {@code dim} (assembly is async; a headless server forces the load). */
     private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (readIntOr(exec("artest vs ship-count-all " + dim), "count", -1) >= 1) {
-                exec("artest vs load-ships " + dim);
-                int loaded = readIntOr(exec("artest vs ship-count " + dim), "count", -1);
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            bot().waitTicks(5);
-        }
-        return 0;
+        // ASSERTED, not waited for — see ShipReadiness, which carries the measurement: the waiting
+        // branch of this helper never executed on the server tier, at one fork or at six, because
+        // the ship is already loaded by the time a scenario asks. The postcondition fails at once
+        // and names whether the craft never REGISTERED or registered and did not LOAD.
+        return ShipReadiness.requireLoaded(this::exec, dim,
+                "this scenario's craft must be loaded before the rider is put on it");
     }
 
+    /**
+     * The rider keeps his mount through a coasting horizontal cruise faster than the mount's
+     * tracking headroom.
+     *
+     * <p>red-witnessed: with {@code MixinEntityTrackerRiderSeesVehicle} no longer forcing the mount
+     * visible to its own rider, this fails with "the client threw the rider off his mount 24 of 40
+     * samples", worst anchor lag 40.0 blocks against a 16-block range — 2026-09-28, on the stimulus as
+     * it stands after the settle became a dose and a two-speed window.</p>
+     */
     @Test
     public void aSeatedRiderNeverLosesTheMountHeIsRidingWhileTheShipCruises() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies (run with -PwithVS)", serverHasVs());
 
         // Headless: nobody is near the ship between probe calls, so pin it loaded. This is
         // arrangement only - what is under test is what the client is TOLD about an entity it
         // already has, not whether the ship loads.
-        exec("artest vs permaload true");
 
-        String setup = exec("artest space transit-setup-empty");
-        assertTrue("ARRANGEMENT: empty cell setup must succeed: " + setup, readBool(setup, "ok"));
-        int dim = readInt(setup, "originDim");
+        int dim = TransitSetup.empty(this::exec).originDim;
 
-        int bx = 40, by = 64, bz = 40;
-        assertTrue("ARRANGEMENT: chunk warmup failed",
-                readBool(exec("artest chunk warmup " + dim + " " + ((bx - 2) >> 4) + " " + ((bz - 2) >> 4)
-                        + " " + ((bx + 7) >> 4) + " " + ((bz + 7) >> 4)), "ok"));
-
-        String fixture = exec("artest fixture rocket " + dim + " " + bx + " " + by + " " + bz
-                + " with-pilot-seat");
-        assertTrue("ARRANGEMENT: with-pilot-seat fixture failed: " + fixture, readBool(fixture, "ok"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("ARRANGEMENT: fixture missing builderPos: " + fixture, bp.find());
-        String assembled = exec("artest rocket assemble " + dim
-                + " " + bp.group(1) + " " + bp.group(2) + " " + bp.group(3));
-        assertTrue("ARRANGEMENT: a with-pilot-seat build must route to a ship: " + assembled,
-                assembled.contains("\"rocketCount\":0"));
-        assertTrue("ARRANGEMENT: the ship never assembled/loaded in the cell (dim " + dim + ")",
+        // The cell is a void world, so this is not about escaping terrain — it is about ONE
+        // definition of where a fixture stands instead of a 64 nobody chose. The first link still
+        // earns its place: it MEASURES that the cell is empty rather than taking the setup probe's
+        // word for it.
+        //
+        // NOT ALLOCATED FROM A PLOT, deliberately. A plot keeps a scenario clear of its siblings in
+        // a SHARED world; this craft is alone in a cell made for it, so there is nobody to be kept
+        // clear of, and moving it into a region of that dimension whose extent nobody has measured
+        // would be a real risk taken for no contract.
+        final zmaster587.advancedRocketry.test.FixtureSite site =
+                zmaster587.advancedRocketry.test.FixtureSite.openAir(dim, 40, 40);
+        int bx = site.x, by = site.y, bz = site.z;
+        String assembled = zmaster587.advancedRocketry.test.RocketFixture.assembleAt(site, this::exec, "with-pilot-seat", 2, 16,
+                "the craft whose rider must stay aboard through the cruise");
+        scenario().requireArranged("a with-pilot-seat build must route to a ship: " + assembled,
+                (Reply.of(assembled).integer("rocketCount") == 0));
+        scenario().requireArranged("the ship never assembled/loaded in the cell (dim " + dim + ")",
                 waitForLoadedShip(dim) >= 1);
 
-        String seat = exec("artest vs find-seat " + dim
-                + " " + (bx + 3) + " " + (by + 3) + " " + (bz + 3));
-        assertTrue("ARRANGEMENT: the pilot seat must be found (else the test is vacuous): " + seat,
-                readBool(seat, "seatFound"));
-        int seatX = readInt(seat, "seatX"), seatY = readInt(seat, "seatY"), seatZ = readInt(seat, "seatZ");
-        int sx = (int) Math.round(readDouble(seat, Pattern.compile("\"shipWorldX\":(-?[0-9.E\\-]+)")));
-        int sy = (int) Math.round(readDouble(seat, Pattern.compile("\"shipWorldY\":(-?[0-9.E\\-]+)")));
-        int sz = (int) Math.round(readDouble(seat, Pattern.compile("\"shipWorldZ\":(-?[0-9.E\\-]+)")));
+        // The seat inside the craft this scenario BUILT, named by the assembler that minted it. The
+        // anchored form resolved the yard nearest a point over the whole registry, so it could reach
+        // a neighbour's craft — or a blockless crossing remnant — and report seatFound for it.
+        String durableShipId = ShipIdentity.nameFromAssembly(assembled);
+        String scenarioShipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events(), dim, durableShipId, 200);
+        PilotSeat seat = PilotSeat.byId(this::exec, dim, scenarioShipId)
+                .requireFound("the pilot seat must be found, or the test is vacuous");
+        int seatX = seat.seatX, seatY = seat.seatY, seatZ = seat.seatZ;
+        // A WORLD-frame pose, carried through a name lookup into the `space enter` below. Sound
+        // here for one reason worth stating in a class whose whole subject is a MOVING hull: the
+        // craft has just been assembled at its berth and nothing has commanded it — the cruise is
+        // this test's STIMULUS and is not ordered for another eighty lines. The seatX/Y/Z beside it
+        // are SUBSPACE and carry no such condition.
+        int sx = (int) Math.round(seat.shipWorldX);
+        int sy = (int) Math.round(seat.shipWorldY);
+        int sz = (int) Math.round(seat.shipWorldZ);
 
         String health = exec("artest player health");
-        Matcher nameM = PLAYER_NAME.matcher(health);
-        assertTrue("player health must echo the player name: " + health, nameM.find());
-        String botName = nameM.group(1);
+        Reply nameMReply = Reply.of(health);
+        String botName = nameMReply.text(PLAYER_NAME);
 
-        assertTrue("ARRANGEMENT: the bot must enter the cell",
+        long enterMark = clientEvents().mark();
+        scenario().requireArranged("the bot must enter the cell",
                 readBool(exec("artest space enter " + botName + " " + dim
                         + " " + sx + " " + sy + " " + sz), "ok"));
-        bot().waitTicks(20);
-        assertEquals("ARRANGEMENT: the client must have followed into the cell",
-                dim, bot().reportWeather().get("dim").getAsInt());
+        awaitClientDim(enterMark, dim, "the client must follow the bot into the ship's cell");
 
         // The subject is a mount on a MOVING SHIP whose data-watcher is quiet - a passenger seat,
         // not the pilot's. This is not a detail: a mount bound to a LINKED pilot seat republishes six
@@ -189,44 +211,65 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         // any speed VS will allow. A mount one block off the pilot seat resolves no flight computer,
         // publishes nothing, and is carried by the same ship - which is exactly a passenger's chair.
         int mountX = seatX + 1, mountY = seatY, mountZ = seatZ;
-        String mount = "";
-        boolean mounted = false;
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = exec("artest vs seat-mount-at " + dim
-                    + " " + mountX + " " + mountY + " " + mountZ);
-            assertTrue("ARRANGEMENT: seat-mount-at must spawn the seat dummy: " + mountAt,
-                    readBool(mountAt, "ok"));
-            mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
+        // ONE mount. It used to be retried five times ten ticks apart, which would hide WHY a first
+        // mount is refused — and a refused mount is the arrangement's own failure, reported with the
+        // server's answer. The client's mark goes before it: the link below is this mount's.
+        long seatClientMark = clientEvents().mark();
+        String mountAt = exec("artest vs seat-mount-at " + dim
+                + " " + mountX + " " + mountY + " " + mountZ);
+        scenario().requireArranged("seat-mount-at must spawn the seat dummy: " + mountAt,
+                readBool(mountAt, "ok"));
+        int dummyId = readInt(mountAt, "dummyId");
+        String mount = exec("artest player mount-entity " + dummyId);
+        scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount,
+                Reply.of(mount).boolOr("mounted", false));
+        // THE CLIENT'S OWN SEATING, as a link. The ten ticks that stood here produced the red whose
+        // text is three lines below — "the mount reported success and he is off ten ticks later" —
+        // and under four client forks it was replication lag: the server reported him riding a live
+        // dummy carrying one passenger while the client had not applied the packet yet.
+        awaitClientMount(seatClientMark, "the client must report the bot seated before anything"
+                + " else — this whole scenario is about a rider the client is rendering aboard",
+                SEAT_LINK_BUDGET_TICKS, "");
+        // The same discriminator the mid-transit relog scenario carries, and for the same reason:
+        // "he is not seated" is produced BOTH by something removing the dummy under him and by
+        // something dismounting him from a dummy that is still there, and this class exists for
+        // precisely the contract those two break. `deck-capture <dim> <id>` answers "entity not
+        // found" for a removed entity; read only on the failing path.
+        if (!riding()) {
+            scenario().arrangementFailed("the client must report the bot seated before anything else"
+                    + " — the mount reported success and he is off ten ticks later. Whether the seat"
+                    + " dummy (entity " + dummyId + ") still EXISTS separates a removal under him"
+                    + " from a dismount: mountReply=" + mount
+                    + " dummyNow=" + exec("artest vs deck-capture " + dim + " " + dummyId)
+                    + " serverSaysRiding=" + exec("artest player riding-of " + botName));
         }
-        assertTrue("ARRANGEMENT: the bot must mount the pilot-seat dummy: " + mount, mounted);
-        bot().waitTicks(10);
-        assertTrue("ARRANGEMENT: the client must report the bot seated before anything else",
-                riding());
 
         // The instrument's own proof: it must be able to say FALSE. Without this leg, the cruise
         // assertion below is green on a reporter that is simply stuck on true.
+        long offClientMark = clientEvents().mark();
         exec("artest player dismount");
-        bot().waitTicks(10);
+        // The control's own far side is a record too: the client LETTING GO is what makes the
+        // reporter's FALSE mean something, and ten ticks were the same bet as above in reverse.
+        awaitClientDismount(offClientMark, "CONTROL: the client must be able to report NOT riding —"
+                + " otherwise the cruise leg below is green on a reporter stuck on true",
+                SEAT_LINK_BUDGET_TICKS);
         assertFalse("CONTROL: the client must be able to report NOT riding - otherwise the cruise"
                         + " leg cannot fail", riding());
 
-        mounted = false;
-        for (int attempt = 0; attempt < 5 && !mounted; attempt++) {
-            String mountAt = exec("artest vs seat-mount-at " + dim
-                    + " " + mountX + " " + mountY + " " + mountZ);
-            mount = exec("artest player mount-entity " + readInt(mountAt, "dummyId"));
-            mounted = mount.contains("\"mounted\":true");
-            if (!mounted) {
-                bot().waitTicks(10);
-            }
-        }
-        assertTrue("ARRANGEMENT: the bot must be re-seated after the control: " + mount, mounted);
-        bot().waitTicks(10);
-        assertTrue("ARRANGEMENT: seated again before the cruise", riding());
+        // The CLIENT's mark, before the re-seat is ordered: the control below reads the
+        // client, and the link is what says the mount reached it. ONE re-seat, for the reason above.
+        long reseatClientMark = clientEvents().mark();
+        String remountAt = exec("artest vs seat-mount-at " + dim
+                + " " + mountX + " " + mountY + " " + mountZ);
+        scenario().requireArranged("seat-mount-at must spawn the seat dummy again: " + remountAt,
+                readBool(remountAt, "ok"));
+        mount = exec("artest player mount-entity " + readInt(remountAt, "dummyId"));
+        scenario().requireArranged("the bot must be re-seated after the control: " + mount,
+                Reply.of(mount).boolOr("mounted", false));
+        // WAS `waitTicks(10)` and a read. The server says it seated him; this reads the
+        // CLIENT, and a budget between the two is an assertion about replication speed.
+        ridingOnceTheClientHasRemounted(reseatClientMark, CLIENT_REMOUNT_BUDGET_TICKS);
+        scenario().requireArranged("seated again before the cruise", riding());
 
         // ---- STIMULUS: a COASTING horizontal cruise. Three properties, each load-bearing.
         //
@@ -255,43 +298,43 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         // computer fight the commanded velocity and the ship falls to ~0.11 blocks/tick, well under
         // the speed this leg needs. A coasting ship at a commanded constant is both faster and
         // quieter, which is the state the report was flown in.
-        // Take the ship's IDENTITY first, while it still rests at the spot the seat reported, and
-        // command it by that id from here on. This leg deliberately flies the ship several hundred
-        // blocks; a lookup keyed on where it STARTED stops describing it almost immediately, and on a
-        // shared client the ship it starts describing instead is a neighbour's.
-        String atSeat = exec("artest vs ship-info " + dim + " " + sx + " " + sy + " " + sz + " 48");
-        Matcher idM = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(atSeat);
-        assertTrue("ARRANGEMENT: the ship must name itself before it is commanded: " + atSeat,
-                idM.find());
-        String shipId = idM.group(1);
+        // Commanded by the name this scenario has held since the assembly. The identity used to be
+        // re-derived here from a bounded read at the seat's reported spot — a second answer to a
+        // question already answered, and one a neighbour's craft can give.
+        String shipId = scenarioShipId;
+        scenario().requireArranged("this scenario's ship must be managed before it is commanded;"
+                + " id=" + shipId, ShipInfo.loadedIn(this::exec, dim, shipId));
 
         String commanded = exec("artest vs force-vel-by-id " + dim + " " + shipId
                 + " " + COMMANDED_SPEED_BLOCKS_PER_SECOND + " 0 0");
-        assertTrue("ARRANGEMENT: the cruise command must reach THIS ship's flight computer: "
+        scenario().requireArranged("the cruise command must reach THIS ship's flight computer: "
                 + commanded, readBool(commanded, "commanded"));
 
-        double steady = Double.NaN, prev = Double.NaN;
-        for (int attempt = 0; attempt < 60 && Double.isNaN(steady); attempt++) {
-            String s0 = exec("artest vs ship-info " + dim + " id " + shipId);
-            double ax = readDouble(s0, POS_X), az = readDouble(s0, POS_Z);
-            bot().waitTicks(SETTLE_SAMPLE_TICKS);
-            String s1 = exec("artest vs ship-info " + dim + " id " + shipId);
-            double speed = Math.hypot(readDouble(s1, POS_X) - ax, readDouble(s1, POS_Z) - az)
-                    / SETTLE_SAMPLE_TICKS;
-            if (speed > EVICTION_THRESHOLD_BLOCKS_PER_TICK
-                    && !Double.isNaN(prev) && Math.abs(speed - prev) < STEADY_EPSILON) {
-                steady = speed;
-            }
-            prev = speed;
-        }
-        assertTrue("ARRANGEMENT: the ship must reach a STEADY cruise above "
+        // EXPERIMENT: CRUISE_RAMP_TICKS from the command for the ship to reach its cruise (measured,
+        // see the constant); then the cruise is judged ONCE, by the window below.
+        bot().waitTicks(CRUISE_RAMP_TICKS);
+        // WINDOW: three reads, two consecutive SETTLE_SAMPLE_TICKS-long speeds; the verdict names
+        // both. The physics velocity controller never decides it has arrived, so no record answers.
+        ShipInfo s0 = ShipInfo.byId(this::exec, dim, shipId);
+        // WINDOW: the first half of the same window.
+        bot().waitTicks(SETTLE_SAMPLE_TICKS);
+        ShipInfo s1 = ShipInfo.byId(this::exec, dim, shipId);
+        // WINDOW: the second half of the same window.
+        bot().waitTicks(SETTLE_SAMPLE_TICKS);
+        ShipInfo s2 = ShipInfo.byId(this::exec, dim, shipId);
+        double first = Math.hypot(s1.x - s0.x, s1.z - s0.z) / SETTLE_SAMPLE_TICKS;
+        double second = Math.hypot(s2.x - s1.x, s2.z - s1.z) / SETTLE_SAMPLE_TICKS;
+        scenario().requireArranged("the ship must be in a STEADY cruise above "
                 + EVICTION_THRESHOLD_BLOCKS_PER_TICK + " blocks/tick - while it is still accelerating"
                 + " the mount re-pins its own tracking anchor every tick and nothing can be evicted,"
-                + " so an unsettled ship makes this leg unfalsifiable. Last speed sample: " + prev,
-                !Double.isNaN(steady));
+                + " so an unsettled ship makes this leg unfalsifiable. Speeds over two consecutive "
+                + SETTLE_SAMPLE_TICKS + "-tick windows, " + CRUISE_RAMP_TICKS + " ticks after the"
+                + " command: " + first + ", " + second + " (steady within " + STEADY_TOLERANCE + ")",
+                first > EVICTION_THRESHOLD_BLOCKS_PER_TICK && second > EVICTION_THRESHOLD_BLOCKS_PER_TICK
+                        && Math.abs(first - second) < STEADY_TOLERANCE);
 
-        String before = exec("artest vs ship-info " + dim + " id " + shipId);
-        double x0 = readDouble(before, POS_X), z0 = readDouble(before, POS_Z);
+        ShipInfo before = ShipInfo.byId(this::exec, dim, shipId);
+        double x0 = before.x, z0 = before.z;
         double px0 = bot().reportState().get("playerX").getAsDouble();
         double pz0 = bot().reportState().get("playerZ").getAsDouble();
 
@@ -303,6 +346,10 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         int notRiding = 0, samples = 0, mountMissing = 0, riderUntracked = 0;
         double maxAnchorLag = 0.0;
         StringBuilder trace = new StringBuilder();
+        // WINDOW: it COUNTS how many samples of a cruise found the rider unseated, his mount
+        // missing or the anchor lagging, plus the WORST lag seen. Every one of those is a statistic
+        // over the cruise, and the contract is about the cruise rather than about any tick of it.
+        // What it cannot see: a seat lost and regained inside one sampling gap.
         for (int t = 0; t < OBSERVE_TICKS; t += POLL_EVERY_TICKS) {
             bot().waitTicks(POLL_EVERY_TICKS);
             samples++;
@@ -314,16 +361,24 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
             // held, never why - and a green would not distinguish "the guard worked" from "the
             // arrangement never put the mechanism under load".
             String track = exec("artest vs mount-tracking " + dim);
-            if (readBool(track, "seatedRider") && !readBool(track, "riderTracks")) {
+            // absence is the answer for `seatedRider`: the verb writes `{"error":"world not
+            // loaded"}` with no fields at all when the dimension is between worlds, which across a
+            // jump is exactly the moment this counter exists to describe — and a refusing read
+            // there would end the measurement window with a complaint about the instrument.
+            // `riderTracks` stays a refusing read on purpose: the producer always writes it on a
+            // reply that says `seatedRider` is true, so the `&&` reaches it only where it is
+            // there — and a default would quietly turn "not tracked" into "nothing to report".
+            if (Reply.of(track).boolOr("seatedRider", false)
+                    && !readBool(track, "riderTracks")) {
                 riderUntracked++;
             }
-            Matcher lx = Pattern.compile("\"anchorLagX\":([0-9.E\\-]+)").matcher(track);
-            Matcher lz = Pattern.compile("\"anchorLagZ\":([0-9.E\\-]+)").matcher(track);
-            if (lx.find()) {
-                maxAnchorLag = Math.max(maxAnchorLag, Double.parseDouble(lx.group(1)));
+            double lagX = Events.number(track, "anchorLagX");
+            double lagZ = Events.number(track, "anchorLagZ");
+            if (!Double.isNaN(lagX)) {
+                maxAnchorLag = Math.max(maxAnchorLag, lagX);
             }
-            if (lz.find()) {
-                maxAnchorLag = Math.max(maxAnchorLag, Double.parseDouble(lz.group(1)));
+            if (!Double.isNaN(lagZ)) {
+                maxAnchorLag = Math.max(maxAnchorLag, lagZ);
             }
             if (!seated) {
                 notRiding++;
@@ -336,8 +391,8 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         System.out.println("[#163] seated/mount trace ('.' seated+mount present, 'x' unseated,"
                 + " 'M' mount gone, 'X' both): " + trace);
 
-        String after = exec("artest vs ship-info " + dim + " id " + shipId);
-        double shipDX = readDouble(after, POS_X) - x0, shipDZ = readDouble(after, POS_Z) - z0;
+        ShipInfo after = ShipInfo.byId(this::exec, dim, shipId);
+        double shipDX = after.x - x0, shipDZ = after.z - z0;
         double shipTravel = Math.hypot(shipDX, shipDZ);
         double perTickX = Math.abs(shipDX) / OBSERVE_TICKS;
         double perTickZ = Math.abs(shipDZ) / OBSERVE_TICKS;
@@ -357,11 +412,11 @@ public class VSRiderKeepsHisMountAtCruiseE2ETest extends AbstractClientE2ETest {
         // Both checked BEFORE the verdict. A ship that did not cruise, or a mount that did not
         // carry the player with it, makes the poll below unfalsifiable - and that is an
         // arrangement failure, not a passing build.
-        assertTrue("ARRANGEMENT: the ship must cruise faster than the mount's own tracking headroom"
+        scenario().requireArranged("the ship must cruise faster than the mount's own tracking headroom"
                 + " (" + EVICTION_THRESHOLD_BLOCKS_PER_TICK + " blocks/tick) or this leg cannot"
                 + " exhibit the fault." + measured,
                 fastestAxis > EVICTION_THRESHOLD_BLOCKS_PER_TICK);
-        assertTrue("ARRANGEMENT: the seated player must TRAVEL WITH the ship - a mount that stays"
+        scenario().requireArranged("the seated player must TRAVEL WITH the ship - a mount that stays"
                 + " put keeps its tracking anchor fresh, so nothing here could ever be evicted and"
                 + " the leg would pass on any build." + measured,
                 playerTravel > shipTravel * 0.5);
