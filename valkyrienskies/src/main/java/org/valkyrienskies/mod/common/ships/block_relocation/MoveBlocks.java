@@ -51,7 +51,7 @@ public class MoveBlocks {
         // The block's damage record is held by position, not by the block, so a deconstruction that
         // moved only the block would hand the ship back to its owner repaired. Same treatment as the
         // tile entity on the next line, and for the same reason.
-        zmaster587.advancedRocketry.damage.DamageState.blockMoved(world, oldPos, newPos);
+        dev.stannismod.stellurgy.damage.DamageState.blockMoved(world, oldPos, newPos);
 
         // Now that we've copied the block to the position, copy the tile entity
         copyTileEntityToPos(world, oldPos, newPos, physicsObject);

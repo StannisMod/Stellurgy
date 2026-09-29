@@ -1,0 +1,22 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+        {
+            "item": "stellurgy:ic",
+            "data": 0
+        },
+	{
+            "item": "stellurgy:ic",
+            "data": 0
+        },
+        {
+            "item": "stellurgy:satelliteidchip"
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:planetidchip",
+        "count": 1
+    }
+}

@@ -21,15 +21,43 @@ public final class ClientBot implements Closeable {
     private final BufferedReader reader;
     private final BufferedWriter writer;
 
+    /**
+     * What the channel was last asked, when it last ANSWERED, and how many answers it has given.
+     *
+     * <p>These exist for one purpose: a read that times out must be able to say something about the
+     * SUBJECT. Measured 2026-09-21 — a full-tier run lost a test to a bare
+     * {@code SocketTimeoutException} whose stack named {@code SocketInputStream.read} and nothing
+     * else, which is indistinguishable from the outside between a busy box and a client wedged by
+     * the very thing under test. Every occurrence then costs a triage that cannot conclude.</p>
+     *
+     * <p>Written and read only under the {@code writer} monitor or immediately around the read that
+     * follows it, on the one thread that owns this channel.</p>
+     */
+    private volatile String lastCommandSent = "(none yet)";
+    private volatile long lastAnswerNanos = System.nanoTime();
+    private volatile long answersReceived;
+
+    /**
+     * How long the bot waits for a reply — and the OUTER budget of the whole bridge.
+     *
+     * <p><b>Every deadline the client side runs must be strictly shorter than this.</b> An inner
+     * budget equal to the outer one can never be reported: the client finishes waiting exactly when
+     * the caller has already given up, so its own diagnosis — which names what it was waiting for —
+     * is written to a socket nobody is reading any more. Measured 2026-09-22: `wait_world` ran a
+     * two-minute deadline of its own, inside a `runOnClientThread` whose future `get` was also two
+     * minutes, inside this. A slow world load was therefore delivered as "the client bridge did not
+     * answer", and the client's own "Timed out waiting for the client world to load" could not
+     * reach anyone by construction.</p>
+     */
+    public static final long READ_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
+
     ClientBot(Socket socket) throws IOException {
         this.socket = socket;
         this.socket.setTcpNoDelay(true);
-        // Load-scaled: a starved client thread queue stretches every command round-trip.
-        this.socket.setSoTimeout(com.github.stannismod.forge.testing.TestTimeouts
-                .scaledMillis(Duration.ofMinutes(2).toMillis()));
+        this.socket.setSoTimeout((int) READ_TIMEOUT_MILLIS);
         this.reader = new BufferedReader(new java.io.InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         this.writer = new BufferedWriter(new java.io.OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
-        awaitReady(com.github.stannismod.forge.testing.TestTimeouts.scaled(Duration.ofMinutes(2)));
+        awaitReady(Duration.ofMinutes(2));
     }
 
     public void waitForWorld() throws IOException {
@@ -480,6 +508,26 @@ public final class ClientBot implements Closeable {
      * player. Returns the client-side {@code EnumActionResult} name under
      * {@code result}.
      */
+    /**
+     * Right-clicks whatever the CROSSHAIR is on, letting vanilla decide what that is.
+     *
+     * <p>The difference from {@link #interactBlock} is the whole point of it. That one is TOLD which
+     * block to hit, so it can answer "does interacting with this position work" and can never answer
+     * "is the block the player interacts with the one his crosshair outlines" — the caller supplies
+     * the position under test. This calls {@code Minecraft.rightClickMouse}, which reads
+     * {@code mc.objectMouseOver} itself, so the dispatch under test is vanilla's own rather than a
+     * copy of it living in the harness.</p>
+     *
+     * <p>Reports what the crosshair was on AT THE MOMENT OF THE CLICK — {@code aimedAtBlock},
+     * {@code blockX}/{@code blockY}/{@code blockZ} and {@code blockBefore} (the registry id there
+     * before the click) — because reading that in a separate call is a second frame, and the
+     * question is what the outline and the click saw on ONE frame. On a physics-mod ship the
+     * position is the ship's own subspace one, as with {@link #reportMouseOver}.</p>
+     */
+    public JsonObject useMouseOver() throws IOException {
+        return assertOk(execute(command("use_mouse_over")));
+    }
+
     public JsonObject interactBlock(int x, int y, int z) throws IOException {
         JsonObject command = command("interact_block");
         command.addProperty("x", x);
@@ -580,6 +628,30 @@ public final class ClientBot implements Closeable {
         return assertOk(execute(command("report_sounds")));
     }
 
+    /**
+     * The client event log's current sequence, taken BEFORE the action under test.
+     *
+     * <p>The client half of the ordered event log. Its first citizen is
+     * {@code chunk_data_applied} — the instant the client can actually SEE a chunk's blocks, which
+     * no Forge event reports (the load event fires on an empty chunk, before the data is applied).
+     * A test that teleports a player onto freshly-sent terrain has to wait for THAT, not for a
+     * number of ticks: movement is client-driven, so a client without the blocks simulates a fall
+     * and carries the server's player down with it.</p>
+     */
+    public JsonObject eventMark() throws IOException {
+        return assertOk(execute(command("event_mark")));
+    }
+
+    /** Client events recorded at or after {@code seq}, in order; {@code type} filters, or null. */
+    public JsonObject eventsSince(long seq, String type) throws IOException {
+        JsonObject command = command("event_since");
+        command.addProperty("seq", seq);
+        if (type != null) {
+            command.addProperty("type", type);
+        }
+        return assertOk(execute(command));
+    }
+
     /** Resets the played-sound log consumed by {@link #reportSounds()}. */
     public void clearSounds() throws IOException {
         assertOk(execute(command("clear_sounds")));
@@ -660,9 +732,9 @@ public final class ClientBot implements Closeable {
     /**
      * Is the client still answering? Answers within {@code timeoutMillis} whatever the client does.
      *
-     * <p>This exists because the command channel's own read timeout is <b>two minutes, scaled by
-     * the fork factor</b> ({@link #ClientBot} sets it) — six minutes at eight forks. That is right
-     * for a command: a starved client thread queue genuinely takes a long time. It is wrong for a
+     * <p>This exists because the command channel's own read timeout is <b>two minutes</b>
+     * ({@link #ClientBot} sets it). That is right for a command: a starved client thread queue
+     * genuinely takes a long time. It is wrong for a
      * liveness question asked on a failure path, and the two death modes are not alike:</p>
      *
      * <ul>
@@ -676,7 +748,7 @@ public final class ClientBot implements Closeable {
      * in both. So this borrows the socket with its own short timeout and restores the original.</p>
      *
      * <p><b>Trade, stated:</b> a merely SLOW client can be reported dead. A normal round trip is
-     * milliseconds, so pass something generous (seconds, scaled by the fork factor) — never a value
+     * milliseconds, so pass something generous (seconds) — never a value
      * close to a real round trip, or a loaded box starts declaring corpses.</p>
      *
      * @return true if the client answered a trivial command in time; false on ANY failure
@@ -723,22 +795,80 @@ public final class ClientBot implements Closeable {
     }
 
     private JsonObject execute(JsonObject command) throws IOException {
+        String sent = command.toString();
         synchronized (writer) {
-            writer.write(command.toString());
+            lastCommandSent = sent;
+            writer.write(sent);
             writer.newLine();
             writer.flush();
         }
 
-        String line = reader.readLine();
-        if (line == null) {
-            throw new IOException("Client bridge closed unexpectedly");
+        String line;
+        try {
+            line = reader.readLine();
+        } catch (java.net.SocketTimeoutException timedOut) {
+            throw new IOException(describeTimeout(sent), timedOut);
         }
+        if (line == null) {
+            throw new IOException("Client bridge closed unexpectedly after " + answersReceived
+                    + " answered command(s); the last one asked was " + abbreviate(sent), null);
+        }
+        lastAnswerNanos = System.nanoTime();
+        answersReceived++;
 
         JsonElement parsed = new JsonParser().parse(line);
         if (!parsed.isJsonObject()) {
             throw new IOException("Malformed client bridge response: " + line);
         }
         return parsed.getAsJsonObject();
+    }
+
+    /**
+     * What to say when the command channel stops answering.
+     *
+     * <p><b>It names the subject, because the exception cannot.</b> A bare
+     * {@code SocketTimeoutException} says only that a socket read expired: the same stack is
+     * produced by a loaded box, by a client that crashed mid-command, and by a client wedged by the
+     * behaviour the test is about. This prints what distinguishes them — the command that was
+     * outstanding, how long this read was allowed, how long the channel had been answering happily
+     * before it, and how many commands it had answered.</p>
+     *
+     * <p><b>Nothing is probed here, deliberately.</b> {@link #isAlive} would write to the same
+     * channel and read the next line — and after a timeout the next line may be the LATE reply to
+     * the command that just expired, which the probe would then read as its own answer. So the
+     * diagnosis is built from what is already known, and the caller is told plainly that the
+     * channel is now out of step and must not be reused.</p>
+     */
+    private String describeTimeout(String sent) {
+        long idleMillis = (System.nanoTime() - lastAnswerNanos) / 1_000_000L;
+        int budgetMillis;
+        try {
+            budgetMillis = socket.getSoTimeout();
+        } catch (IOException unreadable) {
+            budgetMillis = -1;
+        }
+        // idleMillis is taken HERE, at the timeout, so it CONTAINS this wait. Saying "before the
+        // read began" would overstate the silence by the whole budget — measured 2026-09-22 on a
+        // real timeout that printed 120012 ms against a 120000 ms budget, i.e. the channel had in
+        // fact answered 12 ms before the command went out and was healthy until it.
+        return "the client bridge did not answer within " + budgetMillis + " ms."
+                + " Outstanding command: " + abbreviate(sent) + "."
+                + " It had answered " + answersReceived + " command(s), and had been silent for "
+                + idleMillis + " ms when this read gave up — that figure INCLUDES this wait, so"
+                + " subtract the budget to see how long the channel had been quiet before the"
+                + " command went out (a small remainder means it was healthy until this one)."
+                + " THE CHANNEL IS NOW OUT OF STEP: a late reply to this command would be read as"
+                + " the answer to the next one, so this bot must not be reused."
+                + " Three things produce this and they want different fixes — a client killed or"
+                + " crashed mid-command (look for its process and its log tail), a client wedged by"
+                + " the behaviour under test (the outstanding command above says which), and a box"
+                + " so loaded that " + budgetMillis + " ms was not enough (the answered count and"
+                + " the idle time above say whether it had been keeping up).";
+    }
+
+    /** A command line, short enough to read in a stack trace and long enough to name the verb. */
+    private static String abbreviate(String line) {
+        return line.length() <= 300 ? line : line.substring(0, 300) + "… (" + line.length() + " chars)";
     }
 
     private JsonObject assertOk(JsonObject response) throws IOException {
@@ -749,15 +879,37 @@ public final class ClientBot implements Closeable {
         return response;
     }
 
+    /**
+     * Wait for the client bridge's {@code READY}.
+     *
+     * <p>{@code timeout} is APPLIED, and used to be ignored: the parameter was accepted and the
+     * read ran on whatever the socket's own timeout happened to be, so a caller asking for thirty
+     * seconds waited two minutes. The old code also reported a non-{@code READY} first line as
+     * "Timed out waiting for readiness", which is a different fault wearing the timeout's name —
+     * the two are separated here.</p>
+     */
     private void awaitReady(Duration timeout) throws IOException {
-        String line = reader.readLine();
+        int previous = socket.getSoTimeout();
+        String line;
+        try {
+            socket.setSoTimeout((int) Math.max(1L, timeout.toMillis()));
+            line = reader.readLine();
+        } catch (java.net.SocketTimeoutException timedOut) {
+            throw new IOException("the client bridge never signalled READY within "
+                    + timeout.toMillis() + " ms. Nothing has been asked of it yet, so this is the"
+                    + " client failing to come up rather than a command wedging it: look at the"
+                    + " client's own log for how far its start got.", timedOut);
+        } finally {
+            socket.setSoTimeout(previous);
+        }
         if (line == null) {
             throw new IOException("Client bridge disconnected before signaling readiness");
         }
         if ("READY".equals(line)) {
             return;
         }
-        throw new IOException("Timed out waiting for client bridge readiness");
+        throw new IOException("the client bridge's first line was not READY but "
+                + abbreviate(line) + " — the channel is speaking, and saying something else");
     }
 
     private static JsonObject command(String command) {

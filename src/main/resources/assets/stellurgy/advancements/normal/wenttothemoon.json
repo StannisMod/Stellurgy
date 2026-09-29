@@ -1,0 +1,20 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:spaceBoots"
+        },
+        "title": {
+            "translate": "advancement.weReallyWentToTheMoon"
+        },
+        "description": {
+            "translate": "advancement.weReallyWentToTheMoon.desc"
+        },
+        "frame": "challenge"
+    },
+    "parent": "stellurgy:normal/moonlanding",
+    "criteria": {
+        "wenttothemoon": {
+            "trigger": "wenttothemoon"
+        }
+    }
+} 

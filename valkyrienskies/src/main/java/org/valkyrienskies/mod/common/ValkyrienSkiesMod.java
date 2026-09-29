@@ -15,10 +15,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.crafting.CraftingHelper;
 import net.minecraftforge.event.RegistryEvent;
-import net.minecraftforge.fml.common.FMLLog;
 import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.SidedProxy;
-import zmaster587.advancedRocketry.api.Constants;
+import dev.stannismod.stellurgy.api.Constants;
 import net.minecraftforge.fml.common.event.*;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
@@ -51,9 +50,9 @@ import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Function;
 
-// NOT an @Mod. Valkyrien Skies is vendored into Advanced Rocketry and hosted by AR's single
-// mod container: AR's lifecycle handlers drive this class's preInit/init/postInit/serverStart,
-// and its @Mod.EventBusSubscriber handlers are owned by AR's modid (see HOST_MOD_ID). Being a
+// NOT an @Mod. Valkyrien Skies is vendored into Stellurgy and hosted by Stellurgy's single
+// mod container: Stellurgy's lifecycle handlers drive this class's preInit/init/postInit/serverStart,
+// and its @Mod.EventBusSubscriber handlers are owned by Stellurgy's modid (see HOST_MOD_ID). Being a
 // second @Mod in one jar broke every FML mechanism that partitions by mod (sided-proxy and
 // event-bus-subscriber owner resolution match the target class name against the @Mod class name).
 public class ValkyrienSkiesMod {
@@ -63,16 +62,31 @@ public class ValkyrienSkiesMod {
 	public static final List<Block> BLOCKS = new ArrayList<>();
 	public static final List<Item> ITEMS = new ArrayList<>();
 	// MOD INFO CONSTANTS
-	// MOD_ID stays "valkyrienskies": it is the registry DOMAIN for VS blocks/items/entities and the
-	// assets path, and a registry domain need not equal the owning modid. HOST_MOD_ID is the modid of
-	// the mod that actually owns VS's lifecycle and event-bus subscriptions now — Advanced Rocketry.
+	// MOD_ID is "valkyrienskies". HOST_MOD_ID is the modid of the mod that actually owns VS's
+	// lifecycle and event-bus subscriptions now — Stellurgy.
+	//
+	// THIS COMMENT USED TO SAY MOD_ID WAS "the registry DOMAIN for VS blocks/items/entities and the
+	// assets path". IT IS NOT, AND MEASURING IT IS HOW A LIVE BUG WAS FOUND (2026-09-22). The domain
+	// is whatever each registration ASKS for, and the registrations here do not agree:
+	//   - TILE ENTITIES pass `new ResourceLocation(MOD_ID, …)` explicitly  -> valkyrienskies:…
+	//   - BLOCKS and ITEMS reach the registry through BaseBlock/BaseItem, which call
+	//     `setRegistryName(name)` with a BARE string -> Forge resolves it against the ACTIVE mod
+	//     container, which for a vendored mod is the HOST: stellurgy:…
+	//   - ASSETS sit under assets/valkyrienskies/, which is where neither of the above looks for a
+	//     block model.
+	// The client says both halves out loud on every boot: "Potentially Dangerous alternative prefix
+	// `valkyrienskies` for name `tile_captains_chair`, expected `stellurgy`" for the first,
+	// and "FileNotFoundException: stellurgy:models/item/vs_ship_tracker.json" for the second.
+	// Every block registered through BaseBlock therefore draws as the missing model. Not fixed here:
+	// the fix is an explicit domain or a moved asset root, and which one is a decision about where a
+	// vendored mod's assets live. `VendoredAssetDomainTest` pins the state until it is taken.
 	public static final String MOD_ID = "valkyrienskies";
 	public static final String HOST_MOD_ID = Constants.modId;
 	static final String MOD_FINGERPRINT = "b308676914a5e7d99459c1d2fb298744387899a7";
 	// MOD INSTANCE — self-initialised (no @Instance: there is no "valkyrienskies" mod container to
 	// inject from). Ready at class-load, before any registry event references it.
 	public static ValkyrienSkiesMod INSTANCE = new ValkyrienSkiesMod();
-	// modId names AR's container so FML injects this proxy as part of AR's mod (VS is not its own mod).
+	// modId names Stellurgy's container so FML injects this proxy as part of Stellurgy's mod (VS is not its own mod).
 	@SidedProxy(modId = HOST_MOD_ID, clientSide = "org.valkyrienskies.mod.proxy.ClientProxy", serverSide = "org.valkyrienskies.mod.proxy.ServerProxy")
 	public static CommonProxy proxy;
 	static final int VS_ENTITY_LOAD_DISTANCE = 128;
@@ -94,7 +108,7 @@ public class ValkyrienSkiesMod {
 	// part of this mod rather than shipped as a platform for those add-ons, so there is nothing to
 	// detect and nothing to recommend installing.
 
-	// onFingerprintViolation removed: VS is vendored into AR (unsigned, integrated),
+	// onFingerprintViolation removed: VS is vendored into Stellurgy (unsigned, integrated),
 	// so the JAR-signature check is meaningless; its body also referenced the coremod
 	// class MixinLoaderForge, which lives in the mixin-owned package
 	// org.valkyrienskies.mixin.* and cannot be referenced from ordinary (non-mixin) code.

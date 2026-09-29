@@ -1,0 +1,21 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+            "type": "forge:ore_dict",
+            "ore": "ingotSteel"
+        },
+	    {
+            "item": "stellurgy:rocketmotor",
+            "data": 1
+        }
+    ],
+    "time": 900,
+    "energy": 100,
+    "itemresults":
+    {
+        "item": "stellurgy:rocketmotor",
+        "count": 1
+    }
+}

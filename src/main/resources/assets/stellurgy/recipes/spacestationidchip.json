@@ -1,0 +1,19 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+        {
+            "item": "stellurgy:ic",
+            "data": 0
+        },
+        {
+            "item": "libvulpes:linker"
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:spacestationchip",
+        "count": 1,
+        "data": 0
+    }
+}

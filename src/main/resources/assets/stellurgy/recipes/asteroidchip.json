@@ -1,0 +1,19 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+        {
+	    "item": "stellurgy:dataunit",
+	    "data": 0
+        },
+        {
+	    "item": "stellurgy:ic",
+	    "data": 1
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:asteroidchip",
+        "count": 1
+    }
+}

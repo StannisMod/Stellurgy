@@ -1,0 +1,43 @@
+package dev.stannismod.stellurgy.network;
+
+import io.netty.buffer.ByteBuf;
+import net.minecraft.client.Minecraft;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+
+/**
+ * Literally the entire purpose of this class is to tell the player he/she is in an airless environment
+ */
+public class PacketOxygenState extends BasePacket {
+
+    @Override
+    public void write(ByteBuf out) {
+
+    }
+
+    @Override
+    @SideOnly(Side.CLIENT)
+    public void readClient(ByteBuf in) {
+        dev.stannismod.stellurgy.client.ClientAtmosphere.suffocatedAt(
+                Minecraft.getMinecraft().world.getTotalWorldTime());
+    }
+
+    @Override
+    public void read(ByteBuf in) {
+
+    }
+
+    @Override
+    public void executeClient(EntityPlayer thePlayer) {
+
+    }
+
+    @Override
+    public void executeServer(EntityPlayerMP player) {
+
+    }
+
+}

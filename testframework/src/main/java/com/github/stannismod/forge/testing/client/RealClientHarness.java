@@ -63,6 +63,12 @@ public final class RealClientHarness implements AutoCloseable {
         return start(serverHarness, CLIENT_USERNAME);
     }
 
+    /** The default client, with the framebuffer object on from the first frame — see the overload below. */
+    public static RealClientHarness startWithFramebuffer(RealDedicatedServerHarness serverHarness)
+            throws Exception {
+        return start(serverHarness, CLIENT_USERNAME, true);
+    }
+
     /**
      * Spawn a Minecraft client harness with a caller-supplied username.
      *
@@ -80,9 +86,30 @@ public final class RealClientHarness implements AutoCloseable {
      */
     public static RealClientHarness start(RealDedicatedServerHarness serverHarness,
                                           String clientUsername) throws Exception {
+        return start(serverHarness, clientUsername,
+                "true".equalsIgnoreCase(System.getProperty("forge.test.client.fbo")));
+    }
+
+    /**
+     * Spawn a client whose framebuffer object is enabled from its FIRST frame.
+     *
+     * <p>A test that measures WORLD pixels needs this rather than
+     * {@link ClientBot#setFramebuffer(boolean)}: a runtime enable recreates the framebuffer after the
+     * world pass is already bound to the back buffer, so the capture comes back as the framebuffer's
+     * own clear colour (opaque white) with only the HUD over it — a frame indistinguishable from
+     * "the renderer drew nothing". Asking for it here keeps that requirement with the test that has
+     * it, instead of in a launch flag every invocation has to remember.</p>
+     *
+     * <p>Off for everyone else on purpose: the FBO is one of the GL features this harness keeps
+     * minimal for driver safety, and the render path the rest of the tier runs is not one test's to
+     * change. {@code -Dforge.test.client.fbo=true} still turns it on for every client.</p>
+     */
+    public static RealClientHarness start(RealDedicatedServerHarness serverHarness,
+                                          String clientUsername,
+                                          boolean framebufferAtLaunch) throws Exception {
         Path root = Files.createTempDirectory("forge-client-");
         Files.createDirectories(root.resolve("resourcepacks"));
-        bootstrapClientFiles(root);
+        bootstrapClientFiles(root, framebufferAtLaunch);
 
         Path clientLogFile = root.resolve("client.log");
         Process process = null;
@@ -247,10 +274,6 @@ public final class RealClientHarness implements AutoCloseable {
         javaArgs.add("-Dfml.noGrab=true");
         javaArgs.add("-Dforge.test.client=true");
         javaArgs.add("-Dforge.test.client.port=" + controlPort);
-        // Forward the wall-clock multiplier so the client-side ceilings (waitTicks, waitForWorld,
-        // client-thread task get) stretch with the fork count exactly like the test JVM's.
-        javaArgs.add("-D" + com.github.stannismod.forge.testing.TestTimeouts.PROP_FACTOR + "="
-                + com.github.stannismod.forge.testing.TestTimeouts.factor());
         javaArgs.add("-Djava.library.path=" + nativesDir.toAbsolutePath());
         javaArgs.add("-Dorg.lwjgl.librarypath=" + nativesDir.toAbsolutePath());
         javaArgs.add("-Dforge.test.client.logFile=" + clientLogFile.toAbsolutePath());
@@ -258,6 +281,22 @@ public final class RealClientHarness implements AutoCloseable {
         // driver can't provide a stable context — keeps the harness alive on
         // machines whose GL driver crashes on legacy MC 1.12 rendering.
         javaArgs.add("-Dorg.lwjgl.opengl.Display.allowSoftwareOpenGL=true");
+        // The harness's OWN coremod, so its mixin config is queued while mixin still accepts
+        // configurations. Registering it from the bootstrap at FML init is too late: the call
+        // throws nothing, does nothing, and leaves a recorder that reports itself as running
+        // while recording nothing. A normal game never sets this property, never discovers the
+        // class (it is compiled into the test source set only) and pays nothing for any of it.
+        javaArgs.add("-Dfml.coreMods.load=com.github.stannismod.forge.testing.mixin.ForgeTestCoreMod");
+        // Every `mixin.*` property set on the test JVM is forwarded to the child. Queuing a
+        // configuration is not the same as WEAVING a class, and nothing reports the difference: a
+        // mixin whose target was already loaded is silently skipped, and its silence then reads as
+        // "the code I was watching never ran". Measured 2026-08-23 — three runs were read against a
+        // mixin that had not applied on this side. `-Dmixin.debug=true` is what says which did.
+        for (String property : System.getProperties().stringPropertyNames()) {
+            if (property.startsWith("mixin.")) {
+                javaArgs.add("-D" + property + "=" + System.getProperty(property));
+            }
+        }
         javaArgs.add("-cp");
         javaArgs.add(launcherClassPath);
         javaArgs.add(launcherClass);
@@ -366,10 +405,7 @@ public final class RealClientHarness implements AutoCloseable {
     }
 
     private static ClientBot awaitClientBot(java.net.ServerSocket serverSocket) throws IOException {
-        // Load-scaled: the client JVM's boot (GL init + mod load + jar copying) is the slowest
-        // single phase and stretches most under concurrent forks.
-        serverSocket.setSoTimeout(com.github.stannismod.forge.testing.TestTimeouts
-                .scaledMillis(TimeUnit.MINUTES.toMillis(2)));
+        serverSocket.setSoTimeout((int) TimeUnit.MINUTES.toMillis(2));
         java.net.Socket socket = serverSocket.accept();
         return new ClientBot(socket);
     }
@@ -504,7 +540,7 @@ public final class RealClientHarness implements AutoCloseable {
         return builder.toString();
     }
 
-    private static void bootstrapClientFiles(Path root) throws IOException {
+    private static void bootstrapClientFiles(Path root, boolean framebufferAtLaunch) throws IOException {
         // Conservative GL settings — the test client only needs to reach the
         // in-world handshake, never to render anything pretty. Aggressive GL
         // features (VBOs, fancy graphics) are the usual trigger for
@@ -512,11 +548,12 @@ public final class RealClientHarness implements AutoCloseable {
         // (notably Intel integrated GPUs running legacy MC 1.12 OpenGL).
         List<String> options = new ArrayList<>();
         options.add("pauseOnLostFocus:false");
-        // The framebuffer object stays OFF here, as the other GL features do. A test that needs to SEE
-        // what the client drew turns it on for itself (ClientBot.setFramebuffer) for the few frames it
-        // captures, so the render path every other test runs is unchanged. -Dforge.test.client.fbo=true
-        // turns it on from the start.
-        options.add("fboEnable:" + "true".equalsIgnoreCase(System.getProperty("forge.test.client.fbo")));
+        // The framebuffer object stays OFF here, as the other GL features do, unless the caller asked
+        // for it at launch (start(..., framebufferAtLaunch) — the overload a pixel-measuring test uses)
+        // or -Dforge.test.client.fbo=true turned it on for every client. A runtime
+        // ClientBot.setFramebuffer is NOT equivalent: it recreates the framebuffer after the world pass
+        // is bound, so captures come back as its own white clear colour.
+        options.add("fboEnable:" + framebufferAtLaunch);
         options.add("useVbo:false");
         options.add("renderDistance:2");
         options.add("fancyGraphics:false");
@@ -691,7 +728,16 @@ public final class RealClientHarness implements AutoCloseable {
             return "";
         }
         try {
-            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            // DECODED LENIENTLY, and that is the whole point of this line. `readAllLines` with a
+            // strict UTF-8 decoder throws MalformedInputException — an IOException — on the first
+            // byte a Minecraft log happens to carry in another encoding, and the catch below then
+            // returns "". Measured 2026-09-22: two consecutive full client legs reported
+            // "Failed to start real client harness … Recent client log:" with NOTHING after it,
+            // 108 and 112 times, while the cause sat in the file this method had just failed to
+            // read. Building a String from the bytes cannot throw: malformed input becomes U+FFFD
+            // and the rest of the line survives, which is all a diagnostic needs.
+            List<String> lines = java.util.Arrays.asList(
+                    new String(Files.readAllBytes(file), StandardCharsets.UTF_8).split("\\R", -1));
             if (lines.isEmpty()) {
                 return "";
             }
@@ -707,8 +753,10 @@ public final class RealClientHarness implements AutoCloseable {
                 builder.append(lines.get(i));
             }
             return builder.toString();
-        } catch (IOException ignored) {
-            return "";
+        } catch (IOException unreadable) {
+            // NOT silent. An empty tail and an unreadable one look identical to a reader, and the
+            // second one sent two full-tier investigations looking in the wrong place.
+            return "<the client log at " + file + " could not be read: " + unreadable + ">";
         }
     }
 
@@ -1079,15 +1127,44 @@ public final class RealClientHarness implements AutoCloseable {
             return delegate.isAlive();
         }
 
+        /**
+         * Substrings of a child line that mean "this JVM is already broken, and every failure you
+         * are about to read is a consequence rather than a cause".
+         *
+         * <p>A mixin that cannot be applied is FATAL and names itself — but only in the CHILD's log,
+         * which is a FILE nobody opens while reading a red gate. Measured 2026-08-21: an injection
+         * whose callback took {@code CallbackInfo} where the boolean-returning target required
+         * {@code CallbackInfoReturnable} made {@code KeyBindings} fail to load, crashed the client at
+         * postInit, and reported itself as "Failed to start real client harness" across THIRTY test
+         * classes. The message naming the exact fix was on disk the whole time.</p>
+         */
+        private static final String[] FATAL_MARKERS = {
+            "Critical injection failure",
+            "InvalidMixinException",
+            "InvalidInjectionException",
+            "Mixin apply for mod",
+            "MixinTransformerError",
+        };
+
         private static Thread pump(InputStream input, Path logFile) throws IOException {
             Thread thread = new Thread(() -> {
                 try (InputStream in = input;
                      OutputStream out = Files.newOutputStream(logFile, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
                     byte[] buffer = new byte[4096];
                     int read;
+                    StringBuilder pending = new StringBuilder();
                     while ((read = in.read(buffer)) >= 0) {
                         out.write(buffer, 0, read);
                         out.flush();
+                        // Same bytes, scanned for a cause worth interrupting the reader with. Line
+                        // assembly is done here rather than with a reader so the FILE still receives
+                        // the stream verbatim, byte for byte.
+                        pending.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
+                        int nl;
+                        while ((nl = pending.indexOf("\n")) >= 0) {
+                            echoIfFatal(pending.substring(0, nl));
+                            pending.delete(0, nl + 1);
+                        }
                     }
                 } catch (IOException ignored) {
                     // Best effort logging only.
@@ -1096,6 +1173,17 @@ public final class RealClientHarness implements AutoCloseable {
             thread.setDaemon(true);
             thread.start();
             return thread;
+        }
+
+        /** Put a child-side fatal on the TEST runner's own stdout, where a failure report sees it. */
+        private static void echoIfFatal(String line) {
+            for (String marker : FATAL_MARKERS) {
+                if (line.contains(marker)) {
+                    System.out.println("[forge-test] CLIENT CHILD FATAL — every later failure in this"
+                            + " run is probably a consequence of this: " + line.trim());
+                    return;
+                }
+            }
         }
 
         private static void joinPump(Thread thread) throws InterruptedException {

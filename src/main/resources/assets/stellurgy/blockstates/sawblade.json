@@ -1,0 +1,19 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "textures": {
+            "#None": "stellurgy:/models/cuttingmachine2"
+        },
+        "model": "stellurgy:models/sawblade.obj",
+        "transform": "forge:default-block"
+    },
+    "variants": {
+        "facing=north": { "model": "stellurgy:models/sawblade.obj" },
+        "facing=south": { "model": "stellurgy:models/sawblade.obj", "y": 180 },
+        "facing=west":  { "model": "stellurgy:models/sawblade.obj", "y": 270 },
+        "facing=east":  { "model": "stellurgy:models/sawblade.obj", "y": 90 },
+        "facing=up":  { "model": "stellurgy:models/sawblade.obj", "x": 90 },
+        "facing=down":  { "model": "stellurgy:models/sawblade.obj", "x": -90 },
+        "inventory": { "model": "stellurgy:models/sawblade.obj" }
+    }
+}

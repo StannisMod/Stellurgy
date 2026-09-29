@@ -1,0 +1,36 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"gdg",
+	"dad",
+	"rdr"
+    ],
+    "key":
+    {
+	"a":
+        {
+	    "item": "stellurgy:rocketbuilder"
+        },
+	"d":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "dustDilithium"
+        },
+	"g":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gearTitaniumAluminide"
+        },
+	"r":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "stickTitaniumAluminide"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:deployablerocketbuilder",
+        "count": 1
+    }
+}

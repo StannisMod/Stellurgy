@@ -1,0 +1,55 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"dht",
+	"cbc",
+	"mas"
+    ],
+    "key":
+    {
+        "c":
+        {
+            "item": "stellurgy:ic",
+            "data": 0
+        },
+        "b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+        "m":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "blockMotor"
+        },
+        "t":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateTitanium"
+        },
+        "d":
+        {
+	    "item": "stellurgy:dataunit",
+	    "data": 0
+        },
+        "a":
+        {
+	    "item": "minecraft:anvil",
+	    "data": 0
+        },
+        "s":
+        {
+            "item": "stellurgy:sawblade",
+            "data": 0
+        },
+        "h":
+        {
+	    "item": "minecraft:hopper"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:satellitebuilder",
+        "count": 1
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:electrolyser"
+        },
+        "title": {
+            "translate": "advancement.electrifying"
+        },
+        "description": {
+            "translate": "advancement.electrifying.desc"
+        }
+    },
+    "parent": "stellurgy:normal/holographic",
+    "criteria": {
+        "warp": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "stellurgy:electrolyser"
+                    }
+                ]
+            }
+        }
+    }
+} 

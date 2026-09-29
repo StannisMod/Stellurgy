@@ -1,4 +1,4 @@
-## Version of Advanced Rocketry
+## Version of Stellurgy
 [insert here]
 ## Have you verified this is an issue in the latest unstable build
 Y,N, N/A

@@ -1,4 +1,4 @@
-# Advanced Rocketry `oreConfig.xml` Reference
+# Stellurgy `oreConfig.xml` Reference
 
 This document explains how `oreConfig.xml` is structured and how it behaves.
 
@@ -13,7 +13,7 @@ Path:
 
 ## 1. Purpose
 
-`oreConfig.xml` is a global fallback ore-definition file for AR planets.
+`oreConfig.xml` is a global fallback ore-definition file for Stellurgy planets.
 
 It defines ore-generation presets by:
 - pressure class
@@ -30,14 +30,14 @@ These presets are used only when a planet does **not** define its own per-planet
 
 `./config/advRocketry/oreConfig.xml`
 
-If the file is missing, AR creates:
+If the file is missing, Stellurgy creates:
 
 ```xml
 <OreConfig>
 </OreConfig>
 ```
 
-This is not a general overworld ore config. It is used for AR planetary world generation through `DimensionProperties.getOreGenProperties(...)` and planet chunk population.
+This is not a general overworld ore config. It is used for Stellurgy planetary world generation through `DimensionProperties.getOreGenProperties(...)` and planet chunk population.
 
 ---
 
@@ -52,18 +52,18 @@ Ore behavior priority is:
 Meaning:
 
 1. A per-planet `<oreGen>` in `planetDefs.xml` wins.
-2. Otherwise, AR tries `oreConfig.xml`.
+2. Otherwise, Stellurgy tries `oreConfig.xml`.
 3. Otherwise, worldgen falls back normally:
    - vanilla ores
-   - plus AR config ores if `EnableOreGen=true`
+   - plus Stellurgy config ores if `EnableOreGen=true`
 
-If a planet gets ore properties from either `planetDefs.xml` or `oreConfig.xml`, AR treats that planet as custom-ore-controlled.
+If a planet gets ore properties from either `planetDefs.xml` or `oreConfig.xml`, Stellurgy treats that planet as custom-ore-controlled.
 
 On such planets, `PlanetEventHandler.onWorldGen(...)` denies these `OreGenEvent.GenerateMinable` types:
 
 - `COAL`- `DIAMOND`- `EMERALD`- `GOLD`- `IRON`- `LAPIS`- `QUARTZ`- `REDSTONE`- `CUSTOM`
 
-Because AR’s own config ore generator posts `CUSTOM`, AR config ores are also suppressed there. In practice, custom ore properties replace AR normal config ore generation on that planet rather than adding on top.
+Because Stellurgy’s own config ore generator posts `CUSTOM`, Stellurgy config ores are also suppressed there. In practice, custom ore properties replace Stellurgy normal config ore generation on that planet rather than adding on top.
 
 Mods using other generation paths may still bypass this.
 
@@ -212,9 +212,9 @@ If an `<ore>` entry is invalid, it is skipped. If an `<oreGen>` ends up with no 
 
 If a planet uses `oreConfig.xml`, its ore entries are generated during planet chunk population through `CustomizableOreGen`.
 
-If the planet does not define a custom filler block, AR uses normal `WorldGenMinable(...)`-style stone replacement.
+If the planet does not define a custom filler block, Stellurgy uses normal `WorldGenMinable(...)`-style stone replacement.
 
-If the planet does define a custom filler block, AR uses a custom predicate that allows replacement in:
+If the planet does define a custom filler block, Stellurgy uses a custom predicate that allows replacement in:
 - natural vanilla stone
 - the configured filler block’s block type
 
@@ -295,5 +295,5 @@ Confirmed by code review plus fresh-world testing:
 - pressure-only mappings work
 - unmatched planets fall back normally
 - missing `oreConfig.xml` also falls back normally
-- with `EnableOreGen=true`, normal fallback includes AR config ores
+- with `EnableOreGen=true`, normal fallback includes Stellurgy config ores
 - with `EnableOreGen=false`, normal fallback is vanilla-only

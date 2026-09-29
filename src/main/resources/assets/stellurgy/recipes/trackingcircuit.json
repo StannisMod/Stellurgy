@@ -1,0 +1,24 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "type": "forge:ore_dict",
+            "ore": "dustRedstone"
+        },
+        {
+	    "item": "minecraft:ender_eye"
+        },
+	{
+	    "item": "stellurgy:itemcircuitplate",
+	    "data": 0
+        }
+    ],
+    "time": 900,
+    "energy": 50,
+    "itemresults":
+    {
+	"item": "stellurgy:ic",
+	"data": 1
+    }
+}

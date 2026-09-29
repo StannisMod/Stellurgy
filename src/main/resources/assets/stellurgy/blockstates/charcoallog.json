@@ -1,0 +1,23 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "transform": "forge:default-block",
+        "model": "minecraft:cube_column",
+        "textures": {
+            "end": "stellurgy:blocks/log_charcoal_top",
+            "side": "stellurgy:blocks/log_charcoal"
+        }
+    },
+    "variants": {
+        "axis=y": [{}],
+        "axis=none": {
+            "model": "minecraft:cube_all",
+            "textures": {
+                "all": "stellurgy:blocks/log_charcoal"
+            }
+        },
+        "axis=z": {"model": "minecraft:cube_column", "x": 90},
+        "axis=x": {"model": "minecraft:cube_column", "x": 90, "y": 90},
+        "inventory": [{}]
+    }
+}

@@ -1,0 +1,24 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "type": "forge:ore_dict",
+            "ore": "ingotGold"
+        },
+        {
+	    "item": "minecraft:redstone_block"
+        },
+	{
+	    "item": "stellurgy:wafer",
+	    "data": 0
+        }
+    ],
+    "time": 900,
+    "energy": 100,
+    "itemresults":
+    {
+	"item": "stellurgy:itemcircuitplate",
+	"data": 1
+    }
+}

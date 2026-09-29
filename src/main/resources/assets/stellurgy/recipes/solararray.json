@@ -1,0 +1,36 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"rur",
+	"gbg",
+	"rrr"
+    ],
+    "key":
+    {
+        "g":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "paneGlass"
+        },
+        "u":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"r":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "stickIron"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:solararray",
+        "count": 1
+    }
+}

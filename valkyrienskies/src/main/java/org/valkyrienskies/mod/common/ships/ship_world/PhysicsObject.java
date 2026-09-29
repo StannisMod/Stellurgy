@@ -27,6 +27,7 @@ import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.block_relocation.MoveBlocks;
 import org.valkyrienskies.mod.common.ships.chunk_claims.ClaimedChunkCacheController;
 import org.valkyrienskies.mod.common.ships.chunk_claims.SurroundingChunkCacheController;
+import org.valkyrienskies.mod.common.ships.interpolation.DeclaredMotionTransformInterpolator;
 import org.valkyrienskies.mod.common.ships.interpolation.ITransformInterpolator;
 import org.valkyrienskies.mod.common.ships.interpolation.SimpleEMATransformInterpolator;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
@@ -122,7 +123,19 @@ public class PhysicsObject implements IPhysicsEntity {
         // Note how this is last.
         if (world.isRemote) {
             this.shipRenderer = new PhysObjectRenderManager(this, referenceBlockPos);
-            this.transformInterpolator = new SimpleEMATransformInterpolator(initial.getShipTransform(), initial.getShipBB(), 0.5);
+            // The craft's OWN declared motion drives the pose it is shown at — see that class's
+            // note. The filter it replaces (SimpleEMATransformInterpolator, still present and still
+            // working) moved the shown pose half-way to the newest one each tick: a permanent lag,
+            // and a rate nobody declared.
+            //
+            // What kept the filter until 2026-08-25 was a claim that its lag CONCEALED a body-carry
+            // defect, and that correcting the pose would make standing bodies slide. Measured, that
+            // was wrong twice over: the defect was in the tick ORDER rather than in the carry, and
+            // it stood behind the filter at exactly the same one tick — 0.1974 blocks per tick at
+            // 2 rad/s and 1.974 blocks of arm, the identical number both pose sources produce. With
+            // a body put back on its deck point once the poses are current, the same scenario
+            // measures a seat miss of zero behind either one.
+            this.transformInterpolator = new DeclaredMotionTransformInterpolator(initial.getShipTransform(), initial.getShipBB());
         } else {
             this.shipRenderer = null;
             this.getShipTransformationManager().updateAllTransforms(this.getShipData().getShipTransform(), true, true);
@@ -188,7 +201,7 @@ public class PhysicsObject implements IPhysicsEntity {
      * holds on every load, so the set grows by one per cycle and the physics thread invokes every
      * stale instance forever.</p>
      *
-     * <p>Measured on a ship settled in an AR space cell, which is the arrangement that makes a ship's
+     * <p>Measured on a ship settled in a Stellurgy space cell, which is the arrangement that makes a ship's
      * chunks actually cycle under it: 1 controller on the ground, 2 then 3 in the cell, on a craft
      * carrying ONE flight computer — and commands written to the live tile were not what the physics
      * thread was executing.</p>
@@ -214,6 +227,9 @@ public class PhysicsObject implements IPhysicsEntity {
      * deconstruct back to the world.
      */
     boolean shouldShipBeDestroyed() {
+        if (getShipData().isDead()) {
+            return true; // somebody declared this craft finished; the record carries the decision
+        }
         if (getBlockPositions().isEmpty()) {
             return true;
         }
@@ -248,7 +264,20 @@ public class PhysicsObject implements IPhysicsEntity {
         }
         getWatchingPlayers().clear();
         // Finally, copy all the blocks from the ship to the world
-        if (!getBlockPositions().isEmpty()) {
+        //
+        // ...unless the ship is DEAD, which means DISCARD and not deconstruct. The two dispositions
+        // were never distinguished here because until the dead flag existed the only ships reaching
+        // this path with blocks were being deconstructed on purpose. They are opposites: a caller
+        // that retires a parked hull wants the craft GONE, and copying its blocks back would paste a
+        // whole craft into the world at the hull's position, which is the one outcome that call site
+        // exists to avoid.
+        //
+        // GONE, not abandoned: the ship's chunks are deleted from the world at the end of this
+        // method, unconditionally, so a discarded craft leaves nothing behind in the shipyard
+        // either. This comment said "the blocks left where they are, in a subspace shipyard nothing
+        // loads or can reach" until 2026-09-16 — which contradicted the line below it, and was
+        // quoted to the maintainer as fact before anybody read that line.
+        if (!getBlockPositions().isEmpty() && !getShipData().isDead()) {
             if (deconstructState.copyBlocks) {
                 MutableBlockPos newPos = new MutableBlockPos();
                 ShipTransform currentTransform = getShipTransformationManager().getCurrentTickTransform();

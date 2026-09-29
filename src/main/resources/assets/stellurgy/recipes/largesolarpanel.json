@@ -1,0 +1,36 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+        {
+	    "item": "stellurgy:satellitepowersource",
+	    "data": 0
+        },
+        {
+	    "item": "stellurgy:satellitepowersource",
+	    "data": 0
+        },        
+        {
+	    "item": "stellurgy:satellitepowersource",
+	    "data": 0
+        },
+	{
+	    "item": "stellurgy:satellitepowersource",
+	    "data": 0
+        },
+        {
+	    "item": "stellurgy:satellitepowersource",
+	    "data": 0
+        },        
+        {
+	    "item": "stellurgy:satellitepowersource",
+	    "data": 0
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:satellitepowersource",
+        "count": 1,
+        "data": 1
+    }
+}

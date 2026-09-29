@@ -1,0 +1,365 @@
+package dev.stannismod.stellurgy.test.server;
+
+import dev.stannismod.stellurgy.test.DriveInfo;
+import dev.stannismod.stellurgy.test.Reply;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * The hyperdrive family in a real world: what a player gets for what he builds, and what the helm
+ * does when he presses the key.
+ *
+ * <p>Everything here goes through production — the generator's own scan, the capacitor's own charge
+ * arithmetic, the real jump gate, and the same {@code onJumpKey} the pilot seat calls when the key
+ * is pressed. The probe places blocks and reads answers; it never computes one.</p>
+ *
+ * <p>No balance number is asserted. What is asserted is what a player can rely on while building:
+ * more coils is more drive, more cells is more bank, more sinks is a shorter wait, a machine that
+ * belongs to another ship is not yours, and the pilot is never charged for a jump that did not
+ * happen.</p>
+ */
+public class HyperdriveE2ETest extends AbstractSharedServerTest {
+
+    // Build sites well clear of every other fixture in the shared world, and far enough apart that
+    // one fixture's footprint can never reach into another's. Each family of tests gets its own
+    // ship: the hull tests write a hull extent that persists on the flight computer, and a helm test
+    // inheriting an oversized hull would meet an advisory it never asked for.
+    private static final String SHIP_A = "2600 82 2600";   // what the build is worth
+    private static final String SHIP_B = "2660 82 2660";   // the neighbour that must lend nothing
+    private static final String SHIP_C = "2720 82 2720";   // the window against the hull
+    private static final String SHIP_D = "2780 82 2780";   // the helm
+    private static final String NAV_C = "0 2720 80 2720";
+    private static final String NAV_D = "0 2780 80 2780";
+
+    private String exec(String cmd) throws Exception {
+        return String.join("\n", client().execute(cmd));
+    }
+
+    /** What the drive standing at {@code afc} is, as the ship's own answer. */
+    private DriveInfo drive(String afc) throws Exception {
+        return DriveInfo.at(this::exec, "0 " + afc);
+    }
+
+    private String buildDrive(String afc, int coils, int cells, int sinks,
+                              int emitters, int dampeners) throws Exception {
+        return exec("stellurgytest drive build 0 " + afc + " " + coils + " " + cells + " " + sinks
+                + " " + emitters + " " + dampeners);
+    }
+
+    // ─── What the build is worth ───────────────────────────────────────────────
+
+    @Test
+    public void aBiggerGeneratorIsAStrongerDrive() throws Exception {
+        buildDrive(SHIP_A, 2, 2, 1, 0, 0);
+        long small = drive(SHIP_A).drivePower;
+
+        buildDrive(SHIP_A, 8, 2, 1, 0, 0);
+        long large = drive(SHIP_A).drivePower;
+
+        assertTrue("welding more coils to the generator must make the ship's drive stronger: "
+                + small + " -> " + large, large > small);
+    }
+
+    @Test
+    public void aStrongerDriveIsFasterAndCostsMoreToStart() throws Exception {
+        buildDrive(SHIP_A, 2, 8, 1, 0, 0);
+        DriveInfo weak = drive(SHIP_A);
+
+        buildDrive(SHIP_A, 10, 8, 1, 0, 0);
+        DriveInfo strong = drive(SHIP_A);
+
+        assertTrue("a bigger drive crosses faster",
+                strong.speedBlocksPerTick > weak.speedBlocksPerTick);
+        assertTrue("and asks for a bigger burst to open the window",
+                strong.burstCost > weak.burstCost);
+        assertTrue("and draws more while it holds the window open",
+                strong.inFlightDraw > weak.inFlightDraw);
+    }
+
+    @Test
+    public void moreCellsIsMoreBankAndMoreSinksIsAShorterWait() throws Exception {
+        buildDrive(SHIP_A, 4, 1, 1, 0, 0);
+        DriveInfo lean = drive(SHIP_A);
+
+        buildDrive(SHIP_A, 4, 6, 1, 0, 0);
+        DriveInfo bigBank = drive(SHIP_A);
+
+        assertTrue("cells are what the bank holds", bigBank.capacity > lean.capacity);
+
+        // Same drive, same bank, more cooling: the wait for the next window must shrink. The
+        // cooldown is not a timer anywhere - it is how long this bank takes to reach this burst.
+        exec("stellurgytest drive charge 0 " + SHIP_A + " empty");
+        long slowCooldown = drive(SHIP_A).cooldownTicks;
+        buildDrive(SHIP_A, 4, 6, 6, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_A + " empty");
+        long fastCooldown = drive(SHIP_A).cooldownTicks;
+
+        assertTrue("precondition: an empty bank really does have a wait", slowCooldown > 0L);
+        assertTrue("heat sinks are the whole of the cooling system: " + slowCooldown
+                + " -> " + fastCooldown, fastCooldown < slowCooldown);
+    }
+
+    @Test
+    public void aChargedBankHasNoCooldownAtAll() throws Exception {
+        buildDrive(SHIP_A, 4, 8, 2, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_A + " full");
+
+        DriveInfo info = drive(SHIP_A);
+
+        assertEquals("a ship ready to jump is not waiting for anything", 0L, info.cooldownTicks);
+        assertTrue("and its bank holds at least the burst", info.charge >= info.burstCost);
+    }
+
+    @Test
+    public void anotherShipsMachinesAreNotYours() throws Exception {
+        // The two ships stand well apart and each machine is linked to its own flight computer.
+        // Without that ownership rule a ship could park beside a friend and borrow his capacitor.
+        buildDrive(SHIP_A, 6, 6, 2, 0, 0);
+        buildDrive(SHIP_B, 1, 1, 1, 0, 0);
+
+        long a = drive(SHIP_A).drivePower;
+        long b = drive(SHIP_B).drivePower;
+
+        assertTrue("the big ship keeps its own power", a > b);
+        assertTrue("and the small one gains nothing from the neighbour", b > 0L);
+    }
+
+    // ─── The window and the hull ───────────────────────────────────────────────
+
+    @Test
+    public void aSmallHullFitsInsideTheGeneratorsOwnWindow() throws Exception {
+        buildDrive(SHIP_C, 4, 4, 2, 0, 0);
+        // A starter craft: a couple of blocks either side of the generator.
+        exec("stellurgytest drive hull 0 " + SHIP_C + " 0 0 0 3 1 1");
+
+        DriveInfo info = drive(SHIP_C);
+
+        assertTrue("the hull's coverage must have been measured, or the count below is a"
+                + " placeholder: " + info.raw(), info.hullMeasured);
+        assertEquals("a first ship with no emitters at all must still be able to jump", 0L,
+                info.hullOutsideWindow());
+    }
+
+    @Test
+    public void aHullTooBigForTheWindowWarnsAndStillLetsThePilotGo() throws Exception {
+        buildDrive(SHIP_C, 4, 8, 2, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_C + " full");
+        exec("stellurgytest nav place " + NAV_C);
+        exec("stellurgytest nav link " + NAV_C + " " + SHIP_C);
+        exec("stellurgytest nav target " + NAV_C + " 7 0 0");
+        // A hull far longer than a bare generator can wrap.
+        exec("stellurgytest drive hull 0 " + SHIP_C + " -30 -4 -4 30 4 4");
+
+        DriveInfo info = drive(SHIP_C);
+
+        assertTrue("part of this hull is outside the window: " + info.raw(),
+                info.hullOutsideWindow() > 0L);
+        assertTrue("which is a warning, never a veto - leaving part of the ship behind is the "
+                + "pilot's decision to make: " + info.raw(), info.allowed);
+        assertTrue("and he is told before he makes it: " + info.raw(), info.confirm);
+        assertTrue("and told THAT, in the gate's own message: " + info.raw(),
+                info.messageIs("msg.jumpgate.windowundersized"));
+    }
+
+    @Test
+    public void emittersAreWhatMakeALongHullFit() throws Exception {
+        buildDrive(SHIP_C, 4, 8, 2, 0, 0);
+        exec("stellurgytest drive hull 0 " + SHIP_C + " -30 -4 -4 30 4 4");
+        long bare = drive(SHIP_C).hullOutsideWindow();
+
+        buildDrive(SHIP_C, 4, 8, 2, 6, 0);
+        long withEmitters = drive(SHIP_C).hullOutsideWindow();
+
+        assertTrue("precondition: the bare generator leaves this hull sticking out", bare > 0L);
+        assertTrue("emitters are an extension for a big hull, and this is what they buy: "
+                + bare + " -> " + withEmitters, withEmitters < bare);
+    }
+
+    // ─── The helm ──────────────────────────────────────────────────────────────
+
+    @Test
+    public void thePilotCannotFireAJumpNobodyArmed() throws Exception {
+        buildDrive(SHIP_D, 4, 8, 2, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_D + " full");
+        exec("stellurgytest nav place " + NAV_D);
+        exec("stellurgytest nav link " + NAV_D + " " + SHIP_D);
+        exec("stellurgytest nav target " + NAV_D + " 7 0 0");
+        exec("stellurgytest drive arm 0 " + SHIP_D + " off");
+
+        String pressed = exec("stellurgytest drive press 0 " + SHIP_D);
+
+        assertTrue("choosing a destination and choosing to go are two separate acts: " + pressed,
+                (!Reply.of(pressed).bool("spooling")));
+    }
+
+    @Test
+    public void armingAtTheConsoleAndPressingAtTheHelmWindsTheDriveUp() throws Exception {
+        buildDrive(SHIP_D, 4, 8, 2, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_D + " full");
+        exec("stellurgytest nav place " + NAV_D);
+        exec("stellurgytest nav link " + NAV_D + " " + SHIP_D);
+        exec("stellurgytest nav target " + NAV_D + " 7 0 0");
+
+        String armed = exec("stellurgytest drive arm 0 " + SHIP_D + " on");
+        String pressed = exec("stellurgytest drive press 0 " + SHIP_D);
+
+        assertTrue("the console is where the pilot commits to a destination: " + armed,
+                Reply.of(armed).bool("armed"));
+        assertTrue("and the helm is where he commits to going: " + pressed,
+                Reply.of(pressed).bool("spooling"));
+    }
+
+    @Test
+    public void pressingAgainDuringTheWindUpAbortsItAndCostsNothing() throws Exception {
+        buildDrive(SHIP_D, 4, 8, 2, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_D + " full");
+        exec("stellurgytest nav place " + NAV_D);
+        exec("stellurgytest nav link " + NAV_D + " " + SHIP_D);
+        exec("stellurgytest nav target " + NAV_D + " 7 0 0");
+        exec("stellurgytest drive arm 0 " + SHIP_D + " on");
+
+        long chargeBefore = drive(SHIP_D).charge;
+        exec("stellurgytest drive press 0 " + SHIP_D);
+        String aborted = exec("stellurgytest drive press 0 " + SHIP_D);
+        long chargeAfter = drive(SHIP_D).charge;
+
+        assertTrue("a second press during the wind-up stops it: " + aborted,
+                (!Reply.of(aborted).bool("spooling")));
+        assertEquals("and it costs the pilot nothing - the burst is the only thing ever spent, "
+                + "and it has not fired", chargeBefore, chargeAfter);
+    }
+
+    @Test
+    public void aRefusedJumpNeverSpendsTheCharge() throws Exception {
+        // Armed, charged, but aimed at nothing: the gate refuses. Asking must stay free, because a
+        // pilot is expected to press the key to find out where he stands.
+        buildDrive(SHIP_D, 4, 8, 2, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_D + " full");
+        exec("stellurgytest nav place " + NAV_D);
+        exec("stellurgytest nav link " + NAV_D + " " + SHIP_D);
+        exec("stellurgytest nav target " + NAV_D + " 7 0 0");
+        exec("stellurgytest drive arm 0 " + SHIP_D + " on");
+        exec("stellurgytest nav cleartarget " + NAV_D);
+
+        long before = drive(SHIP_D).charge;
+        String pressed = exec("stellurgytest drive press 0 " + SHIP_D);
+        long after = drive(SHIP_D).charge;
+
+        assertTrue("a ship with no destination does not wind up: " + pressed,
+                (!Reply.of(pressed).bool("spooling")));
+        assertEquals("and a refusal is never a loss", before, after);
+    }
+
+    @Test
+    public void clearingTheTargetDisarmsTheJump() throws Exception {
+        // Re-aiming must never leave a ship armed at the answer to a question the pilot has already
+        // changed his mind about.
+        buildDrive(SHIP_D, 4, 8, 2, 0, 0);
+        exec("stellurgytest nav place " + NAV_D);
+        exec("stellurgytest nav link " + NAV_D + " " + SHIP_D);
+        exec("stellurgytest nav target " + NAV_D + " 7 0 0");
+        String armed = exec("stellurgytest drive arm 0 " + SHIP_D + " on");
+
+        exec("stellurgytest nav target " + NAV_D + " 9 0 0");
+        String pressed = exec("stellurgytest drive press 0 " + SHIP_D);
+
+        assertTrue("precondition: it really was armed: " + armed, Reply.of(armed).bool("armed"));
+        assertTrue("a new destination is a new decision: " + pressed,
+                (!Reply.of(pressed).bool("spooling")));
+    }
+
+    // ─── Dampeners ─────────────────────────────────────────────────────────────
+
+    @Test
+    public void dampenersAreFoundAndReportPowered() throws Exception {
+        buildDrive(SHIP_A, 4, 4, 2, 0, 3);
+
+        DriveInfo info = drive(SHIP_A);
+
+        assertEquals("all three belong to this ship", 3, info.dampeners);
+        assertEquals("and a dampener with power in its buffer is one that will protect somebody",
+                3, info.poweredDampeners);
+    }
+
+    // ─── The bank is filled by the SHIP, not by the clock ──────────────────────
+
+    /** Its own site: this family drains, feeds and unloads a bank, and must disturb nobody else. */
+    private static final String SHIP_E = "2840 82 2840";
+
+    @Test
+    public void aFRESHBANKSTAYSEMPTYWHILETIMEPASSES() throws Exception {
+        // THE property the old model got wrong, asked of a real world with a real clock — which is the
+        // strongest form of the question, because the defect WAS the clock. The bank used to be a closed
+        // form of elapsed ticks, so the biggest cost in the family (the window burst, twenty times the
+        // drive's power) was paid for by waiting. A buffer nobody feeds must stay at nothing.
+        buildDrive(SHIP_E, 4, 8, 4, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_E + " empty");
+
+        long before = drive(SHIP_E).charge;
+        assertEquals("a drained bank starts empty", 0L, before);
+
+        // WINDOW: the bank is read on both sides of 100 ticks of its own world, and the claim is
+        // that the second read equals the first. Overshoot gives an unfed bank MORE time to fill
+        // itself, so a slow box can only make this stricter.
+        dev.stannismod.stellurgy.test.GameTicks.advanceWorld(client(), 0, 100);
+
+        DriveInfo after = drive(SHIP_E);
+        assertEquals("100 ticks of a running server must not have put a single unit into a bank that"
+                        + " nothing is feeding (charge " + before + " -> " + after.charge + "): "
+                        + after.raw(), before, after.charge);
+        assertTrue("and it must still WANT charge, or this proves nothing", after.burstCost > 0L);
+    }
+
+    @Test
+    public void whatTheSHIPPUSHESINthroughItsGridIsWhatTheBankHolds() throws Exception {
+        // The positive half of the same wiring, and it goes through the real Forge Energy capability —
+        // the same one an adjacent reactor, array or cable pushes into — rather than through the
+        // fixture seam that sets the level directly.
+        buildDrive(SHIP_E, 4, 8, 4, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_E + " empty");
+
+        // `push` answers what the PORTS did, not what the drive is, so it is read as its own
+        // three-field reply rather than as a drive reading.
+        Reply pushed = Reply.of("stellurgytest drive push",
+                exec("stellurgytest drive push 0 " + SHIP_E + " 1000000000"));
+        assertTrue("the bank must expose an energy port for the ship to push into: " + pushed,
+                pushed.longInteger("ports") > 0L);
+        long accepted = pushed.longInteger("accepted");
+        assertTrue("and it must have taken some of it: " + pushed, accepted > 0L);
+        DriveInfo filled = drive(SHIP_E);
+        assertEquals("what it took is what it holds", accepted, filled.charge);
+
+        // One push is one tick's worth: the accept rate is a THROUGHPUT ceiling, so a billion offered
+        // at once does not fill a bank that a hundred pushes would.
+        assertTrue("a single tick of inflow must not fill the whole bank (" + accepted + " of "
+                + filled.capacity + ")", filled.capacity <= 0L || accepted < filled.capacity);
+
+        Reply again = Reply.of("stellurgytest drive push",
+                exec("stellurgytest drive push 0 " + SHIP_E + " 1000000000"));
+        assertTrue("a second push must add more", again.longInteger("charge") > accepted);
+    }
+
+    @Test
+    public void aBanksChargeSurvivesAREALunloadAndReload() throws Exception {
+        // The write half of the persistence contract, which only a real save can exercise: a
+        // force-loaded chunk never leaves memory, so a test against one proves the object was not
+        // collected rather than that its NBT round-trips. `chunk cycle` saves, drops and reads back.
+        buildDrive(SHIP_E, 4, 8, 4, 0, 0);
+        exec("stellurgytest drive charge 0 " + SHIP_E + " full");
+        long before = drive(SHIP_E).charge;
+        assertTrue("the fixture needs a bank with something in it", before > 0L);
+
+        int cx = 2840 >> 4;
+        int cz = 2840 >> 4;
+        String cycled = exec("stellurgytest chunk cycle 0 " + cx + " " + cz);
+        assertTrue("the chunk must really have left memory, or nothing was read back from disk: "
+                + cycled, Reply.of(cycled).bool("dropped"));
+
+        DriveInfo after = drive(SHIP_E);
+        assertEquals("a bank that came back from disk holds what it held: " + after.raw(), before,
+                after.charge);
+    }
+}

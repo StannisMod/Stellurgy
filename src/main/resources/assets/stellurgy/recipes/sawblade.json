@@ -1,0 +1,32 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"s s",
+	"pbp",
+	"p p"
+    ],
+    "key":
+    {
+        "s":
+        {
+            "type": "forge:ore_dict",
+            "ore": "stickIron"
+        },
+	"p":
+        {
+            "type": "forge:ore_dict",
+            "ore": "plateIron"
+        },
+	"b":
+        {
+            "item": "stellurgy:sawbladeiron",
+            "data": 0
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:sawblade",
+        "count": 1
+    }
+}

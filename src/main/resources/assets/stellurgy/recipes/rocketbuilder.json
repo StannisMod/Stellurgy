@@ -1,0 +1,45 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"sgs",
+	"cbc",
+	"tdt"
+    ],
+    "key":
+    {
+        "c":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+	"g":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"d":
+        {
+	    "item": "stellurgy:concrete"
+        },
+	"t":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gearTitanium"
+        },
+	"s":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "stickTitanium"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:rocketbuilder",
+        "count": 1
+    }
+}

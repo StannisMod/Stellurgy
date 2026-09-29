@@ -1,0 +1,26 @@
+{
+    "display": {
+        "icon": {
+            "item": "libvulpes:holoProjector"
+        },
+        "title": {
+            "translate": "advancement.holographic"
+        },
+        "description": {
+            "translate": "advancement.holographic.desc"
+        }
+    },
+    "parent": "stellurgy:normal/blockpresser",
+    "criteria": {
+        "warp": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "libvulpes:holoProjector"
+                    }
+                ]
+            }
+        }
+    }
+} 

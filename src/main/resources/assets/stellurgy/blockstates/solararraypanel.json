@@ -1,0 +1,59 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "transform": "forge:default-block"
+    },
+    "variants": {
+        "inventory": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=0": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=1": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=2": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=3": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=4": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=5": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=6": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=7": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=8": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=9": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=10": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=11": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=12": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=13": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=14": [{
+            "model": "stellurgy:solararraypanel"
+        }],
+        "varient=15": [{
+            "model": "stellurgy:solararraypanel"
+        }]
+    }
+}
