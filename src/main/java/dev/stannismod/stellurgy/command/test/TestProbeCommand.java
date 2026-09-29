@@ -5578,6 +5578,109 @@ public class TestProbeCommand extends CommandBase {
         // settled here. In BOTH forms the anchor block comes from the hull the durable id NAMES: the
         // ledger pose plus "the ship block nearest it" is a proximity lookup, and an arrival depth is
         // deterministic, so the resident answers it as readily as the newcomer.
+        // jump-key id <durableShipId> <cellKey> [slotDim] [speed]: the same jump, to a cell named by its
+        // KEY rather than by a galactic sector triple - which is the only way to aim at a cell inside a
+        // ZONE, where the triple is counted in the zone's own lattice and means nothing on its own.
+        //
+        // THE WIDTH IS RE-ATTACHED HERE, FROM THE REGISTRY, AND A FAILURE TO RESOLVE IT IS A REFUSAL.
+        // `fromCellKey` answers WIDTH_UNKNOWN by construction, and handing that to a crossing is the
+        // defect the seam contract exists to forbid: the arithmetic downstream multiplies by a width it
+        // does not have. A guessed width would not fail either - it would rename the cell.
+        if (args.length >= 3 && "jump-key".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.space.SpaceSubsystem keyStack = liveStack();
+            if (keyStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
+                return;
+            }
+            if (!"id".equalsIgnoreCase(args[1]) || args.length < 4) {
+                send(sender, "{\"error\":\"jump-key needs id <durableShipId> <cellKey> [slotDim] "
+                        + "[speed]\"}");
+                return;
+            }
+            java.util.UUID keyShip;
+            try {
+                keyShip = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"jump-key needs a well-formed uuid\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.space.GalacticCoord keyCell =
+                    dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[3]);
+            if (keyCell == null) {
+                send(sender, "{\"error\":\"unparsable cell key\",\"cellKey\":\"" + args[3] + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.UniverseRegistry keyReg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (keyCell.zone() != null) {
+                // PRODUCTION's own reading of this zone's lattice, not a second derivation of it:
+                // the same call `zoneMembershipOf` addresses a craft on. It covers the childless
+                // zone (one cell spanning the sphere) that a registry lookup alone cannot answer.
+                long width = dev.stannismod.stellurgy.space.SpaceSubsystem.latticeWidthOfZone(
+                        keyReg, dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(keyCell.zone()),
+                        dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
+                if (width <= 0L) {
+                    send(sender, "{\"ok\":true,\"began\":false,\"reason\":\"no body stands at this key's "
+                            + "zone, so its lattice width cannot be re-attached - refused rather than "
+                            + "guessed, because a wrong width renames the cell instead of failing\""
+                            + ",\"cellKey\":\"" + args[3] + "\",\"zone\":\"" + keyCell.zone() + "\"}");
+                    return;
+                }
+                keyCell = keyCell.inLattice(width);
+            }
+            int keySlot = args.length > 4
+                    ? parseIntOr(args[4], sender.getEntityWorld().provider.getDimension())
+                    : sender.getEntityWorld().provider.getDimension();
+            long keySpeed = args.length > 5
+                    ? Math.max(1L, parseLongOr(args[5], 5_000_000L)) : 5_000_000L;
+            net.minecraft.world.WorldServer keyOrigin =
+                    net.minecraftforge.common.DimensionManager.getWorld(keySlot);
+            if (keyOrigin == null) {
+                send(sender, "{\"error\":\"origin cell world not loaded\",\"slotDim\":" + keySlot + "}");
+                return;
+            }
+            dev.stannismod.stellurgy.space.ShipLedger.Entry keyEntry = keyStack.ledger.get(keyShip);
+            if (keyEntry == null
+                    || keyEntry.state != dev.stannismod.stellurgy.space.ShipLedger.State.SETTLED
+                    || slotDimOfCell(keyEntry.coord) != keySlot) {
+                send(sender, "{\"ok\":true,\"began\":false,\"reason\":\"that ship is not settled in this "
+                        + "cell\",\"shipId\":\"" + keyShip + "\",\"ledgered\":" + (keyEntry != null)
+                        + ",\"state\":\"" + (keyEntry == null ? "" : keyEntry.state) + "\""
+                        + ",\"slotDim\":" + keySlot + "}");
+                return;
+            }
+            java.util.UUID keyHull = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                    .shipUuidOfDurableId(keyOrigin, keyShip.toString());
+            net.minecraft.util.math.BlockPos keyAnchor = keyHull == null ? null
+                    : dev.stannismod.stellurgy.integration.vs.VSIntegration
+                            .shipBlockOf(keyOrigin, keyHull);
+            if (keyAnchor == null) {
+                send(sender, "{\"ok\":true,\"began\":false,\"reason\":\"no loaded hull carries that "
+                        + "ship's name\",\"shipId\":\"" + keyShip + "\",\"hullFound\":"
+                        + (keyHull != null) + "}");
+                return;
+            }
+            // The origin's local offsets are kept, exactly as the sector form keeps them: "jump to this
+            // cell" means the same spot inside it, not its local-(0,0,0) corner.
+            dev.stannismod.stellurgy.space.GalacticCoord keyTarget = keyCell.zone() == null
+                    ? dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+                            keyCell.sectorX(), keyCell.sectorY(), keyCell.sectorZ(),
+                            keyEntry.coord.localX(), keyEntry.coord.localY(), keyEntry.coord.localZ())
+                    : dev.stannismod.stellurgy.space.GalacticCoord.inZone(
+                            keyCell.zone(), keyCell.cellBlocks(),
+                            keyCell.sectorX(), keyCell.sectorY(), keyCell.sectorZ(),
+                            keyEntry.coord.localX(), keyEntry.coord.localY(), keyEntry.coord.localZ());
+            boolean keyBegan = keyStack.transit.beginTransit(keyShip.toString(), keyEntry.coord,
+                    keySlot, keyAnchor, keyTarget, keySpeed);
+            send(sender, "{\"ok\":true,\"began\":" + keyBegan
+                    + ",\"shipId\":\"" + keyShip + "\""
+                    + ",\"fromCell\":\"" + keyEntry.coord.cellKey() + "\""
+                    + ",\"toCell\":\"" + keyTarget.cellKey() + "\""
+                    + ",\"toCellBlocks\":" + keyTarget.cellBlocks()
+                    + ",\"slotDim\":" + keySlot
+                    + ",\"inTransit\":" + keyStack.transit.inTransitCount() + "}");
+            return;
+        }
         if (args.length >= 4 && "jump".equalsIgnoreCase(args[0])) {
             dev.stannismod.stellurgy.space.SpaceSubsystem spaceStack = liveStack();
             if (spaceStack == null) {

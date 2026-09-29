@@ -599,6 +599,26 @@ public final class SpaceSubsystem {
      * pass would have produced too. The zero handed to {@code cellBlocks} here therefore states a
      * fact the registry was asked for, rather than a parameter nobody filled in.</p>
      */
+    /**
+     * The width of the lattice INSIDE the zone whose own cell is {@code zoneCell}, at {@code tick} —
+     * the same answer {@link #zoneMembershipIn} addresses a craft on, reached by a caller that holds
+     * a cell rather than a body.
+     *
+     * <p>{@link GalacticCoord#WIDTH_UNKNOWN} when no body stands at that cell, and the caller must
+     * say what it does about that rather than substituting a width: a wrong one does not fail, it
+     * renames the cell.</p>
+     *
+     * <p>Public because the alternative is a second derivation of one quantity, and two derivations
+     * of a lattice width do not conflict when they disagree — they produce different well-formed
+     * names for one place. That is the defect this whole area was fixed for.</p>
+     */
+    public static long latticeWidthOfZone(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
+                                          GalacticCoord zoneCell, long tick) {
+        dev.stannismod.stellurgy.universe.SystemBody zoneBody = frameBodyAt(reg, zoneCell);
+        return zoneBody == null ? GalacticCoord.WIDTH_UNKNOWN
+                : latticeOf(reg, zoneBody, primaryOf(reg, zoneCell), tick);
+    }
+
     private static long latticeOf(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
                                   dev.stannismod.stellurgy.universe.SystemBody zoneBody,
                                   dev.stannismod.stellurgy.universe.SystemBody primary,
