@@ -67,7 +67,7 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
 
     /**
      * From {@code ModCountParityE2ETest}: e2e regression guard for the dummy-mod-container removal
-     * (dercodeKoenig/Stellurgy#71).
+     * (dercodeKoenig/AdvancedRocketry#71).
      *
      * <p>The ASM coremod used to register a {@code DummyModContainer}
      * ({@code stellurgycore}) with empty lifecycle handlers. Its single observable effect was
@@ -100,7 +100,7 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
 
         assertTrue("stellurgy must be among loaded mods: " + idList, hasAr);
         assertFalse("the vestigial dummy container stellurgycore must be gone "
-                + "(issue dercodeKoenig/Stellurgy#71): " + idList, hasDummy);
+                + "(issue dercodeKoenig/AdvancedRocketry#71): " + idList, hasDummy);
         // The actual user-visible symptom: the title-screen counts must agree.
         // A loaded-but-never-active container makes loadedCount = activeCount + 1.
         assertEquals("every loaded mod must be active (title-screen 'loaded' vs 'active' "

@@ -18,7 +18,7 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Server-level regression guard for the tolerant planetDefs.xml loading
- * (dercodeKoenig/Stellurgy#77).
+ * (dercodeKoenig/AdvancedRocketry#77).
  *
  * <p>The original report: a planetDefs.xml referencing content from a mod
  * that isn't installed crashed world creation, and the crash killed the JVM

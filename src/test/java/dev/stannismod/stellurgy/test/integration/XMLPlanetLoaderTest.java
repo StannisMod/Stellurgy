@@ -355,7 +355,7 @@ public class XMLPlanetLoaderTest {
     // ---- laser drill ores: tolerant ore-name resolution ----------------------
 
     /**
-     * Regression for dercodeKoenig/Stellurgy#77 — creating a world with a
+     * Regression for dercodeKoenig/AdvancedRocketry#77 — creating a world with a
      * subset of mods crashed with {@code IndexOutOfBoundsException: Index 0 out of
      * bounds for length 0} at the {@code <laserDrillOres>} parse path.
      *

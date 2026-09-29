@@ -23,7 +23,7 @@ import static org.junit.Assert.assertTrue;
  *   <li><b>Opted back in.</b> With the arcade mechanic on, the skip must land on the PLANET's own
  *       dawn — a multiple of its {@code rotationalPeriod} — where vanilla's hard-coded rounding would
  *       put 24000, still night on a 30000-tick day. That was the original report
- *       (dercodeKoenig/Stellurgy#66).</li>
+ *       (dercodeKoenig/AdvancedRocketry#66).</li>
  * </ul>
  *
  * <p><b>Neither side is a witness alone</b>, which is why they belong in one class rather than two: a
