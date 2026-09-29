@@ -32,8 +32,8 @@ import org.junit.Before;
  *   public class WeatherBaselineTest extends AbstractHeadlessServerTest {
  *       @Test
  *       public void rainIsolatedPerDimension() throws Exception {
- *           client().execute("artest weather set 0 rain 12000");
- *           List<String> after = client().execute("artest weather get 0");
+ *           client().execute("stellurgytest weather set 0 rain 12000");
+ *           List<String> after = client().execute("stellurgytest weather get 0");
  *           assertTrue(String.join("\n", after).contains("\"isRaining\":true"));
  *       }
  *   }

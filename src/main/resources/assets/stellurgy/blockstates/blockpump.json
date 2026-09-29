@@ -1,0 +1,24 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "transform": "forge:default-block",
+        "model": "stellurgy:orientablebottom",
+        "textures": {
+            "bottom": "stellurgy:blocks/pumpbottom",
+            "front": "stellurgy:blocks/pumpside",
+            "side": "stellurgy:blocks/pumpside",
+            "top": "libvulpes:blocks/machinegeneric"
+        }
+    },
+    "variants": {
+        "facing=north,state=false": [{}],
+        "facing=south,state=false": { "model": "stellurgy:orientablebottom", "y": 180 },
+        "facing=west,state=false":  { "model": "stellurgy:orientablebottom", "y": 270 },
+        "facing=east,state=false":  { "model": "stellurgy:orientablebottom", "y": 90 },
+        "facing=north,state=true": [{}],
+        "facing=south,state=true": { "model": "stellurgy:orientablebottom", "y": 180 },
+        "facing=west,state=true":  { "model": "stellurgy:orientablebottom", "y": 270 },
+        "facing=east,state=true":  { "model": "stellurgy:orientablebottom", "y": 90 },
+        "inventory" : [{}]
+    }
+}

@@ -1,0 +1,27 @@
+{
+    "display": {
+        "icon": {
+            "item": "libvulpes:productgem"
+        },
+        "title": {
+            "translate": "advancement.dilithium"
+        },
+        "description": {
+            "translate": "advancement.dilithium.desc"
+        }
+    },
+    "parent": "stellurgy:normal/root",
+    "criteria": {
+        "dilithium": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "libvulpes:productgem",
+                        "data": 0
+                    }
+                ]
+            }
+        }
+    }
+} 

@@ -1,0 +1,413 @@
+package dev.stannismod.stellurgy.space;
+
+import java.util.List;
+
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextComponentTranslation;
+import net.minecraft.world.WorldServer;
+import net.minecraftforge.common.DimensionManager;
+
+import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+
+/**
+ * Production {@link ShipCrossingService.Ops}: carries a crossing state machine's decisions out
+ * against live worlds — the proven per-ship crossing, the rider-carrying rigid pose teleport, and
+ * the crew re-seat. Shared by the entry on-ramp ({@link ShipEntryController}) and the planet
+ * descent ({@link DescentController}); mirrors {@link VSShipCrosser}'s role for the transit state
+ * machine. Safe no-ops (nulls/false) when a world is missing, so a crossing aborts cleanly.
+ */
+public final class VSShipCrossingOps implements ShipCrossingService.Ops {
+
+    private static final org.apache.logging.log4j.Logger LOGGER =
+            org.apache.logging.log4j.LogManager.getLogger(VSShipCrossingOps.class);
+
+    /**
+     * How far outside the hull's own bounding box a mount still counts as aboard, in blocks.
+     *
+     * <p>A seat's dummy sits where a rider's feet go, which is a little clear of the block it is
+     * bound to, and the hull box is the blocks. One block covers that and nothing else — this is a
+     * fitting margin on a measured extent, not a guess at how big a ship might be.</p>
+     *
+     * <p>It replaces a fixed 8-block half-width around the ship's POSE, credited in its own comment
+     * to "the proven probe recipe". A pose is one point on a hull, so that box found the mounts of a
+     * small craft and silently missed the cockpit of anything longer than sixteen blocks — the
+     * failure mode being a pilot left behind at the departure coordinate, which reads as the crossing
+     * dropping him.</p>
+     */
+    private static final double ABOARD_MARGIN = 1.0;
+
+    @Override
+    public double[] shipWorldPosition(int dimId, BlockPos afcPos) {
+        WorldServer world = DimensionManager.getWorld(dimId);
+        return world == null ? null : VSIntegration.getShipWorldPosition(world, afcPos);
+    }
+
+    /**
+     * What each crossing took off its ship that was NOT crew, keyed by the ship's durable id and
+     * waiting for {@link #reseat} to put it back. Empty except between a capture and its arrival.
+     *
+     * <p>Keyed by the SHIP and not by the destination: a crossing is identified by the craft making
+     * it, and two craft can be crossing into the same slot world at once.</p>
+     */
+    private final java.util.Map<java.util.UUID, List<AboardBodies.Stowed>> bodyStash =
+            new java.util.HashMap<>();
+
+    /**
+     * Ships whose crew is already back in its seats but whose arrival is not finished — it is still
+     * waiting on the bodies. Dropped the moment both halves are down.
+     *
+     * <p>Both this and {@link #bodyStash} are emptied by a completed arrival and by nothing else, so
+     * a crossing that exhausts the settle loop's attempts leaves an entry behind. That is the same
+     * bound the transit path's own stashes carry, it costs a handful of bytes per abandoned crossing,
+     * and the alternative — clearing on the give-up path — would need this object to be told about a
+     * failure it is not currently part of.</p>
+     */
+    private final java.util.Set<java.util.UUID> crewAlreadySeated = new java.util.HashSet<>();
+
+    @Override
+    public List<CrewTransfer.Crew> captureCrew(int dimId, BlockPos afcPos, double[] shipWorldPos,
+                                               java.util.UUID shipId) {
+        WorldServer world = DimensionManager.getWorld(dimId);
+        if (world == null) {
+            return new java.util.ArrayList<CrewTransfer.Crew>();
+        }
+        // Everything that is NOT crew comes out first, and ahead of the crew capture for the same
+        // reason the transit path does it in that order: these need no negotiation with a client, so
+        // they are stowed rather than held, and a crewless ship must still take its cargo with it.
+        //
+        // This is the call that was missing. `AboardBodies` was driven from ONE place — the transit
+        // path's own crosser — so a JUMP carried the mob on the deck while an entry, a descent and a
+        // cell-seam carry silently left it behind, in a world the ship had just been cut out of.
+        if (shipId != null) {
+            List<AboardBodies.Stowed> bodies = AboardBodies.capture(world, afcPos);
+            if (!bodies.isEmpty()) {
+                bodyStash.put(shipId, bodies);
+            }
+        }
+        return CrewTransfer.capture(world, afcPos, shipWorldPos);
+    }
+
+    @Override
+    public List<CrewTransfer.Crew> peekCrew(int dimId, BlockPos afcPos, double[] shipWorldPos) {
+        WorldServer world = DimensionManager.getWorld(dimId);
+        return world == null
+                ? new java.util.ArrayList<CrewTransfer.Crew>()
+                : CrewTransfer.peek(world, afcPos, shipWorldPos);
+    }
+
+    @Override
+    public void latchEntryUntilBelowTheLine(int dimId, BlockPos afcPos) {
+        WorldServer world = DimensionManager.getWorld(dimId);
+        if (world == null || afcPos == null) {
+            return;
+        }
+        net.minecraft.tileentity.TileEntity te = world.getTileEntity(afcPos);
+        if (te instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) {
+            ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) te)
+                    .latchEntryUntilBelowTheLine();
+        }
+    }
+
+    @Override
+    public ShipCrossingService.Crossed cross(java.util.UUID shipId, int srcDimId,
+                                             double[] srcShipPos, int destDim,
+                                             int pasteX, int pasteY, int pasteZ) {
+        WorldServer src = DimensionManager.getWorld(srcDimId);
+        WorldServer dst = DimensionManager.getWorld(destDim);
+        if (src == null || dst == null || srcShipPos == null) {
+            return null;
+        }
+        // BY IDENTITY. The durable name is indexed beside the ship's uuid on its own record, so this
+        // is one hash probe, and it is the difference between cutting this craft and cutting the one
+        // that happens to be nearest the same point — which in a destination already crossed into is
+        // an exact tie decided by registry iteration order, with a blockless remnant of a previous
+        // crossing as a live candidate.
+        java.util.UUID named = shipId == null
+                ? null : VSIntegration.shipUuidOfDurableId(src, shipId.toString());
+        if (named == null) {
+            LOGGER.error("[SPACE] crossing REFUSED: ship {} is not registered in dim {} under its own"
+                            + " durable name. Cutting by position at {},{},{} would hand back"
+                            + " whichever craft is nearest and re-assemble it carrying this ship's"
+                            + " name. Nothing is cut.",
+                    shipId, srcDimId, srcShipPos[0], srcShipPos[1], srcShipPos[2]);
+            return null;
+        }
+        VSIntegration.CrossResult res = VSIntegration.crossShip(
+                src, srcShipPos[0], srcShipPos[1], srcShipPos[2], named,
+                dst, pasteX, pasteY, pasteZ);
+        return res.ok() ? new ShipCrossingService.Crossed(res.anchor, res.shipUuid) : null;
+    }
+
+    @Override
+    public void pinDim(int dimId) {
+        // LOAD it, then hold it. The flag alone pins nothing: Forge's keepDimensionLoaded only stops
+        // a LOADED world being queued for unload, and a planet with nobody on it is unloaded within
+        // seconds of the last player leaving. A destination that is already down therefore stayed
+        // down, and every read of it afterwards - the descent's own arrival resolve above all -
+        // answered "no such world" forever, because nothing on that path ever asked for it.
+        // Init only when it is actually absent: initDimension on a live dimension reloads it.
+        if (DimensionManager.getWorld(dimId) == null) {
+            DimensionManager.initDimension(dimId);
+        }
+        DimensionManager.keepDimensionLoaded(dimId, true);
+    }
+
+    @Override
+    public boolean reseat(int destDim, BlockPos anchor, List<CrewTransfer.Crew> crew,
+            java.util.UUID shipId, java.util.UUID vsShipUuid) {
+        WorldServer world = DimensionManager.getWorld(destDim);
+        if (world == null) {
+            return false; // target world not up yet — retry next tick
+        }
+        // BOTH, reported as one verdict, on the same retry loop: the crossing is not finished while a
+        // mob that was standing on the deck is still in a map on this side.
+        //
+        // THE CREW IS ATTEMPTED EVERY TICK REGARDLESS, and its success is remembered rather than
+        // re-performed. This is the transit path's shape and it is copied on purpose: the two halves
+        // can succeed on different ticks, and without the memo a body that lands late would drive a
+        // second `CrewTransfer.reseat` over crew that is already sitting down. Ordering the crew
+        // behind the bodies would avoid that too, but it would also let a body that cannot be placed
+        // keep a pilot standing in a world his ship has left — a far worse trade than a lost item.
+        boolean bodiesPlaced = releaseStowed(world, anchor, shipId, vsShipUuid);
+        boolean crewSeated = shipId != null && crewAlreadySeated.contains(shipId);
+        if (!crewSeated && CrewTransfer.reseat(world, anchor, crew, shipId, vsShipUuid)) {
+            crewSeated = true;
+            if (shipId != null) {
+                crewAlreadySeated.add(shipId);
+            }
+        }
+        if (bodiesPlaced && crewSeated) {
+            crewAlreadySeated.remove(shipId);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Put the bodies stowed for {@code shipId} back on the ship that arrived at {@code anchor}, and
+     * drop the stash once they are down.
+     *
+     * <p>{@code true} with nothing stowed — a ship that carried no loose body has nothing to wait
+     * for. {@code false} means the ship is not rebuilt here yet, which is the same "come back next
+     * tick" the crew placement answers with.</p>
+     */
+    private boolean releaseStowed(WorldServer world, BlockPos anchor, java.util.UUID shipId,
+                                  java.util.UUID vsShipUuid) {
+        List<AboardBodies.Stowed> bodies = shipId == null ? null : bodyStash.get(shipId);
+        if (bodies == null || bodies.isEmpty()) {
+            return true;
+        }
+        // NAMED, not "whatever is at the anchor". The anchor is the arrival pose and an arrival pose
+        // is deterministic, so a cell that has been crossed into before already has a craft sitting
+        // exactly there — and this used to hand it the newcomer's cargo.
+        BlockPos afcPos = VSIntegration.flightComputerOfNamedShip(world, vsShipUuid, shipId,
+                anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5);
+        // BOTH REFUSALS SPEAK, and they are different failures. This returned a bare `false` for
+        // either, which is the caller's "come back next tick" — indistinguishable from progress right
+        // up to the moment the crossing gives up, at which point the bodies are in this map and in no
+        // world at all. A carry that loses cargo must say which half could not place it.
+        if (afcPos == null) {
+            LOGGER.warn("[SPACE] cargo NOT released yet for ship {} arriving at {} in dim {}: its "
+                            + "flight computer does not resolve here (physics id {}). {} body(ies) "
+                            + "are held out of the world until it does.",
+                    shipId, anchor, world.provider.getDimension(), vsShipUuid, bodies.size());
+            return false;
+        }
+        int placed = AboardBodies.release(world, afcPos, bodies);
+        lastRelease = "ship=" + shipId + " dim=" + world.provider.getDimension()
+                + " afc=" + afcPos + " stowed=" + bodies.size() + " placed=" + placed;
+        if (placed == 0) {
+            LOGGER.warn("[SPACE] cargo NOT released yet for ship {} at computer {} in dim {}: the "
+                            + "ship's transform is not registered here, so no ship-relative point can "
+                            + "be mapped. {} body(ies) are held out of the world until it is.",
+                    shipId, afcPos, world.provider.getDimension(), bodies.size());
+            return false;
+        }
+        bodyStash.remove(shipId);
+        return true;
+    }
+
+    /**
+     * The bodies this crossing has taken out of a world and not yet put back, per ship — read-only,
+     * for a test that needs to tell "the carry never picked the cargo up" from "it picked it up and
+     * never put it down". The two are one symptom from outside (the body is in neither world) and
+     * they are faults in different halves of the mechanism.
+     */
+    /** What the last cargo release did, for a reader who cannot see this server's log. */
+    private String lastRelease = "never";
+
+    /** @see #lastRelease */
+    public String lastCargoRelease() {
+        return lastRelease;
+    }
+
+    public java.util.Map<java.util.UUID, Integer> stowedCargo() {
+        java.util.Map<java.util.UUID, Integer> held = new java.util.LinkedHashMap<>();
+        for (java.util.Map.Entry<java.util.UUID, List<AboardBodies.Stowed>> e : bodyStash.entrySet()) {
+            held.put(e.getKey(), e.getValue() == null ? 0 : e.getValue().size());
+        }
+        return held;
+    }
+
+    @Override
+    public boolean teleportPoseWithRiders(int destDim, BlockPos anchor, java.util.UUID vsShipUuid,
+                                          double px, double py, double pz) {
+        WorldServer world = DimensionManager.getWorld(destDim);
+        if (world == null) {
+            return false;
+        }
+        // Readiness gate. The thing that must be true before the pose is written is that the physics
+        // mod has finished relocating the blocks we pasted into the ship's subspace shipyard —
+        // writing the transform mid-relocation re-maps the remaining blocks against the moved pose.
+        // That is a statement about THIS crossing's progress, and it is readable at the one point we
+        // own: the anchor we pasted on and seeded the assembly with. The assembly deletes every block
+        // it claims from this world (the anchor is always in its found set, it is the seed), so the
+        // anchor going to air is exactly "my ship has been claimed" — an exact test on one position,
+        // not a nearest-ship lookup, and independent of whether the ship happens to be loaded.
+        //
+        // It deliberately does NOT ask whether a ship is loaded. Loadedness is re-decided every tick
+        // from player proximity: with nobody aboard and nobody nearby, an unmanned arrival is exactly
+        // the case such a gate can never satisfy on its own, and it only ever passed because the
+        // settle force-loaded the ship itself — a coin flip against the unload the physics mod queues
+        // on the same tick, not a readiness check.
+        if (!world.isAirBlock(anchor)) {
+            return false;
+        }
+        return teleportShipAndItsMounts(world, vsShipUuid,
+                anchor.getX() + 0.5, anchor.getY() + 0.5, anchor.getZ() + 0.5, px, py, pz);
+    }
+
+    /**
+     * Move a craft to {@code (px,py,pz)} and take everything that RIDES it along — the whole of what
+     * a teleport owes, with none of a crossing's readiness gate.
+     *
+     * <p>Split out of {@link #teleportPoseWithRiders} on 2026-09-11, because the two things were one
+     * method and a second caller could not have the carry without also being asked a question about
+     * a paste anchor it never pasted. The gate belongs to the crossing that owns the anchor; the
+     * carry belongs to the move.</p>
+     *
+     * @param sx the craft's CURRENT pose, which is the origin every rider is shifted from
+     */
+    public boolean teleportShipAndItsMounts(WorldServer world, java.util.UUID vsShipUuid,
+                                            double sx, double sy, double sz,
+                                            double px, double py, double pz) {
+        int destDim = world.provider.getDimension();
+        BlockPos anchor = new BlockPos(sx, sy, sz);
+        // Capture the mounts at the CURRENT pose before the write, then carry them by the same delta.
+        //
+        // WHAT IS CARRIED, and why it is only this. A body STANDING on the deck is already carried by
+        // the ship: its deck point is authoritative and `DeckFollowsItsShip` re-images it through the
+        // pose that now stands, every tick, so a crew member needs nothing here and moving him would
+        // be a second writer of the same position. What is NOT carried that way is a mount — an
+        // EntityDummy lives in world coordinates and belongs to its seat, not to a deck point — and a
+        // mount that stays behind takes its seated player with it, or rather leaves him behind with
+        // it, which is unrecoverable once the two are past tracking range.
+        //
+        // WHERE they are looked for: the hull's own world bounding box, grown by ABOARD_MARGIN. The
+        // registry knows that box for an unloaded ship too, which is the case a crossing is always
+        // in.
+        // ONE identity for the whole operation. The caller's id may be absent (the crossing's own
+        // record admits "null if the physics mod minted none"), and the positional teleport this
+        // replaces then moved "whatever ship is nearest" — so the craft that MOVED and the craft the
+        // riders were gathered around were two independent answers to two lookups. Resolved once,
+        // here, and everything below is about that one craft.
+        java.util.UUID shipId = vsShipUuid != null ? vsShipUuid
+                : VSIntegration.shipUuidAt(world, sx, sy, sz);
+        AxisAlignedBB hull = VSIntegration.shipWorldBoundsOf(world, shipId);
+        if (shipId == null || hull == null) {
+            LOGGER.error("[SPACE] refusing to teleport a ship at {} in dim {}: asked for {}, resolved"
+                    + " {}, and the registry has no world bounds for it — nothing can say which"
+                    + " mounts are aboard, and carrying the wrong ones is worse than carrying none.",
+                    anchor, destDim, vsShipUuid, shipId);
+            return false;
+        }
+        List<EntityDummy> riders = world.getEntitiesWithinAABB(EntityDummy.class,
+                hull.grow(ABOARD_MARGIN));
+        // BY IDENTITY, always — the id resolved above. The position form moved whatever ship was
+        // nearest to the anchor, and a destination that already holds another craft can hand back
+        // that craft, which then sits at OUR arrival pose while our ship stays where it was
+        // assembled, and every later lookup at the pose answers for the stranger.
+        boolean moved = VSIntegration.teleportShipToByUuid(world, shipId, px, py, pz);
+        if (!moved) {
+            return false;
+        }
+        for (EntityDummy d : riders) {
+            d.setPositionAndUpdate(d.posX + (px - sx), d.posY + (py - sy), d.posZ + (pz - sz));
+            // Safety net: a mount must never leave a seated player behind (a rider split from his
+            // mount by more than tracking range is unrecoverable client-side). The settle re-seats
+            // AFTER this teleport so no crew normally rides through it, but probe mounts and any
+            // future caller with a live rider are carried by the same delta.
+            for (net.minecraft.entity.Entity p : d.getPassengers()) {
+                if (p instanceof net.minecraft.entity.player.EntityPlayerMP) {
+                    p.setPositionAndUpdate(p.posX + (px - sx), p.posY + (py - sy), p.posZ + (pz - sz));
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Move a craft and EVERYONE aboard it — its mounts, their passengers, and the crew standing on
+     * its decks. The whole of what an in-world teleport owes.
+     *
+     * <p><b>Why this is not what a CROSSING calls.</b> A crossing owns its crew already: it captures
+     * them at the departure, stashes them, and re-seats them at the arrival, so the bodies are not
+     * standing on the deck while the pose is written. Carrying them here as well is a second writer
+     * of one position, and it is not a subtle one — measured 2026-09-11, the seam scenarios put the
+     * body 138 blocks under its own ship, {@code aboard:false}, because it received the delta twice.
+     * So the two operations are NAMED rather than switched: {@link #teleportShipAndItsMounts} is the
+     * crossing's half, this is the whole move, and no caller picks between them with a flag.</p>
+     *
+     * <p>The crew are carried only if the craft actually moved: a failed teleport must not leave
+     * bodies translated away from the hull they are standing on.</p>
+     */
+    public boolean teleportShipAndEveryoneAboard(WorldServer world, java.util.UUID vsShipUuid,
+                                                 double sx, double sy, double sz,
+                                                 double px, double py, double pz) {
+        // Resolved ONCE, and the resolved id is what goes down — not the caller's, which may be
+        // absent. Passing the original would have the move and the crew carry each run their own
+        // lookup, and two lookups are two answers: the craft that moved and the craft whose crew was
+        // carried could be different ones. That is the same defect this method's own callee had
+        // until today, one level up.
+        java.util.UUID shipId = vsShipUuid != null ? vsShipUuid
+                : VSIntegration.shipUuidAt(world, sx, sy, sz);
+        if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz)) {
+            return false;
+        }
+        int crew = dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.carryHeldBodies(
+                world, shipId == null ? null : shipId.toString(), px - sx, py - sy, pz - sz);
+        LOGGER.info("[SPACE] teleported ship {} in dim {} with {} aboard body/bodies carried.",
+                shipId, world.provider.getDimension(), crew);
+        return true;
+    }
+
+    @Override
+    public String settleDiagnostics() {
+        return CrewTransfer.lastReseatBlock();
+    }
+
+    @Override
+    public void unpark(int destDim, java.util.UUID vsShipUuid, double px, double py, double pz) {
+        WorldServer world = DimensionManager.getWorld(destDim);
+        if (world == null) {
+            return;
+        }
+        // Identity first, for the same reason the pose teleport uses it: giving physics back to
+        // whatever ship is nearest to the arrival point can un-park a stranger and leave the ship
+        // that actually crossed frozen.
+        if (vsShipUuid == null || !VSIntegration.unparkShip(world, vsShipUuid)) {
+            VSIntegration.unparkShipAt(world, px, py, pz);
+        }
+    }
+
+    @Override
+    public void messageCrew(List<CrewTransfer.Crew> crew, String langKey, Object... args) {
+        for (CrewTransfer.Crew rider : crew) {
+            if (!rider.player.hasDisconnected()) {
+                rider.player.sendMessage(new TextComponentTranslation(langKey, args));
+            }
+        }
+    }
+}

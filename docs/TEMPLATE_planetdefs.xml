@@ -18,7 +18,7 @@
                 <orbitalPhi>0</orbitalPhi>
                 <rotationalPeriod>36000</rotationalPeriod>
                 <atmosphereDensity>0</atmosphereDensity>
-                <biomeIds>advancedrocketry:moon,advancedrocketry:moondark</biomeIds>
+                <biomeIds>stellurgy:moon,stellurgy:moondark</biomeIds>
             </planet>
         </planet>
     </star>

@@ -1,0 +1,17 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "transform": "forge:default-block",
+        "model": "minecraft:leaves",
+        "textures": {
+            "all": "stellurgy:blocks/leaves_alien"
+        }
+    },
+    "variants": {
+        "check_decay=false,decayable=false": [{}],
+        "check_decay=false,decayable=true": [{}],
+        "check_decay=true,decayable=false": [{}],
+        "check_decay=true,decayable=true": [{}],
+        "inventory": [{}]
+    }
+}

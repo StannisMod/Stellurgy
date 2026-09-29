@@ -1,0 +1,7 @@
+{
+    "parent": "item/generated",
+    "textures": {
+        "layer0": "stellurgy:items/spaceChestplate",
+        "layer1": "stellurgy:items/spaceChestplate_overlay"
+    }
+}

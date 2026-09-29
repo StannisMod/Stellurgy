@@ -1,0 +1,50 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"aba",
+	"cde",
+	"opo"
+    ],
+    "key":
+    {
+        "a":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gearSteel"
+        },
+        "b":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"c":
+        {
+            "item": "stellurgy:ic",
+            "data": 4
+        },
+	"d":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"e":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+	"o":
+        {
+            "item": "minecraft:obsidian"
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateSteel"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:cuttingmachine",
+        "count": 1
+    }
+}

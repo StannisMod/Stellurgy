@@ -1,0 +1,16 @@
+{
+    "type": "minecraft:crafting_shapeless",
+    "ingredients":
+    [
+	{
+	    "item": "stellurgy:loader",
+	    "data": 5
+        }
+    ],
+    "result":
+    {
+        "item": "stellurgy:loader",
+        "count": 1,
+        "data": 4
+    }
+}

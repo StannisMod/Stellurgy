@@ -1,0 +1,18 @@
+{
+"buttonBlipA": {"category": "master","sounds": [{"name": "stellurgy:buttonBlipA","stream": false}]},
+"ElectricShockSmall": {"category": "master","sounds": [{"name": "stellurgy:ElectricShockSmall","stream": false}]},
+"MachineLarge": {"category": "master","sounds": [{"name": "stellurgy:MachineLarge","stream": false}]},
+"rollingMachine": {"category": "master","sounds": [{"name": "stellurgy:rollingMachine","stream": false}]},
+"airHissLoop": {"category": "master","sounds": [{"name": "stellurgy:airHissLoop","stream": false}]},
+"railgunBang": {"category": "master","sounds": [{"name": "stellurgy:railgunBang","stream": false}]},
+"laserDrill": {"category": "master","sounds": [{"name": "stellurgy:laserDrill","stream": false}]},
+"combustionRocket": {"category": "master","sounds": [{"name": "stellurgy:combustionRocket","stream": false}]},
+"crystallizer": {"category": "master","sounds": [{"name": "stellurgy:crystallizer","stream": false}]},
+"cuttingMachine": {"category": "master","sounds": [{"name": "stellurgy:cuttingMachine","stream": false}]},
+"electricArcFurnace": {"category": "master","sounds": [{"name": "stellurgy:electricArcFurnace","stream": false}]},
+"electrolyser": {"category": "master","sounds": [{"name": "stellurgy:electrolyser","stream": false}]},
+"precAss": {"category": "master","sounds": [{"name": "stellurgy:precAss","stream": false}]},
+"basicLaserGun": {"category": "master", "sounds": [{"name": "stellurgy:basicLaserGun", "stream": false}]},
+"gravityOhhh": {"category": "master", "sounds": [{"name": "stellurgy:gravityOhhh", "stream": false}]},
+"lathe": {"category": "master","sounds": [{"name": "stellurgy:lathe","stream": false}]}
+}

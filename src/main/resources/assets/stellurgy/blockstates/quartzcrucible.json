@@ -1,0 +1,9 @@
+{
+    "variants": {
+        "level=0": { "model": "stellurgy:quartzcrucible" },
+        "level=1": { "model": "stellurgy:quartzcrucible" },
+        "level=2": { "model": "stellurgy:quartzcrucible" },
+        "level=3": { "model": "stellurgy:quartzcrucible" },
+        "inventory" : { "model": "stellurgy:quartzcrucible" }
+    }
+}

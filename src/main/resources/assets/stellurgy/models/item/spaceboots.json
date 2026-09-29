@@ -1,0 +1,7 @@
+{
+    "parent": "item/generated",
+    "textures": {
+        "layer0": "stellurgy:items/spaceBoots",
+        "layer1": "stellurgy:items/spaceBoots_overlay"
+    }
+}

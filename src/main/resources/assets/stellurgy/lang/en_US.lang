@@ -1,0 +1,1742 @@
+itemGroup.stellurgy=Stellurgy
+itemGroup.stellurgyOres=Stellurgy Ores
+
+death.attack.Vacuum=%1$s was depressurized
+death.attack.Vacuum.player=%1$s was depressurized
+death.attack.OxygenToxicity=%1$s died due to oxygen toxicity
+death.attack.OxygenToxicity.player=%1$s died due to oxygen toxicity
+death.attack.LowOxygen=%1$s died due to lack of oxygen
+death.attack.LowOxygen.player=%1$s died due to lack of oxygen
+death.attack.Heat=%1$s died due to overheating
+death.attack.Heat.player=%1$s died due to overheating
+death.attack.stellurgyHyperspaceVoid=%1$s was lost to the void of hyperspace
+death.attack.stellurgyHyperspaceVoid.player=%1$s was lost to the void of hyperspace
+entity.stellurgy.rocket.name=Rocket
+entity.rocket.name=Rocket
+entity.deployedRocket.name=Rocket
+entity.hovercraft.name=Hovercraft
+entity.StellurgyPlanetUIItem.name=Holographic Body
+entity.StellurgyStarUIButton.name=Holographic Star
+
+tile.landingPad.name=Landing Pad
+tile.seat.name=Seat
+tile.pilotSeat.name=Pilot Seat
+tile.pad.name=Launch Pad
+tile.servicestation.name=Service Station
+tile.servicemonitor.name=Service monitor
+tile.invhatch.name=Storage Hatch
+tile.structuretower.name=Structure Tower
+tile.rocketAssembler.name=Rocket Assembling Machine
+tile.turf.name=Moon Turf
+tile.turfDark.name=Dark Moon Turf
+tile.cuttingMachine.name=Cutting Machine
+tile.sawBlade.name=Saw Blade Assembly
+tile.precisionAssemblingMachine.name=Precision Assembler
+tile.spaceLaser.name=Orbital Laser Drill
+tile.Crystallizer.name=Crystallizer
+tile.blastBrick.name=HeatProof Brick
+tile.blastFurnaceController.name=HeatProof Furnace Controller
+tile.fuelStation.name=Fueling Station
+tile.databusbig.name=Advanced Databus
+tile.loader.0.name=Databus
+tile.loader.1.name=Satellite Bay
+tile.loader.2.name=Rocket Unloader
+tile.loader.3.name=Rocket Loader
+tile.loader.4.name=Rocket Fluid Unloader
+tile.loader.5.name=Rocket Fluid Loader
+tile.loader.6.name=Guidance Computer Access Hatch
+tile.observatory.name=Observatory
+tile.satelliteBuilder.name=Satellite Builder
+tile.rocket.name=Monopropellant Rocket Engine
+tile.bipropellantrocket.name=Bipropellant Rocket Engine
+tile.nuclearrocket.name=Nuclear Thermal Rocket Engine
+tile.fuelTank.name=Monopropellant Fuel Tank
+tile.bipropellantfueltank.name=Bipropellant Fuel Tank
+tile.oxidizerfueltank.name=Oxidizer Fuel Tank
+tile.nuclearfueltank.name=Nuclear Thermal Working Fluid Tank
+tile.nuclearcore.name=Nuclear Thermal Fission Core
+tile.monitoringstation.name=Rocket Monitoring Station
+tile.satelliteMonitor.name=Satellite Terminal
+tile.terraformingTerminal.name=Terraforming Terminal
+tile.lightwoodlog.name=Lightwood Wood
+tile.lightwoodsapling.name=Lightwood Sapling
+tile.lightwoodleaves.name=Lightwood Leaves
+tile.lightwoodplanks.name=Lightwood planks
+tile.chipStorage.name=Satellite ID Storage
+tile.planetanalyser.name=Astrobody Data Processor
+tile.lunaranalyser.name=Lunar Analyser
+tile.guidanceComputer.name=Guidance Computer
+tile.advancedFlightComputer.name=Advanced Flight Computer
+tile.navigationComputer.name=Navigation Computer
+tile.electricArcFurnace.name=Electric Arc Furnace
+tile.hotDryturf.name=Oxidized Ferric Sand
+tile.concrete.name=Concrete
+tile.lathe.name=Lathe
+tile.rollingMachine.name=Rolling Machine
+tile.planetSelector.name=Planet Selector
+tile.platepress.name=Small Plate Press
+tile.placeHolder.name=Machine
+tile.stationAssembler.name=Space Station Assembler
+tile.electrolyser.name=Electrolyser
+tile.chemreactor.name=Chemical Reactor
+tile.scrubber.name=CO2 Scrubber
+tile.oxygenVent.name=Oxygen Vent
+tile.liquidHatch.name=Fluid Hatch
+tile.rocketFuelBlock.name=Rocket Fuel
+tile.hydrogenFluidBlock.name=Hydrogen
+tile.oxygenFluidBlock.name=Oxygen
+tile.nitrogenFluidBlock.name=Nitrogen
+tile.oxygenCharger.name=Gas Charge Pad
+tile.dockingPad.name=Docking Pad
+tile.stationmonitor.name=Warp Controller
+tile.atmosphereDetector.name=Atmosphere Detector
+tile.unlittorch.name=Extinguished Torch
+tile.geode.name=Geode Block
+tile.electricMushroom.name=Electric Mushroom
+tile.charcoallog.name=Charcoal Log
+tile.vitrifiedSand.name=Vitrified Sand
+tile.ruby.name=Red Crystal Block
+tile.emerald.name=Green Crystal Block
+tile.sapphire.name=Blue Crystal Block
+tile.citrine.name=Yellow Crystal Block
+tile.wulfentite.name=Orange Crystal Block
+tile.amethyst.name=Violet Crystal Block
+tile.gravityControl.name=Station Gravity Controller
+tile.drill.name=Drill
+tile.rfOutput.name=Redstone Flux Output Plug
+tile.microwaveReciever.name=Microwave Receiver
+tile.solarPanel.name=Solar Panel
+tile.suitWorkStation.name=Suit Workstation
+tile.orientationControl.name=Orientation Controller
+tile.biomeScanner.name=Biome Scanner
+tile.atmoshereTerraformer.name=Atmosphere Terraformer
+tile.deployableRocketAssembler.name=Unmanned Vehicle Assembler
+tile.pressurizedTank.name=Pressurized Tank
+tile.gasIntake.name=Gas Intake
+tile.atmosphereTerraformer.name=Atmosphere Terraformer
+tile.circleLight.name=Station Light
+tile.solarGenerator.name=Solar Generator
+tile.stationMarker.name=Station Docking Port
+tile.qcrucible.name=Quartz Crucible
+tile.altitudeController.name=Altitude Controller
+tile.railgun.name=Railgun
+tile.advRocket.name=Advanced Monopropellant Rocket Engine
+tile.advbipropellantRocket.name=Advanced Bipropellant Rocket Engine
+tile.planetHoloSelector.name=Holographic Planet Selector
+tile.lens.name=Lens
+tile.vacuumLaser.name=Vacuum-Chamber High Power Laser Emitter
+tile.gravityMachine.name=Area Gravity Controller
+tile.pipeSeal.name=Pipe Seal
+tile.spaceElevatorController.name=Space Elevator
+tile.beacon.name=Beacon
+tile.thermiteTorch.name=Thermite Torch
+tile.wirelessTransceiver.name=Wireless Transceiver
+tile.blackholegenerator.name=Black Hole Generator
+tile.pump.name=Fluid Pump
+tile.centrifuge.name=Centrifuge
+tile.precisionlaseretcher.name=Precision Laser Etcher
+tile.enrichedLavaBlock.name=Enriched Lava Block
+tile.basalt.name=Basalt
+tile.landingfloat.name=Landing Float
+tile.solararray.name=Solar Array Controller
+tile.solararraypanel.name=Solar Array Panel
+tile.serviceStation.name=Service Station
+tile.orbitalRegistry.name=Orbital Registry
+
+item.lens.0.name=Basic Lens
+item.wafer.0.name=Silicon Wafer
+item.circuitplate.0.name=Basic Circuit Plate
+item.circuitplate.1.name=Advanced Circuit Plate
+item.circuitIC.0.name=Basic Circuit
+item.circuitIC.1.name=Tracking Circuit
+item.circuitIC.2.name=Advanced Circuit
+item.circuitIC.3.name=Control Circuit Board
+item.circuitIC.4.name=Item IO Circuit Board
+item.circuitIC.5.name=Liquid IO Circuit Board
+item.OreScanner.name=Ore Scanner
+item.dataUnit.0.name=Data Storage Unit
+item.sawBlade.0.name=Iron Saw Blade
+item.satellite.name=Satellite
+item.satellitePowerSource.0.name=Basic Solar Panel
+item.satellitePowerSource.1.name=Large Solar Panel
+item.satellitePrimaryFunction.0.name=Optical Sensor
+item.satellitePrimaryFunction.1.name=Composition Sensor
+item.satellitePrimaryFunction.2.name=Mass Detector
+item.satellitePrimaryFunction.3.name=Microwave Transmitter
+item.satellitePrimaryFunction.4.name=Ore Mapper
+item.satellitePrimaryFunction.5.name=Biome Changer
+item.satellitePrimaryFunction.6.name=Weather Controller
+item.satelliteIdChip.name=Satellite ID Chip
+item.planetIdChip.name=Planet ID Chip
+item.asteroidChip.name=Asteroid Chip
+item.miscpart.0.name=User Interface
+item.miscpart.1.name=Carbon Brick
+item.station.name=Space Station Container
+item.stationChip.name=Space Station ID Chip
+item.stationchip.openmenu=Sneak right-click to edit planet return coordinates
+item.spaceHelmet.name=Space Suit Helmet
+item.spaceChest.name=Space Suit Chest-Piece
+item.spaceLeggings.name=Space Suit Leggings
+item.spaceBoots.name=Space Suit Boots
+item.smallAirlock.name=Small Airlock Door
+item.carbonScrubberCartridge.name=Carbon Collection Cartridge
+item.jackhammer.name=Jackhammer
+item.sealDetector.name=Seal Detector
+item.itemUpgrade.0.name=Hover Upgrade
+item.itemUpgrade.1.name=Flight Speed Control Upgrade
+item.itemUpgrade.2.name=Bionic Leg Upgrade
+item.itemUpgrade.3.name=Padded Landing Boots
+item.itemUpgrade.4.name=Anti-Fog Visor
+item.itemUpgrade.5.name=Earthbright Visor
+item.atmAnalyser.name=Atmosphere Analyzer
+item.biomeChanger.name=Biome Changer Remote
+item.weatherController.name=Weather Remote
+item.basicLaserGun.name=Basic Laser Gun
+item.beaconFinder.name=Beacon Finder
+item.thermite.name=Thermite
+item.hovercraft.name=Hovercraft
+item.satellite.opticaltelescope=Optical Telescope
+item.satellite.composition=Composition Scanner
+item.satellite.massscanner=Mass Scanner
+item.satellite.solar=Solar
+item.satellite.oremapper=Ore Mapper
+item.satellite.biomechanger=Biome Changer
+item.satellite.weather=Weather Satellite
+
+
+item.jetPack.name=Suit Jetpack
+item.pressureTank.0.name=Low Pressure Tank
+item.pressureTank.1.name=Pressure Tank
+item.pressureTank.2.name=High Pressure Tank
+item.pressureTank.3.name=Super High Pressure Tank
+item.elevatorChip.name=Space Elevator Chip
+
+container.satellite=Satellite Bay
+container.monitoringstation=Monitoring Station
+container.invhatch=Storage Hatch
+container.servicestation=Service Station
+
+material.TitaniumAluminide.name=Titanium Aluminide
+material.TitaniumIridium.name=Titanium Iridium Alloy
+
+enchantment.spaceBreathing=Airtight Seal
+
+data.undefined.name=Undefined
+data.distance.name=Distance
+data.humidity.name=Humidity
+data.temperature.name=Temperature
+data.composition.name=Composition
+data.atmospheredensity.name=Atmosphere Density
+data.mass.name=Mass
+data.label.type=Type:
+data.label.data=Data
+
+
+fluid.oxygen=Oxygen
+fluid.hydrogen=Hydrogen
+fluid.nitrogen=Nitrogen
+fluid.rocketFuel=Rocket Fuel
+fluid.enrichedLava=Enriched Lava
+
+mission.asteroidmining.name=Asteroid Mining
+mission.gascollection.name=Gas Collection
+
+error.rocket.notEnoughMissionFuel=Not enough fuel!
+error.rocket.tooHeavy=Rocket is too heavy to launch (insufficient thrust).
+error.rocket.tooWorn=Rocket is too worn to launch safely (%s%% chance of failure). Service it first.
+error.rocket.seatWorn=A seat is too worn for a crewed launch. Repair or replace it, or launch uncrewed.
+warning.rocket.worn=§eWarning: worn rocket parts — %s%% chance of failure on launch.
+error.rocket.cannotGetThere=Selected destination cannot be reached. (Are you trying to land on a Gas Giant?)
+error.rocket.destinationNotExist=Selected space station does not exist.
+error.rocket.partsWornOut=Critical parts are worn out — launch aborted.
+error.rocket.aborted=Launch aborted.
+error.rocket.gatedArtifactMissing=Missing Artifact. (Player Inventory)
+error.rocket.gatedArtifactMissingWithItem=Missing required artifact: %sx %s (Player Inventory)
+error.rocket.outsideStarSystem=Interstellar travel requires a Starship.
+error.rocket.outsidePlanetarySystem=Planetary travel requires a Nuclear Rocket.
+
+advancement.holographic=Holographic
+advancement.holographic.desc=Craft a Holo-Projector
+advancement.flattening=Flattening
+advancement.flattening.desc=Make a Small Plate Presser
+advancement.feelTheHeat=Feel The Heat!
+advancement.feelTheHeat.desc=Craft an Arc Furnace
+advancement.electrifying=Electrifying!
+advancement.electrifying.desc=Craft an Electrolyser
+advancement.spinDoctor=Spin Doctor
+advancement.spinDoctor.desc=Craft a Lathe
+advancement.rollin=Rollin'
+advancement.rollin.desc=Craft a Rolling Machine
+advancement.crystalline=Crystalline
+advancement.crystalline.desc=Craft a Crystallizer
+advancement.warp=Warp
+advancement.warp.desc=Build a warp core
+advancement.moonLanding=Moon Landing!
+advancement.moonLanding.desc=Land on the moon
+advancement.oneSmallStep=One Small Step...
+advancement.oneSmallStep.desc=Be the first to land on the moon!
+advancement.weReallyWentToTheMoon=We Really Went to the Moon!
+advancement.weReallyWentToTheMoon.desc=Find the Apollo 11 landing site on the Moon
+advancement.dilithium=Dilithium
+advancement.dilithium.desc=Find Dilithium ore
+advancement.givingItAllShesGot=Giving it all she's got!
+advancement.givingItAllShesGot.desc=Fly in a Warp Capable ship
+advancement.flightOfThePhoenix=Flight of the Phoenix
+advancement.flightOfThePhoenix.desc=Build and fly the first warp-capable ship
+advancement.beerOnTheSun=Adult Beverages on the Sun
+advancement.beerOnTheSun.desc=You'll need more TNT to get to orbit
+advancement.suitedUp=Suited Up
+advancement.suitedUp.desc=Wear a full spacesuit
+
+# Controls - options
+key.controls.stellurgy=Stellurgy
+key.openRocketUI=Open Rocket GUI
+key.toggleJetpack=Toggle Jetpack
+key.togglercs=Toggle RCS
+key.turnRocketLeft=Rotate Vehicle Left
+key.turnRocketRight=Rotate Vehicle Right
+key.turnRocketUp=Move Vehicle Up
+key.turnRocketDown=Move Vehicle Down
+key.toggleFlightMode=Toggle Flight Mode
+key.pitchRocketUp=Pitch Vehicle Up
+key.pitchRocketDown=Pitch Vehicle Down
+key.strafeLeft=Strafe Left (Free Flight)
+key.strafeRight=Strafe Right (Free Flight)
+key.flightVerticalUp=Move Up (Free Flight)
+key.flightVerticalDown=Move Down (Free Flight)
+key.flightAssistToggle=Toggle Flight Assist
+key.autoTakeoffToggle=Toggle Auto-Takeoff (tier-2 ship)
+
+enchantment.stellurgy.spacebreathing.desc=Allows the piece of armor to form an airtight seal
+
+# Commands
+commands.stellurgy.invalid=%s %s does not exist!
+
+commands.stellurgy.dev.usage=/stellurgy dev help - (developer use only) lists subcommands.
+commands.stellurgy.dev.dumpbiomes.usage=dumpBiomes - Dumps biome info to BiomeDump.txt
+commands.stellurgy.dev.dumpbiomes.success=The file 'BiomeDump.txt' has been written to the instance directory
+commands.stellurgy.dev.runtests.usage=runTests - Runs rocket tests for debug only!
+
+msg.stellurgy.universe.alpha=This world uses universe generator %s - an ALPHA. The leading zero means the world model may be replaced in a later release rather than extended, so this world is not guaranteed a way forward. Only what you have already seen is frozen.
+commands.stellurgy.universe.usage=/stellurgy universe help - the world model this save was generated under
+commands.stellurgy.universe.unavailable=The universe registry is not available on this world
+commands.stellurgy.universe.status.usage=status - report the world model, the pack's configuration, and how much sky is frozen
+commands.stellurgy.universe.status.schema=World model: schema %s (this build ships %s)
+commands.stellurgy.universe.status.alpha=Generator %s is an ALPHA: a leading zero means this world model may be REPLACED in a later release, not extended.
+commands.stellurgy.universe.status.stable=Generator %s is a stable release.
+commands.stellurgy.universe.status.config=Configuration: world %s, pack %s
+commands.stellurgy.universe.status.agrees=The pack states the same universe this world was generated under.
+commands.stellurgy.universe.status.differs=The pack states a DIFFERENT universe. Restore the previous <galaxyGen>, or run /stellurgy universe upgrade to accept it.
+commands.stellurgy.universe.status.frozen=Frozen by being seen: %s systems
+commands.stellurgy.universe.status.released=Models this build can still read: %s
+commands.stellurgy.universe.status.armed=An upgrade is armed: the next start will accept one change to <galaxyGen>.
+commands.stellurgy.universe.upgrade.usage=upgrade [confirm] - freeze everything already seen, then accept the pack's current universe
+commands.stellurgy.universe.upgrade.preview=This would move the world from configuration %s to %s. %s systems are already frozen.
+commands.stellurgy.universe.upgrade.reach=Memory crystals will be read from the %s player(s) online. Crystals in chests, in unloaded chunks, or carried by players who are offline CANNOT be read - bring them in first.
+commands.stellurgy.universe.upgrade.confirm=Run /stellurgy universe upgrade confirm to go ahead. This cannot be undone.
+commands.stellurgy.universe.upgrade.done=Upgrade complete: %s crystals read, %s addresses, %s newly frozen. World model %s -> %s, configuration %s.
+commands.stellurgy.universe.upgrade.armed=This world will also accept ONE change to <galaxyGen> at its next start. Stop the server, put the new configuration in place, and start again.
+commands.stellurgy.universe.upgrade.seam=Charted space keeps exactly what it held; everything beyond it is re-derived under the new model.
+
+commands.stellurgy.filldata.usage=/ar fillData <type> <amount> OR /ar fillData chip (alias: fd)
+commands.stellurgy.filldata.chip.notheld=Hold an asteroid chip in your main hand to use /ar fillData chip
+commands.stellurgy.filldata.chip.success=Filled asteroid chip with %s data in composition, mass, and distance
+commands.stellurgy.filldata.invalid=Not a valid datatype, try one of the following:
+commands.stellurgy.filldata.success=Data filled!
+commands.stellurgy.filldata.wrongtype=Type does not match stored type, data unchanged
+
+commands.stellurgy.goto.usage=/stellurgy goto help - lists subcommands.
+commands.stellurgy.goto.dimension.usage=goto dimension <dimId> (alias: d, dim) - teleports the player to the supplied dimension
+commands.stellurgy.goto.station.usage=goto station <stationId> (alias: s) - teleports the player to the supplied station
+
+commands.stellurgy.planet.usage=/stellurgy planet help - lists subcommands.
+commands.stellurgy.planet.weather.usage=planet weather [dimId]
+commands.stellurgy.planet.reset.usage=planet reset [dimId]
+commands.stellurgy.planet.list.usage=planet list
+commands.stellurgy.planet.list.dimensions=Dimensions:
+commands.stellurgy.planet.list.entry=DIM%d: %s
+commands.stellurgy.planet.delete.usage=planet delete <dimId>
+commands.stellurgy.planet.delete.success=Dim %d deleted!
+commands.stellurgy.planet.delete.invalid=World still has players:
+commands.stellurgy.planet.set.usage=planet set [dimId] <property name> <property value(s)>
+commands.stellurgy.planet.set.success=Successfully set dimension %d's property %s to %s
+commands.stellurgy.planet.set.invalid=Property lookup failed, please check logs
+commands.stellurgy.planet.set.mismatch=Cannot set property %s of type %s to value(s) %s
+commands.stellurgy.planet.set.wronglength=Array property is of length %d, but %d values were passed
+commands.stellurgy.planet.get.usage=planet get [dimId] <property name> <property value(s)>
+commands.stellurgy.planet.get.success=%s=%s
+
+commands.stellurgy.star.usage=/stellurgy star help - lists subcommands.
+commands.stellurgy.star.action.temp.get=Temp: %d
+commands.stellurgy.star.action.temp.set=Temp set to %d
+commands.stellurgy.star.action.planets.get=Planets orbiting the star:
+commands.stellurgy.star.action.planets.get.entry=ID: %d : %s
+commands.stellurgy.star.action.pos.get=Position: %d, %d
+commands.stellurgy.star.action.pos.set=Position set to %d, %d
+commands.stellurgy.star.list.usage=star list
+commands.stellurgy.star.list.entry=Star ID: %d   Name: %s  Num Planets: %d
+commands.stellurgy.star.get.usage=star get <temp:planets:pos> <star id>
+commands.stellurgy.star.set.usage=star set <temp:pos> <star id>
+commands.stellurgy.star.set.temp.usage=star set temp <star id> <temperature>
+commands.stellurgy.star.set.pos.usage=star set pos <star id> <x> <z>
+commands.stellurgy.star.generate.usage=star generate <name> <temp> <x> <z>
+commands.stellurgy.star.generate.success=Star added!
+commands.stellurgy.star.generate.invalid=Why can't I hold all these stars! (either you have an insane number of stars or something really broke!)
+
+commands.stellurgy.station.usage=/stellurgy station help - lists subcommands.
+commands.stellurgy.station.create.usage=create <orbitDimId> [playerName] [tp] - Creates a new station orbiting <orbitDimId> and generates a 3x3 cobble platform. If [playerName] is provided, the player will be given a corresponding station ID chip. If [tp] is specified, they will also be teleported to the station.
+commands.stellurgy.station.create.invalid=No Stellurgy DimensionProperties for dimId %s
+commands.stellurgy.station.create.tip=Tip: /stellurgy planet list
+commands.stellurgy.station.create.success=Created station ID %d orbiting dim %d (space @ %d, %d, %d)
+commands.stellurgy.station.give.usage=give <stationId> [playerName] - Gives you (or the player [playerName]) a space station with ID <stationID>
+
+commands.stellurgy.fetch.usage=/stellurgy fetch <playerName> - Teleports the player <playerName> from any dimension to you
+
+commands.stellurgy.reloadrecipes.usage=/stellurgy reloadRecipes - Reloads recipes from the XML files in the config folder
+commands.stellurgy.reloadrecipes.error1=Serious error has occurred! Possible recipe corruption
+commands.stellurgy.reloadrecipes.error2=Please check logs!
+commands.stellurgy.reloadrecipes.error3=You may be able to rectify this error by repairing the XML and/or restarting the game
+
+commands.stellurgy.setgravity.usage=/stellurgy setGravity <multiplier> [playerName] - sets your gravity (or the player [playerName]) to <multiplier> where 1 is Earth's, 0 is planet's default
+
+commands.stellurgy.addtorch.usage=/stellurgy addTorch - Adds held block to the list of objects that drop when there's no atmosphere
+commands.stellurgy.addtorch.invalid=Held block cannot be added to torch list
+commands.stellurgy.addtorch.exists=%s is already in the torch list
+commands.stellurgy.addtorch.success=%s added to the torch list
+
+commands.stellurgy.addsealant.usage=/stellurgy addSealant - Adds held block to the list of blocks that can be used as airtight seal
+commands.stellurgy.addsealant.invalid=Held block cannot be added to sealed block list
+commands.stellurgy.addsealant.exists=%s is already in the sealed block list
+commands.stellurgy.addsealant.success=%s added to the sealed block list
+
+commands.stellurgy.weather.usage=/stellurgy weather <clear|rain|thunder> [duration in seconds]
+commands.stellurgy.weather.invalid=Current dimension (%s) is not a Stellurgy planet!
+
+msg.crystalliser.gravityTooHigh=Gravity is not low enough!
+msg.rocket.satelliteDeployFailed=A satellite could not be deployed: its type is no longer available. The chassis was left in the hatch.
+msg.observetory.scan.tooltip=Scans for new asteroids, consumes 100 distance data
+msg.observetory.scan.button=Scan!
+msg.observetory.scan.crystal=Memory crystal
+msg.observetory.scan.direction=Aimed at:
+msg.observetory.scan.direction.tooltip=Turn the instrument to the next patch of sky
+msg.observetory.scan.distance=Distance (stars):
+msg.observetory.scan.distance.tooltip=How far out to look, counted in neighbouring stars. Farther is a longer observation, and the instrument has a horizon.
+msg.observetory.scan.lightyears= (%.1f ly)
+msg.observetory.scan.region=Observe
+msg.observetory.scan.region.tooltip=Point the instrument along the chosen direction and write every system bright enough to register onto the crystal
+msg.observetory.scan.looking=Looks taken:
+msg.observetory.scan.found=Addresses written:
+msg.observetory.scan.obscured=Dust in the way - coordinates only:
+msg.observetory.scan.idle=Idle
+msg.observetory.scan.abort=Stop
+msg.observetory.scan.abort.tooltip=Stop the survey. Everything already resolved is already on the crystal.
+msg.observetory.upload.button=Deposit
+msg.observetory.upload.tooltip=Read the crystal into what is known ON THIS WORLD, so a launch pad here can be aimed at it. An address of a world nobody has landed on yet has nothing to fly to and is skipped.
+msg.observetory.upload.result=Deposited %s of %s addresses into local knowledge.
+msg.observetory.scan.mode.active=Deep
+msg.observetory.scan.mode.passive=Local
+msg.observetory.scan.mode.tooltip=Local watches the neighbourhood and has its data ready; deep looks at a chosen distant region. One at a time - an instrument staring into deep space cannot see what is close.
+msg.observetory.scan.detail.full=Full
+msg.observetory.scan.detail.coords=Positions
+msg.observetory.scan.detail.tooltip=Full names every body of every system the survey registers; Positions writes down only where they are. A deep pointing on Full fills a crystal many times faster - and a position is still somewhere you can fly to and look.
+msg.observetory.scan.keepcrystal=Keep a crystal in the machine: a broken observatory loses what it holds.
+msg.observetory.text.asteroids=Asteroids
+msg.observetory.text.composition=Composition
+msg.observetory.text.processdiscovery=Process discovery
+msg.observetory.text.observabledistance=Observable distance:
+msg.observetory.text.missionTime=Mission Time:
+msg.observetory.text.time=Time:
+msg.observetory.req.open=Observatory must be open (night, clear sky, sky access) or be in space!
+msg.observetory.print.already=You already printed a chip for this asteroid!
+
+# Atmosphere detector GUI labels
+msg.atmosphere.air=Normal Air
+msg.atmosphere.pressurizedair=Pressurized Air
+msg.atmosphere.lowo2=Low Oxygen
+msg.atmosphere.vacuum=Vacuum
+msg.atmosphere.highpressure=High Pressure
+msg.atmosphere.superhighpressure=Super High Pressure
+msg.atmosphere.veryhot=Very Hot
+msg.atmosphere.superheated=Superheated
+msg.atmosphere.noo2=No Oxygen (No O₂)
+msg.atmosphere.highpressurenoo2=High Pressure (No O₂)
+msg.atmosphere.superhighpressurenoo2=Super High Pressure (No O₂)
+msg.atmosphere.veryhotnoo2=Very Hot (No O₂)
+msg.atmosphere.superheatednooxygen=Superheated (No O₂)
+msg.stellurgy.atmosphereDetector.selected=Selected atmosphere: %s
+msg.stellurgy.atmosphereDetector.alreadySelected=Already selected atmosphere: %s
+
+msg.tooltip.data=Data
+msg.tooltip.asteroidselection=Asteroid Selection
+msg.tooltip.regionscan=Region Scan
+msg.label.name=Name
+msg.label.clear=Clear
+msg.label.add=Add New
+msg.label.rename=Rename
+msg.label.delete=Delete
+msg.label.noneSelected=No Destination Selected
+msg.label.selectDst=Select dst
+msg.label.destName=Dest name
+msg.label.coords=Coords
+msg.spaceElevator.button.summon=Summon Capsule
+msg.spaceElevator.sameDimensionError=Cannot connect two elevators on the same planet!
+msg.spaceElevator.linkNotGeostationaryError=Station is not in geostationary orbit!
+msg.spaceElevator.tetherWouldBreakError=Station must be upright and stationary to receive tether!
+msg.spaceElevator.linkCannotChangeError=Elevator tethers cannot change position while already linked!
+msg.spaceElevator.newDstAdded=Elevator Tether Linked!
+msg.spaceElevator.ascentReady=Getting ready for ascent
+msg.spaceElevator.warning.anchored0=This elevator tether has
+msg.spaceElevator.warning.anchored1=the station anchored!
+msg.spaceElevator.warning.unanchored=This elevator has no tether
+msg.spaceElevator.turnedOff=Elevator is turned off
+msg.fuelingStation.link=You program the linker with the fueling station at
+
+msg.monitoringStation.tab.status=Status
+msg.monitoringStation.tab.mission=Mission
+msg.monitoringStation.buttonLaunch=Launch!
+msg.monitoringStation.missionProgressNA=Mission Progress: N/A
+msg.monitoringStation.missionNoActiveMission=No Active Missions...
+msg.monitoringStation.mission.type.gas=Gas Collection Mission
+msg.monitoringStation.mission.type.ore=Asteroid Mining Mission
+msg.monitoringStation.mission.target.default=Harvest: (pending)
+msg.monitoringStation.mission.targetPrefix=Harvest:
+msg.monitoringStation.mission.Asteroid.target.default=Asteroid:
+msg.monitoringStation.mission.Asteroid.targetPrefix=Asteroid:
+msg.monitoringStation.mission.asteroidIdPrefix=Type:
+msg.monitoringStation.mission.plannedAmountPrefix=Amount:
+msg.monitoringStation.mission.plannedAmountPending=Amount: (pending)
+msg.monitoringStation.mission.asteroidType=Asteroid type: (shown on chip / mission)
+msg.monitoringStation.link=You program the linker with the monitoring station at
+msg.monitoringStation.progress=ETA: 
+msg.monitoringStation.prelaunch=Initiating...
+msg.monitoringStation.launching=Launching!
+msg.monitoringStation.orbit=Reached orbit!
+msg.monitoringStation.deorbiting=Returned from orbit!
+msg.monitoringStation.landed=Landed
+msg.monitoringStation.aborted=Aborted!
+msg.monitoringStation.returningToDock=Returning to dock
+msg.monitoringStation.noLinkedRocket=Not Linked to any Rocket!
+
+msg.guidanceComputer.backtorocket=Back to Rocket
+msg.guidanceComputerHatch.loadingState=Loading State: 
+msg.guidanceComputerHatch.ejectonlanding=Auto Eject Upon Landing
+msg.guidanceComputerHatch.ejectonsatlanding=Allow Ejection of Satellite Chips
+msg.guidanceComputerHatch.ejectonplanetlanding=Allow Ejection of Planet Chips
+msg.guidanceComputerHatch.ejectonstationlanding=Allow Ejection of Station Chips
+msg.guidanceComputerHatch.link=You program the linker with the fluid loader at
+msg.fluidLoader.loadingState=Loading State: 
+msg.fluidLoader.allowLoading=Allow Loading: 
+msg.fluidLoader.allowredstoneinput=Redstone Input (Red)
+msg.fluidLoader.allowredstoneoutput=Redstone Output (Blue)
+msg.fluidLoader.none=Disabled (Green)
+msg.fluidLoader.link=You program the linker with the fluid loader at: 
+msg.rocketLoader.loadingState=Loading State: 
+msg.rocketLoader.allowLoading=Allow Loading: 
+msg.rocketLoader.none=Disabled (Green)
+msg.rocketLoader.allowredstoneoutput=Redstone Output (Blue)
+msg.rocketLoader.allowredstoneinput=Redstone Input (Red)
+msg.rocketLoader.link=You program the linker with the rocket loader at: 
+stellurgy.sideselector.direction.bottom=Bottom
+stellurgy.sideselector.direction.top=Top
+stellurgy.sideselector.direction.north=North
+stellurgy.sideselector.direction.south=South
+stellurgy.sideselector.direction.west=West
+stellurgy.sideselector.direction.east=East
+msg.microwaverec.notgenerating=Generating 0 RF/t
+msg.microwaverec.generating=Generating
+msg.abdp.research=Research
+msg.abdp.compositionresearch=Composition Research
+msg.abdp.distanceresearch=Distance Research
+msg.abdp.massresearch=Mass Research
+msg.terraformer.atminc=Increase Atm
+msg.terraformer.atmdec=Decrease Atm
+msg.terraformer.running=Running
+msg.terraformer.missingbiome=Missing biome changer link
+msg.terraformer.outofgas=Aborted: Ran out of gasses
+msg.terraformer.notrunning=Not running
+msg.terraformer.status=Status
+msg.terraformer.pressure=Pressure
+msg.terraformingterminal.terraforming=Terraforming planet...
+msg.terraformingterminal.powergen=Power generation:
+msg.terraformingterminal.blockspertick=Blocks per tick:
+msg.terraformingterminal.needredstone.line1=Provide redstone signal
+msg.terraformingterminal.needredstone.line2=to start the process
+msg.terraformingterminal.insertchip.line1=Place a Biome Changer Remote
+msg.terraformingterminal.insertchip.line2=here to make the Satellite
+msg.terraformingterminal.insertchip.line3=terraform the entire planet
+msg.biomescanner.gas=nyehhh, Gassy, ain't it?
+msg.biomescanner.star=If i only had sunshades...
+msg.gravitycontroller.radius=Radius: 
+msg.gravitycontroller.targetgrav=Target Gravity:
+msg.gravitycontroller.none=No Force
+msg.gravitycontroller.activeadd=Add Force (combine directions)
+msg.gravitycontroller.activeset=Add Force (combine directions) + lift
+msg.gravitycontroller.targetdir.1=Target->
+msg.gravitycontroller.targetdir.2=Direction
+msg.railgun.transfermin=Min Transfer Size
+msg.railgun.status.no_target=No destination set - link to another railgun
+msg.railgun.status.target_unavailable=Destination railgun not found
+msg.railgun.status.target_full=Destination output is full or has no output hatch
+msg.railgun.status.different_system=Destination is in a different planetary system
+msg.spacelaser.reset=Reset
+msg.spacelaser.notarget1=No target found!
+msg.spacelaser.notarget2=Go down and survey the area!
+msg.spacelaser.voidmining.line1=Mining the internals
+msg.spacelaser.voidmining.line2=of the planet below
+msg.spacelaser.voidcobble=Void Cobble
+msg.spacelaser.voidcobble.on=Void Cobble: ON
+msg.spacelaser.voidcobble.off=Void Cobble: OFF
+msg.satctrlcenter.toofar=Too Far
+msg.satctrlcenter.nolink=No Link...
+msg.satctrlcenter.info=Info:
+msg.satctrlcenter.destroysat=Destroy Satellite
+msg.satctrlcenter.connect=Download
+msg.satctrlcenter.data=Data:
+msg.satctrlcenter.power=Power gen.:
+msg.satctrlcenter.autodl_hint=Automatic with Wireless Transceiver (Extract)
+msg.satbuilder.writesecondchip=Write to Secondary Chip
+msg.dockingport.target=Target ID
+msg.dockingport.me=My ID
+msg.planetholo.size=Hologram Size:
+msg.stationaltctrl.maxaltrate=Max Altitude Change Rate: 
+msg.stationaltctrl.tgtalt=Target Altitude:
+msg.stationaltctrl.alt=Altitude: 
+msg.stationgravctrl.maxaltrate=Max Gravity Change Rate: 
+msg.stationgravctrl.tgtalt=Target Gravity: 
+msg.stationgravctrl.alt=Artificial Gravity: 
+msg.stationorientctrl.alt=Angular Velocity: 
+msg.stationorientctrl.tgtalt=Target Ang Vel:
+msg.station.anchored=§cAnchored!
+msg.warpmon.tab.warp=Warp Selection
+msg.warpmon.tab.data=Data
+msg.warpmon.tab.tracking=Planet Tracking
+msg.warpmon.selectplanet=Select Planet
+msg.warpmon.corestatus=Core Status:
+msg.warpmon.anchored=Anchored!
+msg.warpmon.nowhere=Nowhere to go
+msg.warpmon.missingart=Missing Artifact
+msg.warpmon.ready=Ready!
+msg.warpmon.notready=Not Ready
+msg.warpmon.warp=Warp!
+msg.warpmon.fuelcost=Fuel Cost: 
+msg.warpmon.fuel=Fuel: 
+msg.warpmon.dest=Dest: 
+msg.warpmon.orbit=Orbiting:
+msg.warpmon.na=N/A
+msg.warpmon.search=Search for planet
+msg.warpmon.chip=Program from chip
+msg.warpmon.datareq=100 of each datatype required
+msg.warpmon.artifact=Artifacts
+msg.rocketbuilder.success=Clear for liftoff!
+msg.rocketbuilder.nofuel=Not enough fuel capacity!
+msg.rocketbuilder.noseat=Missing seat or satellite bay!
+msg.rocketbuilder.noengines=Not enough thrust!
+msg.rocketbuilder.noguidance=Missing Guidance Computer
+msg.rocketbuilder.unscanned=Rocket unscanned
+msg.rocketbuilder.unscanned_station=Standing by for scan
+msg.rocketbuilder.success_station=Ready!
+msg.rocketbuilder.fail_cut=Build failed: area changed
+msg.rocketbuilder.empty=Nothing here
+msg.rocketbuilder.finished=Build Complete!
+msg.rocketbuild.invalidblock=Invalid block!
+msg.rocketbuilder.incompletestructure=Invalid Launch Pad Structure!
+msg.rocketbuilder.nosatellitehatch=Missing Sat Bay
+msg.rocketbuilder.nosatellitechip=Missing Chip
+msg.rocketbuilder.outputblocked=Output slot blocked
+msg.rocketbuilder.thrust=Thrust
+msg.rocketbuilder.weight=Weight
+msg.rocketbuilder.fuel=Fuel
+msg.rocketbuilder.acc=Acc
+msg.rocketbuilder.build=Build
+msg.rocketbuilder.scan=Scan
+msg.rocketbuild.combinedthrust=Fuel types cannot be combined!
+msg.rocketbuilder.alreadyassembled=Rocket already assembled
+msg.rocketbuilder.nointake=Missing Gas Intake!
+msg.rocketbuilder.notank=Missing Fluidtank!
+msg.rocketbuilder.multipleflightcomputers=Only one Flight Computer per ship!
+msg.rocketbuilder.multiplepilotseats=Only one Pilot Seat per ship!
+msg.solar.collectingEnergy=Collecting Energy:
+msg.solar.cannotcollectEnergy=Unable to collect Energy
+msg.asteroidChip.asteroid=Asteroid
+msg.asteroidChip.type=Type: 
+msg.atmanal.atmtype=Atmosphere Type: 
+msg.atmanal.canbreathe=Breathable: 
+msg.biomechanger.scan=Scan Biome
+msg.biomechanger.nosat=Satellite not yet launched
+msg.biomechanger.selBiome=Selected Biome: 
+msg.biomechanger.numBiome=Num Biomes Scanned: 
+msg.itemorescanner.nosat=Satellite not yet launched
+msg.itemorescanner.maxzoom=Max zoom: 
+msg.itemorescanner.filter=Can filter ore: 
+msg.itemorescanner.value=Value: 
+msg.itemplanetidchip.planetname=Planet Name: 
+msg.itemplanetidchip.stationid=Station ID:
+msg.itemplanetidchip.artifacts=Artifacts:
+msg.vent.trace=Oxygen Trace
+
+msg.serviceStation.destroyProbNA=Destroy probability: N/A
+msg.serviceStation.destroyProb=Destroy probability
+msg.serviceStation.serviceProgress=Service progress
+msg.serviceStation.serviceProgressNA=Service progress: N/A
+msg.serviceStation.wornMotorsText=Engines
+msg.serviceStation.wornSeatsText=Seats
+msg.serviceStation.wornTanksText=Tanks
+msg.serviceStation.assemblerScan=Scan for assemblers
+msg.serviceStation.link=You program the linker with the service station at
+
+msg.itemsatellite.pwr=Power Storage: 
+msg.itemsatellite.nopwr=No Power Storage
+msg.itemsatellite.pwrgen=Power Generation: 
+msg.itemsatellite.nopwrgen=No Power Generation!
+msg.itemsatellite.microwavestatus=Collecting Power
+msg.itemsatellite.data=Data Storage: 
+msg.itemsatellite.nodata=No Data Storage!
+msg.itemsatellite.empty=Empty Chassis
+msg.itemsatellite.datagen=Data gen: %s/s
+msg.itemsatellite.weight=Chassis weight: 
+msg.itemsatellite.noweight=Error in weight calculation
+msg.itemsatellite.unassembled=Not assembled (preview)
+
+
+msg.brokenstage.text=Destruction stage
+
+msg.itemsatchip.id=ID: 
+msg.itemsatchip.planet=Planet: 
+msg.itemsatchip.planetunk=Planet: Unknown
+msg.itemsatchip.sat=Satellite: 
+msg.itemsatchip.satlost=Satellite: Contact Lost
+msg.sealdetector.sealed=Should hold a nice seal.
+msg.sealdetector.notsealmat=Material will not hold a seal.
+msg.sealdetector.notsealblock=Block will not hold a seal.
+msg.sealdetector.notfullblock=Air will pass around this block.
+msg.sealdetector.fluid=Air will bubble through this block.
+msg.sealdetector.other=Air will leak through this block.
+msg.stationchip.sation=Station 
+msg.entity.rocket.rcsDeprecated=RCS toggle is deprecated. Press [M] to switch to Free Flight Mode before launch.
+msg.entity.rocket.ffNoLiftoff=Not enough fuel or thrust to lift off. Fuel the rocket or reduce its mass before launch.
+msg.entity.rocket.descend.1=Press Space to descend!
+msg.entity.rocket.descend.2=Auto descend in 
+msg.entity.rocket.ascend.1=Press Space to take off!
+msg.entity.rocket.ascend.2=Dest: 
+msg.entity.rocket.launch=Launch in T-
+msg.entity.rocket.launch2=Press [Space] to abort
+msg.entity.rocket.station=Station 
+msg.entity.rocket.pad=Pad: 
+msg.entity.rocket.disass=Disassemble
+msg.entity.rocket.seldst=Select Dst
+msg.entity.rocket.clear=Clear
+msg.entity.rocket.rcs=RCS Mode
+msg.entity.rocket.none=None Selected
+msg.entity.rocket.openGuiHint=Press %s to open Rocket GUI
+msg.ff.hud.title=Free Flight Mode
+msg.ff.hud.prelaunch=%s Classic mode
+msg.ff.hud.engines.off=ENGINES OFF — hold %s to start
+msg.ff.hud.engines.starting=STARTING ENGINES... %d%%
+msg.ff.hud.engines.on=ENGINES ON
+msg.ff.engines.started=Engines started
+msg.ff.engines.stopped=Engines stopped
+msg.ff.hud.vector=FWD %s   LAT %s   VRT %s
+msg.ff.hud.speed=SPD %s m/s
+msg.ff.hud.active=FREE FLIGHT    Flight Assist: %s
+msg.ff.hud.tier=[TIER %d]
+msg.ff.hud.fa.on=ON
+msg.ff.hud.fa.off=OFF — Newtonian
+msg.ff.hud.move=%s / %s  Forward / Back
+msg.ff.hud.strafe=%s / %s  Strafe
+msg.ff.hud.yaw=%s / %s  Yaw
+msg.ff.hud.vert=%s / %s  Up / Down
+msg.ff.hud.pitchmouse=Mouse  Steer nose (view locked to craft)
+msg.ff.hud.cut=%s  Brake to hover
+msg.ff.hud.brake=%s Brake
+msg.ff.hud.assist=%s Flight Assist
+msg.ff.hud.drive.idle=%s Jump — not armed, drive %d%%
+msg.ff.hud.drive.armed=%s Jump — ARMED, drive %d%%
+msg.ff.hud.drive.spooling=JUMPING in %ss — press %s again to abort
+msg.ff.hud.transit.departing=IN HYPERSPACE — departing
+msg.ff.hud.transit.cruising=IN HYPERSPACE — under way
+msg.ff.hud.transit.arriving=IN HYPERSPACE — arriving
+msg.wirelessTransceiver.extract=extract
+msg.wirelessTransceiver.insert=insert
+msg.wirelessTransceiver.type=Type: %s
+msg.wirelessTransceiver.network=Network:
+msg.wirelessTransceiver.network.unlinked=Unlinked
+msg.wirelessTransceiver.priority=Priority
+msg.wirelessTransceiver.priority.tooltip.1=Higher priority fills/empties first.
+msg.wirelessTransceiver.priority.tooltip.2=Same priority shares evenly.
+msg.wirelessTransceiver.priority.tooltip.3=Default: 0
+
+
+msg.stellurgy.planetselector.up=<< Up
+msg.stellurgy.planetselector.select=Select
+msg.stellurgy.planetselector.planet.list=Planet List
+msg.stellurgy.planetselector.atm.tooltip=%b -> %a Earth's atmospheric pressure
+msg.stellurgy.planetselector.mass.tooltip=%b -> %a Earth's mass
+msg.stellurgy.planetselector.distance.tooltip=%b -> %a Relative Distance units
+msg.stellurgy.planetselector.star.tooltip.name=Name: %s
+msg.stellurgy.planetselector.star.tooltip.number.of.planets=Number of Planets: %d
+msg.stellurgy.planetselector.planet.tooltip.name=%s
+msg.stellurgy.planetselector.planet.tooltip.moons.count=Moons: %d
+
+
+
+msg.powerunit.rfpertick=RF/t
+msg.linker.error.firstMachine=This must be the first machine to link!
+msg.linker.program=Coordinates programmed into Linker
+msg.linker.success=Linked Successfully
+msg.linker.sameblock=You can't link a wireless transceiver to itself.
+msg.notenoughpower=Not Enough Power!
+msg.empty=Empty
+msg.yes=yes
+msg.no=no
+msg.connected=Connected
+msg.notconnected=Not Connected
+msg.unprogrammed=Unprogrammed
+msg.programfail=Programming Failed
+msg.modules=Modules:
+msg.na=N/A
+msg.entityDeployedRocket.notGasGiant=No Gas
+msg.noOxygen=Warning: Atmosphere lacks oxygen!
+msg.tooHot=Warning: Atmosphere too hot!
+msg.tooDense=Warning: Atmosphere pressure too high!
+msg.muchTooDense=Warning: Atmosphere pressure critically dense!
+
+msg.chat.nostation1=You wake up on the space station with a lingering feeling that your far-reaching spacewalk was frowned upon by some elder fox deity, and that it would be foolish to attempt so again and to expect different results
+msg.chat.nostation2=Maybe you should think before overstepping clearly logical and absolute boundaries again then deciding it was a good idea and not your fault if things go wrong
+msg.chat.nostation3=You must be on a space station to be in this dimension, and none have been created!
+
+# Orbital Registry
+msg.orbitalregistry.tab.satellites=Satellites:
+msg.orbitalregistry.tab.stations=Space Stations:
+msg.orbitalregistry.text.details=Details:
+msg.orbitalregistry.text.satellites=Satellites
+msg.orbitalregistry.text.stations=Space Stations
+msg.orbitalregistry.text.nosel=Select an object
+msg.orbitalregistry.text.notfound=Not found
+msg.orbitalregistry.text.sat.datagen=Data gen:
+msg.orbitalregistry.scan.tooltip=Update this list
+msg.orbitalregistry.writechip.ok=Click to program chip!
+msg.orbitalregistry.writechip.no=Cannot program this
+msg.orbitalregistry.writechip=Program chip
+
+
+# List entry
+msg.orbitalregistry.text.listentry=ID
+
+# StationDetails
+msg.orbitalregistry.text.type.starshiplist=§6Starship
+msg.orbitalregistry.text.type.starship=Starship
+msg.orbitalregistry.text.type.station=Station
+msg.orbitalregistry.text.id=ID:
+msg.orbitalregistry.text.type=Type:
+msg.orbitalregistry.text.dimid=Dim:
+msg.orbitalregistry.text.dimid.none=None
+msg.orbitalregistry.text.orbit=Orbiting:
+msg.orbitalregistry.text.orbit.unlaunched=Not in orbit!
+msg.orbitalregistry.text.freepads=Free landingpads:
+msg.orbitalregistry.text.anchored=Anchored:
+msg.orbitalregistry.text.anchored.yes=Yes
+msg.orbitalregistry.text.anchored.no=No
+msg.orbitalregistry.text.system=System:
+msg.orbitalregistry.text.system.none=None
+msg.orbitalregistry.text.system.unknown=Unknown
+
+# SatelliteDetails power fields
+msg.orbitalregistry.text.sat.pwrgen=Pwr Gen:
+msg.orbitalregistry.text.sat.pwrstore=Pwr Store:
+msg.orbitalregistry.text.sat.maxdata=Max Data:
+
+# Orbital Registry – satellite type names
+msg.orbitalregistry.sat.name.optical=Telescope
+msg.orbitalregistry.sat.name.density=Density
+msg.orbitalregistry.sat.name.composition=Composition
+msg.orbitalregistry.sat.name.mass=Mass
+msg.orbitalregistry.sat.name.solarEnergy=Solar
+msg.orbitalregistry.sat.name.oreScanner=Ore Scanner
+msg.orbitalregistry.sat.name.biomeChanger=Biome Changer
+msg.orbitalregistry.sat.name.weatherController=Weather
+
+msg.orbitalregistry.writechip.hint.insert=Insert a chip to write
+msg.orbitalregistry.writechip.hint.select=Select an entry from the list
+msg.orbitalregistry.writechip.hint.output=Clear the output slot first
+msg.orbitalregistry.writechip.hint.sat.or.stationchip=Insert a Station Chip
+msg.orbitalregistry.writechip.hint.sat.or.idchip=Insert a Satellite ID Chip or Controller
+msg.orbitalregistry.writechip.hint.sat.badcontroller=This satellite does not accept this chip, use correct controller instead!
+msg.orbitalregistry.writechip.hint.sat.orescanner.only=Ore Scanner can only link to Ore Mapping satellites
+msg.orbitalregistry.writechip.hint.station.unlaunched=This station is not in orbit yet
+
+
+
+commands.weather.always_not_clear=This planet is always not clear...
+commands.weather.cannot_rain=Cannot start a rain here
+commands.weather.cannot_thunder=Cannot start a thunder here
+commands.weather.cannot_rain_atmosphere=This planet's atmosphere is too thin to hold rain
+commands.weather.cannot_thunder_norain=This planet cannot thunder - rain is impossible here
+
+# Jeistuff
+jei.machinerecipe.power=Power:
+jei.machinerecipe.time=Time:
+jei.sb.satellitepreview=Ready for orbit!
+jei.sb.copy.source=Source
+jei.sb.copy.output=New Copy
+jei.sb.assemblyhint=At least one solar panel
+jei.sb.copychiphint=Make backups!
+jei.ar.asteroids=Asteroids
+
+jei.stellurgy.gasgiants.title=Gas Missions
+jei.stellurgy.gasgiants.orbiting=Orbiting %s
+jei.stellurgy.gasgiants.harvestcap=Harvest cap: %s mB/mission
+jei.stellurgy.gasgiants.harvestcap.infinite=Harvest cap: Infinite
+
+jei.ar.fuel.role.monopropellant=Monopropellant Fuel
+jei.ar.fuel.role.biprop_fuel=Bipropellant Fuel
+jei.ar.fuel.role.oxidizer=Oxidizer
+jei.ar.fuel.role.working_fluid=Working Fluid
+jei.ar.stationAssembler.newStationChipHint=§cThis points to the new Station!
+
+# TOP-integration
+
+msg.top.stellurgy.guidance.noComputer=No Guidance Computer
+msg.top.stellurgy.guidance.noDestination=No Destination
+msg.top.stellurgy.guidance.unprogrammed=Unprogrammed
+msg.top.stellurgy.guidance.station=Station
+msg.top.stellurgy.guidance.orbit=Orbit
+msg.top.stellurgy.guidance.space=Space
+msg.top.stellurgy.guidance.pad=/ Pad
+msg.top.stellurgy.guidance.destination=Destination:
+
+msg.top.stellurgy.fuel.label=Fuel
+msg.top.stellurgy.fuel.oxidizer=Oxidizer
+msg.top.stellurgy.fuel.workingFluid=Working Fluid
+msg.top.stellurgy.fuel.unknownFluid=Unknown fluid
+msg.top.stellurgy.fuel.noFuel=Empty
+
+msg.top.stellurgy.rocket.monopropellant=Monopropellant Rocket
+msg.top.stellurgy.rocket.bipropellant=Bipropellant Rocket
+msg.top.stellurgy.rocket.nuclear=Nuclear Rocket
+msg.top.stellurgy.harvest.gas=Gas
+msg.top.stellurgy.modname=Stellurgy
+
+msg.top.stellurgy.data.label=Data
+msg.top.stellurgy.data.type=Type
+msg.top.stellurgy.data.locked=Locked
+msg.top.stellurgy.data.network=Network ID
+
+msg.top.stellurgy.data.mode=Mode
+msg.top.stellurgy.data.mode.insert=Insert
+msg.top.stellurgy.data.mode.extract=Extract
+msg.top.stellurgy.data.link.linked=Linked
+msg.top.stellurgy.data.link.unlinked=Unlinked
+
+# Tier-2 ship space entry
+msg.timeskip.locked=§7You wake in the dark. This world turns at its own rate - dawn is about %s minute(s) away.
+msg.timeskip.command.partial=§7Time set on %s world(s); %s left alone (their time skip is disabled in the config).
+msg.shipentry.refused=§cSpace is saturated - the ship cannot enter orbit right now. Descend and try again later.
+msg.shipentry.failed=§cThe ascent failed - the ship could not cross into space.
+msg.shipentry.arrived=§aOrbit reached - the ship has entered space.
+msg.shipentry.autotakeoff.blocked=§eAuto-takeoff aborted - the path to orbit is blocked. Reposition and climb manually.
+msg.pilotseat.notassembled=§eShip not assembled - assemble it to fly.
+msg.pilotseat.occupied=§e%s is already in this seat.
+msg.pilotseat.taken=§eYour seat was taken by %s while you were away.
+msg.pilotseat.afcdestroyed=§cFlight computer destroyed - the ship is adrift.
+msg.deckhold.lost=§cYour ship never came up under you - you are on your own footing now.
+msg.deckhold.shipgone=§cYour ship was destroyed under you - you are on your own footing now.
+msg.loginrestore.shipunknown=§cYour ship could not be found - the server has no record of it, so you have been placed at your spawn point.
+msg.shipdescent.refused=§cThe descent could not start - the destination is not ready yet. Wait a moment and try again.
+msg.shipdescent.failed=§cThe descent failed - the ship could not cross onto the planet.
+msg.shipdescent.arrived=§aDescent complete - the ship is in the sky over the planet. Take her down.
+msg.shipseam.refused=§cThe ship has left this neighbourhood, but space is saturated - no room to carry her across. Turn back.
+msg.shipseam.failed=§cThe crossing failed - the ship could not be carried into the next neighbourhood.
+msg.shipseam.arrived=§aThe ship has crossed into the next neighbourhood.
+msg.shiptransit.departed=§aJump engaged - the ship is under way. Helm control is offline until you arrive.
+msg.shiptransit.arrived=§aArrived - the ship is back in normal space. Helm control is yours again.
+msg.shiptransit.directfailed=§cThe crossing failed - your ship is at its destination but not cleanly placed. It is safe; report this.
+msg.shiptransit.arrivalrecovered=§eThe jump completed, but not cleanly - your ship is at its arrival point rather than on course. It is safe; report this.
+msg.shiptransit.arrivalstalled=§cThe jump cannot finish right now. Your ship is not lost - it stays in transit and will arrive. Report this.
+
+#########################
+##### TOOLTIP STUFF #####
+#########################
+# Generic hint
+tooltip.stellurgy.hold_shift=Hold §eShift§7 for details
+tooltip.stellurgy.hold_alt=Hold §eAlt§7 for advanced tips
+
+# Fuel Tank (monoprop)
+tooltip.stellurgy.fueltank=§cPart of Rocket
+tooltip.stellurgy.fueltank.shift.1=§fHolds: §b%s
+tooltip.stellurgy.fueltank.alt.1=Lets Rockety Rockrock!
+
+# Bipropellant Fuel Tank
+tooltip.stellurgy.bipropfueltank=§cPart of Rocket
+tooltip.stellurgy.bipropfueltank.shift.1=§fHolds: §b%s
+tooltip.stellurgy.bipropfueltank.alt.1=§fBipropellant Rocket requires §bBipropellant§f and §bOxidizer§f tanks
+
+# Oxidizer Fuel Tank
+tooltip.stellurgy.oxidizerfueltank=§cPart of Rocket
+tooltip.stellurgy.oxidizerfueltank.shift.1=§fHolds: §b%s
+tooltip.stellurgy.oxidizerfueltank.alt.1=§fBipropellant Rocket requires §bBipropellant§f and §bOxidizer§f tanks
+
+# Nuclear Fuel Tank
+tooltip.stellurgy.nuclearfueltank=§cPart of Rocket
+tooltip.stellurgy.nuclearfueltank.1=§6Allows planetary travel!
+tooltip.stellurgy.nuclearfueltank.shift.1=§fHolds: §b%s
+tooltip.stellurgy.nuclearfueltank.alt.1=§fRequires §bNuclear Core§f and §bNuclear Engine
+
+# Monopropellant Engine
+tooltip.stellurgy.monopropmotor=§cPart of Rocket
+tooltip.stellurgy.monopropmotor.shift.1=§fUses §bMonopropellant Fuel
+tooltip.stellurgy.monopropmotor.alt.1=Check Fueling Station JEI-page
+
+# Nuclear Core
+tooltip.stellurgy.nuclearcore=§cPart of Rocket
+tooltip.stellurgy.nuclearcore.1=§6Allows planetary travel!
+tooltip.stellurgy.nuclearcore.shift.1=Needs to be directly on top of a
+tooltip.stellurgy.nuclearcore.shift.2=Nuclear Engine or another Nuclear Core.
+tooltip.stellurgy.nuclearcore.alt.1=Vertical placement rules don't apply
+tooltip.stellurgy.nuclearcore.alt.2=for Unmanned Vehicles (Gas Mission rockets)
+
+# Nuclear rocketengine
+tooltip.stellurgy.nuclearmotor=§cPart of Rocket
+tooltip.stellurgy.nuclearmotor.1=§6Allows planetary travel!
+tooltip.stellurgy.nuclearmotor.shift.1=§fUses §bWorking fluid
+tooltip.stellurgy.nuclearmotor.shift.2=Needs Nuclear Core directly above.
+tooltip.stellurgy.nuclearmotor.alt.1=Check Fueling Station JEI-page
+
+# Bipropellant Engine
+tooltip.stellurgy.bipropmotor=§cPart of Rocket
+tooltip.stellurgy.bipropmotor.shift.1=§fUses §bBipropellant Fuel§f and §bOxidizer
+tooltip.stellurgy.bipropmotor.alt.1=Check Fueling Station JEI-page
+
+# Drill
+tooltip.stellurgy.drill=§cPart of Rocket
+tooltip.stellurgy.drill.shift.1=Lowers duration of §6Mining Missions
+tooltip.stellurgy.drill.shift.2=§bEffect stacks
+tooltip.stellurgy.drill.alt.1=This rocket is built with Rocket Assembling Machine
+tooltip.stellurgy.drill.alt.2=Requires a programmed Asteroid Chip
+
+# Gas Intake
+tooltip.stellurgy.intake=§cPart of Rocket
+tooltip.stellurgy.intake.shift.1=Lowers duration of §6Gas Missions
+tooltip.stellurgy.intake.shift.2=§bEffect stacks
+tooltip.stellurgy.intake.alt.1=This rocket is built with Unmanned Vehicle Assembler
+tooltip.stellurgy.intake.alt.2=Launched from Space Station orbiting a Gas giant
+
+# Seat
+tooltip.stellurgy.seat=§cPart of rocket
+tooltip.stellurgy.seat.shift.1=Adds a passenger slot to the rocket
+tooltip.stellurgy.pilotseat=§bTier-2 ship control station
+tooltip.stellurgy.pilotseat.shift.1=Sit to pilot a ship built with an Advanced Flight Computer (requires Valkyrien Skies)
+
+# Guidance Computer
+tooltip.stellurgy.guidancecomputer=§cPart of Rocket
+tooltip.stellurgy.guidancecomputer.shift.1=Insert a §cChip§7 or programmed §cLinker§7
+tooltip.stellurgy.guidancecomputer.alt.1=Remember to tell rocket which planet to target
+tooltip.stellurgy.guidancecomputer.alt.2=when deploying Satellites or Space Station into orbit
+
+# Service Monitor
+tooltip.stellurgy.servicemonitor=§cPart of Rocket
+tooltip.stellurgy.servicemonitor.shift.1=Shows worn parts and failure
+tooltip.stellurgy.servicemonitor.shift.2=chance in the rocket GUI
+tooltip.stellurgy.servicemonitor.alt.1=Place one inside a rocket
+tooltip.stellurgy.servicemonitor.alt.2=
+
+# Docking Pad (landingPad)
+tooltip.stellurgy.landingpad=Replace the launchpad’s center block with this
+tooltip.stellurgy.landingpad.shift.1=§cLinker§7 can store this block's exact position (dimension-aware).
+tooltip.stellurgy.landingpad.shift.2=Insert in §4Guidance Computer§7 to land here.
+tooltip.stellurgy.landingpad.alt.1=Place a programmed Linker in the Docking Pad.
+tooltip.stellurgy.landingpad.alt.2=Rockets launched from this pad will fly to the Linker’s saved coordinates (used for automation).
+tooltip.stellurgy.landingpad.alt.3=if there is nothing in the rocket's guidance computer.
+
+# Launch Pad
+tooltip.stellurgy.launchpad=Base for Launch Pad platform.
+tooltip.stellurgy.launchpad.shift.1=Place Launch Pad blocks in a flat square.
+tooltip.stellurgy.launchpad.shift.2=3x3, 4x4, 5x5, ....
+tooltip.stellurgy.launchpad.alt.1=§bAdd Structure Tower (minimum 4 high, starting at same y as Launch Pad)
+tooltip.stellurgy.launchpad.alt.2=§fRocket/Station Assembler will connect automatically
+
+# Structure Tower
+tooltip.stellurgy.structuretower=Vertical support for the Launch Pad platform.
+tooltip.stellurgy.structuretower.shift.1=Tower must be minimum 4 blocks.
+tooltip.stellurgy.structuretower.shift.2=Bottom block must touch the Launch Pad.
+tooltip.stellurgy.structuretower.alt.1=Main block for Unmanned Vehicle Assembler structure
+tooltip.stellurgy.structuretower.alt.2=Check wiki for more info.
+
+# Terraformer
+tooltip.stellurgy.terraformer=Terraform the entire planet!
+tooltip.stellurgy.terraformer.shift.1=§fUse with §cBiome Changer Satellite
+tooltip.stellurgy.terraformer.shift.2=§fSatellite has to orbit this planet
+tooltip.stellurgy.terraformer.alt.1=§fInsert §cBiome Changer Remote
+tooltip.stellurgy.terraformer.alt.2=§fPowered by Satellite
+
+# Rocket Monitoring Station
+tooltip.stellurgy.monitoringstation=§cInfrastructure
+tooltip.stellurgy.monitoringstation.shift.1=Launch with Redstone Signal!
+tooltip.stellurgy.monitoringstation.shift.2=§fLink to §4Rocket Assembler/Dockingpad§f or §4Rocket
+tooltip.stellurgy.monitoringstation.alt.1=§bMissions become active when orbit is reached!
+
+# Satellite Terminal
+tooltip.stellurgy.satellitecontrolcenter=Communicates with Satellites
+tooltip.stellurgy.satellitecontrolcenter.shift.1=Insert Satellite Chip
+tooltip.stellurgy.satellitecontrolcenter.shift.2=Download Data
+tooltip.stellurgy.satellitecontrolcenter.alt.1=§fTransfer and Auto-Download Data with Wireless Transceiver or Data Unit
+
+# Satellite Builder
+tooltip.stellurgy.satellitebuilder=Assembles Satellites
+tooltip.stellurgy.satellitebuilder.shift.1=Also Copy Chips/Remotes.
+tooltip.stellurgy.satellitebuilder.shift.2=§bMust be on top of a Power Plug!
+tooltip.stellurgy.satellitebuilder.alt.1=Insert chassis, Chip/Remote
+tooltip.stellurgy.satellitebuilder.alt.2=core component + other components
+
+# Orbital Registry
+tooltip.stellurgy.orbitalregistry=Tracks man-made objects in space
+tooltip.stellurgy.orbitalregistry.shift.1=§fPrints new Chips!
+tooltip.stellurgy.orbitalregistry.alt.1=§fTo destroy a Satellite use chip in §4Satellite Terminal
+
+### Infrastructure
+## BlockStellurgyHatch
+
+# TileDataBusBig
+tooltip.stellurgy.databusbig.header=§cBus and Unit
+tooltip.stellurgy.databusbig.shift.1=§bCan only hold one type of Data
+tooltip.stellurgy.databusbig.alt.1=§bKeeps data when broken, works as item and block
+
+# TileDataBus
+tooltip.stellurgy.hatch.databus=Capacity: §62000 §7Data
+tooltip.stellurgy.hatch.databus.shift.1=§bCan only hold one type of Data
+tooltip.stellurgy.hatch.databus.alt.1=§fClears Data when broken
+
+# TileSatelliteHatch
+tooltip.stellurgy.hatch.satellite=§cPart of Rocket
+tooltip.stellurgy.hatch.satellite.shift.1=§fUsed to put payloads in orbit
+tooltip.stellurgy.hatch.satellite.shift.2=§bRemember to set target planet for orbit!
+tooltip.stellurgy.hatch.satellite.alt.1=§fUsed in §4Station Assembler§f to pack and store the Station
+
+# TileRocketUnloader
+tooltip.stellurgy.hatch.item_unloader=§cInfrastructure
+tooltip.stellurgy.hatch.item_unloader.shift.1=Emits redstone when empty
+tooltip.stellurgy.hatch.item_unloader.alt.1=§fLink to §4Rocket Assembler/Dockingpad§f or §4Rocket
+tooltip.stellurgy.hatch.item_unloader.alt.2=§fRockets landing here will auto-link to this.
+
+# TileRocketLoader
+tooltip.stellurgy.hatch.item_loader=§cInfrastructure
+tooltip.stellurgy.hatch.item_loader.shift.1=Emits redstone when full
+tooltip.stellurgy.hatch.item_loader.alt.1=§fLink to §4Rocket Assembler/Dockingpad§f or §4Rocket
+tooltip.stellurgy.hatch.item_loader.alt.2=§fRockets landing here will auto-link to this.
+
+# TileRocketFluidUnloader
+tooltip.stellurgy.hatch.fluid_unloader=§cInfrastructure
+tooltip.stellurgy.hatch.fluid_unloader.shift.1=Emits redstone when empty
+tooltip.stellurgy.hatch.fluid_unloader.alt.1=§fLink to §4Rocket Assembler/Dockingpad§f or §4Rocket
+tooltip.stellurgy.hatch.fluid_unloader.alt.2=§fRockets landing here will auto-link to this.
+
+# TileRocketFluidLoader
+tooltip.stellurgy.hatch.fluid_loader=§cInfrastructure
+tooltip.stellurgy.hatch.fluid_loader.shift.1=Emits redstone when full
+tooltip.stellurgy.hatch.fluid_loader.alt.1=§fLink to §4Rocket Assembler/Dockingpad§f or §4Rocket
+tooltip.stellurgy.hatch.fluid_loader.alt.2=§fRockets landing here will auto-link to this.
+
+# Guidance Computer Access
+tooltip.stellurgy.hatch.gca=§cInfrastructure
+tooltip.stellurgy.hatch.gca.shift.1=Emits redstone when empty
+tooltip.stellurgy.hatch.gca.alt.1=§fLink to §4Rocket Assembler/Dockingpad§f or §4Rocket
+tooltip.stellurgy.hatch.gca.alt.2=§fRockets landing here will auto-link to this.
+
+## /BlockStellurgyHatch
+
+# Fueling Station
+tooltip.stellurgy.fuelingstation=§cInfrastructure
+tooltip.stellurgy.fuelingstation.shift.1=Emits redstone when full
+tooltip.stellurgy.fuelingstation.shift.2=if station has same fueltype.
+tooltip.stellurgy.fuelingstation.alt.1=§fLink to §4Rocket Assembler/Dockingpad§f or §4Rocket
+tooltip.stellurgy.fuelingstation.alt.2=§fRockets landing here will auto-link to this.
+
+# Service Station
+tooltip.stellurgy.servicestation=§cInfrastructure
+tooltip.stellurgy.servicestation.shift.1=Link to a rocket to repair
+tooltip.stellurgy.servicestation.shift.2=worn parts (needs power)
+
+## // Infrastructure
+
+# Pressurized Fluid Tank
+tooltip.stellurgy.fluidtank.empty=Empty
+tooltip.stellurgy.fluidtank.fluid=Fluid: 
+tooltip.stellurgy.fluidtank.level=Level: 
+tooltip.stellurgy.fluidtank.shift.1=§cConnects to tanks above or below to make a bigger tank
+
+# Wireless Transceiver
+tooltip.stellurgy.transceiver=Transfers §6Data
+tooltip.stellurgy.transceiver.shift.1=§fUse §cLinker§f to create Networks
+tooltip.stellurgy.transceiver.shift.2=§fSupports multiple Transceivers
+tooltip.stellurgy.transceiver.alt.1=§fExtractmode toggles autodownload from Terminal
+tooltip.stellurgy.transceiver.alt.2=§o(reinsert chip if stale)
+
+# Atmosphere Detector
+tooltip.stellurgy.atmosphereDetector=Emits redstone based on Atmosphere
+tooltip.stellurgy.atmosphereDetector.shift.1=Select wanted Atmosphere
+tooltip.stellurgy.atmosphereDetector.shift.2=emits if the condition is true
+tooltip.stellurgy.atmosphereDetector.alt.1=Can detect: air, vacuum, 
+tooltip.stellurgy.atmosphereDetector.alt.2=low O₂, No O₂, very hot and more.
+
+# Station Light
+tooltip.stellurgy.circlelight=Always on
+tooltip.stellurgy.circlelight.shift.1=Does not require
+tooltip.stellurgy.circlelight.shift.2=Power or Redstone
+
+# Gas Charge Pad
+tooltip.stellurgy.oxygencharger=Charges Space Suit O₂ and H₂
+tooltip.stellurgy.oxygencharger.shift.1=Stand on pad to refill
+tooltip.stellurgy.oxygencharger.alt.1=Does not require Power
+
+# Docking Port
+tooltip.stellurgy.dockingport=Marks a station module docking point
+tooltip.stellurgy.dockingport.shift.1=On the station: set a unique “My ID”
+tooltip.stellurgy.dockingport.shift.2=On the new module: set “Target ID”
+tooltip.stellurgy.dockingport.alt.1=Build new module in Station Builder
+tooltip.stellurgy.dockingport.alt.2=clamp faces must face each other
+
+# Pipe Seal
+tooltip.stellurgy.pipeseal=Airtight holes!
+tooltip.stellurgy.pipeseal.shift.1=Seal a 1×1 gap by framing it with this
+tooltip.stellurgy.pipeseal.shift.2=§bRequires 4 blocks per hole
+tooltip.stellurgy.pipeseal.alt.1=Allows pipes through while keeping O₂ in
+tooltip.stellurgy.pipeseal.alt.2=Entities can pass through the opening
+
+# Planet Selector (full-screen)
+tooltip.stellurgy.planetselector=Browse Spacebodies
+tooltip.stellurgy.planetselector.shift.1=Opens full-screen planet UI.
+tooltip.stellurgy.planetselector.shift.2=Browse systems, planets and moons
+tooltip.stellurgy.planetselector.alt.1=Allows you to remotely set a 
+tooltip.stellurgy.planetselector.alt.2=planet destination for warp controller.
+
+# Holographic Planet Selector
+tooltip.stellurgy.planetholoselector=Holographic Spacebody Display
+tooltip.stellurgy.planetholoselector.shift.1=Makes holographs in-world
+tooltip.stellurgy.planetholoselector.alt.1="Functions the as planet selector
+tooltip.stellurgy.planetholoselector.alt.2=but with a 3D holographic display"
+
+# Orientation Controller
+tooltip.stellurgy.orientationctrl=§cSpace Station Controller
+tooltip.stellurgy.orientationctrl.shift.1=Customize Angular Velocity
+tooltip.stellurgy.orientationctrl.alt.1=§bCosmetic only§7
+
+# Gravity Controller
+tooltip.stellurgy.gravityctrl=§cSpace Station Controller
+tooltip.stellurgy.gravityctrl.shift.1=Artificial gravity!
+tooltip.stellurgy.gravityctrl.alt.1=Redstone control
+
+# Altitude Controller
+tooltip.stellurgy.altitudectrl=§cSpace Station Controller
+tooltip.stellurgy.altitudectrl.shift.1=Customize orbital height
+tooltip.stellurgy.altitudectrl.alt.1=§bCosmetic only§7
+tooltip.stellurgy.altitudectrl.alt.2=Redstone control
+
+# Co2Scrubber
+tooltip.stellurgy.scrubber=Place next to Oxygen Vent
+tooltip.stellurgy.scrubber.shift.1=Reduces Oxygen use (max 2)
+tooltip.stellurgy.scrubber.alt.1=Each scrubber halves O₂ use, increases Power use.
+tooltip.stellurgy.scrubber.alt.2=With 2 Scrubbers, Oxygen Vent won't use Oxygen.
+
+# Oxygen Vent
+tooltip.stellurgy.oxygenvent=Creates breathable air in sealed rooms.
+tooltip.stellurgy.oxygenvent.shift.1=§fRequires Power and Oxygen.
+tooltip.stellurgy.oxygenvent.shift.2=§fPlace inside enclosed area.
+tooltip.stellurgy.oxygenvent.alt.1=§fUse CO2 Scrubber instead of oxygen.
+tooltip.stellurgy.oxygenvent.alt.2=§fRange: %s blocks radius.
+
+# Airlock Door
+tooltip.stellurgy.smallairlock=Airtight door!
+tooltip.stellurgy.smallairlock.shift.1=§fNot airtight, leaks when open
+tooltip.stellurgy.smallairlock.alt.1=§fBuild a proper airlock
+tooltip.stellurgy.smallairlock.alt.2=§fusing 2 doors
+
+# Warp Controller
+tooltip.stellurgy.warpcontroller=Turns the station into a §6Starship
+tooltip.stellurgy.warpcontroller.shift.1=§fPlace §4Warp Controller§f + §4Warp Core§f on a space station
+tooltip.stellurgy.warpcontroller.shift.2=§fWarp between planets and solar systems
+tooltip.stellurgy.warpcontroller.alt.1=§fUI shows location, destinations, and warp fuel
+tooltip.stellurgy.warpcontroller.alt.2=(You made it this far! check wiki bro)
+
+# CarbonScrubberCartridge
+tooltip.stellurgy.scrubbercart=Used in CO₂ Scrubber
+tooltip.stellurgy.scrubbercart.shift.1=§fPurifies air at the cost of durability.
+tooltip.stellurgy.scrubbercart.alt.1=§fShould last more than 24h
+
+# Seal Detector
+tooltip.stellurgy.sealdetector=Detects if a block is airtight
+tooltip.stellurgy.sealdetector.shift.1=§fRight Click on block to use
+
+# Lens
+tooltip.stellurgy.lens=§cPart of Multiblock
+tooltip.stellurgy.lens.shift.1=§bUse Holo-Projector!
+
+## SPACE SUIT + COMPONENTS
+
+# Suit Working Station
+tooltip.stellurgy.suitworkingstation=Install/remove §5Space Suit Components
+tooltip.stellurgy.suitworkingstation.shift.1=§fWorks with Space Suit armor
+tooltip.stellurgy.suitworkingstation.shift.2=(Helmet/Chest/Legs/Boots)
+tooltip.stellurgy.suitworkingstation.alt.1=§fDoes not require Power
+
+# Jetpack
+tooltip.stellurgy.jetpack=§5Space Suit Component
+tooltip.stellurgy.jetpack.shift.1=§dSlot: Chest§7
+
+# AtmosphereAnalyzer
+tooltip.stellurgy.atmanalyzer=§5Space Suit Component
+tooltip.stellurgy.atmanalyzer.1=§fRight Click in hand to check atmosphere.
+tooltip.stellurgy.atmanalyzer.shift.1=§dSlot: Helmet§7
+tooltip.stellurgy.atmanalyzer.alt.1=§fBreathable? Depends on atmosphere
+tooltip.stellurgy.atmanalyzer.alt.2=§fShows type and pressure
+
+# BeaconFinder
+tooltip.stellurgy.beaconfinder=§5Space Suit Component
+tooltip.stellurgy.beaconfinder.shift.1=§fShows a HUD arrow toward Stellurgy beacons in this dimension
+tooltip.stellurgy.beaconfinder.shift.2=§dSlot: Helmet§7
+tooltip.stellurgy.beaconfinder.alt.1=Arrow offset is relative to your facing
+tooltip.stellurgy.beaconfinder.alt.2=Works only in Stellurgy dimensions that have registered beacons.
+
+# PressureTank
+tooltip.stellurgy.pressuretank.shift.1=§dSlot: Chest§7
+tooltip.stellurgy.pressuretank.alt.1=§fStores Oxygen for suit
+tooltip.stellurgy.pressuretank.alt.2=§fStores Hydrogen for Jetpack
+
+## Item Upgrade
+# 0 = Hover
+tooltip.stellurgy.itemupgrade.0=§5Space Suit Component
+tooltip.stellurgy.itemupgrade.0.shift.1=§fEnables Jetpack hover mode
+tooltip.stellurgy.itemupgrade.0.shift.2=§dSlot: Helmet§7
+tooltip.stellurgy.itemupgrade.0.alt.1=Requires a Jetpack installed in the chestplate.
+tooltip.stellurgy.itemupgrade.0.alt.2=§fSneak + Toggle Jetpack to activate
+
+# 1 = Flight Speed Control Upgrade
+tooltip.stellurgy.itemupgrade.1=§5Space Suit Component
+tooltip.stellurgy.itemupgrade.1.shift.1=§fBoosts Jetpack flight speed
+tooltip.stellurgy.itemupgrade.1.shift.2=§dSlot: Leggings§7
+tooltip.stellurgy.itemupgrade.1.alt.1=Requires a Jetpack installed in the chestplate.
+tooltip.stellurgy.itemupgrade.1.alt.2=§bEffect Stacks!
+
+# 2 = Bionic Leg Upgrade (speed)
+tooltip.stellurgy.itemupgrade.2=§5Space Suit Component
+tooltip.stellurgy.itemupgrade.2.shift.1=§fIncreases walk speed
+tooltip.stellurgy.itemupgrade.2.shift.2=§dSlot: Leggings§7
+tooltip.stellurgy.itemupgrade.2.alt.1=Sprint to activate 
+tooltip.stellurgy.itemupgrade.2.alt.2=Stacks with multiple modules.
+
+# 3 = Padded Landing Boots Upgrade (no fall damage; config-aware)
+tooltip.stellurgy.itemupgrade.3=§5Space Suit Component
+tooltip.stellurgy.itemupgrade.3.shift.1=§fEliminates fall damage
+tooltip.stellurgy.itemupgrade.3.shift.2=§dSlot: Feet§7
+tooltip.stellurgy.itemupgrade.3.alt.1=Stacking has no additional effect.
+
+# 4 = Antifog Visor Upgrade
+tooltip.stellurgy.itemupgrade.4=§5Space Suit Component
+tooltip.stellurgy.itemupgrade.4.shift.1=§fSee through fog on high pressure planets
+tooltip.stellurgy.itemupgrade.4.shift.2=§dSlot: Helmet§7
+tooltip.stellurgy.itemupgrade.4.alt.1=Stacking has no additional effect.
+
+# 5 = Earthbright Visor
+tooltip.stellurgy.itemupgrade.5=§5Space Suit Component
+tooltip.stellurgy.itemupgrade.5.shift.1=§fAdjusts the lightlevels on distant worlds
+tooltip.stellurgy.itemupgrade.5.shift.2=§dSlot: Helmet§7
+tooltip.stellurgy.itemupgrade.5.alt.1=Stacking has no additional effect.
+
+## Satellite Components
+# Primary Function payloads
+tooltip.stellurgy.satfunc.optical=§5Satellite Core Component
+tooltip.stellurgy.satfunc.optical.shift.1=§bCollects Distance Data§7
+tooltip.stellurgy.satfunc.optical.shift.2=§oDownload Data in Satellite Terminal
+tooltip.stellurgy.satfunc.optical.alt.1=Combine with Satellite Chip
+tooltip.stellurgy.satfunc.optical.alt.2=when assembling
+
+tooltip.stellurgy.satfunc.composition=§5Satellite Core Component
+tooltip.stellurgy.satfunc.composition.shift.1=§bCollects Composition Data§7
+tooltip.stellurgy.satfunc.composition.shift.2=§oDownload data in Satellite Terminal
+tooltip.stellurgy.satfunc.composition.alt.1=Combine with Satellite Chip
+tooltip.stellurgy.satfunc.composition.alt.2=when assembling
+
+tooltip.stellurgy.satfunc.mass=§5Satellite Core Component
+tooltip.stellurgy.satfunc.mass.shift.1=§bCollects Mass Data§7
+tooltip.stellurgy.satfunc.mass.shift.2=§oDownload data in Satellite Terminal
+tooltip.stellurgy.satfunc.mass.alt.1=Combine with Satellite Chip
+tooltip.stellurgy.satfunc.mass.alt.2=when assembling
+
+tooltip.stellurgy.satfunc.microwave=§5Satellite Core Component
+tooltip.stellurgy.satfunc.microwave.shift.1=§bGenerates Power in Space§7
+tooltip.stellurgy.satfunc.microwave.shift.2=§oNeeds Microwave Receiver (5x5 Multiblock)
+tooltip.stellurgy.satfunc.microwave.alt.1=Combine with Satellite Chip
+tooltip.stellurgy.satfunc.microwave.alt.2=when assembling
+
+tooltip.stellurgy.satfunc.oremapping=§5Satellite Core Component
+tooltip.stellurgy.satfunc.oremapping.shift.1=§bScans the planet for Ore§7
+tooltip.stellurgy.satfunc.oremapping.alt.1=Combine with Ore Scanner
+tooltip.stellurgy.satfunc.oremapping.alt.2=when assembling
+
+tooltip.stellurgy.satfunc.biomechanger=§5Satellite Core Component
+tooltip.stellurgy.satfunc.biomechanger.shift.1=§bAdjusts biomes§7
+tooltip.stellurgy.satfunc.biomechanger.alt.1=Combine with Biome Changer Remote when assembling
+tooltip.stellurgy.satfunc.biomechanger.alt.2=Requires Power generation and storage!
+
+tooltip.stellurgy.satfunc.weather=§5Satellite Core Component
+tooltip.stellurgy.satfunc.weather.shift.1=§bDoes some weather stuff!
+tooltip.stellurgy.satfunc.weather.alt.1=Combine with Weather Remote when assembling
+
+# Weather Remote
+tooltip.stellurgy.weathercontrollerremote=§bShift-Right Click to open GUI
+tooltip.stellurgy.weathercontrollerremote.shift.1=§fRight-click in hand to use
+tooltip.stellurgy.weathercontrollerremote.alt.1=Combine with Weather Controller when assembling
+tooltip.stellurgy.weathercontrollerremote.mode.rain=§eMode: Rain - Makes it rain on the planet and fills small basins in the terrain with water
+tooltip.stellurgy.weathercontrollerremote.mode.dry=§eMode: Dry - Keeps the sky clear and dries all water in a radius of 16
+tooltip.stellurgy.weathercontrollerremote.mode.flood=§eMode: Flood - Floods area with a radius of 16 with water
+
+
+# Biome Changer Remote
+tooltip.stellurgy.biomechangerremote=§bShift-Right Click to open GUI
+tooltip.stellurgy.biomechangerremote.shift.1=§fRight-click in hand to transform a 20×20 area
+tooltip.stellurgy.biomechangerremote.shift.2=§f"Scan Biome" stores the Biome you're standing in to satellite’s memory.
+tooltip.stellurgy.biomechangerremote.alt.1=§6Satellite needs a lot of power
+tooltip.stellurgy.biomechangerremote.alt.2=§fUsed in §cTerraforming Terminal§f and§c Atmosphere Terraformer
+
+# Ore Scanner
+tooltip.stellurgy.orescanner=§bRight-Click to open GUI
+tooltip.stellurgy.orescanner.shift.1=§fIf satellite has at least §63,000 data§f storage, the Ore Scanner can filter by type.
+tooltip.stellurgy.orescanner.alt.1=§fScan range depends on the satellite's energy generation
+
+# Power Sources
+tooltip.stellurgy.satpower.0=§5Satellite Component
+tooltip.stellurgy.satpower.0.shift.1=§fGenerates §c4 §fRF/t§7
+tooltip.stellurgy.satpower.0.shift.2=§oSatellites requires atleast 1 powergen
+
+tooltip.stellurgy.satpower.1=§5Satellite Component
+tooltip.stellurgy.satpower.1.shift.1=§fGenerates §c40 §fRF/t§7
+tooltip.stellurgy.satpower.1.shift.2=§oSatellites requires atleast 1 powergen
+
+# LibVulpes Batteries
+tooltip.libvulpes.battery.0=§5Satellite Component§7
+tooltip.libvulpes.battery.0.shift.1=Increases Powerstorage
+tooltip.libvulpes.battery.0.shift.2=§fCapacity: §c10.000 §fRF§7
+
+tooltip.libvulpes.battery.1=§5Satellite Component
+tooltip.libvulpes.battery.1.shift.1=Increases Powerstorage
+tooltip.libvulpes.battery.1.shift.2=§fCapacity: §c40.000 §fRF§7
+
+# Data Unit
+tooltip.stellurgy.itemdata.header=§5Satellite Component
+tooltip.stellurgy.itemdata.type=§fType: 
+tooltip.stellurgy.itemdata.data=§fData stored: 
+tooltip.stellurgy.itemdataunit.shift.1=§fIncrease Satellite Data Storage by 1000
+tooltip.stellurgy.itemdataunit.alt.1=§fWorks as Datastorage in inventory aswell
+
+## Chips / remotes
+# Asteroid Chip
+tooltip.stellurgy.asteroidchip.shift.1=§bUsed for Mining Missions§7
+tooltip.stellurgy.asteroidchip.shift.2=§fProgram in §cObservatory
+tooltip.stellurgy.asteroidchip.alt.1=§4Insert programmed Chip in Guidance Computer§7
+tooltip.stellurgy.asteroidchip.alt.2=§fYou get the chip back after Mission
+
+# Station Chip
+tooltip.stellurgy.stationchip=§bMake Backups!
+tooltip.stellurgy.stationchip.shift.1=§fProgram in Space Station Assembler
+tooltip.stellurgy.stationchip.shift.2=§cCopied in Satellite Builder
+tooltip.stellurgy.stationchip.alt.1=§4Insert programmed Chip in Guidance Computer§7
+tooltip.stellurgy.stationchip.namelabel=Name: 
+
+# Planet Chip
+tooltip.stellurgy.planetidchip=§bReprogrammable!
+tooltip.stellurgy.planetidchip.shift.1=§fInsert Chip in §4Guidance Computer§7
+tooltip.stellurgy.planetidchip.shift.2=§fSet destination in Rocket GUI to program it.
+tooltip.stellurgy.planetidchip.alt.1=§4Doublecheck that this is programmed before Launch!
+
+# Satellite Chip
+tooltip.stellurgy.satidchip=§bMake Backups!
+tooltip.stellurgy.satidchip.shift.1=§fStores a satellite’s ID.
+tooltip.stellurgy.satidchip.shift.2=§cCopied in Satellite Builder
+tooltip.stellurgy.satidchip.alt.1=§4Use in Satellite Terminal to link or in the Microwave Receiver Multiblock (Input hatch). 
+tooltip.stellurgy.satidchip.alt.2=§8 (Planet: resolves if put in Terminal)
+
+# Elevator Chip
+tooltip.stellurgy.elevatorchip=Space Elevator Chip
+tooltip.stellurgy.elevatorchip.shift.1=§fLinks an elevator pad/destination.
+
+## Multiblocks
+# Black Hole Generator
+tooltip.stellurgy.blackholegen=Generates Power from compressed mass
+tooltip.stellurgy.blackholegen.shift.1=§bUse Holo-Projector!
+
+# Microwave Receiver
+tooltip.stellurgy.microwavereceiver=Receives Power from Solar Satellites
+tooltip.stellurgy.microwavereceiver.shift.1=5x5 Multiblock
+tooltip.stellurgy.microwavereceiver.shift.2=§bUse Holo-Projector!
+tooltip.stellurgy.microwavereceiver.alt.1=§fSolar Satellites are built with §bMicrowave Transmitter§f and §bSatellite Chip
+tooltip.stellurgy.microwavereceiver.alt.2=§8RF/t = (sum Satellites RF/t) * (2 * AtmospheredensityFactor)
+
+# Solar Panel (part of Microwave Receiver)
+tooltip.stellurgy.solarpanel=§cPart of Multiblock
+tooltip.stellurgy.solarpanel.shift.1=5x5 Multiblock
+tooltip.stellurgy.solarpanel.shift.2=§o§f(Microwave Receiver)
+tooltip.stellurgy.solarpanel.shift.3=§bUse Holo-Projector!
+
+# Solar Array Controller
+tooltip.stellurgy.solararray=Generates Power from sunlight
+tooltip.stellurgy.solararray.shift.1=Requires 63x Solar Array Panels
+tooltip.stellurgy.solararray.shift.2=§bUse Holo-Projector!
+
+# Solar Array Panel
+tooltip.stellurgy.solararraypanel=§cPart of Multiblock
+tooltip.stellurgy.solararraypanel.shift.1=Requires 63x Solar Array Panels and Controller
+tooltip.stellurgy.solararraypanel.shift.2=§bUse Holo-Projector!
+
+# Solar Generator
+tooltip.stellurgy.solargenerator=Basic Solar Panel
+tooltip.stellurgy.solargenerator.shift.1=§fGenerates §c2 §fRF/t§7
+
+# Arc Furnace
+tooltip.stellurgy.arcfurnace=Smelts at extreme temperatures
+tooltip.stellurgy.arcfurnace.shift.1=§bUse Holo-Projector!
+
+# Rolling Machine
+tooltip.stellurgy.rollingmachine=Rolls plates and foils
+tooltip.stellurgy.rollingmachine.shift.1=§bUse Holo-Projector!
+
+# Lathe
+tooltip.stellurgy.lathe=Turns rods and shafts
+tooltip.stellurgy.lathe.shift.1=§bUse Holo-Projector!
+
+# Crystallizer
+tooltip.stellurgy.crystallizer=Grows high-purity crystals
+tooltip.stellurgy.crystallizer.shift.1=§bUse Holo-Projector!
+
+# Cutting Machine
+tooltip.stellurgy.cuttingmachine=Precision cutting of materials
+tooltip.stellurgy.cuttingmachine.shift.1=§bUse Holo-Projector!
+
+# Precision Assembler
+tooltip.stellurgy.precisionassembler=Automates complex assembly
+tooltip.stellurgy.precisionassembler.shift.1=§bUse Holo-Projector!
+
+# Electrolyser
+tooltip.stellurgy.electrolyser=Splits compounds via electrolysis
+tooltip.stellurgy.electrolyser.shift.1=§bUse Holo-Projector!
+
+# Chemical Reactor
+tooltip.stellurgy.chemreactor=Processes chemical reactions
+tooltip.stellurgy.chemreactor.shift.1=§bUse Holo-Projector!
+
+# Precision Laser Etcher
+tooltip.stellurgy.precisionlaseretcher=Laser-etches fine circuits
+tooltip.stellurgy.precisionlaseretcher.shift.1=§bUse Holo-Projector!
+
+# Observatory
+tooltip.stellurgy.observatory=Analyzes celestial bodies
+tooltip.stellurgy.observatory.shift.1=§fUsed for §6Mining Missions
+tooltip.stellurgy.observatory.shift.2=§bUse Holo-Projector!
+tooltip.stellurgy.observatory.alt.1=§fInsert §cAsteroid Chip
+tooltip.stellurgy.observatory.alt.2=§fNeeds §6Distance Data§f to operate (operates only at night)
+
+# LibVulpes Hatches and Coal Generator
+tooltip.stellurgy.libvulpes.hatch=§cPart of Multiblock
+tooltip.stellurgy.libvulpes.hatch.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.libvulpes.forgepoweroutput=§cPart of Multiblock
+tooltip.stellurgy.libvulpes.forgepoweroutput.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.libvulpes.forgepowerinput=§cPart of Multiblock
+tooltip.stellurgy.libvulpes.forgepowerinput.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.libvulpes.creativepowerbattery=§dInfinite Power
+tooltip.stellurgy.libvulpes.creativepowerbattery.shift.1=§cPart of Multiblock
+tooltip.stellurgy.libvulpes.creativepowerbattery.shift.2=§bUse Holo-Projector!
+tooltip.stellurgy.libvulpes.coalgenerator=§cBurns solid fuels
+tooltip.stellurgy.libvulpes.linker.shift.1=§fSneak+Right-click to link, (Use in air to reset.)
+tooltip.stellurgy.libvulpes.linker.alt.1=§fLinks §cinfrastructure§f to rockets.
+tooltip.stellurgy.libvulpes.linker.alt.2=§fTo use as Guidance Chip, link to §eDocking Pad§f, then place in §eGuidance Computer§f
+
+
+# Planet Analyser
+tooltip.stellurgy.planetanalyser=Processes data and writes it to Asteroid Chip
+tooltip.stellurgy.planetanalyser.shift.1=§bUse Holo-Projector!
+
+# Centrifuge
+tooltip.stellurgy.centrifuge=Separates by density
+tooltip.stellurgy.centrifuge.shift.1=§bUse Holo-Projector!
+
+# Warp Core
+
+# Beacon
+tooltip.stellurgy.beacon=Long-range signal beacon
+tooltip.stellurgy.beacon.shift.1=§bUse Holo-Projector!
+
+# Biome Scanner
+tooltip.stellurgy.biomescan=Scans planetary biomes below
+tooltip.stellurgy.biomescan.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.biomescan.alt.1=§cNeeds air below!
+# Railgun
+tooltip.stellurgy.railgun=Shoots Items into space
+tooltip.stellurgy.railgun.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.railgun.alt.1="The railgun is not powerful enough to transport item stacks between planets and its range is limited to bodies within the same system"
+
+# Space Elevator Controller
+tooltip.stellurgy.spaceelevatorctrl=Controls the Space Elevator
+tooltip.stellurgy.spaceelevatorctrl.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.spaceelevatorctrl.shift.2=§fAnchors station
+tooltip.stellurgy.spaceelevatorctrl.alt.1=§fNeeds air above (Planetside), air below (Stationside)
+tooltip.stellurgy.spaceelevatorctrl.alt.2=§cUse Linker
+# Atmosphere Terraformer
+tooltip.stellurgy.atmosterraformer=Changes Atmospheric pressure on an entire planet
+tooltip.stellurgy.atmosterraformer.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.atmosterraformer.alt.1=§fIncrease and decrease the Atmospheric pressure by using connected §cBiome Changer Remote.
+
+# Area Gravity Controller
+tooltip.stellurgy.gravitymachine=Manipulates Gravity
+tooltip.stellurgy.gravitymachine.shift.1=§fCan also affect the direction of Gravity
+tooltip.stellurgy.gravitymachine.shift.2=§bUse Holo-Projector!
+
+# Orbital Last Drill
+tooltip.stellurgy.spacelaser=§cSpace Station Multiblock
+tooltip.stellurgy.spacelaser.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.spacelaser.alt.1=§fRequires Redstone to run
+
+# Force Field Projector
+
+# Vacuum Laser
+tooltip.stellurgy.vacuumlaser=§cPart of Multiblock
+tooltip.stellurgy.vacuumlaser.shift.1=§bUse Holo-Projector!
+
+
+# Pump
+tooltip.stellurgy.pump=Searches for fluid directly below
+tooltip.stellurgy.pump.shift.1=§cPulls from the connected pool within 64 blocks.
+tooltip.stellurgy.pump.alt.1=§fAuto-ejects to nearby tank
+tooltip.stellurgy.pump.alt.2=Redstone turns it off
+
+# Parts for Multiblock
+tooltip.stellurgy.concrete=§cPart of Multiblock
+tooltip.stellurgy.concrete.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.blastbrick=§cPart of Multiblock
+tooltip.stellurgy.blastbrick.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.qcrucible=§cPart of Multiblock
+tooltip.stellurgy.qcrucible.shift.1=§bUse Holo-Projector!
+tooltip.stellurgy.sawblade=§cPart of Multiblock
+tooltip.stellurgy.sawblade.shift.1=§bUse Holo-Projector!
+tooltip.libvulpes.structuremachine=§cPart of Multiblock
+tooltip.libvulpes.structuremachine.shift.1=§bUse Holo-Projector!
+tooltip.libvulpes.advstructuremachine=§cPart of Multiblock
+tooltip.libvulpes.advstructuremachine.shift.1=§bUse Holo-Projector!
+
+
+## Assemblers
+# Rocket Assembler
+tooltip.stellurgy.rocketassembler=§cBuilds Rockets
+tooltip.stellurgy.rocketassembler.shift.1=§bRequires Launch Pad + Structure Tower Structure
+tooltip.stellurgy.rocketassembler.shift.2=§fConnecting infrastructure here lets it auto-connect to Rockets on the Pad
+tooltip.stellurgy.rocketassembler.alt.1=§fPlace this 1 block higher than Launch Pad, connecting lower corners and facing opposite of the Launch Pad square
+
+# Station Assembler
+tooltip.stellurgy.stationassembler=§cPacks Space Stations down for Launch!
+tooltip.stellurgy.stationassembler.shift.1=§bRequires Launch Pad + Structure Tower Structure
+tooltip.stellurgy.stationassembler.alt.1=§fPlace this 1 block higher than Launch Pad, connecting lower corners and facing opposite of the Launch Pad square
+
+# Packet Station
+tooltip.stellurgy.packedstructure=Insert in §cSatellite Bay§7 to put in Orbit!
+tooltip.stellurgy.packedstructure.shift.1=§eRemember to set the rocket's target planet before launch!
+
+# Deployable Rocket Assembler
+tooltip.stellurgy.deployablerocketassembler=§cBuilds Rockets on Space Stations
+tooltip.stellurgy.deployablerocketassembler.shift.1=§bRequires Structure Tower blocks
+tooltip.stellurgy.deployablerocketassembler.shift.2=§fUsed for §6Gas Missions§7
+tooltip.stellurgy.deployablerocketassembler.alt.1=§fPlace this in the middle of an upside-down T facing outward in space, then add horizontal support from the tower top.
+tooltip.stellurgy.deployablerocketassembler.alt.2=Check wiki if unsure!
+
+# Hovercraft
+tooltip.stellurgy.hovercraft=Long-lasting dilithium power source. It'll probably outlive you.
+tooltip.stellurgy.hovercraft.alt.1=§fCheck steering in controls
+
+# Thermite
+tooltip.stellurgy.thermite=Known for generating intense heat!
+
+# Thermite Torch
+tooltip.stellurgy.thermitetorch=Burns without oxygen
+tooltip.stellurgy.thermitetorch.shift.1=§fUsed in low or no Atmosphere
+
+# Jackhammer
+tooltip.stellurgy.jackhammer=§cVery Fast Mining Tool
+tooltip.stellurgy.jackhammer.1=It'll probably outlive you, (if you change bolts)
+tooltip.stellurgy.jackhammer.shift.1=§fRepair with §6Titanium Rod
+tooltip.stellurgy.jackhammer.alt.1=§fHarvest level: §bDiamond
+
+# Basic basicLaserGun
+tooltip.stellurgy.lasergun=§cRanged Mining Tool
+tooltip.stellurgy.lasergun.shift.1=§dInfinite uses
+tooltip.stellurgy.lasergun.alt.1=§fHarvest level: §bDiamond
+tooltip.stellurgy.lasergun.alt.2=§fRange: §b50 blocks
+
+tooltip.stellurgy.platepress=§cManual grinding and pressing
+tooltip.stellurgy.platepress.shift.1=§fRequires obsidian two blocks below to function
+tooltip.stellurgy.platepress.alt.1=§fActivate with redstone
+
+## Crafting items
+tooltip.stellurgy.sawbladeiron=§3Crafting Item
+tooltip.stellurgy.wafer=§3Crafting Item
+tooltip.stellurgy.circuitplate=§3Crafting Item
+tooltip.stellurgy.circuitic=§3Crafting Item
+tooltip.stellurgy.miscpart=§3Crafting Item
+tooltip.stellurgy.itemlens=§3Crafting Item
+tooltip.stellurgy.misc=§3Crafting Item
+
+item.stellurgy:memoryCrystal.name=Memory Crystal
+msg.memorycrystal.addresses=Recorded addresses:
+msg.navcomputer.copy=Copy
+msg.navcomputer.erase=Erase
+msg.navcomputer.cleartarget=Clear target
+msg.navcomputer.aimtyped=Aim at typed coordinate
+msg.navcomputer.sync=Sync channel
+msg.navcomputer.target=Target:
+msg.navcomputer.notarget=none set
+msg.navcomputer.addresses=Addresses on the ship's crystal:
+msg.navcomputer.noshipcrystal=No ship crystal - put one in the LOWER slot
+msg.jumpgate.nonavcomputer=No navigation computer aboard
+msg.jumpgate.positionunknown=Position unknown - the ship must re-localize before it can jump
+msg.jumpgate.notarget=No jump target set
+msg.jumpgate.alreadythere=The ship is already in that cell - there is nothing to fly
+msg.jumpgate.targetlost=The target body cannot be located - re-aim before jumping
+
+# --- Hyperdrive family -------------------------------------------------------
+tile.hyperdriveGenerator.name=Hyperspace Field Generator
+tile.hyperdriveCoil.name=Hyperdrive Coil
+tile.jumpFieldEmitter.name=Jump Field Emitter
+tile.jumpCapacitor.name=Jump Capacitor
+tile.jumpCapacitorCell.name=Capacitor Cell
+tile.jumpHeatSink.name=Capacitor Heat Sink
+tile.gravityDampener.name=Gravity Dampener
+key.jumpTrigger=Commit jump (tier-2 ship)
+msg.jumpgate.nodrive=No hyperspace field generator aboard
+msg.jumpgate.windowundersized=Warning: the jump window does not enclose the whole hull
+msg.jumpgate.nocapacitor=No jump capacitor aboard - the drive has nothing to fire from
+msg.jumpgate.capacitortoosmall=The capacitor cannot hold this drive's burst - add capacity, waiting will not help
+msg.jumpgate.capacitorlow=Capacitor still charging - not enough for the burst yet
+msg.jumpgate.energyshortfall=Warning: not enough energy aboard for the whole flight
+msg.jump.armed=Jump armed
+msg.jump.disarmed=Jump disarmed
+msg.jump.notarmed=No jump armed - arm one at the navigation computer
+msg.jump.spooling=Drive spooling up
+msg.jump.aborted=Jump aborted
+msg.jump.committed=Jump window open
+msg.jump.burstfailed=The capacitor failed to open the window
+msg.jump.nopositionrecord=The ship's position is not on record
+msg.jump.departfailed=The drive fired but the ship did not leave - check the hull is one assembled craft, then try again
+msg.jump.cellnotlive=The ship's position has not settled yet - wait a moment and try again
+msg.jump.notonship=Not aboard an assembled ship
+msg.jump.confirm=Press again to confirm
+msg.navcomputer.arm=Arm jump
+msg.navcomputer.disarm=Disarm
+msg.navcomputer.labelson=Show sky labels
+msg.navcomputer.labelsoff=Hide sky labels
+msg.navcomputer.noforecast=No forecast
+msg.navcomputer.notonship=Not installed on an assembled ship
+msg.navcomputer.drivepower=Drive power:
+msg.navcomputer.burst=Capacitor:
+msg.navcomputer.capacitors=Capacitors (capacity):
+msg.navcomputer.cooldown=Ready in:
+msg.navcomputer.eta=Flight time:
+msg.navcomputer.flightcost=Energy for the flight:
+msg.navcomputer.hullexposed=Hull outside the window (blocks):
+msg.navcomputer.ready=Ready to jump
+commands.stellurgy.planet.generate.usage=planet generate <starId|planetId> [moon] <name>
+commands.stellurgy.planet.generate.invalid=Dimension: %s failed to generate!
+commands.stellurgy.planet.generate.success=Dimension: %s generated!

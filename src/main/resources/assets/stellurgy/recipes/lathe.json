@@ -1,0 +1,51 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"rsr",
+	"abc",
+	"pgp"
+    ],
+    "key":
+    {
+        "r":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "stickIron"
+        },
+        "s":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"a":
+        {
+            "item": "stellurgy:ic",
+            "data": 4
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"c":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+	"g":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gearSteel"
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateSteel"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:lathe",
+        "count": 1
+    }
+}

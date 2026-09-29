@@ -1,0 +1,41 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"pip",
+	"obo",
+	"pcp"
+    ],
+    "key":
+    {
+	"c":
+        {
+            "item": "stellurgy:ic",
+            "data": 2
+        },
+	"i":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"b":
+        {
+	    "item": "libvulpes:structuremachine"
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateSteel"
+        },
+	"o":
+        {
+	    "item": "stellurgy:ic",
+	    "data": 3
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:warpmonitor",
+        "count": 1
+    }
+}

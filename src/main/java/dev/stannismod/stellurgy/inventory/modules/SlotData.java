@@ -1,0 +1,32 @@
+package dev.stannismod.stellurgy.inventory.modules;
+
+import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.Slot;
+import net.minecraft.item.ItemStack;
+import dev.stannismod.stellurgy.item.IDataItem;
+
+import javax.annotation.Nonnull;
+
+public class SlotData extends Slot {
+
+    public SlotData(IInventory p_i1824_1_, int p_i1824_2_, int p_i1824_3_,
+                    int p_i1824_4_) {
+        super(p_i1824_1_, p_i1824_2_, p_i1824_3_, p_i1824_4_);
+
+    }
+
+    @Override
+    public boolean isItemValid(@Nonnull ItemStack stack) {
+        return !stack.isEmpty() && stack.getItem() instanceof IDataItem;
+    }
+
+    @Override
+    public int getSlotStackLimit() {
+        return 1;
+    }
+
+    @Override
+    public int getItemStackLimit(@Nonnull ItemStack stack) {
+        return 1;
+    }
+}

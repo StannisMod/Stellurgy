@@ -1,0 +1,19 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "textures": {
+            "#None": "stellurgy:/models/advcombustion"
+        },
+        "model": "stellurgy:models/advrocket.obj",
+        "transform": "forge:default-block"
+    },
+    "variants": {
+        "facing=north": { "model": "stellurgy:models/advrocket.obj", "texture": "stellurgy:textures/models/advcombustion", "x": 90 },
+        "facing=south": {  "model": "stellurgy:models/advrocket.obj", "texture": "stellurgy:textures/models/advcombustion", "x": 90, "y": 180 },
+        "facing=west":  { "model": "stellurgy:models/advrocket.obj", "texture": "stellurgy:textures/models/advcombustion", "x": 90, "y": 270 },
+        "facing=east":  { "model": "stellurgy:models/advrocket.obj", "texture": "stellurgy:textures/models/advcombustion", "x": 90, "y": 90 },
+        "facing=up":  { "model": "stellurgy:models/advrocket.obj", "texture": "stellurgy:textures/models/advcombustion", "x": 180 },
+        "facing=down":  { "model": "stellurgy:models/advrocket.obj", "texture": "stellurgy:textures/models/advcombustion" },
+        "inventory": { "model": "stellurgy:models/advrocket.obj", "texture": "stellurgy:textures/models/advcombustion"}
+    }
+}

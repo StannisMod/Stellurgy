@@ -1,0 +1,19 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:hyperdriveGenerator"
+        },
+        "title": {
+            "translate": "advancement.givingItAllShesGot"
+        },
+        "description": {
+            "translate": "advancement.givingItAllShesGot.desc"
+        }
+    },
+    "parent": "stellurgy:normal/warp",
+    "criteria": {
+        "givingitallshesgot": {
+            "trigger": "givingitallshesgot"
+        }
+    }
+}

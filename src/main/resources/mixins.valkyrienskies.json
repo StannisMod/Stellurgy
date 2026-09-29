@@ -2,7 +2,7 @@
   "required": true,
   "compatibilityLevel": "JAVA_8",
   "package": "org.valkyrienskies.mixin",
-  "refmap": "mixins.advancedrocketry.refmap.json",
+  "refmap": "mixins.stellurgy.refmap.json",
   "minVersion": "0.6",
   "mixins": [
     "entity.MixinEntity",

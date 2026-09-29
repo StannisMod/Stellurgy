@@ -28,7 +28,7 @@ import org.valkyrienskies.mod.common.ships.physics_data.IPhysicsObjectCenterOfMa
 import org.valkyrienskies.mod.common.util.multithreaded.CalledFromWrongThreadException;
 import org.valkyrienskies.mod.common.util.multithreaded.VSWorldPhysicsLoop;
 import net.minecraftforge.common.MinecraftForge;
-import zmaster587.advancedRocketry.api.event.ShipLifecycleEvent;
+import dev.stannismod.stellurgy.api.event.ShipLifecycleEvent;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.*;
@@ -460,7 +460,7 @@ public class WorldServerShipManager implements IPhysObjectWorld {
             return;
         }
         UUID shipUuid = ship.getUuid();
-        UUID durableId = ship.getArDurableId();
+        UUID durableId = ship.getStellurgyDurableId();
         pendingLifecycle.add(cause == ShipLifecycleEvent.Cause.UNLOADED
                 || cause == ShipLifecycleEvent.Cause.DESTROYED
                 ? new ShipLifecycleEvent.ShipUnnamed(world, shipUuid, durableId, cause)

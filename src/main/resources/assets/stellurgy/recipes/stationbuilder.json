@@ -1,0 +1,41 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"udg",
+	"dsd",
+	"ada"
+    ],
+    "key":
+    {
+        "a":
+        {
+            "item": "stellurgy:ic",
+            "data": 2
+        },
+        "u":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+        "s":
+        {
+            "item": "stellurgy:rocketbuilder"
+        },
+        "d":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "dustDilithium"
+        },
+        "g":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gearTitanium"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:stationbuilder",
+        "count": 1
+    }
+}

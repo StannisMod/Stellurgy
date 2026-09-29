@@ -1,0 +1,25 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+            "type": "forge:ore_dict",
+            "ore": "ingotSteel"
+        },
+        {
+            "type": "forge:ore_dict",
+            "ore": "plateTitanium"
+        },
+	    {
+            "item": "stellurgy:rocketmotor",
+            "data": 6
+        }
+    ],
+    "time": 1800,
+    "energy": 600,
+    "itemresults":
+    {
+        "item": "stellurgy:rocketmotor",
+        "count": 1
+    }
+}

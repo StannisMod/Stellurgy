@@ -1,0 +1,25 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "type": "forge:ore_dict",
+            "ore": "blockMotor"
+        },
+        {
+	    "item": "stellurgy:ic",
+	    "data": 2
+        },
+	{
+	    "item": "stellurgy:ic",
+	    "data": 3
+        }
+    ],
+    "time": 200,
+    "energy": 1,
+    "itemresults":
+    {
+	"item": "stellurgy:itemupgrade",
+	"data": 2
+    }
+}

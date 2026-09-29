@@ -1,0 +1,46 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"psp",
+	"abc",
+	"rrr"
+    ],
+    "key":
+    {
+        "r":
+        {
+            "item": "stellurgy:ic",
+            "data": 2
+        },
+        "s":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+	"a":
+        {
+            "item": "stellurgy:ic",
+            "data": 4
+        },
+	"b":
+        {
+            "item": "libvulpes:structuremachine"
+        },
+	"c":
+        {
+            "item": "stellurgy:ic",
+            "data": 3
+        },
+	"p":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "plateGold"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:precisionlaseretcher",
+        "count": 1
+    }
+}

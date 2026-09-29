@@ -1,6 +1,6 @@
 # `planetDefs.xml` — the universe catalogue
 
-Everything Advanced Rocketry lets a pack author say about stars, planets and the procedural galaxy.
+Everything Stellurgy lets a pack author say about stars, planets and the procedural galaxy.
 This file documents the format exhaustively: every element, every attribute, its unit, its default,
 what happens when it is missing or malformed, and — the part that costs people days — what happens
 when two of them are stated together.
@@ -11,12 +11,12 @@ when two of them are stated together.
 
 | | path |
 |---|---|
-| **template** (what a pack ships) | `config/advancedRocketry/planetDefs.xml` |
+| **template** (what a pack ships) | `config/stellurgy/planetDefs.xml` |
 | **live copy** (what the game reads) | `<save>/advRocketry/planetDefs.xml` |
 
 1. On world load the game looks for the **live copy**. If it is absent, the **template** is copied
    there and that copy is loaded.
-2. The config option `resetPlanetsFromXML` (section `Planet` of `advancedRocketry.cfg`) forces the
+2. The config option `resetPlanetsFromXML` (section `Planet` of `stellurgy.cfg`) forces the
    copy to happen again, overwriting the live copy from the template. That is the only supported way
    to push a template edit into an existing world. It **resets itself to `false` after one load**
    unless `ResetOnlyOnce` is set to `false`, which is what a pack developer wants while iterating.
@@ -270,7 +270,7 @@ never applied to an authored `<planet>`.
     <gen source="NATIVE"        genType="0"                      weight="2"/>
     <gen source="TEMPLATE"      path="frozen_ruins"              weight="1"/>
   </terrain>
-  <biomeIds>advancedrocketry:moondark;10,minecraft:ice_flats;30</biomeIds>
+  <biomeIds>stellurgy:moondark;10,minecraft:ice_flats;30</biomeIds>
   <seaLevel>0</seaLevel>
   <oceanBlock>minecraft:water</oceanBlock>
   <oreGen>…</oreGen>
@@ -367,75 +367,75 @@ that are easy to miss:
 |---|---|
 | `name` | Display name. |
 | `DIMID` | Explicit dimension id. Absent → the next free id is assigned. Malformed → **the whole planet is skipped**. |
-| `dimMapping` | Presence alone (any value, including empty) marks this as a dimension another mod owns; Advanced Rocketry decorates it instead of creating it. |
+| `dimMapping` | Presence alone (any value, including empty) marks this as a dimension another mod owns; Stellurgy decorates it instead of creating it. |
 | `customIcon` | Basename of the planet-selector texture. See the catalogue below. |
 
 ### Built-in `customIcon` values
 
 Built-in planet icon basenames:
 
-`src/main/resources/assets/advancedrocketry/textures/planets/`
+`src/main/resources/assets/stellurgy/textures/planets/`
 
 #### Standard icons
 
 <table>
   <tr>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/asteroid.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/asteroid.png" width="96"><br>
       <code>asteroid</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/carbonworld.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/carbonworld.png" width="96"><br>
       <code>carbonworld</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/desertworld.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/desertworld.png" width="96"><br>
       <code>desertworld</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/earthlike.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/earthlike.png" width="96"><br>
       <code>earthlike</code>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/gasgiantblue.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/gasgiantblue.png" width="96"><br>
       <code>gasgiantblue</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/gasgiantbrown.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/gasgiantbrown.png" width="96"><br>
       <code>gasgiantbrown</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/gasgiantred.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/gasgiantred.png" width="96"><br>
       <code>gasgiantred</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/iceworld.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/iceworld.png" width="96"><br>
       <code>iceworld</code>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/lava.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/lava.png" width="96"><br>
       <code>lava</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/marslike.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/marslike.png" width="96"><br>
       <code>marslike</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/moon.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/moon.png" width="96"><br>
       <code>moon</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/venusian.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/venusian.png" width="96"><br>
       <code>venusian</code>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/waterworld.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/waterworld.png" width="96"><br>
       <code>waterworld</code>
     </td>
     <td></td>
@@ -448,19 +448,19 @@ Built-in planet icon basenames:
 <table>
   <tr>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/asteroid_a.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/asteroid_a.png" width="96"><br>
       <code>asteroid_a</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/asteroid_b.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/asteroid_b.png" width="96"><br>
       <code>asteroid_b</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/asteroid_c.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/asteroid_c.png" width="96"><br>
       <code>asteroid_c</code>
     </td>
     <td align="center">
-      <img src="../src/main/resources/assets/advancedrocketry/textures/planets/spoopy.png" width="96"><br>
+      <img src="../src/main/resources/assets/stellurgy/textures/planets/spoopy.png" width="96"><br>
       <code>spoopy</code>
     </td>
   </tr>
@@ -475,8 +475,8 @@ Built-in planet icon basenames:
 Resource pack should provide:
 
 ```text
-assets/advancedrocketry/textures/planets/myplanet.jpg
-assets/advancedrocketry/textures/planets/myplanetleo.jpg
+assets/stellurgy/textures/planets/myplanet.jpg
+assets/stellurgy/textures/planets/myplanetleo.jpg
 ```
 
 Then reference the basename in `planetDefs.xml`:
@@ -490,7 +490,7 @@ Notes:
 - Custom icons are loaded as `<name>.png` for the normal planet texture and `<name>leo.jpg` for the LEO/orbit texture.
 - The LEO texture is used for orbit views
 - Every built-in texture lives in this repository under
-  [`src/main/resources/assets/advancedrocketry/textures/planets/`](../src/main/resources/assets/advancedrocketry/textures/planets/).
+  [`src/main/resources/assets/stellurgy/textures/planets/`](../src/main/resources/assets/stellurgy/textures/planets/).
 
 A `<planet>` nested inside a `<planet>` is a **moon** of it. Moons nest arbitrarily deep. A moon's
 `orbitalDistance` is measured from its PARENT, not from the star.
@@ -589,7 +589,7 @@ class name. Neither resolving → a warning, and the entry is skipped.
 `biomeIds` — comma-separated `biome` or `biome;weight`:
 
 ```xml
-<biomeIds>minecraft:desert;40,advancedrocketry:moondark;10</biomeIds>
+<biomeIds>minecraft:desert;40,stellurgy:moondark;10</biomeIds>
 ```
 
 - `biome` is a registry name (preferred) or a raw numeric id (legacy, and dependent on the installed

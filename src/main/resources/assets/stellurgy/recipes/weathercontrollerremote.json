@@ -1,0 +1,35 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "item": "libvulpes:battery",
+	    "data": 0
+        },
+        {
+	    "item": "stellurgy:ic",
+	    "data": 2
+        },
+	{
+	    "item": "stellurgy:misc",
+	    "data": 0
+        },
+	{
+	    "item": "stellurgy:ic",
+	    "data": 1
+        },
+	{
+            "type": "forge:ore_dict",
+            "ore": "plateTin"
+        },
+	{
+            "item": "minecraft:stone_button"
+        }
+    ],
+    "time": 1000,
+    "energy": 1,
+    "itemresults":
+    {
+	"item": "stellurgy:weathercontroller"
+    }
+}

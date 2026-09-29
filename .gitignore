@@ -23,7 +23,7 @@ eclipse
 run
 run-server
 refresh.bat
-AdvancedRocketry.txt
+Stellurgy.txt
 changelog.html
 lasthash.txt
 *.bak
@@ -39,7 +39,6 @@ logs/
 .agent/
 /CLAUDE.md
 /AGENTS.md
-/SETUP-AR.md
 .claude/
 .codex/
 .Stellurgy-navigator.git/

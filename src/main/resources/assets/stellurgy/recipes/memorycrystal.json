@@ -1,0 +1,24 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+            "type": "forge:ore_dict",
+            "ore": "gemDiamond"
+        },
+        {
+            "type": "forge:ore_dict",
+            "ore": "dustRedstone"
+        },
+        {
+            "item": "stellurgy:ic",
+            "data": 1
+        }
+    ],
+    "time": 800,
+    "energy": 120,
+    "itemresults":
+    {
+        "item": "stellurgy:memorycrystal"
+    }
+}

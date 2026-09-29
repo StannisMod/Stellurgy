@@ -1,0 +1,29 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "item": "libvulpes:battery",
+	    "data": 0
+        },
+        {
+	    "item": "stellurgy:ic",
+	    "data": 2
+        },
+	{
+	    "item": "stellurgy:ic",
+	    "data": 3
+        },
+	{
+	    "item": "stellurgy:lens",
+	    "data": 0
+        }
+    ],
+    "time": 200,
+    "energy": 1,
+    "itemresults":
+    {
+	"item": "stellurgy:itemupgrade",
+	"data": 4
+    }
+}

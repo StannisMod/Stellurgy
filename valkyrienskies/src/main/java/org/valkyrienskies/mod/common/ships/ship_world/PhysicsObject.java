@@ -201,7 +201,7 @@ public class PhysicsObject implements IPhysicsEntity {
      * holds on every load, so the set grows by one per cycle and the physics thread invokes every
      * stale instance forever.</p>
      *
-     * <p>Measured on a ship settled in an AR space cell, which is the arrangement that makes a ship's
+     * <p>Measured on a ship settled in a Stellurgy space cell, which is the arrangement that makes a ship's
      * chunks actually cycle under it: 1 controller on the ground, 2 then 3 in the cell, on a craft
      * carrying ONE flight computer — and commands written to the live tile were not what the physics
      * thread was executing.</p>

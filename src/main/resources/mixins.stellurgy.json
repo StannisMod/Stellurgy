@@ -1,0 +1,33 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.stannismod.stellurgy.mixin",
+  "plugin": "dev.stannismod.stellurgy.mixin.StellurgyMixinPlugin",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "mixins.stellurgy.refmap.json",
+  "mixins": [
+    "MixinEntityCellVoid",
+    "MixinEntityGravity",
+    "MixinEntityLivingShipTravel",
+    "MixinEntityPlayerShipFlight",
+    "MixinEntityShipEyes",
+    "MixinEntityShipLocalMove",
+    "MixinEntityTrackerRiderSeesVehicle",
+    "MixinNetHandlerDeckMovementBound",
+    "MixinEntityPlayerInventoryAccess",
+    "MixinEntityPlayerMPInventoryAccess",
+    "MixinPlayerList",
+    "MixinWorldProvider",
+    "MixinWorldServer",
+    "MixinWorldServerMulti",
+    "MixinWorldSetBlockState"
+  ],
+  "client": [
+    "MixinNetHandlerFFCameraRepin",
+    "MixinAcidRainRender",
+    "MixinEntityRendererShipEye",
+    "MixinRenderLivingBaseShipRoll",
+    "MixinEntityDeckLookTurn"
+  ],
+  "server": []
+}

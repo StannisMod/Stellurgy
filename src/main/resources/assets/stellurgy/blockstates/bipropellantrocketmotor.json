@@ -1,0 +1,24 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "textures": {
+            "#None": "stellurgy:/models/bipropellantcombustion"
+        },
+        "model": "stellurgy:models/bipropellantrocket.obj",
+        "transform": "forge:default-block"
+    },
+    "variants": {
+        "facing=north": { "model": "stellurgy:models/bipropellantrocket.obj", "texture": "stellurgy:textures/models/bipropellantcombustion.png", "x": 90 },
+        "facing=south": {  "model": "stellurgy:models/bipropellantrocket.obj", "texture": "stellurgy:textures/models/bipropellantcombustion.png", "x": 90, "y": 180 },
+        "facing=west":  { "model": "stellurgy:models/bipropellantrocket.obj", "texture": "stellurgy:textures/models/bipropellantcombustion.png", "x": 90, "y": 270 },
+        "facing=east":  { "model": "stellurgy:models/bipropellantrocket.obj", "texture": "stellurgy:textures/models/bipropellantcombustion.png", "x": 90, "y": 90 },
+        "facing=up":  { "model": "stellurgy:models/bipropellantrocket.obj", "texture": "stellurgy:textures/models/bipropellantcombustion.png", "x": 180 },
+        "facing=down":  { "model": "stellurgy:models/bipropellantrocket.obj", "texture": "stellurgy:textures/models/bipropellantcombustion.png" },
+        "inventory": {
+            "model": "stellurgy:models/bipropellantrocket.obj",
+            "textures": {
+                "layer0": "stellurgy:textures/models/bipropellantcombustion.png"
+            }
+        }
+    }
+}

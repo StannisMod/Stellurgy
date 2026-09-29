@@ -1,0 +1,32 @@
+{
+    "type": "stellurgy:precisionassembler",
+    "itemingredients":
+    [
+        {
+	    "item": "libvulpes:battery",
+	    "data": 0
+        },
+        {
+	    "item": "stellurgy:ic",
+	    "data": 2
+        },
+	{
+	    "item": "stellurgy:misc",
+	    "data": 0
+        },
+	{
+	    "item": "stellurgy:lens",
+	    "data": 0
+        },
+	{
+            "type": "forge:ore_dict",
+            "ore": "plateTin"
+        }
+    ],
+    "time": 1000,
+    "energy": 1,
+    "itemresults":
+    {
+	"item": "stellurgy:atmanalyser"
+    }
+}

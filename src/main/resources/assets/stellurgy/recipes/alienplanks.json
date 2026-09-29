@@ -1,0 +1,18 @@
+{
+    "type": "stellurgy:cuttingmachine",
+    "itemingredients":
+    [
+        {
+            "item": "stellurgy:alienwood",
+            "data": 0
+        }
+    ],
+    "time": 80,
+    "energy": 10,
+    "itemresults":
+    {
+            "item": "stellurgy:planks",
+            "data": 0,
+            "count": 6
+    }
+}

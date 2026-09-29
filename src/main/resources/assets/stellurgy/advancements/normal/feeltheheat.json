@@ -1,0 +1,26 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:arcFurnace"
+        },
+        "title": {
+            "translate": "advancement.feelTheHeat"
+        },
+        "description": {
+            "translate": "advancement.feelTheHeat.desc"
+        }
+    },
+    "parent": "stellurgy:normal/holographic",
+    "criteria": {
+        "warp": {
+            "trigger": "minecraft:inventory_changed",
+            "conditions": {
+                "items": [
+                    {
+                        "item": "stellurgy:arcFurnace"
+                    }
+                ]
+            }
+        }
+    }
+} 

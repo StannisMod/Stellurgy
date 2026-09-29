@@ -1,0 +1,28 @@
+{
+    "type": "stellurgy:precisionlaseretcher",
+    "itemingredients": [
+        {
+            "type": "forge:ore_dict",
+            "ore": "lensPrecisionLaserEtcher"
+        },
+        {
+	        "type": "forge:ore_dict",
+            "ore": "plateGold"
+        },
+        {
+	        "item": "minecraft:redstone_block"
+        },
+    	{
+	        "item": "stellurgy:wafer",
+	        "data": 0,
+            "count": 4
+        }
+    ],
+    "time": 1200,
+    "energy": 600,
+    "itemresults": {
+	    "item": "stellurgy:itemcircuitplate",
+	    "data": 1,
+        "count": 2
+    }
+}

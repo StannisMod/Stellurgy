@@ -1,0 +1,19 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:moonTurf"
+        },
+        "title": {
+            "translate": "advancement.moonLanding"
+        },
+        "description": {
+            "translate": "advancement.moonLanding.desc"
+        }
+    },
+    "parent": "stellurgy:normal/root",
+    "criteria": {
+        "moonlanding": {
+            "trigger": "moonlanding"
+        }
+    }
+}

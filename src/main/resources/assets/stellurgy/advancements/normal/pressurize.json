@@ -1,0 +1,20 @@
+{
+    "display": {
+        "icon": {
+            "item": "stellurgy:lens"
+        },
+        "title": {
+            "translate": "Pressurized"
+        },
+        "description": {
+            "translate": "Construct a Atmosphere Terraformer"
+        },
+        "frame": "challenge"
+    },
+    "parent": "stellurgy:normal/deathstar",
+    "criteria": {
+        "deathstar": {
+            "trigger": "pressurize"
+        }
+    }
+} 

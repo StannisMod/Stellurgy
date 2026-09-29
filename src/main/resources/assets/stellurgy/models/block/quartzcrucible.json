@@ -1,0 +1,11 @@
+{
+    "parent": "block/cauldron_empty",
+    "ambientocclusion": false,
+    "textures": {
+        "particle": "stellurgy:blocks/qcrucible_side",
+        "top": "stellurgy:blocks/qcrucible_top",
+        "bottom": "stellurgy:blocks/qcrucible_bottom",
+        "side": "stellurgy:blocks/qcrucible_side",
+        "inside": "stellurgy:blocks/qcrucible_inner"
+    }
+}

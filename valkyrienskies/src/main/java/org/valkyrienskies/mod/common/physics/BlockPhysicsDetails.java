@@ -115,8 +115,8 @@ public class BlockPhysicsDetails {
      * Get block mass, in kg.
      */
     /**
-     * Mass of one block, kilograms. Answered from AR's own per-block table rather than this class's
-     * flat one: AR's is keyed by registry name with a material fallback, is denominated in kilograms,
+     * Mass of one block, kilograms. Answered from Stellurgy's own per-block table rather than this class's
+     * flat one: Stellurgy's is keyed by registry name with a material fallback, is denominated in kilograms,
      * and is the same table the rocket tier has always massed hulls with. Two tables would be two mass
      * models, and every craft is meant to have one.
      *
@@ -128,7 +128,7 @@ public class BlockPhysicsDetails {
      * from one lookup to a rewrite.</p>
      */
     public static double getMassFromState(IBlockState state) {
-        return zmaster587.advancedRocketry.integration.vs.ArBlockMass.of(state);
+        return dev.stannismod.stellurgy.integration.vs.StellurgyBlockMass.of(state);
     }
 
     private static double getMassOfMaterial(Material material) {

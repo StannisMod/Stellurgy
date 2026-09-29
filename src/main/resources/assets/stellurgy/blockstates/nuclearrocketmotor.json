@@ -1,0 +1,24 @@
+{
+    "forge_marker": 1,
+    "defaults": {
+        "textures": {
+            "#None": "stellurgy:/models/nuclearcombustion"
+        },
+        "model": "stellurgy:models/nuclearrocket.obj",
+        "transform": "forge:default-block"
+    },
+    "variants": {
+        "facing=north": { "model": "stellurgy:models/nuclearrocket.obj", "texture": "stellurgy:textures/models/nuclearcombustion.png", "x": 90 },
+        "facing=south": {  "model": "stellurgy:models/nuclearrocket.obj", "texture": "stellurgy:textures/models/nuclearcombustion.png", "x": 90, "y": 180 },
+        "facing=west":  { "model": "stellurgy:models/nuclearrocket.obj", "texture": "stellurgy:textures/models/nuclearcombustion.png", "x": 90, "y": 270 },
+        "facing=east":  { "model": "stellurgy:models/nuclearrocket.obj", "texture": "stellurgy:textures/models/nuclearcombustion.png", "x": 90, "y": 90 },
+        "facing=up":  { "model": "stellurgy:models/nuclearrocket.obj", "texture": "stellurgy:textures/models/nuclearcombustion.png", "x": 180 },
+        "facing=down":  { "model": "stellurgy:models/nuclearrocket.obj", "texture": "stellurgy:textures/models/nuclearcombustion.png" },
+        "inventory": {
+            "model": "stellurgy:models/nuclearrocket.obj",
+            "textures": {
+                "layer0": "stellurgy:textures/models/nuclearcombustion.png"
+            }
+        }
+    }
+}

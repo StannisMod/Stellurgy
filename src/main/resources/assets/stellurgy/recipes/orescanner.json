@@ -1,0 +1,41 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"ial",
+	"bgb",
+	"   "
+    ],
+    "key":
+    {
+        "i":
+        {
+            "item": "stellurgy:ic",
+            "data": 2
+        },
+        "g":
+        {
+            "item": "stellurgy:misc",
+            "data": 0
+        },
+        "b":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "itemBattery"
+        },
+        "l":
+        {
+            "item": "minecraft:lever"
+        },
+        "a":
+        {
+            "item": "stellurgy:ic",
+            "data": 2
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:orescanner",
+        "count": 1
+    }
+}

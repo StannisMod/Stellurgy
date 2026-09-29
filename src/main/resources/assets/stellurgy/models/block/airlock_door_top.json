@@ -1,0 +1,7 @@
+{
+    "parent": "block/door_top",
+    "textures": {
+        "bottom": "stellurgy:blocks/smallAirlockDoor_lower",
+        "top": "stellurgy:blocks/smallAirlockDoor_upper"
+    }
+}

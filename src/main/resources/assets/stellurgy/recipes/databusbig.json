@@ -1,0 +1,37 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	" a ",
+	"cmb",
+	" a "
+    ],
+    "key":
+    {
+        "c":
+        {
+            "item": "stellurgy:loader",
+            "data": 0
+        },
+	    "m":
+        {
+            "item": "libvulpes:advstructuremachine"
+        },
+        "a":
+        {
+            "item": "stellurgy:ic",
+            "data": 2
+        },
+        "b":
+        {
+            "item": "stellurgy:dataunit",
+            "data": 0
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:databusbig",
+        "data": 0,
+        "count": 1
+    }
+}

@@ -1,0 +1,40 @@
+{
+    "type": "minecraft:crafting_shaped",
+    "pattern":
+    [
+	"bib",
+	"csc",
+	"e e"
+    ],
+    "key":
+    {
+	"i":
+        {
+	    "item": "stellurgy:misc",
+	    "data": 0
+        },
+	"b":
+        {
+	    "item": "libvulpes:battery",
+	    "data": 1
+        },
+	"e":
+        {
+	    "item": "stellurgy:rocketmotor"
+        },
+	"c":
+        {
+	    "type": "forge:ore_dict",
+            "ore": "gemDilithium"
+        },
+	"s":
+        {
+	    "item": "stellurgy:structuretower"
+        }
+    },
+    "result":
+    {
+        "item": "stellurgy:hovercraft",
+        "count": 1
+    }
+}
