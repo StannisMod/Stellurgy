@@ -53,7 +53,10 @@ public final class ArrivalSpawn {
             return false;
         }
         body.setPosition(x, y, z);
-        world.getChunkProvider().provideChunk(((int) x) >> 4, ((int) z) >> 4);
+        // floor, as spawnEntity itself computes the chunk: an int cast truncates toward zero and
+        // names the neighbouring chunk for a negative fractional coordinate.
+        world.getChunkProvider().provideChunk(net.minecraft.util.math.MathHelper.floor(x) >> 4,
+                net.minecraft.util.math.MathHelper.floor(z) >> 4);
         boolean accepted = world.spawnEntity(body);
         if (!accepted) {
             // The one case this class cannot fix, said out loud: the chunk was asked for and the

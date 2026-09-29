@@ -29,6 +29,11 @@ package zmaster587.advancedRocketry.universe;
  *       by the minimum-orbit floor also stopped keeping the period of the orbit it was AUTHORED on
  *       rather than the one it is on. <b>Measured blast radius: 34 bodies in the golden corpus,
  *       every one of them a MOON</b>; no planet, star or belt moved.</li>
+ *   <li><b>2026-09-05 — a moon is named by its own cell.</b> A generated moon used to share its
+ *       parent's cell key; it is now named by a cell inside its parent's zone, {@code <parent>.<cell>}.
+ *       Only systems nobody has touched are re-derived: a PINNED system keeps the bodies it was saved
+ *       with, so its moons keep the shared name, and anything else that stored a moon's address
+ *       before this (a navigation crystal) still names the parent's cell.</li>
  * </ul>
  */
 public final class UniverseSchemaV0 implements UniverseSchema {

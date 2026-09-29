@@ -82,14 +82,12 @@ public final class HyperspaceVoid {
     /**
      * Consecutive ticks adrift, per player. An entry exists only while its player is adrift.
      *
-     * <p><b>NOT moved into the player's bindings capability, and this is a deferred question rather
-     * than an oversight.</b> The argument for moving it is that losing the count on a relog lets a
-     * crew member the void is counting down to killing reset it by disconnecting. The argument
-     * against is written at {@link #pruneDeparted} below and predates this: a returning player is
-     * placed by the login restore, which is *a fresh judgement, not a continuation*, so resuming his
-     * countdown where it stopped asserts something about a situation he may no longer be in. Both
-     * are real; the second is the one the code was built on, so it stands until it is overturned
-     * deliberately.</p>
+     * <p><b>NOT moved into the player's bindings capability, by a ruling of 2026-09-15.</b> The
+     * argument for moving it was that a relog resets the countdown; but the countdown is 200 ticks,
+     * so a relog buys ten seconds of falling in the same void - it postpones rather than saves. The
+     * argument against stands, written at {@link #pruneDeparted} below: a returning player is placed
+     * by the login restore, which is *a fresh judgement, not a continuation*, so resuming his
+     * countdown where it stopped asserts something about a situation he may no longer be in.</p>
      */
     private final Map<UUID, Integer> adriftTicks = new HashMap<>();
 

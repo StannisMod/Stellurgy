@@ -966,9 +966,9 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
 
     /**
      * The galactic coordinate of a planet/moon/star-proxy dimension. This is the planet&rarr;coord seam the
-     * tier-2 entry/descent handlers use. Per A#1a this is the body's OWN cell — a planet resolves to its
-     * zone cell (NOT the system anchor), a moon to its parent planet's cell (moons are local), a star-proxy
-     * dim to the system's anchor. Falls back to the anchor when the body is not derivable.
+     * tier-2 entry/descent handlers use. This is the body's OWN cell — a planet resolves to its cell
+     * (NOT the system anchor), a moon to its own cell inside its parent's zone, a star-proxy dim to the
+     * system's anchor. EMPTY when the body is not derivable from its system's content.
      */
     public Optional<GalacticCoord> coordForPlanet(DimensionProperties props) {
         if (props == null) {
@@ -989,7 +989,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         }
         for (SystemBody body : allSystemBodies(anchor.get())) {
             if (body.dimId() == props.getId()) {
-                return Optional.of(body.name()); // the body's OWN cell (moon: the parent's)
+                return Optional.of(body.name()); // the body's OWN cell (moon: its zone cell)
             }
         }
         // A body its own system cannot account for has NO address, and saying so is the only honest
@@ -1016,13 +1016,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * <p>This is what a jump AIMS at, and it is deliberately not {@link #coordForPlanet}. That answers
      * "which cell is this body in", snapped to the cell centre, which is the right answer for
      * attribution, for the home-cell skip and for anything that compares cell keys. It is the wrong
-     * answer for flying: a moon shares its parent's cell but sits tens of thousands of blocks off its
-     * centre, so a ship aimed at the cell arrives at the PARENT and is left short of the moon by ~50
-     * descent radii — it can never put down on the body the pilot actually chose. A body target aims
-     * at the body.</p>
+     * answer for flying at any body that does not sit at its cell's centre: a ship aimed at the cell
+     * arrives at the centre and is left short of the body the pilot actually chose. A body target
+     * aims at the body.</p>
      *
-     * <p>Empty rather than the lenient anchor fallback {@link #coordForPlanet} makes: aiming a ship at
-     * a system's star because its planet could not be resolved is exactly the silent
+     * <p>Empty, like {@link #coordForPlanet}, when the body cannot be resolved: aiming a ship at a
+     * system's star because its planet could not be resolved is exactly the silent
      * flown-somewhere-else failure this exists to prevent. The caller surfaces it instead.</p>
      */
     public Optional<GalacticCoord> addressForPlanet(DimensionProperties props, long atTick) {

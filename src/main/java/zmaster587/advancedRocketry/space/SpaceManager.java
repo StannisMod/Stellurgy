@@ -418,10 +418,11 @@ public final class SpaceManager {
             // main thread, i.e. a hung server. Each victim therefore gets exactly one attempt.
             java.util.Set<String> attempted = new java.util.HashSet<>();
             while (storedCellCount() > config.maxStoredCells) {
-                String victim = oldestGcCandidate();
-                if (victim == null || !attempted.add(victim)) {
-                    break; // nothing collectable left, or the store is refusing to shrink
+                String victim = oldestGcCandidate(attempted);
+                if (victim == null) {
+                    break; // nothing collectable left that this pass has not already tried
                 }
+                attempted.add(victim);
                 if (vetoed(victim, zmaster587.advancedRocketry.api.event.SpaceCellEvent.Reason.COUNT,
                         Long.MIN_VALUE)) {
                     // Marked attempted above, so the next turn of the loop picks the NEXT oldest
@@ -476,10 +477,14 @@ public final class SpaceManager {
         return isStored(cellKey) && !isClaimed(cellKey) && !loadedCellToSlot.containsKey(cellKey);
     }
 
-    private String oldestGcCandidate() {
+    /** The least recently visited collectable cell that is not in {@code skip}, or {@code null}. */
+    private String oldestGcCandidate(java.util.Set<String> skip) {
         String victim = null;
         long oldest = Long.MAX_VALUE;
         for (String key : gcKnownCells()) {
+            if (skip.contains(key)) {
+                continue;
+            }
             long visit = metaOf(key).lastVisitTick;
             if (isGcCandidate(key) && visit < oldest) {
                 oldest = visit;

@@ -22,7 +22,7 @@ import zmaster587.advancedRocketry.player.IPlayerBindings;
  * could ask whether an entity is inside the window, and nothing could END the window — which is why
  * a player carrying one could hand it to whatever he did next.</p>
  *
- * <p>It is a BINDING in the sense {@link zmaster587.advancedRocketry.api.event.PlayerReleaseEvent}
+ * <p>It is a BINDING in the sense {@link zmaster587.advancedRocketry.player.PlayerRelease}
  * uses: state stamped on a player by one subsystem that changes how another subsystem treats him.
  * Giving it an owner is what lets it be released.</p>
  */

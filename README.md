@@ -219,16 +219,18 @@ separately for [Towards Rocket Science](https://www.curseforge.com/minecraft/mod
 
 One vanilla setting matters more here than in most packs.
 
-**`allow-flight=true` in `server.properties`.** Vanilla kicks a player whose ridden entity has had no block
-underneath it for eighty ticks — four seconds — with *"Flying is not enabled on this server"*. A pilot sitting
-in a tier-2 craft is exactly that case by construction: the deck he is on belongs to the craft's own subspace,
-and the anti-cheat looks for a block in the world, where there is none. The same flag guards the on-foot form,
-so a crew member walking a deck in flight is on the same timer. Left at vanilla's default, an ordinary flight
-ends in a disconnect that looks like a mod bug and is not one.
+**`allow-flight=true` in `server.properties`.** Vanilla kicks a player who has been "floating" — no block
+under him — for eighty ticks, four seconds, with *"Flying is not enabled on this server"*. A crew member
+walking the deck of a tier-2 craft in flight is that case by construction: the deck belongs to the craft's own
+subspace, and the anti-cheat looks for a block in the world, where there is none. Sitting down at the controls
+does not reset the count, because vanilla stops updating the on-foot check while a player rides and keeps
+counting the value it last had. Left at vanilla's default, an ordinary flight ends in a disconnect that looks
+like a mod bug and is not one.
 
-This is read off vanilla's own check (`NetHandlerPlayServer`, the `vehicleFloating` and `floating` paths, both
-gated by `isFlightAllowed()`), and it applies to any mod that carries players on moving structures. The mod does
-not need the flag for anything else, and turning it on does not enable creative flight for anybody.
+This is read off vanilla's own check (`NetHandlerPlayServer`, the `floating` flag set in `processPlayer` and
+counted in `update`, gated by `isFlightAllowed()`), and it applies to any mod that carries players on moving
+structures. The mod does not need the flag for anything else, and turning it on does not enable creative flight
+for anybody.
 
 **A manned craft stays below world coordinate 30 000 000.** Vanilla disconnects a player whose position packet
 exceeds that on any axis, whatever put him there, so it is a hard ceiling for anything with somebody aboard and

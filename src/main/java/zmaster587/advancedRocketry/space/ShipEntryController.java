@@ -26,7 +26,8 @@ import net.minecraft.util.math.BlockPos;
  *       ceiling), then hands the momentary crossing + async settle to the shared
  *       {@link ShipCrossingService};</li>
  *   <li>on settle, rigid-teleports the pose to the honest-3D realization of the entry coordinate
- *       (world Y &asymp; local Y + HALF_CELL + band) and settles the ship in the {@link ShipLedger}.</li>
+ *       (the cell is centred on the world origin, so world position = local position on every
+ *       axis) and settles the ship in the {@link ShipLedger}.</li>
  * </ol>
  *
  * <p>Crossing + re-assembly are asynchronous, so the settle runs over several ticks with retries

@@ -42,14 +42,15 @@ import zmaster587.advancedRocketry.player.IPlayerBindings;
  *
  * <p>The NBT half ({@link #write}, {@link #read}, {@link #clear(NBTTagCompound)}) touches no world,
  * server or player type, so it is exercisable against a bare compound. The player-facing wrappers
- * are thin shims over {@code getEntityData()}. Server-side in practice.</p>
+ * read and write the player's {@code IPlayerBindings} capability, whose storage calls that NBT half.
+ * Server-side in practice.</p>
  */
 public final class ShipAboardTag {
 
     /**
-     * The ForgeData sub-compound key. Everything this class writes goes UNDER this one key: the
-     * ForgeData compound is shared with every other mod on the pack, so a flat set of fields there
-     * would be a collision waiting to happen.
+     * The sub-compound key. Everything this class writes goes UNDER this one key, inside the
+     * compound it is handed - today the player bindings capability's own tag, which also carries
+     * other fields beside it.
      */
     public static final String KEY = "arShipAboard";
 

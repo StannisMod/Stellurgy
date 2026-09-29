@@ -55,7 +55,11 @@ public abstract class MixinEntityCellVoid {
     @Redirect(method = "onEntityUpdate",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/Entity;outOfWorld()V"))
     private void advancedRocketry$theCellHasNoVoid(Entity self) {
-        if (self.world != null && self.world.provider instanceof WorldProviderSpaceSlot) {
+        // Hyperspace is registered with the same provider class as the cell slots, so the provider
+        // alone does not tell them apart. Its lanes park at Y 128 and nothing there lives below
+        // zero, so it keeps vanilla's floor like every other non-cell world.
+        if (self.world != null && self.world.provider instanceof WorldProviderSpaceSlot
+                && !zmaster587.advancedRocketry.space.HyperspaceWorld.isHyperspace(self.world)) {
             return;
         }
         outOfWorld();
