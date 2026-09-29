@@ -1,3 +1,4 @@
+itemGroup.tabAffs=Stellurgy Shields
 tile.field_generator.name=Shield Injector
 tile.shield_generator.name=Shield Generator
 tile.shield_accumulator.name=Shield Accumulator
@@ -24,6 +25,8 @@ gui.affs.network_status=Network status
 gui.affs.network_root=Component root
 gui.affs.network_counts=Cables / sources / sinks
 gui.affs.shield_counts=Cables / generators / injectors
+gui.affs.network_generation=Shield generation / t
+gui.affs.network_consumption=Shield consumption / t
 gui.affs.console_counts=Generators / injectors
 gui.affs.network_flow=Delivered / available / requested
 gui.affs.network_capacity=Total cable capacity

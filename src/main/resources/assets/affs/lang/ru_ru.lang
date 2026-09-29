@@ -1,3 +1,4 @@
+itemGroup.tabAffs=Щиты Stellurgy
 tile.field_generator.name=Щитовой инжектор
 tile.shield_generator.name=Щитовой генератор
 tile.shield_cable.name=Щитовой кабель
@@ -57,6 +58,8 @@ tile.shield_cable.tier2.name=Щитовой кабель III
 tile.shield_generator.tier3.name=Щитовой генератор IV
 tile.shield_cable.tier3.name=Щитовой кабель IV
 gui.affs.shield_counts=Кабели / генераторы / инжекторы
+gui.affs.network_generation=Генерация щита / т
+gui.affs.network_consumption=Потребление щита / т
 
 item.laser_gun.name=Лазерная пушка
 gui.affs.energy_resistance=Сопротивление энергии

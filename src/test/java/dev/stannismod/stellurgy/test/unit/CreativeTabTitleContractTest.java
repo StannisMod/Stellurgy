@@ -56,9 +56,6 @@ public class CreativeTabTitleContractTest {
 
     /** Labels known to be untranslated - each a recorded bug, never a permanent exception. */
     private static final Map<String, String> EXEMPT = new LinkedHashMap<String, String>();
-    static {
-        EXEMPT.put("tabAffs", "known bug: the shield subsystem's tab has no itemGroup.tabAffs in any catalogue yet");
-    }
 
     @Test
     public void everyCreativeTabHasAnEnglishTitle() throws IOException {

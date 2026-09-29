@@ -100,12 +100,7 @@ public class LangKeyCrossReferenceTest {
     static {
         EXEMPT.put("tooltip.stellurgy.none",
                 "optional by design — TooltipInjector guards it with I18n.hasKey and "
-                        + "substitutes a literal \"None\" when absent");
-        EXEMPT.put("gui.affs.network_generation",
-                "known bug: the shield console's generation label has no catalogue entry yet");
-        EXEMPT.put("gui.affs.network_consumption",
-                "known bug: the shield console's consumption label has no catalogue entry yet");
-    }
+                        + "substitutes a literal \"None\" when absent");    }
 
     @Test
     public void everyLocalizationKeyIsDefinedInAShippedCatalogue() throws Exception {
