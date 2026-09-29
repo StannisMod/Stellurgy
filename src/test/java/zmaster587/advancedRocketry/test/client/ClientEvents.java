@@ -61,10 +61,12 @@ public final class ClientEvents {
      *
      * @param clientLog the CLIENT's log ({@link #of})
      * @param mark      a mark on THAT log, taken BEFORE the teleport command
+     * @return the placement records since the mark, the last of which is the one near the target —
+     *         so a caller can take its {@code seq} as the start of "after he arrived"
      */
-    public static void awaitPlacedNear(Events clientLog, long mark, double x, double z,
-                                       String what, int tickBudget) throws Exception {
-        clientLog.awaitMatching(mark, "client_pos_look_applied",
+    public static String awaitPlacedNear(Events clientLog, long mark, double x, double z,
+                                         String what, int tickBudget) throws Exception {
+        return clientLog.awaitMatching(mark, "client_pos_look_applied",
                 reply -> appliedNear(reply, x, z),
                 "placing the client at " + x + ", " + z, what, tickBudget);
     }

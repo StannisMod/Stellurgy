@@ -975,23 +975,40 @@ public final class Events {
      */
     public void assertChain(long mark, String what, int tickBudget, String... types)
             throws Exception {
-        for (String type : types) {
-            await(mark, type, what, tickBudget);
-        }
+        // Waits for the ORDERED chain, not for each type's existence. It used to await every type
+        // first and check the order once after: a record of a later type from EARLIER in the window
+        // satisfied its wait, and the order check then ran before the record that completes the
+        // chain had arrived — a red for a chain that was about to hold. Measured 2026-09-28, two runs
+        // in five of one scenario, on a `deck_released` left by a teleport before the one under test.
         List<String> seen = typesOf(since(mark));
+        for (int waited = 0; chainBreak(seen, types) >= 0 && waited < tickBudget; waited += 5) {
+            step.ticks(5);
+            seen = typesOf(since(mark));
+        }
+        int missing = chainBreak(seen, types);
+        assertTrue(what + " — `" + (missing < 0 ? "" : types[missing]) + "` is missing from the chain"
+                + " AFTER the events that must precede it, within " + tickBudget + " ticks. Recorded in"
+                + " order: " + seen, missing < 0);
+    }
+
+    /** The index of the first of {@code types} not found, in order, in {@code seen}; -1 when the
+     *  whole chain is there. */
+    private static int chainBreak(List<String> seen, String[] types) {
         int at = -1;
-        for (String type : types) {
+        for (int t = 0; t < types.length; t++) {
             int found = -1;
             for (int i = at + 1; i < seen.size(); i++) {
-                if (seen.get(i).equals(type)) {
+                if (seen.get(i).equals(types[t])) {
                     found = i;
                     break;
                 }
             }
-            assertTrue(what + " — `" + type + "` is missing from the chain AFTER the events that"
-                    + " must precede it. Recorded in order: " + seen, found > at);
+            if (found < 0) {
+                return t;
+            }
             at = found;
         }
+        return -1;
     }
 
     /** The recorded types, in order — the compact form a failure leads with. */

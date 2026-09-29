@@ -485,20 +485,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // the body, and a neighbour's capture in the same window would satisfy a type-only wait and
         // open the interval below on a craft the scenario never touches.
         //
-        // Over the EPISODE and not the record, and over the EPISODE'S OPENING at that. `deck_entered`
-        // is a per-tick commit, so "a capture of this ship happened" is satisfied by one the deck
-        // has since let go of — and, measured 2026-09-16, by one that was ALREADY RUNNING when the
-        // mark was taken: this scenario's body arrives beside the hull in HULL-STAND from the
-        // previous leg, its stale commit lands one tick after the mark, the wait returns before the
-        // teleport has even applied, and the read below then catches the body three blocks up and
-        // still falling. The edge is what the stimulus is supposed to produce.
+        // On the LANDING after the teleport applied, not on "a capture since the mark". A body left
+        // beside the hull falls into HULL-STAND by itself, after the mark and before the teleport
+        // lands; a capture-since-mark wait returned on that and the read below then caught the body
+        // over the deck and still falling. Measured 2026-09-16 here, and again 2026-09-28 at four red
+        // runs of five in the sibling scenario — where the fix of the 16th (the episode's OPENING
+        // instead of any record) turned out not to exclude it, because that capture OPENS after the
+        // mark too. The helper waits for the client's own placement, then `deck_contact` on this
+        // ship after it, then fences the server.
         long arrivalServerMark = events().mark();
         long arrivalMark = client.mark();
-        awaitCaptureUnderGateWatch(arrivalMark, arrivalServerMark, scenarioShipId,
+        landOnTheDeckUnderGateWatch(arrivalMark, arrivalServerMark, scenarioShipId,
                 "the client player must be taken by THIS ship's deck"
                 + " before the jump — the whole scenario is about a capture that already exists",
-                CAPTURE_LINK_BUDGET_TICKS, GATE_WINDOW_RECORDS,
-                () -> exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0"));
+                CAPTURE_LINK_BUDGET_TICKS, GATE_WINDOW_RECORDS, ship[0], ship[1] + 4, ship[2]);
         // Read ONCE, and proved to be about THIS ship: the two execs this replaces
         // printed one sample and asserted a second, and neither said which craft
         // held the body. Still under the open gate window — the wait buys a CLIENT capture and this
@@ -2210,15 +2210,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * A body that meets a deck after the craft manoeuvred with nobody aboard is carried by what the
      * craft is doing now, not by the average of what it did.
      *
-     * <p>red-witnessed (not yet — the carry verdict has not been seen red), 2026-09-28. Run as the
-     * only method of its class, the method is red on HEALTHY production at its arrangement "the body
-     * must stand on the deck ONCE before the manoeuvre" (the server reads no capture after the
-     * client's capture link has passed), so both inversions tried that way — a carry bias from a
-     * body's second capture, and one only on a capture after an absence — stopped there. In the full
-     * class run of the same day's gate it PASSED; the inversion run of the whole class that followed
-     * stopped at the same arrangement again, with this method first in the class as it was in the
-     * gate. Red at the arrangement in four of five runs that day, on healthy and inverted production
-     * alike: the arrangement, not the carry, decides this method's outcome today.</p>
+     * <p>red-witnessed: with the client's carry ({@code ShipFrameTravel.travel}'s deck carry, the
+     * value {@code remember} binds) raised by 0.1 a tick on a capture that follows more than 100
+     * ticks off the deck: "the carry installed when the body was captured must be what the craft SAYS
+     * it is doing (5.9E-19/tick …) … the largest carry any capture in this window was committed with
+     * is 0.1", 2026-09-28.</p>
+     *
+     * <p>It could not be seen red before that day's fixes, because its ARRANGEMENT was red on healthy
+     * production in four runs of five. Two test-side races, both measured: the stand-once wait
+     * returned on a hull-stand capture the body fell into beside the hull BEFORE the teleport onto the
+     * deck landed (fixed by waiting for the landing after the teleport's own placement), and the
+     * stand-then-leave chain was read by an {@code assertChain} that checked its order once, after an
+     * earlier release had satisfied the wait (fixed in {@code Events.assertChain}, which now waits for
+     * the ordered chain). After both: 10 green of 10 across this method and the jump scenario that
+     * shares the landing wait.</p>
      */
     @Test
     public void aBodyMeetingADeckThatManoeuvredUnwatchedIsNotCarriedByIt() throws Exception {
@@ -2243,18 +2248,19 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // Measured on the way to this: staged without this step the whole encounter produced 25
         // derivations, every one of them one tick wide.
         Events client = clientEvents();
-        // Same as the two above: the record this teleport must leave is awaited from a mark taken
-        // before it, so sixty ticks of pacing added delay and nothing else. Under the gate window
-        // since 2026-09-16 — this is the second half of the bisect pair, and the half that goes red
-        // with exactly one predecessor in front of it.
+        // The landing on this deck after the teleport applied, under the gate window. This was the
+        // "red with one predecessor" half of the 2026-09-16 bisect, and on 2026-09-28 red in four
+        // runs of five with or without one: `buildShip` leaves the body beside the hull, it falls into
+        // HULL-STAND by itself, and the old capture-since-mark wait returned on THAT capture — at the
+        // wrong spot, before the teleport landed — so the server's read below found him released
+        // over the deck, still falling.
         long seedServerMark = events().mark();
         long seedMark = client.mark();
-        awaitCaptureUnderGateWatch(seedMark, seedServerMark, scenarioShipId,
+        landOnTheDeckUnderGateWatch(seedMark, seedServerMark, scenarioShipId,
                 "the body must be taken by THIS deck ONCE before the"
                 + " manoeuvre, or the client holds no earlier observation of the craft and the"
                 + " interval under test does not exist",
-                CAPTURE_LINK_BUDGET_TICKS, GATE_WINDOW_RECORDS,
-                () -> exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0"));
+                CAPTURE_LINK_BUDGET_TICKS, GATE_WINDOW_RECORDS, ship[0], ship[1] + 3, ship[2]);
         // Still under the open gate window — see the sibling scenario: the wait buys a CLIENT
         // capture and THIS read asks the SERVER, which is where the two have been seen to disagree.
         DeckCapture seeded;
@@ -2282,18 +2288,20 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // observation to go stale. NOT sent far away: at 600 blocks the craft leaves the loaded
         // region and the physics mod stops managing it entirely (`"managed":false`), which is a
         // different experiment — an unloaded craft does not manoeuvre at all.
+        // The staging this scenario needs is a two-link CHAIN: he was TAKEN by the deck (leaving the
+        // client one observation of the craft), and then RELEASED by leaving it (so that observation
+        // goes stale). The first link is the landing awaited above; this is the second, counted from
+        // a mark taken BEFORE the teleport that causes it. It used to be one `assertChain` from the
+        // mark before the stand — which awaits each type's EXISTENCE first and checks the order
+        // after, so a release from earlier in the window (the teleport ONTO the deck lifting a body
+        // that had fallen into hull-stand beside the hull) satisfied the wait, and the order check
+        // ran before this release arrived: "`deck_released` is missing AFTER", twice in five runs on
+        // 2026-09-28. The release record carries the gate that made it, so a red names which.
+        long awayMark = client.mark();
         exec("tp @a " + (bx + 24) + " " + (by + 10) + " " + (bz + 24) + " 0 0");
-        // The staging this scenario needs is a two-link CHAIN and is asserted as one, from the mark
-        // taken before the body ever touched the deck: he was TAKEN by it (leaving the client one
-        // observation of the craft), and then RELEASED (so the client stops observing and that
-        // observation goes stale). The order is what makes the interval exist — a release before any
-        // capture is a body that was never on the deck — and it is the part a fixed wait after each
-        // teleport could never check. The release record carries the gate that made it
-        // (leftShipRegion, steppedOntoTerrain, …), so a red names which.
-        client.assertChain(seedMark, "the body must stand on this deck and then be taken off it, or"
-                + " the client holds no stale observation of the craft and there is nothing for the"
-                + " manoeuvre below to be wrong about", CAPTURE_LINK_BUDGET_TICKS,
-                "deck_entered", "deck_released");
+        client.await(awayMark, "deck_released", "the body must be taken OFF this deck once it has stood"
+                + " on it, or the client holds no stale observation of the craft and there is nothing"
+                + " for the manoeuvre below to be wrong about", CAPTURE_LINK_BUDGET_TICKS);
 
         // The craft must still be LOADED and managed with the body standing off it, or nothing below
         // manoeuvres — and that refusal is the reader's own, by identity, naming the world it asked.

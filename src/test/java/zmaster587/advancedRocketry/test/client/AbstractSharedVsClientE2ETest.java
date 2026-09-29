@@ -971,15 +971,21 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
         }
     }
 
-    /** The stimulus a {@link #awaitCaptureUnderGateWatch} watches — whatever puts the body on the
-     *  deck. Declared because the harness's calls throw, and a {@code Runnable} cannot. */
-    protected interface Stimulus {
-        void run() throws Exception;
-    }
-
     /**
-     * Run {@code stimulus} with the deck-gate window open on this scenario's player, then wait for
-     * the capture — and when it does not arrive, print {@link #deckGateTrail}.
+     * Teleport the player to {@code (x, y, z)} over this scenario's deck with the deck-gate window
+     * open, wait for him to LAND on this ship after the teleport applied, and fence the server behind
+     * the landing — and when he does not, print {@link #deckGateTrail}.
+     *
+     * <p><b>The landing is counted from the teleport's own arrival, not from a mark before it.</b>
+     * This used to take a stimulus and wait for "a capture episode opened on this ship since the
+     * mark, and nothing ended it" — and a body left beside the hull by the scenario's own assembly
+     * falls into HULL-STAND on its own, AFTER the mark and BEFORE the teleport lands. Measured
+     * 2026-09-28, four red runs of five: the wait returned on that capture at the body's old spot, the
+     * teleport then carried him off it (released, two blocks above the deck), and the server read the
+     * next line found nothing — "the body must stand on the deck ONCE" reported as the fixture failing.
+     * So: the client applies the teleport (its own placement record, near the target), then the
+     * resolver puts him on a surface of THIS ship after that record ({@code deck_contact}), then the
+     * server has handled every movement packet up to it.</p>
      *
      * <p><b>The window is opened before the stimulus</b>, because the decisions in question are the
      * ones taken in the ticks the stimulus lands in. The failure this exists for reports a body in
@@ -1001,24 +1007,29 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * So the caller closes it with {@link #closeDeckGateWindow} once its arrangement reads are done,
      * and until then the budget is what bounds it — an over-run window stops itself and says so.</p>
      *
-     * @param clientMark  a mark from {@code clientEvents()}, taken before the stimulus
-     * @param serverMark  a mark from {@code events()}, taken before the stimulus
-     * @param recordsEach the gate window's record budget; state it from the length of the
-     *                    stimulus, not from habit
+     * @param clientMark  a mark from {@code clientEvents()}, taken before the teleport
+     * @param serverMark  a mark from {@code events()}, taken before the teleport
+     * @param recordsEach the gate window's record budget; state it from the length of the fall,
+     *                    not from habit
+     * @return the landing's {@code deck_contact} records, for the caller's own reading
      */
-    protected final String awaitCaptureUnderGateWatch(long clientMark, long serverMark, String shipId,
-                                                      String what, int tickBudget, int recordsEach,
-                                                      Stimulus stimulus)
+    protected final String landOnTheDeckUnderGateWatch(long clientMark, long serverMark,
+                                                       String shipId, String what, int tickBudget,
+                                                       int recordsEach, double x, double y, double z)
             throws Exception {
         openDeckGateWindow(recordsEach);
         try {
-            stimulus.run();
-            // There is one form of this wait again. It briefly had two — a "held" one and an "edge"
-            // one — because a held body republished a per-tick commit and the held form could be
-            // satisfied by an episode that predated the mark. The commit is gone; the only records
-            // left are the two edges, and an edge cannot predate the mark it is read after.
-            return zmaster587.advancedRocketry.test.ShipIdentity.awaitCaptureHeldBy(
-                    clientEvents(), clientMark, shipId, what, tickBudget);
+            exec("tp @a " + x + " " + y + " " + z + " 0 0");
+            String placed = ClientEvents.awaitPlacedNear(clientEvents(), clientMark, x, z,
+                    "the teleport over the deck must land on the client before a landing can be"
+                            + " about the place it was sent to", tickBudget);
+            long arrived = (long) Events.number(Events.lastRecord(placed), "seq");
+            String landed = clientEvents().awaitField(arrived + 1, "deck_contact", "ship", shipId,
+                    what + " — he must LAND on this ship's deck after the teleport put him over it",
+                    tickBudget);
+            fenceWhatTheClientSent("the server must have handled the landing before it is asked"
+                    + " whether the body is on the deck");
+            return landed;
         } catch (AssertionError notTaken) {
             closeDeckGateWindow();
             throw new AssertionError(notTaken.getMessage() + " | " + deckGateTrail(clientMark,
