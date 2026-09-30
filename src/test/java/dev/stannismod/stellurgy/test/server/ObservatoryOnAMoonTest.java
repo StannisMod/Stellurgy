@@ -1,7 +1,5 @@
 package dev.stannismod.stellurgy.test.server;
 
-import java.util.Arrays;
-
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
@@ -15,23 +13,23 @@ import dev.stannismod.stellurgy.test.TelescopeReading;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * The home world's moon is a destination of its own, and a player learns its address by LOOKING.
+ * An observatory built ON a moon surveys from the moon's system, in the galactic lattice a survey
+ * walks — never from the moon's own name inside its planet's zone, whose sector triple counts a lattice
+ * four orders of magnitude finer. Before that was so, its first survey step took the server down.
  *
- * <p>Contract (maintainer ruling 2026-09-30): a moon has a cell of its own inside its planet's zone,
- * so the home world's address no longer covers it. A starter crystal carries the home world and not
- * the bodies inside its zone; the observatory's local radar, standing in the home system, is what
- * names them. And an observatory may stand ON that moon: it surveys from the moon's system, in the
- * galactic lattice a survey walks.</p>
+ * <p>A test of the instrument's MECHANICS, not an end-to-end test: the machines are placed and
+ * driven by probes. Building an observatory on a moon is something a player may do, but it is not on
+ * his way anywhere; the path a player walks to the moon — including the home telescope that is where
+ * he learns its address — is {@code M1PlanetToPlanetMilestoneE2ETest}.</p>
  *
- * <p>Played as the game ships: the aperture and the resolve margin are the configuration defaults,
- * asserted as an arrangement rather than set, because an instrument widened for the test can resolve
- * a system that a player's cannot.</p>
+ * <p>Played as the game ships: the aperture is the configuration default, asserted as an arrangement
+ * rather than set, because an instrument widened for the test can resolve a system that a player's
+ * cannot.</p>
  */
-public class HomeMoonIsFoundByTelescopeE2ETest extends AbstractSharedServerTest {
+public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
 
     /** The overworld: the world a player starts on, and the body whose zone is the subject. */
     private static final int HOME_DIM = 0;
@@ -148,53 +146,6 @@ public class HomeMoonIsFoundByTelescopeE2ETest extends AbstractSharedServerTest 
                 "the local radar must finish", RADAR_RECORD_TICKS,
                 "pos", recordKey(site), "complete", "true");
         return TelescopeReading.at(this::exec, at(site));
-    }
-
-    /**
-     * <p>red-witnessed: with {@code CrystalSeeding.java:94}'s zone skip reverted to cell equality
-     * ({@code home.cellKey().equals(coord.cellKey())}): "a starter crystal must not carry a body
-     * inside the home world's zone (dim 2 at 19_0_0.1_0_0 inside 19_0_0) … Starter holds [0, 2]";
-     * and with {@code CrystalSeeding.java:61}'s home record disabled: "a starter crystal must carry
-     * the home world: … crystalDims:[]" — one inversion per run, 2026-09-30.</p>
-     */
-    @Test
-    public void aStarterCrystalCarriesTheHomeWorldButNotItsMoon() throws Exception {
-        defaultGameLocalRadar();
-        ZoneBody moon = bodyInsideTheHomeZone();
-
-        String reply = exec("stellurgytest telescope starter " + HOME_DIM);
-        Reply starter = Reply.of("stellurgytest telescope starter", reply);
-        requireArranged("the probe must seed a crystal: " + reply, starter.ok());
-        int[] dims = starter.intArray("crystalDims");
-
-        // The positive half, on the same reply: seeding ran and wrote a body. Without it an empty
-        // crystal also says "no moon". THIS TEST DOES NOT SEE the other half of the rule - that
-        // bodies OUTSIDE the home zone stay common knowledge - because this server's starter holds
-        // the home world alone (measured 2026-09-30: [0]).
-        assertTrue("a starter crystal must carry the home world: " + reply, names(dims, HOME_DIM));
-        assertFalse("a starter crystal must not carry a body inside the home world's zone (" + moon
-                        + "): its address is found with a telescope. Starter holds "
-                        + Arrays.toString(dims),
-                names(dims, moon.dim));
-    }
-
-    /**
-     * <p>red-witnessed: with {@code TelescopeScan.java:257}'s body loop skipping a {@code MOON}:
-     * "the local radar at home must write the body inside the home world's zone (dim 2 at
-     * 19_0_0.1_0_0 inside 19_0_0); the crystal names [0]", 2026-09-30.</p>
-     */
-    @Test
-    public void theLocalRadarAtHomeWritesTheHomeWorldsMoon() throws Exception {
-        defaultGameLocalRadar();
-        ZoneBody moon = bodyInsideTheHomeZone();
-        FixtureSite site = site();
-        observatoryWithBlankCrystal(site);
-
-        TelescopeReading done = localRadar(site);
-        assertTrue("the local radar at home must write the body inside the home world's zone ("
-                        + moon + "); the crystal names " + Arrays.toString(done.crystalDims())
-                        + ": " + done.raw(),
-                names(done.crystalDims(), moon.dim));
     }
 
     /**

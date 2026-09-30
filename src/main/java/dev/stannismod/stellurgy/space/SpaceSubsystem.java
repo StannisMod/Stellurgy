@@ -413,12 +413,18 @@ public final class SpaceSubsystem {
         // does put the ship at zero distance from the body, and an observer→body vector of zero is
         // dropped by the sky renderer — so the pilot spends a jump and arrives at a destination his
         // own sky does not draw.
+        // The ring and the clearance come from the BODIES, as the entry path's do: the descent trigger
+        // fires inside each body's own shell, so a flat ring sits inside any shell wider than itself —
+        // a moon's, a planet's — and the arrival it exists to protect is inside the trigger again.
         java.util.List<GalacticCoord> occupied = new java.util.ArrayList<>();
+        long ring = ShipEntryController.ENTRY_RING_BLOCKS;
+        long clearance = ShipEntryController.DESCENT_RADIUS_BLOCKS;
         for (dev.stannismod.stellurgy.universe.SystemBody body : reg.bodiesAt(target)) {
             occupied.add(body.addressAt(worldTick));
+            ring = Math.max(ring, ShipEntryController.entryRingAround(body));
+            clearance = Math.max(clearance, DescentShell.radiusAround(body));
         }
-        return StandoffRing.standoffFrom(target, occupied, ShipEntryController.ENTRY_RING_BLOCKS,
-                ShipEntryController.DESCENT_RADIUS_BLOCKS,
+        return StandoffRing.standoffFrom(target, occupied, ring, clearance,
                 shipId == null ? 0 : shipId.hashCode());
     }
 

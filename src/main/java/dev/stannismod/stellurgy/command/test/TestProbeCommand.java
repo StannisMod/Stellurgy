@@ -5978,18 +5978,41 @@ public class TestProbeCommand extends CommandBase {
         // eternal and its position is a function of time (it rides its primary), and those are two different
         // numbers: reporting only the name makes "the body is still in its cell" unfalsifiable, since
         // a name that never moves would say that even for a frame that never moved either.
-        if (args.length >= 4 && "frame".equalsIgnoreCase(args[0])) {
-            dev.stannismod.stellurgy.space.GalacticCoord name =
-                    dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+        // frame <cellKey>: the same, for a cell named by KEY — the only way to name a cell inside a
+        // zone, whose sector triple is counted in the zone's own lattice and means nothing alone.
+        // frame <cellKey> <relativeToKey>: also where it is RELATIVE to a second cell, both read at the
+        // one clock. Two separate calls straddle a tick, and a planet's heliocentric motion alone is
+        // thousands of blocks a tick, so a difference of two calls measures the call gap.
+        if ((args.length >= 4 || args.length == 2 || args.length == 3)
+                && "frame".equalsIgnoreCase(args[0])) {
+            boolean byKey = args.length <= 3;
+            dev.stannismod.stellurgy.space.GalacticCoord name = byKey
+                    ? dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[1])
+                    : dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
             long clock = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
             dev.stannismod.stellurgy.space.AbsolutePos origin =
                     dev.stannismod.stellurgy.space.SpaceSubsystem.cellFrameOriginAt(name, clock);
-            send(sender, "{\"ok\":true,\"cellKey\":\"" + name.cellKey() + "\",\"clock\":" + clock
+            StringBuilder out = new StringBuilder("{\"ok\":true,\"cellKey\":\"" + name.cellKey()
+                    + "\",\"clock\":" + clock
                     + ",\"originSector\":[" + origin.sectorX() + "," + origin.sectorY() + ","
                     + origin.sectorZ() + "],\"originOffset\":[" + origin.localX() + ","
-                    + origin.localY() + "," + origin.localZ() + "]}");
+                    + origin.localY() + "," + origin.localZ() + "]");
+            if (args.length == 3) {
+                dev.stannismod.stellurgy.space.AbsolutePos other =
+                        dev.stannismod.stellurgy.space.SpaceSubsystem.cellFrameOriginAt(
+                                dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[2]), clock);
+                long cell = dev.stannismod.stellurgy.space.GalacticCoord.CELL;
+                out.append(",\"relativeTo\":\"").append(args[2]).append("\",\"relative\":[")
+                        .append((origin.sectorX() - other.sectorX()) * cell + origin.localX() - other.localX())
+                        .append(',')
+                        .append((origin.sectorY() - other.sectorY()) * cell + origin.localY() - other.localY())
+                        .append(',')
+                        .append((origin.sectorZ() - other.sectorZ()) * cell + origin.localZ() - other.localZ())
+                        .append(']');
+            }
+            send(sender, out.append('}').toString());
             return;
         }
         // forget-name <dimId>: drop the RECORDED cell name of a dimension, so the next query has to

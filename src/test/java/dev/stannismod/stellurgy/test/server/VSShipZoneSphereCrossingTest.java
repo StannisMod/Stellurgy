@@ -22,8 +22,16 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * E2E: a live craft crossing a MOON's sphere of influence changes lattice there — out into its
- * parent's, in into the moon's own — named where it is and without moving, and it stays.
+ * The sphere seam on a live ship: a craft crossing a MOON's sphere of influence changes lattice
+ * there — out into its parent's, in into the moon's own — named where it is and without moving, and
+ * it stays.
+ *
+ * <p><b>This is a test of the seam's MECHANICS, not an end-to-end test.</b> The craft is put beside
+ * the moon and moved across the sphere by probes, because flying out of Luna's sphere by hand is some
+ * 250 000 blocks at the assist's 3 blocks a tick — over an hour — and the hysteresis bands are
+ * positions no player aims for. The player's own path through the INWARD crossing is walked in
+ * {@code M1PlanetToPlanetMilestoneE2ETest} (leg 7b: a jump beside the moon is carried into its zone,
+ * seated, and keeps station there).</p>
  *
  * <p>Inside a zone the seam is a sphere, not the cube face {@code VSShipCellSeamE2ETest} flies
  * through. The decision and the naming are pinned on the real solar arithmetic by
@@ -55,7 +63,7 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Gated on the server's real VS presence (run with); skips cleanly otherwise.</p>
  */
-public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
+public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
 
     /** How much WORLD an async crossing is allowed to settle in, in server ticks — thirty seconds. */
     private static final int SETTLE_TICKS = 600;
@@ -428,10 +436,15 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
 
     /** Move a placed craft along X to {@code toX} from the moon, within its cell, and prove it moved. */
     private Placed moveWithin(Placed from, long toX) throws Exception {
+        return moveWithin(from, toX, (long) from.pose.z);
+    }
+
+    /** The same, also putting the craft at {@code toZ} across the axis. */
+    private Placed moveWithin(Placed from, long toX, long toZ) throws Exception {
         int slot = from.ledger.slotDim;
         assertTrue("the move within the cell failed", Reply.of(exec("stellurgytest vs "
                 + "teleport-ship-by-id " + slot + " " + from.vsId + " " + toX + " "
-                + (long) from.pose.y + " " + (long) from.pose.z)).ok());
+                + (long) from.pose.y + " " + toZ)).ok());
         exec("stellurgytest vs unpark-by-id " + slot + " " + from.vsId);
         ShipInfo moved = ShipInfo.byId(this::exec, slot, from.vsId);
         assertEquals("arrangement: the craft is not where it was moved to: " + moved.raw(),
@@ -515,9 +528,11 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
         String vsId = ShipIdentity.physicsIdOf(this::exec, slot, moon.durableId);
         EntryStatus ledger = EntryStatus.forShip(this::exec, moon.durableId).requireFound(
                 "the carried craft must still have its ledger row");
-        Placed band = moveWithin(new Placed(ledger, vsId, ShipInfo.byId(this::exec, slot, vsId)), toX);
-        // The DISTANCE, not the X: the arrival ring leaves the craft up to a thousand blocks off-axis,
-        // and the band is only a few hundred blocks deep on its outer side.
+        // ON the axis: the arrival ring stands the craft off the moon by twice its descent shell (for
+        // Luna ~14 000 blocks, at a bearing drawn from the ship's id), and the band is only a few
+        // hundred blocks deep on its outer side, so an X placed with that Z kept misses it.
+        Placed band = moveWithin(new Placed(ledger, vsId, ShipInfo.byId(this::exec, slot, vsId)), toX, 0L);
+        // And the DISTANCE is still what is asserted, not the X: Y is kept as the craft came.
         assertTrue("arrangement: the craft must stand INSIDE the hysteresis band ("
                         + moon.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION) + " .. "
                         + moon.radius * (1d + CellSeam.SPHERE_CARRY_FRACTION) + "), it is "
