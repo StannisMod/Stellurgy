@@ -31,6 +31,25 @@ final class WorldCommandFixtures {
         return String.join("\n", AbstractSharedServerTest.client().execute(cmd));
     }
 
+    /** Send a command and read its reply as DATA — refusing, naming the command, if the verb did
+     *  not answer one JSON object. */
+    static Reply ask(String cmd) throws Exception {
+        return Reply.of(cmd, exec(cmd));
+    }
+
+    /**
+     * Send a command that is a STEP OF THE ARRANGEMENT, and refuse as an arrangement failure unless
+     * the verb reported {@code ok}.
+     *
+     * <p>A reply dropped on the floor cannot say that the step did not happen: a fill into an
+     * unloaded world, a force-tick of a tile that is not there and an energy inject into the wrong
+     * block all answer an {@code error}, and an unread one lets the scenario go on to measure a world
+     * that was never built — and report what it measures as the mechanic.</p>
+     */
+    static Reply arrange(String cmd) throws Exception {
+        return ask(cmd).requireOk(cmd);
+    }
+
     /**
      * What time it is in the GAME, asked of the server.
      *

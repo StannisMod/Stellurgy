@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * Life support as a placed machine rather than as arithmetic.
@@ -21,43 +21,41 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
-    private static final Pattern AIR_O2 = Pattern.compile("\"airO2\":(-?\\d+)");
-    private static final Pattern AIR_CO2 = Pattern.compile("\"airCO2\":(-?\\d+)");
-    private static final Pattern AIR_PRESSURE = Pattern.compile("\"airPressure\":(-?\\d+)");
-    private static final Pattern TANK_AMOUNT = Pattern.compile("\"tankAmount\":(-?\\d+)");
-    private static final Pattern CONFIG_VALUE = Pattern.compile("\"value\":(-?\\d+)");
-    private static final Pattern OBSTRUCTION = Pattern.compile("\"obstruction\":(-?\\d+)");
-    private static final Pattern HELD_COUNT = Pattern.compile("\"heldCount\":(-?\\d+)");
-    private static final Pattern EJECTED = Pattern.compile("\"ejected\":(-?\\d+)");
+    /** The Y and Z every helper here builds on, taken from this scenario's own site by
+     *  {@link #stand}. A fresh instance per test method, so one scenario's never reaches another. */
+    private int cyBase;
+    private int czBase;
 
-    private static final int CY_BASE = 64;
-    private static final int CZ_BASE = 2100;
-    private static final int CX_FRESH = 2000;
-    private static final int CX_UNPOWERED = 2200;
-    private static final int CX_RECIRC = 2400;
-    private static final int CX_SEPARATOR = 2600;
-    private static final int CX_COMBINE = 2800;
-    private static final int CX_GOVERNOR = 3000;
-    private static final int CX_JETTISON = 3200;
-    private static final int CX_JETTISON_BLOCKED = 3400;
+    /**
+     * Ask for this scenario's site, prove its volume empty, and answer the X the fixture is centred
+     * on. The room spans two blocks either side of that X and five blocks up from one above the
+     * site; the jettison pocket reaches four either side, and its floor stands on the site's own Y.
+     */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(4, 8, what);
+        cyBase = site.y + 2;
+        czBase = site.z + 2;
+        return site.x + 2;
+    }
 
     /** A maintained zone starts as sea-level air, and reports the pressure the mod has always
      *  reported for a pressurised room. This is the probe's own grounding: if it lied, the two
      *  tests below would be measuring nothing. */
     @Test
     public void aSealedPoweredRoomHoldsBreathableAir() throws Exception {
-        buildSealableRoom(CX_FRESH);
-        placeVent(CX_FRESH);
-        injectEnergy(CX_FRESH, 1_000_000);
-        injectOxygen(CX_FRESH, 16000);
-        forceTickAndReseal(CX_FRESH);
+        int cx = stand("a sealed room with a powered vent");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        injectOxygen(cx, 16000);
+        forceTickAndReseal(cx);
 
-        String info = ventInfo(CX_FRESH);
+        Reply info = ventInfo(cx);
         assertEquals("a fresh maintained zone must hold sea-level oxygen: " + info,
-                ppm(210_000), extract(info, AIR_O2));
-        assertEquals("and no carbon dioxide at all: " + info, 0L, extract(info, AIR_CO2));
+                ppm(210_000), info.longInteger("airO2"));
+        assertEquals("and no carbon dioxide at all: " + info, 0L, info.longInteger("airCO2"));
         assertEquals("its pressure must read as one atmosphere: " + info,
-                100, extract(info, AIR_PRESSURE));
+                100L, info.longInteger("airPressure"));
     }
 
     /** INV-ATM-19. Without power the vent never seals, so there is no zone — and therefore nothing
@@ -66,60 +64,61 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  has no opinion about. */
     @Test
     public void anUnpoweredRoomHasNoZoneForLifeSupportToTouch() throws Exception {
-        buildSealableRoom(CX_UNPOWERED);
-        placeVent(CX_UNPOWERED);
-        injectOxygen(CX_UNPOWERED, 16000);
+        int cx = stand("a sealed room with an unpowered vent");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectOxygen(cx, 16000);
         // Deliberately no energy.
-        forceTickAndReseal(CX_UNPOWERED);
+        forceTickAndReseal(cx);
 
-        String info = ventInfo(CX_UNPOWERED);
+        Reply info = ventInfo(cx);
         assertEquals("an unpowered vent must not be maintaining a zone: " + info,
-                -1L, extract(info, AIR_O2));
+                -1L, info.longInteger("airO2"));
     }
 
     /** MECH-ATM-20 end to end: a powered recirculator standing in a stale room turns that room's
      *  CO2 back into oxygen and leaves solid carbon in its own slot. */
     @Test
     public void aRecirculatorClearsItsRoomsCarbonDioxideAndDropsDust() throws Exception {
-        buildSealableRoom(CX_RECIRC);
-        placeVent(CX_RECIRC);
-        injectEnergy(CX_RECIRC, 1_000_000);
-        injectOxygen(CX_RECIRC, 16000);
-        forceTickAndReseal(CX_RECIRC);
+        int cx = stand("a stale room with a recirculator in it");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        injectOxygen(cx, 16000);
+        forceTickAndReseal(cx);
 
         // Make the room stale: most of its oxygen already breathed into CO2.
-        String set = exec("stellurgytest vent setair 0 " + CX_RECIRC + " " + CY_BASE + " " + CZ_BASE
+        arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
                 + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
 
-        String before = ventInfo(CX_RECIRC);
+        Reply before = ventInfo(cx);
         assertEquals("premise: the room is stale before the machine runs: " + before,
-                ppm(150_000), extract(before, AIR_CO2));
+                ppm(150_000), before.longInteger("airCO2"));
 
-        placeRecirculator(CX_RECIRC);
-        injectEnergy2(CX_RECIRC, 1_000_000);
+        placeRecirculator(cx);
+        injectEnergyAt(cx + 1, 1_000_000);
         // World time advances one second per 20 ticks and the machine acts on that cadence.
-        exec("stellurgytest tile force-tick 0 " + (CX_RECIRC + 1) + " " + CY_BASE + " " + CZ_BASE + " 400");
+        forceTick(cx + 1, 400);
 
-        String after = ventInfo(CX_RECIRC);
-        long co2After = extract(after, AIR_CO2);
-        long o2After = extract(after, AIR_O2);
+        Reply after = ventInfo(cx);
+        long co2After = after.longInteger("airCO2");
+        long o2After = after.longInteger("airO2");
         assertTrue("the recirculator must consume its room's CO2 (before=150000 after="
                 + co2After + "): " + after, co2After < ppm(150_000));
         assertTrue("and the oxygen must come back (before=60000 after=" + o2After + "): " + after,
                 o2After > ppm(60_000));
         assertEquals("regeneration must not change the room's pressure: " + after,
-                100, extract(after, AIR_PRESSURE));
+                100L, after.longInteger("airPressure"));
         // The gases are only half the story: what damages the crew is the atmosphere the zone
         // PUBLISHES, and a room that has been regenerated must publish a breathable one.
-        assertTrue("a regenerated room must read as breathable, not merely contain oxygen: " + after,
-                after.contains("\"blobAtmosphere\":\"PressurizedAir\""));
+        assertEquals("a regenerated room must read as breathable, not merely contain oxygen: " + after,
+                "PressurizedAir", after.text("blobAtmosphere"));
 
         // Forge lowercases registry paths, so the id Java passes as "carbonDust" is stored — and
         // reported — as "carbondust".
-        String slot = exec("stellurgytest hatch read 0 " + (CX_RECIRC + 1) + " " + CY_BASE + " " + CZ_BASE);
+        Reply slot = ask("stellurgytest hatch read 0 " + (cx + 1) + " " + cyBase + " " + czBase);
         assertTrue("the carbon it removed from the air must appear as dust: " + slot,
-                slot.contains("stellurgy:carbondust"));
+                slot.element("slots", "item", "stellurgy:carbondust").integer("count") >= 1);
     }
 
     /** MECH-ATM-21 split: a separator standing in a stale room draws its CO2 into its own tank.
@@ -127,33 +126,33 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  is precisely what the recirculator got wrong twice. */
     @Test
     public void aSeparatorDrawsItsRoomsCarbonDioxideIntoItsTank() throws Exception {
-        buildSealableRoom(CX_SEPARATOR);
-        placeVent(CX_SEPARATOR);
-        injectEnergy(CX_SEPARATOR, 1_000_000);
-        injectOxygen(CX_SEPARATOR, 16000);
-        forceTickAndReseal(CX_SEPARATOR);
+        int cx = stand("a stale room with a separator in it");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        injectOxygen(cx, 16000);
+        forceTickAndReseal(cx);
 
-        String set = exec("stellurgytest vent setair 0 " + CX_SEPARATOR + " " + CY_BASE + " " + CZ_BASE
+        arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
                 + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
 
-        placeSeparator(CX_SEPARATOR);
-        injectEnergyAt(CX_SEPARATOR + 1, 1_000_000);
-        exec("stellurgytest tile force-tick 0 " + (CX_SEPARATOR + 1) + " " + CY_BASE + " " + CZ_BASE + " 200");
+        placeSeparator(cx);
+        injectEnergyAt(cx + 1, 1_000_000);
+        forceTick(cx + 1, 200);
 
-        String after = ventInfo(CX_SEPARATOR);
-        long co2After = extract(after, AIR_CO2);
+        Reply after = ventInfo(cx);
+        long co2After = after.longInteger("airCO2");
         assertTrue("the separator must pull CO2 out of the room (before=150000 after="
                 + co2After + "): " + after, co2After < ppm(150_000));
         // A floor, not an equality. The vent maintaining this room restores oxygen while the
         // separator runs, and that is not the separator touching it; what the clause forbids is the
         // separator drawing the crew's oxygen, which a floor still catches.
         assertTrue("and must not touch the oxygen the crew are breathing: " + after,
-                extract(after, AIR_O2) >= ppm(60_000));
+                after.longInteger("airO2") >= ppm(60_000));
 
-        String tank = exec("stellurgytest fluid stored 0 " + (CX_SEPARATOR + 1) + " " + CY_BASE + " " + CZ_BASE);
+        Reply tank = ask("stellurgytest fluid stored 0 " + (cx + 1) + " " + cyBase + " " + czBase);
         assertTrue("the gas it removed must be in its tank as carbon dioxide: " + tank,
-                tank.contains("carbon_dioxide"));
+                tank.element("tanks", "fluid", "carbon_dioxide").longInteger("amount") > 0);
     }
 
     /** MECH-ATM-21 combine: the other direction. A separator flipped to combine puts the gas in
@@ -161,47 +160,45 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  the half of the machine no test had ever driven in a world. */
     @Test
     public void aSeparatorInCombineModeGivesItsOxygenBackToTheRoom() throws Exception {
-        buildSealableRoom(CX_COMBINE);
-        placeVent(CX_COMBINE);
-        injectEnergy(CX_COMBINE, 1_000_000);
-        injectOxygen(CX_COMBINE, 16000);
-        forceTickAndReseal(CX_COMBINE);
+        int cx = stand("a stripped room with a combining separator in it");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        injectOxygen(cx, 16000);
+        forceTickAndReseal(cx);
 
         // A room whose oxygen has been stripped out: still pressurised by its nitrogen, but not
         // breathable. This is the state a split-mode separator leaves behind.
-        String set = exec("stellurgytest vent setair 0 " + CX_COMBINE + " " + CY_BASE + " " + CZ_BASE
+        arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
                 + " " + ppm(790_000) + " " + ppm(60_000) + " 0");
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
-        String before = ventInfo(CX_COMBINE);
-        assertTrue("premise: the room must start un-breathable: " + before,
-                before.contains("\"blobAtmosphere\":\"lowO2\""));
+        Reply before = ventInfo(cx);
+        assertEquals("premise: the room must start un-breathable: " + before,
+                "lowO2", before.text("blobAtmosphere"));
 
-        placeSeparator(CX_COMBINE);
-        injectEnergyAt(CX_COMBINE + 1, 1_000_000);
-        String filled = exec("stellurgytest fluid inject 0 " + (CX_COMBINE + 1) + " " + CY_BASE + " "
-                + CZ_BASE + " oxygen 8000");
-        assertTrue("could not put oxygen in the separator's tank: " + filled,
-                filled.contains("\"ok\":true"));
+        placeSeparator(cx);
+        injectEnergyAt(cx + 1, 1_000_000);
+        arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cyBase + " "
+                + czBase + " oxygen 8000");
 
-        flipMode(CX_COMBINE + 1);
-        String mode = separatorInfo(CX_COMBINE + 1);
+        flipMode(cx + 1);
+        Reply mode = separatorInfo(cx + 1);
         assertTrue("premise: the sneak-click must have put it in combine mode: " + mode,
-                mode.contains("\"combining\":true"));
+                mode.bool("combining"));
         assertTrue("premise: it must have found the room it stands in: " + mode,
-                mode.contains("\"hasServedCell\":true"));
+                mode.bool("hasServedCell"));
 
-        exec("stellurgytest tile force-tick 0 " + (CX_COMBINE + 1) + " " + CY_BASE + " " + CZ_BASE + " 200");
+        forceTick(cx + 1, 200);
 
-        String after = ventInfo(CX_COMBINE);
-        long o2After = extract(after, AIR_O2);
+        Reply after = ventInfo(cx);
+        long o2After = after.longInteger("airO2");
         assertTrue("the separator must push its oxygen into the room (before=60000 after="
                 + o2After + "): " + after, o2After > ppm(60_000));
-        assertTrue("and the room must become breathable again: " + after,
-                after.contains("\"blobAtmosphere\":\"PressurizedAir\""));
+        assertEquals("and the room must become breathable again: " + after,
+                "PressurizedAir", after.text("blobAtmosphere"));
 
-        String tank = separatorInfo(CX_COMBINE + 1);
+        Reply tank = separatorInfo(cx + 1);
         assertTrue("the oxygen it gave the room must have left its tank: " + tank,
-                extract(tank, TANK_AMOUNT) < 8000);
+                tank.longInteger("tankAmount") < 8000);
     }
 
     /** MECH-ATM-21 governor — the reason the combiner exists. Oxygen is admitted only up to the
@@ -213,38 +210,36 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         long ceiling = configValue("lifeSupportMaxPartialO2");
         long start = ceiling - ppm(40_000);
 
-        buildSealableRoom(CX_GOVERNOR);
-        placeVent(CX_GOVERNOR);
-        injectEnergy(CX_GOVERNOR, 1_000_000);
-        injectOxygen(CX_GOVERNOR, 16000);
-        forceTickAndReseal(CX_GOVERNOR);
+        int cx = stand("a room just under the oxygen ceiling, with a combining separator");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        injectOxygen(cx, 16000);
+        forceTickAndReseal(cx);
 
-        String set = exec("stellurgytest vent setair 0 " + CX_GOVERNOR + " " + CY_BASE + " " + CZ_BASE
+        arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
                 + " " + ppm(790_000) + " " + start + " 0");
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
 
-        placeSeparator(CX_GOVERNOR);
-        injectEnergyAt(CX_GOVERNOR + 1, 1_000_000);
-        String filled = exec("stellurgytest fluid inject 0 " + (CX_GOVERNOR + 1) + " " + CY_BASE + " "
-                + CZ_BASE + " oxygen 8000");
-        assertTrue("could not put oxygen in the separator's tank: " + filled,
-                filled.contains("\"ok\":true"));
+        placeSeparator(cx);
+        injectEnergyAt(cx + 1, 1_000_000);
+        arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cyBase + " "
+                + czBase + " oxygen 8000");
 
-        flipMode(CX_GOVERNOR + 1);
+        flipMode(cx + 1);
         // Far longer than the two operations the gap needs: the machine must stop by decision,
         // not by running out of time.
-        forceTick(CX_GOVERNOR + 1, 400);
+        forceTick(cx + 1, 400);
 
-        String after = ventInfo(CX_GOVERNOR);
-        long o2After = extract(after, AIR_O2);
+        Reply after = ventInfo(cx);
+        long o2After = after.longInteger("airO2");
         assertEquals("oxygen must stop exactly at the ceiling — climbing from " + start
                 + " and no further than " + ceiling + ": " + after, ceiling, o2After);
-        assertTrue("and the room must stay breathable rather than turn oxygen-toxic: " + after,
-                after.contains("\"blobAtmosphere\":\"PressurizedAir\""));
+        assertEquals("and the room must stay breathable rather than turn oxygen-toxic: " + after,
+                "PressurizedAir", after.text("blobAtmosphere"));
 
-        String tank = separatorInfo(CX_GOVERNOR + 1);
+        Reply tank = separatorInfo(cx + 1);
         assertTrue("it must have stopped because of the ceiling, not because the tank ran dry: "
-                + tank, extract(tank, TANK_AMOUNT) > 0);
+                + tank, tank.longInteger("tankAmount") > 0);
     }
 
     // ─── helpers ───────────────────────────────────────────────────────
@@ -259,21 +254,22 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      */
     @Test
     public void aJettisonPortThrowsItsCargoOverboard() throws Exception {
-        clearAirPocket(CX_JETTISON);
-        placeJettisonPort(CX_JETTISON);
+        int cx = stand("a jettison port with a clear exit");
+        clearAirPocket(cx);
+        placeJettisonPort(cx);
 
-        String loaded = exec("stellurgytest jettison load 0 " + CX_JETTISON + " " + CY_BASE + " " + CZ_BASE
+        Reply loaded = ask("stellurgytest jettison load 0 " + cx + " " + cyBase + " " + czBase
                 + " stellurgy:carbonDust 1");
-        assertTrue("the port must accept a stack: " + loaded, loaded.contains("\"ok\":true"));
+        assertTrue("the port must accept a stack: " + loaded, loaded.ok());
 
-        forceTick(CX_JETTISON, 25);
+        forceTick(cx, 25);
 
-        String info = exec("stellurgytest jettison info 0 " + CX_JETTISON + " " + CY_BASE + " " + CZ_BASE);
+        Reply info = ask("stellurgytest jettison info 0 " + cx + " " + cyBase + " " + czBase);
         assertEquals("a port with a clear exit must report no obstruction: " + info,
-                0, extract(info, OBSTRUCTION));
-        assertEquals("and its slot must be empty afterwards: " + info, 0, extract(info, HELD_COUNT));
+                0, info.integer("obstruction"));
+        assertEquals("and its slot must be empty afterwards: " + info, 0, info.integer("heldCount"));
         assertTrue("the dust must exist in the world as a jettisoned item — an empty slot alone is"
-                + " what voiding it would also look like: " + info, extract(info, EJECTED) >= 1);
+                + " what voiding it would also look like: " + info, info.integer("ejected") >= 1);
     }
 
     /**
@@ -282,93 +278,82 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      */
     @Test
     public void aBlockedJettisonPortHoldsItsCargo() throws Exception {
-        clearAirPocket(CX_JETTISON_BLOCKED);
-        placeJettisonPort(CX_JETTISON_BLOCKED);
+        int cx = stand("a jettison port walled in on every side");
+        clearAirPocket(cx);
+        placeJettisonPort(cx);
         // Wall it in on every side, so the outcome does not depend on which way the port was placed.
-        exec("stellurgytest fill 0 " + (CX_JETTISON_BLOCKED - 1) + " " + (CY_BASE - 1) + " " + (CZ_BASE - 1)
-                + " " + (CX_JETTISON_BLOCKED + 1) + " " + (CY_BASE + 1) + " " + (CZ_BASE + 1)
+        arrange("stellurgytest fill 0 " + (cx - 1) + " " + (cyBase - 1) + " " + (czBase - 1)
+                + " " + (cx + 1) + " " + (cyBase + 1) + " " + (czBase + 1)
                 + " minecraft:stone");
-        placeJettisonPort(CX_JETTISON_BLOCKED);
+        placeJettisonPort(cx);
 
-        exec("stellurgytest jettison load 0 " + CX_JETTISON_BLOCKED + " " + CY_BASE + " " + CZ_BASE
+        arrange("stellurgytest jettison load 0 " + cx + " " + cyBase + " " + czBase
                 + " stellurgy:carbonDust 1");
-        forceTick(CX_JETTISON_BLOCKED, 25);
+        forceTick(cx, 25);
 
-        String info = exec("stellurgytest jettison info 0 " + CX_JETTISON_BLOCKED + " " + CY_BASE + " "
-                + CZ_BASE);
+        Reply info = ask("stellurgytest jettison info 0 " + cx + " " + cyBase + " "
+                + czBase);
         assertTrue("a walled-in port must report where the obstruction is: " + info,
-                extract(info, OBSTRUCTION) > 0);
-        assertEquals("and it must still be holding the dust: " + info, 1, extract(info, HELD_COUNT));
-        assertEquals("with nothing jettisoned: " + info, 0, extract(info, EJECTED));
+                info.integer("obstruction") > 0);
+        assertEquals("and it must still be holding the dust: " + info, 1, info.integer("heldCount"));
+        assertEquals("with nothing jettisoned: " + info, 0, info.integer("ejected"));
     }
 
     /** Open sky around the port, on a stone floor, so its exit is clear whichever way it faces. */
     private void clearAirPocket(int cx) throws Exception {
-        exec("stellurgytest fill 0 " + (cx - 4) + " " + (CY_BASE - 1) + " " + (CZ_BASE - 4)
-                + " " + (cx + 4) + " " + (CY_BASE + 4) + " " + (CZ_BASE + 4) + " minecraft:air");
-        exec("stellurgytest fill 0 " + (cx - 4) + " " + (CY_BASE - 2) + " " + (CZ_BASE - 4)
-                + " " + (cx + 4) + " " + (CY_BASE - 2) + " " + (CZ_BASE + 4) + " minecraft:stone");
+        arrange("stellurgytest fill 0 " + (cx - 4) + " " + (cyBase - 1) + " " + (czBase - 4)
+                + " " + (cx + 4) + " " + (cyBase + 4) + " " + (czBase + 4) + " minecraft:air");
+        arrange("stellurgytest fill 0 " + (cx - 4) + " " + (cyBase - 2) + " " + (czBase - 4)
+                + " " + (cx + 4) + " " + (cyBase - 2) + " " + (czBase + 4) + " minecraft:stone");
     }
 
     private void placeJettisonPort(int cx) throws Exception {
-        String resp = exec("stellurgytest place 0 " + cx + " " + CY_BASE + " " + CZ_BASE
-                + " stellurgy:jettisonPort");
-        assertTrue("jettison port place failed: " + resp, resp.contains("\"placed\":true"));
+        place(cx, "stellurgy:jettisonPort");
     }
 
     private void buildSealableRoom(int cx) throws Exception {
-        int by = CY_BASE, bz = CZ_BASE;
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
+        int by = cyBase, bz = czBase;
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
                 + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
         for (int yy = by + 1; yy <= by + 2; yy++) {
-            exec("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
+            arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
                     + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
-            exec("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
+            arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
                     + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
         }
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
                 + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
     }
 
     private void placeVent(int cx) throws Exception {
-        String resp = exec("stellurgytest place 0 " + cx + " " + CY_BASE + " " + CZ_BASE
-                + " stellurgy:oxygenVent");
-        assertTrue("vent place failed: " + resp, resp.contains("\"placed\":true"));
+        place(cx, "stellurgy:oxygenVent");
     }
 
     /** Placed one block along, inside the same sealed volume as the vent. */
     private void placeRecirculator(int cx) throws Exception {
-        String resp = exec("stellurgytest place 0 " + (cx + 1) + " " + CY_BASE + " " + CZ_BASE
-                + " stellurgy:airRecirculator");
-        assertTrue("recirculator place failed: " + resp, resp.contains("\"placed\":true"));
-    }
-
-    private void injectEnergy(int cx, int amount) throws Exception {
-        String resp = exec("stellurgytest energy inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
-                + " " + amount);
-        assertTrue("energy inject failed: " + resp, resp.contains("\"ok\":true"));
-    }
-
-    private void injectEnergy2(int cx, int amount) throws Exception {
-        injectEnergyAt(cx + 1, amount);
-    }
-
-    private void injectEnergyAt(int x, int amount) throws Exception {
-        String resp = exec("stellurgytest energy inject 0 " + x + " " + CY_BASE + " " + CZ_BASE
-                + " " + amount);
-        assertTrue("energy inject failed at " + x + ": " + resp, resp.contains("\"ok\":true"));
+        place(cx + 1, "stellurgy:airRecirculator");
     }
 
     private void placeSeparator(int cx) throws Exception {
-        String resp = exec("stellurgytest place 0 " + (cx + 1) + " " + CY_BASE + " " + CZ_BASE
-                + " stellurgy:gasSeparator");
-        assertTrue("separator place failed: " + resp, resp.contains("\"placed\":true"));
+        place(cx + 1, "stellurgy:gasSeparator");
+    }
+
+    private void place(int x, String block) throws Exception {
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cyBase + " " + czBase + " " + block);
+        assertTrue(block + " place failed: " + resp, resp.bool("placed"));
+    }
+
+    private void injectEnergy(int cx, int amount) throws Exception {
+        injectEnergyAt(cx, amount);
+    }
+
+    private void injectEnergyAt(int x, int amount) throws Exception {
+        arrange("stellurgytest energy inject 0 " + x + " " + cyBase + " " + czBase + " " + amount);
     }
 
     private void injectOxygen(int cx, int amount) throws Exception {
-        String resp = exec("stellurgytest fluid inject 0 " + cx + " " + CY_BASE + " " + CZ_BASE
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cyBase + " " + czBase
                 + " oxygen " + amount);
-        assertTrue("oxygen inject failed: " + resp, resp.contains("\"ok\":true"));
     }
 
     /**
@@ -381,43 +366,32 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      * ticked at all.
      */
     private void forceTick(int x, int ticks) throws Exception {
-        String resp = exec("stellurgytest tile force-tick 0 " + x + " " + CY_BASE + " " + CZ_BASE
-                + " " + ticks);
-        assertTrue("force-tick found no tile at x=" + x + " — the machine was not there to act, so"
-                + " nothing below is a statement about it: " + resp, !resp.contains("\"error\""));
+        arrange("stellurgytest tile force-tick 0 " + x + " " + cyBase + " " + czBase + " " + ticks);
     }
 
     private void forceTickAndReseal(int cx) throws Exception {
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY_BASE + " " + CZ_BASE + " 1");
-        exec("stellurgytest vent reseal 0 " + cx + " " + CY_BASE + " " + CZ_BASE);
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY_BASE + " " + CZ_BASE + " 5");
+        forceTick(cx, 1);
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cyBase + " " + czBase);
+        forceTick(cx, 5);
     }
 
-    private String ventInfo(int cx) throws Exception {
-        return exec("stellurgytest vent info 0 " + cx + " " + CY_BASE + " " + CZ_BASE);
+    private Reply ventInfo(int cx) throws Exception {
+        return ask("stellurgytest vent info 0 " + cx + " " + cyBase + " " + czBase);
     }
 
-    private String separatorInfo(int x) throws Exception {
-        return exec("stellurgytest separator info 0 " + x + " " + CY_BASE + " " + CZ_BASE);
+    private Reply separatorInfo(int x) throws Exception {
+        return ask("stellurgytest separator info 0 " + x + " " + cyBase + " " + czBase);
     }
 
     /** The production toggle: a sneak-right-click on the block, through the block's own
      *  onBlockActivated. Calling toggleMode() on the tile would skip the dispatch that decides
      *  whether a click means "open me" or "flip me", which is the part a player uses. */
     private void flipMode(int x) throws Exception {
-        String resp = exec("stellurgytest block activate 0 " + x + " " + CY_BASE + " " + CZ_BASE + " true");
-        assertTrue("sneak-click failed: " + resp, resp.contains("\"handled\":true"));
+        Reply resp = ask("stellurgytest block activate 0 " + x + " " + cyBase + " " + czBase + " true");
+        assertTrue("sneak-click failed: " + resp, resp.bool("handled"));
     }
 
     private long configValue(String key) throws Exception {
-        String resp = exec("stellurgytest config get " + key);
-        assertTrue("config get " + key + " failed: " + resp, resp.contains("\"ok\":true"));
-        return extract(resp, CONFIG_VALUE);
-    }
-
-    private static long extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+        return arrange("stellurgytest config get " + key).longInteger("value");
     }
 }

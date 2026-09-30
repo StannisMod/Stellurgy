@@ -12,17 +12,16 @@ import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import static org.junit.Assert.assertTrue;
 
 /**
- * The clause that keeps the emergency dump an emergency, checked as a RELATION rather than as a pair
- * of numbers.
+ * A slug is SPENT: what it carries away leaves the ship with it.
  *
- * <p>C12 HEAT-17 says sustained throughput from ejected slugs must stay below the cheapest continuous
- * radiator tier: {@code E_slug / t_charge < P_radiator}. Written that way it survives rebalancing -
- * by us or by a modpack author - because what it forbids is a SHAPE (slugs standing in for surface),
- * not a value. So this test computes both sides from the config the game is actually running and
- * compares them; it names no temperature and no rate of its own.</p>
+ * <p>The other half of the dump's bargain — sustained dump throughput must stay under the cheapest
+ * radiator — used to live here too, computed from numbers this class set itself in {@code @Before}
+ * while its javadoc said "the config the game is actually running". A copy of the defaults cannot
+ * notice the defaults changing, so that check now reads the running server's config instead:
+ * {@code server/HeatDumpBuysSecondsTest.atTheShippedDefaultsOneDumpOutshedsOneRadiatingCell}.</p>
  *
- * <p>This became checkable only when the dump gained a charge rate. Before that the clause had no
- * {@code t_charge} to divide by, which is why it sat unpinned through three slices.</p>
+ * <p>The {@code @Before} below still copies the defaults, and the seconds threshold here has no
+ * derivation yet: how many seconds "seconds" is has not been decided.</p>
  */
 public class SlugStaysAnEmergencyTest {
 
@@ -48,38 +47,6 @@ public class SlugStaysAnEmergencyTest {
         // bigger slug only means it runs longer before the port fires. That is the whole point of
         // expressing the clause per second rather than per slug.
         return StellurgyConfiguration.getCurrentConfig().shipHeatDumpThroughput;
-    }
-
-    /**
-     * What ONE radiating cell sheds per second at its own reference temperature - the cheapest tier.
-     *
-     * <p>Read straight off the config rather than through the curve, because at the reference point
-     * the curve is defined to give exactly this: that is what "a point on the curve" means, and going
-     * through the code to fetch a number the config states would measure the arithmetic instead of
-     * the relation.</p>
-     */
-    private static double cheapestRadiatorRate() {
-        // A radiator is a square plate by design, so the smallest one worth calling a tier is 3x3.
-        // Naming that here rather than a bare multiplier is the difference between stating the
-        // clause's own subject and inventing a fudge factor: change the shape of the cheapest tier
-        // and this number should change with it.
-        return StellurgyConfiguration.getCurrentConfig().shipHeatRadiatorCellPower * CHEAPEST_TIER_CELLS;
-    }
-
-    /** The smallest square plate a player would build: the cheapest CONTINUOUS tier the clause names. */
-    private static final int CHEAPEST_TIER_CELLS = 3 * 3;
-
-    @Test
-    public void aDumpCannotStandInForRadiators() {
-        double dump = sustainedDumpRate();
-        double radiator = cheapestRadiatorRate();
-
-        assertTrue("premise: the cheapest radiator tier must shed something at its reference point",
-                radiator > 0);
-        assertTrue("sustained dump throughput must stay under what the cheapest continuous radiator"
-                + " tier sheds, or a ship could be cooled by feeding it iron: dump=" + dump
-                + " per second, radiator=" + radiator + " per second per cell",
-                dump < radiator);
     }
 
     /**

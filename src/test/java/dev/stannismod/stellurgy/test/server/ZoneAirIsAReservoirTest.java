@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * A compartment's air as a HEAT reservoir: it has a temperature, it has a capacity, and gas arriving
@@ -30,17 +30,17 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
 
-    private static final Pattern AIR_O2 = Pattern.compile("\"airO2\":(-?\\d+)");
-    private static final Pattern AIR_PRESSURE = Pattern.compile("\"airPressure\":(-?\\d+)");
-    private static final Pattern AIR_TEMP = Pattern.compile("\"airTempMilliK\":(-?\\d+)");
-    private static final Pattern AIR_CAPACITY = Pattern.compile("\"airHeatCapacity\":(-?\\d+)");
-    private static final Pattern CONFIG_VALUE = Pattern.compile("\"value\":(-?\\d+)");
+    /** The Y and Z every helper here builds on, from this scenario's own site (see {@link #stand}). */
+    private int cy;
+    private int cz;
 
-    private static final int CY = 64;
-    private static final int CZ = 2960;
-    private static final int CX_MIX = 2000;
-    private static final int CX_DRAW = 2200;
-    private static final int CX_VACUUM = 2400;
+    /** Ask for this scenario's site, prove its volume empty, and answer the X its room is centred on. */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(2, 6, what);
+        cy = site.y + 2;
+        cz = site.z + 2;
+        return site.x + 2;
+    }
 
     /** Hot enough that the mix is unmistakable, and nowhere near any threshold this test cares about. */
     private static final int HOT_MILLI_K = 400_000;
@@ -55,51 +55,73 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      */
     @Test
     public void gasArrivingMixesByHowMuchOfEachThereIs() throws Exception {
-        buildRoomWithVent(CX_MIX);
+        int cx = stand("a hot room with a combining separator in it");
+        buildRoomWithVent(cx);
         // Oxygen-poor so the governor leaves plenty of headroom to admit into.
-        setAir(CX_MIX, 790_000, 60_000, 0, HOT_MILLI_K);
+        setAir(cx, 790_000, 60_000, 0, HOT_MILLI_K);
 
-        String before = ventInfo(CX_MIX);
-        long pressureBefore = extract(before, AIR_PRESSURE);
-        long tempBefore = extract(before, AIR_TEMP);
-        // Within a kelvin. The vent tops this room up with gas at storage temperature, so a
-        // MAINTAINED room's temperature is not a figure that holds to the milli-kelvin -- and the
-        // scenario below is about a mixing rule worth whole kelvins, not about this digit.
-        assertTrue("premise: the room must actually start hot, or there is nothing to mix into: "
-                + before, Math.abs(tempBefore - HOT_MILLI_K) < 1_000);
-        assertTrue("premise: and must hold air at all: " + before, pressureBefore > 0);
+        // Everything that enters this room while it is watched arrives at ONE temperature: the
+        // separator's tank gas and the vent's top-up are both admitted at `AirState.ambientKelvin()`
+        // (`TileGasSeparator`, `TileOxygenVent.replenishOxygen`). So however many admissions there
+        // are, the calorimeter rule composes into one: T = (P0·T0 + ΔP·Ta) / (P0 + ΔP), with P the
+        // total partial pressure — which is what `AirState.mixIn` weights by. The weights are read as
+        // the exact partial pressures, not the centi-atm `airPressure`, which is truncated to
+        // hundredths of an atmosphere and would put a percent of error into each weight.
+        long tickBefore = WorldCommandFixtures.serverTick();
+        Reply before = ventInfo(cx);
+        long gasBefore = totalGas(before);
+        long tempBefore = before.longInteger("airTempMilliK");
+        assertTrue("premise: the room must hold air at all: " + before, gasBefore > 0);
 
         int ambient = configInt("shipHeatAmbientKelvin");
-        assertTrue("premise: the tank's gas must be at a different temperature from the room, or "
-                        + "this test cannot tell mixing from doing nothing (room=" + tempBefore
-                        + " tank=" + (ambient * 1000) + ")",
-                Math.abs(tempBefore - ambient * 1000L) > 50_000L);
 
-        runCombinerInto(CX_MIX);
+        runCombinerInto(cx);
 
-        String after = ventInfo(CX_MIX);
-        long pressureAfter = extract(after, AIR_PRESSURE);
-        long tempAfter = extract(after, AIR_TEMP);
-        assertTrue("premise: the combiner must actually have put gas in (before=" + pressureBefore
-                + " after=" + pressureAfter + "): " + after, pressureAfter > pressureBefore);
-        assertTrue("premise: and enough of it to tell a weighted mean from an average: " + after,
-                pressureAfter - pressureBefore > pressureBefore / 20);
+        Reply after = ventInfo(cx);
+        long ticksWatched = WorldCommandFixtures.serverTick() - tickBefore;
+        long gasAfter = totalGas(after);
+        long tempAfter = after.longInteger("airTempMilliK");
+        assertTrue("premise: the combiner must actually have put gas in (before=" + gasBefore
+                + " after=" + gasAfter + "): " + after, gasAfter > gasBefore);
 
-        double admitted = pressureAfter - pressureBefore;
-        double expected = (pressureBefore * (tempBefore / 1000.0D) + admitted * ambient)
-                / (pressureBefore + admitted);
-        double plainAverage = (tempBefore / 1000.0D + ambient) / 2.0D;
+        double t0 = tempBefore / 1000.0D;
+        double admitted = gasAfter - gasBefore;
+        double expected = (gasBefore * t0 + admitted * ambient) / (gasBefore + admitted);
+        double plainAverage = (t0 + ambient) / 2.0D;
         double measured = tempAfter / 1000.0D;
 
+        // The ONLY slack: each `mixIn` rounds the result to a milli-kelvin, half a milli-kelvin per
+        // call, and an earlier call's error only shrinks under later mixing. Calls are bounded by
+        // admissions: at most one per separator tick — the forced ones plus one per world tick — and
+        // one per vent tick, which is one per world tick.
+        double bound = 0.0005D * (COMBINER_TICKS + 2L * ticksWatched);
+        assertTrue("premise: the rule under test must be distinguishable from doing nothing, by more "
+                        + "than the rounding can hide (room " + t0 + " K, arriving " + ambient
+                        + " K, expected " + expected + " K, bound " + bound + " K)",
+                Math.abs(expected - t0) > bound);
+        assertTrue("premise: and from a plain average, by more than twice the rounding — or the two "
+                        + "readings below could not come apart (expected " + expected + " K, average "
+                        + plainAverage + " K, bound " + bound + " K)",
+                Math.abs(expected - plainAverage) > 2.0D * bound);
+
         assertTrue("the room must end up at the enthalpy-weighted mean of what was there and what "
-                        + "arrived: expected " + expected + " K from " + pressureBefore + " of air at "
-                        + (tempBefore / 1000.0D) + " K meeting " + admitted + " at " + ambient
-                        + " K, measured " + measured + " K",
-                Math.abs(measured - expected) < 1.5D);
+                        + "arrived: expected " + expected + " K from " + gasBefore + " of air at " + t0
+                        + " K meeting " + admitted + " at " + ambient + " K, measured " + measured
+                        + " K, allowed " + bound + " K of rounding over " + ticksWatched + " ticks",
+                Math.abs(measured - expected) <= bound);
         assertTrue("and NOT at the plain average of the two temperatures (" + plainAverage + " K) — "
                         + "the two agree only when the sides are equal, which is exactly the case "
                         + "this scenario avoids",
-                Math.abs(measured - plainAverage) > 5.0D);
+                Math.abs(measured - plainAverage) > bound);
+    }
+
+    /** The separator is force-ticked this many times while combining (see {@link #runCombinerInto}). */
+    private static final int COMBINER_TICKS = 200;
+
+    /** The room's total partial pressure — the weight `AirState.mixIn` uses. Only these three gases
+     *  are ever put in this room, by `setair`, the vent and the separator. */
+    private static long totalGas(Reply vent) {
+        return vent.longInteger("airN2") + vent.longInteger("airO2") + vent.longInteger("airCO2");
     }
 
     /**
@@ -112,23 +134,24 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      */
     @Test
     public void drawingGasOutLeavesTheTemperatureAndLowersTheCapacity() throws Exception {
-        buildRoomWithVent(CX_DRAW);
-        setAir(CX_DRAW, 790_000, 210_000, 0, HOT_MILLI_K);
+        int cx = stand("a hot room with a splitting separator in it");
+        buildRoomWithVent(cx);
+        setAir(cx, 790_000, 210_000, 0, HOT_MILLI_K);
 
-        String before = ventInfo(CX_DRAW);
-        long tempBefore = extract(before, AIR_TEMP);
-        long capacityBefore = extract(before, AIR_CAPACITY);
+        Reply before = ventInfo(cx);
+        long tempBefore = before.longInteger("airTempMilliK");
+        long capacityBefore = before.longInteger("airHeatCapacity");
         assertEquals("premise: the room must start hot: " + before, HOT_MILLI_K, tempBefore);
         assertTrue("premise: and must have a real capacity to lose: " + before, capacityBefore > 0);
 
         // The separator's default direction: gas out of the room and into its tank.
-        placeSeparator(CX_DRAW);
-        injectEnergyAt(CX_DRAW + 1, 1_000_000);
-        forceTick(CX_DRAW + 1, 200);
+        placeSeparator(cx);
+        injectEnergyAt(cx + 1, 1_000_000);
+        forceTick(cx + 1, 200);
 
-        String after = ventInfo(CX_DRAW);
-        long capacityAfter = extract(after, AIR_CAPACITY);
-        long tempAfter = extract(after, AIR_TEMP);
+        Reply after = ventInfo(cx);
+        long capacityAfter = after.longInteger("airHeatCapacity");
+        long tempAfter = after.longInteger("airTempMilliK");
         assertTrue("premise: the separator must actually have taken gas out (capacity before="
                         + capacityBefore + " after=" + capacityAfter + "): " + after,
                 capacityAfter < capacityBefore);
@@ -145,97 +168,84 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      */
     @Test
     public void airThatIsNotThereHasNoTemperature() throws Exception {
-        buildRoomWithVent(CX_VACUUM);
-        setAir(CX_VACUUM, 790_000, 210_000, 0, HOT_MILLI_K);
-        assertEquals("premise: the room must be hot while it still holds air: " + ventInfo(CX_VACUUM),
-                HOT_MILLI_K, extract(ventInfo(CX_VACUUM), AIR_TEMP));
+        int cx = stand("a hot room pumped down to vacuum");
+        buildRoomWithVent(cx);
+        setAir(cx, 790_000, 210_000, 0, HOT_MILLI_K);
+        Reply hot = ventInfo(cx);
+        assertEquals("premise: the room must be hot while it still holds air: " + hot,
+                HOT_MILLI_K, hot.longInteger("airTempMilliK"));
 
-        setAir(CX_VACUUM, 0, 0, 0, HOT_MILLI_K);
+        setAir(cx, 0, 0, 0, HOT_MILLI_K);
 
-        String empty = ventInfo(CX_VACUUM);
+        Reply empty = ventInfo(cx);
         int ambient = configInt("shipHeatAmbientKelvin");
         assertEquals("a zone holding nothing must read ambient, not what it was at when it still had "
-                + "air: " + empty, ambient * 1000L, extract(empty, AIR_TEMP));
-        assertEquals("and must hold no heat at all: " + empty, 0, extract(empty, AIR_CAPACITY));
+                + "air: " + empty, ambient * 1000L, empty.longInteger("airTempMilliK"));
+        assertEquals("and must hold no heat at all: " + empty, 0L, empty.longInteger("airHeatCapacity"));
     }
 
     // ─── the rig ───────────────────────────────────────────────────────
 
     private void buildRoomWithVent(int cx) throws Exception {
-        int by = CY, bz = CZ;
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
+        int by = cy, bz = cz;
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
                 + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
         for (int yy = by + 1; yy <= by + 2; yy++) {
-            exec("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
+            arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (bz - 2)
                     + " " + (cx + 2) + " " + yy + " " + (bz + 2) + " minecraft:stone");
-            exec("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
+            arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (bz - 1)
                     + " " + (cx + 1) + " " + yy + " " + (bz + 1) + " minecraft:air");
         }
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by + 3) + " " + (bz - 2)
                 + " " + (cx + 2) + " " + (by + 3) + " " + (bz + 2) + " minecraft:stone");
 
-        String vent = exec("stellurgytest place 0 " + cx + " " + CY + " " + CZ
-                + " stellurgy:oxygenVent");
-        assertTrue("vent place failed: " + vent, vent.contains("\"placed\":true"));
+        place(cx, "stellurgy:oxygenVent");
         injectEnergyAt(cx, 1_000_000);
-        String oxygen = exec("stellurgytest fluid inject 0 " + cx + " " + CY + " " + CZ + " oxygen 16000");
-        assertTrue("oxygen inject failed: " + oxygen, oxygen.contains("\"ok\":true"));
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY + " " + CZ + " 1");
-        exec("stellurgytest vent reseal 0 " + cx + " " + CY + " " + CZ);
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY + " " + CZ + " 5");
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
+        forceTick(cx, 1);
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+        forceTick(cx, 5);
     }
 
     /** A separator in combine mode, with oxygen in its tank, run long enough to empty it. */
     private void runCombinerInto(int cx) throws Exception {
         placeSeparator(cx);
         injectEnergyAt(cx + 1, 1_000_000);
-        String filled = exec("stellurgytest fluid inject 0 " + (cx + 1) + " " + CY + " " + CZ
-                + " oxygen 8000");
-        assertTrue("could not put oxygen in the separator's tank: " + filled,
-                filled.contains("\"ok\":true"));
-        String flip = exec("stellurgytest block activate 0 " + (cx + 1) + " " + CY + " " + CZ + " true");
-        assertTrue("sneak-click failed: " + flip, flip.contains("\"handled\":true"));
-        forceTick(cx + 1, 200);
+        arrange("stellurgytest fluid inject 0 " + (cx + 1) + " " + cy + " " + cz + " oxygen 8000");
+        Reply flip = ask("stellurgytest block activate 0 " + (cx + 1) + " " + cy + " " + cz + " true");
+        assertTrue("sneak-click failed: " + flip, flip.bool("handled"));
+        forceTick(cx + 1, COMBINER_TICKS);
     }
 
     private void placeSeparator(int cx) throws Exception {
-        String resp = exec("stellurgytest place 0 " + (cx + 1) + " " + CY + " " + CZ
-                + " stellurgy:gasSeparator");
-        assertTrue("separator place failed: " + resp, resp.contains("\"placed\":true"));
+        place(cx + 1, "stellurgy:gasSeparator");
+    }
+
+    private void place(int x, String block) throws Exception {
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block);
+        assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
     /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int cx, int n2, int o2, int co2, int milliK) throws Exception {
-        String set = exec("stellurgytest vent setair 0 " + cx + " " + CY + " " + CZ
+        arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
                 + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 
     private void injectEnergyAt(int x, int amount) throws Exception {
-        String resp = exec("stellurgytest energy inject 0 " + x + " " + CY + " " + CZ + " " + amount);
-        assertTrue("energy inject failed at " + x + ": " + resp, resp.contains("\"ok\":true"));
+        arrange("stellurgytest energy inject 0 " + x + " " + cy + " " + cz + " " + amount);
     }
 
     /** Force-ticks a machine and CHECKS it was there: a missing tile reads exactly like inaction. */
     private void forceTick(int x, int ticks) throws Exception {
-        String resp = exec("stellurgytest tile force-tick 0 " + x + " " + CY + " " + CZ + " " + ticks);
-        assertTrue("force-tick found no tile at x=" + x + " — nothing below is a statement about a "
-                + "machine that was not there: " + resp, !resp.contains("\"error\""));
+        arrange("stellurgytest tile force-tick 0 " + x + " " + cy + " " + cz + " " + ticks);
     }
 
-    private String ventInfo(int cx) throws Exception {
-        return exec("stellurgytest vent info 0 " + cx + " " + CY + " " + CZ);
+    private Reply ventInfo(int cx) throws Exception {
+        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 
     private int configInt(String key) throws Exception {
-        String resp = exec("stellurgytest config get " + key);
-        assertTrue("config get " + key + " failed: " + resp, resp.contains("\"ok\":true"));
-        return (int) extract(resp, CONFIG_VALUE);
-    }
-
-    private static long extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+        return arrange("stellurgytest config get " + key).integer("value");
     }
 }

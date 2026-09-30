@@ -1,14 +1,15 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * Whether a fire can start is asked of the AIR, on the path the game actually uses.
@@ -25,16 +26,10 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
 
-    private static final Pattern TYPE = Pattern.compile("\"type\":\"([^\"]*)\"");
-    private static final Pattern COMBUSTIBLE = Pattern.compile("\"combustible\":(true|false)");
-    private static final Pattern LABEL = Pattern.compile("\"labelCombustible\":(true|false)");
-    private static final Pattern BREATHABLE_AIR = Pattern.compile("\"breathableAir\":(true|false)");
-    private static final Pattern OXYGEN = Pattern.compile("\"oxygen\":(\\d+)");
-
-    /** Well clear of every other fixture in the shared world. */
-    private static final int ROOM_X = 1320;
-    private static final int ROOM_Y = 100;
-    private static final int ROOM_Z = 2880;
+    /** Where the room's vent stands, from this scenario's own site (see {@link #buildRoomWithVent}). */
+    private int roomX;
+    private int roomY;
+    private int roomZ;
 
     /**
      * Far below anything that burns, and far below anything that can be breathed. In parts per
@@ -53,31 +48,29 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
         buildRoomWithVent();
 
         setAir(AirMix.THIN);
-        String thin = atmosphere();
+        Reply thin = atmosphere();
         // The premise is that the room is thin, not that it holds one exact figure: a maintained
         // room's vent begins restoring oxygen the moment the composition lands, so the number moves
         // between the write and the read. What matters to this test is that it stays far below the
         // breathing threshold, which is what the rest of the scenario rests on.
-        long thinOxygen = longOf(thin, OXYGEN);
+        long thinOxygen = oxygenOf(thin);
         assertTrue("premise: the composition must have arrived, and thin: " + thin,
                 thinOxygen >= ppm(THIN_OXYGEN) && thinOxygen < ppm(THIN_OXYGEN) + ppm(1_000));
-        assertEquals("premise: air this thin is not breathable: " + thin,
-                "false", stringOf(thin, BREATHABLE_AIR));
-        assertEquals("nothing may light in air this thin - and this is the defect the slice closes,"
-                + " because the LABEL below still says it can: " + thin,
-                "false", stringOf(thin, COMBUSTIBLE));
-        assertEquals("the label's own flag is unchanged, and it is WRONG - it was assigned from the"
+        assertFalse("premise: air this thin is not breathable: " + thin, thin.bool("breathableAir"));
+        assertFalse("nothing may light in air this thin - and this is the defect the slice closes,"
+                + " because the LABEL below still says it can: " + thin, thin.bool("combustible"));
+        assertTrue("the label's own flag is unchanged, and it is WRONG - it was assigned from the"
                 + " breathing band. It stays visible until the types are deleted: " + thin,
-                "true", stringOf(thin, LABEL));
+                thin.bool("labelCombustible"));
         assertEquals("premise: the label the game shows is still the thin-air one: " + thin,
-                "lowO2", stringOf(thin, TYPE));
+                "lowO2", thin.text("type"));
 
         setAir(AirMix.NORMAL);
-        String normal = atmosphere();
+        Reply normal = atmosphere();
         assertEquals("premise: the room was refilled: " + normal,
-                ppm(NORMAL_OXYGEN), longOf(normal, OXYGEN));
-        assertEquals("ordinary air burns: " + normal, "true", stringOf(normal, COMBUSTIBLE));
-        assertEquals("and is breathable: " + normal, "true", stringOf(normal, BREATHABLE_AIR));
+                ppm(NORMAL_OXYGEN), oxygenOf(normal));
+        assertTrue("ordinary air burns: " + normal, normal.bool("combustible"));
+        assertTrue("and is breathable: " + normal, normal.bool("breathableAir"));
     }
 
     // ─── the rig ───────────────────────────────────────────────────────
@@ -86,48 +79,44 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
 
     private void setAir(AirMix mix) throws Exception {
         int oxygen = mix == AirMix.THIN ? THIN_OXYGEN : NORMAL_OXYGEN;
-        String set = exec("stellurgytest vent setair 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
+        arrange("stellurgytest vent setair 0 " + roomX + " " + roomY + " " + roomZ
                 + " " + ppm(1_000_000 - oxygen) + " " + ppm(oxygen) + " 0");
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 
     /** What a person standing in the room breathes, and what the air itself says about burning. */
-    private String atmosphere() throws Exception {
-        return exec("stellurgytest atmosphere get 0 " + ROOM_X + " " + (ROOM_Y + 1) + " " + ROOM_Z);
+    private Reply atmosphere() throws Exception {
+        return ask("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ);
+    }
+
+    /** The oxygen in the room's composition — a member of {@code gases}, keyed by gas name. */
+    private static long oxygenOf(Reply atmosphere) {
+        return Reply.of("the `gases` of " + atmosphere, atmosphere.object("gases")).longInteger("oxygen");
     }
 
     /** A sealed room with a powered, sealed vent — the same rig the zone-air tests run on. */
     private void buildRoomWithVent() throws Exception {
-        exec("stellurgytest fill 0 " + (ROOM_X - 2) + " " + (ROOM_Y - 1) + " " + (ROOM_Z - 2)
-                + " " + (ROOM_X + 2) + " " + ROOM_Y + " " + (ROOM_Z + 2) + " minecraft:stone");
-        for (int yy = ROOM_Y + 1; yy <= ROOM_Y + 2; yy++) {
-            exec("stellurgytest fill 0 " + (ROOM_X - 2) + " " + yy + " " + (ROOM_Z - 2)
-                    + " " + (ROOM_X + 2) + " " + yy + " " + (ROOM_Z + 2) + " minecraft:stone");
-            exec("stellurgytest fill 0 " + (ROOM_X - 1) + " " + yy + " " + (ROOM_Z - 1)
-                    + " " + (ROOM_X + 1) + " " + yy + " " + (ROOM_Z + 1) + " minecraft:air");
+        FixtureSite site = clearedSite(2, 6, "a sealed room with a powered vent");
+        roomX = site.x + 2;
+        roomY = site.y + 2;
+        roomZ = site.z + 2;
+        arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY - 1) + " " + (roomZ - 2)
+                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone");
+        for (int yy = roomY + 1; yy <= roomY + 2; yy++) {
+            arrange("stellurgytest fill 0 " + (roomX - 2) + " " + yy + " " + (roomZ - 2)
+                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone");
+            arrange("stellurgytest fill 0 " + (roomX - 1) + " " + yy + " " + (roomZ - 1)
+                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air");
         }
-        exec("stellurgytest fill 0 " + (ROOM_X - 2) + " " + (ROOM_Y + 3) + " " + (ROOM_Z - 2)
-                + " " + (ROOM_X + 2) + " " + (ROOM_Y + 3) + " " + (ROOM_Z + 2) + " minecraft:stone");
+        arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY + 3) + " " + (roomZ - 2)
+                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone");
 
-        String vent = exec("stellurgytest place 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
+        Reply vent = arrange("stellurgytest place 0 " + roomX + " " + roomY + " " + roomZ
                 + " stellurgy:oxygenVent");
-        assertTrue("vent place failed: " + vent, vent.contains("\"placed\":true"));
-        exec("stellurgytest energy inject 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z + " 1000000");
-        exec("stellurgytest fluid inject 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z + " oxygen 16000");
-        exec("stellurgytest tile force-tick 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z + " 1");
-        exec("stellurgytest vent reseal 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z);
-        exec("stellurgytest tile force-tick 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z + " 5");
-    }
-
-    private static long longOf(String json, Pattern pattern) {
-        Matcher m = pattern.matcher(json);
-        assertTrue("no " + pattern.pattern() + " in: " + json, m.find());
-        return Long.parseLong(m.group(1));
-    }
-
-    private static String stringOf(String json, Pattern pattern) {
-        Matcher m = pattern.matcher(json);
-        assertTrue("no " + pattern.pattern() + " in: " + json, m.find());
-        return m.group(1);
+        assertTrue("vent place failed: " + vent, vent.bool("placed"));
+        arrange("stellurgytest energy inject 0 " + roomX + " " + roomY + " " + roomZ + " 1000000");
+        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000");
+        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1");
+        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ);
+        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5");
     }
 }

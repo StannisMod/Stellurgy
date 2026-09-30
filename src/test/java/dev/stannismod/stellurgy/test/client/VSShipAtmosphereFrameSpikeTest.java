@@ -275,9 +275,11 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         assertTrue("oxygen inject failed",
                 Reply.of(exec("stellurgytest fluid inject 0 " + x + " " + (y - 1) + " " + z + " oxygen 16000")
                         ).ok());
-        exec("stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 1");
+        String firstTick = "stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 1";
+        Reply.of(firstTick, exec(firstTick)).requireOk(firstTick);
         String reseal = exec("stellurgytest vent reseal 0 " + x + " " + (y - 1) + " " + z);
-        exec("stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 5");
+        String settle = "stellurgytest tile force-tick 0 " + x + " " + (y - 1) + " " + z + " 5";
+        Reply.of(settle, exec(settle)).requireOk(settle);
         return reseal;
     }
 
@@ -328,9 +330,16 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         // there is no record to read. Reading both is the point: the pair separates "he was moved
         // into a different atmosphere" from "he is in the same one he was in", which is exactly the
         // difference between this test's two legs.
-        String resp = exec("stellurgytest atmosphere for-player");
-        Reply mReply = Reply.of(resp);
-        String resolved = mReply.has(PLAYER_ATM) ? mReply.text(PLAYER_ATM) : "";
+        String command = "stellurgytest atmosphere for-player";
+        Reply mReply = Reply.of(command, exec(command)).requireOk(command);
+        // The verb writes `"atmosphere":""` when the gate resolved NOTHING, and RESULT-3 asks only
+        // that the answer is not PressurizedAir — so an unresolved player would read as the finding.
+        // "Resolved to nothing" is a different defect from "resolved to the wrong air", and it is
+        // refused here as that rather than counted as either answer.
+        assertTrue("the per-entity gate must resolve SOME atmosphere for the player at (" + x + ","
+                + y + "," + z + "), or neither leg is a reading: " + mReply,
+                mReply.bool("hasHandler") && mReply.bool("hasAtmosphere"));
+        String resolved = mReply.text(PLAYER_ATM);
         System.out.println("[S1/gate] at (" + x + "," + y + "," + z + ") resolved=" + resolved
                 + " changes=" + changes);
         return resolved;

@@ -1,13 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * What being too hot COSTS: the two rungs of the failure ladder that a ship can reach today.
@@ -36,27 +39,31 @@ import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
  */
 public class HeatFailureLadderTest extends AbstractSharedServerTest {
 
-    private static final Pattern CONFIG_VALUE = Pattern.compile("\"value\":(-?\\d+)");
-    private static final Pattern ATMOSPHERE_TYPE = Pattern.compile("\"type\":\"([^\"]*)\"");
-    private static final Pattern MESSAGE = Pattern.compile("\"message\":\"([^\"]*)\"");
+    /** The compartment's vent: a sealed room on this scenario's own site (see {@link #buildRoomWithVent}). */
+    private int roomX;
+    private int roomY;
+    private int roomZ;
 
-    /** The compartment: a sealed room with a vent, well clear of every other fixture. */
-    private static final int ROOM_X = 2000;
-    private static final int ROOM_Y = 64;
-    private static final int ROOM_Z = 3100;
+    /**
+     * The ship's flight computer as {@code x y z}, and its navigation computer two blocks under it
+     * as {@code dim x y z}; both from this scenario's own site (see {@link #standShip}). One
+     * scenario lays coolant against the drive and one does not - the second is the control.
+     */
+    private String ship;
+    private String nav;
 
-    /** The ships. One with coolant against its drive, one with none - the second is the control. */
-    private static final String SHIP_COOLED = "2840 82 2840";
-    private static final String NAV_COOLED = "0 2840 80 2840";
-    private static final String SHIP_DRY = "2900 82 2900";
-    private static final String NAV_DRY = "0 2900 80 2900";
+    /**
+     * Ask for this scenario's site and prove it empty. The drive fixture clears twenty blocks either
+     * side of the flight computer on its own two layers, so the site's whole allowance is taken.
+     */
+    private void standShip(String what) throws Exception {
+        FixtureSite site = clearedSite(20, 4, what);
+        ship = site.x + " " + (site.y + 3) + " " + site.z;
+        nav = site.dim + " " + site.x + " " + (site.y + 1) + " " + site.z;
+    }
 
     /** The drive's own coolant run: three pipes laid along the top of the generator. */
     private static final int PIPES = 3;
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     // ─── Rung one: the air is what hurts the crew ──────────────────────────────
 
@@ -123,47 +130,49 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      */
     @Test
     public void anOverheatedDriveRefusesToFireAndTheRefusalIsFree() throws Exception {
-        buildArmedShip(SHIP_COOLED, NAV_COOLED);
+        standShip("an armed ship with coolant laid against its drive");
+        buildArmedShip(ship, nav);
         layCoolantAlongTheGenerator();
         int refusal = configInt("shipHeatDriveRefusalKelvin");
         assertTrue("premise: the rung must be switched on", refusal > 0);
 
-        String cold = exec("stellurgytest drive info 0 " + SHIP_COOLED);
+        Reply cold = driveInfo(ship);
         assertTrue("premise: the ship must be able to jump before it is cooked: " + cold,
-                cold.contains("\"allowed\":true"));
-        long coldReading = field(cold, "driveCoolantMilliK");
+                cold.bool("allowed"));
+        long coldReading = cold.longInteger("driveCoolantMilliK");
         assertTrue("premise: the drive must actually have found the coolant against it, or the "
                 + "refusal below would be about a loop nobody measured: " + cold, coldReading > 0);
         assertTrue("premise: and that coolant must start well below the threshold: " + cold,
                 coldReading < refusal * 1000L);
-        long chargeBefore = field(cold, "charge");
+        long chargeBefore = cold.longInteger("charge");
         assertTrue("premise: with an empty bank the gate would refuse for a different reason: " + cold,
-                chargeBefore >= field(cold, "burstCost"));
+                chargeBefore >= cold.longInteger("burstCost"));
 
-        String cooked = cook(refusal);
+        Reply cooked = cook(refusal);
         assertTrue("premise: the loop must actually have been driven past the threshold: " + cooked,
-                field(cooked, "temperatureMilliK") >= refusal * 1000L);
+                cooked.longInteger("temperatureMilliK") >= refusal * 1000L);
 
-        String hot = exec("stellurgytest drive info 0 " + SHIP_COOLED);
-        assertTrue("a drive whose coolant is past the threshold must not fire: " + hot,
-                hot.contains("\"allowed\":false"));
+        Reply hot = driveInfo(ship);
+        assertFalse("a drive whose coolant is past the threshold must not fire: " + hot,
+                hot.bool("allowed"));
         assertEquals("and the pilot must be told which of the refusals this is: " + hot,
-                "msg.jumpgate.driveoverheated", text(hot, MESSAGE));
+                "msg.jumpgate.driveoverheated", hot.text("message"));
         assertTrue("the gate must be reading the loop bolted to the generator: " + hot,
-                field(hot, "driveCoolantMilliK") >= refusal * 1000L);
+                hot.longInteger("driveCoolantMilliK") >= refusal * 1000L);
 
-        String pressed = exec("stellurgytest drive press 0 " + SHIP_COOLED);
-        assertTrue("a refused jump must not wind the drive up: " + pressed,
-                pressed.contains("\"spooling\":false"));
+        Reply pressed = arrange("stellurgytest drive press 0 " + ship);
+        assertFalse("a refused jump must not wind the drive up: " + pressed, pressed.bool("spooling"));
+        Reply afterPress = driveInfo(ship);
         assertEquals("and must cost the pilot nothing - this refusal is above the commit line: "
-                + pressed, chargeBefore, field(exec("stellurgytest drive info 0 " + SHIP_COOLED), "charge"));
+                + afterPress, chargeBefore, afterPress.longInteger("charge"));
 
-        String shed = exec("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1");
+        Reply shed = arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1");
+        requireArranged("premise: the drive's pipes must still be a loop: " + shed, shed.bool("inLoop"));
         assertTrue("premise: the loop must actually have shed what it was holding: " + shed,
-                field(shed, "temperatureMilliK") < refusal * 1000L);
+                shed.longInteger("temperatureMilliK") < refusal * 1000L);
+        Reply cooled = driveInfo(ship);
         assertTrue("cooling the ship is the whole of the fix - the gate is read-only and remembers "
-                        + "nothing: " + exec("stellurgytest drive info 0 " + SHIP_COOLED),
-                exec("stellurgytest drive info 0 " + SHIP_COOLED).contains("\"allowed\":true"));
+                + "nothing: " + cooled, cooled.bool("allowed"));
     }
 
     /**
@@ -175,71 +184,74 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      */
     @Test
     public void aDriveWithNoCoolantAgainstItIsNotMeasuredAndNotRefused() throws Exception {
-        buildArmedShip(SHIP_DRY, NAV_DRY);
+        standShip("an armed ship with nothing against its drive");
+        buildArmedShip(ship, nav);
 
-        String info = exec("stellurgytest drive info 0 " + SHIP_DRY);
+        Reply info = driveInfo(ship);
 
         assertEquals("with nothing bolted to the drive there is nothing to read: " + info,
-                0L, field(info, "driveCoolantMilliK"));
+                0L, info.longInteger("driveCoolantMilliK"));
         assertTrue("and an unmeasured drive must still be allowed to jump: " + info,
-                info.contains("\"allowed\":true"));
+                info.bool("allowed"));
     }
 
     // ─── the rig ───────────────────────────────────────────────────────────────
 
     /** A sealed room with a powered, sealed vent - the same rig the zone-air tests run on. */
     private void buildRoomWithVent() throws Exception {
-        exec("stellurgytest fill 0 " + (ROOM_X - 2) + " " + (ROOM_Y - 1) + " " + (ROOM_Z - 2)
-                + " " + (ROOM_X + 2) + " " + ROOM_Y + " " + (ROOM_Z + 2) + " minecraft:stone");
-        for (int yy = ROOM_Y + 1; yy <= ROOM_Y + 2; yy++) {
-            exec("stellurgytest fill 0 " + (ROOM_X - 2) + " " + yy + " " + (ROOM_Z - 2)
-                    + " " + (ROOM_X + 2) + " " + yy + " " + (ROOM_Z + 2) + " minecraft:stone");
-            exec("stellurgytest fill 0 " + (ROOM_X - 1) + " " + yy + " " + (ROOM_Z - 1)
-                    + " " + (ROOM_X + 1) + " " + yy + " " + (ROOM_Z + 1) + " minecraft:air");
+        FixtureSite site = clearedSite(2, 6, "a sealed room with a powered vent");
+        roomX = site.x + 2;
+        roomY = site.y + 2;
+        roomZ = site.z + 2;
+        arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY - 1) + " " + (roomZ - 2)
+                + " " + (roomX + 2) + " " + roomY + " " + (roomZ + 2) + " minecraft:stone");
+        for (int yy = roomY + 1; yy <= roomY + 2; yy++) {
+            arrange("stellurgytest fill 0 " + (roomX - 2) + " " + yy + " " + (roomZ - 2)
+                    + " " + (roomX + 2) + " " + yy + " " + (roomZ + 2) + " minecraft:stone");
+            arrange("stellurgytest fill 0 " + (roomX - 1) + " " + yy + " " + (roomZ - 1)
+                    + " " + (roomX + 1) + " " + yy + " " + (roomZ + 1) + " minecraft:air");
         }
-        exec("stellurgytest fill 0 " + (ROOM_X - 2) + " " + (ROOM_Y + 3) + " " + (ROOM_Z - 2)
-                + " " + (ROOM_X + 2) + " " + (ROOM_Y + 3) + " " + (ROOM_Z + 2) + " minecraft:stone");
+        arrange("stellurgytest fill 0 " + (roomX - 2) + " " + (roomY + 3) + " " + (roomZ - 2)
+                + " " + (roomX + 2) + " " + (roomY + 3) + " " + (roomZ + 2) + " minecraft:stone");
 
-        String vent = exec("stellurgytest place 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
+        Reply vent = arrange("stellurgytest place 0 " + roomX + " " + roomY + " " + roomZ
                 + " stellurgy:oxygenVent");
-        assertTrue("vent place failed: " + vent, vent.contains("\"placed\":true"));
-        String energy = exec("stellurgytest energy inject 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
-                + " 1000000");
-        assertTrue("energy inject failed: " + energy, energy.contains("\"ok\":true"));
-        String oxygen = exec("stellurgytest fluid inject 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
-                + " oxygen 16000");
-        assertTrue("oxygen inject failed: " + oxygen, oxygen.contains("\"ok\":true"));
-        exec("stellurgytest tile force-tick 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z + " 1");
-        exec("stellurgytest vent reseal 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z);
-        exec("stellurgytest tile force-tick 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z + " 5");
+        assertTrue("vent place failed: " + vent, vent.bool("placed"));
+        arrange("stellurgytest energy inject 0 " + roomX + " " + roomY + " " + roomZ + " 1000000");
+        arrange("stellurgytest fluid inject 0 " + roomX + " " + roomY + " " + roomZ + " oxygen 16000");
+        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 1");
+        arrange("stellurgytest vent reseal 0 " + roomX + " " + roomY + " " + roomZ);
+        arrange("stellurgytest tile force-tick 0 " + roomX + " " + roomY + " " + roomZ + " 5");
     }
 
     /** Gases in parts per million of an atmosphere, which is how a room's mix is quoted. */
     private void setAir(int n2, int o2, int co2, int milliK) throws Exception {
-        String set = exec("stellurgytest vent setair 0 " + ROOM_X + " " + ROOM_Y + " " + ROOM_Z
+        arrange("stellurgytest vent setair 0 " + roomX + " " + roomY + " " + roomZ
                 + " " + ppm(n2) + " " + ppm(o2) + " " + ppm(co2) + " " + milliK);
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 
     /** What a person standing in the compartment breathes, as the handler publishes it. */
     private String atmosphereInRoom() throws Exception {
-        String resp = exec("stellurgytest atmosphere get 0 " + ROOM_X + " " + (ROOM_Y + 1) + " " + ROOM_Z);
-        Matcher m = ATMOSPHERE_TYPE.matcher(resp);
-        assertTrue("no atmosphere type in: " + resp, m.find());
-        return m.group(1);
+        return ask("stellurgytest atmosphere get 0 " + roomX + " " + (roomY + 1) + " " + roomZ)
+                .text("type");
+    }
+
+    private Reply driveInfo(String afc) throws Exception {
+        return ask("stellurgytest drive info 0 " + afc);
     }
 
     /** A ship that can jump: a drive, a full bank, a navigation computer, a target, armed. */
     private void buildArmedShip(String afc, String nav) throws Exception {
-        String built = exec("stellurgytest drive build 0 " + afc + " 4 8 0 0 0");
-        assertTrue("drive build failed: " + built, !built.contains("\"error\""));
-        exec("stellurgytest drive charge 0 " + afc + " full");
-        exec("stellurgytest nav place " + nav);
-        exec("stellurgytest nav link " + nav + " " + afc);
-        exec("stellurgytest nav target " + nav + " 7 0 0");
-        String armed = exec("stellurgytest drive arm 0 " + afc + " on");
+        arrange("stellurgytest drive build 0 " + afc + " 4 8 0 0 0");
+        arrange("stellurgytest drive charge 0 " + afc + " full");
+        arrange("stellurgytest nav place " + nav);
+        Reply linked = arrange("stellurgytest nav link " + nav + " " + afc);
+        requireArranged("the navigation computer must be linked to the drive: " + linked,
+                linked.bool("linked"));
+        arrange("stellurgytest nav target " + nav + " 7 0 0");
+        Reply armed = arrange("stellurgytest drive arm 0 " + afc + " on");
         assertTrue("the ship must be armed, or the gate refuses for a different reason: " + armed,
-                armed.contains("\"armed\":true"));
+                armed.bool("armed"));
     }
 
     /**
@@ -249,28 +261,28 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      */
     private void layCoolantAlongTheGenerator() throws Exception {
         for (int i = 0; i < PIPES; i++) {
-            String placed = exec("stellurgytest place 0 " + pipeAt(i) + " stellurgy:heatPipe");
-            assertTrue("pipe place failed at " + pipeAt(i) + ": " + placed,
-                    placed.contains("\"placed\":true"));
+            Reply placed = arrange("stellurgytest place 0 " + pipeAt(i) + " stellurgy:heatPipe");
+            assertTrue("pipe place failed at " + pipeAt(i) + ": " + placed, placed.bool("placed"));
         }
-        String solved = exec("stellurgytest subnet solve all 0 1");
-        assertTrue("the loop never solved, so it does not exist yet: " + solved,
-                solved.contains("\"ticksSolved\":1"));
+        Reply solved = arrange("stellurgytest subnet solve all 0 1");
+        assertEquals("the loop never solved, so it does not exist yet: " + solved,
+                1, solved.integer("ticksSolved"));
     }
 
     /** Charge the drive's loop past {@code refusalKelvin} in one call, and answer what it reached. */
-    private String cook(int refusalKelvin) throws Exception {
-        String empty = exec("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1");
-        long capacity = field(empty, "heatCapacity");
+    private Reply cook(int refusalKelvin) throws Exception {
+        Reply empty = arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " 0 1");
+        requireArranged("premise: the drive's pipes must form a loop: " + empty, empty.bool("inLoop"));
+        long capacity = empty.longInteger("heatCapacity");
         assertTrue("premise: the loop must have thermal mass to charge: " + empty, capacity > 0);
         int ambient = configInt("shipHeatAmbientKelvin");
         long charge = (refusalKelvin + 100L - ambient) * capacity;
-        return exec("stellurgytest heat cycle 0 " + pipeAt(0) + " " + charge + " 1");
+        return arrange("stellurgytest heat cycle 0 " + pipeAt(0) + " " + charge + " 1");
     }
 
     /** The i-th pipe of the drive's coolant run: above the generator, running away from the coils. */
     private String pipeAt(int i) {
-        String[] afc = SHIP_COOLED.split(" ");
+        String[] afc = ship.split(" ");
         int x = Integer.parseInt(afc[0]) + 2;
         int y = Integer.parseInt(afc[1]) + 1;
         int z = Integer.parseInt(afc[2]) - i;
@@ -278,22 +290,6 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
     }
 
     private int configInt(String key) throws Exception {
-        String resp = exec("stellurgytest config get " + key);
-        assertTrue("config get " + key + " failed: " + resp, resp.contains("\"ok\":true"));
-        Matcher m = CONFIG_VALUE.matcher(resp);
-        assertTrue("no value in: " + resp, m.find());
-        return Integer.parseInt(m.group(1));
-    }
-
-    private static long field(String json, String name) {
-        Matcher m = Pattern.compile("\"" + name + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected a numeric field " + name + " in: " + json, m.find());
-        return Long.parseLong(m.group(1));
-    }
-
-    private static String text(String json, Pattern pattern) {
-        Matcher m = pattern.matcher(json);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + json, m.find());
-        return m.group(1);
+        return arrange("stellurgytest config get " + key).integer("value");
     }
 }

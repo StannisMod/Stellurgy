@@ -1,10 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * A powered machine offers a coolant loop the heat its work leaves behind — and not only the one
@@ -28,29 +32,26 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServerTest {
 
-    private static final int CY = 100;
-    private static final int CZ = 3600;
-
     /** A recipe machine — the branch of the hierarchy under {@code TileWasteHeatMachine}. */
     @Test
     public void anElectrolyserOffersItsWasteHeat() throws Exception {
-        assertOffersWasteHeat(3800, "stellurgy:electrolyser");
+        assertOffersWasteHeat("stellurgy:electrolyser");
     }
 
     @Test
     public void anArcFurnaceOffersItsWasteHeat() throws Exception {
-        assertOffersWasteHeat(3810, "stellurgy:arcfurnace");
+        assertOffersWasteHeat("stellurgy:arcfurnace");
     }
 
     /** A plain power consumer — the other branch, under {@code TileWasteHeatPowerConsumer}. */
     @Test
     public void anObservatoryOffersItsWasteHeat() throws Exception {
-        assertOffersWasteHeat(3820, "stellurgy:observatory");
+        assertOffersWasteHeat("stellurgy:observatory");
     }
 
     @Test
     public void aRailgunOffersItsWasteHeat() throws Exception {
-        assertOffersWasteHeat(3830, "stellurgy:railgun");
+        assertOffersWasteHeat("stellurgy:railgun");
     }
 
     /**
@@ -60,32 +61,45 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
      */
     @Test
     public void theLifeSupportPlantOffersItsWasteHeatToo() throws Exception {
-        assertOffersWasteHeat(3840, "stellurgy:lifeSupportPlant");
+        assertOffersWasteHeat("stellurgy:lifeSupportPlant");
     }
 
-    private void assertOffersWasteHeat(int cx, String block) throws Exception {
-        String placed = exec("stellurgytest place 0 " + cx + " " + CY + " " + CZ + " " + block);
-        assertTrue("premise: the machine must be placeable: " + placed, placed.contains("\"ok\":true"));
+    /** One block, one above this scenario's own site, after the site is proved empty. */
+    private String standAlone(String block) throws Exception {
+        FixtureSite site = clearedSite(1, 2, block + " standing alone in open air");
+        return site.dim + " " + site.x + " " + (site.y + 1) + " " + site.z;
+    }
 
-        String emitter = exec("stellurgytest heat emitter 0 " + cx + " " + CY + " " + CZ);
-        assertTrue("premise: the probe must find a tile there: " + emitter,
-                emitter.contains("\"ok\":true"));
+    private void assertOffersWasteHeat(String block) throws Exception {
+        String at = standAlone(block);
+        arrange("stellurgytest place " + at + " " + block);
+
+        // The probe answers `present:false, tile:"none"` for an empty position, so "the probe found a
+        // tile" is the `tile` field and not `ok` — `ok` is true for both.
+        Reply emitter = arrange("stellurgytest heat emitter " + at);
+        requireArranged("premise: the probe must find a tile there: " + emitter,
+                !"none".equals(emitter.text("tile")));
         assertTrue(block + " must offer a coolant loop its waste heat, and every powered machine "
                         + "must, or a ship full of running machinery heats nothing: " + emitter,
-                emitter.contains("\"present\":true"));
+                emitter.bool("present"));
     }
 
-    /** A block that is not a machine must NOT claim to make waste heat — the planted negative. */
+    /**
+     * A block that is not a machine must NOT claim to make waste heat — the planted negative.
+     *
+     * <p>It has to HAVE a tile, or production is never asked: for an empty position the probe answers
+     * {@code present:false} from its own no-tile branch without consulting the capability at all. A
+     * chest is a tile entity that does no work, so its {@code false} is the capability's answer.</p>
+     */
     @Test
-    public void aPlainBlockOffersNothing() throws Exception {
-        String placed = exec("stellurgytest place 0 3850 " + CY + " " + CZ + " minecraft:stone");
-        assertTrue("premise: the control block must be placeable: " + placed,
-                placed.contains("\"ok\":true"));
+    public void aTileThatIsNotAMachineOffersNothing() throws Exception {
+        String at = standAlone("minecraft:chest");
+        arrange("stellurgytest place " + at + " minecraft:chest");
 
-        String emitter = exec("stellurgytest heat emitter 0 3850 " + CY + " " + CZ);
-        assertTrue("a plain stone block has no tile and therefore nothing to offer: " + emitter,
-                emitter.contains("\"present\":false"));
-        assertEquals("and the probe must say so rather than erroring: " + emitter,
-                true, emitter.contains("\"ok\":true"));
+        Reply emitter = arrange("stellurgytest heat emitter " + at);
+        requireArranged("premise: the probe must find the chest's tile, or the capability was never"
+                + " asked: " + emitter, !"none".equals(emitter.text("tile")));
+        assertFalse("a chest does no work and so has no waste heat to offer: " + emitter,
+                emitter.bool("present"));
     }
 }

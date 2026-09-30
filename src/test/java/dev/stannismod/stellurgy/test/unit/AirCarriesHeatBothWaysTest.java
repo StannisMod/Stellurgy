@@ -73,7 +73,7 @@ public class AirCarriesHeatBothWaysTest {
     @Test
     public void warmingAirRaisesItsTemperatureByTheEnergyOverItsCapacity() {
         AirState air = room();
-        double before = air.getTemperatureKelvin();
+        int before = air.getTemperatureMilliK();
         long capacity = air.getHeatCapacity(VOLUME);
         assertTrue("a pressurised room must have a heat capacity to warm at all", capacity > 0L);
 
@@ -81,8 +81,10 @@ public class AirCarriesHeatBothWaysTest {
 
         assertEquals("all of it is accepted: air has no ceiling short of the model's own",
                 capacity * 30L, accepted);
+        // EXACT, in the unit the air stores: `addHeat` adds `amount / capacity` kelvin and rounds to a
+        // milli-kelvin, and thirty capacities is thirty whole kelvin — nothing is left to round.
         assertEquals("thirty kelvin of energy is thirty kelvin of temperature",
-                before + 30.0D, air.getTemperatureKelvin(), 0.5D);
+                before + 30_000, air.getTemperatureMilliK());
     }
 
     /**
@@ -112,8 +114,11 @@ public class AirCarriesHeatBothWaysTest {
         long budgetAtStart = air.availableHeat(VOLUME);
 
         air.addHeat(capacity * 10L, VOLUME);
+        // One unit, not one kelvin's worth: `availableHeat` is `(long)` of temperature × capacity, a
+        // truncation of less than one unit on each of the two readings, so their difference can sit
+        // at most one unit from what was added.
         assertEquals("the removable budget grows by exactly what was added",
-                budgetAtStart + capacity * 10L, air.availableHeat(VOLUME), capacity);
+                budgetAtStart + capacity * 10L, air.availableHeat(VOLUME), 1L);
 
         long taken = air.removeHeat(capacity * 10L, VOLUME);
         assertEquals("and taking it back leaves the room where it started",

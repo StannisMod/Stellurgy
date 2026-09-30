@@ -104,9 +104,13 @@ public class ThermalSignatureTest {
                 compact.detectionRangeBlocks(2000.0D), sprawling.detectionRangeBlocks(2000.0D),
                 compact.detectionRangeBlocks(2000.0D) * 1e-9D);
 
-        assertTrue("but the LOCK term is radiance, a function of temperature alone, so the compact"
-                        + " hot array must be far the brighter target: " + compact + " | " + sprawling,
-                compact.radiance() > 3.5D * sprawling.radiance());
+        // FOUR, not "more than 3.5": radiance is `cellPowerAt(peakKelvin)`, quartic in temperature
+        // alone, and the sprawling array was built at T·¼^¼ — so the ratio is exactly (T / T·¼^¼)⁴ = 4,
+        // to the same relative precision as the equal-power premise above.
+        assertEquals("but the LOCK term is radiance, a function of temperature alone, so the compact"
+                        + " hot array must be four times the brighter target: " + compact + " | "
+                        + sprawling,
+                4.0D, compact.radiance() / sprawling.radiance(), 4.0D * 1e-9D);
     }
 
     /**

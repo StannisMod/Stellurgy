@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * The coolant loop as a physical body: a machine's waste heat goes into the pipes touching it, and
@@ -22,22 +22,30 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class HeatLoopTest extends AbstractSharedServerTest {
 
-    private static final Pattern MEMBERS = Pattern.compile("\"members\":(-?\\d+)");
-    private static final Pattern CABLES = Pattern.compile("\"cables\":(-?\\d+)");
-    private static final Pattern HEAT_STORED = Pattern.compile("\"heatStored\":(-?\\d+)");
-    private static final Pattern HEAT_CAPACITY = Pattern.compile("\"heatCapacity\":(-?\\d+)");
-    private static final Pattern TEMPERATURE = Pattern.compile("\"temperatureMilliK\":(-?\\d+)");
+    /** The Y and Z every helper here builds on, from this scenario's own site (see {@link #stand}). */
+    private int cy;
+    private int cz;
 
-    private static final int CY = 64;
-    private static final int CZ = 2500;
+    /**
+     * The second rig of a two-rig scenario stands this far along from the first: the short rig ends
+     * seven blocks past its room's centre, and the long rig's room begins two before its own, so this
+     * leaves one block of air between them.
+     */
+    private static final int SECOND_RIG_OFFSET = 11;
+
+    /**
+     * Ask for this scenario's site, prove its volume empty, and answer the X its (first) room is
+     * centred on. Wide enough for two rigs side by side, the second a long one.
+     */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(18, 6, what);
+        cy = site.y + 2;
+        cz = site.z + 2;
+        return site.x + 2;
+    }
     /** Three pipes on the short loop, six on the long one — the ratio the second scenario reads. */
     private static final int SHORT_LOOP_PIPES = 3;
     private static final int LONG_LOOP_PIPES = 6;
-    private static final int CX_LATE = 800;
-    private static final int CX_OFF = 1200;
-    private static final int CX_SOLO = 1600;
-    private static final int CX_SHORT = 2000;
-    private static final int CX_LONG = 2400;
     /** Long enough for the plant to spend a visible amount of power; well inside the room's CO2. */
     private static final int SOLVE_TICKS = 300;
 
@@ -47,30 +55,32 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      */
     @Test
     public void aMachineOnACoolantLoopWarmsIt() throws Exception {
-        buildRig(CX_SOLO, SHORT_LOOP_PIPES);
+        int cxSolo = stand("a life-support plant with a short coolant loop welded to it");
+        buildRig(cxSolo, SHORT_LOOP_PIPES);
 
         // One tick to let the loop find itself, taken while the plant still has no power: an
         // unpowered plant does no work, so this baseline is a cold loop and not a slightly warm one.
         solve(1);
-        String cold = loopInfo(CX_SOLO + 5);
+        Reply cold = loopInfo(cxSolo + 5);
         assertEquals("premise: the pipes must have formed one loop: " + cold,
-                SHORT_LOOP_PIPES, extract(cold, MEMBERS));
+                SHORT_LOOP_PIPES, cold.integer("members"));
         assertEquals("premise: every one of them is transport for the loop: " + cold,
-                SHORT_LOOP_PIPES, extract(cold, CABLES));
+                SHORT_LOOP_PIPES, cold.integer("cables"));
         assertEquals("premise: a loop whose machine has not run holds nothing: " + cold,
-                0, extract(cold, HEAT_STORED));
-        long ambient = extract(cold, TEMPERATURE);
+                0L, cold.longInteger("heatStored"));
+        long ambient = cold.longInteger("temperatureMilliK");
         assertTrue("premise: a cold loop still has a temperature — ambient: " + cold, ambient > 0);
 
-        powerPlant(CX_SOLO);
+        powerPlant(cxSolo);
         solve(SOLVE_TICKS);
 
-        String warm = loopInfo(CX_SOLO + 5);
+        Reply warm = loopInfo(cxSolo + 5);
+        long stored = warm.longInteger("heatStored");
+        long now = warm.longInteger("temperatureMilliK");
         assertTrue("the plant's waste heat must end up in the loop it touches (stored="
-                + extract(warm, HEAT_STORED) + "): " + warm, extract(warm, HEAT_STORED) > 0);
+                + stored + "): " + warm, stored > 0);
         assertTrue("and the loop must therefore be hotter than it started (ambient=" + ambient
-                + " now=" + extract(warm, TEMPERATURE) + "): " + warm,
-                extract(warm, TEMPERATURE) > ambient);
+                + " now=" + now + "): " + warm, now > ambient);
     }
 
     /**
@@ -84,27 +94,29 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      */
     @Test
     public void theSameHeatInALongerLoopIsALowerTemperature() throws Exception {
-        buildRig(CX_SHORT, SHORT_LOOP_PIPES);
-        buildRig(CX_LONG, LONG_LOOP_PIPES);
+        int cxShort = stand("two plant rigs side by side, one loop twice the other's length");
+        int cxLong = cxShort + SECOND_RIG_OFFSET;
+        buildRig(cxShort, SHORT_LOOP_PIPES);
+        buildRig(cxLong, LONG_LOOP_PIPES);
 
         solve(1);
-        String coldShort = loopInfo(CX_SHORT + 5);
-        String coldLong = loopInfo(CX_LONG + 5);
-        long ambient = extract(coldShort, TEMPERATURE);
+        Reply coldShort = loopInfo(cxShort + 5);
+        Reply coldLong = loopInfo(cxLong + 5);
+        long ambient = coldShort.longInteger("temperatureMilliK");
         assertEquals("premise: the two loops must sit at the same ambient before anything runs: "
-                + coldShort + " | " + coldLong, ambient, extract(coldLong, TEMPERATURE));
+                + coldShort + " | " + coldLong, ambient, coldLong.longInteger("temperatureMilliK"));
         assertEquals("premise: the long loop is built to hold exactly twice as much: "
                 + coldShort + " | " + coldLong,
-                2 * extract(coldShort, HEAT_CAPACITY), extract(coldLong, HEAT_CAPACITY));
+                2 * coldShort.longInteger("heatCapacity"), coldLong.longInteger("heatCapacity"));
 
-        powerPlant(CX_SHORT);
-        powerPlant(CX_LONG);
+        powerPlant(cxShort);
+        powerPlant(cxLong);
         solve(SOLVE_TICKS);
 
-        String warmShort = loopInfo(CX_SHORT + 5);
-        String warmLong = loopInfo(CX_LONG + 5);
-        long storedShort = extract(warmShort, HEAT_STORED);
-        long storedLong = extract(warmLong, HEAT_STORED);
+        Reply warmShort = loopInfo(cxShort + 5);
+        Reply warmLong = loopInfo(cxLong + 5);
+        long storedShort = warmShort.longInteger("heatStored");
+        long storedLong = warmLong.longInteger("heatStored");
         assertTrue("premise: both loops must have picked heat up at all (short=" + storedShort
                 + " long=" + storedLong + "): " + warmShort + " | " + warmLong,
                 storedShort > 0 && storedLong > 0);
@@ -112,8 +124,8 @@ public class HeatLoopTest extends AbstractSharedServerTest {
                 + "heat (short=" + storedShort + " long=" + storedLong + "): "
                 + warmShort + " | " + warmLong, storedLong >= storedShort);
 
-        long riseShort = extract(warmShort, TEMPERATURE) - ambient;
-        long riseLong = extract(warmLong, TEMPERATURE) - ambient;
+        long riseShort = warmShort.longInteger("temperatureMilliK") - ambient;
+        long riseLong = warmLong.longInteger("temperatureMilliK") - ambient;
         assertTrue("a loop with twice the thermal mass must warm markedly less on the same heat "
                 + "(short rose " + riseShort + " milliK, long rose " + riseLong + "): "
                 + warmShort + " | " + warmLong, riseLong < riseShort);
@@ -127,21 +139,22 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      */
     @Test
     public void withTheThermalSystemOffNothingHeats() throws Exception {
-        buildRig(CX_OFF, SHORT_LOOP_PIPES);
+        int cxOff = stand("a plant rig driven with the thermal system switched off, then on");
+        buildRig(cxOff, SHORT_LOOP_PIPES);
         solve(1);
-        long ambient = extract(loopInfo(CX_OFF + 5), TEMPERATURE);
+        long ambient = loopInfo(cxOff + 5).longInteger("temperatureMilliK");
 
         setConfig("shipHeat", "false");
         try {
-            powerPlant(CX_OFF);
+            powerPlant(cxOff);
             solve(SOLVE_TICKS);
 
-            String off = loopInfo(CX_OFF + 5);
+            Reply off = loopInfo(cxOff + 5);
             assertEquals("with the thermal system off a loop must store no heat: " + off,
-                    0, extract(off, HEAT_STORED));
+                    0L, off.longInteger("heatStored"));
             assertEquals("and must report no capacity to store it in: " + off,
-                    0, extract(off, HEAT_CAPACITY));
-            assertEquals("and must sit at ambient: " + off, ambient, extract(off, TEMPERATURE));
+                    0L, off.longInteger("heatCapacity"));
+            assertEquals("and must sit at ambient: " + off, ambient, off.longInteger("temperatureMilliK"));
         } finally {
             setConfig("shipHeat", "true");
         }
@@ -149,11 +162,11 @@ public class HeatLoopTest extends AbstractSharedServerTest {
         // The control: the very same rig, flag on. Without this the assertions above would also
         // pass on a rig that was never driven, or on a plant that had run out of power.
         solve(SOLVE_TICKS);
-        String on = loopInfo(CX_OFF + 5);
+        Reply on = loopInfo(cxOff + 5);
         assertTrue("the same rig with the flag back on must heat, or the assertions above measured "
-                + "nothing: " + on, extract(on, HEAT_STORED) > 0);
+                + "nothing: " + on, on.longInteger("heatStored") > 0);
         assertTrue("and must be above ambient (" + ambient + "): " + on,
-                extract(on, TEMPERATURE) > ambient);
+                on.longInteger("temperatureMilliK") > ambient);
     }
 
     /**
@@ -167,30 +180,32 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      */
     @Test
     public void aMachineBuiltAfterTheLoopIsStillPickedUp() throws Exception {
-        buildStaleRoom(CX_LATE);
-        placeDuct(CX_LATE + 1);
-        placeDuct(CX_LATE + 2);
-        placeDuct(CX_LATE + 3);
+        int cxLate = stand("a coolant loop that settles before its machine is built");
+        buildStaleRoom(cxLate);
+        placeDuct(cxLate + 1);
+        placeDuct(cxLate + 2);
+        placeDuct(cxLate + 3);
         for (int i = 0; i < SHORT_LOOP_PIPES; i++) {
-            placePipe(CX_LATE + 5 + i);
+            placePipe(cxLate + 5 + i);
         }
 
         // The loop settles with nothing beside it, and works its neighbours out while that is true.
         solve(1);
-        String alone = loopInfo(CX_LATE + 5);
+        Reply alone = loopInfo(cxLate + 5);
         assertEquals("premise: the loop must exist before the machine does: " + alone,
-                SHORT_LOOP_PIPES, extract(alone, MEMBERS));
-        long ambient = extract(alone, TEMPERATURE);
+                SHORT_LOOP_PIPES, alone.integer("members"));
+        long ambient = alone.longInteger("temperatureMilliK");
 
-        placePlant(CX_LATE + 4);
-        powerPlant(CX_LATE);
+        placePlant(cxLate + 4);
+        powerPlant(cxLate);
         solve(SOLVE_TICKS);
 
-        String after = loopInfo(CX_LATE + 5);
+        Reply after = loopInfo(cxLate + 5);
+        long stored = after.longInteger("heatStored");
+        long now = after.longInteger("temperatureMilliK");
         assertTrue("a machine placed against a finished loop must be found by it (stored="
-                + extract(after, HEAT_STORED) + "): " + after, extract(after, HEAT_STORED) > 0);
-        assertTrue("and must warm it (ambient=" + ambient + " now=" + extract(after, TEMPERATURE)
-                + "): " + after, extract(after, TEMPERATURE) > ambient);
+                + stored + "): " + after, stored > 0);
+        assertTrue("and must warm it (ambient=" + ambient + " now=" + now + "): " + after, now > ambient);
     }
 
     // ─── the rig ───────────────────────────────────────────────────────
@@ -223,69 +238,60 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * nothing.
      */
     private void solve(int ticks) throws Exception {
-        String solved = exec("stellurgytest subnet solve all 0 " + ticks);
-        assertTrue("solve failed: " + solved, solved.contains("\"ticksSolved\":" + ticks));
+        Reply solved = arrange("stellurgytest subnet solve all 0 " + ticks);
+        assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
     private void buildStaleRoom(int cx) throws Exception {
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (CY - 1) + " " + (CZ - 2)
-                + " " + (cx + 2) + " " + CY + " " + (CZ + 2) + " minecraft:stone");
-        for (int yy = CY + 1; yy <= CY + 2; yy++) {
-            exec("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (CZ - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (CZ + 2) + " minecraft:stone");
-            exec("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (CZ - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (CZ + 1) + " minecraft:air");
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy - 1) + " " + (cz - 2)
+                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+        for (int yy = cy + 1; yy <= cy + 2; yy++) {
+            arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+            arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
         }
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (CY + 3) + " " + (CZ - 2)
-                + " " + (cx + 2) + " " + (CY + 3) + " " + (CZ + 2) + " minecraft:stone");
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy + 3) + " " + (cz - 2)
+                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
 
-        String vent = exec("stellurgytest place 0 " + cx + " " + CY + " " + CZ + " stellurgy:oxygenVent");
-        assertTrue("vent place failed: " + vent, vent.contains("\"placed\":true"));
+        place(cx, "stellurgy:oxygenVent");
         injectEnergyAt(cx, 1_000_000);
-        String oxygen = exec("stellurgytest fluid inject 0 " + cx + " " + CY + " " + CZ + " oxygen 16000");
-        assertTrue("oxygen inject failed: " + oxygen, oxygen.contains("\"ok\":true"));
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
 
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY + " " + CZ + " 1");
-        exec("stellurgytest vent reseal 0 " + cx + " " + CY + " " + CZ);
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY + " " + CZ + " 5");
+        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1");
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5");
 
-        String set = exec("stellurgytest vent setair 0 " + cx + " " + CY + " " + CZ
+        arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
                 + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 
     private void placeDuct(int x) throws Exception {
-        String resp = exec("stellurgytest place 0 " + x + " " + CY + " " + CZ + " stellurgy:ventilationDuct");
-        assertTrue("duct place failed at " + x + ": " + resp, resp.contains("\"placed\":true"));
+        place(x, "stellurgy:ventilationDuct");
     }
 
     private void placePlant(int x) throws Exception {
-        String resp = exec("stellurgytest place 0 " + x + " " + CY + " " + CZ + " stellurgy:lifeSupportPlant");
-        assertTrue("plant place failed at " + x + ": " + resp, resp.contains("\"placed\":true"));
+        place(x, "stellurgy:lifeSupportPlant");
     }
 
     private void placePipe(int x) throws Exception {
-        String resp = exec("stellurgytest place 0 " + x + " " + CY + " " + CZ + " stellurgy:heatPipe");
-        assertTrue("pipe place failed at " + x + ": " + resp, resp.contains("\"placed\":true"));
+        place(x, "stellurgy:heatPipe");
+    }
+
+    private void place(int x, String block) throws Exception {
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + cy + " " + cz + " " + block);
+        assertTrue(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
     }
 
     private void injectEnergyAt(int x, int amount) throws Exception {
-        String resp = exec("stellurgytest energy inject 0 " + x + " " + CY + " " + CZ + " " + amount);
-        assertTrue("energy inject failed at " + x + ": " + resp, resp.contains("\"ok\":true"));
+        arrange("stellurgytest energy inject 0 " + x + " " + cy + " " + cz + " " + amount);
     }
 
     private void setConfig(String key, String value) throws Exception {
-        String resp = exec("stellurgytest config set " + key + " " + value);
-        assertTrue("config set " + key + "=" + value + " failed: " + resp, resp.contains("\"ok\":true"));
+        arrange("stellurgytest config set " + key + " " + value);
     }
 
-    private String loopInfo(int x) throws Exception {
-        return exec("stellurgytest subnet info heat 0 " + x + " " + CY + " " + CZ);
-    }
-
-    private static long extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+    private Reply loopInfo(int x) throws Exception {
+        return ask("stellurgytest subnet info heat 0 " + x + " " + cy + " " + cz);
     }
 }

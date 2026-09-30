@@ -1,13 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * How heat gets off a ship: the radiating cell, and the two things that decide how much it sheds.
@@ -23,25 +24,24 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class HeatRejectionTest extends AbstractSharedServerTest {
 
-    private static final Pattern HEAT_STORED = Pattern.compile("\"heatStored\":(-?\\d+)");
-    private static final Pattern HEAT_CAPACITY = Pattern.compile("\"heatCapacity\":(-?\\d+)");
-    private static final Pattern TEMPERATURE = Pattern.compile("\"temperatureMilliK\":(-?\\d+)");
-    private static final Pattern EXCHANGERS = Pattern.compile("\"exchangers\":(-?\\d+)");
-    private static final Pattern CELLS = Pattern.compile("\"radiatingCells\":(-?\\d+)");
-    private static final Pattern OBSTRUCTION = Pattern.compile("\"obstruction\":(-?\\d+)");
-    /** `heat cycle` names its own figures, so they do not collide with the loop readout's. */
-    private static final Pattern CYCLE_REJECTED = Pattern.compile("\"rejected\":(-?\\d+)");
-    private static final Pattern CHARGED = Pattern.compile("\"charged\":(-?\\d+)");
-    /** What the outside puts into ONE cell per tick, in thousandths — the other half of the net. */
-    private static final Pattern INCIDENT_FLUX_MILLI = Pattern.compile("\"incidentFluxMilli\":(-?\\d+)");
+    /** The row every loop stands on, in open air so a radiator facing up has nothing over it but
+     *  sky; from this scenario's own site (see {@link #stand}). */
+    private int y;
+    private int z;
 
-    /** High and in the open, so a radiator facing up has nothing over it but sky. */
-    private static final int Y = 100;
-    private static final int Z = 2700;
-    private static final int X_AREA_ONE = 1000;
-    private static final int X_AREA_THREE = 1010;
-    private static final int X_QUARTIC = 1020;
-    private static final int X_BLOCKED = 1030;
+    /** Half of one step of a figure the probe rounds to thousandths — the rounding it can hide. */
+    private static final double HALF_MILLI = 0.0005D;
+
+    /** The second loop of the area scenario stands this far along from the first. */
+    private static final int SECOND_LOOP_OFFSET = 10;
+
+    /** Ask for this scenario's site, prove its volume empty, and answer where the first loop starts. */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(9, 3, what);
+        y = site.y + 1;
+        z = site.z;
+        return site.x;
+    }
 
     /** `getStateFromMeta` maps this to a cell radiating UP, so obstructions go straight above. */
     private static final String RADIATOR_FACING_UP = "1";
@@ -57,27 +57,32 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
     @Test
     public void rejectionScalesWithTheAreaBuilt() throws Exception {
         // Same four blocks in each, one radiator against three.
-        buildLoop(X_AREA_ONE, 1);
-        buildLoop(X_AREA_THREE, 3);
+        int xOne = stand("two loops of one length, one radiating cell against three");
+        int xThree = xOne + SECOND_LOOP_OFFSET;
+        buildLoop(xOne, 1);
+        buildLoop(xThree, 3);
         solve(1);
 
-        String one = loopInfo(X_AREA_ONE);
-        String three = loopInfo(X_AREA_THREE);
+        Reply one = loopInfo(xOne);
+        Reply three = loopInfo(xThree);
         assertEquals("premise: both loops must be the same size: " + one + " | " + three,
-                longOf(one, HEAT_CAPACITY), longOf(three, HEAT_CAPACITY));
-        assertEquals("premise: one radiating cell on the first loop: " + one, 1, longOf(one, CELLS));
-        assertEquals("premise: three on the second: " + three, 3, longOf(three, CELLS));
+                one.longInteger("heatCapacity"), three.longInteger("heatCapacity"));
+        assertEquals("premise: one radiating cell on the first loop: " + one, 1, one.integer("radiatingCells"));
+        assertEquals("premise: three on the second: " + three, 3, three.integer("radiatingCells"));
 
-        long capacity = longOf(one, HEAT_CAPACITY);
+        long capacity = one.longInteger("heatCapacity");
         long charge = 100L * capacity; // a hundred kelvin above ambient, in both
-        long rejectedByOne = shedInOneTickFrom(X_AREA_ONE, charge);
-        long rejectedByThree = shedInOneTickFrom(X_AREA_THREE, charge);
+        long rejectedByOne = shedInOneTickFrom(xOne, charge);
+        long rejectedByThree = shedInOneTickFrom(xThree, charge);
         assertTrue("premise: the single cell must shed something at all, or the ratio below is "
-                + "meaningless: " + loopInfo(X_AREA_ONE), rejectedByOne > 0);
-        // Integer shares, so allow a unit of slack per cell and no more.
-        assertTrue("three cells must shed three times what one does (one=" + rejectedByOne
+                + "meaningless (shed=" + rejectedByOne + ")", rejectedByOne > 0);
+        // EXACT. `HeatNetwork.rejectHeat` truncates per EXCHANGER, `(long) (perCell * cells)`, and each
+        // radiator here is an exchanger of one cell at the same loop temperature under the same sky —
+        // so the three shares are three copies of the one share, truncation and all. Slack here would
+        // pass a surface law that is merely close to linear.
+        assertEquals("three cells must shed three times what one does (one=" + rejectedByOne
                         + " three=" + rejectedByThree + ")",
-                Math.abs(rejectedByThree - 3L * rejectedByOne) <= 3L);
+                3L * rejectedByOne, rejectedByThree);
     }
 
     /**
@@ -94,39 +99,47 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      */
     @Test
     public void rejectionFollowsTheFourthPowerOfTemperature() throws Exception {
-        buildLoop(X_QUARTIC, 1);
+        int xQuartic = stand("one loop with one radiating cell, charged twice");
+        buildLoop(xQuartic, 1);
         solve(1);
 
-        String cold = loopInfo(X_QUARTIC);
-        long capacity = longOf(cold, HEAT_CAPACITY);
-        double ambient = longOf(cold, TEMPERATURE) / 1000.0D;
+        Reply cold = loopInfo(xQuartic);
+        long capacity = cold.longInteger("heatCapacity");
+        double ambient = cold.longInteger("temperatureMilliK") / 1000.0D;
         assertEquals("premise: a loop that has done nothing holds nothing: " + cold,
-                0, longOf(cold, HEAT_STORED));
+                0L, cold.longInteger("heatStored"));
 
-        String hundred = cycle(X_QUARTIC, 100L * capacity);
-        String twoHundred = cycle(X_QUARTIC, 200L * capacity);
-        long shedAtHundred = longOf(hundred, CYCLE_REJECTED);
-        long shedAtTwoHundred = longOf(twoHundred, CYCLE_REJECTED);
+        Reply hundred = cycle(xQuartic, 100L * capacity);
+        Reply twoHundred = cycle(xQuartic, 200L * capacity);
+        long shedAtHundred = hundred.longInteger("rejected");
+        long shedAtTwoHundred = twoHundred.longInteger("rejected");
+        // What the outside puts into ONE cell per tick, in thousandths — the other half of the net.
         // Per cell and per tick, and there is one cell here — the same units the shed is in.
-        double flux = longOf(hundred, INCIDENT_FLUX_MILLI) / 1000.0D;
+        double flux = hundred.longInteger("incidentFluxMilli") / 1000.0D;
         assertEquals("premise: the environment must be the same in both legs, or adding it back is "
                         + "not an identity: " + hundred + " | " + twoHundred,
-                longOf(hundred, INCIDENT_FLUX_MILLI), longOf(twoHundred, INCIDENT_FLUX_MILLI));
-
-        double expectedRatio = pow4((ambient + 200.0D) / (ambient + 100.0D));
-        double actualRatio = (shedAtTwoHundred + flux) / (shedAtHundred + flux);
+                hundred.longInteger("incidentFluxMilli"), twoHundred.longInteger("incidentFluxMilli"));
 
         assertTrue("premise: both legs must shed something (100K=" + shedAtHundred + " 200K="
                 + shedAtTwoHundred + ")", shedAtHundred > 0 && shedAtTwoHundred > 0);
-        assertTrue("doubling the temperature rise must do markedly MORE than double the rejection, "
-                        + "or the law is linear and the whole chiller tier is pointless (ratio="
-                        + (double) shedAtTwoHundred / shedAtHundred + ")",
-                (double) shedAtTwoHundred / shedAtHundred > 2.5D);
-        assertTrue("and what the cell radiates must follow the fourth power of its temperature: "
-                        + "expected " + expectedRatio + " from " + (ambient + 100.0D) + " K and "
-                        + (ambient + 200.0D) + " K, measured " + actualRatio + " (shed " + shedAtHundred
-                        + " and " + shedAtTwoHundred + " against an incident flux of " + flux + ")",
-                Math.abs(actualRatio - expectedRatio) < 0.1D * expectedRatio);
+
+        // The only slack is production's own quantisation, carried through as an interval rather
+        // than guessed as a percentage. A shed is `(long)` of the true net, so the true net lies in
+        // [shed, shed + 1); the flux readout is `Math.round(flux * 1000)`, so ±0.0005; and ambient was
+        // read off a milli-kelvin figure, so ±0.0005 K. The measured interval and the predicted one
+        // must overlap. The loop temperatures themselves are exact: `HeatNetwork.temperature` is
+        // ambient + stored / capacity, and the charges are whole multiples of the capacity.
+        double lo = (shedAtTwoHundred + flux - HALF_MILLI) / (shedAtHundred + 1 + flux + HALF_MILLI);
+        double hi = (shedAtTwoHundred + 1 + flux + HALF_MILLI) / (shedAtHundred + flux - HALF_MILLI);
+        // The fourth-power ratio falls as ambient rises, so the high ambient bounds it from below.
+        double expectedLo = pow4((ambient + HALF_MILLI + 200.0D) / (ambient + HALF_MILLI + 100.0D));
+        double expectedHi = pow4((ambient - HALF_MILLI + 200.0D) / (ambient - HALF_MILLI + 100.0D));
+        assertTrue("what the cell radiates must follow the fourth power of its temperature: expected "
+                        + expectedLo + ".." + expectedHi + " from " + (ambient + 100.0D) + " K and "
+                        + (ambient + 200.0D) + " K, measured " + lo + ".." + hi + " (shed "
+                        + shedAtHundred + " and " + shedAtTwoHundred + " against an incident flux of "
+                        + flux + ") — a linear law would put it near 2, and nothing here allows that",
+                expectedLo <= hi && lo <= expectedHi);
     }
 
     /**
@@ -138,39 +151,40 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      */
     @Test
     public void anObstructedCellShedsNothingAndSaysWhereTheBlockIs() throws Exception {
-        buildLoop(X_BLOCKED, 1);
+        int xBlocked = stand("one loop whose radiating cell is later obstructed");
+        buildLoop(xBlocked, 1);
         solve(1);
-        long capacity = longOf(loopInfo(X_BLOCKED), HEAT_CAPACITY);
-        int radiatorX = X_BLOCKED + LOOP_LENGTH - 1;
+        long capacity = loopInfo(xBlocked).longInteger("heatCapacity");
+        int radiatorX = xBlocked + LOOP_LENGTH - 1;
 
         // Control first, with the sky still clear: the same rig must genuinely shed.
-        String clear = exec("stellurgytest heat read 0 " + radiatorX + " " + Y + " " + Z);
-        assertTrue("premise: the cell must be a radiator: " + clear, clear.contains("\"isRadiator\":true"));
-        assertEquals("premise: nothing above it yet: " + clear, 0, longOf(clear, OBSTRUCTION));
-        long shedWhileClear = shedInOneTickFrom(X_BLOCKED, 100L * capacity);
+        Reply clear = heatRead(radiatorX);
+        requireArranged("premise: the cell must be a radiator: " + clear, clear.bool("isRadiator"));
+        assertEquals("premise: nothing above it yet: " + clear, 0, clear.integer("obstruction"));
+        long shedWhileClear = shedInOneTickFrom(xBlocked, 100L * capacity);
         assertTrue("premise: an unobstructed cell must genuinely shed, or the zero below is not "
                 + "evidence of anything (shed=" + shedWhileClear + ")", shedWhileClear > 0);
 
         // Now put a block in its way, one above — inside any clearance the config can be set to.
-        String placed = exec("stellurgytest place 0 " + radiatorX + " " + (Y + 1) + " " + Z + " minecraft:stone");
-        assertTrue("obstruction place failed: " + placed, placed.contains("\"placed\":true"));
+        Reply placed = arrange("stellurgytest place 0 " + radiatorX + " " + (y + 1) + " " + z + " minecraft:stone");
+        assertTrue("obstruction place failed: " + placed, placed.bool("placed"));
 
         long charge = 100L * capacity;
-        String cycled = exec("stellurgytest heat cycle 0 " + X_BLOCKED + " " + Y + " " + Z + " " + charge + " 1");
+        Reply cycled = cycle(xBlocked, charge);
         assertEquals("nothing may be shed by an obstructed cell: " + cycled,
-                0, longOf(cycled, CYCLE_REJECTED));
+                0L, cycled.longInteger("rejected"));
         assertEquals("and the energy must still be in the loop, not quietly gone: " + cycled,
-                charge, longOf(cycled, HEAT_STORED));
+                charge, cycled.longInteger("heatStored"));
 
-        String blockedCell = exec("stellurgytest heat read 0 " + radiatorX + " " + Y + " " + Z);
+        Reply blockedCell = heatRead(radiatorX);
         assertEquals("the cell must report the obstruction one block away, so a player can go and "
-                + "find it: " + blockedCell, 1, longOf(blockedCell, OBSTRUCTION));
+                + "find it: " + blockedCell, 1, blockedCell.integer("obstruction"));
         assertEquals("and must count as no radiating surface: " + blockedCell,
-                0, longOf(blockedCell, CELLS));
+                0, blockedCell.integer("radiatingCells"));
 
         assertEquals("the loop must still see the machine — it is obstructed, not gone: " + cycled,
-                1, longOf(cycled, EXCHANGERS));
-        assertEquals("with no working surface between them: " + cycled, 0, longOf(cycled, CELLS));
+                1, cycled.integer("exchangers"));
+        assertEquals("with no working surface between them: " + cycled, 0, cycled.integer("radiatingCells"));
     }
 
     // ─── the rig ───────────────────────────────────────────────────────
@@ -187,8 +201,10 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
         for (int i = LOOP_LENGTH - radiators; i < LOOP_LENGTH; i++) {
             place(x0 + i, "stellurgy:heatRadiator", RADIATOR_FACING_UP);
         }
-        String info = loopInfo(x0);
-        assertTrue("the run must be built before it is solved: " + info, info.contains("\"ok\":true"));
+        // `subnet info` answers ok for a position in no network too, with every quantity zero, so
+        // "the run is built" is `inNetwork` and not `ok`.
+        Reply info = loopInfo(x0);
+        requireArranged("the run must be built before it is solved: " + info, info.bool("inNetwork"));
     }
 
     /**
@@ -201,40 +217,38 @@ public class HeatRejectionTest extends AbstractSharedServerTest {
      * different amounts in that gap, which corrupts precisely the ratio this test is about.</p>
      */
     private long shedInOneTickFrom(int x0, long charge) throws Exception {
-        return longOf(cycle(x0, charge), CYCLE_REJECTED);
+        return cycle(x0, charge).longInteger("rejected");
     }
 
     /** The whole readout of one charged tick, for a caller that needs more than what left. */
-    private String cycle(int x0, long charge) throws Exception {
-        String cycled = exec("stellurgytest heat cycle 0 " + x0 + " " + Y + " " + Z + " " + charge + " 1");
-        assertTrue("heat cycle failed at " + x0 + ": " + cycled, cycled.contains("\"inLoop\":true"));
+    private Reply cycle(int x0, long charge) throws Exception {
+        Reply cycled = arrange("stellurgytest heat cycle 0 " + x0 + " " + y + " " + z + " " + charge + " 1");
+        requireArranged("heat cycle found no loop at " + x0 + ": " + cycled, cycled.bool("inLoop"));
         assertEquals("premise: the loop must have been charged with exactly what was asked: " + cycled,
-                charge, longOf(cycled, CHARGED));
+                charge, cycled.longInteger("charged"));
         return cycled;
     }
 
+    private Reply heatRead(int x) throws Exception {
+        return arrange("stellurgytest heat read 0 " + x + " " + y + " " + z);
+    }
+
     private void place(int x, String block, String meta) throws Exception {
-        String resp = exec("stellurgytest place 0 " + x + " " + Y + " " + Z + " " + block
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block
                 + (meta == null ? "" : " " + meta));
-        assertTrue(block + " place failed at " + x + ": " + resp, resp.contains("\"placed\":true"));
+        assertTrue(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
     }
 
     private void solve(int ticks) throws Exception {
-        String solved = exec("stellurgytest subnet solve heat 0 " + ticks);
-        assertTrue("solve failed: " + solved, solved.contains("\"ticksSolved\":" + ticks));
+        Reply solved = arrange("stellurgytest subnet solve heat 0 " + ticks);
+        assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
-    private String loopInfo(int x) throws Exception {
-        return exec("stellurgytest subnet info heat 0 " + x + " " + Y + " " + Z);
+    private Reply loopInfo(int x) throws Exception {
+        return ask("stellurgytest subnet info heat 0 " + x + " " + y + " " + z);
     }
 
     private static double pow4(double v) {
         return v * v * v * v;
-    }
-
-    private static long longOf(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Long.parseLong(m.group(1));
     }
 }

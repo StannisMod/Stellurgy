@@ -199,4 +199,16 @@ public abstract class AbstractSharedServerTest {
     protected final FixtureSite site() {
         return plot().site();
     }
+
+    /**
+     * This scenario's site, with the FIRST link of its chain already taken: the volume the fixture
+     * is about to use — {@code halo} blocks out from the site's footprint, {@code height} blocks up —
+     * is asserted EMPTY by the air fill's own {@code placed} count, and refused as an arrangement
+     * failure naming what was standing in it otherwise.
+     */
+    protected final FixtureSite clearedSite(int halo, int height, String what) throws Exception {
+        FixtureSite site = site();
+        site.requireClear(WorldCommandFixtures::exec, halo, height, what);
+        return site;
+    }
 }

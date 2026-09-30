@@ -1,12 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * The failure ladder's last rung: past its material's own limit a block stops being damaged and is
@@ -23,117 +27,143 @@ import static org.junit.Assert.assertTrue;
  */
 public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
 
-    private static final int Y = 70;
-    private static final int Z = 3400;
-    private static final int X_MELT = 2100;
-    private static final int X_COLD = 2140;
-    private static final int X_UNKNOWN = 2180;
-    private static final int X_SELF = 2220;
+    /** The row the pipes stand on, from this scenario's own site (see {@link #stand}). */
+    private int y;
+    private int z;
 
     /** Three pipes is enough loop to charge; the block under test stands against the middle one. */
     private static final int PIPES = 3;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
-    private static long field(String json, String name) {
-        Matcher m = Pattern.compile("\"" + name + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected a numeric field " + name + " in: " + json, m.find());
-        return Long.parseLong(m.group(1));
-    }
-
-    private static String text(String json, String name) {
-        Matcher m = Pattern.compile("\"" + name + "\":\"([^\"]*)\"").matcher(json);
-        assertTrue("expected a text field " + name + " in: " + json, m.find());
-        return m.group(1);
+    /**
+     * Ask for this scenario's site, prove its volume empty, and answer where the pipe run starts.
+     * The rig's own air fill reaches two blocks either side of the run and one below it.
+     */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(2, 3, what);
+        y = site.y + 1;
+        z = site.z + 2;
+        return site.x + 2;
     }
 
     /** A run of pipe, with one block of {@code victim} standing against its middle, in clear air. */
     private void buildRig(int cx, String victim) throws Exception {
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (Y - 1) + " " + (Z - 2)
-                + " " + (cx + PIPES + 2) + " " + (Y + 2) + " " + (Z + 2) + " minecraft:air");
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (y - 1) + " " + (z - 2)
+                + " " + (cx + PIPES + 2) + " " + (y + 2) + " " + (z + 2) + " minecraft:air");
         for (int i = 0; i < PIPES; i++) {
-            String placed = exec("stellurgytest place 0 " + (cx + i) + " " + Y + " " + Z
+            Reply placed = arrange("stellurgytest place 0 " + (cx + i) + " " + y + " " + z
                     + " stellurgy:heatPipe");
-            assertTrue("pipe place failed: " + placed, placed.contains("\"placed\":true"));
+            assertTrue("pipe place failed: " + placed, placed.bool("placed"));
         }
-        String victimPlaced = exec("stellurgytest place 0 " + (cx + 1) + " " + (Y + 1) + " " + Z
+        Reply victimPlaced = arrange("stellurgytest place 0 " + (cx + 1) + " " + (y + 1) + " " + z
                 + " " + victim);
-        assertTrue("victim place failed: " + victimPlaced, victimPlaced.contains("\"placed\":true"));
-        String solved = exec("stellurgytest subnet solve all 0 1");
-        assertTrue("the loop never solved: " + solved, solved.contains("\"ticksSolved\":1"));
+        assertTrue("victim place failed: " + victimPlaced, victimPlaced.bool("placed"));
+        Reply solved = arrange("stellurgytest subnet solve all 0 1");
+        assertEquals("the loop never solved: " + solved, 1, solved.integer("ticksSolved"));
     }
 
-    private String blockAbove(int cx) throws Exception {
-        return exec("stellurgytest heat material 0 " + (cx + 1) + " " + (Y + 1) + " " + Z);
+    private Reply blockAbove(int cx) throws Exception {
+        return materialAt(cx + 1, y + 1);
     }
 
-    /** Charge the loop to a temperature and let the domain tick, with the sweep on every tick. */
+    private Reply materialAt(int x, int y) throws Exception {
+        return arrange("stellurgytest heat material 0 " + x + " " + y + " " + z);
+    }
+
+    /**
+     * Charge the loop to a temperature and let the domain tick, with the sweep on every tick.
+     *
+     * <p>The sweep's pace is a server-wide setting and this server is shared by every scenario in
+     * the class, so it is put back as soon as the two ticks that need it have run.</p>
+     */
     private void cookAt(int cx, long kelvin) throws Exception {
-        String set = exec("stellurgytest config set shipHeatMeltCheckTicks 1");
-        assertTrue("could not pace the sweep: " + set, set.contains("\"ok\":true"));
-        String empty = exec("stellurgytest heat cycle 0 " + cx + " " + Y + " " + Z + " 0 1");
-        long capacity = field(empty, "heatCapacity");
+        String pace = arrange("stellurgytest config get shipHeatMeltCheckTicks").text("value");
+        arrange("stellurgytest config set shipHeatMeltCheckTicks 1");
+        try {
+            cookWithTheSweepOnEveryTick(cx, kelvin);
+        } finally {
+            arrange("stellurgytest config set shipHeatMeltCheckTicks " + pace);
+        }
+    }
+
+    private void cookWithTheSweepOnEveryTick(int cx, long kelvin) throws Exception {
+        Reply empty = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " 0 1");
+        requireArranged("premise: the pipes must form a loop: " + empty, empty.bool("inLoop"));
+        long capacity = empty.longInteger("heatCapacity");
         assertTrue("premise: the loop must have thermal mass: " + empty, capacity > 0);
-        int ambient = (int) field(exec("stellurgytest config get shipHeatAmbientKelvin"), "value");
+        long ambient = arrange("stellurgytest config get shipHeatAmbientKelvin").longInteger("value");
         long charge = (kelvin - ambient) * capacity;
-        String cooked = exec("stellurgytest heat cycle 0 " + cx + " " + Y + " " + Z + " " + charge + " 2");
+        Reply cooked = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " 2");
         // The readback can legitimately find no loop: at a temperature past the PIPES' own material
         // the first swept tick takes them, which is the self-consumption scenario. Only a loop that
         // still exists is required to read the temperature it was charged to.
-        if (cooked.contains("\"inLoop\":true")) {
-            assertTrue("premise: the loop must actually have reached " + kelvin + " K: " + cooked,
-                    field(cooked, "temperatureMilliK") >= (kelvin - 1) * 1000L);
+        //
+        // EXACTLY that temperature. Nothing here takes heat out of this loop: it has no radiating
+        // cell (so `rejectHeat` returns 0), stands in open air with no cabin to conduct into, and
+        // `HullMelting.sweep` destroys blocks without drawing on the loop. So the stored heat after
+        // the ticks is the charge, and `HeatNetwork.temperature` is ambient + stored / capacity —
+        // `kelvin` to the milli-kelvin, since the charge is a whole multiple of the capacity.
+        if (cooked.bool("inLoop")) {
+            assertEquals("premise: the loop must hold exactly the temperature it was charged to: "
+                    + cooked, kelvin * 1000L, cooked.longInteger("temperatureMilliK"));
         }
     }
 
     @Test
     public void aLoopPastTheMaterialsCeilingTakesTheBlockAndLeavesLava() throws Exception {
-        buildRig(X_MELT, "minecraft:stone");
-        String before = blockAbove(X_MELT);
-        long ceiling = field(before, "ceilingKelvin");
+        int xMelt = stand("a coolant loop with a block of stone against it, cooked past stone's limit");
+        buildRig(xMelt, "minecraft:stone");
+        Reply before = blockAbove(xMelt);
+        long ceiling = before.longInteger("ceilingKelvin");
         assertTrue("premise: the victim must be a substance with a limit: " + before, ceiling > 0);
         assertEquals("premise: and it must still be stone before anything is cooked: " + before,
-                "minecraft:stone", text(before, "block"));
+                "minecraft:stone", before.text("block"));
 
-        cookAt(X_MELT, ceiling + 200);
+        cookAt(xMelt, ceiling + 200);
 
-        String after = blockAbove(X_MELT);
+        Reply after = blockAbove(xMelt);
         assertEquals("past its own limit the block is not damaged, it is gone - and rock leaves lava"
-                + " behind: " + after, "minecraft:lava", text(after, "block"));
+                + " behind: " + after, "minecraft:lava", after.text("block"));
     }
 
     @Test
     public void theSameRigBelowTheCeilingLeavesTheBlockStanding() throws Exception {
-        buildRig(X_COLD, "minecraft:stone");
-        long ceiling = field(blockAbove(X_COLD), "ceilingKelvin");
+        int xCold = stand("a coolant loop with a block of stone against it, kept below stone's limit");
+        buildRig(xCold, "minecraft:stone");
+        long ceiling = blockAbove(xCold).longInteger("ceilingKelvin");
 
-        cookAt(X_COLD, ceiling - 200);
+        cookAt(xCold, ceiling - 200);
 
-        String after = blockAbove(X_COLD);
+        Reply after = blockAbove(xCold);
         assertEquals("below the limit the rung must not fire at all - a block is lost at a"
-                + " temperature, not at a mood: " + after, "minecraft:stone", text(after, "block"));
+                + " temperature, not at a mood: " + after, "minecraft:stone", after.text("block"));
     }
 
     /**
      * Found by the bedrock scenario rather than planned: past the pipes' OWN material the loop is
      * what melts, and there is nothing left to cook anything else with. The design says an overheated
      * loop eats its own pipes first, and this is that, arrived at from the other direction.
+     *
+     * <p>Read as two things, because either alone passes on the wrong world: {@code subnet info}
+     * answers {@code inNetwork:false} for a position that never held a loop at all, so the pipe's own
+     * block is asked too — it must no longer be the block that was placed there.</p>
      */
     @Test
     public void aLoopPastItsOwnMaterialConsumesItself() throws Exception {
-        buildRig(X_SELF, "minecraft:stone");
-        String pipe = exec("stellurgytest heat material 0 " + X_SELF + " " + Y + " " + Z);
-        long pipeCeiling = field(pipe, "ceilingKelvin");
+        int xSelf = stand("a coolant loop cooked past its own pipes' limit");
+        buildRig(xSelf, "minecraft:stone");
+        Reply pipe = materialAt(xSelf, y);
+        long pipeCeiling = pipe.longInteger("ceilingKelvin");
         assertTrue("premise: the pipes must be made of something with a limit: " + pipe,
                 pipeCeiling > 0);
+        String pipeBlock = pipe.text("block");
 
-        cookAt(X_SELF, pipeCeiling + 500);
+        cookAt(xSelf, pipeCeiling + 500);
 
-        String after = exec("stellurgytest subnet info heat 0 " + X_SELF + " " + Y + " " + Z);
-        assertTrue("a loop hotter than its own pipes has no pipes: " + after,
-                after.contains("\"members\":0") || after.contains("\"error\""));
+        Reply after = ask("stellurgytest subnet info heat 0 " + xSelf + " " + y + " " + z);
+        assertFalse("a loop hotter than its own pipes has no pipes: " + after, after.bool("inNetwork"));
+        Reply where = materialAt(xSelf, y);
+        assertNotEquals("and the pipe that stood there must be gone, not merely disconnected: " + where,
+                pipeBlock, where.text("block"));
     }
 
     /**
@@ -142,18 +172,19 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
      */
     @Test
     public void aSubstanceNobodyDescribedIsNeverMelted() throws Exception {
-        buildRig(X_UNKNOWN, "minecraft:bedrock");
-        String before = blockAbove(X_UNKNOWN);
+        int xUnknown = stand("a coolant loop with a block of bedrock against it");
+        buildRig(xUnknown, "minecraft:bedrock");
+        Reply before = blockAbove(xUnknown);
         assertEquals("premise: the fixture must actually stand on the unknown block: " + before,
-                "minecraft:bedrock", text(before, "block"));
+                "minecraft:bedrock", before.text("block"));
 
         // Hot enough that stone would be gone twice over, and still under what the loop's OWN pipes
         // survive - at 5000 K the pipes melt first and there is no loop left to run the sweep, which
         // is a different scenario and is the one below.
-        cookAt(X_UNKNOWN, 1600);
+        cookAt(xUnknown, 1600);
 
-        String after = blockAbove(X_UNKNOWN);
+        Reply after = blockAbove(xUnknown);
         assertEquals("with no ceiling there is no threshold to cross: " + after,
-                "minecraft:bedrock", text(after, "block"));
+                "minecraft:bedrock", after.text("block"));
     }
 }

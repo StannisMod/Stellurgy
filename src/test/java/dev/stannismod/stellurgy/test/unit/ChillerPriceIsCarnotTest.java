@@ -59,8 +59,12 @@ public class ChillerPriceIsCarnotTest {
         double cop = HeatNetwork.coefficientOfPerformance(293.0D, 500.0D);
 
         double idealCooling = 293.0D / (500.0D - 293.0D);
+        // EXACT: `HeatNetwork.coefficientOfPerformance` computes the same `Tc / (Th - Tc)` and scales
+        // it by 500 / 1000.0 = 0.5, well inside its floor and ceiling — the same operations on the same
+        // doubles give the same bits. Tc/(Th-Tc) and Th/(Th-Tc) differ by 1, so any slack hides nothing
+        // today and would hide the next wrong formula that happens to land near.
         assertEquals("half of Tc/(Th-Tc), not half of Th/(Th-Tc)",
-                idealCooling * 0.5D, cop, 0.01D);
+                idealCooling * 0.5D, cop, 0.0D);
     }
 
     /**

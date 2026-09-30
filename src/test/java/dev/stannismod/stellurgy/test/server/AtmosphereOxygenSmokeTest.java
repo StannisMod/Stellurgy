@@ -329,7 +329,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         ok(client().execute("stellurgytest place 0 " + sx + " " + by + " " + bz + " minecraft:stone"));
 
         // Clear any prior contents from previous test runs in the same JVM.
-        client().execute("stellurgytest atmosphere torch-block-clear");
+        ok(client().execute("stellurgytest atmosphere torch-block-clear"));
 
         String addList = String.join("\n", client().execute(
                 "stellurgytest atmosphere torch-block-add minecraft:stone"));

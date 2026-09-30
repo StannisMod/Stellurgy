@@ -1,13 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * The chiller: two coolant loops with a heat pump between them, and the one clause a pump breaks
@@ -25,21 +26,20 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class HeatChillerTest extends AbstractSharedServerTest {
 
-    private static final Pattern CHARGED = Pattern.compile("\"charged\":(-?\\d+)");
-    private static final Pattern PUMPED_OUT = Pattern.compile("\"pumpedOut\":(-?\\d+)");
-    private static final Pattern DELIVERED = Pattern.compile("\"delivered\":(-?\\d+)");
-    private static final Pattern HEAT_STORED = Pattern.compile("\"heatStored\":(-?\\d+)");
-    private static final Pattern WORK = Pattern.compile("\"work\":(-?\\d+)");
-    private static final Pattern PUMPS = Pattern.compile("\"pumps\":(-?\\d+)");
-    private static final Pattern MEMBERS = Pattern.compile("\"members\":(-?\\d+)");
-    private static final Pattern CAPACITY = Pattern.compile("\"heatCapacity\":(-?\\d+)");
-    private static final Pattern TEMPERATURE = Pattern.compile("\"temperatureMilliK\":(-?\\d+)");
+    /** The row the rig stands on, from this scenario's own site (see {@link #stand}). */
+    private int y;
+    private int z;
 
-    /** High and clear, so a radiating cell has nothing over it. */
-    private static final int Y = 100;
-    private static final int Z = 2760;
-    private static final int X_PUMP = 1100;
-    private static final int X_UNPOWERED = 1140;
+    /**
+     * Ask for this scenario's site in open air, so a radiating cell has nothing over it, prove the
+     * volume empty, and answer where the cold run starts. The rig is seven blocks long along X.
+     */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(2, 3, what);
+        y = site.y + 1;
+        z = site.z;
+        return site.x;
+    }
 
     /** `EnumFacing.getIndex()`: 5 is EAST, so the hot side is the +X end of the run. */
     private static final String CHILLER_FACING_EAST = "5";
@@ -59,38 +59,40 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      */
     @Test
     public void theHotLoopReceivesTheHeatPlusTheWork() throws Exception {
-        buildTwoLoops(X_PUMP);
+        int x0 = stand("two coolant loops with a powered chiller between them");
+        buildTwoLoops(x0);
         solve(2);
 
-        String cold = loopInfo(coldAnchor(X_PUMP));
-        String hot = loopInfo(hotAnchor(X_PUMP));
+        Reply cold = loopInfo(coldAnchor(x0));
+        Reply hot = loopInfo(hotAnchor(x0));
         assertEquals("premise: the cold run must be its own loop: " + cold,
-                COLD_LENGTH, longOf(cold, MEMBERS));
+                COLD_LENGTH, cold.integer("members"));
         assertEquals("premise: and the hot run another — a chiller between them must NOT have joined "
-                + "them into one: " + hot, COLD_LENGTH, longOf(hot, MEMBERS));
-        assertEquals("premise: both must see the chiller beside them: " + cold, 1, longOf(cold, PUMPS));
-        assertEquals("premise: from the hot side too: " + hot, 1, longOf(hot, PUMPS));
+                + "them into one: " + hot, COLD_LENGTH, hot.integer("members"));
+        assertEquals("premise: both must see the chiller beside them: " + cold, 1, cold.integer("pumps"));
+        assertEquals("premise: from the hot side too: " + hot, 1, hot.integer("pumps"));
 
         // The chiller's own metal counts as the HOT loop's thermal mass, and only the hot loop's: it is
         // a lump of refrigerant in contact with that coolant. Both runs are the same length, so if the
         // machine's mass were being ignored the two capacities would simply match.
+        long coldCapacity = cold.longInteger("heatCapacity");
+        long hotCapacity = hot.longInteger("heatCapacity");
         assertTrue("a chiller bolted onto the hot loop must add its own thermal mass to it — the hot "
                         + "side has to climb more slowly than its pipes alone would explain (cold="
-                        + longOf(cold, CAPACITY) + " hot=" + longOf(hot, CAPACITY) + ")",
-                longOf(hot, CAPACITY) > longOf(cold, CAPACITY));
+                        + coldCapacity + " hot=" + hotCapacity + ")",
+                hotCapacity > coldCapacity);
         assertEquals("and only to the hot side — the loop it merely draws FROM carries none of the "
-                        + "machine: " + cold, COLD_LENGTH * 20L, longOf(cold, CAPACITY));
+                        + "machine: " + cold, COLD_LENGTH * 20L, coldCapacity);
 
-        powerChiller(X_PUMP);
-        long capacity = longOf(cold, CAPACITY);
-        long charge = 100L * capacity;
+        powerChiller(x0);
+        long charge = 100L * coldCapacity;
         // ONE tick, on a tick where the loop actually holds heat. These are per-tick figures: run the
         // loop dry over many ticks and the last one reports zeros, which says nothing about the pump.
-        String cycled = cycle(coldAnchor(X_PUMP), charge, 1);
+        Reply cycled = cycle(coldAnchor(x0), charge, 1);
 
-        long movedOut = longOf(cycled, PUMPED_OUT);
-        long delivered = longOf(cycled, DELIVERED);
-        long work = longOf(cycled, WORK);
+        long movedOut = cycled.longInteger("pumpedOut");
+        long delivered = cycled.longInteger("delivered");
+        long work = cycled.longInteger("work");
 
         assertTrue("premise: the chiller must have shifted something: " + cycled, movedOut > 0);
         assertTrue("premise: and paid for it: " + cycled, work > 0);
@@ -102,11 +104,11 @@ public class HeatChillerTest extends AbstractSharedServerTest {
         // counter. `pumpedIn` is drained on the hot loop's own tick, and the world ticks between probe
         // calls, so by the time a second command can read it the figure is legitimately zero again.
         // What is durable is that the energy is sitting there.
-        String hotAfter = loopInfo(hotAnchor(X_PUMP));
+        Reply hotAfter = loopInfo(hotAnchor(x0));
         assertTrue("the hot loop must be HOLDING the energy that was handed to it (delivered="
-                        + delivered + "): " + hotAfter, longOf(hotAfter, HEAT_STORED) > 0);
+                        + delivered + "): " + hotAfter, hotAfter.longInteger("heatStored") > 0);
         assertTrue("and be above ambient because of it: " + hotAfter,
-                longOf(hotAfter, TEMPERATURE) > 1000L * ambientKelvinFrom(cold));
+                hotAfter.longInteger("temperatureMilliK") > 1000L * ambientKelvinFrom(cold));
     }
 
     /**
@@ -116,32 +118,33 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      */
     @Test
     public void theHotLoopIsHotterBecauseEnergyAccumulatesInIt() throws Exception {
-        buildTwoLoops(X_UNPOWERED);
+        int x0 = stand("two coolant loops with a chiller that is powered only later");
+        buildTwoLoops(x0);
         solve(2);
-        long capacity = longOf(loopInfo(coldAnchor(X_UNPOWERED)), CAPACITY);
+        long capacity = loopInfo(coldAnchor(x0)).longInteger("heatCapacity");
 
         // An unpowered chiller first: it must shift nothing, and the hot loop must stay at ambient.
-        String starved = cycle(coldAnchor(X_UNPOWERED), 100L * capacity, 1);
-        assertEquals("premise: the loop must see the chiller: " + starved, 1, longOf(starved, PUMPS));
-        assertEquals("an unpowered chiller shifts nothing: " + starved, 0, longOf(starved, PUMPED_OUT));
-        assertEquals("and pays nothing: " + starved, 0, longOf(starved, WORK));
-        long hotAmbient = longOf(loopInfo(hotAnchor(X_UNPOWERED)), TEMPERATURE);
+        Reply starved = cycle(coldAnchor(x0), 100L * capacity, 1);
+        assertEquals("premise: the loop must see the chiller: " + starved, 1, starved.integer("pumps"));
+        assertEquals("an unpowered chiller shifts nothing: " + starved, 0L, starved.longInteger("pumpedOut"));
+        assertEquals("and pays nothing: " + starved, 0L, starved.longInteger("work"));
+        long hotAmbient = loopInfo(hotAnchor(x0)).longInteger("temperatureMilliK");
 
         // Power it and run ONE tick: the transfer is a per-tick figure and must be read on a tick
         // where the cold loop still held something. What the hot loop does with the energy afterwards
         // is a STATE, and that is what the rest of this test reads.
-        powerChiller(X_UNPOWERED);
-        String driven = cycle(coldAnchor(X_UNPOWERED), 100L * capacity, 1);
+        powerChiller(x0);
+        Reply driven = cycle(coldAnchor(x0), 100L * capacity, 1);
         assertTrue("the same chiller with power must shift heat, or the zeros above measured nothing: "
-                + driven, longOf(driven, PUMPED_OUT) > 0);
+                + driven, driven.longInteger("pumpedOut") > 0);
 
-        String hotAfter = loopInfo(hotAnchor(X_UNPOWERED));
-        long hotNow = longOf(hotAfter, TEMPERATURE);
+        Reply hotAfter = loopInfo(hotAnchor(x0));
+        long hotNow = hotAfter.longInteger("temperatureMilliK");
         assertTrue("the hot loop must be hotter than it was left at ambient (" + hotAmbient + " → "
                 + hotNow + "): " + hotAfter, hotNow > hotAmbient);
         assertTrue("and hotter than the cold loop it is fed from — the pump works AGAINST the gradient, "
                         + "which is what its electricity buys: " + hotAfter + " | " + driven,
-                hotNow > longOf(driven, TEMPERATURE));
+                hotNow > driven.longInteger("temperatureMilliK"));
     }
 
     // ─── the rig ───────────────────────────────────────────────────────
@@ -171,43 +174,35 @@ public class HeatChillerTest extends AbstractSharedServerTest {
     }
 
     private void powerChiller(int x0) throws Exception {
-        String resp = exec("stellurgytest energy inject 0 " + (x0 + COLD_LENGTH) + " " + Y + " " + Z
-                + " 100000000");
-        assertTrue("chiller power failed: " + resp, resp.contains("\"ok\":true"));
+        arrange("stellurgytest energy inject 0 " + (x0 + COLD_LENGTH) + " " + y + " " + z + " 100000000");
     }
 
     /** Charge a loop and advance it, atomically — the world ticks between probe calls. */
-    private String cycle(int x, long charge, int ticks) throws Exception {
-        String resp = exec("stellurgytest heat cycle 0 " + x + " " + Y + " " + Z + " " + charge + " " + ticks);
-        assertTrue("heat cycle failed at " + x + ": " + resp, resp.contains("\"inLoop\":true"));
+    private Reply cycle(int x, long charge, int ticks) throws Exception {
+        Reply resp = arrange("stellurgytest heat cycle 0 " + x + " " + y + " " + z + " " + charge + " " + ticks);
+        requireArranged("heat cycle found no loop at " + x + ": " + resp, resp.bool("inLoop"));
         assertEquals("premise: the loop must hold exactly what was asked: " + resp,
-                charge, longOf(resp, CHARGED));
+                charge, resp.longInteger("charged"));
         return resp;
     }
 
     private void place(int x, String block, String meta) throws Exception {
-        String resp = exec("stellurgytest place 0 " + x + " " + Y + " " + Z + " " + block
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block
                 + (meta == null ? "" : " " + meta));
-        assertTrue(block + " place failed at " + x + ": " + resp, resp.contains("\"placed\":true"));
+        assertTrue(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
     }
 
     private void solve(int ticks) throws Exception {
-        String solved = exec("stellurgytest subnet solve heat 0 " + ticks);
-        assertTrue("solve failed: " + solved, solved.contains("\"ticksSolved\":" + ticks));
+        Reply solved = arrange("stellurgytest subnet solve heat 0 " + ticks);
+        assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
-    private String loopInfo(int x) throws Exception {
-        return exec("stellurgytest subnet info heat 0 " + x + " " + Y + " " + Z);
+    private Reply loopInfo(int x) throws Exception {
+        return ask("stellurgytest subnet info heat 0 " + x + " " + y + " " + z);
     }
 
     /** Ambient in kelvin, read off a loop that is holding nothing rather than restated as a number. */
-    private static long ambientKelvinFrom(String coldLoopWhileEmpty) {
-        return longOf(coldLoopWhileEmpty, TEMPERATURE) / 1000L;
-    }
-
-    private static long longOf(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+    private static long ambientKelvinFrom(Reply coldLoopWhileEmpty) {
+        return coldLoopWhileEmpty.longInteger("temperatureMilliK") / 1000L;
     }
 }

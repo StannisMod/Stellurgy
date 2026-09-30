@@ -110,7 +110,7 @@ public class AtmosphereLogicTest {
                 + mutators, mutators.isEmpty());
 
         // And the two flags still have to be independent of each other at construction: fire and
-        // lungs are different questions about the same gas, which is the defect ledger #306 records.
+        // lungs are different questions about the same gas, and conflating them was a real defect.
         Atmosphere unbreathableButFlammable =
                 new Atmosphere(false, false, true, "ar.test.combust." + System.nanoTime());
         assertFalse(unbreathableButFlammable.isBreathable());

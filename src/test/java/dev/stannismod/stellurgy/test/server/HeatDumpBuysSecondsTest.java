@@ -1,12 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
 
 /**
  * The emergency dump: heat leaves the ship inside a lump of matter that is thrown overboard.
@@ -19,89 +20,138 @@ import static org.junit.Assert.assertTrue;
  */
 public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
 
-    private static final int Y = 70;
-    private static final int Z = 3500;
-    private static final int X_HOT = 2300;
-    private static final int X_COLD = 2340;
+    /** The row the rig stands on, from this scenario's own site (see {@link #stand}). */
+    private int y;
+    private int z;
+
+    /**
+     * Ask for this scenario's site, prove its volume empty, and answer where the pipe run starts.
+     * The rig clears two blocks behind that and fifteen ahead of it, where a thrown slug lands.
+     */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(12, 3, what);
+        y = site.y + 1;
+        z = site.z + 2;
+        return site.x + 2;
+    }
 
     private static final int PIPES = 3;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
-    private static long field(String json, String name) {
-        Matcher m = Pattern.compile("\"" + name + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected a numeric field " + name + " in: " + json, m.find());
-        return Long.parseLong(m.group(1));
-    }
-
     /** A loop with a dump bolted to its end, loaded with a block of iron and powered. */
     private void buildRig(int cx) throws Exception {
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (Y - 1) + " " + (Z - 2)
-                + " " + (cx + PIPES + 12) + " " + (Y + 2) + " " + (Z + 2) + " minecraft:air");
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (y - 1) + " " + (z - 2)
+                + " " + (cx + PIPES + 12) + " " + (y + 2) + " " + (z + 2) + " minecraft:air");
         for (int i = 0; i < PIPES; i++) {
-            String placed = exec("stellurgytest place 0 " + (cx + i) + " " + Y + " " + Z
+            Reply placed = arrange("stellurgytest place 0 " + (cx + i) + " " + y + " " + z
                     + " stellurgy:heatPipe");
-            assertTrue("pipe place failed: " + placed, placed.contains("\"placed\":true"));
+            assertTrue("pipe place failed: " + placed, placed.bool("placed"));
         }
-        String dump = exec("stellurgytest place 0 " + (cx + PIPES) + " " + Y + " " + Z
+        Reply dump = arrange("stellurgytest place 0 " + (cx + PIPES) + " " + y + " " + z
                 + " stellurgy:heatDump");
-        assertTrue("dump place failed: " + dump, dump.contains("\"placed\":true"));
-        String energy = exec("stellurgytest energy inject 0 " + (cx + PIPES) + " " + Y + " " + Z + " 1000000");
-        assertTrue("the dump must have power: " + energy, energy.contains("\"ok\":true"));
-        String loaded = exec("stellurgytest heat dump 0 " + (cx + PIPES) + " " + Y + " " + Z
+        assertTrue("dump place failed: " + dump, dump.bool("placed"));
+        arrange("stellurgytest energy inject 0 " + (cx + PIPES) + " " + y + " " + z + " 1000000");
+        Reply loaded = arrange("stellurgytest heat dump 0 " + (cx + PIPES) + " " + y + " " + z
                 + " load minecraft:iron_block");
         assertTrue("the dump must be loaded with something to charge: " + loaded,
-                loaded.contains("\"hasStack\":true"));
-        exec("stellurgytest subnet solve all 0 1");
+                loaded.bool("hasStack"));
+        arrange("stellurgytest subnet solve all 0 1");
     }
 
-    private String dumpInfo(int cx) throws Exception {
-        return exec("stellurgytest heat dump 0 " + (cx + PIPES) + " " + Y + " " + Z);
+    /**
+     * The dump's own state — refusing as an arrangement failure when there is no dump there.
+     *
+     * <p>The probe answers {@code isDump:false, charge:0, hasStack:false} for a position holding no
+     * dump, which satisfies both "it never fired" and "it fired and threw the slug out". Neither is a
+     * reading about a dump that is not there.</p>
+     */
+    private Reply dumpInfo(int cx) throws Exception {
+        Reply info = arrange("stellurgytest heat dump 0 " + (cx + PIPES) + " " + y + " " + z);
+        requireArranged("there must be a dump at the end of the loop: " + info, info.bool("isDump"));
+        return info;
     }
 
     /** Charge the loop to a stated temperature and advance the domain in one call. */
-    private String cycle(int cx, long kelvin, int ticks) throws Exception {
-        String empty = exec("stellurgytest heat cycle 0 " + cx + " " + Y + " " + Z + " 0 1");
-        long capacity = field(empty, "heatCapacity");
+    private Reply cycle(int cx, long kelvin, int ticks) throws Exception {
+        Reply empty = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " 0 1");
+        requireArranged("premise: the pipes must form a loop: " + empty, empty.bool("inLoop"));
+        long capacity = empty.longInteger("heatCapacity");
         assertTrue("premise: the loop must have thermal mass: " + empty, capacity > 0);
-        int ambient = (int) field(exec("stellurgytest config get shipHeatAmbientKelvin"), "value");
+        long ambient = configValue("shipHeatAmbientKelvin");
         long charge = (kelvin - ambient) * capacity;
-        return exec("stellurgytest heat cycle 0 " + cx + " " + Y + " " + Z + " " + charge + " " + ticks);
+        Reply cycled = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " " + ticks);
+        requireArranged("premise: the loop must still be a loop when charged: " + cycled,
+                cycled.bool("inLoop"));
+        return cycled;
+    }
+
+    private static long configValue(String key) throws Exception {
+        return arrange("stellurgytest config get " + key).longInteger("value");
+    }
+
+    /**
+     * KNOWN BUG, pinned as it stands: at the shipped defaults one dump sustains MORE than the
+     * cheapest radiator sheds, so a ship can be kept cool on iron instead of on radiators.
+     *
+     * <p>The clause is a relation — a dump's sustained throughput must stay under the cheapest
+     * continuous radiator tier — and the cheapest tier is ONE cell (a radiator is "a cell, not a
+     * plate", and the design ruled it so on 2026-09-29). Both sides are read off the server the
+     * harness booted, which carries the defaults, rather than restated here: a copy of the defaults
+     * cannot notice them changing, and noticing that is this pin's whole job.</p>
+     *
+     * <p>This asserts the CURRENT violation. Rebalancing the defaults so a dump sheds less than one
+     * cell turns it red on purpose — at which point the assertion flips to {@code dump < cell} and
+     * the known-bug note goes.</p>
+     */
+    @Test
+    public void atTheShippedDefaultsOneDumpOutshedsOneRadiatingCell() throws Exception {
+        long dump = configValue("shipHeatDumpThroughput");
+        long cell = configValue("shipHeatRadiatorCellPower");
+        assertTrue("premise: a radiating cell must shed something at its reference point: " + cell,
+                cell > 0);
+        assertTrue("KNOWN BUG: at the shipped defaults a dump's sustained throughput is at or above"
+                        + " what the cheapest radiator (one cell) sheds; if this is red, the balance was"
+                        + " fixed — flip this to dump < cell. dump=" + dump + " cell=" + cell
+                        + " per second",
+                dump >= cell);
     }
 
     @Test
     public void aLoopPastTheTriggerLosesHeatIntoTheSlugAndThrowsItOut() throws Exception {
-        buildRig(X_HOT);
-        long trigger = field(exec("stellurgytest config get shipHeatDumpTriggerKelvin"), "value");
-        String before = dumpInfo(X_HOT);
+        int cx = stand("a coolant loop with a loaded dump, about to be driven past its trigger");
+        buildRig(cx);
+        long trigger = configValue("shipHeatDumpTriggerKelvin");
+        Reply before = dumpInfo(cx);
         assertEquals("premise: the dump must start holding the material it was given: " + before,
-                0L, field(before, "charge"));
+                0L, before.longInteger("charge"));
         assertTrue("premise: and that material must be able to take heat at all: " + before,
-                field(before, "headroom") > 0);
+                before.longInteger("headroom") > 0);
 
-        String cooked = cycle(X_HOT, trigger + 200, 2);
+        Reply cooked = cycle(cx, trigger + 200, 2);
 
-        String after = dumpInfo(X_HOT);
+        Reply after = dumpInfo(cx);
         // Either the slug is holding charge, or it filled and was thrown out - both are the rung
         // working, and telling them apart is what `hasStack` is for.
         assertTrue("the dump must have taken heat off the loop and put it in the slug: " + after,
-                field(after, "charge") > 0 || !after.contains("\"hasStack\":true"));
+                after.longInteger("charge") > 0 || !after.bool("hasStack"));
         assertTrue("and the loop must be poorer by what left it: " + cooked,
-                field(cooked, "sunk") > 0);
+                cooked.longInteger("sunk") > 0);
     }
 
     @Test
     public void aShipThatIsCopingThrowsNothingAway() throws Exception {
-        buildRig(X_COLD);
-        long trigger = field(exec("stellurgytest config get shipHeatDumpTriggerKelvin"), "value");
+        int cx = stand("a coolant loop with a loaded dump, kept below its trigger");
+        buildRig(cx);
+        long trigger = configValue("shipHeatDumpTriggerKelvin");
 
-        String cooked = cycle(X_COLD, trigger - 200, 2);
+        Reply cooked = cycle(cx, trigger - 200, 2);
 
-        String after = dumpInfo(X_COLD);
+        Reply after = dumpInfo(cx);
         assertEquals("below the trigger the dump must do nothing at all - it is an emergency, not a"
-                + " cooling system: " + after, 0L, field(after, "charge"));
-        assertEquals("and the loop must lose nothing to it: " + cooked, 0L, field(cooked, "sunk"));
+                + " cooling system: " + after, 0L, after.longInteger("charge"));
+        // An empty slug reads `charge:0` too, and so does a slug that filled and went out of the port;
+        // only a slug still in the slot makes the zero above mean "never charged".
+        assertTrue("and it must still be holding the slug it was given: " + after,
+                after.bool("hasStack"));
+        assertEquals("and the loop must lose nothing to it: " + cooked, 0L, cooked.longInteger("sunk"));
     }
 }

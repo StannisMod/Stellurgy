@@ -1,13 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * What the OUTSIDE does to a ship's heat: the incident flux, and the shield that thins it.
@@ -33,24 +34,54 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class HeatEnvironmentTest extends AbstractSharedServerTest {
 
-    private static final Pattern HEAT_STORED = Pattern.compile("\"heatStored\":(-?\\d+)");
-    private static final Pattern HEAT_CAPACITY = Pattern.compile("\"heatCapacity\":(-?\\d+)");
-    private static final Pattern CELLS = Pattern.compile("\"radiatingCells\":(-?\\d+)");
-    private static final Pattern CYCLE_REJECTED = Pattern.compile("\"rejected\":(-?\\d+)");
-    private static final Pattern CHARGED = Pattern.compile("\"charged\":(-?\\d+)");
-    private static final Pattern INCIDENT_FLUX_MILLI = Pattern.compile("\"incidentFluxMilli\":(-?\\d+)");
-    private static final Pattern SLOT_DIM = Pattern.compile("\"slotDim\":(-?\\d+)");
+    /** The row every rig stands on, in open air so a cell facing up has nothing over it but sky;
+     *  from this scenario's own site (see {@link #stand} and {@link #standInCell}). */
+    private int y;
+    private int z;
 
-    /** High and in the open, so a cell facing up has nothing over it but sky. */
-    private static final int Y = 100;
-    private static final int Z = 2820;
+    /** A second loop stands this far along from the first, clear of it. */
+    private static final int CONTROL_OFFSET = 10;
+    /** The shielded loop's radiator stands just past the emitter, inside the shield. */
+    private static final int SHIELDED_OFFSET = 3;
+    /** The unshielded loop stands twenty blocks from the generator, outside the shield. */
+    private static final int UNSHIELDED_OFFSET = 20;
+    /** Out from the site's footprint far enough to hold the unshielded loop's far end. */
+    private static final int HALO = 18;
 
-    private static final int X_ONE_CHANNEL = 1000;
-    private static final int X_WITH_RADIATOR = 1010;
-    private static final int X_WITHOUT_RADIATOR = 1020;
-    private static final int X_SHIELD_GENERATOR = 1040;
-    private static final int X_SHIELDED = 1043;
-    private static final int X_UNSHIELDED = 1060;
+    /**
+     * How far the world-vs-space difference may sit from the reported flux difference, and it is
+     * nothing but the readouts' own quantisation. Each leg's net is {@code (long) ((gross - incident)
+     * * cells)} ({@code HeatNetwork.rejectHeat}): a truncation toward zero worth less than one unit,
+     * and the two legs can truncate in opposite directions when one net is positive and the other
+     * negative — under two units between them. Each leg's flux is {@code Math.round(flux * 1000)},
+     * half a milli-unit, twice. The gross term is the same in both legs (same capacity, same charge,
+     * so the same temperature) and cancels.
+     */
+    private static final double QUANTISATION_BOUND = 2.0D + 2 * 0.0005D;
+
+    /** Ask for this scenario's site on the world, prove it empty, and answer where the rig starts. */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(HALO, 3, what);
+        y = site.y + 1;
+        z = site.z;
+        return site.x;
+    }
+
+    /**
+     * The same allocation, proved empty in the space cell's OWN world rather than the overworld —
+     * the cell is where these rigs are built, and a slot world is shared by every scenario here.
+     */
+    private int standInCell(Cell cell, String what) throws Exception {
+        FixtureSite allocated = site();
+        y = allocated.y + 1;
+        z = allocated.z;
+        requireClearInCell(cell, allocated.x, what);
+        return allocated.x;
+    }
+
+    private void requireClearInCell(Cell cell, int x0, String what) throws Exception {
+        FixtureSite.openAir(cell.dim, x0, z).requireClear(WorldCommandFixtures::exec, HALO, 3, what);
+    }
 
     /** `getStateFromMeta` maps this to a cell radiating UP, so nothing but sky is in front of it. */
     private static final String RADIATOR_FACING_UP = "1";
@@ -79,16 +110,17 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      */
     @Test
     public void aWorldsWarmthAndAStarArriveThroughTheSameTerm() throws Exception {
-        buildLoop(0, X_ONE_CHANNEL, 1);
-        String built = loopInfo(0, X_ONE_CHANNEL);
+        int x0 = stand("one radiating loop on the overworld, and the same loop in a space cell");
+        buildLoop(0, x0, 1);
+        Reply built = loopInfo(0, x0);
         assertEquals("premise: exactly one radiating cell, so per-cell figures are per-loop figures: "
-                + built, 1, longOf(built, CELLS));
-        long capacity = longOf(built, HEAT_CAPACITY);
+                + built, 1, built.integer("radiatingCells"));
+        long capacity = built.longInteger("heatCapacity");
         long charge = 100L * capacity;
 
-        String onAWorld = cycle(0, X_ONE_CHANNEL, charge);
-        long fluxOnAWorld = longOf(onAWorld, INCIDENT_FLUX_MILLI);
-        long netOnAWorld = longOf(onAWorld, CYCLE_REJECTED);
+        Reply onAWorld = cycle(0, x0, charge);
+        long fluxOnAWorld = onAWorld.longInteger("incidentFluxMilli");
+        long netOnAWorld = onAWorld.longInteger("rejected");
         assertTrue("premise: a world must be radiating something at the ship standing on it, or this "
                 + "leg is deep space with extra steps: " + onAWorld, fluxOnAWorld > 0);
 
@@ -100,20 +132,22 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
         // working sum from a broken one.
         setConfig("shipHeatStarFluxReferenceKelvin", "600");
         try {
-            buildLoop(cell.dim, X_ONE_CHANNEL, 1);
-            String inSpace = cycle(cell.dim, X_ONE_CHANNEL, charge);
+            requireClearInCell(cell, x0, "the same loop, in the space cell");
+            buildLoop(cell.dim, x0, 1);
+            Reply inSpace = cycle(cell.dim, x0, charge);
             assertEquals("premise: the two rigs must be the same size, or their temperatures differ "
                             + "and what they radiate no longer cancels: " + onAWorld + " | " + inSpace,
-                    capacity, longOf(inSpace, HEAT_CAPACITY));
+                    capacity, inSpace.longInteger("heatCapacity"));
             assertEquals("premise: and must have the same radiating surface: " + inSpace,
-                    1, longOf(inSpace, CELLS));
-            fluxInSpace = longOf(inSpace, INCIDENT_FLUX_MILLI);
-            netInSpace = longOf(inSpace, CYCLE_REJECTED);
+                    1, inSpace.integer("radiatingCells"));
+            fluxInSpace = inSpace.longInteger("incidentFluxMilli");
+            netInSpace = inSpace.longInteger("rejected");
             assertTrue("premise: a star must actually be reaching this cell, or the second source does "
                     + "not exist and only one thing is under test: " + inSpace, fluxInSpace > 0);
-            assertTrue("premise: the two environments must be measurably different, or the difference "
-                            + "below is rounding: world=" + fluxOnAWorld + " space=" + fluxInSpace,
-                    Math.abs(fluxInSpace - fluxOnAWorld) > 100_000L);
+            assertTrue("premise: the two environments must differ by more than the readouts' own "
+                            + "quantisation, or the comparison below cannot tell a working sum from a "
+                            + "broken one: world=" + fluxOnAWorld + " space=" + fluxInSpace,
+                    Math.abs(fluxInSpace - fluxOnAWorld) / 1000.0D > QUANTISATION_BOUND);
         } finally {
             setConfig("shipHeatStarFluxReferenceKelvin", DEFAULT_STAR_KELVIN);
             release(cell);
@@ -127,7 +161,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
                         + "reported flux difference of " + fluxDifference + ". They do not match, so "
                         + "one of the two sources reaches the loop by a path the environment readout "
                         + "does not describe.",
-                Math.abs(netDifference - fluxDifference) <= 2.0D);
+                Math.abs(netDifference - fluxDifference) < QUANTISATION_BOUND);
     }
 
     /**
@@ -143,34 +177,37 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
     public void aShipUnderAFierceStarHeatsThroughItsRadiators() throws Exception {
         Cell cell = occupyHomeCell();
         try {
-            buildLoop(cell.dim, X_WITH_RADIATOR, 1);
-            buildLoop(cell.dim, X_WITHOUT_RADIATOR, 0);
-            assertEquals("premise: one cell of radiating surface: " + loopInfo(cell.dim, X_WITH_RADIATOR),
-                    1, longOf(loopInfo(cell.dim, X_WITH_RADIATOR), CELLS));
-            assertEquals("premise: and none at all on the control: "
-                            + loopInfo(cell.dim, X_WITHOUT_RADIATOR),
-                    0, longOf(loopInfo(cell.dim, X_WITHOUT_RADIATOR), CELLS));
+            int withX = standInCell(cell, "a loop with a radiator and a loop without, under one star");
+            int withoutX = withX + CONTROL_OFFSET;
+            buildLoop(cell.dim, withX, 1);
+            buildLoop(cell.dim, withoutX, 0);
+            Reply withRadiator = loopInfo(cell.dim, withX);
+            Reply withoutRadiator = loopInfo(cell.dim, withoutX);
+            assertEquals("premise: one cell of radiating surface: " + withRadiator,
+                    1, withRadiator.integer("radiatingCells"));
+            assertEquals("premise: and none at all on the control: " + withoutRadiator,
+                    0, withoutRadiator.integer("radiatingCells"));
 
             // The control on the environment first: an ordinary star must leave a charged loop
             // shedding, so the reversal below is the star and not something the rig does regardless.
-            long capacity = longOf(loopInfo(cell.dim, X_WITH_RADIATOR), HEAT_CAPACITY);
-            String calm = cycle(cell.dim, X_WITH_RADIATOR, 100L * capacity);
+            long capacity = withRadiator.longInteger("heatCapacity");
+            Reply calm = cycle(cell.dim, withX, 100L * capacity);
             assertTrue("premise: under an ordinary star a charged loop must still be shedding: " + calm,
-                    longOf(calm, CYCLE_REJECTED) > 0);
+                    calm.longInteger("rejected") > 0);
 
             setConfig("shipHeatStarFluxReferenceKelvin", FIERCE_STAR_KELVIN);
             try {
-                String radiating = cycle(cell.dim, X_WITH_RADIATOR, 0L);
+                Reply radiating = cycle(cell.dim, withX, 0L);
                 assertTrue("under a star this strong the net must run BACKWARDS — a loop that can only "
                                 + "ever lose heat gives a ship free immunity to its environment: "
-                                + radiating, longOf(radiating, CYCLE_REJECTED) < 0);
+                                + radiating, radiating.longInteger("rejected") < 0);
                 assertTrue("and the energy must actually be in the loop, not merely reported: "
-                        + radiating, longOf(radiating, HEAT_STORED) > 0);
+                        + radiating, radiating.longInteger("heatStored") > 0);
 
-                String bare = cycle(cell.dim, X_WITHOUT_RADIATOR, 0L);
+                Reply bare = cycle(cell.dim, withoutX, 0L);
                 assertEquals("a loop with no radiating surface must take nothing from the environment "
                                 + "— the cells are the coupling, and a hull is not one: " + bare,
-                        0, longOf(bare, HEAT_STORED));
+                        0L, bare.longInteger("heatStored"));
             } finally {
                 setConfig("shipHeatStarFluxReferenceKelvin", DEFAULT_STAR_KELVIN);
             }
@@ -192,36 +229,46 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
     public void aShieldThinsTheFluxAndNeverRemovesIt() throws Exception {
         Cell cell = occupyHomeCell();
         try {
-            int emitterX = X_SHIELD_GENERATOR + 1;
-            place(cell.dim, X_SHIELD_GENERATOR, "affs:shield_generator", null);
+            int generatorX = standInCell(cell, "a shield, a loop inside it and a loop outside it");
+            int emitterX = generatorX + 1;
+            int shieldedX = generatorX + SHIELDED_OFFSET;
+            int unshieldedX = generatorX + UNSHIELDED_OFFSET;
+            place(cell.dim, generatorX, "affs:shield_generator", null);
             place(cell.dim, emitterX, "affs:field_generator", null);
-            buildLoopWithRadiatorFirst(cell.dim, X_SHIELDED);
-            buildLoopWithRadiatorFirst(cell.dim, X_UNSHIELDED);
+            buildLoopWithRadiatorFirst(cell.dim, shieldedX);
+            buildLoopWithRadiatorFirst(cell.dim, unshieldedX);
 
+            // STIMULUS: fifteen rounds of charge, generator tick and network solve are the DOSE that
+            // brings the emitter up, and every round is driven by a probe rather than by world time,
+            // so the same dose does the same work on any box. No record closes it because nothing
+            // here waits: the one read after the dose is refused as an arrangement failure below.
             for (int i = 0; i < 15; i++) {
-                exec("stellurgytest energy inject " + cell.dim + " " + X_SHIELD_GENERATOR + " " + Y + " " + Z
+                arrange("stellurgytest energy inject " + cell.dim + " " + generatorX + " " + y + " " + z
                         + " 4000");
-                exec("stellurgytest tile force-tick " + cell.dim + " " + X_SHIELD_GENERATOR + " " + Y + " " + Z
+                arrange("stellurgytest tile force-tick " + cell.dim + " " + generatorX + " " + y + " " + z
                         + " 1");
-                exec("stellurgytest shield tick " + cell.dim);
+                arrange("stellurgytest shield tick " + cell.dim);
             }
-            String emitter = exec("stellurgytest shield read " + cell.dim + " " + emitterX + " " + Y + " " + Z);
-            assertTrue("premise: the emitter never came up, so nothing below is a test of a shield: "
-                    + emitter, emitter.contains("\"powered\":true"));
+            Reply emitter = ask("stellurgytest shield read " + cell.dim + " " + emitterX + " " + y + " " + z);
+            requireArranged("premise: the emitter never came up, so nothing below is a test of a shield: "
+                    + emitter, emitter.bool("powered"));
 
             setConfig("shipHeatStarFluxReferenceKelvin", FIERCE_STAR_KELVIN);
             setConfig("shipHeatShieldAttenuation", "1000");
             try {
-                String shielded = cycle(cell.dim, X_SHIELDED, 0L);
-                String unshielded = cycle(cell.dim, X_UNSHIELDED, 0L);
-                long gainedShielded = longOf(shielded, HEAT_STORED);
-                long gainedUnshielded = longOf(unshielded, HEAT_STORED);
+                Reply shielded = cycle(cell.dim, shieldedX, 0L);
+                Reply unshielded = cycle(cell.dim, unshieldedX, 0L);
+                long gainedShielded = shielded.longInteger("heatStored");
+                long gainedUnshielded = unshielded.longInteger("heatStored");
 
                 assertTrue("premise: the unshielded control must be heating hard, or there is nothing "
                         + "for the shield to have stopped: " + unshielded, gainedUnshielded > 0);
+                // MOST is the clause's own word and its own boundary: more than half. A tighter figure
+                // would be a copy of the shield's private cap, and this test's second half already
+                // pins the side of that cap which is the contract — that it is not all.
                 assertTrue("a raised shield must take most of the incident flux off the ship (shielded="
                                 + gainedShielded + " unshielded=" + gainedUnshielded + "): " + shielded,
-                        gainedShielded < gainedUnshielded / 10L);
+                        gainedShielded * 2L < gainedUnshielded);
                 assertTrue("and it must NOT take all of it, however much the configuration asks for — "
                                 + "a ship parked in a star heats slowly and always (shielded="
                                 + gainedShielded + "): " + shielded, gainedShielded > 0);
@@ -252,20 +299,19 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * a real star at its real distance rather than something this test invented.
      */
     private Cell occupyHomeCell() throws Exception {
-        String cellKey = dimCell(exec("stellurgytest space cell-info 0 0 0 0"));
+        String cellKey = ask("stellurgytest space cell-info 0 0 0 0").text("dimCell");
         String[] sectors = cellKey.split("_");
         assertEquals("a cell key is a sector triple: " + cellKey, 3, sectors.length);
         String args = sectors[0] + " " + sectors[1] + " " + sectors[2];
-        String occupied = exec("stellurgytest space occupy " + args);
-        assertTrue("the cell must materialize, or there is no space environment to test in: "
-                        + occupied,
-                occupied.contains("\"ok\":true") && occupied.contains("\"worldLoaded\":true"));
-        return new Cell(args, (int) longOf(occupied, SLOT_DIM));
+        Reply occupied = arrange("stellurgytest space occupy " + args);
+        requireArranged("the cell must materialize, or there is no space environment to test in: "
+                + occupied, occupied.bool("worldLoaded"));
+        return new Cell(args, occupied.integer("slotDim"));
     }
 
     /** Hand the slot back. A test that holds a pool slot is a test that breaks somebody else's. */
     private void release(Cell cell) throws Exception {
-        exec("stellurgytest space release " + cell.args);
+        arrange("stellurgytest space release " + cell.args);
     }
 
     /** A straight run of {@value #LOOP_LENGTH} blocks with {@code radiators} cells at the far end. */
@@ -287,10 +333,12 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
             place(dim, x0 + i, radiator ? "stellurgy:heatRadiator" : "stellurgy:heatPipe",
                     radiator ? RADIATOR_FACING_UP : null);
         }
-        String info = loopInfo(dim, x0);
-        assertTrue("the run must be built before it is solved: " + info, info.contains("\"ok\":true"));
-        String solved = exec("stellurgytest subnet solve heat " + dim + " 1");
-        assertTrue("solve failed in dim " + dim + ": " + solved, solved.contains("\"ticksSolved\":1"));
+        // `subnet info` answers ok for a position in no network too, with every quantity zero, so
+        // "the run is built" is `inNetwork` and not `ok`.
+        Reply info = loopInfo(dim, x0);
+        requireArranged("the run must be built before it is solved: " + info, info.bool("inNetwork"));
+        Reply solved = arrange("stellurgytest subnet solve heat " + dim + " 1");
+        assertEquals("solve failed in dim " + dim + ": " + solved, 1, solved.integer("ticksSolved"));
     }
 
     /**
@@ -300,41 +348,27 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * it, so charging in one command and measuring in the next measures whatever survived some natural
      * ticks — and here that gap would quietly deliver a whole star's worth of flux into the answer.</p>
      */
-    private String cycle(int dim, int x0, long charge) throws Exception {
-        String cycled = exec("stellurgytest heat cycle " + dim + " " + x0 + " " + Y + " " + Z + " " + charge
+    private Reply cycle(int dim, int x0, long charge) throws Exception {
+        Reply cycled = arrange("stellurgytest heat cycle " + dim + " " + x0 + " " + y + " " + z + " " + charge
                 + " 1");
-        assertTrue("heat cycle failed at " + x0 + " in dim " + dim + ": " + cycled,
-                cycled.contains("\"inLoop\":true"));
+        requireArranged("heat cycle found no loop at " + x0 + " in dim " + dim + ": " + cycled,
+                cycled.bool("inLoop"));
         assertEquals("premise: the loop must have been charged with exactly what was asked: " + cycled,
-                charge, longOf(cycled, CHARGED));
+                charge, cycled.longInteger("charged"));
         return cycled;
     }
 
     private void place(int dim, int x, String block, String meta) throws Exception {
-        String resp = exec("stellurgytest place " + dim + " " + x + " " + Y + " " + Z + " " + block
+        Reply resp = arrange("stellurgytest place " + dim + " " + x + " " + y + " " + z + " " + block
                 + (meta == null ? "" : " " + meta));
-        assertTrue(block + " place failed at " + x + " in dim " + dim + ": " + resp,
-                resp.contains("\"placed\":true"));
+        assertTrue(block + " place failed at " + x + " in dim " + dim + ": " + resp, resp.bool("placed"));
     }
 
     private void setConfig(String key, String value) throws Exception {
-        String resp = exec("stellurgytest config set " + key + " " + value);
-        assertTrue("config set " + key + "=" + value + " failed: " + resp, resp.contains("\"ok\":true"));
+        arrange("stellurgytest config set " + key + " " + value);
     }
 
-    private String loopInfo(int dim, int x) throws Exception {
-        return exec("stellurgytest subnet info heat " + dim + " " + x + " " + Y + " " + Z);
-    }
-
-    private static String dimCell(String json) {
-        Matcher m = Pattern.compile("\"dimCell\":\"([^\"]+)\"").matcher(json);
-        assertTrue("probe response carries no \"dimCell\": " + json, m.find());
-        return m.group(1);
-    }
-
-    private static long longOf(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Long.parseLong(m.group(1));
+    private Reply loopInfo(int dim, int x) throws Exception {
+        return ask("stellurgytest subnet info heat " + dim + " " + x + " " + y + " " + z);
     }
 }

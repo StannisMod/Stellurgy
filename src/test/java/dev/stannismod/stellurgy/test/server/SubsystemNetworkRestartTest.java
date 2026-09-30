@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
@@ -9,11 +10,10 @@ import org.junit.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * What a restart must give back — split by who owns it.
@@ -30,16 +30,6 @@ import static org.junit.Assert.assertTrue;
  * them). A regression in either direction is invisible in a single-boot test.</p>
  */
 public class SubsystemNetworkRestartTest {
-
-    private static final Pattern CABLES = Pattern.compile("\"cables\":(-?\\d+)");
-    private static final Pattern SOURCES = Pattern.compile("\"sources\":(-?\\d+)");
-    private static final Pattern SINKS = Pattern.compile("\"sinks\":(-?\\d+)");
-    private static final Pattern MEMBERS = Pattern.compile("\"members\":(-?\\d+)");
-    private static final Pattern PRIORITY = Pattern.compile("\"priority\":(-?\\d+)");
-    private static final Pattern BIAS = Pattern.compile("\"resistanceBias\":([0-9.]+)");
-    private static final Pattern HEAT_STORED = Pattern.compile("\"heatStored\":(-?\\d+)");
-    private static final Pattern HEAT_CAPACITY = Pattern.compile("\"heatCapacity\":(-?\\d+)");
-    private static final Pattern TEMPERATURE = Pattern.compile("\"temperatureMilliK\":(-?\\d+)");
 
     /** One chunk, so a single probe pulls every node of both networks back into memory. */
     private static final int Y = 64;
@@ -96,21 +86,20 @@ public class SubsystemNetworkRestartTest {
         place(firstBoot, "affs:field_generator", SHIELD_SINK);
         place(firstBoot, "affs:shield_console", SHIELD_CONSOLE);
 
-        String priorityWrite = exec(firstBoot,
+        Reply priorityWrite = arrange(firstBoot,
                 "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z + " " + ZONE_PRIORITY);
         assertEquals("priority write failed: " + priorityWrite,
-                ZONE_PRIORITY, intOf(PRIORITY, priorityWrite, "priority (boot 1)"));
+                ZONE_PRIORITY, priorityWrite.integer("priority"));
 
-        String biasWrite = exec(firstBoot, "stellurgytest shield console-bias 0 " + SHIELD_CONSOLE + " "
+        arrange(firstBoot, "stellurgytest shield console-bias 0 " + SHIELD_CONSOLE + " "
                 + Y + " " + Z + " " + RESISTANCE_BIAS);
-        assertTrue("bias write failed: " + biasWrite, biasWrite.contains("\"ok\":true"));
 
-        exec(firstBoot, "stellurgytest subnet solve lifesupport 0 2");
-        String ventilationBefore = subnet(firstBoot, DUCT_A);
-        int cablesBefore = intOf(CABLES, ventilationBefore, "cables (boot 1)");
-        int sourcesBefore = intOf(SOURCES, ventilationBefore, "sources (boot 1)");
-        int sinksBefore = intOf(SINKS, ventilationBefore, "sinks (boot 1)");
-        int membersBefore = intOf(MEMBERS, ventilationBefore, "members (boot 1)");
+        arrange(firstBoot, "stellurgytest subnet solve lifesupport 0 2");
+        Reply ventilationBefore = subnet(firstBoot, DUCT_A);
+        int cablesBefore = ventilationBefore.integer("cables");
+        int sourcesBefore = ventilationBefore.integer("sources");
+        int sinksBefore = ventilationBefore.integer("sinks");
+        int membersBefore = ventilationBefore.integer("members");
         assertEquals("premise: two ducts must be in the network before the restart: "
                 + ventilationBefore, 2, cablesBefore);
         assertEquals("premise: the plant must be its source: " + ventilationBefore, 1, sourcesBefore);
@@ -127,32 +116,30 @@ public class SubsystemNetworkRestartTest {
         // chunk still on disk there is legitimately no network to report. In play a walking player
         // does this; here it is explicit, because a probe that quietly loaded the chunk would be
         // changing the thing it measures.
-        String forced = exec(secondBoot, "stellurgytest chunk forceload 0 " + (VENT >> 4) + " " + (Z >> 4));
-        assertTrue("chunk forceload failed: " + forced, forced.contains("\"ok\":true"));
-        exec(secondBoot, "stellurgytest subnet solve lifesupport 0 2");
-        String ventilationAfter = subnet(secondBoot, DUCT_A);
+        arrange(secondBoot, "stellurgytest chunk forceload 0 " + (VENT >> 4) + " " + (Z >> 4));
+        arrange(secondBoot, "stellurgytest subnet solve lifesupport 0 2");
+        Reply ventilationAfter = subnet(secondBoot, DUCT_A);
         assertEquals("the ventilation graph must come back with the same cable count — it is "
                 + "rebuilt from the world, and the world did not change: " + ventilationAfter,
-                cablesBefore, intOf(CABLES, ventilationAfter, "cables (boot 2)"));
+                cablesBefore, ventilationAfter.integer("cables"));
         assertEquals("and the same source count: " + ventilationAfter,
-                sourcesBefore, intOf(SOURCES, ventilationAfter, "sources (boot 2)"));
+                sourcesBefore, ventilationAfter.integer("sources"));
         assertEquals("and the same sink count: " + ventilationAfter,
-                sinksBefore, intOf(SINKS, ventilationAfter, "sinks (boot 2)"));
+                sinksBefore, ventilationAfter.integer("sinks"));
         assertEquals("and the same membership: " + ventilationAfter,
-                membersBefore, intOf(MEMBERS, ventilationAfter, "members (boot 2)"));
+                membersBefore, ventilationAfter.integer("members"));
 
         // The settings, by contrast, are only here because their own tiles wrote them to NBT.
-        String priorityAfter = exec(secondBoot, "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z);
+        Reply priorityAfter = arrange(secondBoot, "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z);
         assertEquals("the vent's zone priority must survive the restart — it is the vent's own "
                         + "setting, not the network's: " + priorityAfter,
-                ZONE_PRIORITY, intOf(PRIORITY, priorityAfter, "priority (boot 2)"));
+                ZONE_PRIORITY, priorityAfter.integer("priority"));
 
-        String consoleAfter = exec(secondBoot, "stellurgytest shield console-info 0 " + SHIELD_CONSOLE
+        Reply consoleAfter = ask(secondBoot, "stellurgytest shield console-info 0 " + SHIELD_CONSOLE
                 + " " + Y + " " + Z);
         assertEquals("the console's resistance bias must survive the restart, and it is the only "
                         + "thing that re-seeds the rebuilt shield network: " + consoleAfter,
-                Double.parseDouble(RESISTANCE_BIAS),
-                Double.parseDouble(stringOf(BIAS, consoleAfter, "bias (boot 2)")), 1.0e-6);
+                Double.parseDouble(RESISTANCE_BIAS), consoleAfter.number("resistanceBias"), 1.0e-6);
     }
 
     /**
@@ -175,22 +162,22 @@ public class SubsystemNetworkRestartTest {
         place(firstBoot, "stellurgy:heatPipe", PIPE_B);
         place(firstBoot, "stellurgy:heatAccumulator", ACCUMULATOR);
 
-        String written = exec(firstBoot,
+        Reply written = arrange(firstBoot,
                 "stellurgytest heat set 0 " + PIPE_A + " " + Y + " " + Z + " " + STORED_HEAT);
-        assertTrue("premise: the position must hold a loop block: " + written,
-                written.contains("\"isLoopBlock\":true"));
+        requireArranged("premise: the position must hold a loop block: " + written,
+                written.bool("isLoopBlock"));
         assertEquals("premise: the block must accept the energy: " + written,
-                STORED_HEAT, longOf(HEAT_STORED, written, "block heat (boot 1)"));
+                STORED_HEAT, written.longInteger("heatStored"));
 
         // One tick, so the loop finds itself and spreads the energy over its members at one
         // temperature — which is the state a real ship would be saved in, not a lump in one pipe.
-        exec(firstBoot, "stellurgytest subnet solve heat 0 1");
-        String loopBefore = subnetHeat(firstBoot, PIPE_A);
-        long loopHeatBefore = longOf(HEAT_STORED, loopBefore, "loop heat (boot 1)");
-        long loopCapacityBefore = longOf(HEAT_CAPACITY, loopBefore, "loop capacity (boot 1)");
-        long temperatureBefore = longOf(TEMPERATURE, loopBefore, "temperature (boot 1)");
+        arrange(firstBoot, "stellurgytest subnet solve heat 0 1");
+        Reply loopBefore = subnetHeat(firstBoot, PIPE_A);
+        long loopHeatBefore = loopBefore.longInteger("heatStored");
+        long loopCapacityBefore = loopBefore.longInteger("heatCapacity");
+        long temperatureBefore = loopBefore.longInteger("temperatureMilliK");
         assertEquals("premise: all three blocks must be one loop: " + loopBefore,
-                3, intOf(MEMBERS, loopBefore, "members (boot 1)"));
+                3, loopBefore.integer("members"));
         assertEquals("premise: the loop must hold exactly what was put in it: " + loopBefore,
                 STORED_HEAT, loopHeatBefore);
 
@@ -200,62 +187,50 @@ public class SubsystemNetworkRestartTest {
         // ─────── Boot 2: same world, and the loop is a fresh object ───────
         secondBoot = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        String forced = exec(secondBoot, "stellurgytest chunk forceload 0 " + (PIPE_A >> 4) + " " + (Z >> 4));
-        assertTrue("chunk forceload failed: " + forced, forced.contains("\"ok\":true"));
+        arrange(secondBoot, "stellurgytest chunk forceload 0 " + (PIPE_A >> 4) + " " + (Z >> 4));
 
         // The blocks first: this is where the energy actually was, and the only place it could have
         // come from — nothing saved the loop.
         long fromBlocks = 0L;
         for (int x : new int[]{PIPE_A, PIPE_B, ACCUMULATOR}) {
-            String block = exec(secondBoot, "stellurgytest heat read 0 " + x + " " + Y + " " + Z);
-            assertTrue("the loop block at " + x + " must be back: " + block,
-                    block.contains("\"isLoopBlock\":true"));
-            fromBlocks += longOf(HEAT_STORED, block, "block heat at " + x + " (boot 2)");
+            Reply block = arrange(secondBoot, "stellurgytest heat read 0 " + x + " " + Y + " " + Z);
+            assertTrue("the loop block at " + x + " must be back: " + block, block.bool("isLoopBlock"));
+            fromBlocks += block.longInteger("heatStored");
         }
         assertEquals("every heat unit must come back off the blocks that were holding it — this is "
                         + "the whole reason the energy lives on blocks and not in the network",
                 STORED_HEAT, fromBlocks);
 
-        exec(secondBoot, "stellurgytest subnet solve heat 0 1");
-        String loopAfter = subnetHeat(secondBoot, PIPE_A);
+        arrange(secondBoot, "stellurgytest subnet solve heat 0 1");
+        Reply loopAfter = subnetHeat(secondBoot, PIPE_A);
         assertEquals("the loop must be REBUILT with the same membership — nothing persisted it: "
-                + loopAfter, 3, intOf(MEMBERS, loopAfter, "members (boot 2)"));
+                + loopAfter, 3, loopAfter.integer("members"));
         assertEquals("with the same capacity, because the same blocks are back: " + loopAfter,
-                loopCapacityBefore, longOf(HEAT_CAPACITY, loopAfter, "loop capacity (boot 2)"));
+                loopCapacityBefore, loopAfter.longInteger("heatCapacity"));
         assertEquals("and holding the same energy: " + loopAfter,
-                loopHeatBefore, longOf(HEAT_STORED, loopAfter, "loop heat (boot 2)"));
+                loopHeatBefore, loopAfter.longInteger("heatStored"));
         assertEquals("so a player finds the ship exactly as hot as they left it: " + loopAfter,
-                temperatureBefore, longOf(TEMPERATURE, loopAfter, "temperature (boot 2)"));
+                temperatureBefore, loopAfter.longInteger("temperatureMilliK"));
     }
 
-    private String subnetHeat(RealDedicatedServerHarness harness, int x) throws Exception {
-        return exec(harness, "stellurgytest subnet info heat 0 " + x + " " + Y + " " + Z);
+    private Reply subnetHeat(RealDedicatedServerHarness harness, int x) throws Exception {
+        return ask(harness, "stellurgytest subnet info heat 0 " + x + " " + Y + " " + Z);
     }
 
     private void place(RealDedicatedServerHarness harness, String block, int x) throws Exception {
-        String resp = exec(harness, "stellurgytest place 0 " + x + " " + Y + " " + Z + " " + block);
-        assertTrue(block + " place failed at " + x + ": " + resp, resp.contains("\"placed\":true"));
+        Reply resp = arrange(harness, "stellurgytest place 0 " + x + " " + Y + " " + Z + " " + block);
+        assertTrue(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
     }
 
-    private String subnet(RealDedicatedServerHarness harness, int x) throws Exception {
-        return exec(harness, "stellurgytest subnet info lifesupport 0 " + x + " " + Y + " " + Z);
+    private Reply subnet(RealDedicatedServerHarness harness, int x) throws Exception {
+        return ask(harness, "stellurgytest subnet info lifesupport 0 " + x + " " + Y + " " + Z);
     }
 
-    private static String exec(RealDedicatedServerHarness harness, String command) throws Exception {
-        return String.join("\n", harness.client().execute(command));
+    private static Reply ask(RealDedicatedServerHarness harness, String command) throws Exception {
+        return Reply.of(command, String.join("\n", harness.client().execute(command)));
     }
 
-    private static int intOf(Pattern pattern, String response, String label) {
-        return Integer.parseInt(stringOf(pattern, response, label));
-    }
-
-    private static long longOf(Pattern pattern, String response, String label) {
-        return Long.parseLong(stringOf(pattern, response, label));
-    }
-
-    private static String stringOf(Pattern pattern, String response, String label) {
-        Matcher m = pattern.matcher(response);
-        assertTrue("could not parse " + label + " from response: " + response, m.find());
-        return m.group(1);
+    private static Reply arrange(RealDedicatedServerHarness harness, String command) throws Exception {
+        return ask(harness, command).requireOk(command);
     }
 }

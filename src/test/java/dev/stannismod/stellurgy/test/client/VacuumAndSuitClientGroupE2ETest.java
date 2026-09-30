@@ -161,7 +161,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         awaitClientPlacedNear(standMark, plot().x(STAND_DX) + 0.5, plot().z(STAND_DZ) + 0.5,
                 "the vacuum this scenario is about is the one at the player's own position");
 
-        exec("stellurgytest player clear-armor");
+        arrangeProbe("stellurgytest player clear-armor");
         exec("gamerule naturalRegeneration false");
         exec("gamemode survival @a");
         // WINDOW: ten ticks of survival on the spot he was placed, watched for damage — he arrived
@@ -941,12 +941,12 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         // Pressurised, and short of oxygen: the three partials still total one atmosphere, so this
         // is emphatically NOT the vacuum every other scenario here uses - it is a room whose air has
         // been breathed. 50 000 ppm sits below lifeSupportMinPartialO2's 160 000 ppm default.
-        String setAir = exec("stellurgytest vent setair " + at
+        arrangeProbe("stellurgytest vent setair " + at
                 + " " + ppm(790_000) + " " + ppm(50_000) + " " + ppm(160_000));
-        scenario().requireArranged("setair must take: " + setAir, setAir.contains("\"ok\":true"));
 
-        String info = exec("stellurgytest vent info " + at);
-        scenario().record("ventInfo", info);
+        String infoCommand = "stellurgytest vent info " + at;
+        Reply info = Reply.of(infoCommand, exec(infoCommand));
+        scenario().record("ventInfo", info.toString());
         // What is asserted is the room's STATE, not the number that was written into it. The vent
         // holding the seal is powered and fuelled, so it is adding the oxygen it pays for the whole
         // time this room exists, and the composition sits a little above what setair asked for.
@@ -954,10 +954,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         // working - and it was redundant anyway: `lowO2` IS the statement that the oxygen is below
         // what a person needs, derived from this very number, and the pressure says the room is not
         // a vacuum. The subject is "pressurised, and too thin to breathe"; these three say it.
-        long o2 = Reply.of(info).longInteger("airO2");
+        long o2 = info.longInteger("airO2");
         scenario().requireArranged("the room must actually BE a zone before anyone stands in it, and"
                 + " it must read as pressurised-but-stale rather than as vacuum: " + info,
-                o2 > 0 && info.contains("\"airPressure\":100") && info.contains("lowO2"));
+                o2 > 0 && info.longInteger("airPressure") == 100
+                        && "lowO2".equals(info.text("blobAtmosphere")));
 
         standInTheRoomUnhurt();
         return at;
@@ -977,42 +978,57 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
         String at = dim + " " + vx + " " + vy + " " + vz;
 
         scenario().arranging("build a sealed room and seal it with a powered vent");
-        exec("stellurgytest fill " + dim + " " + (vx - 2) + " " + (vy - 1) + " " + (vz - 2)
+        arrangeProbe("stellurgytest fill " + dim + " " + (vx - 2) + " " + (vy - 1) + " " + (vz - 2)
                 + " " + (vx + 2) + " " + vy + " " + (vz + 2) + " minecraft:stone");
         for (int yy = vy + 1; yy <= vy + 2; yy++) {
-            exec("stellurgytest fill " + dim + " " + (vx - 2) + " " + yy + " " + (vz - 2)
+            arrangeProbe("stellurgytest fill " + dim + " " + (vx - 2) + " " + yy + " " + (vz - 2)
                     + " " + (vx + 2) + " " + yy + " " + (vz + 2) + " minecraft:stone");
-            exec("stellurgytest fill " + dim + " " + (vx - 1) + " " + yy + " " + (vz - 1)
+            arrangeProbe("stellurgytest fill " + dim + " " + (vx - 1) + " " + yy + " " + (vz - 1)
                     + " " + (vx + 1) + " " + yy + " " + (vz + 1) + " minecraft:air");
         }
-        exec("stellurgytest fill " + dim + " " + (vx - 2) + " " + (vy + 3) + " " + (vz - 2)
+        arrangeProbe("stellurgytest fill " + dim + " " + (vx - 2) + " " + (vy + 3) + " " + (vz - 2)
                 + " " + (vx + 2) + " " + (vy + 3) + " " + (vz + 2) + " minecraft:stone");
 
-        String placed = exec("stellurgytest place " + at + " stellurgy:oxygenVent");
-        scenario().requireArranged("the vent must place: " + placed, placed.contains("\"placed\":true"));
-        exec("stellurgytest energy inject " + at + " 1000000");
-        exec("stellurgytest fluid inject " + at + " oxygen 16000");
-        exec("stellurgytest tile force-tick " + at + " 1");
-        exec("stellurgytest vent reseal " + at);
-        exec("stellurgytest tile force-tick " + at + " 5");
+        Reply placed = arrangeProbe("stellurgytest place " + at + " stellurgy:oxygenVent");
+        scenario().requireArranged("the vent must place: " + placed, placed.bool("placed"));
+        arrangeProbe("stellurgytest energy inject " + at + " 1000000");
+        arrangeProbe("stellurgytest fluid inject " + at + " oxygen 16000");
+        arrangeProbe("stellurgytest tile force-tick " + at + " 1");
+        arrangeProbe("stellurgytest vent reseal " + at);
+        arrangeProbe("stellurgytest tile force-tick " + at + " 5");
         return at;
     }
 
-    /** Puts the player inside the sealed room and proves he arrived there unhurt. */
+    /**
+     * A probe that is a step of the arrangement, refused as one unless the verb reported {@code ok}.
+     * A dropped reply cannot say the step did not happen, and the scenario would then measure a room
+     * that was never built.
+     */
+    private Reply arrangeProbe(String command) throws Exception {
+        Reply reply = Reply.of(command, exec(command));
+        scenario().requireArranged(command + " must report ok: " + reply, reply.ok());
+        return reply;
+    }
+
+    /** Puts the player inside the sealed room, on its floor, at full health. */
     private void standInTheRoomUnhurt() throws Exception {
         int vx = plot().x(ROOM_DX), vy = ROOM_Y, vz = plot().z(ROOM_DZ);
-        // Stand him in the room while still CREATIVE, and check "unhurt" THERE. Creative
-        // short-circuits AtmosphereNeedsSuit.isImmune, so the room cannot hurt him yet — which is
-        // what makes the check meaningful: it can only fail on arriving in a wall or falling, the
-        // two things it exists to catch. Checking it in survival instead measured the subject:
-        // the room bit once during the settling ticks and the precondition read 19.0, i.e. this
-        // scenario refusing to run because its own contract had already fired.
-        exec("tp @a " + (vx + 0.5) + " " + (vy + 1) + " " + (vz + 0.5));
-        bot().waitTicks(10);
+        // Stand him in the room while still CREATIVE: creative short-circuits
+        // AtmosphereNeedsSuit.isImmune, so the room cannot hurt him yet. Checking health in survival
+        // instead measured the subject: the room bit once during the settling ticks and the
+        // precondition read 19.0, i.e. this scenario refusing to run because its own contract had
+        // already fired.
+        // WHERE he stands is a link on the client applying the placement onto a floor it holds —
+        // not a settle of ten ticks, which was a guess at how long that takes on this box.
+        standOnFloorTheClientHolds(vx + 0.5, vy + 1, vz + 0.5, 0f, 0f,
+                "the player must be standing on the sealed room's floor before the window opens");
 
+        // A creative player takes no fall or suffocation damage, so this cannot catch a bad
+        // arrival — that is the placement link's job. What it catches is a player who comes into
+        // this scenario already hurt from an earlier one on the same client, with regeneration off.
         double health = health(bot().reportState());
         scenario().record("healthInRoom", health);
-        scenario().requireArranged("the player must be standing unhurt INSIDE the sealed room before"
+        scenario().requireArranged("the player must be at full health INSIDE the sealed room before"
                 + " the window opens; client health=" + health, health >= 20.0);
     }
 
@@ -1097,9 +1113,8 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
     /** Overwrites the room's air: breathable sea-level gas at a stated temperature, in milliK. */
     private void setRoomAir(String at, int milliK) throws Exception {
-        String setAir = exec("stellurgytest vent setair " + at
+        arrangeProbe("stellurgytest vent setair " + at
                 + " " + ppm(790_000) + " " + ppm(210_000) + " 0 " + milliK);
-        scenario().requireArranged("setair must take: " + setAir, setAir.contains("\"ok\":true"));
     }
 
     /** What a person standing in the room breathes, as the handler publishes it. */
@@ -1178,32 +1193,47 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             sealStaleZoneAndStandInIt();
 
             scenario().arranging("equip an air-carrying suit");
-            String equip = exec("stellurgytest player equip-airsuit 1000");
-            scenario().requireArranged("equip-airsuit must succeed: " + equip,
-                    equip.contains("\"ok\":true"));
+            arrangeProbe("stellurgytest player equip-airsuit 1000");
             assertEquals("the suit must start full so any fall belongs to this window",
                     1000, readChestAir());
 
             // Survival only once the suit is on: an unprotected settling tick here would spend the
             // wearer's health on the very hazard this scenario claims the suit covers.
+            // Both marks BEFORE survival begins: in creative the hazard path never asks the suit, so
+            // the first payment can only come after this point, and a mark taken later could miss it.
+            Events events = events();
+            long mark = events.markInstrumented();
+            long clientMark = clientEvents().mark();
             scenario().measuring("health and suit air before the stale-air window");
             double healthStart = openSurvivalWindow();
 
             scenario().asserting("the suit covers the stale zone, and spends air doing it");
-            // AtmosphereLowOxygen.onTick gates on `% 20 == 0`, and the isImmune call that spends the
-            // air sits inside that gate — so this window is ~6 chances to spend, not 120.
-            bot().waitTicks(120);
+            // A LINK, not a budget: the suit paying is a record production publishes
+            // (`suit_air_drained`, route "enchanted" for this suit — the chest's own buffer), and the
+            // hazard path only spends inside its once-a-second gate, so a fixed wait was a guess at
+            // how many of those gates a box of this speed would fit in.
+            String drains = events.awaitRecordWithField(mark, "suit_air_drained", "route", "enchanted",
+                    "the stale air must reach the suit's buffer — a drain is the proof the hazard path"
+                            + " asked the suit at all", LINK_BUDGET_TICKS);
+
+            // The suit HELD while it paid: the gate never recorded a refusal. The decision recorder
+            // is edge-only, so the claim is the ABSENCE of `immune:false` in a window the drain above
+            // proves was watched.
+            String decisions = events.since(mark, "suit_immunity_decided");
+            assertEquals("the suit must protect its wearer from stale zone air; decisions since the"
+                            + " window opened: " + decisions + " | drains: " + drains,
+                    0, Events.countRecords(decisions, "immune", "false"));
 
             int chestAirAfter = readChestAir();
-            int clientAirAfter = clientChestAir();
             double healthAfter = health(bot().reportState());
-            scenario().record("chestAirAfter", chestAirAfter).record("clientChestAir", clientAirAfter)
-                    .record("healthAfter", healthAfter);
-
-            assertTrue("the suit must protect its wearer from stale zone air; healthStart="
-                    + healthStart + " healthAfter=" + healthAfter, healthAfter >= healthStart);
+            scenario().record("chestAirAfter", chestAirAfter).record("healthAfter", healthAfter);
+            assertTrue("and no health may have been spent on it; healthStart=" + healthStart
+                    + " healthAfter=" + healthAfter, healthAfter >= healthStart);
             assertTrue("and it must PAY for that protection — a fallback that costs nothing is not a"
                     + " fallback; before=1000 after=" + chestAirAfter, chestAirAfter < 1000);
+            int clientAirAfter = clientChestAirOnceSynced(clientMark, v -> v < 1000,
+                    "the client must render the drained suit, not a stale full one");
+            scenario().record("clientChestAir", clientAirAfter);
             assertTrue("the client must render the drained suit, not a stale full one; client="
                     + clientAirAfter, clientAirAfter < 1000);
         } finally {

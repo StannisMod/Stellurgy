@@ -1,13 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * A console reports its network as dead once the network dies.
@@ -19,61 +20,55 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  * fallback path, not the push. It fails if the console stops clearing itself, which is the way this
  * display can really go stale.</p>
  *
- * <p>Recorded in ledger #260, including the wrong version — it was caught only by re-running this
- * test with the "fix" reverted and watching it pass anyway.</p>
+ * <p>The wrong version was caught only by re-running this test with the "fix" reverted and watching
+ * it pass anyway.</p>
  */
 public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
-
-    private static final Pattern STATUS = Pattern.compile("\"networkStatus\":(-?\\d+)");
-    private static final Pattern CONNECTED = Pattern.compile("\"networkConnected\":(true|false)");
 
     /** `SubsystemNetworkStatus.DISCONNECTED` — no source, or no sink, so nothing can flow. */
     private static final int DISCONNECTED = 1;
 
     private static final int DIM = 0;
-    private static final int Y = 64;
+    /** The row the network stands on, one above this scenario's own site. */
+    private int y;
 
     @Test
     public void aConsoleStopsReportingANetworkThatLostItsLastSource() throws Exception {
-        int z = 900;
-        int source = 1200;
+        FixtureSite site = clearedSite(2, 2, "a shield source, sink and console in a row");
+        y = site.y + 1;
+        int z = site.z;
+        int source = site.x;
         int sink = source + 1;
         int console = source + 2;
 
         place("affs:shield_generator", source, z);
         place("affs:field_generator", sink, z);
         place("affs:shield_console", console, z);
-        exec("stellurgytest energy inject " + DIM + " " + source + " " + Y + " " + z + " 1000000");
+        arrange("stellurgytest energy inject " + DIM + " " + source + " " + y + " " + z + " 1000000");
 
-        exec("stellurgytest shield tick " + DIM);
-        String working = consoleInfo(console, z);
+        arrange("stellurgytest shield tick " + DIM);
+        Reply working = consoleInfo(console, z);
         assertTrue("premise: with a source and a sink the console must report a live network: "
-                + working, extract(working, CONNECTED).equals("true"));
+                + working, working.bool("networkConnected"));
 
         // Take the source away. The network can no longer move anything, and the console must say so.
-        exec("stellurgytest fill " + DIM + " " + source + " " + Y + " " + z + " "
-                + source + " " + Y + " " + z + " minecraft:air");
-        exec("stellurgytest shield tick " + DIM);
+        arrange("stellurgytest fill " + DIM + " " + source + " " + y + " " + z + " "
+                + source + " " + y + " " + z + " minecraft:air");
+        arrange("stellurgytest shield tick " + DIM);
 
-        String collapsed = consoleInfo(console, z);
-        assertEquals("a console whose network lost its last source must stop reporting it as live: "
-                + collapsed, "false", extract(collapsed, CONNECTED));
+        Reply collapsed = consoleInfo(console, z);
+        assertFalse("a console whose network lost its last source must stop reporting it as live: "
+                + collapsed, collapsed.bool("networkConnected"));
         assertEquals("and must report the disconnected status rather than the previous one: "
-                + collapsed, DISCONNECTED, Integer.parseInt(extract(collapsed, STATUS)));
+                + collapsed, DISCONNECTED, collapsed.integer("networkStatus"));
     }
 
     private void place(String block, int x, int z) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
-        assertTrue(block + " place failed: " + resp, resp.contains("\"placed\":true"));
+        Reply resp = arrange("stellurgytest place " + DIM + " " + x + " " + y + " " + z + " " + block);
+        assertTrue(block + " place failed: " + resp, resp.bool("placed"));
     }
 
-    private String consoleInfo(int x, int z) throws Exception {
-        return exec("stellurgytest shield console-info " + DIM + " " + x + " " + Y + " " + z);
-    }
-
-    private static String extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return m.group(1);
+    private Reply consoleInfo(int x, int z) throws Exception {
+        return ask("stellurgytest shield console-info " + DIM + " " + x + " " + y + " " + z);
     }
 }

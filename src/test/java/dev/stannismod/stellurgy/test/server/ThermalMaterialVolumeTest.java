@@ -1,12 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
 
 /**
  * How much substance a block IS, read off the block itself.
@@ -27,58 +28,49 @@ import static org.junit.Assert.assertTrue;
  */
 public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
 
-    private static final int Y = 70;
-    private static final int Z = 3300;
-    private static final int X_FULL = 2000;
-    private static final int X_SLAB = 2010;
-    private static final int X_STAIRS = 2020;
-    private static final int X_AIR = 2030;
-    private static final int X_GOLD = 2040;
-
     /** One cubic metre in the millilitres the probe reports. */
     private static final long WHOLE_BLOCK = 1_000_000L;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
-    private static long field(String json, String name) {
-        Matcher m = Pattern.compile("\"" + name + "\":(-?\\d+)").matcher(json);
-        assertTrue("expected a numeric field " + name + " in: " + json, m.find());
-        return Long.parseLong(m.group(1));
-    }
-
-    private String placeAndRead(int x, String block) throws Exception {
-        String placed = exec("stellurgytest place 0 " + x + " " + Y + " " + Z + " " + block);
-        assertTrue("could not place " + block + ": " + placed, !placed.contains("\"error\""));
-        return exec("stellurgytest heat material 0 " + x + " " + Y + " " + Z);
+    /**
+     * Place one block, one above this scenario's own site once the site is proved empty, then read
+     * what stands there. The read names the block it found, and that is what proves the placement
+     * took — not {@code placed}, which is false for air placed into air.
+     */
+    private Reply placeAndRead(String block) throws Exception {
+        FixtureSite site = clearedSite(1, 2, block + " standing alone in open air");
+        String at = site.dim + " " + site.x + " " + (site.y + 1) + " " + site.z;
+        arrange("stellurgytest place " + at + " " + block);
+        Reply read = arrange("stellurgytest heat material " + at);
+        requireArranged("premise: the position must hold " + block + ": " + read,
+                block.equals(read.text("block")));
+        return read;
     }
 
     @Test
     public void aWholeBlockIsAWholeCubicMetreOfItsSubstance() throws Exception {
-        String iron = placeAndRead(X_FULL, "minecraft:iron_block");
+        Reply iron = placeAndRead("minecraft:iron_block");
 
         assertEquals("a full block is a cubic metre: " + iron, WHOLE_BLOCK,
-                field(iron, "volumeMilliLitres"));
+                iron.longInteger("volumeMilliLitres"));
         assertTrue("and iron is a substance the table knows, so it has a capacity: " + iron,
-                field(iron, "capacity") > 0);
+                iron.longInteger("capacity") > 0);
     }
 
     @Test
     public void aSlabIsHalfABlockOfIt() throws Exception {
-        String slab = placeAndRead(X_SLAB, "minecraft:stone_slab");
+        Reply slab = placeAndRead("minecraft:stone_slab");
 
         assertEquals("half the shape is half the substance: " + slab, WHOLE_BLOCK / 2,
-                field(slab, "volumeMilliLitres"));
+                slab.longInteger("volumeMilliLitres"));
     }
 
     /** The discriminator: the outline of a staircase is a full cube, and its substance is not. */
     @Test
     public void stairsAreThreeQuartersBecauseTheirCOLLISIONSaysSoAndTheirOutlineDoesNot()
             throws Exception {
-        String stairs = placeAndRead(X_STAIRS, "minecraft:stone_stairs");
+        Reply stairs = placeAndRead("minecraft:stone_stairs");
 
-        long volume = field(stairs, "volumeMilliLitres");
+        long volume = stairs.longInteger("volumeMilliLitres");
         assertTrue("a staircase must not read as a whole block - that is what its bounding box says,"
                 + " and the bounding box is not what it is made of: " + stairs, volume < WHOLE_BLOCK);
         assertEquals("it is the half slab plus the quarter step: " + stairs,
@@ -92,10 +84,10 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      */
     @Test
     public void aSlabInTheHandIsTheSameHalfBlockAsASlabOnTheGround() throws Exception {
-        String held = exec("stellurgytest heat item minecraft:stone_slab");
+        Reply held = arrange("stellurgytest heat item minecraft:stone_slab");
 
         assertEquals("an item the ore dictionary cannot name still has the shape of what it places: "
-                + held, WHOLE_BLOCK / 2, field(held, "volumeMilliLitres"));
+                + held, WHOLE_BLOCK / 2, held.longInteger("volumeMilliLitres"));
     }
 
     /**
@@ -105,12 +97,12 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      */
     @Test
     public void aBlockTheOreDictionaryNeverNamedStillKnowsWhatItIsMadeOf() throws Exception {
-        String slab = placeAndRead(X_SLAB, "minecraft:stone_slab");
+        Reply slab = placeAndRead("minecraft:stone_slab");
 
-        assertTrue("stone must resolve through the block's own vanilla material: " + slab,
-                slab.contains("\"material\":\"stone\""));
+        assertEquals("stone must resolve through the block's own vanilla material: " + slab,
+                "stone", slab.text("material"));
         assertTrue("and having both halves, it must have a capacity: " + slab,
-                field(slab, "capacity") > 0);
+                slab.longInteger("capacity") > 0);
     }
 
     /**
@@ -121,18 +113,18 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      */
     @Test
     public void theOreDictionaryOutranksTheBlocksCoarseVanillaMaterial() throws Exception {
-        String gold = placeAndRead(X_GOLD, "minecraft:gold_block");
+        Reply gold = placeAndRead("minecraft:gold_block");
 
-        assertTrue("the specific name must win over the coarse one: " + gold,
-                gold.contains("\"material\":\"gold\""));
+        assertEquals("the specific name must win over the coarse one: " + gold,
+                "gold", gold.text("material"));
     }
 
     @Test
     public void thereIsNoSubstanceInEmptySpace() throws Exception {
-        String air = placeAndRead(X_AIR, "minecraft:air");
+        Reply air = placeAndRead("minecraft:air");
 
         assertEquals("air is not a small lump of something: " + air, 0L,
-                field(air, "volumeMilliLitres"));
-        assertEquals("and it can hold no heat", 0L, field(air, "capacity"));
+                air.longInteger("volumeMilliLitres"));
+        assertEquals("and it can hold no heat: " + air, 0L, air.longInteger("capacity"));
     }
 }

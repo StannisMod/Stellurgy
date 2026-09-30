@@ -1,14 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
+import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * Tier 4: a central plant regenerating a room it does not stand in, through ducts.
@@ -20,57 +20,74 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class VentilationNetworkTest extends AbstractSharedServerTest {
 
-    private static final Pattern AIR_O2 = Pattern.compile("\"airO2\":(-?\\d+)");
-    private static final Pattern AIR_CO2 = Pattern.compile("\"airCO2\":(-?\\d+)");
-    private static final Pattern SOURCES = Pattern.compile("\"sources\":(-?\\d+)");
-    private static final Pattern SINKS = Pattern.compile("\"sinks\":(-?\\d+)");
-    private static final Pattern CABLES = Pattern.compile("\"cables\":(-?\\d+)");
+    /** The Y and Z every helper here builds on, from this scenario's own site (see {@link #stand}). */
+    private int cy;
+    private int cz;
 
-    private static final int CY = 64;
-    private static final int CZ = 2300;
-    private static final int CX_PLANT = 2000;
-    private static final int CX_ISOLATION = 2400;
-    private static final int CX_PRIORITY = 2800;
+    /** The second room of the priority scenario stands this far along from the first. */
+    private static final int SECOND_ROOM_OFFSET = 8;
 
-    private static final Pattern CONFIG_VALUE = Pattern.compile("\"value\":(-?\\d+)");
+    /**
+     * Ask for this scenario's site, prove its volume empty, and answer the X its (first) room is
+     * centred on. Wide enough for two rooms side by side with a duct run under both.
+     */
+    private int stand(String what) throws Exception {
+        FixtureSite site = clearedSite(8, 6, what);
+        cy = site.y + 2;
+        cz = site.z + 2;
+        return site.x + 2;
+    }
 
     /** Regeneration arrives from three blocks away, over ducts the plant never has to know about. */
     @Test
     public void aCentralPlantRegeneratesARoomItDoesNotStandIn() throws Exception {
-        buildStaleRoom(CX_PLANT);
+        int cxPlant = stand("a stale room ducted to a plant that stands outside it");
+        buildStaleRoom(cxPlant);
+        // Sea-level oxygen on top of the carbon dioxide. The room's own vent tops oxygen up only
+        // while it is BELOW sea level (`TileOxygenVent.replenishOxygen`: `missing` is the gap to
+        // `AirState.earthLike()`), so from here on every unit of oxygen that appears is the plant's —
+        // which is what lets the oxygen coming back be read exactly instead of as a floor.
+        arrange("stellurgytest vent setair 0 " + cxPlant + " " + cy + " " + cz
+                + " " + ppm(640_000) + " " + ppm(210_000) + " " + ppm(150_000));
 
         // Duct run leaving the vent, then the plant at the far end: the plant touches no zone.
-        placeDuct(CX_PLANT + 1);
-        placeDuct(CX_PLANT + 2);
-        placeDuct(CX_PLANT + 3);
-        placePlant(CX_PLANT + 4);
-        injectEnergyAt(CX_PLANT + 4, 1_000_000);
+        placeDuct(cxPlant + 1);
+        placeDuct(cxPlant + 2);
+        placeDuct(cxPlant + 3);
+        placePlant(cxPlant + 4);
+        injectEnergyAt(cxPlant + 4, 1_000_000);
 
-        String net = subnetInfo(CX_PLANT + 2);
+        Reply net = subnetInfo(cxPlant + 2);
         assertEquals("premise: the vent must have joined the ventilation network as its zone's sink: "
-                + net, 1, extract(net, SINKS));
-        assertEquals("premise: the plant must be its source: " + net, 1, extract(net, SOURCES));
-        assertEquals("premise: three ducts between them: " + net, 3, extract(net, CABLES));
+                + net, 1, net.integer("sinks"));
+        assertEquals("premise: the plant must be its source: " + net, 1, net.integer("sources"));
+        assertEquals("premise: three ducts between them: " + net, 3, net.integer("cables"));
 
         // Drive the network's own tick. Waiting on wall-clock does NOT work here: a probe runs on
         // the server thread and holds the tick loop while it waits, so 300 ticks of waiting bought
         // four solves. Long enough for a whole dust: the DUCT is the bottleneck by design (6000 a
         // tick against the plant's 12000), so carbon accrues at the rate the pipe allows.
-        String solved = exec("stellurgytest subnet solve lifesupport 0 300");
-        assertTrue("solve failed: " + solved, solved.contains("\"ticksSolved\":300"));
+        // The baseline is taken HERE: the network also solves on the world's own ticks, so the air
+        // has already moved by however long the setup took.
+        Reply before = ventInfo(cxPlant);
+        solve(300);
 
-        String after = ventInfo(CX_PLANT);
-        long co2 = extract(after, AIR_CO2);
-        long o2 = extract(after, AIR_O2);
-        assertTrue("the plant must clear the room's CO2 through the ducts (before=150000 after="
-                + co2 + "): " + after, co2 < ppm(150_000));
-        assertTrue("and the oxygen must come back (before=60000 after=" + o2 + "): " + after,
-                o2 > ppm(60_000));
+        Reply after = ventInfo(cxPlant);
+        long co2Removed = before.longInteger("airCO2") - after.longInteger("airCO2");
+        long o2Returned = after.longInteger("airO2") - before.longInteger("airO2");
+        assertTrue("the plant must clear the room's CO2 through the ducts (removed " + co2Removed
+                + "): " + before + " → " + after, co2Removed > 0);
+        // EXACT: regeneration turns carbon dioxide into oxygen one for one (`AirState.regenerate`),
+        // and nothing else adds or takes oxygen here — no crew, and a vent that tops up only below
+        // sea level. A plant that kept the carbon and voided the oxygen fails this, where a floor
+        // on the oxygen did not.
+        assertEquals("and every unit of CO2 it took must come back to the room as oxygen: " + before
+                + " → " + after, co2Removed, o2Returned);
 
-        String slot = exec("stellurgytest hatch read 0 " + (CX_PLANT + 4) + " " + CY + " " + CZ);
+        Reply slot = ask("stellurgytest hatch read 0 " + (cxPlant + 4) + " " + cy + " " + cz);
         assertTrue("the carbon it took out of that room must appear in the PLANT's slot, not the "
-                + "room's: " + slot + " | air=" + after + " | network=" + subnetInfo(CX_PLANT + 2),
-                slot.contains("stellurgy:carbondust"));
+                + "room's: " + slot + " | air=" + after + " | network=" + subnetInfo(cxPlant + 2),
+                slot.element("slots", "item", "stellurgy:carbondust").integer("count") >= 1);
     }
 
     /**
@@ -78,33 +95,38 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * the two subsystems are laid through one another and must not conduct for each other. The test
      * above is this one's positive control — without it, "no air moved" would also be what a broken
      * rig looks like.
+     *
+     * <p>{@code subnet info} answers {@code sources:0} for a position in no network at all, so the
+     * vent's half is first required to BE a network — a sink with its duct — before "no source on its
+     * side" says anything about the cable.</p>
      */
     @Test
     public void aShieldCableIsNotADuctAndCarriesNoAir() throws Exception {
-        buildStaleRoom(CX_ISOLATION);
+        int cxIsolation = stand("a stale room whose duct run is broken by a shield cable");
+        buildStaleRoom(cxIsolation);
 
-        placeDuct(CX_ISOLATION + 1);
-        String cable = exec("stellurgytest place 0 " + (CX_ISOLATION + 2) + " " + CY + " " + CZ
-                + " affs:shield_cable");
-        assertTrue("shield cable place failed: " + cable, cable.contains("\"placed\":true"));
-        placeDuct(CX_ISOLATION + 3);
-        placePlant(CX_ISOLATION + 4);
-        injectEnergyAt(CX_ISOLATION + 4, 1_000_000);
+        placeDuct(cxIsolation + 1);
+        place(cxIsolation + 2, cy, "affs:shield_cable");
+        placeDuct(cxIsolation + 3);
+        placePlant(cxIsolation + 4);
+        injectEnergyAt(cxIsolation + 4, 1_000_000);
 
-        String net = subnetInfo(CX_ISOLATION + 1);
+        Reply net = subnetInfo(cxIsolation + 1);
+        assertEquals("premise: the vent's side must be a network of its own, with the vent as its "
+                + "sink: " + net, 1, net.integer("sinks"));
         assertEquals("the vent's ventilation network must end at the shield cable, with no source "
-                + "on its side: " + net, 0, extract(net, SOURCES));
+                + "on its side: " + net, 0, net.integer("sources"));
 
-        exec("stellurgytest subnet solve lifesupport 0 300");
+        solve(300);
 
-        String after = ventInfo(CX_ISOLATION);
+        Reply after = ventInfo(cxIsolation);
         assertEquals("no regeneration may cross a cable belonging to another subsystem: " + after,
-                ppm(150_000), extract(after, AIR_CO2));
+                ppm(150_000), after.longInteger("airCO2"));
         // A floor, not an equality: this room's own vent is running and restores oxygen toward sea
         // level, which is its job. What a foreign subsystem's cable may not do is carry regeneration
         // -- the CO2 assertion above -- or take the room's oxygen away.
         assertTrue("and the oxygen must not be drawn down across it: " + after,
-                extract(after, AIR_O2) >= ppm(60_000));
+                after.longInteger("airO2") >= ppm(60_000));
     }
 
     /**
@@ -115,9 +137,9 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      */
     @Test
     public void underADeficitTheHigherPriorityZoneIsServedFirst() throws Exception {
-        int roomA = CX_PRIORITY;
-        int roomB = CX_PRIORITY + 8;
-        String plantRateBefore = configValue("lifeSupportPlantRate");
+        int roomA = stand("two stale rooms on one plant, one of them prioritised");
+        int roomB = roomA + SECOND_ROOM_OFFSET;
+        String plantRateBefore = arrange("stellurgytest config get lifeSupportPlantRate").text("value");
         try {
             buildStaleRoom(roomA);
             buildStaleRoom(roomB);
@@ -126,36 +148,35 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
             // volume, with the plant in the middle of it.
             for (int x = roomA; x <= roomB; x++) {
                 if (x == roomA + 4) {
-                    placePlantAt(x, CY - 1);
+                    place(x, cy - 1, "stellurgy:lifeSupportPlant");
                 } else {
-                    placeDuctAt(x, CY - 1);
+                    place(x, cy - 1, "stellurgy:ventilationDuct");
                 }
             }
-            injectEnergyAt(roomA + 4, CY - 1, 1_000_000);
+            injectEnergyAt(roomA + 4, cy - 1, 1_000_000);
 
             // Less than one room can take: 3000 a tick against a duct that would pass 6000.
-            String cfg = exec("stellurgytest config set lifeSupportPlantRate 60000");
-            assertTrue("config set failed: " + cfg, cfg.contains("\"ok\":true"));
+            arrange("stellurgytest config set lifeSupportPlantRate 60000");
 
-            String high = exec("stellurgytest vent priority 0 " + roomA + " " + CY + " " + CZ + " 1");
-            assertTrue("priority set failed: " + high, high.contains("\"priority\":1"));
+            Reply high = arrange("stellurgytest vent priority 0 " + roomA + " " + cy + " " + cz + " 1");
+            assertEquals("priority set failed: " + high, 1, high.integer("priority"));
 
             // Measure from a snapshot taken HERE, not from the value setair wrote: the server ticks
             // between commands and solves the network as it goes, so anything asserted against the
             // authored figure is really asserting how long the setup took.
-            long baseA = extract(ventInfo(roomA), AIR_CO2);
-            long baseB = extract(ventInfo(roomB), AIR_CO2);
+            long baseA = ventInfo(roomA).longInteger("airCO2");
+            long baseB = ventInfo(roomB).longInteger("airCO2");
 
-            exec("stellurgytest subnet solve lifesupport 0 300");
+            solve(300);
 
-            String a = ventInfo(roomA);
-            String b = ventInfo(roomB);
+            Reply a = ventInfo(roomA);
+            Reply b = ventInfo(roomB);
             assertTrue("the prioritised room must be served (before=" + baseA + " after="
-                    + extract(a, AIR_CO2) + "): " + a, extract(a, AIR_CO2) < baseA);
+                    + a.longInteger("airCO2") + "): " + a, a.longInteger("airCO2") < baseA);
             assertEquals("and under a deficit the normal-priority room must get nothing, not a "
-                    + "share: " + b, baseB, extract(b, AIR_CO2));
+                    + "share: " + b, baseB, b.longInteger("airCO2"));
         } finally {
-            exec("stellurgytest config set lifeSupportPlantRate " + plantRateBefore);
+            arrange("stellurgytest config set lifeSupportPlantRate " + plantRateBefore);
         }
     }
 
@@ -163,77 +184,60 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
 
     /** A sealed, maintained room whose air has been breathed down. */
     private void buildStaleRoom(int cx) throws Exception {
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (CY - 1) + " " + (CZ - 2)
-                + " " + (cx + 2) + " " + CY + " " + (CZ + 2) + " minecraft:stone");
-        for (int yy = CY + 1; yy <= CY + 2; yy++) {
-            exec("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (CZ - 2)
-                    + " " + (cx + 2) + " " + yy + " " + (CZ + 2) + " minecraft:stone");
-            exec("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (CZ - 1)
-                    + " " + (cx + 1) + " " + yy + " " + (CZ + 1) + " minecraft:air");
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy - 1) + " " + (cz - 2)
+                + " " + (cx + 2) + " " + cy + " " + (cz + 2) + " minecraft:stone");
+        for (int yy = cy + 1; yy <= cy + 2; yy++) {
+            arrange("stellurgytest fill 0 " + (cx - 2) + " " + yy + " " + (cz - 2)
+                    + " " + (cx + 2) + " " + yy + " " + (cz + 2) + " minecraft:stone");
+            arrange("stellurgytest fill 0 " + (cx - 1) + " " + yy + " " + (cz - 1)
+                    + " " + (cx + 1) + " " + yy + " " + (cz + 1) + " minecraft:air");
         }
-        exec("stellurgytest fill 0 " + (cx - 2) + " " + (CY + 3) + " " + (CZ - 2)
-                + " " + (cx + 2) + " " + (CY + 3) + " " + (CZ + 2) + " minecraft:stone");
+        arrange("stellurgytest fill 0 " + (cx - 2) + " " + (cy + 3) + " " + (cz - 2)
+                + " " + (cx + 2) + " " + (cy + 3) + " " + (cz + 2) + " minecraft:stone");
 
-        String vent = exec("stellurgytest place 0 " + cx + " " + CY + " " + CZ + " stellurgy:oxygenVent");
-        assertTrue("vent place failed: " + vent, vent.contains("\"placed\":true"));
+        place(cx, cy, "stellurgy:oxygenVent");
         injectEnergyAt(cx, 1_000_000);
-        String oxygen = exec("stellurgytest fluid inject 0 " + cx + " " + CY + " " + CZ + " oxygen 16000");
-        assertTrue("oxygen inject failed: " + oxygen, oxygen.contains("\"ok\":true"));
+        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
 
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY + " " + CZ + " 1");
-        exec("stellurgytest vent reseal 0 " + cx + " " + CY + " " + CZ);
-        exec("stellurgytest tile force-tick 0 " + cx + " " + CY + " " + CZ + " 5");
+        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 1");
+        arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
+        arrange("stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 5");
 
-        String set = exec("stellurgytest vent setair 0 " + cx + " " + CY + " " + CZ
+        arrange("stellurgytest vent setair 0 " + cx + " " + cy + " " + cz
                 + " " + ppm(790_000) + " " + ppm(60_000) + " " + ppm(150_000));
-        assertTrue("setair failed: " + set, set.contains("\"ok\":true"));
     }
 
     private void placeDuct(int x) throws Exception {
-        placeDuctAt(x, CY);
-    }
-
-    private void placeDuctAt(int x, int y) throws Exception {
-        String resp = exec("stellurgytest place 0 " + x + " " + y + " " + CZ + " stellurgy:ventilationDuct");
-        assertTrue("duct place failed at " + x + "," + y + ": " + resp, resp.contains("\"placed\":true"));
+        place(x, cy, "stellurgy:ventilationDuct");
     }
 
     private void placePlant(int x) throws Exception {
-        placePlantAt(x, CY);
+        place(x, cy, "stellurgy:lifeSupportPlant");
     }
 
-    private void placePlantAt(int x, int y) throws Exception {
-        String resp = exec("stellurgytest place 0 " + x + " " + y + " " + CZ + " stellurgy:lifeSupportPlant");
-        assertTrue("plant place failed at " + x + "," + y + ": " + resp, resp.contains("\"placed\":true"));
+    private void place(int x, int y, String block) throws Exception {
+        Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + cz + " " + block);
+        assertTrue(block + " place failed at " + x + "," + y + ": " + resp, resp.bool("placed"));
     }
 
     private void injectEnergyAt(int x, int amount) throws Exception {
-        injectEnergyAt(x, CY, amount);
+        injectEnergyAt(x, cy, amount);
     }
 
     private void injectEnergyAt(int x, int y, int amount) throws Exception {
-        String resp = exec("stellurgytest energy inject 0 " + x + " " + y + " " + CZ + " " + amount);
-        assertTrue("energy inject failed at " + x + "," + y + ": " + resp, resp.contains("\"ok\":true"));
+        arrange("stellurgytest energy inject 0 " + x + " " + y + " " + cz + " " + amount);
     }
 
-    private String configValue(String key) throws Exception {
-        String resp = exec("stellurgytest config get " + key);
-        Matcher m = CONFIG_VALUE.matcher(resp);
-        assertTrue("config get " + key + " failed: " + resp, m.find());
-        return m.group(1);
+    private void solve(int ticks) throws Exception {
+        Reply solved = arrange("stellurgytest subnet solve lifesupport 0 " + ticks);
+        assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
     }
 
-    private String ventInfo(int cx) throws Exception {
-        return exec("stellurgytest vent info 0 " + cx + " " + CY + " " + CZ);
+    private Reply ventInfo(int cx) throws Exception {
+        return ask("stellurgytest vent info 0 " + cx + " " + cy + " " + cz);
     }
 
-    private String subnetInfo(int x) throws Exception {
-        return exec("stellurgytest subnet info lifesupport 0 " + x + " " + CY + " " + CZ);
-    }
-
-    private static int extract(String src, Pattern pattern) {
-        Matcher m = pattern.matcher(src);
-        assertTrue("pattern " + pattern.pattern() + " not found in: " + src, m.find());
-        return Integer.parseInt(m.group(1));
+    private Reply subnetInfo(int x) throws Exception {
+        return ask("stellurgytest subnet info lifesupport 0 " + x + " " + cy + " " + cz);
     }
 }
