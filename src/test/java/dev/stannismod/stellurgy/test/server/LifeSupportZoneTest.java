@@ -1,11 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
@@ -97,9 +99,12 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  — {@code TileAirRecirculator:118} no longer refreshing the published atmosphere: "a
      *  regenerated room must read as breathable, not merely contain oxygen: … \"lowO2\"". DUST —
      *  {@code TileAirRecirculator:113} no longer making dust: "`slots` holds no element whose `item`
-     *  is stellurgy:carbondust". Not witnessed: "the oxygen must come back" stays green with
-     *  {@code AirState:218} returning no oxygen at all, because the powered vent tops the room up
-     *  meanwhile (the run read 60 263 155 against 60 000 000); and the stale-room premise.</p> */
+     *  is stellurgy:carbondust". The stale-room premise is an arrangement and is not witnessed.</p>
+     *
+     *  <p>Not asserted here: that the oxygen comes back, because this room's vent tops it up toward
+     *  sea level the whole time, so a rise in oxygen cannot be credited to the recirculator. That is
+     *  {@link #aRecirculatorGivesBackOneOxygenForEachCarbonDioxideItTakes}, in a room the vent has
+     *  nothing to add to.</p> */
     @Test
     public void aRecirculatorClearsItsRoomsCarbonDioxideAndDropsDust() throws Exception {
         int cx = stand("a stale room with a recirculator in it");
@@ -124,11 +129,8 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
 
         Reply after = ventInfo(cx);
         long co2After = after.longInteger("airCO2");
-        long o2After = after.longInteger("airO2");
         assertTrue("the recirculator must consume its room's CO2 (before=150000 after="
                 + co2After + "): " + after, co2After < ppm(150_000));
-        assertTrue("and the oxygen must come back (before=60000 after=" + o2After + "): " + after,
-                o2After > ppm(60_000));
         assertEquals("regeneration must not change the room's pressure: " + after,
                 100L, after.longInteger("airPressure"));
         // The gases are only half the story: what damages the crew is the atmosphere the zone
@@ -141,6 +143,56 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         Reply slot = ask("stellurgytest hatch read 0 " + (cx + 1) + " " + cyBase + " " + czBase);
         assertTrue("the carbon it removed from the air must appear as dust: " + slot,
                 slot.element("slots", "item", "stellurgy:carbondust").integer("count") >= 1);
+    }
+
+    /** The half of regeneration the stale room above cannot see: the oxygen a recirculator puts back is
+     *  the carbon dioxide it took, one for one.
+     *
+     *  <p>The room is arranged so that nothing ELSE can put oxygen in it. Its vent tops a room up
+     *  toward sea level, and only while it is below that; this room starts with sea-level oxygen plus
+     *  carbon dioxide on top, and regeneration only ever raises its oxygen, so the vent has nothing to
+     *  add at any point. That is measured before the machine arrives, not assumed: a window with the
+     *  vent alone must leave the oxygen where it was.</p>
+     *
+     *  <p>red-witnessed: with {@code AirState:218} ({@code regenerate}) taking the carbon dioxide and
+     *  returning no oxygen: "the oxygen must come back, one for one with the carbon dioxide the
+     *  recirculator took (took 60000000, oxygen rose 0)", 2026-09-30. The vent-alone premise is an
+     *  arrangement and is not witnessed.</p> */
+    @Test
+    public void aRecirculatorGivesBackOneOxygenForEachCarbonDioxideItTakes() throws Exception {
+        int cx = stand("a room at sea-level oxygen plus carbon dioxide, with a recirculator in it");
+        buildSealableRoom(cx);
+        placeVent(cx);
+        injectEnergy(cx, 1_000_000);
+        injectOxygen(cx, 16000);
+        forceTickAndReseal(cx);
+
+        arrange("stellurgytest vent setair 0 " + cx + " " + cyBase + " " + czBase
+                + " " + ppm(730_000) + " " + ppm(210_000) + " " + ppm(60_000));
+
+        Reply ventAloneBefore = ventInfo(cx);
+        // WINDOW: two reads with the vent alone between them, ventAloneBefore and before. The vent's
+        // top-up is the only other thing that puts oxygen into this room, it works per server tick,
+        // and at this room's size it would add tens of ppm on each of them — so an unchanged reading
+        // across twenty ticks says the vent is not adding, which no single read could say.
+        GameTicks.advance(client(), GameTicks.server(), 20);
+        Reply before = ventInfo(cx);
+        requireArranged("premise: the vent alone must add no oxygen to this room, or the oxygen below"
+                        + " could be the vent's: " + ventAloneBefore + " → " + before,
+                before.longInteger("airO2") == ventAloneBefore.longInteger("airO2"));
+        long o2Before = before.longInteger("airO2");
+        long co2Before = before.longInteger("airCO2");
+
+        placeRecirculator(cx);
+        injectEnergyAt(cx + 1, 1_000_000);
+        forceTick(cx + 1, 400);
+
+        Reply after = ventInfo(cx);
+        long taken = co2Before - after.longInteger("airCO2");
+        long gained = after.longInteger("airO2") - o2Before;
+        assertTrue("the oxygen must come back, one for one with the carbon dioxide the recirculator took"
+                        + " (took " + taken + ", oxygen rose " + gained + "): " + before + " → " + after,
+                gained > 0 && gained == taken);
     }
 
     /** MECH-ATM-21 split: a separator standing in a stale room draws its CO2 into its own tank.
@@ -192,10 +244,13 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  TileGasSeparator:114} no longer refreshing the published atmosphere: "and the room must become
      *  breathable again: … \"lowO2\" … \"airO2\":260368417". LEFT ITS TANK — {@code
      *  TileGasSeparator:188} admitting oxygen without draining it: "the oxygen it gave the room must
-     *  have left its tank: … \"tankAmount\":8000". Not witnessed: "the separator must push its oxygen
-     *  into the room" stays green with {@code combine} admitting nothing at all ({@code
-     *  TileGasSeparator:170}), because the powered vent tops the room up meanwhile (the run read
-     *  60 421 048 against 60 000 000); and the three premises.</p> */
+     *  have left its tank: … \"tankAmount\":8000". The three premises are arrangements and are not
+     *  witnessed.</p>
+     *
+     *  <p>Not asserted here: that the room's oxygen rises, because this room's vent tops it up toward
+     *  sea level meanwhile, so a rise cannot be credited to the separator. The separator's own
+     *  delivery is pinned by {@link #theCombinerRefusesToPushOxygenPastTheSafeCeiling}, whose room
+     *  starts above what the vent tops up to.</p> */
     @Test
     public void aSeparatorInCombineModeGivesItsOxygenBackToTheRoom() throws Exception {
         int cx = stand("a stripped room with a combining separator in it");
@@ -228,9 +283,6 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
         forceTick(cx + 1, 200);
 
         Reply after = ventInfo(cx);
-        long o2After = after.longInteger("airO2");
-        assertTrue("the separator must push its oxygen into the room (before=60000 after="
-                + o2After + "): " + after, o2After > ppm(60_000));
         assertEquals("and the room must become breathable again: " + after,
                 "PressurizedAir", after.text("blobAtmosphere"));
 
@@ -246,7 +298,11 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *
      *  <p>red-witnessed: one inversion per verdict, 2026-09-30. AT THE CEILING — {@code
      *  TileGasSeparator:184} admitting without the headroom cap: "oxygen must stop exactly at the
-     *  ceiling … \"airO2\":660000000". STAYS BREATHABLE — {@code AirState:547} calling the ceiling
+     *  ceiling … \"airO2\":660000000"; and, the separator's delivery at all, {@code
+     *  TileGasSeparator:187} draining the tank without adding the oxygen to the room: "… climbing from
+     *  260000000 and no further than 300000000: … expected:&lt;300000000&gt; but
+     *  was:&lt;260000000&gt;" — the room starts above what its vent tops up to, so nothing but the
+     *  separator could have moved it. STAYS BREATHABLE — {@code AirState:547} calling the ceiling
      *  itself oxygen-rich: "and the room must stay breathable rather than turn oxygen-toxic: …
      *  \"highO2\"". NOT DRY — {@code TileGasSeparator:185} emptying the tank once it can admit
      *  nothing: "it must have stopped because of the ceiling, not because the tank ran dry: …

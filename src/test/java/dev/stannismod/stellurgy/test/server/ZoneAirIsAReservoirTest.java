@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
@@ -55,15 +56,16 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      *
      * <p>red-witnessed: with {@code AirState:389} mixing by the plain average of the two
      * temperatures: "the room must end up at the enthalpy-weighted mean … expected 314.648… K …
-     * measured 293.001 K", 2026-09-30. The four premises are arrangements and are not witnessed. The
-     * "not the plain average" verdict is not witnessed and cannot go red on its own: the second
-     * premise puts the expected value more than twice the bound from the average, so any reading
-     * within the bound of the expected value is already more than the bound from the average.</p>
+     * measured 293.001 K", 2026-09-30. The four premises are arrangements and are not witnessed.</p>
+     *
+     * <p>Not asserted: that the room is NOT at the plain average, because the second premise puts the
+     * expected value more than twice the bound from the average, so any reading the verdict accepts
+     * is already more than the bound from it — the check could not go red on its own.</p>
      */
     @Test
     public void gasArrivingMixesByHowMuchOfEachThereIs() throws Exception {
         int cx = stand("a hot room with a combining separator in it");
-        buildRoomWithVent(cx);
+        buildRoomWithVent(cx, 16000);
         // Oxygen-poor so the governor leaves plenty of headroom to admit into.
         setAir(cx, 790_000, 60_000, 0, HOT_MILLI_K);
 
@@ -106,9 +108,9 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
                         + "than the rounding can hide (room " + t0 + " K, arriving " + ambient
                         + " K, expected " + expected + " K, bound " + bound + " K)",
                 Math.abs(expected - t0) > bound);
-        assertTrue("premise: and from a plain average, by more than twice the rounding — or the two "
-                        + "readings below could not come apart (expected " + expected + " K, average "
-                        + plainAverage + " K, bound " + bound + " K)",
+        assertTrue("premise: and from a plain average, by more than twice the rounding — or the "
+                        + "verdict below could not tell the rule from splitting the difference (expected "
+                        + expected + " K, average " + plainAverage + " K, bound " + bound + " K)",
                 Math.abs(expected - plainAverage) > 2.0D * bound);
 
         assertTrue("the room must end up at the enthalpy-weighted mean of what was there and what "
@@ -116,10 +118,6 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
                         + " K meeting " + admitted + " at " + ambient + " K, measured " + measured
                         + " K, allowed " + bound + " K of rounding over " + ticksWatched + " ticks",
                 Math.abs(measured - expected) <= bound);
-        assertTrue("and NOT at the plain average of the two temperatures (" + plainAverage + " K) — "
-                        + "the two agree only when the sides are equal, which is exactly the case "
-                        + "this scenario avoids",
-                Math.abs(measured - plainAverage) > bound);
     }
 
     /** The separator is force-ticked this many times while combining (see {@link #runCombinerInto}). */
@@ -147,7 +145,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
     @Test
     public void drawingGasOutLeavesTheTemperatureAndLowersTheCapacity() throws Exception {
         int cx = stand("a hot room with a splitting separator in it");
-        buildRoomWithVent(cx);
+        buildRoomWithVent(cx, 16000);
         setAir(cx, 790_000, 210_000, 0, HOT_MILLI_K);
 
         Reply before = ventInfo(cx);
@@ -178,17 +176,21 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * number it was holding when it still had air in it. A stale reading here would hand the failure
      * ladder a hot compartment where there is nothing to be hot.</p>
      *
-     * <p>red-witnessed: with {@code AirState:282} giving air a heat capacity whatever its pressure:
-     * "and must hold no heat at all: … \"airO2\":52631 … expected:&lt;0&gt; but was:&lt;760&gt;",
-     * 2026-09-30. The hot-room premise is an arrangement and is not witnessed. The ambient-temperature
-     * verdict is not witnessed: with {@code AirState:259}'s empty-air rule removed it stays green,
-     * because the powered vent tops the emptied room up with oxygen at ambient before the read — the
-     * reply above shows it holding some.</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, in the dry-vent room. AMBIENT — {@code
+     * AirState:259}'s empty-air rule removed, so the reading is whatever the gas last held: "a zone
+     * holding nothing must read ambient, not what it was at when it still had air: … \"airO2\":0 …
+     * expected:&lt;293000&gt; but was:&lt;400000&gt;". NO HEAT — {@code AirState:282} giving air a
+     * heat capacity whatever its pressure: "and must hold no heat at all: … \"airO2\":0 …
+     * expected:&lt;0&gt; but was:&lt;760&gt;". The hot-room and empty-room premises are arrangements
+     * and are not witnessed.</p>
      */
     @Test
     public void airThatIsNotThereHasNoTemperature() throws Exception {
         int cx = stand("a hot room pumped down to vacuum");
-        buildRoomWithVent(cx);
+        // A DRY vent: it seals the room into a zone, which is all this needs, and has no oxygen to top
+        // the emptied room up with. A fuelled one puts gas back at ambient before the read, and then
+        // "reads ambient" is about the gas that arrived rather than about air that is not there.
+        buildRoomWithVent(cx, 0);
         setAir(cx, 790_000, 210_000, 0, HOT_MILLI_K);
         Reply hot = ventInfo(cx);
         assertEquals("premise: the room must be hot while it still holds air: " + hot,
@@ -197,6 +199,8 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
         setAir(cx, 0, 0, 0, HOT_MILLI_K);
 
         Reply empty = ventInfo(cx);
+        requireArranged("premise: the room must hold no gas at all when it is read: " + empty,
+                totalGas(empty) == 0L);
         int ambient = configInt("shipHeatAmbientKelvin");
         assertEquals("a zone holding nothing must read ambient, not what it was at when it still had "
                 + "air: " + empty, ambient * 1000L, empty.longInteger("airTempMilliK"));
@@ -205,7 +209,11 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
 
     // ─── the rig ───────────────────────────────────────────────────────
 
-    private void buildRoomWithVent(int cx) throws Exception {
+    /**
+     * @param ventOxygenMb oxygen put in the vent's tank; 0 leaves it dry, and a dry vent still seals
+     *                     the room into a zone but never tops its air up
+     */
+    private void buildRoomWithVent(int cx, int ventOxygenMb) throws Exception {
         int by = cy, bz = cz;
         arrange("stellurgytest fill 0 " + (cx - 2) + " " + (by - 1) + " " + (bz - 2)
                 + " " + (cx + 2) + " " + by + " " + (bz + 2) + " minecraft:stone");
@@ -220,7 +228,9 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
 
         place(cx, "stellurgy:oxygenVent");
         injectEnergyAt(cx, 1_000_000);
-        arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen 16000");
+        if (ventOxygenMb > 0) {
+            arrange("stellurgytest fluid inject 0 " + cx + " " + cy + " " + cz + " oxygen " + ventOxygenMb);
+        }
         forceTick(cx, 1);
         arrange("stellurgytest vent reseal 0 " + cx + " " + cy + " " + cz);
         forceTick(cx, 5);

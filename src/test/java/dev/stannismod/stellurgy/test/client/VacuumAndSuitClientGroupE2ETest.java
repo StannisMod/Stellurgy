@@ -1054,7 +1054,6 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
     private double openSurvivalWindow() throws Exception {
         exec("gamerule naturalRegeneration false");
         exec("gamemode survival @a");
-        bot().waitTicks(2);
         double health = health(bot().reportState());
         scenario().record("healthAtWindowOpen", health);
         return health;
@@ -1080,9 +1079,12 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * ({@code AtmosphereHazards:139}): "control leg: the room itself must not hurt him while it is at
      * cabin temperature … start=20.0 after=16.0". HURTS — {@code AtmosphereHazards:139} dropping the
      * heat row: "a compartment past the crew threshold must hurt the person in it … no
-     * `client_health_updated` below 20.0". Removing only the row's damage ({@code HazardExposure:145})
-     * is not enough to turn this red: the heat row also sets him alight, and the fire alone hurts
-     * him. The rung and cabin premises are arrangements and are not witnessed.</p>
+     * `client_health_updated` below 20.0". HEAT ITSELF — {@code HazardExposure:145} skipping the damage
+     * of the heat row only, so it still sets him alight: "the overheated room must itself deal him
+     * heat damage — not only set him alight — no `living_hurt` carrying who = ForgeTestClient and
+     * source = Heat was recorded within 200 ticks", with the fire's own {@code living_hurt} records
+     * in the window, 2026-09-30. The rung, cabin and player-name premises are arrangements and are
+     * not witnessed.</p>
      */
     @Test
     public void overheatedZoneAirHurtsAnUnsuitedCrewman() throws Exception {
@@ -1105,6 +1107,8 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
 
             scenario().measuring("health in the same room while it is merely warm");
             double healthStart = openSurvivalWindow();
+            // WINDOW: healthStart and healthCold, eighty ticks apart in the room at cabin temperature;
+            // the control asserts their difference, so the interval is how long the room had to hurt.
             bot().waitTicks(80);
             double healthCold = health(bot().reportState());
             scenario().record("healthAfterControlWindow", healthCold);
@@ -1113,8 +1117,15 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     + " start=" + healthStart + " after=" + healthCold, healthCold >= healthStart);
 
             scenario().arranging("drive the same room's air past the crew threshold");
-            // Marked BEFORE the stimulus, so the wait below is about the damage THIS heating caused
+            // Who the room is about to hurt, by name, so the damage wait below is about THIS player.
+            Reply standing = Reply.of(exec("stellurgytest atmosphere for-player"));
+            scenario().requireArranged("the server must name the player standing in the room: "
+                    + standing, standing.ok());
+            String who = standing.text("player");
+            // Marked BEFORE the stimulus, so the waits below are about the damage THIS heating caused
             // and cannot be satisfied by anything the control leg already recorded.
+            Events serverEvents = events();
+            long hotDamageMark = serverEvents.markInstrumented();
             long hotMark = clientEvents().mark();
             setRoomAir(at, (veryHot + 10) * 1000);
             String hostile = atmosphereInRoom();
@@ -1123,6 +1134,15 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     + " anyone can be hurt by it: " + hostile, "VeryHot".equals(hostile));
 
             scenario().asserting("an overheated compartment hurts the crew standing in it");
+            // THE HEAT ITSELF, by its damage source. The heat row also sets him alight, and the fire
+            // hurts him on its own, so the client's health falling below cannot say the heat did it —
+            // a row that ignited him and dealt nothing would pass that link. `living_hurt` is the
+            // server's LivingHurtEvent, fired only for a hit that got past the invulnerability window,
+            // and it names the damage source, so this is the row's own hit, landed.
+            String heatHit = serverEvents.awaitRecordWithFields(hotDamageMark, "living_hurt",
+                    "the overheated room must itself deal him heat damage — not only set him alight",
+                    LINK_BUDGET_TICKS, "who", who, "source", "Heat");
+            scenario().record("heatDamage", heatHit);
             double healthHot = awaitClientHealthBelow(hotMark, healthCold,
                     "a compartment past the crew threshold must hurt the person in it - the room IS"
                             + " the hazard, and the CLIENT must be told the damage rather than the"
@@ -1169,10 +1189,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      *
      * <p>red-witnessed: with {@code HazardExposure:145} no longer applying a row's damage: "a
      * pressurised room below the breathable oxygen floor must hurt an unsuited player, and the CLIENT
-     * must be told it (he started at 20.0) — no `client_health_updated` below 20.0", 2026-09-30. The
-     * closing
-     * {@code healthAfter < healthStart} is not witnessed: it compares the health that wait returned,
-     * which is below the start unless he healed inside the same window with regeneration off.</p>
+     * must be told it (he started at 20.0) — no `client_health_updated` below 20.0", 2026-09-30.</p>
+     *
+     * <p>Not asserted: a closing comparison of his health against the start, because the wait above
+     * already requires a client health below the start, so the comparison could not go red on its
+     * own.</p>
      */
     @Test
     public void staleZoneAirHurtsAnUnsuitedPlayer() throws Exception {
@@ -1196,11 +1217,6 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     LINK_BUDGET_TICKS);
             scenario().record("healthAfter", healthAfter)
                     .record("ventInfoAfter", exec("stellurgytest vent info " + at));
-
-            assertTrue("a pressurised room below the breathable oxygen floor must hurt an unsuited"
-                    + " player — if this passes at full health the room never became a stale zone and"
-                    + " the suited scenario proves nothing; healthStart=" + healthStart
-                    + " healthAfter=" + healthAfter, healthAfter < healthStart);
         } finally {
             restoreDim(originalDensity);
         }

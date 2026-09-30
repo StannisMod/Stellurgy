@@ -142,9 +142,11 @@ public class AtmospherePredicatesTest {
      * TOXIC - {@code AirState:460} calling a poison toxic only at three times its limit: "and adding a
      * poison must make it so". REMOVING IT CLEARS IT - {@code AirState:129} removing half of what was
      * drawn: "and removing it must take the toxicity with it". The clean-air premise is an arrangement
-     * and is not witnessed. The poison-naming verdict is not witnessed: with one poison present,
-     * {@code isToxic()} is {@code worstToxin() != null}, so the verdict before it already implies
-     * which gas is named.</p>
+     * and is not witnessed.</p>
+     *
+     * <p>Not asserted: which gas {@code worstToxin()} names, because with carbon monoxide the only
+     * poison present, {@code isToxic()} is {@code worstToxin() != null} and nothing else could be named
+     * - the check could not fail without the verdict before it failing first.</p>
      */
     @Test
     public void aStrictlyBetterAtmosphereNeverReadsAsWorse() {
@@ -163,8 +165,6 @@ public class AtmospherePredicatesTest {
                 GasRegistry.CARBON_MONOXIDE.hazardThreshold() * 2, 293.0D);
         assertFalse("premise: clean air is not toxic", clean.isToxic());
         assertTrue("and adding a poison must make it so", poisoned.isToxic());
-        assertEquals("naming the poison, so a consumer can say which one", GasRegistry.CARBON_MONOXIDE,
-                poisoned.worstToxin());
 
         poisoned.draw(GasRegistry.CARBON_MONOXIDE, Long.MAX_VALUE);
         assertFalse("and removing it must take the toxicity with it", poisoned.isToxic());
@@ -179,8 +179,11 @@ public class AtmospherePredicatesTest {
      * poisoning: ..."; {@code AirState:460} alone stays green, because the starting worst excess of 1.0
      * enforces the same limit a second time. STRICTER POISON IS OVER - {@code AirState:459} judging
      * every poison against ammonia's limit: "the SAME amount of a stricter poison is over ITS limit:
-     * ...". The premise is an arrangement and is not witnessed. The naming verdict is not witnessed:
-     * with one poison present the verdict before it already implies which gas is named.</p>
+     * ...". The premise is an arrangement and is not witnessed.</p>
+     *
+     * <p>Not asserted: which gas {@code worstToxin()} names, because with sulphide the only poison in
+     * the room, {@code isToxic()} is {@code worstToxin() != null} and nothing else could be named - the
+     * check could not fail without the verdict before it failing first.</p>
      */
     @Test
     public void aPoisonIsJudgedAgainstItsOwnLimitAndNotAgainstTheAirAroundIt() {
@@ -198,7 +201,6 @@ public class AtmospherePredicatesTest {
         other.add(sulphide, justUnderAmmonia, 293.0D);
         assertTrue("the SAME amount of a stricter poison is over ITS limit: " + other,
                 other.isToxic());
-        assertEquals(sulphide, other.worstToxin());
     }
 
     /**
@@ -278,9 +280,10 @@ public class AtmospherePredicatesTest {
      * temperature: "and the temperature with them expected:&lt;293000&gt; but was:&lt;146500&gt;".
      * DROPPED - {@code AirState:576} reading an unknown gas as nitrogen: "a substance this game no
      * longer knows is DROPPED, never guessed at expected:&lt;1000001234&gt; but
-     * was:&lt;1000006234&gt;". The not-reachable-by-name verdict is not witnessed: a fallback in
-     * {@code GasRegistry:94} goes red on the DROPPED verdict first, because reading uses the same
-     * lookup. The last line is a premise and is not witnessed.</p>
+     * was:&lt;1000006234&gt;". NOT REACHABLE BY NAME -
+     * {@code GasRegistry:94} answering helium for a name it does not know: "a substance this game does
+     * not know is not reachable by name expected null, but was:&lt;Gas[helium [INERT]]&gt;". The known-gas line is a premise
+     * and is not witnessed.</p>
      */
     @Test
     public void aCompositionSurvivesASaveAndAnUnknownGasIsDropped() {
@@ -297,11 +300,16 @@ public class AtmospherePredicatesTest {
         assertEquals("and the temperature with them", written.getTemperatureMilliK(),
                 read.getTemperatureMilliK());
 
+        // Asked of the registry BEFORE any save carries the unknown name: reading a save goes through
+        // the same lookup, so asked afterwards a lookup that guessed would already have failed the
+        // DROPPED verdict, and this one could never speak for itself.
+        assertNotNull("premise: a known gas is reachable by name", GasRegistry.byName("methane"));
+        assertNull("a substance this game does not know is not reachable by name",
+                GasRegistry.byName("unobtainium"));
+
         nbt.getCompoundTag("gases").setLong("unobtainium", 5_000L);
         AirState afterRemoval = AirState.readFromNBT(nbt);
         assertEquals("a substance this game no longer knows is DROPPED, never guessed at",
                 read.getTotalPressure(), afterRemoval.getTotalPressure());
-        assertNull("and it is not reachable by name either", GasRegistry.byName("unobtainium"));
-        assertNotNull("premise: a known gas still is", GasRegistry.byName("methane"));
     }
 }

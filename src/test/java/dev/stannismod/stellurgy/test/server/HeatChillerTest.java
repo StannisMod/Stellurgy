@@ -23,6 +23,11 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
  * <p>What the pump costs joins the HOT side: the hot loop receives the heat PLUS the work, and only
  * the heat comes off the cold one. A pump implemented the obvious way moves `Q` and delivers `Q`,
  * which looks right in every readout and hands the player free thermodynamics.</p>
+ *
+ * <p>Every verdict here is read as ENERGY — what a loop is holding, what the chiller's battery is
+ * holding — and never as the per-tick figures the loop publishes about its own exchanges. Those are
+ * counted beside the transfer rather than by it, so a pump that reported heat plus work and deposited
+ * a tenth of it would satisfy them.</p>
  */
 public class HeatChillerTest extends AbstractSharedServerTest {
 
@@ -31,8 +36,8 @@ public class HeatChillerTest extends AbstractSharedServerTest {
     private int z;
 
     /**
-     * Ask for this scenario's site in open air, so a radiating cell has nothing over it, prove the
-     * volume empty, and answer where the cold run starts. The rig is seven blocks long along X.
+     * Ask for this scenario's site, prove the volume empty, and answer where the cold run starts. The
+     * rig is seven blocks long along X.
      */
     private int stand(String what) throws Exception {
         FixtureSite site = clearedSite(2, 3, what);
@@ -43,152 +48,172 @@ public class HeatChillerTest extends AbstractSharedServerTest {
 
     /** `EnumFacing.getIndex()`: 5 is EAST, so the hot side is the +X end of the run. */
     private static final String CHILLER_FACING_EAST = "5";
-    private static final String RADIATOR_FACING_UP = "1";
 
     /** Cold run, then the chiller, then the hot run: three pipes each side. */
-    private static final int COLD_LENGTH = 3;
+    private static final int RUN_LENGTH = 3;
 
     /**
-     * The clause, as three numbers from ONE tick of ONE loop: what came off the cold side, what was
-     * handed to the hot side, and what was paid. The first plus the last must equal the middle.
+     * The clause: the hot loop gains what the cold loop lost PLUS what the chiller's battery paid.
      *
-     * <p>Read from the cold loop deliberately. The receiving loop is a separate component and is solved
-     * in whatever order the solver reaches it, so a test that compared one loop's tick against the
-     * other's would be measuring the visit order as much as the physics. The hot loop's own arrival
-     * figure is asserted too, as an independent witness that the energy really landed.</p>
+     * <p>All three are stores, read before and after one charged tick of the cold loop: the cold loop's
+     * energy in the same call that ran the tick, the hot loop's and the battery's in the calls around
+     * it. Neither loop has any other way in or out — no radiating cell, no machine, no sink, no cabin —
+     * and the cold loop is charged with no more than one tick moves, so the world's own ticks between
+     * the calls find it empty and move nothing.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OWN THERMAL MASS — {@code
-     * HeatNetwork:245} leaving a bolted chiller out of the loop's capacity: "a chiller bolted onto the
-     * hot loop must add its own thermal mass to it … (cold=60 hot=60)". HOLDING — {@code
-     * HeatNetwork:452} depositing nothing in the hot loop: "the hot loop must be HOLDING the energy
-     * that was handed to it (delivered=6240): … \"heatStored\":0". Not witnessed: ONLY TO THE HOT SIDE
-     * — the chiller's mass leaking onto the cold loop ({@code HeatNetwork:343} and {@code :352} both
-     * opened) reds OWN THERMAL MASS first, "(cold=260 hot=260)", because the two runs are equal and a
-     * leak makes them tie; only a change to the pipe's own capacity reaches this one. THE CLAUSE —
-     * it compares the {@code delivered} figure, which is counted apart from what is deposited: with
-     * {@code HeatNetwork:452} depositing a tenth of heat plus work, the whole method stays green.
-     * ABOVE AMBIENT — follows from HOLDING, since a loop's temperature is ambient plus stored over
-     * capacity. The four premises at its head and the two after the cycle are arrangements and are
-     * not witnessed.</p>
+     * <p>Before that, the machine's mass: a chiller counts as thermal mass of the loop on its HOT face
+     * and of no other. Each half is read as the loop's capacity before the chiller was placed against
+     * the same loop's capacity after, so a leak onto the cold loop reds the cold reading on its own,
+     * whatever the hot one does.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NONE OF THE MASS — {@code
+     * HeatNetwork:343} and {@code :352} both opened, so the chiller's mass joins every loop it
+     * touches: "the loop the chiller merely draws FROM carries none of the machine's mass: …
+     * expected:&lt;60&gt; but was:&lt;260&gt;". ITS OWN MASS — {@code HeatNetwork:245} leaving a
+     * bolted chiller out of the loop's capacity: "a chiller bolted onto the hot loop must add its own
+     * thermal mass to it … (before=60): … \"heatCapacity\":60". THE CLAUSE — {@code HeatNetwork:452}
+     * depositing a tenth of heat plus work: "THE CLAUSE: the hot loop gains what the cold loop lost
+     * PLUS the work … (cold lost 6000, battery paid 240, hot gained 624) expected:&lt;6240&gt; but
+     * was:&lt;624&gt;". The premises are arrangements and are not witnessed.</p>
      */
     @Test
     public void theHotLoopReceivesTheHeatPlusTheWork() throws Exception {
         int x0 = stand("two coolant loops with a powered chiller between them");
-        buildTwoLoops(x0);
+        buildRuns(x0);
         solve(2);
+        long coldBefore = loopInfo(coldAnchor(x0)).longInteger("heatCapacity");
+        long hotBefore = loopInfo(hotAnchor(x0)).longInteger("heatCapacity");
+        requireArranged("premise: both runs must be loops with mass before the chiller exists (cold="
+                + coldBefore + " hot=" + hotBefore + ")", coldBefore > 0 && hotBefore > 0);
 
+        placeChiller(x0);
+        solve(2);
         Reply cold = loopInfo(coldAnchor(x0));
         Reply hot = loopInfo(hotAnchor(x0));
         assertEquals("premise: the cold run must be its own loop: " + cold,
-                COLD_LENGTH, cold.integer("members"));
+                RUN_LENGTH, cold.integer("members"));
         assertEquals("premise: and the hot run another — a chiller between them must NOT have joined "
-                + "them into one: " + hot, COLD_LENGTH, hot.integer("members"));
+                + "them into one: " + hot, RUN_LENGTH, hot.integer("members"));
         assertEquals("premise: both must see the chiller beside them: " + cold, 1, cold.integer("pumps"));
         assertEquals("premise: from the hot side too: " + hot, 1, hot.integer("pumps"));
 
-        // The chiller's own metal counts as the HOT loop's thermal mass, and only the hot loop's: it is
-        // a lump of refrigerant in contact with that coolant. Both runs are the same length, so if the
-        // machine's mass were being ignored the two capacities would simply match.
-        long coldCapacity = cold.longInteger("heatCapacity");
-        long hotCapacity = hot.longInteger("heatCapacity");
+        assertEquals("the loop the chiller merely draws FROM carries none of the machine's mass: "
+                + cold, coldBefore, cold.longInteger("heatCapacity"));
         assertTrue("a chiller bolted onto the hot loop must add its own thermal mass to it — the hot "
-                        + "side has to climb more slowly than its pipes alone would explain (cold="
-                        + coldCapacity + " hot=" + hotCapacity + ")",
-                hotCapacity > coldCapacity);
-        assertEquals("and only to the hot side — the loop it merely draws FROM carries none of the "
-                        + "machine: " + cold, COLD_LENGTH * 20L, coldCapacity);
+                        + "side has to climb more slowly than its pipes alone would explain (before="
+                        + hotBefore + "): " + hot,
+                hot.longInteger("heatCapacity") > hotBefore);
 
         powerChiller(x0);
-        long charge = 100L * coldCapacity;
-        // ONE tick, on a tick where the loop actually holds heat. These are per-tick figures: run the
-        // loop dry over many ticks and the last one reports zeros, which says nothing about the pump.
+        // The charging verb zeroes a bolted machine's share before it ticks, and the chiller's share
+        // is part of the HOT loop's energy: only a hot loop holding nothing loses nothing to that.
+        long hotStart = loopInfo(hotAnchor(x0)).longInteger("heatStored");
+        requireArranged("premise: the hot loop must start holding nothing (" + hotStart + ")",
+                hotStart == 0L);
+        long batteryStart = chillerEnergy(x0);
+
+        long charge = 100L * cold.longInteger("heatCapacity");
         Reply cycled = cycle(coldAnchor(x0), charge, 1);
+        // The clause compares one tick's take against a hot loop read LATER, so heat the cold loop
+        // still held would be pumped in between and counted on one side only.
+        requireArranged("premise: one tick must have emptied the cold loop, or the reads below span "
+                + "different intervals: " + cycled, cycled.longInteger("heatStored") == 0L);
+        long takenFromCold = charge - cycled.longInteger("heatStored");
+        long hotEnd = loopInfo(hotAnchor(x0)).longInteger("heatStored");
+        long work = batteryStart - chillerEnergy(x0);
 
-        long movedOut = cycled.longInteger("pumpedOut");
-        long delivered = cycled.longInteger("delivered");
-        long work = cycled.longInteger("work");
-
-        assertTrue("premise: the chiller must have shifted something: " + cycled, movedOut > 0);
-        assertTrue("premise: and paid for it: " + cycled, work > 0);
-        assertEquals("THE CLAUSE: the hot loop receives the heat PLUS the work — a pump whose own work "
-                + "does not join the hot side has invented energy from nowhere: " + cycled,
-                delivered, movedOut + work);
-
-        // The receiving end, independently — witnessed by the hot loop's STATE and not by a per-tick
-        // counter. `pumpedIn` is drained on the hot loop's own tick, and the world ticks between probe
-        // calls, so by the time a second command can read it the figure is legitimately zero again.
-        // What is durable is that the energy is sitting there.
-        Reply hotAfter = loopInfo(hotAnchor(x0));
-        assertTrue("the hot loop must be HOLDING the energy that was handed to it (delivered="
-                        + delivered + "): " + hotAfter, hotAfter.longInteger("heatStored") > 0);
-        assertTrue("and be above ambient because of it: " + hotAfter,
-                hotAfter.longInteger("temperatureMilliK") > 1000L * ambientKelvinFrom(cold));
+        assertTrue("premise: the chiller must have taken something off the cold loop: " + cycled,
+                takenFromCold > 0);
+        assertTrue("premise: and paid for it out of its battery (" + work + ")", work > 0);
+        assertEquals("THE CLAUSE: the hot loop gains what the cold loop lost PLUS the work — a pump whose "
+                        + "own work does not join the hot side has invented energy from nowhere (cold lost "
+                        + takenFromCold + ", battery paid " + work + ", hot gained " + (hotEnd - hotStart)
+                        + ")",
+                takenFromCold + work, hotEnd - hotStart);
     }
 
     /**
-     * Nobody sets the hot loop's temperature: it is what its own capacity makes of the energy it has
-     * been given. So a chiller run for a while must leave the hot loop measurably hotter than the cold
-     * one — which is the whole reason the tier exists, since rejection is quartic in temperature.
+     * Nobody sets the hot loop's temperature: energy accumulates in it, and a chiller keeps adding to
+     * it after it is already the hotter of the two — which is what the electricity buys, and the whole
+     * reason the tier exists, since rejection is quartic in temperature.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SHIFTS NOTHING — {@code
-     * TileHeatChiller:92} and {@code :104} both answering as if powered: "an unpowered chiller shifts
-     * nothing: … expected:&lt;0&gt; but was:&lt;6000&gt;". WITH POWER — {@code TileHeatChiller:94}
-     * offering no throughput: "the same chiller with power must shift heat, or the zeros above
-     * measured nothing: … \"pumpedOut\":0". HOTTER THAN AMBIENT — {@code HeatNetwork:452} depositing
-     * nothing in the hot loop: "the hot loop must be hotter than it was left at ambient (293000 →
-     * 293000)". Not witnessed: PAYS NOTHING — the pump moves heat exactly when it is paid, so any
-     * fault that pays reds SHIFTS NOTHING first. HOTTER THAN THE COLD LOOP — one tick of chiller
-     * throughput is the whole 100 K charge, so the cold loop reads ambient after the cycle and this
-     * follows from HOTTER THAN AMBIENT: with {@code HeatNetwork:452} depositing a tenth, it stays
-     * green. The premise at its head is an arrangement and is not witnessed.</p>
+     * <p>So the last leg charges the cold loop to HALF of the hot loop's measured rise above ambient,
+     * which puts it below the hot loop, and requires heat to go on leaving it. The cold loop has no way
+     * out but the chiller, so the energy it lost is energy the chiller moved up the gradient.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. TAKES NOTHING — {@code
+     * TileHeatChiller:92} and {@code :104} both answering as if powered: "an unpowered chiller takes
+     * nothing out of the loop it draws from: … expected:&lt;6000&gt; but was:&lt;0&gt;". WITH POWER
+     * — {@code TileHeatChiller:94} offering no throughput: "the same chiller with power must take
+     * heat out, or the reading above measured nothing: … \"heatStored\":6000". UP THE GRADIENT — a
+     * line after {@code HeatNetwork:435} skipping a pump whose hot side is the hotter: "heat must go
+     * on leaving the cold loop although the hot loop is already hotter (cold charged to 886 at half
+     * the hot loop's rise; hot 322538 milliK) … \"heatStored\":886". The premises are arrangements and
+     * are not witnessed.</p>
+     *
+     * <p>What the unpowered chiller PAYS is not asserted: it moves heat exactly when work is paid, so
+     * a payment is a transfer and TAKES NOTHING already reads it.</p>
      */
     @Test
     public void theHotLoopIsHotterBecauseEnergyAccumulatesInIt() throws Exception {
         int x0 = stand("two coolant loops with a chiller that is powered only later");
-        buildTwoLoops(x0);
+        buildRuns(x0);
+        placeChiller(x0);
         solve(2);
-        long capacity = loopInfo(coldAnchor(x0)).longInteger("heatCapacity");
+        Reply coldEmpty = loopInfo(coldAnchor(x0));
+        long capacity = coldEmpty.longInteger("heatCapacity");
+        long ambientMilliK = coldEmpty.longInteger("temperatureMilliK");
+        requireArranged("premise: the cold loop must start holding nothing, so it reads ambient: "
+                + coldEmpty, coldEmpty.longInteger("heatStored") == 0L);
 
-        // An unpowered chiller first: it must shift nothing, and the hot loop must stay at ambient.
-        Reply starved = cycle(coldAnchor(x0), 100L * capacity, 1);
+        long charge = 100L * capacity;
+        Reply starved = cycle(coldAnchor(x0), charge, 1);
         assertEquals("premise: the loop must see the chiller: " + starved, 1, starved.integer("pumps"));
-        assertEquals("an unpowered chiller shifts nothing: " + starved, 0L, starved.longInteger("pumpedOut"));
-        assertEquals("and pays nothing: " + starved, 0L, starved.longInteger("work"));
-        long hotAmbient = loopInfo(hotAnchor(x0)).longInteger("temperatureMilliK");
+        assertEquals("an unpowered chiller takes nothing out of the loop it draws from: " + starved,
+                charge, starved.longInteger("heatStored"));
 
-        // Power it and run ONE tick: the transfer is a per-tick figure and must be read on a tick
-        // where the cold loop still held something. What the hot loop does with the energy afterwards
-        // is a STATE, and that is what the rest of this test reads.
         powerChiller(x0);
-        Reply driven = cycle(coldAnchor(x0), 100L * capacity, 1);
-        assertTrue("the same chiller with power must shift heat, or the zeros above measured nothing: "
-                + driven, driven.longInteger("pumpedOut") > 0);
+        Reply driven = cycle(coldAnchor(x0), charge, 1);
+        assertTrue("the same chiller with power must take heat out, or the reading above measured "
+                + "nothing: " + driven, driven.longInteger("heatStored") < charge);
 
-        Reply hotAfter = loopInfo(hotAnchor(x0));
-        long hotNow = hotAfter.longInteger("temperatureMilliK");
-        assertTrue("the hot loop must be hotter than it was left at ambient (" + hotAmbient + " → "
-                + hotNow + "): " + hotAfter, hotNow > hotAmbient);
-        assertTrue("and hotter than the cold loop it is fed from — the pump works AGAINST the gradient, "
-                        + "which is what its electricity buys: " + hotAfter + " | " + driven,
-                hotNow > driven.longInteger("temperatureMilliK"));
+        Reply hot = loopInfo(hotAnchor(x0));
+        long gradientCharge = capacity * (hot.longInteger("temperatureMilliK") - ambientMilliK) / 2000L;
+        requireArranged("premise: the hot loop must be above ambient, or there is no gradient to work "
+                + "against: " + hot, gradientCharge > 0);
+        Reply set = arrange("stellurgytest heat set 0 " + coldAnchor(x0) + " " + y + " " + z + " "
+                + gradientCharge);
+        requireArranged("premise: the cold loop's block must take the charge: " + set,
+                set.bool("isLoopBlock") && set.longInteger("heatStored") == gradientCharge);
+        solve(1);
+        Reply coldAfter = loopInfo(coldAnchor(x0));
+        assertTrue("heat must go on leaving the cold loop although the hot loop is already hotter "
+                        + "(cold charged to " + gradientCharge + " at half the hot loop's rise; hot "
+                        + hot.longInteger("temperatureMilliK") + " milliK) — a pump that only works "
+                        + "downhill is not a chiller: " + coldAfter,
+                coldAfter.longInteger("heatStored") < gradientCharge);
     }
 
     // ─── the rig ───────────────────────────────────────────────────────
 
     /**
-     * Cold run, chiller, hot run, in a straight line along X. The chiller faces east, so its hot side
-     * is the far run and its cold side the near one — and because it is not a network node, the two
-     * runs stay two loops with it sitting between them.
+     * The two runs, in a straight line along X with one block of air between them where the chiller
+     * goes. Pipes only: a radiating cell would be a way out of the hot loop that the energy readings
+     * above would have to account for.
      */
-    private void buildTwoLoops(int x0) throws Exception {
-        for (int i = 0; i < COLD_LENGTH; i++) {
+    private void buildRuns(int x0) throws Exception {
+        for (int i = 0; i < RUN_LENGTH; i++) {
             place(x0 + i, "stellurgy:heatPipe", null);
+            place(x0 + RUN_LENGTH + 1 + i, "stellurgy:heatPipe", null);
         }
-        place(x0 + COLD_LENGTH, "stellurgy:heatChiller", CHILLER_FACING_EAST);
-        // The hot run: two pipes and a radiating cell, so it can actually shed what it is given.
-        place(x0 + COLD_LENGTH + 1, "stellurgy:heatPipe", null);
-        place(x0 + COLD_LENGTH + 2, "stellurgy:heatPipe", null);
-        place(x0 + COLD_LENGTH + 3, "stellurgy:heatRadiator", RADIATOR_FACING_UP);
+    }
+
+    /**
+     * The chiller in the gap, facing east, so its hot side is the far run and its cold side the near
+     * one — and because it is not a network node, the two runs stay two loops with it between them.
+     */
+    private void placeChiller(int x0) throws Exception {
+        place(x0 + RUN_LENGTH, "stellurgy:heatChiller", CHILLER_FACING_EAST);
     }
 
     private int coldAnchor(int x0) {
@@ -196,39 +221,44 @@ public class HeatChillerTest extends AbstractSharedServerTest {
     }
 
     private int hotAnchor(int x0) {
-        return x0 + COLD_LENGTH + 1;
+        return x0 + RUN_LENGTH + 1;
     }
 
     private void powerChiller(int x0) throws Exception {
-        arrange("stellurgytest energy inject 0 " + (x0 + COLD_LENGTH) + " " + y + " " + z + " 100000000");
+        arrange("stellurgytest energy inject 0 " + (x0 + RUN_LENGTH) + " " + y + " " + z + " 100000000");
+    }
+
+    /**
+     * What the chiller's battery holds: the work it pays comes out of here and nowhere else. The verb
+     * answers no {@code ok}; a reply that is not a battery reading carries no {@code hasEnergy:true}.
+     */
+    private long chillerEnergy(int x0) throws Exception {
+        Reply stored = ask("stellurgytest energy stored 0 " + (x0 + RUN_LENGTH) + " " + y + " " + z);
+        requireArranged("premise: the chiller must expose its battery: " + stored, stored.bool("hasEnergy"));
+        return stored.longInteger("energyStored");
     }
 
     /** Charge a loop and advance it, atomically — the world ticks between probe calls. */
     private Reply cycle(int x, long charge, int ticks) throws Exception {
         Reply resp = arrange("stellurgytest heat cycle 0 " + x + " " + y + " " + z + " " + charge + " " + ticks);
         requireArranged("heat cycle found no loop at " + x + ": " + resp, resp.bool("inLoop"));
-        assertEquals("premise: the loop must hold exactly what was asked: " + resp,
-                charge, resp.longInteger("charged"));
+        requireArranged("premise: the loop must hold exactly what was asked: " + resp,
+                charge == resp.longInteger("charged"));
         return resp;
     }
 
     private void place(int x, String block, String meta) throws Exception {
         Reply resp = arrange("stellurgytest place 0 " + x + " " + y + " " + z + " " + block
                 + (meta == null ? "" : " " + meta));
-        assertTrue(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
+        requireArranged(block + " place failed at " + x + ": " + resp, resp.bool("placed"));
     }
 
     private void solve(int ticks) throws Exception {
         Reply solved = arrange("stellurgytest subnet solve heat 0 " + ticks);
-        assertEquals("solve failed: " + solved, ticks, solved.integer("ticksSolved"));
+        requireArranged("solve failed: " + solved, ticks == solved.integer("ticksSolved"));
     }
 
     private Reply loopInfo(int x) throws Exception {
         return ask("stellurgytest subnet info heat 0 " + x + " " + y + " " + z);
-    }
-
-    /** Ambient in kelvin, read off a loop that is holding nothing rather than restated as a number. */
-    private static long ambientKelvinFrom(Reply coldLoopWhileEmpty) {
-        return coldLoopWhileEmpty.longInteger("temperatureMilliK") / 1000L;
     }
 }

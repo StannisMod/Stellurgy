@@ -54,10 +54,11 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * can be is in the pipes — which is exactly what a ship with no radiators should experience.
      *
      * <p>red-witnessed: with {@code HeatNetwork:834} collecting no machine's pending heat: "the
-     * plant's waste heat must end up in the loop it touches (stored=0)", 2026-09-30. The HOTTER
-     * verdict is not witnessed: a loop's temperature is ambient plus stored over capacity, so it
-     * follows from the one above. The four premises at its head are arrangements and are not
-     * witnessed.</p>
+     * plant's waste heat must end up in the loop it touches (stored=0)", 2026-09-30. The three
+     * premises at its head are arrangements and are not witnessed.</p>
+     *
+     * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
+     * "hotter than it started" is this same verdict read through a division.</p>
      */
     @Test
     public void aMachineOnACoolantLoopWarmsIt() throws Exception {
@@ -74,19 +75,14 @@ public class HeatLoopTest extends AbstractSharedServerTest {
                 SHORT_LOOP_PIPES, cold.integer("cables"));
         assertEquals("premise: a loop whose machine has not run holds nothing: " + cold,
                 0L, cold.longInteger("heatStored"));
-        long ambient = cold.longInteger("temperatureMilliK");
-        assertTrue("premise: a cold loop still has a temperature — ambient: " + cold, ambient > 0);
 
         powerPlant(cxSolo);
         solve(SOLVE_TICKS);
 
         Reply warm = loopInfo(cxSolo + 5);
         long stored = warm.longInteger("heatStored");
-        long now = warm.longInteger("temperatureMilliK");
         assertTrue("the plant's waste heat must end up in the loop it touches (stored="
                 + stored + "): " + warm, stored > 0);
-        assertTrue("and the loop must therefore be hotter than it started (ambient=" + ambient
-                + " now=" + now + "): " + warm, now > ambient);
     }
 
     /**
@@ -154,16 +150,19 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * ignoring the flag, the waste-heat guard left standing: "and must report no capacity to store it
      * in: … \"heatCapacity\":60". HEATS AGAIN — {@code HeatNetwork:834} collecting no machine's
      * pending heat: "the same rig with the flag back on must heat, or the assertions above measured
-     * nothing: … \"heatStored\":0". Not witnessed: the two AT AMBIENT / ABOVE AMBIENT verdicts, since
-     * a loop's temperature is ambient plus stored over capacity and each follows from the stored
-     * verdict before it.</p>
+     * nothing: … \"heatStored\":0". AT AMBIENT — {@code HeatNetwork:205} writing
+     * 0 K instead of the ambient for a switched-off loop: "and must read the cabin's ambient, not a
+     * number of its own: … expected:&lt;293000&gt; but was:&lt;0&gt;".</p>
+     *
+     * <p>The temperature IS asserted here, unlike the flag-on scenarios: with the flag off the loop's
+     * temperature is not derived from stored heat at all, it is written directly, so neither stored
+     * verdict implies it.</p>
      */
     @Test
     public void withTheThermalSystemOffNothingHeats() throws Exception {
         int cxOff = stand("a plant rig driven with the thermal system switched off, then on");
         buildRig(cxOff, SHORT_LOOP_PIPES);
         solve(1);
-        long ambient = loopInfo(cxOff + 5).longInteger("temperatureMilliK");
 
         setConfig("shipHeat", "false");
         try {
@@ -175,7 +174,9 @@ public class HeatLoopTest extends AbstractSharedServerTest {
                     0L, off.longInteger("heatStored"));
             assertEquals("and must report no capacity to store it in: " + off,
                     0L, off.longInteger("heatCapacity"));
-            assertEquals("and must sit at ambient: " + off, ambient, off.longInteger("temperatureMilliK"));
+            long ambient = ask("stellurgytest config get shipHeatAmbientKelvin").longInteger("value");
+            assertEquals("and must read the cabin's ambient, not a number of its own: " + off,
+                    ambient * 1000L, off.longInteger("temperatureMilliK"));
         } finally {
             setConfig("shipHeat", "true");
         }
@@ -186,8 +187,6 @@ public class HeatLoopTest extends AbstractSharedServerTest {
         Reply on = loopInfo(cxOff + 5);
         assertTrue("the same rig with the flag back on must heat, or the assertions above measured "
                 + "nothing: " + on, on.longInteger("heatStored") > 0);
-        assertTrue("and must be above ambient (" + ambient + "): " + on,
-                on.longInteger("temperatureMilliK") > ambient);
     }
 
     /**
@@ -201,9 +200,10 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      *
      * <p>red-witnessed: with {@code HeatNetwork:132} no longer marking the domain dirty when a loop's
      * neighbour changes: "a machine placed against a finished loop must be found by it (stored=0)",
-     * 2026-09-30. The WARM verdict is not witnessed: it follows from the stored verdict, since a
-     * loop's temperature is ambient plus stored over capacity. The premise at its head is an
-     * arrangement and is not witnessed.</p>
+     * 2026-09-30. The premise at its head is an arrangement and is not witnessed.</p>
+     *
+     * <p>No temperature is asserted: a loop's temperature is ambient plus stored over capacity, so
+     * "it warms" is the stored verdict read through a division.</p>
      */
     @Test
     public void aMachineBuiltAfterTheLoopIsStillPickedUp() throws Exception {
@@ -221,7 +221,6 @@ public class HeatLoopTest extends AbstractSharedServerTest {
         Reply alone = loopInfo(cxLate + 5);
         assertEquals("premise: the loop must exist before the machine does: " + alone,
                 SHORT_LOOP_PIPES, alone.integer("members"));
-        long ambient = alone.longInteger("temperatureMilliK");
 
         placePlant(cxLate + 4);
         powerPlant(cxLate);
@@ -229,10 +228,8 @@ public class HeatLoopTest extends AbstractSharedServerTest {
 
         Reply after = loopInfo(cxLate + 5);
         long stored = after.longInteger("heatStored");
-        long now = after.longInteger("temperatureMilliK");
         assertTrue("a machine placed against a finished loop must be found by it (stored="
                 + stored + "): " + after, stored > 0);
-        assertTrue("and must warm it (ambient=" + ambient + " now=" + now + "): " + after, now > ambient);
     }
 
     // ─── the rig ───────────────────────────────────────────────────────

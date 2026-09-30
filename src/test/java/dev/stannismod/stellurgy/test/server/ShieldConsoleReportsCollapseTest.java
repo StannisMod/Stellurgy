@@ -1,12 +1,14 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
@@ -35,10 +37,12 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
     /**
      * <p>red-witnessed: with {@code TileEntityShieldConsole:143} latching {@code networkConnected}
      * once it has been true: "a console whose network lost its last source must stop reporting it as
-     * live: … \"networkConnected\":true", 2026-09-30. The live-network reading at its head is an
-     * arrangement and is not witnessed. The status verdict is not witnessed: a console that kept
-     * its previous status stays green, because the working network already reports the
-     * disconnected status.</p>
+     * live: … \"networkConnected\":true", 2026-09-30, re-run under the battery arrangement.
+     * STATUS — {@code TileEntityShieldConsole:144} keeping its previous
+     * status once the network is no longer connected: "and must report the disconnected status
+     * rather than the previous one (2): … \"networkStatus\":2 … expected:&lt;1&gt; but
+     * was:&lt;2&gt;", 2026-09-30. The two premises at its head are arrangements and are not
+     * witnessed.</p>
      */
     @Test
     public void aConsoleStopsReportingANetworkThatLostItsLastSource() throws Exception {
@@ -52,12 +56,26 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
         place("affs:shield_generator", source, z);
         place("affs:field_generator", sink, z);
         place("affs:shield_console", console, z);
-        arrange("stellurgytest energy inject " + DIM + " " + source + " " + y + " " + z + " 1000000");
+        // A generator FED EVERY TICK, by a creative battery beside it (off the row, touching only the
+        // generator). A one-off energy inject is not a working network for long: the generator takes
+        // at most one tick's conversion per call, and the sink drains that in the same tick, so every
+        // solve after it offers nothing and reports the DISCONNECTED status — the very status asserted
+        // at the end, which is how a console that kept its previous status used to pass here.
+        // Measured: `sourceAvailable:0, networkStatus:1` two ticks after such an inject.
+        place("libvulpes:creativePowerBattery", source, z + 1);
 
-        arrange("stellurgytest shield tick " + DIM);
+        // EXPERIMENT: two server ticks are the dose, not a wait: one for the battery to feed the
+        // generator and the generator to convert, one more for a solve to see it on offer. The network
+        // solves at the END of a server tick, after every tile, so these are real ticks, not forced
+        // solves.
+        GameTicks.advance(client(), GameTicks.server(), 2);
         Reply working = consoleInfo(console, z);
         assertTrue("premise: with a source and a sink the console must report a live network: "
                 + working, working.bool("networkConnected"));
+        int previousStatus = working.integer("networkStatus");
+        requireArranged("premise: the working network must report a status OTHER than disconnected,"
+                + " or a console that kept it would pass the last verdict: " + working,
+                previousStatus != DISCONNECTED);
 
         // Take the source away. The network can no longer move anything, and the console must say so.
         arrange("stellurgytest fill " + DIM + " " + source + " " + y + " " + z + " "
@@ -67,8 +85,8 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
         Reply collapsed = consoleInfo(console, z);
         assertFalse("a console whose network lost its last source must stop reporting it as live: "
                 + collapsed, collapsed.bool("networkConnected"));
-        assertEquals("and must report the disconnected status rather than the previous one: "
-                + collapsed, DISCONNECTED, collapsed.integer("networkStatus"));
+        assertEquals("and must report the disconnected status rather than the previous one ("
+                + previousStatus + "): " + collapsed, DISCONNECTED, collapsed.integer("networkStatus"));
     }
 
     private void place(String block, int x, int z) throws Exception {

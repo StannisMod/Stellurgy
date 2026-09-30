@@ -5,12 +5,10 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * The failure ladder's last rung: past its material's own limit a block stops being damaged and is
@@ -95,7 +93,9 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
         Reply cooked = arrange("stellurgytest heat cycle 0 " + cx + " " + y + " " + z + " " + charge + " 2");
         // The readback can legitimately find no loop: at a temperature past the PIPES' own material
         // the first swept tick takes them, which is the self-consumption scenario. Only a loop that
-        // still exists is required to read the temperature it was charged to.
+        // still exists is required to read the temperature it was charged to. The branch reads a
+        // real answer either way: the producer always writes `inLoop` - both of `heat cycle`'s
+        // replies carry it, false when the position is in no loop.
         //
         // EXACTLY that temperature. Nothing here takes heat out of this loop: it has no radiating
         // cell (so `rejectHeat` returns 0), stands in open air with no cabin to conduct into, and
@@ -154,15 +154,17 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
      * what melts, and there is nothing left to cook anything else with. The design says an overheated
      * loop eats its own pipes first, and this is that, arrived at from the other direction.
      *
-     * <p>Read as two things, because either alone passes on the wrong world: {@code subnet info}
-     * answers {@code inNetwork:false} for a position that never held a loop at all, so the pipe's own
-     * block is asked too — it must no longer be the block that was placed there.</p>
+     * <p>Read off the pipe's own position as a BLOCK, because that is what a player finds there: the
+     * block that was placed must be gone. The premise reads the same position before the cook, so the
+     * block compared against is the one that actually stood there.</p>
      *
      * <p>red-witnessed: with {@code HullMelting:120} melting nothing until 1000 K past a material's
-     * ceiling: "a loop hotter than its own pipes has no pipes: … \"inNetwork\":true", 2026-09-30.
-     * The GONE verdict is not witnessed: the pipe was placed and solved into a loop, so a position
-     * that is in no network any more no longer holds a loop block, and it follows from the verdict
-     * above it. The premise at its head is an arrangement and is not witnessed.</p>
+     * ceiling: "a loop hotter than its own pipes has no pipes - the pipe that stood there must be gone:
+     * … Actual: stellurgy:heatpipe", 2026-09-30. The premise at its head is an arrangement and is not
+     * witnessed.</p>
+     *
+     * <p>Whether the position is still in a network is not asserted: a pipe that stood there and was
+     * solved into a loop is in one exactly while it stands, so that reading is this one again.</p>
      */
     @Test
     public void aLoopPastItsOwnMaterialConsumesItself() throws Exception {
@@ -176,32 +178,45 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
 
         cookAt(xSelf, pipeCeiling + 500);
 
-        Reply after = ask("stellurgytest subnet info heat 0 " + xSelf + " " + y + " " + z);
-        assertFalse("a loop hotter than its own pipes has no pipes: " + after, after.bool("inNetwork"));
         Reply where = materialAt(xSelf, y);
-        assertNotEquals("and the pipe that stood there must be gone, not merely disconnected: " + where,
-                pipeBlock, where.text("block"));
+        assertNotEquals("a loop hotter than its own pipes has no pipes - the pipe that stood there must"
+                + " be gone: " + where, pipeBlock, where.text("block"));
     }
 
     /**
-     * A substance the table cannot name has no ceiling, and a rung with no threshold must not act.
-     * This is what stops the mechanic eating a modded machine nobody described.
+     * A block the world will not let a player break is not taken by heat either, whatever it is made
+     * of. Bedrock is the case: its vanilla material is rock, so the table knows it as stone and it has
+     * a ceiling well under this cook. The only thing standing between it and the melt is the rule that
+     * an unbreakable block is never taken — which is what stops the mechanic eating the floor of a
+     * dimension.
+     *
+     * <p>The premise reads that ceiling off the block itself, so the verdict cannot pass on a block the
+     * table merely fails to name: that case would never cross a threshold at all, and would say
+     * nothing about the rule.</p>
+     *
+     * <p>red-witnessed: with {@code HullMelting:110} no longer sparing a block the world will not
+     * break: "a block the world refuses to let be broken is never taken by heat, even past its own
+     * material's ceiling: … expected:&lt;minecraft:[bedrock]&gt; but was:&lt;minecraft:[lava]&gt;",
+     * 2026-09-30. The two premises are arrangements and are not witnessed.</p>
      */
     @Test
-    public void aSubstanceNobodyDescribedIsNeverMelted() throws Exception {
-        int xUnknown = stand("a coolant loop with a block of bedrock against it");
-        buildRig(xUnknown, "minecraft:bedrock");
-        Reply before = blockAbove(xUnknown);
-        assertEquals("premise: the fixture must actually stand on the unknown block: " + before,
+    public void aBlockTheWorldWillNotLetBeBrokenIsNeverMelted() throws Exception {
+        int xBedrock = stand("a coolant loop with a block of bedrock against it");
+        buildRig(xBedrock, "minecraft:bedrock");
+        Reply before = blockAbove(xBedrock);
+        assertEquals("premise: the fixture must actually stand on bedrock: " + before,
                 "minecraft:bedrock", before.text("block"));
 
-        // Hot enough that stone would be gone twice over, and still under what the loop's OWN pipes
-        // survive - at 5000 K the pipes melt first and there is no loop left to run the sweep, which
-        // is a different scenario and is the one below.
-        cookAt(xUnknown, 1600);
+        // Under what the loop's OWN pipes survive, so the loop is still there to run the sweep.
+        long cook = 1600;
+        long ceiling = before.longInteger("ceilingKelvin");
+        requireArranged("premise: bedrock must have a ceiling under the cook, or nothing here asks the"
+                + " unbreakable rule (cook " + cook + " K): " + before, ceiling > 0 && ceiling < cook);
 
-        Reply after = blockAbove(xUnknown);
-        assertEquals("with no ceiling there is no threshold to cross: " + after,
-                "minecraft:bedrock", after.text("block"));
+        cookAt(xBedrock, cook);
+
+        Reply after = blockAbove(xBedrock);
+        assertEquals("a block the world refuses to let be broken is never taken by heat, even past its"
+                + " own material's ceiling: " + after, "minecraft:bedrock", after.text("block"));
     }
 }

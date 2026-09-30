@@ -96,11 +96,13 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
      * "requests nothing" is only a reading about the breached zone once {@code inNetwork} says the
      * vent is still a node — without it, a breach that tore the network apart would pass here.</p>
      *
-     * <p>red-witnessed: with {@code TileOxygenVent:496} no longer withholding the zone's air from the
-     * network once the vent stops maintaining it: "a breached zone must stop asking the plant for air
-     * … \"sinkRequested\":124105", 2026-09-30. The two premises at its head are arrangements and are
-     * not witnessed. The {@code inNetwork} verdict is not witnessed: it is read at the duct, so it
-     * stays true after the vent itself has left the network.</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, both read at the vent. STILL A NODE —
+     * {@code TileOxygenVent:316} also leaving the ventilation network when it marks itself breached:
+     * "the vent must still be a node on the network after the breach: … \"inNetwork\":false". STOPS
+     * ASKING — {@code TileOxygenVent:496} no longer withholding the zone's air from the network once
+     * the vent stops maintaining it: "a breached zone must stop asking the plant for air …
+     * \"sinkRequested\":124105". The two premises at its head are arrangements and are not
+     * witnessed.</p>
      */
     @Test
     public void aBreachedZoneStopsDrawingFromThePlant() throws Exception {
@@ -126,7 +128,10 @@ public class BreachAndIsolationTest extends AbstractSharedServerTest {
         forceTick(cx, 5);
         arrange("stellurgytest subnet solve lifesupport 0 2");
 
-        Reply afterBreach = subnetInfo(cx + 1);
+        // Read at the VENT, not at the duct: the duct and the plant stay a network of their own
+        // whatever happens to the vent, so only the vent's own position can say that it is still in
+        // one — and a vent that left the network answers `inNetwork:false` here.
+        Reply afterBreach = subnetInfo(cx);
         assertTrue("the vent must still be a node on the network after the breach: " + afterBreach,
                 afterBreach.bool("inNetwork"));
         assertEquals("a breached zone must stop asking the plant for air — the vent is still a node, "

@@ -123,12 +123,10 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
     /**
      * red-witnessed: one inversion per verdict, 2026-09-30. INTO THE SLUG — {@code TileHeatDump:92}
      * asking for heat only at ten times the trigger: "the dump must have taken heat off the loop and
-     * put it in the slug: … \"charge\":0 … \"hasStack\":true". POORER — {@code HeatNetwork:578}
-     * charging the slug without counting it as drained: "and the loop must be poorer by what left
-     * it: … \"heatStored\":36420 … \"sunk\":0". The second verdict reads the {@code sunk} figure,
-     * not the loop's energy: with {@code HeatNetwork:281} alone removed, so that the slug is charged
-     * and reported sunk while the loop keeps every unit, it stays green. The two premises at its head
-     * are arrangements and are not witnessed.
+     * put it in the slug: … \"charge\":0 … \"hasStack\":true". POORER — {@code HeatNetwork:281}
+     * removed, so the slug is charged and reported sunk while the loop keeps every unit: "and the loop
+     * must be poorer by what left it (charged 36420, holding 36420): … \"sunk\":2000". The two
+     * premises at its head are arrangements and are not witnessed.
      */
     @Test
     public void aLoopPastTheTriggerLosesHeatIntoTheSlugAndThrowsItOut() throws Exception {
@@ -148,8 +146,12 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
         // working, and telling them apart is what `hasStack` is for.
         assertTrue("the dump must have taken heat off the loop and put it in the slug: " + after,
                 after.longInteger("charge") > 0 || !after.bool("hasStack"));
-        assertTrue("and the loop must be poorer by what left it: " + cooked,
-                cooked.longInteger("sunk") > 0);
+        // The loop's own energy, not the figure it publishes about the dump: pipes and a dump are the
+        // whole rig, so the dump is the only way anything leaves it during the charged ticks.
+        assertTrue("and the loop must be poorer by what left it (charged "
+                        + cooked.longInteger("charged") + ", holding " + cooked.longInteger("heatStored")
+                        + "): " + cooked,
+                cooked.longInteger("heatStored") < cooked.longInteger("charged"));
     }
 
     /**

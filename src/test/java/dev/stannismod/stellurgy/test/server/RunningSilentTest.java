@@ -77,14 +77,19 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * HeatNetwork:733} and {@code :747} rejecting through every exchanger, shut or not: "a shut array
      * may shed nothing: … expected:&lt;0&gt; but was:&lt;5598&gt;". STILL ABOARD — {@code
      * HeatNetwork:286} losing one unit a tick outside rejection: "so the heat that used to leave is
-     * still on the ship: … expected:&lt;3030000&gt; but was:&lt;3029999&gt;". REOPENED — {@code
-     * TileHeatRadiator:85} refusing to open a shut cell: "opening the sinks failed: …
-     * \"silent\":true". Not witnessed: ONE ORDER, since three cells all open before and all shut after
-     * make the count three and SILENCED already reds on anything less; LOCKABLE, since radiance is
-     * the cell power at the peak temperature and the hull surface carries its skin temperature
-     * whenever it carries power, so it follows from STILL FOUND; COMES BACK, since the same cells
-     * were shedding before they were shut and it follows from REOPENED. The three premises at its
-     * head are arrangements and are not witnessed.</p>
+     * still on the ship: … expected:&lt;3030000&gt; but was:&lt;3029999&gt;". COMES BACK — {@code
+     * TileHeatRadiator:85} refusing to open a shut cell: "a ship that went dark must be able to come
+     * back: … \"rejected\":0 … \"silent\":true".
+     * The three premises at its head are arrangements and are not witnessed.</p>
+     *
+     * LOCKABLE — {@code ThermalSignature:95} taking the added surface's peak instead of the hotter
+     * one, so the shut loop's zero wins over the hull: "and a seeker still has a warm surface to lock
+     * on, the hull's: … \"radianceMilli\":0". NOT SILENT ONCE OPENED — {@code ThermalBody:275}'s
+     * open-radiator check removed, so any body with radiators reads silent: "an opened array is not
+     * running silent: … \"silent\":true".</p>
+     *
+     * <p>Not asserted, because it is another verdict read again: how many cells one order changed
+     * (three working cells before and none after make it three).</p>
      */
     @Test
     public void aShipRunningSilentIsFoundCloserAndIsStillFound() throws Exception {
@@ -106,8 +111,6 @@ public class RunningSilentTest extends AbstractSharedServerTest {
 
         Reply shut = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " on");
         assertTrue("silencing failed: " + shut, shut.bool("silent"));
-        assertEquals("every cell of the array must have been shut by one order: " + shut,
-                RADIATORS, shut.integer("changed"));
 
         Reply silentCycle = cycle(charge);
         Reply silent = signature();
@@ -137,7 +140,7 @@ public class RunningSilentTest extends AbstractSharedServerTest {
                 + " lit=" + litRange + " silent=" + silentRange, silentRange < litRange);
         assertTrue("but the hull is still warmer than space, so a silent ship is found CLOSER and"
                         + " never not at all: " + silent, silentPower > 0 && silentRange > 0);
-        assertTrue("and it is still a thing a seeker can lock, for the same reason: " + silent,
+        assertTrue("and a seeker still has a warm surface to lock on, the hull's: " + silent,
                 silent.longInteger("radianceMilli") > 0);
 
         // The cost, from the loop's own side: nothing left, so all of it is still aboard.
@@ -148,9 +151,9 @@ public class RunningSilentTest extends AbstractSharedServerTest {
 
         // And it is a state a pilot can leave: opening the sinks must restore the ship it was.
         Reply opened = arrange("stellurgytest heat silent 0 " + xShip + " " + y + " " + z + " off");
-        assertFalse("opening the sinks failed: " + opened, opened.bool("silent"));
+        assertFalse("an opened array is not running silent: " + opened, opened.bool("silent"));
         Reply reopened = cycle(charge);
-        assertTrue("a ship that went dark must be able to come back: " + reopened,
+        assertTrue("a ship that went dark must be able to come back: " + reopened + " | " + opened,
                 reopened.longInteger("rejected") > 0);
     }
 

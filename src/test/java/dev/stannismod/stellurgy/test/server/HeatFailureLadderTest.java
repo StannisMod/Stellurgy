@@ -149,11 +149,11 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * drive up: {\"ok\":true,\"spooling\":true}". COSTS NOTHING — {@code JumpTrigger:122} firing the
      * burst before refusing: "and must cost the pilot nothing … \"charge\":720000". REMEMBERS NOTHING
      * — {@code JumpTrigger:122} clearing the aim on a refusal: "cooling the ship is the whole of the
-     * fix - the gate is read-only and remembers nothing: … \"allowed\":false". Not witnessed: READS
-     * THE LOOP — the gate raises the overheated message only when the same {@code
-     * driveCoolantKelvin} this reads is past the threshold, so it follows from WHICH REFUSAL. The
-     * premises at its head and the two after the cook and the cool are arrangements and are not
-     * witnessed.</p>
+     * fix - the gate is read-only and remembers nothing: … \"allowed\":false". The premises at its
+     * head and the two after the cook and the cool are arrangements and are not witnessed.</p>
+     *
+     * <p>What the gate read is not asserted beside the message: the overheated refusal is raised only
+     * when the same coolant reading is past the threshold, so it would be WHICH REFUSAL again.</p>
      */
     @Test
     public void anOverheatedDriveRefusesToFireAndTheRefusalIsFree() throws Exception {
@@ -184,8 +184,6 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
                 hot.bool("allowed"));
         assertEquals("and the pilot must be told which of the refusals this is: " + hot,
                 "msg.jumpgate.driveoverheated", hot.text("message"));
-        assertTrue("the gate must be reading the loop bolted to the generator: " + hot,
-                hot.longInteger("driveCoolantMilliK") >= refusal * 1000L);
 
         Reply pressed = arrange("stellurgytest drive press 0 " + ship);
         assertFalse("a refused jump must not wind the drive up: " + pressed, pressed.bool("spooling"));

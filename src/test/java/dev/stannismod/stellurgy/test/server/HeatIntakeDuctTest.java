@@ -109,9 +109,11 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * TileHeatChiller:92} and {@code :104} both answering as if powered: "an unpowered chiller must
      * move nothing at all: … expected:&lt;352630&gt; but was:&lt;328945&gt;". WITH POWER — {@code
      * HeatNetwork:535} crediting the heat without taking it out of the air: "the same rig with power
-     * must cool the room, or nothing above was measured: … \"airTempMilliK\":400000". Not witnessed:
-     * RECEIVES NOTHING — the loop is paid only what the room gave up plus paid work, so any fault
-     * that feeds it moves the room first and reds MOVES NOTHING.</p>
+     * must cool the room, or nothing above was measured: … \"airTempMilliK\":400000".</p>
+     *
+     * <p>What the loop receives is not asserted here: it is paid only what the room gave up plus paid
+     * work, so any fault that feeds it moves the room first, and the conservation between the two is
+     * the powered scenario's clause.</p>
      */
     @Test
     public void anUnpoweredChillerLeavesTheRoomAlone() throws Exception {
@@ -126,7 +128,6 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
 
         assertEquals("an unpowered chiller must move nothing at all: " + cycled,
                 tempBefore, tempAfter);
-        assertEquals("and its loop must receive nothing: " + cycled, 0L, cycled.longInteger("heatStored"));
 
         // And the same rig, powered, must then work — without this the assertions above would also
         // pass on a rig that was never able to cool anything in the first place.

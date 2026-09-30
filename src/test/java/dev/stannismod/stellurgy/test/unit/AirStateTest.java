@@ -508,12 +508,14 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: the first two verdicts, one inversion each, 2026-09-30. NOTHING LEFT -
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING LEFT -
      * {@code AirState:129} removing half of what was drawn: "nothing is left of it expected:&lt;0&gt;
      * but was:&lt;500&gt;". NOT IN THE COMPOSITION - {@code AirState:103} keeping an entry that reached
-     * zero: "and it is not in the composition either: {... carbondioxide [WASTE]]=0}". The pressure
-     * verdict is not witnessed: the pressure is the sum of the entries, so once the first verdict
-     * holds a gone gas contributes nothing to it.</p>
+     * zero: "and it is not in the composition either: {... carbondioxide [WASTE]]=0}".</p>
+     *
+     * <p>Not asserted: that the gone gas is not counted in the pressure, because the pressure is the
+     * sum of the entries' amounts, so once "nothing is left of it" holds a gone gas adds nothing - the
+     * check could not fail without the first one failing first.</p>
      */
     @Test
     public void whatIsGoneIsAbsentEverywhereRatherThanKeptAsAZero() {
@@ -528,7 +530,6 @@ public class AirStateTest {
         assertTrue("and it is not in the composition either: " + air.composition(),
                 !air.composition().containsKey(
                         dev.stannismod.stellurgy.atmosphere.gas.GasRegistry.CARBON_DIOXIDE));
-        assertEquals("nor counted in the pressure", ppm(1_000_000), air.getTotalPressure());
     }
 
     /**

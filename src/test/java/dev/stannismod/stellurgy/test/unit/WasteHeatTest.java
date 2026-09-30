@@ -116,18 +116,34 @@ public class WasteHeatTest {
     /**
      * Heat nobody collects went into the air around the machine. The buffer is shallow on purpose,
      * which is why a planetside base with no coolant loop needs no thermal build at all.
+     *
+     * <p>What is pinned is that the buffer is BOUNDED, not how deep it is: a second thousand ticks of
+     * the same unclaimed production must add nothing to what the first thousand left. The depth is
+     * production's to choose, so no number of ticks' worth is written here.</p>
+     *
+     * <p>red-witnessed: with {@code WasteHeat:47} no longer capping the buffer: "a second thousand ticks
+     * of unclaimed production must add nothing to the first: 300000 then 600000
+     * expected:&lt;300000&gt; but was:&lt;600000&gt;", 2026-09-30. A deeper buffer is not a red:
+     * with {@code WasteHeat:28} at 21 ticks this stays green. The premise is an arrangement and is not
+     * witnessed.</p>
      */
     @Test
     public void uncollectedHeatDoesNotAccumulateWithoutBound() {
         WasteHeat waste = new WasteHeat();
-        for (int tick = 0; tick < 2_000; tick++) {
+        for (int tick = 0; tick < 1_000; tick++) {
             waste.spend(1_000);
         }
-        long perTick = 1_000L * fraction() / 1000L;
+        int afterOneThousand = waste.getPendingHeat();
+        for (int tick = 0; tick < 1_000; tick++) {
+            waste.spend(1_000);
+        }
+        int afterTwoThousand = waste.getPendingHeat();
 
-        assertTrue("two thousand ticks of unclaimed production must not be two thousand ticks' worth: "
-                        + waste.getPendingHeat(),
-                waste.getPendingHeat() <= perTick * 20L);
+        assertTrue("premise: unclaimed production must leave something in the buffer at all",
+                afterOneThousand > 0);
+        assertEquals("a second thousand ticks of unclaimed production must add nothing to the first: "
+                        + afterOneThousand + " then " + afterTwoThousand,
+                afterOneThousand, afterTwoThousand);
     }
 
     /**

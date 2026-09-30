@@ -81,8 +81,11 @@ public class SubsystemNetworkRestartTest {
      * TileOxygenVent:824} not reading the priority back: "the vent's zone priority must survive the
      * restart … expected:&lt;1&gt; but was:&lt;0&gt;". BIAS — {@code TileEntityShieldConsole:481} not
      * reading the bias back: "the console's resistance bias must survive the restart … expected:&lt;0.75&gt;
-     * but was:&lt;0.5&gt;". Not witnessed: the membership count, which is the three counts above
-     * added up, and the first boot's premises.</p>
+     * but was:&lt;0.5&gt;". The first boot's premises are arrangements and are not witnessed.</p>
+     *
+     * <p>Not asserted: the ventilation network's membership count, because on a network with no
+     * controller it is the cable, source and sink counts added up, so it could not differ while the
+     * three verdicts on them hold.</p>
      */
     @Test
     public void theNetworkIsRebuiltFromTheWorldWhileItsSettingsAreRestoredFromTheirBlocks()
@@ -111,7 +114,6 @@ public class SubsystemNetworkRestartTest {
         int cablesBefore = ventilationBefore.integer("cables");
         int sourcesBefore = ventilationBefore.integer("sources");
         int sinksBefore = ventilationBefore.integer("sinks");
-        int membersBefore = ventilationBefore.integer("members");
         assertEquals("premise: two ducts must be in the network before the restart: "
                 + ventilationBefore, 2, cablesBefore);
         assertEquals("premise: the plant must be its source: " + ventilationBefore, 1, sourcesBefore);
@@ -138,8 +140,6 @@ public class SubsystemNetworkRestartTest {
                 sourcesBefore, ventilationAfter.integer("sources"));
         assertEquals("and the same sink count: " + ventilationAfter,
                 sinksBefore, ventilationAfter.integer("sinks"));
-        assertEquals("and the same membership: " + ventilationAfter,
-                membersBefore, ventilationAfter.integer("members"));
 
         // The settings, by contrast, are only here because their own tiles wrote them to NBT.
         Reply priorityAfter = arrange(secondBoot, "stellurgytest vent priority 0 " + VENT + " " + Y + " " + Z);
@@ -170,9 +170,12 @@ public class SubsystemNetworkRestartTest {
      * blocks that were holding it … expected:&lt;4531&gt; but was:&lt;0&gt;". REBUILT —
      * {@code TileHeatLoopBlock:85} ({@code onLoad}) not re-registering a block restored from the
      * save: "the loop must be REBUILT with the same membership — nothing persisted it: …
-     * \"members\":0". Not witnessed: the loop's capacity, heat and temperature, which the loop sums
-     * from the same member blocks each solve, so they cannot differ while the two verdicts above
-     * hold; and the first boot's premises.</p>
+     * \"members\":0". The first boot's premises are arrangements and are not witnessed.</p>
+     *
+     * <p>Not asserted: the loop's capacity, stored heat and temperature after the restart, because
+     * the loop re-sums capacity and heat from its member blocks on every solve and derives its
+     * temperature from those two, so none of them could differ while the per-block energy and the
+     * membership verdicts hold.</p>
      */
     @Test
     public void aCoolantLoopsEnergyComesBackFromItsBlocks() throws Exception {
@@ -195,8 +198,6 @@ public class SubsystemNetworkRestartTest {
         arrange(firstBoot, "stellurgytest subnet solve heat 0 1");
         Reply loopBefore = subnetHeat(firstBoot, PIPE_A);
         long loopHeatBefore = loopBefore.longInteger("heatStored");
-        long loopCapacityBefore = loopBefore.longInteger("heatCapacity");
-        long temperatureBefore = loopBefore.longInteger("temperatureMilliK");
         assertEquals("premise: all three blocks must be one loop: " + loopBefore,
                 3, loopBefore.integer("members"));
         assertEquals("premise: the loop must hold exactly what was put in it: " + loopBefore,
@@ -226,12 +227,6 @@ public class SubsystemNetworkRestartTest {
         Reply loopAfter = subnetHeat(secondBoot, PIPE_A);
         assertEquals("the loop must be REBUILT with the same membership — nothing persisted it: "
                 + loopAfter, 3, loopAfter.integer("members"));
-        assertEquals("with the same capacity, because the same blocks are back: " + loopAfter,
-                loopCapacityBefore, loopAfter.longInteger("heatCapacity"));
-        assertEquals("and holding the same energy: " + loopAfter,
-                loopHeatBefore, loopAfter.longInteger("heatStored"));
-        assertEquals("so a player finds the ship exactly as hot as they left it: " + loopAfter,
-                temperatureBefore, loopAfter.longInteger("temperatureMilliK"));
     }
 
     private Reply subnetHeat(RealDedicatedServerHarness harness, int x) throws Exception {

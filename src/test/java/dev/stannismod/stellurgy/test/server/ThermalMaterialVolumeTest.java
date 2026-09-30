@@ -48,9 +48,9 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
 
     /**
      * red-witnessed: one inversion per verdict, 2026-09-30. A CUBIC METRE — {@code
-     * ThermalMaterials:225} measuring every block at twice its collision volume: "a full block is a
+     * ThermalMaterials:227} measuring every block at twice its collision volume: "a full block is a
      * cubic metre: … expected:&lt;1000000&gt; but was:&lt;2000000&gt;". A CAPACITY — {@code
-     * ThermalMaterials:190} answering zero for every slug: "and iron is a substance the table knows,
+     * ThermalMaterials:192} answering zero for every slug: "and iron is a substance the table knows,
      * so it has a capacity: … \"capacity\":0". The placement premise is an arrangement and is not
      * witnessed.
      */
@@ -65,7 +65,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code ThermalMaterials:225} measuring every block at twice its collision
+     * red-witnessed: with {@code ThermalMaterials:227} measuring every block at twice its collision
      * volume: "half the shape is half the substance: … expected:&lt;500000&gt; but
      * was:&lt;1000000&gt;", 2026-09-30. The placement premise is an arrangement and is not witnessed.
      */
@@ -81,9 +81,9 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * The discriminator: the outline of a staircase is a full cube, and its substance is not.
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOT A WHOLE BLOCK — {@code
-     * ThermalMaterials:225} measuring every block at twice its collision volume: "a staircase must
+     * ThermalMaterials:227} measuring every block at twice its collision volume: "a staircase must
      * not read as a whole block … \"volumeMilliLitres\":1500000". THREE QUARTERS — {@code
-     * ThermalMaterials:223} summing only the first collision box: "it is the half slab plus the
+     * ThermalMaterials:225} summing only the first collision box: "it is the half slab plus the
      * quarter step: … expected:&lt;750000&gt; but was:&lt;500000&gt;". The placement premise is an
      * arrangement and is not witnessed.</p>
      */
@@ -104,7 +104,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * slab, so without this the thing in your hand is nothing at all - while the identical block on
      * the ground is half a cubic metre.
      *
-     * <p>red-witnessed: with {@code ThermalMaterials:262} doubling the volume an item's block
+     * <p>red-witnessed: with {@code ThermalMaterials:264} doubling the volume an item's block
      * answers for: "an item the ore dictionary cannot name still has the shape of what it places: …
      * expected:&lt;500000&gt; but was:&lt;1000000&gt;", 2026-09-30.</p>
      */
@@ -121,10 +121,10 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * block's own {@code Material} a stone slab has a size and no identity - and a size alone answers
      * nothing, because capacity is the two multiplied.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. STONE — {@code ThermalMaterials:144}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. STONE — {@code ThermalMaterials:146}
      * answering no material for any vanilla {@code Material}: "stone must resolve through the block's
      * own vanilla material: … expected:&lt;[stone]&gt; but was:&lt;[]&gt;". A CAPACITY — {@code
-     * ThermalMaterials:190} answering zero for every slug: "and having both halves, it must have a
+     * ThermalMaterials:192} answering zero for every slug: "and having both halves, it must have a
      * capacity: … \"capacity\":0". The placement premise is an arrangement and is not witnessed.</p>
      */
     @Test
@@ -143,7 +143,7 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
      * because that material means "metal-looking" and nothing finer. Asked on an IRON block this
      * assertion would pass whichever source won, which is a test that cannot fail.
      *
-     * <p>red-witnessed: with {@code ThermalMaterials:130} passing over every ore-dictionary match:
+     * <p>red-witnessed: with {@code ThermalMaterials:132} passing over every ore-dictionary match:
      * "the specific name must win over the coarse one: … expected:&lt;[gold]&gt; but
      * was:&lt;[iron]&gt;", 2026-09-30. The placement premise is an arrangement and is not
      * witnessed.</p>
@@ -157,12 +157,12 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code ThermalMaterials:221} measuring a block with no collision boxes as
+     * red-witnessed: with {@code ThermalMaterials:223} measuring a block with no collision boxes as
      * a whole cube: "air is not a small lump of something: … expected:&lt;0&gt; but
-     * was:&lt;1000000&gt;", 2026-09-30. The capacity verdict is not witnessed: the same run read
-     * {@code capacity:0} for air a cubic metre in size, because air resolves to no material; zero
-     * volume already forces a zero capacity, so no single fault in production reaches it past the
-     * volume verdict above it. The placement premise is an arrangement and is not witnessed.
+     * was:&lt;1000000&gt;", 2026-09-30. The placement premise is an arrangement and is not witnessed.
+     *
+     * <p>Its capacity is not asserted: a capacity is material times volume, and with no volume it is
+     * zero whatever the material — so "it can hold no heat" is this verdict again.</p>
      */
     @Test
     public void thereIsNoSubstanceInEmptySpace() throws Exception {
@@ -170,6 +170,5 @@ public class ThermalMaterialVolumeTest extends AbstractSharedServerTest {
 
         assertEquals("air is not a small lump of something: " + air, 0L,
                 air.longInteger("volumeMilliLitres"));
-        assertEquals("and it can hold no heat: " + air, 0L, air.longInteger("capacity"));
     }
 }

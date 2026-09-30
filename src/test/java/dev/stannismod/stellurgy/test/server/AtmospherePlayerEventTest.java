@@ -196,9 +196,12 @@ public class AtmospherePlayerEventTest {
      * resolve to SOMETHING before the move". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:
      * "the airless planet must resolve as unbreathable before the move: … \"breathable\":true".
      * BREATHABLE AFTER — answering {@code NoO2} for a breathable planet: "the breathable planet must
-     * resolve as breathable after the move: … \"NoO2\"". Not witnessed, and not witnessable: the
-     * resolver-dim assertion reads a field of the very record the await selected by that field, and
-     * "must not survive the move" is implied by the two breathability verdicts around it.</p>
+     * resolve as breathable after the move: … \"NoO2\"".</p>
+     *
+     * <p>Not asserted: which dimension's handler resolved him after the move, because the wait
+     * selects its record by that very field, so reading it back could not disagree; and that the
+     * airless planet's atmosphere does not survive the move, because it is implied by the two
+     * breathability verdicts either side of it.</p>
      */
     @Test
     public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
@@ -210,19 +213,14 @@ public class AtmospherePlayerEventTest {
         assertEquals("the airless planet must resolve as unbreathable before the move: " + onVacuum,
                 "false", field(PLAYER_BREATHABLE, onVacuum));
 
-        String airResolution = enterDimAndAwaitResolution(DIM_AIR);
-        // THE MOVE ITSELF, read off the record: the gate resolved him to something OTHER than what
-        // he was in, in the arriving dimension's own handler. That record is what separates "he
-        // arrived and was re-resolved" from "he arrived and nobody asked" — the state read below
-        // cannot tell those apart, because a gate that never ran leaves the same answer standing.
-        assertEquals("the breathable dim's handler must be the one that resolved him: "
-                + airResolution, String.valueOf(DIM_AIR), Events.text(airResolution, "dim"));
+        // THE MOVE ITSELF is the link this waits on: the arriving dimension's own handler resolving
+        // him. That record is what separates "he arrived and was re-resolved" from "he arrived and
+        // nobody asked" — the state read below cannot tell those apart, because a gate that never ran
+        // leaves the same answer standing.
+        enterDimAndAwaitResolution(DIM_AIR);
 
         String onAir = exec("stellurgytest atmosphere for-player");
-        String atmoAir = field(PLAYER_ATMOS, onAir);
         assertEquals("the breathable planet must resolve as breathable after the move: " + onAir,
                 "true", field(PLAYER_BREATHABLE, onAir));
-        assertFalse("the airless planet's atmosphere must not survive the move; before=" + atmoVac
-                + " after=" + atmoAir, atmoVac.equals(atmoAir));
     }
 }

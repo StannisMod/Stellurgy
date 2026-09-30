@@ -65,13 +65,12 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
     }
 
     /**
-     * Place an atmosphere detector on overworld. Its default {@code
-     * atmosphereToDetect} is AIR, and overworld has no per-dim atmosphere
-     * handler, so {@link dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector#update()}
-     * falls into the no-handler branch where {@code detectedAtm = atmosphereToDetect == AIR}
-     * &rarr; {@code true} &rarr; the block flips to POWERED on the first valid tick.
-     * Then re-target the detector to a non-AIR atmosphere (vacuum) and confirm
-     * it unpowers — exercises both branches of the update loop.
+     * Place an atmosphere detector in open overworld air. It starts out watching the statement
+     * "breathable". The overworld HAS an atmosphere handler, and with no sealed zone around the
+     * detector {@link dev.stannismod.stellurgy.tile.atmosphere.TileAtmosphereDetector#statementHolds()}
+     * is answered from the dimension's published atmosphere: breathable, and not vacuum. So a forced
+     * sample powers the block; re-targeted to "vacuum", the next forced sample unpowers it. Both
+     * samples go through the handler branch — the detector's no-handler branch is not reached here.
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30, for the three verdicts this branch
      * rewrote. DEFAULT — {@code TileAtmosphereDetector:43} starting on {@code VACUUM}: "detector
@@ -86,9 +85,8 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
     public void atmosphereDetectorReportsCurrentAtmosphereOnRedstone() throws Exception {
         int bx = 1700, by = SITE_Y, bz = 1500;
 
-        // Clear neighbours so the detector's sample loop sees AIR (any opaque
-        // block on any face would suppress the AIR branch). 3×3×3 air around
-        // the target pos is enough.
+        // Clear neighbours so the detector's sample loop has open air to ask about: it skips any
+        // face with an opaque block on it. 3×3×3 air around the target pos is enough.
         ok(client().execute("stellurgytest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
 

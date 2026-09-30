@@ -103,8 +103,8 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     /**
      * INV-NET-01, made falsifiable. The same layout with the middle duct replaced by a shield cable:
      * the two subsystems are laid through one another and must not conduct for each other. The test
-     * above is this one's positive control — without it, "no air moved" would also be what a broken
-     * rig looks like.
+     * above is this one's positive control — without it, "no source on the vent's side" would also be
+     * what a rig whose ducts never joined anything looks like.
      *
      * <p>{@code subnet info} answers {@code sources:0} for a position in no network at all, so the
      * vent's half is first required to BE a network — a sink with its duct — before "no source on its
@@ -113,9 +113,11 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * <p>red-witnessed: with {@code SubsystemNetworkManager:134} letting other domains' cables into
      * the life-support graph: "the vent's ventilation network must end at the shield cable, with no
      * source on its side: … \"sources\":1", 2026-09-30. The sink premise is an arrangement and is not
-     * witnessed. The two air verdicts after the solve are not witnessed: with no source on the vent's
-     * network nothing can regenerate the room, so they cannot go red while the verdict above
-     * holds.</p>
+     * witnessed.</p>
+     *
+     * <p>Not asserted: the room's carbon dioxide and oxygen after a solve, because with no source on
+     * the vent's network nothing can regenerate the room or draw from it through the network, so
+     * neither reading could go red while the verdict above holds.</p>
      */
     @Test
     public void aShieldCableIsNotADuctAndCarriesNoAir() throws Exception {
@@ -133,17 +135,6 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
                 + "sink: " + net, 1, net.integer("sinks"));
         assertEquals("the vent's ventilation network must end at the shield cable, with no source "
                 + "on its side: " + net, 0, net.integer("sources"));
-
-        solve(300);
-
-        Reply after = ventInfo(cxIsolation);
-        assertEquals("no regeneration may cross a cable belonging to another subsystem: " + after,
-                ppm(150_000), after.longInteger("airCO2"));
-        // A floor, not an equality: this room's own vent is running and restores oxygen toward sea
-        // level, which is its job. What a foreign subsystem's cable may not do is carry regeneration
-        // -- the CO2 assertion above -- or take the room's oxygen away.
-        assertTrue("and the oxygen must not be drawn down across it: " + after,
-                after.longInteger("airO2") >= ppm(60_000));
     }
 
     /**

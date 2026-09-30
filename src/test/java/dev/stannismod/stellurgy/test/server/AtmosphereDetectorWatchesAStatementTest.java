@@ -4,6 +4,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
@@ -23,6 +24,12 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
  * <p>Two scenarios, and the second is the one that could not exist before. The first shows the
  * detector TRACKING its statement as the air changes — a detector that simply latched on would pass a
  * one-shot check. The second wires a condition no named atmosphere expressed at all.</p>
+ *
+ * <p><b>The detector's output feeds nothing it watches.</b> A vent in its default redstone mode runs
+ * only while powered, and the detector sits one block from the vent's floor, so its signal would
+ * otherwise be what keeps the room a zone: the first "off" would let the vent drop the zone, and every
+ * later reading would be about the vent rather than the detector. The vent is therefore powered by a
+ * redstone block of its own, beneath it, which holds it on whatever the detector says.</p>
  */
 public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServerTest {
 
@@ -52,13 +59,15 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
     }
 
     /**
-     * <p>red-witnessed: with {@code AtmosphereAssertions:37} holding "not breathable" everywhere:
-     * "breathable air must not satisfy \"not breathable\" (after a forced sample): …
-     * expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. The sealed-zone premise is an
-     * arrangement and is not witnessed. The two later verdicts are not witnessed: the room's vent is
-     * switched on by this detector's own redstone, so the first verdict switching the detector off
-     * lets the vent clear the zone, and a red on the second can come from that as well as from the
-     * code.</p>
+     * <p>red-witnessed: one inversion per verdict. CONTROL — {@code AtmosphereAssertions:37} holding
+     * "not breathable" everywhere: "breathable air must not satisfy \"not breathable\" (after a forced
+     * sample): … expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. UNBREATHABLE — the same
+     * line never holding: "air nobody can breathe must satisfy it (after a forced sample): …
+     * expected:&lt;true&gt; but was:&lt;false&gt;", 2026-09-30. OFF AGAIN — {@code
+     * TileAtmosphereDetector:70} ({@code statementHolds}) latching true for a statement once it has
+     * held: "and refilling the room must switch it off again (after a forced sample): …
+     * expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. The sealed-zone premises are
+     * arrangements and are not witnessed.</p>
      */
     @Test
     public void theDetectorFollowsItsStatementAsTheAirChanges() throws Exception {
@@ -85,9 +94,10 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
     /**
      * <p>red-witnessed: with {@code AtmosphereAssertions:47} calling any zone air toxic: "clean air
      * must not read as poisonous (after a forced sample): … expected:&lt;false&gt; but
-     * was:&lt;true&gt;", 2026-09-30. The sealed-zone premise is an arrangement and is not witnessed;
-     * the poisonous-room verdict is not witnessed, for the reason given on
-     * {@link #theDetectorFollowsItsStatementAsTheAirChanges}.</p>
+     * was:&lt;true&gt;", 2026-09-30. POISONOUS — the same line never holding: "a room can be
+     * breathable and poisonous at once, and the detector must be able to wire the second (after a
+     * forced sample): … expected:&lt;true&gt; but was:&lt;false&gt;", 2026-09-30. The sealed-zone
+     * premises are arrangements and are not witnessed.</p>
      */
     @Test
     public void theDetectorCanWatchForSomethingNoNamedAtmosphereEverSaid() throws Exception {
@@ -135,6 +145,11 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
      * which is how this test first failed, silently, by sampling a position in no zone at all.
      */
     private void sealRoom(int cx) throws Exception {
+        // The vent's own power, under its floor and out of the room, so the detector's signal — which
+        // reaches the vent through the floor block beneath the detector — is never the thing that
+        // decides whether the room is a zone. See the class note.
+        arrange("stellurgytest fill 0 " + cx + " " + (cy - 1) + " " + cz
+                + " " + cx + " " + (cy - 1) + " " + cz + " minecraft:redstone_block");
         arrange("stellurgytest place 0 " + cx + " " + cy + " " + cz + " stellurgy:oxygenVent");
         arrange("stellurgytest energy inject 0 " + cx + " " + cy + " " + cz + " 1000000");
         // EXPERIMENT: SEAL_TICKS is a DOSE of the SERVER'S OWN clock, not a budget for this box to
@@ -182,6 +197,12 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
      * comparison and supplied exactly the delay it needed.
      */
     private void assertPowered(int cx, boolean expected, String why) throws Exception {
+        // The air the detector is about to judge must still be the ROOM's: a position that has
+        // dropped out of the zone reads the overworld's open air, and a verdict on that is a verdict
+        // about whatever unsealed the room.
+        Reply air = ask("stellurgytest atmosphere get 0 " + cx + " " + airY() + " " + cz);
+        requireArranged("the room must still be a sealed zone when the detector is asked about it: "
+                + air, air.has("gases"));
         // MADE to sample, not waited for. Production gates the detector's sample on
         // `world.getWorldTime() % 10`, so what it reports is whatever it decided the last time that
         // gate happened to fire — which, right after the air was changed, is about the OLD air.
