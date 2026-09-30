@@ -40,10 +40,16 @@ public abstract class AbstractDeckBodyE2ETest extends AbstractSharedServerTest {
     protected static final int REST_WINDOW_TICKS = 100;
 
     /**
-     * How far a body at rest may move along the deck, or across it, in a window. A body lying on
-     * level ground moves by float noise; anything past this is something moving it.
+     * How far a body at rest may move along the deck, or across it, in a window.
+     *
+     * <p>Measured 2026-09-29 over every scenario on both classes that use it, healthy: the largest
+     * movement read was 1.9e-8 (an item on a deck held at 60 deg) - about 5 ulps at the shipyard's
+     * coordinates (~1.92e7, an ulp 3.7e-9), the transform's own round-trip error. The bound is 50x
+     * that. The smallest movement read in a run that was WRONG is 0.0054 (a stand on a steadily
+     * rolling deck, held by the travel resolver), nearly four orders above it; the bound this
+     * replaced, 0.05, let that one pass.</p>
      */
-    protected static final double AT_REST = 0.05;
+    protected static final double AT_REST = 1.0e-6;
 
     /** The steady roll rate, rad/s: 5 s of it turns the deck through about 143 deg, past inverted. */
     protected static final double ROLL_RATE = 0.5;

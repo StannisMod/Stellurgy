@@ -745,6 +745,16 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- Test 4: a body on a GROUNDED ship's deck stays on the deck, not through it -----------
 
+    /**
+     * The subject is the PLAYER, because the playtest was a player's and a player is what the travel
+     * resolver still holds; an armor stand stood in for him until the deck's own frame began to hold
+     * stands, after which this scenario no longer reached the terrain gate at all.
+     *
+     * <p>Not witnessed red in this form (2026-09-30). The inversion owed is the resolver releasing a
+     * body standing on its deck when world terrain appears under it
+     * ({@code ShipFrameTravel.handles}, the {@code steppedOntoTerrain} branch without its
+     * ship-support clause).</p>
+     */
     @Test
     public void aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -758,54 +768,56 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // ground: a body on the deck is resolved in the ship frame whatever the terrain below does.
         double[] ship = buildShip(site);
 
-        // A body settled on the actual deck - the exact thing the pilot stands on.
-        int standId = dropStandAndAwaitItsCapture(ship);
+        // The player settled on the actual deck - the exact thing the pilot stands on.
+        int botId = standTheBotOnTheDeck(ship);
 
-        PlayerShipData onDeck = PlayerShipData.byId(this::exec, 0, standId);
-        assertTrue("the body must have settled on the deck: " + onDeck.raw(),
-                onDeck.onGround && onDeck.shipLoaded);
+        PlayerShipData onDeck = PlayerShipData.byId(this::exec, 0, botId);
         // On THIS scenario's deck. `deckY` below is taken out of this same reply and every later
         // assertion is a comparison against it, so a neighbour's hull answering here does not merely
         // mislabel the settle — it moves the baseline the grounded-deck claim is measured from.
         onDeck.requireAboard(scenarioShipId,
-                "the body must have settled on the deck of the ship this scenario built");
+                "the player must have settled on the deck of the ship this scenario built");
         double deckY = onDeck.playerY;
-        String heldBefore = deckHolding(standId);
-        assertTrue("a body on the deck must be held by THIS ship's deck: " + heldBefore,
-                heldBefore.contains(scenarioShipId));
+        String heldBefore = resolverHolding(botId);
+        scenario().requireArranged("before the floor goes in, THIS ship's deck must hold the player,"
+                + " or nothing below is about a deck letting go: " + heldBefore,
+                scenarioShipId.equals(heldBefore));
 
         // Now make the ship "grounded": lay a world stone floor right under the deck, so the deck has
-        // real terrain close beneath it - the overlap that broke the playtest. A body on the deck must
-        // stay ON the deck, not fall to (or through) this floor.
+        // real terrain close beneath it - the overlap that broke the playtest.
         int fy = (int) Math.floor(deckY) - 1;
         int sx = (int) Math.floor(ship[0]);
         int sz = (int) Math.floor(ship[2]);
+        Events events = events();
+        long floorMark = events.markInstrumented();
         assertTrue("must lay the world floor under the deck",
                 Reply.of(exec("stellurgytest fill 0 " + (sx - 3) + " " + fy + " " + (sz - 3) + " "
                         + (sx + 3) + " " + fy + " " + (sz + 3) + " minecraft:stone")).ok());
-        // WINDOW: the body stands 60 ticks over ground that was not there before, then the deck
-        // holding it is read again. The regression is a RELEASE - handing the body to vanilla the
-        // moment world ground appears under its feet - and a released body is not taken back while
-        // it stands on terrain, so the second read names it. Overshoot only lengthens the exposure.
-        //
-        // Which of the two deck mechanisms holds the stand is not the claim: a dropped stand is taken
-        // by the travel resolver while it falls and by the deck's own frame once it lies on the deck.
-        // (This scenario's playtest was a PLAYER's, and the stand no longer moves the way a player
-        // does; that half has no subject here.)
+        // WINDOW: the player stands 60 ticks over ground that was not there before, then which deck
+        // holds him is read again. The regression is a RELEASE - handing him to vanilla the moment
+        // world ground appears under his feet - and a released body is not taken back while it
+        // stands on terrain, so the second read names it. Overshoot only lengthens the exposure.
         bot().waitTicks(60);
 
-        PlayerShipData afterFloor = PlayerShipData.byId(this::exec, 0, standId);
-        double yAfter = afterFloor.playerY;
-        String heldAfter = deckHolding(standId);
-        System.out.println("[tier2] grounded-deck: deckY=" + deckY + " afterFloor y=" + yAfter
+        String heldAfter = resolverHolding(botId);
+        String releases = events.since(floorMark, "deck_released");
+        PlayerShipData afterFloor = PlayerShipData.byId(this::exec, 0, botId);
+        System.out.println("[tier2] grounded-deck: deckY=" + deckY + " afterFloor y=" + afterFloor.playerY
                 + " floorTop=" + (fy + 1) + " before=" + heldBefore + " after=" + heldAfter);
-        assertTrue("a body on the deck of a grounded ship must still be held by that deck, not be "
-                + "handed to vanilla because there is now ground below: before the floor " + heldBefore
-                + ", after " + heldAfter, heldAfter.contains(scenarioShipId));
-        assertTrue("it must stay ON the deck (y=" + deckY + "), not drop toward the world floor (top "
-                + (fy + 1) + "): it is at y=" + yAfter, Math.abs(yAfter - deckY) < 1.0);
-        assertTrue("and still on the ground (the deck), not falling: " + afterFloor.raw(),
-                afterFloor.onGround);
+        assertTrue("a player on the deck of a grounded ship must still be held by that deck, not be"
+                + " handed to vanilla because there is now ground below: before the floor " + heldBefore
+                + ", after " + heldAfter, scenarioShipId.equals(heldAfter));
+        // The resolver names its own reason at a release, and `steppedOntoTerrain` is that gate's
+        // word for exactly this regression. The recorder is asked first: "nothing was released" and
+        // "nobody was recording" are the same empty reply until it is.
+        Events.assertInstrumentRan(releases, DECK_INSTRUMENT,
+                "no terrain release means the player kept his deck when the ground appeared");
+        assertTrue("laying world ground under the deck must not release the player (entity " + botId
+                        + ") naming the terrain: every release since the floor went in: " + releases,
+                matchingRecords(releases, "\"e\":" + botId + ",", "steppedOntoTerrain") == 0);
+        // Height and ground contact are NOT discriminators here: the floor is flush with the deck
+        // (its top is at deckY), so a player handed to vanilla would stand on the stone at the same
+        // height, on the ground. The two reads above are what can tell.
         reportClientHealth("aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck");
     }
 
@@ -1284,6 +1296,32 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         long dropMark = events.markInstrumented();
         int crewId = readInt(exec("stellurgytest vs drop-stand 0 " + ship[0] + " " + (ship[1] + 3)
                 + " " + ship[2]), ENTITY_ID);
+        awaitTheDeckTakes(events, dropMark, crewId);
+        return crewId;
+    }
+
+    /**
+     * Put the BOT - the player - three blocks over the deck, where the stand is dropped, and wait
+     * for the deck to take him. A player is still held by the travel resolver; a stand no longer is.
+     *
+     * @return the player's entity id
+     */
+    private int standTheBotOnTheDeck(double[] ship) throws Exception {
+        int botId = Reply.of(exec("stellurgytest vs player-ship-data")).integer("entityId");
+        Events events = events();
+        long dropMark = events.markInstrumented();
+        long placedMark = clientEvents().mark();
+        exec("tp @a " + ship[0] + " " + (ship[1] + 3) + " " + ship[2] + " 0 0");
+        awaitClientPlacedNear(placedMark, ship[0], ship[2],
+                "the player must arrive over the deck before the deck can take him");
+        awaitTheDeckTakes(events, dropMark, botId);
+        return botId;
+    }
+
+    /**
+     * The deck takes {@code bodyId}, as a link, and it comes to rest there.
+     */
+    private void awaitTheDeckTakes(Events events, long dropMark, int crewId) throws Exception {
         // Keyed on the body AND on the ship: the entity needle alone says a deck took him, never
         // which deck, and every reading below is expressed in the taking ship's own frame.
         events.awaitRecordWithFields(dropMark, "deck_entered",
@@ -1306,16 +1344,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         scenario().requireArranged("the dropped body must come to REST on the deck before its drift"
                 + " across that deck can mean anything: " + resting.raw(),
                 resting.onGround);
-        return crewId;
     }
 
-    /**
-     * Which ship's deck holds {@code bodyId}, by either mechanism - the deck's own frame and the
-     * travel resolver - as {@code "deck=<id|null> resolver=<id|null>"}.
-     */
-    private String deckHolding(int bodyId) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + scenarioShipId));
-        return "deck=" + r.textOr("deckHeldBy", "null") + " resolver=" + r.textOr("resolverHeldBy", "null");
+    /** The ship whose travel resolver holds {@code bodyId}, or {@code "null"}. */
+    private String resolverHolding(int bodyId) throws Exception {
+        return Reply.of(exec("stellurgytest vs player-ship-data 0 " + bodyId + " " + scenarioShipId))
+                .textOr("resolverHeldBy", "null");
     }
 
     private double readDouble(String json, String field) {

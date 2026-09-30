@@ -2494,6 +2494,9 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             Map<String, Object> m = new LinkedHashMap<>(vsData);
+            // Which entity this is: with no id given the subject is the first player, and a caller
+            // that must then name him - in an event filter, in the next read - has no other way to.
+            m.put("entityId", subject.getEntityId());
             m.put("playerX", subject.posX);
             m.put("playerY", subject.posY);
             m.put("playerZ", subject.posZ);

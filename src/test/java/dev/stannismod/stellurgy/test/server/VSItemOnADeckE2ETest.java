@@ -66,6 +66,9 @@ public class VSItemOnADeckE2ETest extends AbstractDeckBodyE2ETest {
      *
      * <p>The landing is the SUBJECT here, so it is asserted rather than gated: with no pull toward
      * the deck the item hangs where it was let go, which is exactly the failure this reads.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, without the stand-down for a deck-held body at
+     * {@code GravityHandler:111} - the item still exactly 0.1 above the face after 100 ticks.</p>
      */
     @Test
     public void anItemLetGoAboveADeckInAWorldWithoutGravityFallsOntoIt() throws Exception {

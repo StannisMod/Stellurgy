@@ -53,11 +53,21 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
 
     // -- a living body with no will of its own rests on the deck, at any attitude ---------------
 
+    /**
+     * red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick:370} admitting no
+     * living body (so the travel resolver held the stand) - along 0.136. The ACROSS verdict has not
+     * been seen red: it runs after along and read 6e-12 in that same run.
+     */
     @Test
     public void anArmorStandOnADeckRolled30DegreesStaysWhereItLanded() throws Exception {
         standRestsOnADeckRolledBy(30.0);
     }
 
+    /**
+     * red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick:370} admitting no
+     * living body (so the travel resolver held the stand) - along 0.136. The ACROSS verdict has not
+     * been seen red: it runs after along and read 1e-12 in that same run.
+     */
     @Test
     public void anArmorStandOnADeckRolled60DegreesStaysWhereItLanded() throws Exception {
         standRestsOnADeckRolledBy(60.0);
@@ -66,6 +76,11 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
     /**
      * The deck rolls over while the stand is on it: past a right angle world-down points away from
      * the deck, so "falls toward the deck" and "falls toward the world" give different answers.
+     *
+     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick:187} taking the whole
+     * world motion into the deck frame each update instead of adding only what the world wrote -
+     * along 0.41; and with {@code DeckFrameTick:370} admitting no living body - along 0.226. The
+     * ACROSS verdict, asserted first, passed in both (2e-11, 7e-12) and has not been seen red.</p>
      */
     @Test
     public void anArmorStandOnADeckStaysOnItWhileTheCraftRollsOver() throws Exception {
@@ -90,7 +105,13 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
                 + along(landed, later) + " blocks along the deck;" + evidence, along(landed, later) <= AT_REST);
     }
 
-    /** The craft keeps rolling at a steady rate under the stand; read while it is still turning. */
+    /**
+     * The craft keeps rolling at a steady rate under the stand; read while it is still turning.
+     *
+     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick:370} admitting no
+     * living body - along 0.0054. That run was read against the earlier 0.05 bound and PASSED there;
+     * it is red against {@code AT_REST} as now measured. The ACROSS verdict has not been seen red.</p>
+     */
     @Test
     public void anArmorStandOnADeckStaysOnItWhileTheCraftKeepsRolling() throws Exception {
         Craft craft = buildCraft();
@@ -125,6 +146,9 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
      * The deck is level and the world around it has no gravity. A craft carries its own for what
      * stands on its deck, so a stand let go a tenth of a block above it falls onto it. The landing
      * is the subject, so it is asserted, not gated.
+     *
+     * <p>red-witnessed: 2026-09-29, without the stand-down for a deck-held body at
+     * {@code GravityHandler:111} - 0.865 blocks off the top face after 100 ticks.</p>
      */
     @Test
     public void anArmorStandLetGoAboveADeckInAWorldWithoutGravityFallsOntoIt() throws Exception {
@@ -147,7 +171,15 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
 
     // -- a mob's own movement keeps it on the deck ---------------------------------------------
 
-    /** A cow running about a deck tilted 60 deg is, wherever it ran, still on the deck. */
+    /**
+     * A cow running about a deck tilted 60 deg is, wherever it ran, still on the deck.
+     *
+     * <p>Not witnessed red. With {@code DeckFrameTick:370} admitting no living body it fails as an
+     * ARRANGEMENT - under the travel resolver the cow could not run at all (0.29 along the slope, its
+     * body never turning), because its pathfinder plans in the world, where the tilted deck is not -
+     * and an arrangement failure is not this verdict failing. The inversion owed is one that lets a
+     * running cow leave the deck.</p>
+     */
     @Test
     public void aCowRunningAboutADeckRolled60DegreesIsStillOnTheDeck() throws Exception {
         Craft craft = buildCraft();
@@ -160,7 +192,12 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
         requireStillOnTheDeck(craft, cowId, landed, COW_WINDOW_TICKS, "tilted60");
     }
 
-    /** A cow running about a deck while the craft rolls over is, afterwards, still on the deck. */
+    /**
+     * A cow running about a deck while the craft rolls over is, afterwards, still on the deck.
+     *
+     * <p>Not witnessed red: the travel resolver passed it too (ran 3.08, on the deck). The inversion
+     * owed is one that lets a running cow leave the deck.</p>
+     */
     @Test
     public void aCowRunningAboutADeckIsStillOnItAfterTheCraftRollsOver() throws Exception {
         Craft craft = buildCraft();
