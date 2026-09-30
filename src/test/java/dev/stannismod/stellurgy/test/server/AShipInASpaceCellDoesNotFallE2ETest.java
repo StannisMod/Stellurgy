@@ -1,12 +1,12 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.ShipInfo;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
-import org.junit.Ignore;
+import dev.stannismod.stellurgy.test.ShipIdentity;
+import dev.stannismod.stellurgy.test.ShipInfo;
+import dev.stannismod.stellurgy.test.TransitSetup;
 import org.junit.Test;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertTrue;
 
@@ -29,169 +29,126 @@ import static org.junit.Assert.assertTrue;
  * mod has actually shipped: physics used to be switched on only after a craft had been flown once, so
  * a newly built ship hung in the air and read as station-keeping.</p>
  *
- * <p>So stillness is asserted only AFTER the same craft is shown to be under the solver's hand: it is
- * pushed, and it must translate. A build where the ship is inert fails that leg and never reaches the
- * one below — which is the whole point, because on such a build the stillness below would be true for
- * the wrong reason and the test would certify the wrong thing.</p>
+ * <p>So stillness is believed only once the same craft is shown to be under the solver's hand: it is
+ * DRIVEN through its own flight computer, and it must translate. The drive is the computer's
+ * realized-force channel ({@code force-vel-by-id}) and not a raw velocity write, which the substrate
+ * overwrites every step and which moves nothing ({@code VSShipMotionServerTest} pins exactly that).</p>
  *
- * <h2>Why it is ignored, and what would un-ignore it</h2>
+ * <h2>Why this is a server test after all</h2>
  *
- * <p>The control leg needs a ship that can be DRIVEN, and this tier cannot drive one: a Valkyrien
- * Skies ship assembled on a headless server never becomes loaded, because with no client near it the
- * physics mod leaves it in the registry and never pulls its chunks in. {@code VSShipMotionServerTest}
- * carries the same limit in its own ignore reason and was the first casualty of it. Measured here as
- * a craft that answers a 4 blocks/s push with 0.0 blocks of travel, through three arrangements — as
- * the transit setup leaves it, plus a force-load, plus an unpark.</p>
+ * <p>It sat {@code @Ignore}d on the premise that a ship on a headless server never becomes loaded,
+ * with a client-tier port beside it that was never run. The premise is false in this tree: a test
+ * server holds its ships loaded, and the crossing and motion tests on this tier drive craft that way.
+ * Its control was the other half of why it could not pass — it pushed with the raw velocity write.
+ * Both are fixed here, and the client port is gone: one contract, one home, on the cheapest tier that
+ * can see a craft's pose.</p>
  *
- * <p>So this is not a defect in the cell or in gravity: it is a test written at the wrong tier. It is
- * kept as executable documentation of the arrangement, and belongs at the CLIENT tier, where ship
- * load and drive already work — moving it is the work, not repairing it.</p>
- *
- * <p>Needs the physics mod: without it there is no ship and no cell to put one in.</p>
+ * <p>red-witnessed: with {@code StellurgyWorldGravity:68} answering the configured vector for a space
+ * slot instead of zero, the stillness verdict fails — "moved 74.2 blocks vertically in 41 ticks" —
+ * on a craft that was {@code ready:true} when released, 2026-09-29. (The first attempt at this
+ * witness stayed GREEN: the window had opened on a craft not yet simulated. That is what the
+ * {@code ship_usable} link above now rules out.)</p>
  */
-@Ignore("The control leg needs a DRIVEN ship, which the server tier cannot provide: a VS ship on a "
-        + "headless server never becomes loaded (no client near it), so a push moves it 0.0 blocks - "
-        + "measured through three arrangements. Same limit VSShipMotionServerTest is ignored for. "
-        + "Not a defect in the cell: the witness belongs at the client tier and is kept here as "
-        + "executable documentation of its arrangement until it is moved.")
 public class AShipInASpaceCellDoesNotFallE2ETest extends AbstractSharedServerTest {
 
     /**
-     * How far the craft may drift vertically and still count as not falling, in blocks. Generous
-     * against the settle a freshly assembled hull does, and far below what a fall covers: at the
-     * configured field a released craft clears fifty blocks in the window used here, so the two
-     * readings cannot be confused.
+     * How far the craft may drift vertically and still count as not falling, in blocks. At the
+     * configured field a released craft covers about 110 blocks in 60 ticks (measured 2026-08-19), so
+     * a cell handed a planet's gravity sinks tens of blocks in this window, not two. Measured in a cell
+     * 2026-09-29: 0.27 over 41 ticks.
      */
     private static final double STILL_TOLERANCE = 2.0;
 
-    /** The push used to prove the craft is being simulated at all, in blocks per second. */
-    private static final double PUSH_VZ = 4.0;
+    /** The velocity the flight computer is commanded to realize for the control, in blocks/second. */
+    private static final double DRIVE_VZ = 4.0;
 
-    /** How far it must actually travel under that push before the stillness leg means anything. */
-    private static final double PUSH_MIN_TRAVEL = 3.0;
+    /**
+     * How far it must travel under that command before the stillness means anything, in blocks. At
+     * the commanded rate the window covers {@code DRIVE_VZ x SAMPLE_TICKS / 20} = 8 blocks; the bar is
+     * well under that so the controller's ramp-up does not decide it, and far above the drift of a
+     * craft nobody simulates. Measured 2026-09-29: 7.9 over 41 ticks.
+     */
+    private static final double DRIVE_MIN_TRAVEL = 3.0;
 
+    /** The window each leg is watched over, in server ticks. */
     private static final int SAMPLE_TICKS = 40;
+
+    /** A LINK budget for the setup's craft to become usable, in server ticks. */
+    private static final int WAIT_TICKS = 200;
+
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     @Test
     public void aReleasedCraftInACellKeepsItsAltitudeAndIsStillBeingSimulated() throws Exception {
 
-        exec("stellurgytest vs permaload true");
+        long setupMark = events.markInstrumented();
+        TransitSetup setup = TransitSetup.piloted(this::exec);
+        int cellDim = setup.originDim;
+        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, cellDim,
+                setup.requireDurableId(), WAIT_TICKS);
+        // USABLE, as its own link, and not merely named. The id above answers as soon as the craft
+        // is REGISTERED; a registered craft whose physics has not started yet sits exactly as still
+        // as a weightless one. Measured 2026-09-29: the subject window opened on `ready:false`, and
+        // under load a planet's gravity in the cell then sank the craft 1.48 blocks in 76 ticks —
+        // green, because it was not being simulated for most of the window.
+        ShipIdentity.awaitUsable(events, setupMark, shipId, cellDim,
+                "ARRANGEMENT: the craft must be USABLE before its stillness can mean anything", WAIT_TICKS);
 
-        String setup = exec("stellurgytest space transit-setup-piloted");
-        assertTrue("the cell arrangement failed: " + setup, Reply.of(setup).ok());
-        int cellDim = extractInt(setup, "originDim");
-        assertTrue("ARRANGEMENT: the ship never assembled in the cell (dim " + cellDim + ")",
-                waitForLoadedShip(cellDim) >= 1);
-
-        String info = exec("stellurgytest vs ship-info " + cellDim + " 1 64 1");
-        assertTrue("ARRANGEMENT: no ship answered in the cell: " + info, ShipInfo.isLoaded(info));
-        String shipId = extractString(info, "id");
-        assertTrue("ARRANGEMENT: the ship answered without an identity: " + info, shipId != null);
-
-        // Hand the craft to the solver explicitly. A headless server has nobody standing near a ship,
-        // and the physics mod decides loadedness from player proximity every tick - so without this a
-        // craft sits inert for a reason that has nothing to do with gravity, which is exactly the
-        // confusion the control leg below exists to refuse.
-        assertTrue("ARRANGEMENT: the cell's ships must be loaded and simulated: nobody is near them",
-                exec("stellurgytest vs load-ships " + cellDim).contains("\"requested\":"));
-
-        // ...and unpark it. A craft placed by a paste is rigid until something hands it back, and a
-        // rigid craft is exactly as still as a weightless one.
-        exec("stellurgytest vs unpark " + cellDim + " " + (int) extractDouble(info, "posX") + " "
-                + (int) extractDouble(info, "posY") + " " + (int) extractDouble(info, "posZ"));
+        // A craft placed by a paste is rigid until something hands it back, and a rigid craft is
+        // exactly as still as a weightless one.
+        String unparked = exec("stellurgytest vs unpark-by-id " + cellDim + " " + shipId);
+        assertTrue("ARRANGEMENT: the pasted craft must be handed back to physics: " + unparked,
+                Reply.of(unparked).ok());
 
         // Release it: Flight Assist off is what hands an unpiloted craft to the field, whatever the
         // field turns out to be. Over a planet this is what makes it fall.
         assertTrue("could not reach the flight computer to release the craft",
-                exec("stellurgytest vs fa-by-id " + cellDim + " " + shipId + " false")
-                        .contains("\"afcResolved\":true"));
+                Reply.of(exec("stellurgytest vs fa-by-id " + cellDim + " " + shipId + " false"))
+                        .bool("afcResolved"));
 
         // --- the subject: released, over nothing, it must keep its altitude ------------------------
-        double before = shipY(cellDim, shipId);
-        Thread.sleep(SAMPLE_TICKS * 50L);
-        double after = shipY(cellDim, shipId);
+        ShipInfo atRelease = ShipInfo.byId(this::exec, cellDim, shipId);
+        double before = atRelease.y;
+        // WINDOW: the altitude is read before and after this stretch and the claim is an UPPER bound
+        // on the difference, so a longer stretch than asked can only make a real field show.
+        long stillTicks = GameTicks.advanceObserved(client(), GameTicks.server(), SAMPLE_TICKS);
+        ShipInfo afterStill = ShipInfo.byId(this::exec, cellDim, shipId);
+        double after = afterStill.y;
         double sank = before - after;
 
-        // --- the control, deliberately AFTER the reading and BEFORE the assertion on it -----------
-        // Taken second so the push cannot disturb the altitude it is vouching for, and asserted first
-        // so a craft nobody is simulating fails HERE, on a leg that says so, instead of passing the
-        // stillness leg for a reason that has nothing to do with gravity.
-        double zBefore = shipZ(cellDim, shipId);
-        assertTrue("could not push the craft: the control leg cannot run",
-                exec("stellurgytest vs push-ship-by-id " + cellDim + " " + shipId + " 0 0 " + PUSH_VZ)
-                        .contains("\"pushed\":true"));
-        Thread.sleep(SAMPLE_TICKS * 50L);
-        double travelled = Math.abs(shipZ(cellDim, shipId) - zBefore);
+        // --- the control, taken AFTER the reading and asserted BEFORE it ---------------------------
+        // Taken second so the drive cannot disturb the altitude it is vouching for, and asserted first
+        // so a craft nobody is simulating fails HERE, on a leg that says so.
+        double zBefore = ShipInfo.byId(this::exec, cellDim, shipId).z;
+        assertTrue("could not command the craft's flight computer: the control leg cannot run",
+                Reply.of(exec("stellurgytest vs force-vel-by-id " + cellDim + " " + shipId + " 0 0 "
+                        + DRIVE_VZ)).bool("afcResolved"));
+        // EXPERIMENT: the dose is SAMPLE_TICKS of commanded drive, and the claim is a LOWER bound —
+        // so the bar is scaled by the ticks this box delivered and the rate it demands is fixed.
+        long driven = GameTicks.advanceObserved(client(), GameTicks.server(), SAMPLE_TICKS);
+        double travelled = Math.abs(ShipInfo.byId(this::exec, cellDim, shipId).z - zBefore);
+        double required = DRIVE_MIN_TRAVEL * driven / SAMPLE_TICKS;
+        System.out.println("[cell witness] sank " + sank + " in " + stillTicks + " ticks; driven "
+                + travelled + " in " + driven + " ticks; at release " + atRelease.raw()
+                + " after " + afterStill.raw());
 
         assertTrue("ARRANGEMENT/CONTROL: the craft must be under the solver's hand for its stillness to"
-                        + " mean anything. Pushed at " + PUSH_VZ + " blocks/s it moved " + travelled
-                        + " blocks, which is not motion. In zero gravity a craft nobody simulates sits"
-                        + " exactly as still as one that is weightless, and this mod has shipped that"
-                        + " defect before - so the stillness measured above would be true for the wrong"
-                        + " reason.",
-                travelled >= PUSH_MIN_TRAVEL);
+                        + " mean anything. Commanded at " + DRIVE_VZ + " blocks/s it moved " + travelled
+                        + " blocks in " + driven + " ticks, needing " + required + ". In zero gravity a"
+                        + " craft nobody simulates sits exactly as still as one that is weightless, so"
+                        + " the stillness measured above would be true for the wrong reason.",
+                travelled >= required);
 
         assertTrue("a released craft in a space cell must keep its altitude: there is nothing for it to"
                         + " fall towards, and the field a cell supplies is zero. This one moved " + sank
-                        + " blocks vertically in " + SAMPLE_TICKS + " ticks (from " + before + " to "
-                        + after + "). A sink of about fifty blocks is what the configured field would"
-                        + " produce, i.e. the cell being handed a planet's gravity.",
+                        + " blocks vertically in " + stillTicks + " ticks (from " + before + " to "
+                        + after + "). Tens of blocks is what the configured field would produce, i.e."
+                        + " the cell being handed a planet's gravity.",
                 Math.abs(sank) <= STILL_TOLERANCE);
     }
 
-    @org.junit.After
-    public void resetPermaload() throws Exception {
-        exec("stellurgytest vs permaload false");
-    }
-
-    // --- observation --------------------------------------------------------------------------------
-
-    private double shipY(int dim, String shipId) throws Exception {
-        return axis(dim, shipId, "posY");
-    }
-
-    private double shipZ(int dim, String shipId) throws Exception {
-        return axis(dim, shipId, "posZ");
-    }
-
-    /** By identity, never "whichever ship is nearest": a pushed craft would outrun a positional query. */
-    private double axis(int dim, String shipId, String key) throws Exception {
-        String info = exec("stellurgytest vs ship-info " + dim + " id " + shipId);
-        assertTrue("the ship under test stopped answering: " + info, ShipInfo.isLoaded(info));
-        return extractDouble(info, key);
-    }
-
-    private int waitForLoadedShip(int dim) throws Exception {
-        int count = 0;
-        for (int i = 0; i < 40; i++) {
-            count = extractInt(exec("stellurgytest vs ship-count " + dim), "count");
-            if (count >= 1) {
-                return count;
-            }
-            Thread.sleep(250);
-        }
-        return count;
-    }
-
-    // --- helpers ------------------------------------------------------------------------------------
-
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-
-    private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
-    }
-
-    private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+(?:\\.\\d+)?)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : 0.0;
-    }
-
-    private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]+)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
     }
 }

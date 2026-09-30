@@ -711,18 +711,13 @@ public class TileAdvancedFlightComputer extends TileEntity
             }
         }
         if (in == null) {
-            // Nobody is flying. A ship that has NEVER been flown this load stays inert - its physics is
-            // off, so it just rests and there is nothing to hold. But a ship that WAS being flown keeps
-            // EXECUTING its retained Flight-Assist setting when the pilot stands up: with FA on and a
+            // Nobody is flying. The craft keeps EXECUTING its retained Flight-Assist setting: with FA on and a
             // non-zero cruise setpoint it KEEPS CRUISING at that setpoint (that is what makes it an
-            // autopilot - the pilot dismounts mid-flight and the ship flies on); with a zero setpoint,
-            // or FA off, it degenerates to holding station: hover in place, at the attitude he left it,
-            // until a pilot returns. A hovering craft is not coasting - it needs continuous force to
+            // autopilot - the pilot dismounts mid-flight and the ship flies on); with a zero setpoint
+            // it holds station: hover in place, at the attitude he left it, until a pilot returns.
+            // With FA off it is released (below). A hovering craft is not coasting - it needs continuous force to
             // fight gravity, so the instant the controller stops commanding it falls out of the sky (the
             // playtest: stood up mid-hover, the ship dropped and took the pilot down with it).
-            // The "was flown" witness is the PERSISTED stationKeeping flag, not the live attitudeReference
-            // (which is null after a reload). A never-flown ship (physics off) stays inert; a ship that has
-            // been flown holds its setting, and holds station again after a world reload instead of falling.
             // The setpoint is deliberately NOT zeroed and NOT re-captured here: the dismounted pilot's
             // cruise setting is his to come back to, never a reset-from-live-velocity.
             // Physics ON regardless of whether anyone has ever flown this craft. A hull with a flight
@@ -1206,7 +1201,7 @@ public class TileAdvancedFlightComputer extends TileEntity
      * per-block delta path keeps structure current between rounds, and this exists for what that path
      * cannot see.
      */
-    private static final int MASS_ROUND_TICKS = 100;
+    public static final int MASS_ROUND_TICKS = 100;
 
     /**
      * Re-measure this ship's mass on a slow round, on a phase of this ship's OWN.

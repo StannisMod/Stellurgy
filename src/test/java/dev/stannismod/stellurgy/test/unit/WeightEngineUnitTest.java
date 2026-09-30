@@ -11,6 +11,7 @@ import java.io.FileWriter;
 import java.io.Writer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -98,6 +99,9 @@ public class WeightEngineUnitTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code WeightEngine:370} no longer stamping formatVersion in save(), fails "retired again", 2026-09-29.</p>
+     */
     @Test
     public void aTableFromAnotherSchemaIsSetAsideRatherThanRead() throws Exception {
         // The numbers in weights.json changed meaning when the tables were denominated in
@@ -133,10 +137,18 @@ public class WeightEngineUnitTest {
                     retired.exists());
             assertTrue("defaults must be reseeded so the engine stays usable", we.materialCount() > 10);
 
-            // The file just written must survive its own version check, i.e. save() stamps it.
+            // The file just written must survive its own version check, i.e. save() stamps it. A file
+            // that fails the check is RETIRED again — which re-creates the backup — and then reseeded,
+            // which leaves the tables looking healthy; so the backup is the discriminating reading and
+            // the material count is not.
+            assertTrue("could not clear the first backup before the second load", retired.delete());
+            // The reseed must have WRITTEN a table: with no file, the next load takes the no-file branch,
+            // retires nothing, and an absent backup would read as a passed check on a file that was
+            // never there.
+            assertTrue("the reseed must write a fresh table for the next load to check", table.exists());
             we.load();
-            assertTrue("the reseeded file must pass the version check on the next load",
-                    we.materialCount() > 10);
+            assertFalse("the reseeded file must pass the version check on the next load, but it was"
+                    + " retired again: save() did not stamp the version it checks", retired.exists());
         } finally {
             if (retired.exists()) {
                 retired.delete();

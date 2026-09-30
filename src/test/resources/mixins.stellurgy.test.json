@@ -36,6 +36,8 @@
     "MixinShipCrossingServiceEvents",
     "MixinVSShipCrossingOpsEvents",
     "MixinShipLedgerEvents",
+    "MixinShipMassTriggerEvents",
+    "MixinShipInertiaWriterEvents",
     "MixinBeaconRegistryEvents",
     "MixinBeaconRegistryWrites",
     "MixinSpaceCellClaims",

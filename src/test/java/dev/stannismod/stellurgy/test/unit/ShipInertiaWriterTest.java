@@ -35,6 +35,9 @@ public class ShipInertiaWriterTest {
                 .build();
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipInertiaWriter:103}'s tensor write skipped, fails "the tensor must be the frame's", 2026-09-29.</p>
+     */
     @Test
     public void aWriteMovesMassCentreAndTensorTogether() {
         // Any consumer that saw one of the three updated and not the others would be integrating a body
@@ -54,6 +57,9 @@ public class ShipInertiaWriterTest {
                 new Matrix3d(record.getGameMoITensor()));
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipInertiaWriter:171} answering every tensor invertible, fails "must be refused", 2026-09-29.</p>
+     */
     @Test
     public void aSingularTensorIsRefusedBeforeItReachesThePhysicsTick() {
         // The physics loop inverts the tensor every step, so a degenerate one is a NaN torque rather
@@ -74,6 +80,9 @@ public class ShipInertiaWriterTest {
                 massBefore, record.getGameTickMass(), 0.0);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "cannot be in drift" (a drift was returned), 2026-09-29.</p>
+     */
     @Test
     public void aRecordThatAgreesWithTheAuthorityReportsNothing() {
         ShipInertiaData record = new ShipInertiaData();
@@ -84,6 +93,9 @@ public class ShipInertiaWriterTest {
                 ShipInertiaWriter.compare(record, frame, "unit-hull"));
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "a 20% mass disagreement must be reported", 2026-09-29.</p>
+     */
     @Test
     public void driftIsReportedWithItsSignAndMagnitudeAndTheRecordIsLEFTALONE() {
         // The whole design of this reconciliation: it is an instrument, not a repair. Substituting the
@@ -96,17 +108,21 @@ public class ShipInertiaWriterTest {
         double stale = frame.getTotalMass() * 0.80; // 20% light: removals that were never applied
         record.setGameTickMass(stale);
 
-        String drift = ShipInertiaWriter.compare(record, frame, "unit-hull");
+        ShipInertiaWriter.Drift drift = ShipInertiaWriter.compare(record, frame, "unit-hull");
         assertNotNull("a 20% mass disagreement must be reported", drift);
-        assertTrue("the report must name the ship: " + drift, drift.contains("unit-hull"));
-        assertTrue("the report must carry the magnitude: " + drift, drift.contains("20"));
-        assertTrue("a light record must be reported as NEGATIVE, because a light record and a heavy one "
-                + "point at different missing triggers: " + drift, drift.contains("-"));
+        assertEquals("the report must name the ship: " + drift, "unit-hull", drift.shipName);
+        // Sign AND magnitude in one number: -0.20 is "20% light". A light record and a heavy one point
+        // at different missing triggers, so a report that loses the sign loses the diagnosis.
+        assertEquals("a 20% light record must be reported as -0.20 of the authority: " + drift,
+                -0.20, drift.relativeMassError, 1e-9);
 
         assertEquals("compare() must not repair the record it is describing",
                 stale, record.getGameTickMass(), 0.0);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "half a percent is accumulation" (a drift was returned), 2026-09-29.</p>
+     */
     @Test
     public void aDisagreementSmallerThanTheToleranceIsNotDrift() {
         // The tolerance is relative on mass so it means the same thing for a shuttle and a capital
@@ -121,6 +137,9 @@ public class ShipInertiaWriterTest {
                 ShipInertiaWriter.compare(record, frame, "unit-hull"));
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "must be reported", 2026-09-29.</p>
+     */
     @Test
     public void aCentreThatHasWalkedAwayIsDriftEvenWhenTheMassAgrees() {
         // Mass and centre fail independently: a block moved from bow to stern changes the centre and
@@ -132,8 +151,11 @@ public class ShipInertiaWriterTest {
         record.setGameTickCenterOfMass(
                 new Vector3d(frame.getCentreOfMass()).add(0.0, 1.5, 0.0));
 
-        String drift = ShipInertiaWriter.compare(record, frame, "unit-hull");
+        ShipInertiaWriter.Drift drift = ShipInertiaWriter.compare(record, frame, "unit-hull");
         assertNotNull("a centre of mass a block and a half out must be reported", drift);
-        assertTrue("the report must say the centre moved: " + drift, drift.contains("centre"));
+        assertEquals("the report must say how far the centre moved: " + drift,
+                1.5, drift.centreOffBlocks, 1e-9);
+        assertEquals("the mass agreed, so the report must not blame it: " + drift,
+                0.0, drift.relativeMassError, 1e-9);
     }
 }

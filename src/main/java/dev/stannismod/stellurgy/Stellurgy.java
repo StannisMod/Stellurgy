@@ -1399,12 +1399,9 @@ public class Stellurgy {
         playerRelease = new dev.stannismod.stellurgy.player.PlayerRelease(
                 spaceEvents, hyperspaceVoid);
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.util.DelayedActionBar());
-        // What the ship-was-named announcement said, per ship. An edge leaves no trace in the world
-        // it changes, so the only way to check one fired exactly once is to have been listening.
-        MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.util.ShipLifecycleTrace.Hooks());
         // The authoritative mass recompute, armed on the naming edge rather than on a timer: before
         // a ship is named its blocks sit at shipyard addresses and a frame computed there is about
-        // nowhere. Writes the record and KEEPS any disagreement for a test to read.
+        // nowhere. Writes the record and logs any disagreement with the incremental total.
         MinecraftForge.EVENT_BUS.register(
                 new dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.Hooks());
 

@@ -182,6 +182,25 @@ public final class ShipIdentity {
     }
 
     /**
+     * Wait until the craft {@code shipId} is USABLE in {@code dim} — its physics is stepped — on
+     * production's own {@code ship_usable}, over the chain ({@link #endsUsable}), from {@code mark}.
+     *
+     * <p>Not {@link #awaitPhysicsIdOf}, whose read-first branch answers as soon as the craft is
+     * REGISTERED: a registered craft whose physics has not started yet sits exactly as still as a
+     * held or a weightless one, and a scenario whose control or subject is stillness reads it as a
+     * pass. Measured 2026-09-29 — a cell scenario opened its window on {@code ready:false}.</p>
+     *
+     * @param mark a mark on the server log taken BEFORE whatever created or loaded the craft
+     */
+    public static void awaitUsable(Events serverLog, long mark, String shipId, int dim, String what,
+                                   int tickBudget) throws Exception {
+        serverLog.awaitMatching(mark, "ship_usable",
+                usable -> endsUsable(usable, serverLog.since(mark, "ship_unloaded"), shipId, dim),
+                "carrying ship " + shipId + " in dim " + dim + ", later than every unload of it",
+                what, tickBudget);
+    }
+
+    /**
      * Whether the latest LOAD of {@code shipId} in {@code usable} ({@code ship_usable} records) is
      * later, by {@code seq}, than every UNLOAD of that craft in {@code unloaded} ({@code
      * ship_unloaded} records). An empty load list is NOT YET.

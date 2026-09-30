@@ -46,6 +46,7 @@ public class ShipMassFrameTest {
      * <p>The inertia leg is the load-bearing half: the tensor is expressed <em>about the centre of
      * mass</em>, so it must be invariant here. If it ever stopped being, every craft's handling would
      * silently depend on where its shipyard happened to be allocated.</p>
+     * <p>red-witnessed: with {@code ShipMassFrame:109} not adding the offset, fails "the centre moves by exactly the offset", 2026-09-29.</p>
      */
     @Test
     public void translatingMovesTheCentreAndLeavesTheInertiaAlone() {
@@ -75,6 +76,9 @@ public class ShipMassFrameTest {
         assertEquals(before.m12(), after.m12(), EPS);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrame:69} leaving out the crew, fails expected 1380.0 but was 1300.0, 2026-09-29.</p>
+     */
     @Test
     public void totalIsExactlyTheThreeCategories() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -91,6 +95,9 @@ public class ShipMassFrameTest {
                 frame.getTotalMass(), EPS);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face instead of its centre, fails expected 1.0 but was 1.5, 2026-09-29.</p>
+     */
     @Test
     public void centreOfMassIsTheMassWeightedMean() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -104,6 +111,9 @@ public class ShipMassFrameTest {
         assertEquals(0.0D, frame.getCentreOfMass().z(), EPS);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face, fails "a symmetric hull balances at its middle" (0.5), 2026-09-29.</p>
+     */
     @Test
     public void cargoLoadedToOneSideMovesTheCentreOfMass() {
         ShipMassFrame empty = symmetricPair(500);
@@ -119,6 +129,9 @@ public class ShipMassFrameTest {
                 loaded.getCentreOfMass().x() > empty.getCentreOfMass().x() + 1.0e-6D);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face, fails expected 0.5 but was 0.667, 2026-09-29.</p>
+     */
     @Test
     public void massAddedAtTheCentreOfMassDoesNotMoveIt() {
         ShipMassFrame before = symmetricPair(500);
@@ -135,6 +148,9 @@ public class ShipMassFrameTest {
         assertEquals(com.z(), after.getCentreOfMass().z(), EPS);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:59} counting content as structure, fails "structure is untouched" (1000 vs 1750), 2026-09-29.</p>
+     */
     @Test
     public void loadingCargoStrictlyIncreasesTotalMassAndNeverThrustLikeQuantities() {
         ShipMassFrame light = symmetricPair(500);
@@ -150,6 +166,9 @@ public class ShipMassFrameTest {
                 light.getStructuralMass(), heavy.getStructuralMass(), EPS);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face, fails "nor drag the centre of mass toward it" (0.5), 2026-09-29. Breaking the builder's own negative-mass guard ({@code :50}, to {@code == 0}) did NOT redden it: the negative mass is refused before the builder, and where is not established.</p>
+     */
     @Test
     public void negativeContributionsCannotCancelPartOfTheShip() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -163,6 +182,9 @@ public class ShipMassFrameTest {
                 frame.getCentreOfMass().x(), EPS);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:119} writing 0 below the diagonal in place of the xy product, fails expected 2400.0 but was 0.0, 2026-09-29.</p>
+     */
     @Test
     public void inertiaIsSymmetric() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -177,6 +199,9 @@ public class ShipMassFrameTest {
         assertEquals(i.m12(), i.m21(), EPS);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:76}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-29.</p>
+     */
     @Test
     public void aSingleBlockHullStillHasAnInvertibleInertia() {
         ShipMassFrame frame = new ShipMassFrameBuilder()
@@ -186,6 +211,9 @@ public class ShipMassFrameTest {
         assertInvertible(frame);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:76}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-29.</p>
+     */
     @Test
     public void aCollinearHullStillHasAnInvertibleInertia() {
         // A mast: every block on one line. A point-mass model gives this a zero moment about the
@@ -197,6 +225,9 @@ public class ShipMassFrameTest {
         assertInvertible(builder.build());
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:99}'s empty guard skipped, fails expected 0.0 but was NaN, 2026-09-29.</p>
+     */
     @Test
     public void anEmptyFrameIsWellFormedRatherThanUndefined() {
         ShipMassFrame frame = new ShipMassFrameBuilder().build();
@@ -207,6 +238,9 @@ public class ShipMassFrameTest {
         assertEquals(0.0D, frame.getCentreOfMass().z(), EPS);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:78} assigning ixx instead of accumulating it, fails expected 182.6 but was -99.45, 2026-09-29.</p>
+     */
     @Test
     public void theOrderContributorsArriveInDoesNotChangeTheShip() {
         // Block iteration order is an accident of how chunks are walked; handling must not depend on it.
@@ -231,6 +265,9 @@ public class ShipMassFrameTest {
         assertEquals(a.m22(), b.m22(), 1.0e-9D);
     }
 
+    /**
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:79} giving iyy the long axis's lever, fails "about the long axis must be the cheapest rotation", 2026-09-29.</p>
+     */
     @Test
     public void aLongHullResistsRollingLessThanYawing() {
         // A property a player feels: a needle-shaped ship spins about its long axis far more readily

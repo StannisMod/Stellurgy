@@ -494,14 +494,6 @@ public class WorldServerShipManager implements IPhysObjectWorld {
     }
 
     private void loadAndUnloadShips() {
-        // Wanting a ship loaded that IS loaded is a SATISFIED request, not an error - and two parties
-        // can want it on the same tick. A tier-2 assembly spawns its ship already loaded, and the
-        // proximity pass a few lines up queues that very ship the moment a player stands near the pad.
-        // The loop below asserts on exactly this state and throws out of the world tick, with nothing
-        // between the throw and the server loop, so the whole dedicated server dies. Enforcing the
-        // precondition here instead turns the illegal double-load into a no-op and changes nothing
-        // else: a queued ship that is genuinely not loaded still loads normally.
-        loadQueue.removeIf(loadedShips::containsKey);
         QueryableShipData queryableShipData = QueryableShipData.get(world);
         // Load the ships that are required immediately.
         for (final UUID toLoadID : loadQueue) {

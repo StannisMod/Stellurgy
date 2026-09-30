@@ -74,23 +74,6 @@ public final class ShipFrameTravel {
     // What an observer needs travels as PARAMETERS of the seams below, at the moment the value
     // exists, on the body it belongs to.
 
-    // Deck-support decision readout: still read by a client e2e on the player's own JVM, where no
-    // server probe can reach. The only diagnostic statics left here, because nothing else yet
-    // records this decision for a test.
-
-    /** Support count the LAST deck-support decision compared — the quantity the capture path gates on.
-     *  Written at the decision site, so on a player's own client this is the client's number and not a
-     *  server tick's; that distinction is the whole reason these are statics and not a server probe. */
-    public static volatile int lastSupportStanding = -1;
-
-    /** Probe reach that decision used, in blocks: the base reach plus the body's own downward
-     *  ship-frame speed. Distinguishes "no deck near" from "the probe was too short". */
-    public static volatile double lastSupportProbeReach = -1.0;
-
-    /** Feet-to-highest-box-top of that decision, in ship-frame blocks, or NaN when the probe found
-     *  nothing. POSITIVE means the body has sunk PAST the highest box, so it can no longer count as
-     *  support however close it is — the quantity a body crosses when it loses its deck. */
-    public static volatile double lastSupportFeetToHighestTop = Double.NaN;
     /** Throttle for the [FF-TRACE/WALK] line (test mode only). */
     private static int walkTraceTicks = 0;
 
@@ -1283,23 +1266,11 @@ public final class ShipFrameTravel {
                 local[0] - half, local[1] - reach, local[2] - half,
                 local[0] + half, local[1], local[2] + half);
         int standing = 0;
-        double highestTop = Double.NEGATIVE_INFINITY;
-        int boxes = 0;
         for (AxisAlignedBB box : entity.world.getCollisionBoxes(entity, underFeet)) {
-            boxes++;
-            if (box.maxY > highestTop) {
-                highestTop = box.maxY;
-            }
             if (box.maxY <= local[1] + STANDING_TOLERANCE) {
                 standing++;
             }
         }
-        // Recorded at the DECISION site, so the numbers belong to whichever side actually ran it -
-        // capture is the client's for a player, and a server-side reading of these would describe a
-        // different body's tick. See the fields' own javadoc.
-        lastSupportStanding = standing;
-        lastSupportProbeReach = reach;
-        lastSupportFeetToHighestTop = boxes == 0 ? Double.NaN : highestTop - local[1];
         return standing;
     }
 

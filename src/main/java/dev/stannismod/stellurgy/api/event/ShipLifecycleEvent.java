@@ -59,12 +59,11 @@ import net.minecraftforge.fml.common.eventhandler.Event;
  *       happened.</li>
  * </ul>
  *
- * <h2>Named is not the same as simulated</h2>
+ * <h2>Named is not the same as moving</h2>
  *
- * <p>A ship can be named and still not be integrated: the engine only steps a body whose physics has
- * been switched on, and a craft nobody has flown has not switched it on. A handler that arms on this
- * event and then waits for the craft to MOVE may wait forever, and that is not a fault in the
- * event.</p>
+ * <p>A named ship is simulated from its assembly, but whether it MOVES is its flight computer's
+ * decision: with Flight Assist on, an unpiloted craft holds station. A handler that arms on this event
+ * and then waits for the craft to move may wait forever, and that is not a fault in the event.</p>
  */
 public class ShipLifecycleEvent extends Event {
 

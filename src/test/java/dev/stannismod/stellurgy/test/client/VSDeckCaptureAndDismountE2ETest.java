@@ -1,14 +1,11 @@
 package dev.stannismod.stellurgy.test.client;
 
-import org.junit.Assume;
 import org.junit.FixMethodOrder;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.lwjgl.input.Keyboard;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 
 import dev.stannismod.stellurgy.test.PlayerShipData;
@@ -1666,240 +1663,87 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         return ShipInfo.isLoaded(shipInfoReply());
     }
 
-    private double readDouble(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected a number in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
-    }
-
-    // ---- Deck support under a gravity the body does not share -----------------------------------
+    // ---- A falling deck keeps the body it has taken -----------------------------------------------
     //
-    // The two scenarios above assert the CONTRACT ("the pilot stays on the deck"). This pair measures
-    // the THRESHOLD that contract is decided by: an outcome alone cannot separate "the deck held" from
-    // "the body was never near the deck", and those two look identical in a green. A threshold test
-    // that does not assert the quantity the production code compares is measuring its own arrangement.
-    //
-    // WHY THE NUMBER MATTERS HERE. An entity and a VS ship do not fall at the same rate: an entity
-    // accumulates -0.08 per game tick against a 0.98 drag (terminal 3.92 blocks/tick), a ship
-    // integrates -9.8 blocks/s^2 at a 1/60 step against a 0.99-per-game-tick drag (terminal ~2.44
-    // blocks/tick). A body aboard a FALLING deck therefore sinks toward it. A captured body is immune
-    // by construction - its ship-frame position is authoritative and the deck is static in that frame
-    // - so the exposure is the SEAM: the ticks when a body is aboard but not resolved in the ship
-    // frame. Support counts only boxes whose top is at or below the feet, so once a body has sunk past
-    // the deck it cannot be seated, and the refusal hands it back to world gravity to sink further.
-    //
-    // These read the decision's inputs from the CLIENT, because for a player the client owns the
-    // movement and therefore makes the decision; the same statics read server-side would describe a
-    // different body's tick.
+    // The two scenarios above hold a hovering deck. This one lets the deck FALL, because that is where
+    // a body and its deck part company if anything does: an entity and a VS ship do not fall at the
+    // same rate (an entity accumulates -0.08 per game tick against a 0.98 drag; a ship integrates its
+    // field at its own step and drag), so a body resolved in the WORLD frame over a falling deck sinks
+    // toward it and through it. A body resolved in the SHIP frame cannot — its ship-frame position is
+    // authoritative and the deck is static in that frame — and the support probe that keeps it there
+    // reaches further the faster the body falls in the ship frame. So the contract is stated on the
+    // resolver's own record: taken onto this deck, and still held by it after the deck has fallen.
 
-    private static final String SHIP_FRAME_TRAVEL_CLASS =
-            "dev.stannismod.stellurgy.integration.vs.ShipFrameTravel";
-
-    /** A numeric static read off the CLIENT's own JVM, which is where this decision is taken. */
-    private double clientDouble(String className, String field) throws Exception {
-        return Double.parseDouble(bot().readStaticField(className, field).get("value").getAsString());
-    }
-
-    /** Ticks sampled after a dismount: ~1.5 s, past the point where the relative rate saturates. */
-    private static final int SUPPORT_SAMPLES = 30;
-
-    /** One sampled tick: what the client's capture decision saw, plus where both bodies were. */
-    private static final class SupportRow {
-        int standing;
-        double feetToTop;
-        double probeReach;
-        double clientY;
-        double shipY;
-    }
-
-    private SupportRow sampleSupport() throws Exception {
-        SupportRow r = new SupportRow();
-        r.standing = (int) clientDouble(SHIP_FRAME_TRAVEL_CLASS, "lastSupportStanding");
-        r.feetToTop = clientDouble(SHIP_FRAME_TRAVEL_CLASS, "lastSupportFeetToHighestTop");
-        r.probeReach = clientDouble(SHIP_FRAME_TRAVEL_CLASS, "lastSupportProbeReach");
-        r.clientY = bot().reportState().get("playerY").getAsDouble();
-        r.shipY = readShipInfoXYZ(shipInfo())[1];
-        return r;
-    }
-
-    /** Stand up for REAL: the dismount must run the client's own sneak handling, not a server probe. */
-    private void dismountByRealKey() throws Exception {
-        bot().holdKey(Keyboard.KEY_LSHIFT);
-        bot().waitTicks(4);
-        bot().setKey(Keyboard.KEY_LSHIFT, false);
-    }
+    /** How long the released deck is let fall, in ticks of the hull's world clock. */
+    private static final int DECK_FALL_TICKS = 30;
 
     /**
-     * Travel of the body against its deck across the trace, in blocks; positive = the body sank toward
-     * or through the deck. Computed from the two POSITIONS, never from a gravity constant, so it cannot
-     * inherit the arithmetic it exists to check.
+     * How far the deck must have fallen for this scenario to be about a FALLING deck, in blocks. A
+     * released craft covers 88.7 to 128.3 blocks in 61 ticks on the server tier (four runs,
+     * 2026-09-29), so a
+     * deck that clears this in thirty has been released; one that does not is still being held.
      */
-    private static double relativeSink(SupportRow first, SupportRow last) {
-        return (first.clientY - last.clientY) - (first.shipY - last.shipY);
-    }
+    private static final double DECK_FELL_MIN = 4.0;
 
-    private static String supportTrace(SupportRow[] rows) {
-        StringBuilder b = new StringBuilder();
-        for (int i = 0; i < rows.length; i++) {
-            b.append(String.format("[%d st=%d f2t=%.3f reach=%.2f y=%.2f shipY=%.2f] ", i,
-                    rows[i].standing, rows[i].feetToTop, rows[i].probeReach,
-                    rows[i].clientY, rows[i].shipY));
-        }
-        return b.toString();
-    }
+    /**
+     * How far above its pad the deck is lifted before it is let fall, in blocks: more than a released
+     * craft covers in {@link #DECK_FALL_TICKS} (at most about 31 from rest, scaling the server tier's
+     * largest measured fall, 128.3 in 61 ticks, by the square of the time), so
+     * the fall ends in the air and not on the pad.
+     */
+    private static final int DECK_FALL_CLEARANCE_BLOCKS = 60;
 
+    /**
+     * A pilot who stands up and is taken onto his deck stays on it while the deck falls.
+     *
+     * <p>red-witnessed: NOT YET, and one attempt is on record as a non-witness. With
+     * {@code ShipFrameTravel.FLOOR_PROBE_DEPTH} at 0 — the {@code noDeckBelow} release gate finding no
+     * floor at all — this stayed GREEN (2026-09-29), so on this fixture the body is kept by something
+     * other than that gate (the roofed-interior exception beside it is the unverified candidate).</p>
+     */
     @Test
-    public void yDeckSupportSurvivesADeckThatIsFalling() throws Exception {
-        // Assembled at ALTITUDE, in the open-air band, not at ground level: this scenario needs a deck
-        // with room to fall. At y=64 the hull rests on terrain, which is what made three earlier
-        // versions of this test measure ground-collision response and call it station-keeping.
-        double[] ship = buildAndBoardShip(FixtureSite.openAir(0, 4820, 4820));
-        bot().waitTicks(20);
+    public void yABodyTakenOntoADeckIsKeptWhileTheDeckFalls() throws Exception {
+        buildAndBoardShip(site());
+        // Off the pad first: the launchpad is WORLD blocks under the hull, so a deck released where it
+        // was built falls one block onto it and stops — measured 2026-09-29, 1.6 blocks in 30 ticks.
+        // The rigid lift carries the seated pilot with it.
+        liftClearOfThePad(scenarioShipId, DECK_FALL_CLEARANCE_BLOCKS);
 
-        // CLIMB FIRST, with the pilot's own Space key. Learned the hard way 2026-08-17: the earlier
-        // versions of this scenario assembled at y=64 and never left, so their "deck" was a hull
-        // resting on terrain. Nothing about a falling deck can be learned from one that is parked -
-        // and the up-then-back excursion a commanded velocity produced there was ground collision
-        // response, not station-keeping. Get airborne, then let go of everything and let gravity be
-        // the only thing moving the deck: that is what this scenario is for.
-        // Nothing lifts the ship and nothing commands it: while the pilot sits, the flight computer's
-        // own hold keeps it up, and standing up removes that. Two lifting attempts were tried and
-        // both were dead ends worth recording so they are not retried: holding Space moved the ship 0
-        // blocks in 180 ticks (vertical authority is not that keybind), and `force-vel-by-id` gained
-        // only 3.2 blocks in 80 - it is a short impulse, and it now fights a gravity of 32 blocks/s².
-        double liftedY = readShipInfoXYZ(shipInfo())[1];
+        // Stand up the way a player does — the real sneak key — and wait for his OWN client to take
+        // him onto THIS ship's deck. A riding body is excluded from capture, so standing up has to
+        // produce an entry, and an entry is an edge the mark cannot miss.
+        Events clientEvents = clientEvents();
+        long clientMark = clientEvents.mark();
+        long dismountMark = events().markInstrumented();
+        bot().holdKey(Keyboard.KEY_LSHIFT);
+        // STIMULUS: the sneak key held across client ticks, as a player holds it to stand up.
+        bot().waitTicks(4);
+        bot().releaseKey(Keyboard.KEY_LSHIFT);
+        events().await(dismountMark, "dismount", "the real sneak key must take the pilot out of his"
+                + " seat before anything about the deck can be asked", DECK_LINK_BUDGET_TICKS);
+        clientEvents.awaitField(clientMark, "deck_entered", "ship", scenarioShipId,
+                "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up",
+                DECK_LINK_BUDGET_TICKS);
 
-        // Stand up: with no pilot input the flight computer commands nothing and the craft drops.
-        dismountByRealKey();
+        // Release the craft. Flight Assist is the unmanned mode switch: on, an unpiloted craft holds;
+        // off, it is handed to the field.
+        scenario().requireArranged("the flight computer of THIS craft must take the release",
+                Reply.of(exec("stellurgytest vs fa-by-id 0 " + scenarioShipId + " false"))
+                        .bool("afcResolved"));
+        double deckFrom = shipInfo().y;
+        // EXPERIMENT: the dose is DECK_FALL_TICKS of fall. The gate below is a LOWER bound on the
+        // deck's drop, which extra ticks only make easier to meet — for a deck that is falling at all.
+        GameTicks.advanceWorld(serverClient(), 0, DECK_FALL_TICKS);
+        double deckTo = shipInfo().y;
+        scenario().requireArranged("the released deck must actually FALL, or nothing here is about a"
+                + " falling deck: it went from " + deckFrom + " to " + deckTo + " in "
+                + DECK_FALL_TICKS + " ticks", deckFrom - deckTo >= DECK_FELL_MIN);
 
-        SupportRow[] rows = new SupportRow[SUPPORT_SAMPLES];
-        int ticksWithoutSupport = 0;
-        for (int i = 0; i < SUPPORT_SAMPLES; i++) {
-            bot().waitTicks(1);
-            rows[i] = sampleSupport();
-            if (rows[i].standing == 0) {
-                ticksWithoutSupport++;
-            }
-        }
-        String tr = supportTrace(rows);
-        double shipDrop = rows[0].shipY - rows[SUPPORT_SAMPLES - 1].shipY;
-        double sink = relativeSink(rows[0], rows[SUPPORT_SAMPLES - 1]);
-        System.out.println("[decksupport] falling liftedTo=" + liftedY + " (base " + ship[1] + ")"
-                + " shipDrop=" + shipDrop + " relativeSink=" + sink
-                + " ticksWithoutSupport=" + ticksWithoutSupport + "/" + SUPPORT_SAMPLES);
-        System.out.println("[decksupport] falling trace=" + tr);
-
-        // Altitude is part of the arrangement, so it is gated: a hull sitting on terrain cannot fall,
-        // and mistaking a grounded hull for a falling one is the error this scenario made three times.
-        Assume.assumeTrue("the deck was not high enough to fall (started at " + liftedY
-                + ", sea level is 63), so nothing here is about a falling deck. trace=" + tr,
-                liftedY > 100.0);
-
-        // Arrangement gate FIRST, and it has to demand a SUSTAINED descent, not merely that the deck
-        // moved at some point. Measured 2026-08-17 across three attempts: `force-vel-by-id` loses to
-        // the station-keeping hold, which returns the ship to the same Y within ~2 ticks, so the deck
-        // makes a brief excursion and settles. A window that only checks total displacement passes on
-        // that excursion and then reports the body's lag while it unwinds as though it were a gravity
-        // effect - which is exactly what the first three runs of this scenario did.
-        double lateDrop = rows[SUPPORT_SAMPLES - 6].shipY - rows[SUPPORT_SAMPLES - 1].shipY;
-        Assume.assumeTrue("the deck did not sustain a descent, so this run says nothing about a "
-                + "falling deck: it fell " + shipDrop + " blocks in total but only " + lateDrop
-                + " over the last 5 sampled ticks, i.e. it settled back onto its hold. A ship with no "
-                + "flight computer - hence no hold at all - is the arrangement this needs. trace=" + tr,
-                lateDrop > 0.05);
-        assertTrue("the support probe never reported, so the client's capture decision was never "
-                + "reached and this test measured its own arrangement: trace=" + tr,
-                rows[SUPPORT_SAMPLES - 1].probeReach >= 0.0);
-
-        // The contract: a body aboard cannot drift from the deck it is aboard. The bound is generous
-        // on purpose - a tenth of a block over 30 ticks - because the claim is "this must not
-        // accumulate at all", not a tuned tolerance.
-        assertTrue("a body aboard a FALLING deck drifted " + sink + " blocks relative to it over "
-                + SUPPORT_SAMPLES + " ticks (deck fell " + shipDrop + "), and lost support on "
-                + ticksWithoutSupport + " of them. trace=" + tr,
-                Math.abs(sink) <= 0.1);
-    }
-
-    @Test
-    public void zDeckSupportOnAHeldDeckIsTheControlForTheFallingOne() throws Exception {
-        buildAndBoardShip(FixtureSite.openAir(0, 4920, 4920));
-        bot().waitTicks(20);
-
-        // The control: hold the ship's attitude and velocity through the addressable probe channel, so
-        // the deck does NOT fall when the pilot stands up. Everything else is identical - which is what
-        // makes the comparison mean anything. If THIS arm drifts too, relative sink is not about the
-        // deck's fall and the falling arm's red is evidence for something else entirely.
-        exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 1.0 0.0 0.0 0.0");
-        exec("stellurgytest vs force-vel-by-id 0 " + scenarioShipId + " 0.0 0.0 0.0");
-        bot().waitTicks(10);
-
-        dismountByRealKey();
-
-        SupportRow[] rows = new SupportRow[SUPPORT_SAMPLES];
-        for (int i = 0; i < SUPPORT_SAMPLES; i++) {
-            bot().waitTicks(1);
-            rows[i] = sampleSupport();
-        }
-        String tr = supportTrace(rows);
-        double shipDrop = rows[0].shipY - rows[SUPPORT_SAMPLES - 1].shipY;
-        double sink = relativeSink(rows[0], rows[SUPPORT_SAMPLES - 1]);
-        System.out.println("[decksupport] held shipDrop=" + shipDrop + " relativeSink=" + sink);
-        System.out.println("[decksupport] held trace=" + tr);
-
-        // A control whose deck also fell is not a control.
-        Assume.assumeTrue("the held deck moved " + shipDrop + " blocks, so it is not a control for a "
-                + "falling deck. trace=" + tr, Math.abs(shipDrop) <= 0.5);
-
-        assertTrue("the CONTROL drifted " + sink + " blocks over " + SUPPORT_SAMPLES + " ticks on a "
-                + "deck that did not move, so relative sink is not explained by the deck's fall and "
-                + "the falling arm proves nothing about gravity. trace=" + tr,
-                Math.abs(sink) <= 0.1);
-    }
-
-    private static final Pattern MASS_KG = Pattern.compile("\"massKg\":(-?[0-9.E\\-]+)");
-
-    /** 25 iron deck blocks at Stellurgy's 5000 kg each. Everything else on the fixture only adds. */
-    private static final double IRON_DECK_KG = 25 * 5000.0;
-
-    @Test
-    public void wAnAssembledShipWeighsWhatArsBlockTableSays() throws Exception {
-        // Lives on this tier because the ship arrangement here WORKS. The same assertion was attempted
-        // on the shared server tier first and skipped three times on its own arrangement gate: the
-        // fixture assembled, but with nobody near it the ship's chunks never loaded and the positional
-        // query answered `managed:false` about a craft that really existed. Rebuilding an arrangement
-        // that already exists one tier up is not worth a run each time.
-        buildShip(FixtureSite.openAir(0, 5220, 5220));
-        bot().waitTicks(20);
-
-        String info = shipInfoReply();
-        // ARRANGEMENT first: without the mass on the probe surface there is nothing to measure, and a
-        // missing field must not read as a passing bound.
-        assertTrue("the probe must report the ship's mass: " + info, MASS_KG.matcher(info).find());
-        double massKg = readDouble(info, MASS_KG);
-
-        // The witness the whole server suite could not provide. That suite stayed green - 616 tests,
-        // unchanged - across the change that replaced how EVERY block's mass is decided, because
-        // nothing in it ever asked a ship what it weighed.
-        //
-        // The bound is one-sided on purpose: the fixture carries a 5x5 iron deck, which Stellurgy's table
-        // denominates at 5000 kg a block, and the physics engine's own flat default cannot reach that
-        // figure with the whole fixture. So this separates the two models without pinning the table's
-        // exact numbers, which are balance and may be tuned.
-        assertTrue("this ship's recorded mass is " + massKg + " kg, below the " + IRON_DECK_KG
-                + " kg of iron deck it carries. A mass that low is the physics engine's flat per-block "
-                + "default, which means the block table Stellurgy owns is not the one deciding ship mass: "
-                + info, massKg >= IRON_DECK_KG);
-    }
-
-    private int readInt(String json, Pattern p) {
-        Matcher m = p.matcher(json);
-        assertTrue("expected an integer in: " + json, m.find());
-        return Integer.parseInt(m.group(1));
-    }
-
-    private static double distance(double[] a, double[] b) {
-        double dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        assertTrue("a body taken onto a deck must still be held by it after the deck has fallen "
+                        + (deckFrom - deckTo) + " blocks. The releases in the window, with production's"
+                        + " own reason for each: " + clientEvents.since(clientMark, "deck_released")
+                        + " ||| the episode edges: " + clientEvents.since(clientMark, "deck_entered"),
+                ShipIdentity.endsCapturedBy(clientEvents, clientMark, scenarioShipId));
     }
 
     private int readInt(String json, String field) {

@@ -32,11 +32,11 @@ import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
  * <h2>Delta by default, recompute as the authority, disagreement REPORTED</h2>
  *
  * <p>{@link #apply} is the authority — a whole frame, computed from the hull, written as three fields
- * together. {@link #reconcile} is the instrument that says whether the cheap incremental path has
+ * together. {@link #compare} is the instrument that says whether the cheap incremental path has
  * drifted from it, and it <b>does not correct anything</b>. That is deliberate and it is the point:
  * a reconciliation that silently substitutes the right number turns a safety net into normal
  * operation and destroys the only signal that a trigger is missing. The repair for drift is the
- * missing trigger; the report is what makes it findable. In a test build the report is a failure.</p>
+ * missing trigger; the report is what makes it findable.</p>
  *
  * <h2>The tensor may never be singular</h2>
  *
@@ -105,74 +105,57 @@ public final class ShipInertiaWriter {
     }
 
     /**
-     * Compare the physics record against {@code authority} and report any disagreement. Changes
-     * nothing.
-     *
-     * @return a description of the drift, or {@code null} when the record agrees with the authority
-     *         (or when there is no such craft to compare)
-     */
-    @Nullable
-    public static String reconcile(@Nullable World world, @Nullable UUID shipId,
-                                  @Nullable ShipMassFrame authority) {
-        if (world == null || shipId == null || authority == null) {
-            return null;
-        }
-        ShipInertiaData record = recordOf(world, shipId);
-        if (record == null) {
-            return null;
-        }
-        String drift = compare(record, authority, String.valueOf(shipId));
-        if (drift != null) {
-            report(drift);
-        }
-        return drift;
-    }
-
-    /**
      * The comparison, against the record rather than against a world, and WITHOUT reporting: returns
-     * the description of the drift or {@code null} when there is none. Split out, and public, so the
-     * tolerances and the wording can be pinned by a test that is not also asserting how loudly a build
-     * complains about them.
+     * the drift or {@code null} when there is none. Reporting is the caller's, so the tolerances can
+     * be pinned by a test that is not also asserting how loudly a build complains about them.
      */
     @Nullable
-    public static String compare(ShipInertiaData record, ShipMassFrame authority, String shipName) {
+    public static Drift compare(ShipInertiaData record, ShipMassFrame authority, String shipName) {
         double recorded = record.getGameTickMass();
         double expected = authority.getTotalMass();
         // Relative on mass, because the tolerance has to mean the same thing for a shuttle and for a
         // capital hull; absolute on the centre, because a tenth of a block is a tenth of a block.
         double massScale = Math.max(Math.abs(expected), 1.0);
-        double massError = Math.abs(recorded - expected);
         double centreError = new Vector3d(authority.getCentreOfMass())
                 .sub(new Vector3d(record.getGameTickCenterOfMass())).length();
-        if (massError / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE) {
+        if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE) {
             return null;
         }
-        // SIGN is part of the report, not just magnitude: a record that is consistently light points
-        // at removals that were never applied, a heavy one at additions counted twice, and those are
-        // different missing triggers.
-        return "ship " + shipName + " inertia drift: mass recorded " + recorded
-                + " vs authority " + expected + " (" + (recorded > expected ? "+" : "")
-                + (recorded - expected) + ", " + String.format("%.2f%%", 100.0 * massError / massScale)
-                + "), centre off by " + String.format("%.4f", centreError) + " blocks";
+        return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);
     }
 
     /**
-     * Drift is a DEFECT in the trigger set, so it is recorded and logged — never thrown.
+     * A disagreement between the physics record and the authoritative frame, as numbers.
      *
-     * <p>This used to raise in a test build, on the reasoning that a run tolerating drift silently is
-     * how a missing trigger survives to the next release. The reasoning is right; the mechanism was
-     * wrong, and only became provably so once something actually detected drift. Every detection
-     * happens inside the world tick, from the ship-lifecycle event, whose contract forbids a handler
-     * to throw: an exception there leaves the tick with nothing between it and the server loop. The
-     * test then fails with "the process exited", which says nothing about mass — the throw destroyed
-     * the very signal it was meant to make loud.</p>
-     *
-     * <p>The obligation moved rather than went away: the trigger keeps each disagreement with its
-     * sign, a probe reads them back, and the assertion that fails a build lives in the test that
-     * reads it.</p>
+     * <p>SIGN is part of it, not just magnitude: a record that is consistently light points at removals
+     * that were never applied, a heavy one at additions counted twice, and those are different missing
+     * triggers. The text form is for the log; a reader that wants the sign asks for the number.</p>
      */
-    private static void report(String message) {
-        LOG.warn(message);
+    public static final class Drift {
+        public final String shipName;
+        public final double recordedMass;
+        public final double authorityMass;
+        /** {@code (recorded - authority) / max(|authority|, 1)}: negative for a light record. */
+        public final double relativeMassError;
+        /** How far the recorded centre of mass sits from the authority's, in blocks. */
+        public final double centreOffBlocks;
+
+        Drift(String shipName, double recordedMass, double authorityMass, double relativeMassError,
+              double centreOffBlocks) {
+            this.shipName = shipName;
+            this.recordedMass = recordedMass;
+            this.authorityMass = authorityMass;
+            this.relativeMassError = relativeMassError;
+            this.centreOffBlocks = centreOffBlocks;
+        }
+
+        @Override
+        public String toString() {
+            return "ship " + shipName + " inertia drift: mass recorded " + recordedMass
+                    + " vs authority " + authorityMass + " ("
+                    + String.format("%+.2f%%", 100.0 * relativeMassError)
+                    + "), centre off by " + String.format("%.4f", centreOffBlocks) + " blocks";
+        }
     }
 
     @Nullable

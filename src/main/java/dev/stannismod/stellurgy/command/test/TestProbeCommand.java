@@ -719,52 +719,10 @@ public class TestProbeCommand extends CommandBase {
                     + dev.stannismod.stellurgy.command.test.MotionTrace.clientSummary() + "}");
             return;
         }
-        // mass-drift reset — forget every recorded recompute and disagreement.
-        // mass-drift — what the AUTHORITATIVE hull recompute found: how many ran, how many found no
-        // hull to weigh, and every disagreement with the incremental path (with its sign). A drift on
-        // an assembly or a paste means a trigger is missing; it is recorded rather than thrown,
-        // because the recompute runs inside the world tick and a throw there kills the server instead
-        // of reporting the number.
-        if (args.length >= 1 && "mass-drift".equalsIgnoreCase(args[0])) {
-            if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.reset();
-                send(sender, "{\"ok\":true,\"reset\":true}");
-                return;
-            }
-            send(sender, "{\"ok\":true,"
-                    + dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.summary() + "}");
-            return;
-        }
-        // lifecycle reset — forget every recorded ship-was-named announcement.
-        // lifecycle <shipUuid> — what was announced FOR THAT SHIP: one count per cause, the durable
-        // id it was announced under, and `seen` saying whether the recorder has heard of it at all.
-        // Keyed on the ship's own identity rather than on what is nearest a point, because the
-        // scenarios that matter (a crossing landing beside a parked hull) hold two craft at once, and
-        // a positional answer there is a plausible-looking answer about the other one. The whole
-        // recorder is reported beside it, so "0 for this ship" is separable from "nothing arrived".
-        if (args.length >= 1 && "lifecycle".equalsIgnoreCase(args[0])) {
-            if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                dev.stannismod.stellurgy.util.ShipLifecycleTrace.reset();
-                send(sender, "{\"ok\":true,\"reset\":true}");
-                return;
-            }
-            if (args.length < 2) {
-                send(sender, "{\"error\":\"usage: vs lifecycle <shipUuid> | vs lifecycle reset\"}");
-                return;
-            }
-            java.util.UUID shipUuid;
-            try {
-                shipUuid = java.util.UUID.fromString(args[1]);
-            } catch (IllegalArgumentException notAnIdentity) {
-                send(sender, "{\"error\":\"not a ship uuid\",\"given\":\"" + args[1] + "\"}");
-                return;
-            }
-            send(sender, "{\"ok\":true,"
-                    + dev.stannismod.stellurgy.util.ShipLifecycleTrace.summaryOf(shipUuid)
-                    + ",\"recorder\":{"
-                    + dev.stannismod.stellurgy.util.ShipLifecycleTrace.summary() + "}}");
-            return;
-        }
+        // `mass-drift` and `lifecycle` ARE GONE. Both read counters that production kept for a test —
+        // the mass trigger's recompute/drift tallies and a lifecycle recorder registered even outside
+        // test mode. Their questions are records in the event log now: `ship_lifecycle` off the bus,
+        // `ship_mass_measured` / `ship_mass_compared` from a test mixin at the decision itself.
         // permaload <bool> — keep VS ships permanently loaded (headless has no player to hold a ship
         // loaded, so a freshly assembled ship auto-unloads between probe calls).
         if (args.length >= 2 && "permaload".equalsIgnoreCase(args[0])) {

@@ -1,6 +1,10 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import net.minecraft.block.material.Material;
 import net.minecraft.nbt.NBTTagCompound;
+import dev.stannismod.stellurgy.block.BlockRocketMotor;
+import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.util.WeightEngine;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -330,6 +334,9 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code StatsRocket:261} weighing without the gravity multiplier, fails expected 4.0 but was 2.0, 2026-09-29.</p>
+     */
     @Test
     public void thrustToWeightRatioIsThrustOverLocalWeight() {
         // Contract: thrust is a force in newtons and mass is a mass in kilograms, so the ratio is
@@ -354,6 +361,9 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code StatsRocket:261} weighing without the gravity multiplier, fails "clears the gate at one sixth gee", 2026-09-29.</p>
+     */
     @Test
     public void launchGateFollowsLocalGravityNotEarthGravity() {
         // A rocket that cannot leave Earth can still leave a light moon, and the gate has to agree
@@ -385,6 +395,9 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code StatsRocket:256} ignoring {@code gravityAffectsFuel}, fails expected 2.0 but was 20.0, 2026-09-29.</p>
+     */
     @Test
     public void gravityMayBeDetachedFromTheModelEntirely() {
         // Disableability: with gravityAffectsFuel off, BOTH the gate and the flight model pin
@@ -497,6 +510,9 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code StatsRocket:280} dividing by a fixed 250 kg instead of the mass, fails "net climb must be scale-free", 2026-09-29.</p>
+     */
     @Test
     public void accelerationDependsOnlyOnTheThrustToWeightRatio() {
         // Dimensional homogeneity: scale mass and thrust by the same factor and the flight model
@@ -529,22 +545,27 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code BlockRocketMotor:63} rated 480_000 N, fails expected 1.0 but was 0.9786, 2026-09-29.</p>
+     */
     @Test
     public void oneBasicMotorExactlyHoldsAHundredOrdinaryBlocks() {
-        // The calibration anchor between the two tables. An ordinary block is 500 kg and a basic
-        // rocket motor is rated 490_500 N, so one motor holds a hundred-block hull at one gee and
-        // no more. Both numbers are player-facing balance: if either table is edited without the
-        // other, every rocket in the pack changes what it can lift, and this is the test that
-        // notices.
+        // The calibration anchor between the two tables: one basic motor holds a hundred ordinary
+        // blocks at one gee and no more. Both numbers are READ from the tables that own them — the
+        // motor's own rating and the weight table's default block — because a test that typed them
+        // in would go on agreeing with itself after either table was edited, which is the one thing
+        // this test exists to notice.
+        MinecraftBootstrap.ensure();
         boolean prevWeightSys = StellurgyConfiguration.getCurrentConfig().advancedWeightSystem;
         boolean prevGravity = StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel;
         try {
             StellurgyConfiguration.getCurrentConfig().advancedWeightSystem = false;
             StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel = true;
+            WeightEngine.INSTANCE.resetTables();
 
             StatsRocket stats = new StatsRocket();
-            stats.setMass(100 * 500f);
-            stats.setThrust(490_500);
+            stats.setMass((float) (100 * WeightEngine.INSTANCE.fallbackMass()));
+            stats.setThrust(new BlockRocketMotor(Material.IRON).getThrust(null, null));
 
             assertEquals("one motor per hundred ordinary blocks is exactly TWR 1",
                     1.0f, stats.getThrustToWeightRatio(1f), 1e-4);
@@ -556,6 +577,9 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code StatsRocket:176} a plain narrowing cast, fails expected 2147483647 but was 2147483645, 2026-09-29.</p>
+     */
     @Test
     public void thrustSaturatesInsteadOfWrapping() {
         // The scan paths sum a per-engine rating in newtons, which overflows int on a large hull;

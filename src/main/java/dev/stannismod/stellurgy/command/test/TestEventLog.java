@@ -383,6 +383,51 @@ public final class TestEventLog {
         }
 
         /**
+         * A player's break of a block, as it STANDS — {@code block_broken}.
+         *
+         * <p>{@code LOWEST} and not receiving cancelled events, so a record is written only for a
+         * break no handler refused; vanilla removes the block right after this event returns. The
+         * position is whatever the interaction path handed the server, which for a block of an
+         * assembled ship is its SUBSPACE address — the one a test aimed at.</p>
+         */
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public void onBlockBroken(net.minecraftforge.event.world.BlockEvent.BreakEvent event) {
+            noteInstrumentEntered("server_bus_block_broken");
+            World world = event.getWorld();
+            if (world == null || world.isRemote) {
+                return;
+            }
+            BlockPos p = event.getPos();
+            record("server", world.getTotalWorldTime(), "block_broken",
+                    "\"x\":" + p.getX() + ",\"y\":" + p.getY() + ",\"z\":" + p.getZ()
+                            + ",\"dim\":" + world.provider.getDimension()
+                            + ",\"block\":\"" + event.getState().getBlock().getRegistryName() + "\""
+                            + ",\"player\":\"" + (event.getPlayer() == null ? "" : event.getPlayer().getName())
+                            + "\"");
+        }
+
+        /**
+         * A player's placement of a block, as it STANDS — {@code block_placed}. Same priority and
+         * the same reason as {@link #onBlockBroken}: a cancelled placement is reverted, so only one
+         * no handler refused is recorded.
+         */
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public void onBlockPlaced(net.minecraftforge.event.world.BlockEvent.PlaceEvent event) {
+            noteInstrumentEntered("server_bus_block_placed");
+            World world = event.getWorld();
+            if (world == null || world.isRemote) {
+                return;
+            }
+            BlockPos p = event.getPos();
+            record("server", world.getTotalWorldTime(), "block_placed",
+                    "\"x\":" + p.getX() + ",\"y\":" + p.getY() + ",\"z\":" + p.getZ()
+                            + ",\"dim\":" + world.provider.getDimension()
+                            + ",\"block\":\"" + event.getPlacedBlock().getBlock().getRegistryName() + "\""
+                            + ",\"player\":\"" + (event.getPlayer() == null ? "" : event.getPlayer().getName())
+                            + "\"");
+        }
+
+        /**
          * The bed attempt, WITH the result a handler put on it.
          *
          * <p>{@code LOWEST} on purpose: the result is what the last handler leaves, and Stellurgy's own
@@ -634,6 +679,33 @@ public final class TestEventLog {
             record(sideOf(world), world.getTotalWorldTime(), "ship_usable",
                     "\"ship\":\"" + str(event.shipId) + "\""
                             + ",\"vsShip\":\"" + str(event.substrateId) + "\""
+                            + ",\"dim\":" + world.provider.getDimension());
+        }
+
+        /**
+         * A ship was NAMED or UNNAMED, with the transition that did it — {@code ship_lifecycle}.
+         *
+         * <p>Production's own announcement, subscribed to like any consumer rather than counted by a
+         * recorder of its own: the mass trigger arms on it, so it has a non-test audience. One record
+         * per announcement, so "exactly once per transition" is a count over a window rather than a
+         * tally somebody had to reset. {@code edge} is which half ({@code named}/{@code unnamed});
+         * {@code durable} is the vessel's id, which survives a crossing where {@code ship} does not.</p>
+         */
+        @SubscribeEvent
+        public void onShipLifecycle(dev.stannismod.stellurgy.api.event.ShipLifecycleEvent event) {
+            noteInstrumentEntered("server_bus_ship_lifecycle");
+            World world = event.world;
+            if (world == null) {
+                return;
+            }
+            record(sideOf(world), world.getTotalWorldTime(), "ship_lifecycle",
+                    "\"ship\":\"" + event.shipUuid + "\""
+                            + ",\"durable\":" + (event.durableId == null
+                                    ? "null" : "\"" + event.durableId + "\"")
+                            + ",\"cause\":\"" + event.cause + "\""
+                            + ",\"edge\":\"" + (event instanceof
+                                    dev.stannismod.stellurgy.api.event.ShipLifecycleEvent.ShipUnnamed
+                                    ? "unnamed" : "named") + "\""
                             + ",\"dim\":" + world.provider.getDimension());
         }
 
