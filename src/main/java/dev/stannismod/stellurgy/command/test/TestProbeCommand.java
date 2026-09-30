@@ -2897,6 +2897,7 @@ public class TestProbeCommand extends CommandBase {
      * a nearest-match. {@code system} has no tile subject and is dispatched before the lookup.</p>
      *
      * <pre>
+     *   /stellurgytest telescope starter &lt;dim&gt;
      *   /stellurgytest telescope system  &lt;sectorX&gt; &lt;sectorY&gt; &lt;sectorZ&gt; [name]
      *   /stellurgytest telescope place   &lt;dim&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt;
      *   /stellurgytest telescope crystal &lt;dim&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt;
@@ -2905,6 +2906,24 @@ public class TestProbeCommand extends CommandBase {
      * </pre>
      */
     private void handleTelescope(MinecraftServer server, ICommandSender sender, String[] args) {
+        // starter <dim>: what a brand-new crystal knows before any instrument has touched it, through
+        // the one entry production seeds by (the navigation computer calls ensureSeeded on insert).
+        // Here because it is the baseline every survey below is compared against.
+        if (args.length >= 2 && "starter".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer starterWorld = server.getWorld(parseIntOr(args[1], 0));
+            if (starterWorld == null) {
+                send(sender, "{\"error\":\"no such dim\"}");
+                return;
+            }
+            net.minecraft.item.ItemStack fresh = new net.minecraft.item.ItemStack(
+                    dev.stannismod.stellurgy.api.StellurgyItems.itemMemoryCrystal);
+            dev.stannismod.stellurgy.item.ItemMemoryCrystal.ensureSeeded(fresh, starterWorld);
+            send(sender, "{\"ok\":true,\"dim\":" + starterWorld.provider.getDimension()
+                    + ",\"addresses\":"
+                    + dev.stannismod.stellurgy.item.ItemMemoryCrystal.memoryOf(fresh).size()
+                    + ",\"crystalDims\":" + crystalDims(fresh) + "}");
+            return;
+        }
         if (args.length < 4) {
             send(sender, "{\"error\":\"usage: telescope system|place|crystal|scan|info ...\"}");
             return;
@@ -3103,7 +3122,8 @@ public class TestProbeCommand extends CommandBase {
                 // WHICH worlds the crystal holds, read without touching anything. A test that had to
                 // call `deposit` to find out would have deposited them, and could no longer show
                 // that pressing the button is what teaches this world.
-                .append(",\"crystalDims\":").append(crystalDims(scope))
+                .append(",\"crystalDims\":").append(crystalDims(scope.getStackInSlot(
+                        dev.stannismod.stellurgy.tile.multiblock.TileObservatory.SLOT_CRYSTAL)))
                 .append(",\"lastDiscoveries\":").append(scope.getLastScanDiscoveries())
                 // Where the OPERATOR has the instrument pointed — the tile's own pick, which is what
                 // a GUI click changes and what the next scan will use. Distinct from the region a
@@ -3168,10 +3188,8 @@ public class TestProbeCommand extends CommandBase {
         return dev.stannismod.stellurgy.item.ItemMemoryCrystal.memoryOf(stack).size();
     }
 
-    /** The dimensions the crystal in that slot names, as a JSON array. Reads nothing into anything. */
-    private String crystalDims(dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope) {
-        net.minecraft.item.ItemStack stack = scope.getStackInSlot(
-                dev.stannismod.stellurgy.tile.multiblock.TileObservatory.SLOT_CRYSTAL);
+    /** The dimensions {@code stack} names, as a JSON array. Reads nothing into anything. */
+    private String crystalDims(net.minecraft.item.ItemStack stack) {
         if (!dev.stannismod.stellurgy.item.ItemMemoryCrystal.isCrystal(stack)) {
             return "[]";
         }

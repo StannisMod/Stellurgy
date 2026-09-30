@@ -23,7 +23,8 @@ import dev.stannismod.stellurgy.universe.UniverseRegistry;
  * <p>What counts as common knowledge is {@code planetsMustBeDiscovered}'s question, and it is asked
  * here: with discovery OFF (the default) every authored body is seeded, because nothing in that
  * regime is meant to need discovering; with it ON, only the bodies the pack author marked known.
- * Either way the home body's own cell is skipped — see the loop.</p>
+ * Either way the home body's own zone is skipped: its moons are found with a telescope — see the
+ * loop.</p>
  *
  * <p>Everything seeded here is recorded at {@link InfoTier#TELESCOPE}: common knowledge is knowing a
  * place exists, not having surveyed it.</p>
@@ -35,7 +36,7 @@ public final class CrystalSeeding {
 
     /**
      * The starter set of addresses for {@code world}'s server: the home world's own coordinate, and
-     * every authored-known body outside the home system. Empty when the universe registry is not up —
+     * every common-knowledge body outside the home world's zone. Empty when the universe registry is not up —
      * a crystal made before the world is ready is simply blank, never broken.
      */
     public static CrystalMemory starterFor(World world) {
@@ -84,14 +85,13 @@ public final class CrystalSeeding {
             if (coord == null) {
                 continue;
             }
-            // Skipped: bodies sharing the HOME BODY'S OWN CELL - the home world itself and its moons,
-            // which a crystal would only be repeating. NOT "the home system": a system spans a
-            // neighbourhood of cells with every planet at a cell of its own
-            // (UniverseRegistry.systemBodiesAt), so its other planets are ordinary jump targets and
-            // are seeded like any other. (This comment used to say "home-system bodies", which reads
-            // as though a system were one cell and intra-system jumps did not exist - they are
-            // exactly what Milestone 1's script asks the player to fly.)
-            if (home != null && home.cellKey().equals(coord.cellKey())) {
+            // Skipped: the HOME BODY'S OWN ZONE - the home world (recorded above) and every moon that
+            // has a cell inside its zone. A moon is a destination of its own, and the home world's
+            // moons are the first thing a player's telescope is for: the observatory's local radar
+            // names them (TelescopeScan.characterise), a starter crystal does not. The other planets
+            // of the home system are NOT in this zone - each has a cell of its own in the galactic
+            // lattice - so they stay common knowledge like any other body.
+            if (home != null && isInZoneOf(coord, home)) {
                 continue;
             }
             // The dim id is the entry's IDENTITY: bodies orbit, so the coordinate recorded here is
@@ -100,6 +100,16 @@ public final class CrystalSeeding {
                     InfoTier.TELESCOPE, now, dimId));
         }
         return memory;
+    }
+
+    /**
+     * Whether {@code coord} names {@code body}'s own cell or a cell anywhere inside its zone. A zoned
+     * key is its zone's key plus a suffix, so containment is a prefix up to a separator.
+     */
+    private static boolean isInZoneOf(GalacticCoord coord, GalacticCoord body) {
+        String bodyKey = body.cellKey();
+        String key = coord.cellKey();
+        return key.equals(bodyKey) || key.startsWith(bodyKey + GalacticCoord.ZONE_SEPARATOR);
     }
 
     private static GalacticCoord coordOf(UniverseRegistry registry, int dimId) {
