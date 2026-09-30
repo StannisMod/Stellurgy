@@ -1088,6 +1088,11 @@ public class ClusteredGalaxyGeneratorTest {
      *
      * <p>Regenerate deliberately, never to make a red test green:
      * {@code ./gradlew testUnit -Dstellurgy.universe.corpus.write=true}</p>
+     *
+     * <p>red-witnessed: 2026-09-29, against the fixture regenerated for moon zones: with
+     * `ZoneScale.cellsAcrossZone:102` back to the flat 1024-cell lattice it shipped with, this fails
+     * with "THE WORLD MODEL HAS MOVED. line 14: fixture: body … .1_0_0 kind=MOON … now: body …
+     * .9_0_-2 kind=MOON" — a moon renamed by a lattice regression.</p>
      */
     @Test
     public void theGoldenCorpusIsByteIdentical() throws Exception {

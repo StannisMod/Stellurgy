@@ -51,6 +51,13 @@ public class AstronomicalBodyHelperTest {
         return star;
     }
 
+    /**
+     * A body's apparent size falls inversely with its distance, in AU.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getBodySizeMultiplier:245` back on the
+     * old distance unit ({@code 100 / d}, "1 AU = 100"), this fails at its first sample with
+     * "expected:&lt;1.0&gt; but was:&lt;6.684585969196633E-5&gt;".</p>
+     */
     @Test
     public void bodySizeMultiplierIsInverselyProportionalToDistance() {
         // At 100 distance (1 AU equivalent) the multiplier is 1.
@@ -64,6 +71,13 @@ public class AstronomicalBodyHelperTest {
         assertEquals(0.25f, AstronomicalBodyHelper.getBodySizeMultiplier((float) (AU * 4)), 1e-6);
     }
 
+    /**
+     * One AU around one solar mass is the 48-day year.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getOrbitalPeriod:265` back on the old
+     * distance unit ({@code a / 100}), this fails with "expected:&lt;48.0&gt; but
+     * was:&lt;8.782729013584356E7&gt;".</p>
+     */
     @Test
     public void orbitalPeriodAtEarthDistanceIsBaseline() {
         // At 100 distance and solarSize=1.0, the formula reduces to 48 days (one MC year).
@@ -105,6 +119,13 @@ public class AstronomicalBodyHelperTest {
         assertTrue("brightness must rise as we approach the star", atHalfAu > atOneAu);
     }
 
+    /**
+     * A sunlike star lights a world at one AU with brightness 1.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getStellarBrightness:416` back on the
+     * old distance unit ({@code d / 100}), this fails with "expected:&lt;1.0&gt; but
+     * was:&lt;4.468368725849103E-9&gt;".</p>
+     */
     @Test
     public void stellarBrightnessAtEarthBaselineEqualsOne() {
         // sunLike: size=1.0, temperature=100 -> normalized=1.0, distance=100 -> AU=1.
@@ -128,6 +149,11 @@ public class AstronomicalBodyHelperTest {
     /**
      * Every star in a system lights the worlds in it. Before this was true, the companion list was
      * walked only to decide a boolean and no companion ever contributed a photon.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getStellarBrightness:437` summing only
+     * the star the planet is bound to instead of its whole system, this fails with "two identical
+     * stars in the same place light a world twice as brightly expected:&lt;2.0&gt; but
+     * was:&lt;1.0&gt;". (A distance-unit inversion leaves it green: it asserts a ratio.)</p>
      */
     @Test
     public void everyStarInASystemContributesItsOwnLight() {
@@ -167,6 +193,13 @@ public class AstronomicalBodyHelperTest {
         assertTrue("but it is never nothing", wideBrightness > alone);
     }
 
+    /**
+     * A world of the companion is lit by the primary too.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getStellarBrightness:437` summing only
+     * the star the planet is bound to, this fails with "a world of the companion sees both stars
+     * expected:&lt;2.0&gt; but was:&lt;1.0&gt;".</p>
+     */
     @Test
     public void aWorldOfTheCompanionIsLitByThePrimaryToo() {
         // An S-type planet is a planet in a binary, not a planet with one sun that happens to have a
@@ -289,6 +322,10 @@ public class AstronomicalBodyHelperTest {
      * 0.3 for every surface, so an ice world and a lava world at the same distance were the same
      * temperature — and the physical direction matters: more reflective means colder, which is what
      * keeps ice being ice.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getStellarBrightness:416` back on the
+     * old distance unit, this fails with "a darker surface absorbs more and runs hotter" — every
+     * temperature collapses to a couple of kelvin and the albedo stops making a difference.</p>
      */
     @Test
     public void albedoCoolsAWorldAndTheDefaultIsEarths() {
@@ -303,6 +340,13 @@ public class AstronomicalBodyHelperTest {
                 AstronomicalBodyHelper.getAverageTemperature(star, AU, 0), earthLike);
     }
 
+    /**
+     * Kepler's third law, exactly: {@code P ∝ a^1.5 / sqrt(M)}.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getOrbitalPeriod:265` back on the old
+     * distance unit ({@code a / 100}), this fails with "expected:&lt;384.0&gt; but
+     * was:&lt;7.026183210867485E8&gt;".</p>
+     */
     @Test
     public void orbitalPeriodFollowsTheThreeHalvesPowerLawExactly() {
         // Four times the distance is eight times the period.
@@ -319,6 +363,9 @@ public class AstronomicalBodyHelperTest {
     /**
      * A star's year is set by its MASS. A star that states no mass supplies one from its radius through
      * the main-sequence relation, which is exact for Sol — and is emphatically not the radius itself.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getOrbitalPeriod:265` back on the old
+     * distance unit, this fails with "expected:&lt;48.0&gt; but was:&lt;8.782729013584356E7&gt;".</p>
      */
     @Test
     public void aYearIsKeyedOnStellarMassAndAStarWithoutOneDerivesItFromItsRadius() {
@@ -359,23 +406,47 @@ public class AstronomicalBodyHelperTest {
                 AstronomicalBodyHelper.getMoonOrbitalPeriod(reference * 2f, 1.0f), 1e-9);
     }
 
+    /**
+     * One AU under one atmosphere is 287 K.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getStellarBrightness:416` back on the
+     * old distance unit, this fails with "expected:&lt;287&gt; but was:&lt;2&gt;".</p>
+     */
     @Test
     public void temperatureAtOneAuUnderOneAtmosphereIsPinned() {
         // 1 AU, one atmosphere: the radiative balance times the greenhouse term.
         assertEquals(287, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), AU, 100));
     }
 
+    /**
+     * A vacuum world at one AU gets the bare radiative balance, 255 K.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getStellarBrightness:416` back on the
+     * old distance unit, this fails with "expected:&lt;255&gt; but was:&lt;2&gt;".</p>
+     */
     @Test
     public void aVacuumWorldGetsTheBareRadiativeBalance() {
         // atmPressure 0 falls to the max(1, ...) floor — no greenhouse lift at all.
         assertEquals(255, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), AU, 0));
     }
 
+    /**
+     * Four AU under one atmosphere is 143 K.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getStellarBrightness:416` back on the
+     * old distance unit, this fails with "expected:&lt;143&gt; but was:&lt;1&gt;".</p>
+     */
     @Test
     public void temperatureAtFourAuIsPinned() {
         assertEquals(143, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), AU * 4, 100));
     }
 
+    /**
+     * Brightness falls with the square of distance, exactly.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getStellarBrightness:416` back on the
+     * old distance unit, this fails with "expected:&lt;0.25&gt; but was:&lt;1.1170921814622757E-9&gt;".</p>
+     */
     @Test
     public void brightnessFallsWithTheSquareOfDistanceExactly() {
         assertEquals(0.25, AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU * 2), 1e-9);
@@ -385,6 +456,13 @@ public class AstronomicalBodyHelperTest {
     // forms do, which is what the class note above excludes. They carry the same law, so the wrap
     // is checkable here as well as in the integration test.
 
+    /**
+     * The orbital angle wraps once per period.
+     *
+     * <p>red-witnessed: 2026-09-29, with `AstronomicalBodyHelper.getOrbitalPeriod:265` back on the old
+     * distance unit, this fails with "expected:&lt;1.5707963267948966&gt; but
+     * was:&lt;8.584828652863555E-7&gt;".</p>
+     */
     @Test
     public void orbitalThetaWrapsOncePerPeriod() {
         long periodTicks = (long) (48.0 * 24000.0);
@@ -394,9 +472,28 @@ public class AstronomicalBodyHelperTest {
         assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(AU, 1.0f, periodTicks), 1e-9);
     }
 
+    /**
+     * A degenerate orbit answers a real angle, never NaN.
+     *
+     * <p>The ZERO-DISTANCE legs are the ones the guards exist for: a period of 0 makes
+     * {@code tick % period} NaN. The massless-parent leg is a different claim — a moon of a body with
+     * no mass never moves, because its period is {@code Infinity} — and the guard is NOT what holds
+     * it: {@code tick % Infinity / Infinity} is already 0 (measured 2026-09-29: with the moon guard
+     * removed, that leg stayed green).</p>
+     *
+     * <p>red-witnessed: 2026-09-29, twice. With the guard in
+     * `AstronomicalBodyHelper.getMoonOrbitalThetaAt:341` removed, this fails with "a moon at zero
+     * distance has a zero period, and must not answer NaN expected:&lt;0.0&gt; but
+     * was:&lt;NaN&gt;". With `AstronomicalBodyHelper.getMoonOrbitalPeriod:287` flooring the parent's
+     * mass at 0.05, it fails at the massless leg with "expected:&lt;0.0&gt; but
+     * was:&lt;3.4454888921967097E-6&gt;" — a finite period, predicted before the run at about
+     * 3.5e-6.</p>
+     */
     @Test
     public void aDegenerateOrbitStaysAddressableRatherThanNaN() {
         assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(0, 1.0f, 12345L), 1e-9);
+        assertEquals("a moon at zero distance has a zero period, and must not answer NaN", 0.0,
+                AstronomicalBodyHelper.getMoonOrbitalThetaAt(0, 1.0f, 12345L), 1e-9);
         assertEquals(0.0, AstronomicalBodyHelper.getMoonOrbitalThetaAt(AU, 0f, 12345L), 1e-9);
     }
 

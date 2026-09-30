@@ -486,6 +486,14 @@ public class PlanetDerivationTest {
 
     // ─── Tidal locking ─────────────────────────────────────────────────────────
 
+    /**
+     * A very close orbit is tidally locked and one a thousand AU out is not.
+     *
+     * <p>red-witnessed: 2026-09-29, with `PlanetDerivation.tidallyLockedAt:281` answering locked for
+     * every orbit, this fails with "a distant orbit must not be locked". That is what the distant leg
+     * can see and all it can see: a unit slip in the lock radius (blocks for distance units, or the
+     * old "1 AU = 100") leaves it green, because 1 000 AU is outside the radius either way.</p>
+     */
     @Test
     public void aCloseOrbitIsLockedAndADistantOneIsNot() {
         StellarBody s = sol();

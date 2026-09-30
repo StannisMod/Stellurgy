@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -13,7 +14,7 @@ import dev.stannismod.stellurgy.space.DescentShell;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemContent;
+import dev.stannismod.stellurgy.universe.UniverseRegistry;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -74,11 +75,16 @@ public class ParkedCraftKeepsStationTest {
      * not a carry and not a parked state: the ship's address names a cell, the cell's origin is its
      * primary's position at the tick, and a constant address therefore tracks the primary for
      * free.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `SystemBody.definesFrame:324` no longer counting a PLANET,
+     * this fails with "…it was 25913.0 blocks out and is now 6.524345703726182E7 (drift
+     * 6.521754403726182E7), while the planet itself moved 6.524203927239168E7" — the planet left and
+     * the address stayed.</p>
      */
     @Test
     public void aCraftParkedBesideAPlanetStaysBesideIt() {
-        StellarBody star = solWithEarthAndLuna();
-        SystemBody earth = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), EARTH_DIM);
+        UniverseRegistry reg = registryWithEarthAndLuna();
+        SystemBody earth = bodyOf(reg.systemBodiesAt(GalacticCoord.ORIGIN), EARTH_DIM);
         assertNotNull("the fixture must produce the planet", earth);
 
         // ARRANGEMENT: the planet must actually move over the window, or "he stayed with it" is a
@@ -88,9 +94,9 @@ public class ParkedCraftKeepsStationTest {
                         + "station with it costs nothing (travelled " + planetTravel + " blocks)",
                 planetTravel > PLANET_TRAVELLED_BLOCKS);
 
-        GalacticCoord parked = parkedBeside(earth, 0L);
-        double at0 = rangeFrom(earth, parked, 0L);
-        double atEnd = rangeFrom(earth, parked, ABANDONED_TICKS);
+        GalacticCoord parked = parkedBeside(reg, earth, 0L);
+        double at0 = rangeFrom(reg, earth, parked, 0L);
+        double atEnd = rangeFrom(reg, earth, parked, ABANDONED_TICKS);
 
         System.out.println("[parked-craft] planet: travel=" + planetTravel
                 + " range@0=" + at0 + " range@" + ABANDONED_TICKS + "=" + atEnd
@@ -127,15 +133,22 @@ public class ParkedCraftKeepsStationTest {
      * not enough: the zone lattice was 1024 cells across, so Earth's cell came out 7 224 blocks
      * against Luna's own 7 066-block shell and the craft fell into the NEXT cell — carried by Earth
      * again, one level down, by the fix itself. This test spent a commit asserting that gap and
-     * saying a coarser lattice was not the answer. It was: the count is now derived per body from
-     * the room its own shell needs, Earth's cell is 57 791 blocks, and the craft is inside the
-     * moon's cell with room to spare.</p>
+     * saying a coarser lattice was not the answer. It was: the count is now derived per body, and
+     * Earth's zone cell measured 1 849 294 blocks on 2026-09-29 (this test prints it), so the craft
+     * is inside the moon's cell with room to spare.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `SystemBody.definesFrame:326` no longer counting a MOON — the
+     * fix this acceptance is named for — this fails with "…it was 7066.0 blocks out and is now
+     * 294995.9100682584 (drift 287929.9100682584), against a shell of 7066": the pre-fix number,
+     * verbatim. <b>The version of this test before that date stayed GREEN on the same inversion</b>
+     * (both methods PASSED, run the same day): it resolved the parked address through
+     * {@code body.frame()}, a frame the test chose, instead of through {@code UniverseRegistry.originAt}
+     * as production does.</p>
      */
     @Test
     public void aCraftParkedOneDescentShellOutFromAMoonKeepsStationWithIt() {
-        StellarBody star = solWithEarthAndLuna();
-        List<SystemBody> bodies = SystemContent.bodiesOf(star, GalacticCoord.ORIGIN);
-        SystemBody luna = bodyOf(bodies, LUNA_DIM);
+        UniverseRegistry reg = registryWithEarthAndLuna();
+        SystemBody luna = bodyOf(reg.systemBodiesAt(GalacticCoord.ORIGIN), LUNA_DIM);
         assertNotNull("the fixture must produce the moon", luna);
 
         // ARRANGEMENT: the moon must actually TRAVEL over the window, or a craft that stayed with it
@@ -146,7 +159,7 @@ public class ParkedCraftKeepsStationTest {
                         + "(travelled " + moonTravel + " blocks)", moonTravel > MOON_TRAVELLED_BLOCKS);
 
         long shell = DescentShell.radiusAround(luna);
-        GalacticCoord parked = parkedBeside(luna, 0L);
+        GalacticCoord parked = parkedBeside(reg, luna, 0L);
         // ARRANGEMENT, and it is the half that was missing for a whole commit: one descent shell out
         // has to be an address INSIDE the moon's own cell. It is a property of the lattice, not of
         // the flight, so a craft can never reach it by flying and the test would be measuring the
@@ -156,8 +169,8 @@ public class ParkedCraftKeepsStationTest {
                         + "however well the rest of the machinery works — got " + parked,
                 parked.sameCell(luna.name()));
 
-        double at0 = rangeFrom(luna, parked, 0L);
-        double atEnd = rangeFrom(luna, parked, ABANDONED_TICKS);
+        double at0 = rangeFrom(reg, luna, parked, 0L);
+        double atEnd = rangeFrom(reg, luna, parked, ABANDONED_TICKS);
 
         System.out.println("[parked-craft] moon: travel=" + moonTravel + " shell=" + shell
                 + " cell=" + luna.name().cellBlocks()
@@ -178,6 +191,7 @@ public class ParkedCraftKeepsStationTest {
 
     private static final int EARTH_DIM = 790;
     private static final int LUNA_DIM = 791;
+    private static final int STAR_ID = 4260;
 
     /**
      * Earth and Luna at their real bulk and separation, around a Sol-mass star.
@@ -186,9 +200,9 @@ public class ParkedCraftKeepsStationTest {
      * behind is the moon's own orbital speed, and a fixture moon on an invented orbit would answer
      * about itself rather than about the system every player meets first.</p>
      */
-    private static StellarBody solWithEarthAndLuna() {
+    private static UniverseRegistry registryWithEarthAndLuna() {
         StellarBody star = new StellarBody();
-        star.setId(4260);
+        star.setId(STAR_ID);
         star.setName("Sol");
         star.setSize(1f);
 
@@ -215,24 +229,40 @@ public class ParkedCraftKeepsStationTest {
         DimensionManager.getInstance().setDimProperties(LUNA_DIM, luna);
         earth.setStar(star);
         luna.setParentPlanet(earth);
-        return star;
+
+        // The registry that NAMES these bodies and says which frame each cell rides — the same
+        // resolution production does, rather than a list of bodies whose frames the test picks.
+        UniverseRegistry reg = new UniverseRegistry();
+        reg.place(GalacticCoord.ORIGIN, STAR_ID);
+        UniverseRegistry.setStarLookup(id -> id == STAR_ID ? star : null);
+        return reg;
     }
 
-    /** A craft holding station one descent shell out from {@code body} at {@code tick}, as an address. */
-    private static GalacticCoord parkedBeside(SystemBody body, long tick) {
-        AbsolutePos at = body.absoluteAt(tick);
-        AbsolutePos origin = body.frame().originAt(tick);
-        // The craft's address is its CELL plus an offset inside it; the offset it holds is wherever
-        // it was when it stopped, expressed in that cell.
-        return body.name().cellCentre().plusLocal(
-                at.localX() - origin.localX() + DescentShell.radiusAround(body),
-                at.localY() - origin.localY(),
-                at.localZ() - origin.localZ());
+    @After
+    public void unwireTheStarLookup() {
+        UniverseRegistry.setStarLookup(null);
     }
 
-    /** How far {@code parked} is from {@code body} at {@code tick}, both resolved at that tick. */
-    private static double rangeFrom(SystemBody body, GalacticCoord parked, long tick) {
-        AbsolutePos craft = body.frame().originAt(tick)
+    /**
+     * A craft holding station one descent shell out from {@code body} at {@code tick}, as an address:
+     * the body's own cell, with the offset measured from the origin production says that cell has.
+     *
+     * <p>Through {@code UniverseRegistry.originAt} and not through {@code body.frame()}: which frame
+     * a cell rides is exactly what is under test, and a test that picks the frame itself measures
+     * its own choice.</p>
+     */
+    private static GalacticCoord parkedBeside(UniverseRegistry reg, SystemBody body, long tick) {
+        GalacticCoord cell = body.name().cellCentre();
+        dev.stannismod.stellurgy.space.BlockDelta off = body.absoluteAt(tick)
+                .plus(DescentShell.radiusAround(body), 0L, 0L)
+                .minus(reg.originAt(cell, tick));
+        return cell.plusLocal(off.dx(), off.dy(), off.dz());
+    }
+
+    /** How far {@code parked} is from {@code body} at {@code tick}, the address resolved as production does. */
+    private static double rangeFrom(UniverseRegistry reg, SystemBody body, GalacticCoord parked,
+                                    long tick) {
+        AbsolutePos craft = reg.originAt(parked.cellCentre(), tick)
                 .plus(parked.localX(), parked.localY(), parked.localZ());
         return craft.distanceTo(body.absoluteAt(tick));
     }

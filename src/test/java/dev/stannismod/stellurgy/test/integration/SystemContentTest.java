@@ -44,16 +44,27 @@ public class SystemContentTest {
     private static final int AUTHORED_DIM_B = 701;
 
     /**
-     * A moon's orbit for these fixtures, in the hundredths-of-an-AU the {@link #planet} helper takes.
+     * A moon's orbit for these fixtures, in DISTANCE UNITS — the unit {@code orbitalDist} is stored in.
      *
-     * <p>The literal was {@code 127}, and it was NOT in the same unit as the planet distances beside
-     * it: a moon's orbit was written in a second unit of 200 chart blocks — 25 400 blocks here —
-     * while a planet's was written in hundredths of an AU. One helper, one parameter, two meanings.
-     * There is one unit now, so this states the same physical distance the fixtures always had.</p>
+     * <p>The fixtures' moon has always been 25 400 chart blocks from its planet (the literal was
+     * {@code 127} units of 200 blocks). That is 63.5 of today's 400-block units, so the nearest whole
+     * number is taken: 64 units, 25 600 blocks.</p>
+     *
+     * <p><b>Why not through {@link #planet}</b>: its parameter is hundredths of an AU, and one
+     * hundredth of an AU is 14 959 units — about 5.98 million blocks — so 25 400 blocks is not
+     * expressible in it at all. This constant was that expression until 2026-09-29, clamped by
+     * {@code Math.max(1, …)} from zero to 1: every moon here sat 5.98 million blocks out while this
+     * comment said 25 400.</p>
      */
-    private static final int MOON_CENTI_AU = (int) Math.max(1L,
-            25_400L * 100L / AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT
-                    * 100L / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
+    private static final int MOON_DISTANCE_UNITS =
+            (int) Math.round(25_400d / AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
+
+    /** A moon of these fixtures: {@link #planet}'s body, at the fixtures' moon distance. */
+    private static DimensionProperties moon(int dimId) {
+        DimensionProperties m = planet(dimId, 0, 0.9);
+        m.orbitalDist = MOON_DISTANCE_UNITS;
+        return m;
+    }
 
     @BeforeClass
     public static void bootstrap() {
@@ -423,7 +434,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(750, 200, 0.5);
         parent.gravitationalMultiplier = 1f;
-        DimensionProperties moon = planet(751, MOON_CENTI_AU, 0.9);
+        DimensionProperties moon = moon(751);
         DimensionManager.getInstance().setDimProperties(750, parent);
         DimensionManager.getInstance().setDimProperties(751, moon);
         parent.setStar(star);
@@ -469,6 +480,16 @@ public class SystemContentTest {
      * is the cell read and the moon is not in that cell — so a later "fix" that widened it would
      * make the positive leg pass while quietly breaking every consumer that asks it a question
      * about one cell (attribution, the wells query, entry placement).</p>
+     *
+     * <p><b>What this does NOT pin: that the descent scan CALLS the sky read.</b> The call is
+     * {@code TileAdvancedFlightComputer.descendTargetsIn}, a private step of the flight computer's
+     * tick, and reverting it to {@code bodiesAt} — the defect as it shipped — leaves this test green.
+     * Nothing pins that call yet: the computer is not ticking on the server tier by the time a craft
+     * could be flown near a moon, so it needs a client e2e with a pilot aboard.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `UniverseRegistry.skyBodiesAt:568` answering the cell read
+     * ({@code bodiesAt}) — the defect as it shipped — this fails with "but the SKY read must hold the
+     * moon, or a scan built on it can never find one" (re-run after the message was narrowed).</p>
      */
     @Test
     public void aMoonIsReachableFromItsParentsCellThroughTheSkyReadButNotTheCellRead() {
@@ -477,7 +498,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(790, 200, 0.5);
         parent.gravitationalMultiplier = 1f;
-        DimensionProperties moon = planet(791, MOON_CENTI_AU, 0.9);
+        DimensionProperties moon = moon(791);
         DimensionManager.getInstance().setDimProperties(790, parent);
         DimensionManager.getInstance().setDimProperties(791, moon);
         parent.setStar(star);
@@ -494,9 +515,13 @@ public class SystemContentTest {
         assertFalse("arrangement: they are different cells, which is what makes this a question",
                 moonCell.sameCell(parentCell));
 
+        // The POSITIVE half of the cell read, in this method (STEP 7): it holds the planet, so the
+        // "no moon" below is the read answering about its one cell and not an empty list.
+        assertTrue("arrangement: the CELL read of the planet's cell must hold the planet itself",
+                holdsDim(reg.bodiesAt(parentCell), 790));
         assertFalse("the CELL read of the planet's cell must not hold the moon — it is not in it",
                 holdsDim(reg.bodiesAt(parentCell), 791));
-        assertTrue("but the read a craft's descent scan uses must, or flying to a moon does nothing",
+        assertTrue("but the SKY read must hold the moon, or a scan built on it can never find one",
                 holdsDim(reg.skyBodiesAt(parentCell), 791));
         assertTrue("...and it must still hold the planet itself",
                 holdsDim(reg.skyBodiesAt(parentCell), 790));
@@ -529,7 +554,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(770, 200, 0.5);
         parent.gravitationalMultiplier = 1f;
-        DimensionProperties moon = planet(771, MOON_CENTI_AU, 0.9);
+        DimensionProperties moon = moon(771);
         DimensionManager.getInstance().setDimProperties(770, parent);
         DimensionManager.getInstance().setDimProperties(771, moon);
         parent.setStar(star);
@@ -574,7 +599,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(780, 200, 0.5);
         parent.setBulk(318d, 11.2d); // a Jupiter: gravity falls out as M/R² = 2.53
-        DimensionProperties moon = planet(781, MOON_CENTI_AU, 0.9);
+        DimensionProperties moon = moon(781);
         DimensionManager.getInstance().setDimProperties(780, parent);
         DimensionManager.getInstance().setDimProperties(781, moon);
         parent.setStar(star);

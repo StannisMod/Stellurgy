@@ -55,6 +55,10 @@ public class ZoneScaleTest {
      *
      * <p>Pan is the tightest case in the system; it is asserted alongside the others rather than
      * alone, because a lattice sized for Pan and wrong for Luna would pass a single-case test.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `ZoneScale.cellsAcrossZone:102` leaving a zone with children
+     * undivided (one cell), this fails with "Mars's innermost moon orbits 9376 km out and shares its
+     * planet's cell: lattice cell = 4609334 blocks, index = 0 …".</p>
      */
     @Test
     public void everyRealMoonGetsACellOfItsOwn() {
@@ -80,6 +84,10 @@ public class ZoneScaleTest {
      * carries it is the body's PARENT, and it drifts away from the body it is parked at. Measured
      * before the fix: Earth's zone cell was 7 235 blocks against Luna's 7 059-block shell, so the
      * craft was outside Luna's cell by construction and no amount of flying could get it in.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `ZoneScale.cellsAcrossZone:102` put back to the flat 1024 it
+     * shipped as (for any zone with a child), this fails with "Mars has a descent shell of 13786
+     * blocks against a zone cell of 4502 (half 2251) …".</p>
      */
     @Test
     public void everyBodysOwnDescentShellFitsInsideItsOwnCell() {
@@ -112,6 +120,10 @@ public class ZoneScaleTest {
      * fine enough to name a moon apart is coarse enough to hold its sphere, for every mass ratio
      * that can exist. Asserted on the real system anyway, because "always" is a claim about the
      * arithmetic and this is a claim about the code.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with the same inversion as the descent-shell test —
+     * `ZoneScale.cellsAcrossZone:102` returning the flat 1024 — this fails with "Mars's innermost moon
+     * has a sphere of influence 7843 blocks in radius against a cell of 4502 (half 2251) …".</p>
      */
     @Test
     public void everyCellContainsTheSphereOfTheBodyItNames() {
@@ -143,14 +155,30 @@ public class ZoneScaleTest {
      * "which body carries this craft" and "which cell is it in" become the same question, because
      * the cell and the sphere are the same region. Nothing needs naming apart inside it, so nothing
      * asks for the lattice to be divided.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, twice. With `ZoneScale.cellsAcrossZone:100` answering 2 for a
+     * childless body, this fails with "a childless body's zone is not divided expected:&lt;1&gt; but
+     * was:&lt;2&gt;". With `ZoneScale.cellBlocks` sizing a one-cell zone from the realization cap
+     * instead of the sphere, it fails with "...so its one cell spans exactly its sphere
+     * expected:&lt;529462.0&gt; but was:&lt;3.2E7&gt;" — which it could NOT do before that day: its moon
+     * was built on a frame of its own, its sphere was the cap itself, and the two readings coincided.</p>
      */
     @Test
     public void aBodyWithNoChildrenGetsOneCellSpanningItsWholeSphere() {
-        SystemBody luna = LUNA.body();
+        // Luna NESTED in Earth's frame. Built on a frame of its own (`LUNA.body()`, as this test first
+        // was), it stands 384 400 km from the ORIGIN rather than from Earth, its sphere comes out
+        // near 1e8 blocks and is clamped to the realization cap — measured 2026-09-29: 16 000 000.
+        SystemBody luna = EARTH.innermostMoon(LUNA.massEarths, LUNA.radiusEarths);
         assertEquals("a childless body's zone is not divided", 1,
                 ZoneScale.cellsAcrossZone(luna, EARTH.body(), 0L, 0L));
         long cell = ZoneScale.cellBlocks(luna, EARTH.body(), 0L, 0L);
         long sphere = ZoneScale.realizedRadiusBlocks(luna, EARTH.body(), 0L);
+        // ARRANGEMENT: the sphere must be the body's OWN, below the realization cap. At the cap,
+        // "the cell spans the sphere" and "the cell spans the cap" are one number and this measures
+        // nothing about which the lattice was sized from.
+        assertTrue("arrangement: the moon's sphere must be its own and not the realization cap ("
+                + sphere + " against a cap of " + GalacticCoord.HALF_CELL + ")",
+                sphere < GalacticCoord.HALF_CELL);
         assertEquals("...so its one cell spans exactly its sphere", 2L * sphere, cell, 1d);
     }
 
@@ -170,7 +198,13 @@ public class ZoneScaleTest {
         assertEquals("and symmetrically on the other side", -1L, ZoneScale.cellIndex(-501L, cell));
     }
 
-    /** The count is a power of two, so a body on a cell boundary does not depend on a rounding mode. */
+    /**
+     * The count is a power of two, so a body on a cell boundary does not depend on a rounding mode.
+     *
+     * <p>red-witnessed: 2026-09-29, with `ZoneScale.cellsAcrossZone:103` returning the raw
+     * {@code needed} count instead of rounding it up to a power of two, this fails with "Mars has a
+     * lattice of 62 cells, which is not a power of two".</p>
+     */
     @Test
     public void theCountIsAPowerOfTwo() {
         for (Planet p : SOLAR_SYSTEM) {
@@ -186,6 +220,10 @@ public class ZoneScaleTest {
      * <p>A body with no mass defines no sphere of influence, and a small-but-nonzero
      * cell handed back here would be indistinguishable from a real lattice at every call site — the
      * naming would succeed and produce an address for a zone nobody owns.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `ZoneScale.cellBlocks:127` answering 1 instead of 0 for a
+     * body with no zone, this fails with "a body with no sphere of influence has no lattice
+     * expected:&lt;0&gt; but was:&lt;1&gt;".</p>
      */
     @Test
     public void noZoneMeansNoLatticeAndTheZeroIsTheAnswer() {
@@ -233,6 +271,11 @@ public class ZoneScaleTest {
          * far lighter than this.</p>
          */
         SystemBody innermostMoon() {
+            return innermostMoon(massEarths / 50d, radiusEarths / 4d);
+        }
+
+        /** The innermost moon with a stated bulk — for a case about one particular moon. */
+        SystemBody innermostMoon(double moonMassEarths, double moonRadiusEarths) {
             // NESTED in its parent's frame, the way production builds one — so the separation the
             // sphere is computed from is the moon's orbit about its PARENT. Built on a frame of its
             // own it would be that distance from the SUN instead, and the sphere would come back as
@@ -243,7 +286,7 @@ public class ZoneScaleTest {
                     CellFrame.of(AbsolutePos.ofCellName(GalacticCoord.ORIGIN), parentOrbit);
             return new SystemBody(GalacticCoord.ORIGIN, CellFrame.within(parentFrame, moonOrbit),
                     BodyEphemeris.STATIC, SystemBodyKind.MOON, Constants.INVALID_PLANET, 1,
-                    100, radiusEarths / 4d, massEarths / 50d);
+                    100, moonRadiusEarths, moonMassEarths);
         }
 
         SystemBody body() {
@@ -276,6 +319,10 @@ public class ZoneScaleTest {
      * craft does not, and an address that dropped the in-cell remainder would move it to the nearest
      * cell centre at the instant it crossed a sphere — up to half a cell, which in Earth's zone is
      * 924 647 blocks of teleport nobody asked for. This is the assertion that separates the two.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `ZoneScale.addressOnLattice:236` dropping the in-cell
+     * remainder (locals 0), this fails with "the address must denote where the craft actually is
+     * expected:&lt;4315080&gt; but was:&lt;3698640&gt;".</p>
      */
     @Test
     public void anAddressInsideAZoneKeepsTheOffsetAndDoesNotSnapToACellCentre() {
@@ -306,18 +353,20 @@ public class ZoneScaleTest {
     }
 
     /**
-     * <b>A craft re-addressed INTO a zone is named on the same lattice as the bodies of that zone.</b>
+     * <b>Addressed on the width a moon's name records, a craft where the moon stands is named by the
+     * moon's cell</b> — the ADDRESSING half of "a zone has one lattice".
      *
-     * <p>A zone has exactly ONE lattice, and two callers derive it: the naming path, which sizes it
-     * so the innermost child gets an index of its own, and the crossing path, which re-addresses a
-     * craft that has just left a child's sphere. If the two disagree about the cell width they
-     * disagree about the NAME — the width is deliberately not part of a cell key, so a mismatch does
-     * not fail anywhere, it silently renames the cell.</p>
+     * <p>A zone's lattice is sized by the naming path, and a craft is addressed on it by
+     * {@link ZoneScale#addressOnLattice} with a width handed in. This pins that the addressing half
+     * honours the width it is handed: given the width the naming path recorded (which is what a
+     * moon's own name carries), a craft sitting exactly where the moon sits lands in the MOON's cell,
+     * not in cell 0, the planet's own.</p>
      *
-     * <p>The witness is the strongest one available: a craft sitting exactly where the moon sits must
-     * be addressed into the MOON's cell. On a lattice sized for nothing that is cell 0 — the planet's
-     * own — which is "a moon shares its parent's name" returning through the crossing, the one door
-     * the zone design has never been checked at.</p>
+     * <p><b>What it does NOT pin</b>, stated because this test used to claim it: WHICH width the
+     * crossing reads. The width here is supplied by the test, so a crossing that sized a second
+     * lattice of its own would not be seen. That choice is pinned on a real registry by
+     * {@code ZoneCrossingAimsAtTheRightCellTest#aCraftLeavingAMoonsSphereIsNamedByTheMoonsOwnCell},
+     * whose red-witness inverts {@code SpaceSubsystem.latticeOf}.</p>
      *
      * <p>red-witnessed: 2026-09-29, with `ZoneScale.addressOnLattice:233` made to ignore the width it
      * is handed and use the undivided one (7 397 280), this fails with *"a craft standing exactly
@@ -338,16 +387,14 @@ public class ZoneScaleTest {
         assertTrue("arrangement: Luna must not already share Earth's own cell",
                 lunasCell.sectorX() != 0L);
 
-        // How the CROSSING path addresses one: on the lattice the naming pass RECORDED, which is what
-        // a moon's own name carries. The crossing has a craft and a body, never the child set the
-        // width is derived from, so it must read the answer rather than size a second lattice.
+        // Addressed on the width the naming pass RECORDED, which is what a moon's own name carries.
         GalacticCoord craft = ZoneScale.addressOnLattice(earth.name().cellKey(),
                 lunasCell.cellBlocks(), whereLunaIs);
         assertNotNull("a craft in a zone must be addressable in it", craft);
 
         assertTrue("a craft standing exactly where the moon stands is named by cell "
                         + craft.cellKey() + " while the moon itself is named by " + lunasCell.cellKey()
-                        + ": the crossing addressed it on a lattice of " + craft.cellBlocks()
+                        + ": it was addressed on a lattice of " + craft.cellBlocks()
                         + " blocks and the moon was named on one of " + lunasCell.cellBlocks()
                         + ". The width is not part of a cell key, so this does not fail anywhere — it "
                         + "renames the cell, and everything keyed on that name then answers about a "

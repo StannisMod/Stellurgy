@@ -82,6 +82,28 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
     private static final double OUTSIDE_BY = CellSeam.SPHERE_REENTRY_FRACTION;
 
     /**
+     * Where the OUTWARD craft ARRIVES, as a fraction of the radius — deeper than where its control is
+     * asked ({@link #INSIDE_AT}), and that difference is the point.
+     *
+     * <p>The craft's computer ticks for a moment after the jump's paste and asks the controller
+     * itself (measured, see the class note). Arrived at the control's own spot, a controller that
+     * wrongly carried a craft that deep would do it on that tick, and the test would go red in its
+     * arrangement instead of at the control. A tenth of the radius is outside the moon's descent
+     * shell and inside a sphere a quarter of the real one; the move to {@link #INSIDE_AT} happens
+     * once the computer has stopped ticking.</p>
+     */
+    private static final double ARRIVE_AT = 0.1d;
+
+    /**
+     * Where the INWARD craft ARRIVES, as a fraction of the moon's radius — for the same reason as
+     * {@link #ARRIVE_AT}, from the outside: three radii is beyond even the sphere Luna gets when it
+     * is measured against the STAR instead of its planet (638 428 blocks, 2.4 R — the shipped defect
+     * that sphere-of-influence code has already had once), so a controller carrying it in would meet
+     * the control at {@link #BESIDE_AT}, not the paste.
+     */
+    private static final double ARRIVE_FAR_AT = 3.0d;
+
+    /**
      * Where a craft stands BETWEEN the spheres before it flies in, as a fraction of the moon's
      * radius: outside the moon's, and — at a few hundred thousand blocks from a moon a million and a
      * half from its planet — deep inside the planet's.
@@ -100,8 +122,8 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
      * How far the arrived hull's reported pose may sit from the address it was placed at, in blocks
      * — physics, not rounding. The crossing teleports the hull exactly onto the address and then
      * RELEASES it to the physics ({@code ShipCrossingService.tick}: pose, re-seat, unpark), and the
-     * hull is read several ticks later. Measured 2026-09-29 on this fixture, twice, to three decimals:
-     * (1.39, -1.16, 0.50) from an address of (264996, 0, 0). Not explained further here, and not the
+     * hull is read several ticks later. Measured 2026-09-29 on this fixture: (1.39, -1.16, 0.50) from
+     * an address of (264996, 0, 0) on most runs, identical to three decimals, and (0, 0, 0) on one. Not explained further here, and not the
      * crossing's to explain: the address itself is checked to the block. The defect this separates is
      * the same 321 993-block displacement.
      */
@@ -126,14 +148,26 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
      * (2) the same method firing for any body with a sphere: fails in the ARRANGEMENT, reproducibly,
      * "the throttle could not be released — the craft's ledger row is now … @19_0_0.1_0_0 +132365,0,0"
      * — the computer's own tick right after the jump's paste carried out a craft at half the radius
-     * before the control could be asked; the control's verdict itself is therefore witnessed only by
-     * {@code ZoneCrossingAimsAtTheRightCellTest}'s control.
-     * (3) `SpaceSubsystem.addressIn:552-554` handing back the lattice address: fails with "the ledger no
+     * before the control could be asked. That is why the craft now ARRIVES at a tenth of the radius
+     * and is moved to the control's spot afterwards ({@code ARRIVE_AT}).
+     * (2b) The CONTROL, witnessed in this class since: with `SpaceSubsystem.zoneMembershipIn:500`
+     * reading a quarter of the sphere, it fails with "a craft 132365.0 blocks from a moon whose sphere
+     * is 264731 must be left where it is: {"started":true,"wouldCarry":true,"toCell":"19_0_0.1_0_0" …}".
+     * (3) `SpaceSubsystem.addressIn:551-553` handing back the lattice address: fails with "the ledger no
      * longer names the cell the carry announced — the craft was carried again after it arrived …
      * @19_0_0.1_0_0.0_0_0 +-46699,0,1650": misplaced some 311 000 blocks back inside the sphere, it was
      * carried straight back in.
-     * (4) `SpaceSubsystem.latticeOf` ignoring the recorded width: fails at the naming verdict,
-     * "expected:&lt;19_0_0.[1]_0_0&gt; but was:&lt;19_0_0.[0]_0_0&gt;" — named by EARTH's cell.</p>
+     * (4) `SpaceSubsystem.latticeOf:652` ignoring the recorded width: fails at the naming verdict,
+     * "expected:&lt;19_0_0.[1]_0_0&gt; but was:&lt;19_0_0.[0]_0_0&gt;" — named by EARTH's cell.
+     * (5) `CellSeam.hasEnteredZone:143` entering at the sphere itself (no inward margin): fails at the
+     * hysteresis band, "a craft back inside the moon's sphere but not past the inward threshold (the
+     * hysteresis), 264598 blocks from a moon whose sphere is 264731 must be left where it is:
+     * {"started":true,"wouldCarry":true,"toCell":"19_0_0.1_0_0.0_0_0" …}" — carried straight back in.
+     * The inward scenario stays green on it.
+     * (6) The POSITIVE half of that band check: with `CellSeam.hasEnteredZone:142` answering
+     * {@code false}, the band still reads "stays" and the method fails one step later, where the
+     * craft is taken deeper: "production does not agree the craft has entered the moon's sphere …
+     * {"started":false,"wouldCarry":false …}".</p>
      */
     @Test
     public void aCraftFlownOutOfAMoonsSphereIsCarriedIntoItsParentsLatticeAndStaysThere()
@@ -141,11 +175,14 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
         Moon luna = arrangeACraftBesideTheMoon();
         String insideKey = GalacticCoord.inZone(luna.moonKey, luna.moonLattice, 0L, 0L, 0L,
                 0L, 0L, 0L).cellKey();
-        Placed deep = jumpTo(luna, insideKey, (long) (luna.radius * INSIDE_AT));
+        Placed arrived = jumpTo(luna, insideKey, (long) (luna.radius * ARRIVE_AT));
         // THE ARRANGEMENT IS ASSERTED: everything below is about the moon's sphere only if the craft
         // is named inside the moon's zone and stands inside the sphere.
-        assertEquals("arrangement: the craft must be named inside the moon's own zone: " + deep.ledger,
-                luna.moonKey, GalacticCoord.fromCellKey(deep.ledger.cellKey).zone());
+        assertEquals("arrangement: the craft must be named inside the moon's own zone: "
+                + arrived.ledger, luna.moonKey, GalacticCoord.fromCellKey(arrived.ledger.cellKey).zone());
+        // Moved to where the CONTROL is asked only after arriving, so a wrong decision meets the
+        // control and not the computer's own tick in the moment after the paste (see ARRIVE_AT).
+        Placed deep = moveWithin(arrived, (long) (luna.radius * INSIDE_AT));
         assertTrue("arrangement: the craft must stand INSIDE the moon's sphere (" + deep.fromMoon
                 + " against " + luna.radius + "): " + deep.pose.raw(), deep.fromMoon < luna.radius);
 
@@ -165,8 +202,20 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
                 + "named by the moon's OWN cell in that lattice: " + out.record, luna.moonKey,
                 out.cell());
         assertRenamedNotMoved(out, luna.durableId);
-        assertStays(out.ledger.slotDim, luna.durableId,
-                "a craft just outside the moon's sphere (the hysteresis)");
+        // THE HYSTERESIS, where it can bite: back INSIDE the sphere, but not as deep as the inward
+        // threshold. Geometrically in the moon's influence again; by the hysteresis still the
+        // planet's. The arrival pose itself (R·1.001) is outside the band and cannot tell a craft
+        // that is held by the hysteresis from one that is simply not near the boundary.
+        Placed band = moveIntoTheBandAndAssertStays(luna, out.ledger.slotDim,
+                (long) Math.floor(luna.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION / 2d)),
+                "a craft back inside the moon's sphere but not past the inward threshold "
+                        + "(the hysteresis)");
+        // ...and the POSITIVE half, in this method (STEP 7): deeper in, the same lattice DOES carry
+        // it into the moon's zone. Without this, a dead inward crossing reads as the hysteresis.
+        Carried back = moveAndCarry(luna, band, (long) (luna.radius * INSIDE_AT),
+                "entered the moon's sphere");
+        assertEquals("past the inward threshold the craft must be taken back into the moon's zone: "
+                + back.record, luna.moonKey, GalacticCoord.fromCellKey(back.cell()).zone());
     }
 
     /**
@@ -181,16 +230,29 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
      * (… 132365 blocks out against a radius of 264731): {"started":false,"wouldCarry":false,
      * "fromCell":"19_0_0.1_0_0" …}", while the outward scenario stays green on that same inversion.
      * The naming and continuity verdicts are shared with the outward scenario through
-     * {@code addressIn}, whose inversion is recorded there.</p>
+     * {@code addressIn}, whose inversion is recorded there. And with `CellSeam.hasLeftZone:130` leaving
+     * at the sphere itself (no outward margin), it fails at the hysteresis band: "a craft back outside
+     * the moon's sphere but not past the outward threshold (the hysteresis), 264745 blocks from a moon
+     * whose sphere is 264731 must be left where it is: {"started":true,"wouldCarry":true …}" —
+     * carried straight back out. The outward scenario stays green on it. And the CONTROL between the
+     * spheres: with `SpaceSubsystem.zoneMembershipIn:490` measuring the moon's sphere against the STAR
+     * (the 638 428-block sphere, the shape of a defect this code has shipped once), it fails with "a
+     * craft 397096.1095767623 blocks from a moon whose sphere is 264731 must be left where it is:
+     * {"started":true,"wouldCarry":true …}". And the POSITIVE half of the band check: with
+     * `CellSeam.hasLeftZone:129` answering {@code false}, the band still reads "stays" and the method
+     * fails one step later, where the craft is taken further out: "production does not agree the
+     * craft has left the moon's sphere … {"started":false,"wouldCarry":false …}".</p>
      */
     @Test
     public void aCraftFlownIntoAMoonsSphereIsCarriedIntoTheMoonsZoneAndStaysThere()
             throws Exception {
         Moon luna = arrangeACraftBesideTheMoon();
-        Placed beside = jumpTo(luna, luna.moonKey, (long) (luna.radius * BESIDE_AT));
+        Placed far = jumpTo(luna, luna.moonKey, (long) (luna.radius * ARRIVE_FAR_AT));
         assertEquals("arrangement: the craft must be named by the moon's own cell in its PLANET's "
-                + "lattice, or this is not the inward crossing: " + beside.ledger, luna.moonKey,
-                beside.ledger.cellKey);
+                + "lattice, or this is not the inward crossing: " + far.ledger, luna.moonKey,
+                far.ledger.cellKey);
+        // Moved to where the CONTROL is asked only after arriving — see ARRIVE_FAR_AT.
+        Placed beside = moveWithin(far, (long) (luna.radius * BESIDE_AT));
         assertTrue("arrangement: the craft must stand OUTSIDE the moon's sphere (" + beside.fromMoon
                 + " against " + luna.radius + "): " + beside.pose.raw(),
                 beside.fromMoon > luna.radius);
@@ -208,8 +270,19 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
         assertEquals("a craft carried into a moon's sphere belongs to that MOON, and is named in its "
                 + "own zone: " + in.record, luna.moonKey, GalacticCoord.fromCellKey(in.cell()).zone());
         assertRenamedNotMoved(in, luna.durableId);
-        assertStays(in.ledger.slotDim, luna.durableId,
-                "a craft half-way inside the moon's sphere");
+        // THE HYSTERESIS, from this side: back OUTSIDE the sphere, but not as far as the outward
+        // threshold. Geometrically out of the moon's influence; by the hysteresis still the moon's.
+        Placed band = moveIntoTheBandAndAssertStays(luna, in.ledger.slotDim,
+                (long) Math.ceil(luna.radius * (1d + CellSeam.SPHERE_CARRY_FRACTION / 2d)),
+                "a craft back outside the moon's sphere but not past the outward threshold "
+                        + "(the hysteresis)");
+        // ...and the POSITIVE half, in this method (STEP 7): further out, the same zone DOES carry it
+        // out to the planet's lattice. Without this, a dead outward crossing reads as the hysteresis.
+        Carried back = moveAndCarry(luna, band, (long) Math.ceil(luna.radius * (1d + OUTSIDE_BY)),
+                "left the moon's sphere");
+        assertEquals("past the outward threshold the craft must be carried out to the planet's "
+                + "lattice: " + back.record, luna.planetKey,
+                GalacticCoord.fromCellKey(back.cell()).zone());
     }
 
     // ---- the arrangement both scenarios share -----------------------------------------------------
@@ -303,6 +376,8 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
         String moonKey = null;
         for (String body : system.objectArray("bodies")) {
             Reply b = Reply.of(body);
+            // Refusing reads on purpose: the producer always writes `dim`, `kind` and `cell` for
+            // every body (`cell-info`'s one body writer), so a missing field is a broken producer.
             if (b.integer("dim") == 0) {
                 planetKey = b.text("cell");
             }
@@ -311,6 +386,7 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
                 + system, planetKey);
         for (String body : system.objectArray("bodies")) {
             Reply b = Reply.of(body);
+            // As above: the producer always writes `kind` and `cell`.
             if ("MOON".equals(b.text("kind"))
                     && planetKey.equals(GalacticCoord.fromCellKey(b.text("cell")).zone())) {
                 assertTrue("arrangement: the launch planet has more than one moon, so which one this "
@@ -348,6 +424,19 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
         String vsId = ShipIdentity.physicsIdOf(this::exec, ledger.slotDim, moon.durableId);
         stopTheCraft(ledger.slotDim, vsId, moon.durableId);
         return new Placed(ledger, vsId, ShipInfo.byId(this::exec, ledger.slotDim, vsId));
+    }
+
+    /** Move a placed craft along X to {@code toX} from the moon, within its cell, and prove it moved. */
+    private Placed moveWithin(Placed from, long toX) throws Exception {
+        int slot = from.ledger.slotDim;
+        assertTrue("the move within the cell failed", Reply.of(exec("stellurgytest vs "
+                + "teleport-ship-by-id " + slot + " " + from.vsId + " " + toX + " "
+                + (long) from.pose.y + " " + (long) from.pose.z)).ok());
+        exec("stellurgytest vs unpark-by-id " + slot + " " + from.vsId);
+        ShipInfo moved = ShipInfo.byId(this::exec, slot, from.vsId);
+        assertEquals("arrangement: the craft is not where it was moved to: " + moved.raw(),
+                toX, moved.x, CONTINUITY_SLACK);
+        return new Placed(from.ledger, from.vsId, moved);
     }
 
     /**
@@ -422,6 +511,30 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
      * decision is a reading. A refusal carries a {@code reason} and decided nothing, so it is told
      * apart first.
      */
+    /**
+     * Move the just-carried craft into the hysteresis band and assert the controller leaves it
+     * there. Returns where it stands, so the caller can assert the POSITIVE half in the same method
+     * (STEP 7): a "stays" is only the hysteresis if the same crossing, further on, does fire.
+     */
+    private Placed moveIntoTheBandAndAssertStays(Moon moon, int slot, long toX, String craft)
+            throws Exception {
+        String vsId = ShipIdentity.physicsIdOf(this::exec, slot, moon.durableId);
+        EntryStatus ledger = EntryStatus.forShip(this::exec, moon.durableId).requireFound(
+                "the carried craft must still have its ledger row");
+        Placed band = moveWithin(new Placed(ledger, vsId, ShipInfo.byId(this::exec, slot, vsId)), toX);
+        // The DISTANCE, not the X: the arrival ring leaves the craft up to a thousand blocks off-axis,
+        // and the band is only a few hundred blocks deep on its outer side.
+        assertTrue("arrangement: the craft must stand INSIDE the hysteresis band ("
+                        + moon.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION) + " .. "
+                        + moon.radius * (1d + CellSeam.SPHERE_CARRY_FRACTION) + "), it is "
+                        + band.fromMoon + " from the moon: " + band.pose.raw(),
+                band.fromMoon > moon.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION)
+                        && band.fromMoon < moon.radius * (1d + CellSeam.SPHERE_CARRY_FRACTION));
+        assertStays(slot, moon.durableId, craft + ", " + band.fromMoon + " blocks from a moon whose "
+                + "sphere is " + moon.radius);
+        return band;
+    }
+
     private void assertStays(int slot, String durableId, String craft) throws Exception {
         Reply decision = Reply.of(exec("stellurgytest space seam-carry " + slot + " id " + durableId));
         assertFalse("the craft was refused rather than judged, so nothing was asked: " + decision,

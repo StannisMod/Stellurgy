@@ -143,6 +143,10 @@ public class CellSeamTest {
      * cell. Reading the in-cell offset alone would put every craft at most half a cell from the body
      * however far across the zone it had flown — which for Earth's zone is an error of millions of
      * blocks and always in the direction of "you have not left yet".</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `CellSeam.distanceFromZoneBody:115` reading the in-cell
+     * offset alone (the {@code sector * width} term dropped), this fails with "expected:&lt;5547882.0&gt;
+     * but was:&lt;0.0&gt;" — a craft three cells out read as standing on the body.</p>
      */
     @Test
     public void distanceIsMeasuredFromTheBodyAndNotFromTheCell() {
@@ -165,6 +169,10 @@ public class CellSeamTest {
      * <p>Between them a craft stays where it is. Without the gap a craft drifting on the boundary
      * re-decides its frame every tick and pays a full cut-and-paste each time — the same failure the
      * cube's two margins exist for, one level down, and the same ratio: ten to one.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `CellSeam.hasEnteredZone:143` entering at the sphere itself
+     * (the {@code 1 - SPHERE_REENTRY_FRACTION} factor dropped), this fails with "but a whisker inside
+     * is not — that is the gap"; every other test in the class stays green on that inversion.</p>
      */
     @Test
     public void theSphereThresholdsAreAHysteresisAndNotOneBoundaryReadTwice() {
@@ -192,37 +200,73 @@ public class CellSeamTest {
     }
 
     /**
-     * A zone with no radius has no sphere to leave, and both answers are NO rather than a guess.
+     * A zone with no radius has no sphere to leave or to enter, and both answers are NO rather than
+     * a guess.
      *
      * <p>That is the galactic lattice, where a cell's extent IS its cube. A sphere test that answered
      * "yes, you have left" for a radius of zero would carry every craft in deep space out of a zone
-     * it was never in.</p>
+     * it was never in; one that answered "entered" for the {@code -1} that
+     * {@link CellSeam#distanceFromZoneBody} returns for a galactic coordinate would take it into one.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, twice. With `CellSeam.hasLeftZone:129` stripped of its
+     * {@code zoneRadiusBlocks > 0} guard, this fails (then with a bare {@code AssertionError}; the
+     * assertions carry messages since). With `CellSeam.hasEnteredZone:142` stripped of the same
+     * guard, it fails with "with no sphere there is nothing to enter, even for the -1 a galactic
+     * coordinate's distance is" — the assertion that read {@code (0, 0)} before could not see that
+     * guard at all, since {@code 0 < 0} is false without it.</p>
      */
     @Test
     public void noSphereMeansNoSphereAnswerRatherThanZero() {
-        assertFalse(CellSeam.hasLeftZone(1_000_000d, 0d));
-        assertFalse(CellSeam.hasEnteredZone(0d, 0d));
+        // The POSITIVE half first, in this method (STEP 7): the same distance against a real sphere
+        // IS a departure, so the "no" below is the missing sphere answering and not a predicate that
+        // never says yes.
+        assertTrue("a million blocks out of a 264 000-block sphere is a departure",
+                CellSeam.hasLeftZone(1_000_000d, 264_000d));
+        assertTrue("and half-way into one is an entry", CellSeam.hasEnteredZone(132_000d, 264_000d));
+
+        assertFalse("with no sphere there is nothing to leave",
+                CellSeam.hasLeftZone(1_000_000d, 0d));
+        assertFalse("with no sphere there is nothing to enter, even for the -1 a galactic "
+                + "coordinate's distance is", CellSeam.hasEnteredZone(-1d, 0d));
     }
 
     /**
-     * The sphere is INSCRIBED in the cell, so where both apply the sphere always fires first.
+     * <b>Where the sphere and the cube both fire, the SPHERE aims the carry.</b>
      *
-     * <p>This is what makes the change safe to land ahead of the rest: a craft is never carried by
-     * the cube out of a zone it had not already left by the sphere. The relation holds because a
-     * childless body's zone is one cell of exactly twice its own radius, so the cell's half-width IS
-     * the radius — the sphere touches each face and is inside everywhere else.</p>
+     * <p>The cube a carry consults is the galactic one — {@code HALF_CELL + CARRY_MARGIN} from the
+     * cell's centre, in every cell, zoned or not ({@code CellSeam.shouldCarry}) — and the widest
+     * sphere production realizes is capped at {@code HALF_CELL} ({@code ZoneScale.realizedRadiusBlocks}).
+     * At that cap a craft just past the sphere is also past the cube, so "the sphere fires first" is
+     * not arithmetic there: both fire, and only the ORDER inside
+     * {@code CellCrossingController.carryDestination} decides where the craft goes. Asked of the
+     * cube, it would be the +X neighbour — a cube face nowhere near the sphere it crossed.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with `CellCrossingController.carryDestination:206` asking the cube
+     * BEFORE the sphere, this fails with "where both fire the carry must be aimed by the sphere
+     * (20_0_0), not at the cube's neighbour: got 2_0_0". (The version before that date asserted
+     * {@code past < 2R/2 + CARRY_MARGIN} on a cube of the test's own making, which production never
+     * consults.)</p>
      */
     @Test
     public void theSphereFiresBeforeTheCubeWhereBothApply() {
-        long radius = 264_000L;
-        long cell = 2L * radius;                 // a childless body's zone: one cell, span 2R
-        // Straight out along +x, one block past the sphere's carry threshold.
-        long past = (long) (radius * (1d + CellSeam.SPHERE_CARRY_FRACTION)) + 1L;
-        GalacticCoord at = GalacticCoord.inZone(ZONE, cell, 0, 0, 0, past, 0L, 0L);
+        double radius = GalacticCoord.HALF_CELL;           // the widest sphere production realizes
+        long past = (long) Math.ceil(radius * (1d + CellSeam.SPHERE_CARRY_FRACTION)) + 1L;
+        GalacticCoord cell = GalacticCoord.inZone(ZONE, ZONE_CELL, 1L, 0L, 0L, 0L, 0L, 0L);
+        GalacticCoord bySphere = GalacticCoord.ofSectorLocal(19L, 0L, 0L, past, 0L, 0L);
 
-        assertTrue("the sphere must call this a departure",
-                CellSeam.hasLeftZone(CellSeam.distanceFromZoneBody(at), radius));
-        assertTrue("...while the cube has not, which is the ordering this rests on",
-                past < cell / 2L + CellSeam.CARRY_MARGIN);
+        // ARRANGEMENT: both answers are "carry", or there is no order to decide.
+        assertTrue("arrangement: the sphere must call this a departure",
+                CellSeam.hasLeftZone(past, radius));
+        assertTrue("arrangement: and so must the cube, or this is not the case where both apply",
+                CellSeam.shouldCarry(past, 0d, 0d));
+
+        dev.stannismod.stellurgy.space.CellCrossingController controller =
+                new dev.stannismod.stellurgy.space.CellCrossingController(null, null, null,
+                        () -> 0L, (craft, tick) -> bySphere);
+        GalacticCoord aimed = controller.carryDestination(cell, new double[]{past, 0d, 0d});
+        assertTrue("where both fire the carry must be aimed by the sphere (" + bySphere.cellKey()
+                        + "), not at the cube's neighbour: got "
+                        + (aimed == null ? "null" : aimed.cellKey()),
+                aimed != null && aimed.sameCell(bySphere));
     }
 }

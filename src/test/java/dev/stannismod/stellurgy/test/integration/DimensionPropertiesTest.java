@@ -67,6 +67,12 @@ public class DimensionPropertiesTest {
         return props;
     }
 
+    /**
+     * A fresh dimension's defaults, including an orbit of one AU in today's distance unit.
+     *
+     * <p>red-witnessed: 2026-09-29, with `DimensionProperties:546` defaulting the orbit to the old
+     * {@code 100} ("1 AU = 100"), this fails with "expected:&lt;1495979&gt; but was:&lt;100&gt;".</p>
+     */
     @Test
     public void dimensionPropertiesDefaultsAreStable() {
         DimensionProperties props = new DimensionProperties(42);

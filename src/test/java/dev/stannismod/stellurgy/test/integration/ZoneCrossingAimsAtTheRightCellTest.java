@@ -70,9 +70,9 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * bodies — it could not descend to it and its sky did not draw it.</p>
      *
      * <p>red-witnessed: 2026-09-29, TWICE, one inversion per assertion, each leaving the other two
-     * scenarios green. With `SpaceSubsystem.latticeOf:606` made to ignore the recorded width, the
+     * scenarios green. With `SpaceSubsystem.latticeOf:652` made to ignore the recorded width, the
      * naming verdict fails *"expected:&lt;1849294&gt; but was:&lt;7397176&gt;"*. With
-     * `SpaceSubsystem.addressIn:552-554` made to hand back the lattice address unchanged, the
+     * `SpaceSubsystem.addressIn:551-553` made to hand back the lattice address unchanged, the
      * continuity verdict fails *"re-addressing must not displace the craft expected:&lt;0.0&gt; but
      * was:&lt;321993.763009472&gt;"*.</p>
      */
@@ -157,13 +157,28 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * sphere — the exact "re-addresses on every tick" defect this control exists to exclude — it
      * fails with *"must be left where it is expected null, but was: GalacticCoord[zone=19_0_0@1849294,
      * sector=(1,0,0) …]"*, and the other two scenarios stay green ON that same inversion, which is
-     * precisely why a control is needed: they cannot tell the difference.</p>
+     * precisely why a control is needed: they cannot tell the difference. Re-run the same day after
+     * the positive half below was added, with the same result.</p>
+     *
+     * <p><b>The positive half, and the inversion that shows why it is here</b>: with
+     * `SystemBody.definesFrame:326` no longer counting a MOON, {@code zoneMembershipIn} cannot resolve
+     * the moon's zone and answers {@code null} for that reason alone — which the null verdict below
+     * would have read as the hysteresis, green. The positive half fails instead: "arrangement: this
+     * zone must resolve — a craft past its sphere is re-addressed" (2026-09-29).</p>
      */
     @Test
     public void aCraftWellInsideItsOwnZoneIsLeftAlone() {
         Fixture home = arrangeEarthAndLuna();
         long lunaSphere = dev.stannismod.stellurgy.space.ZoneScale
                 .realizedRadiusBlocks(home.luna, home.earth, TICK);
+        assertTrue("arrangement: the moon must have a sphere to be inside", lunaSphere > 0L);
+        // The POSITIVE half, in this method (STEP 7): the same zone, the same registry, a craft past
+        // the sphere IS re-addressed. A null from `zoneMembershipIn` also means "the universe could
+        // not be asked", so without this the null below could be that and not the hysteresis.
+        long out = (long) Math.ceil(lunaSphere * (1d + CellSeam.SPHERE_CARRY_FRACTION)) + 1L;
+        assertNotNull("arrangement: this zone must resolve — a craft past its sphere is re-addressed",
+                SpaceSubsystem.zoneMembershipIn(home.reg, inLunasZone(home, out), TICK));
+
         GalacticCoord craft = inLunasZone(home, lunaSphere / 2L);
         assertNull("a craft inside its own zone and inside nothing else must be left where it is",
                 SpaceSubsystem.zoneMembershipIn(home.reg, craft, TICK));
