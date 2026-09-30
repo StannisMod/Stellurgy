@@ -229,6 +229,14 @@ public final class ShipFrameTravel {
         if (entity == null || entity.world == null) {
             return false;
         }
+        // A body the deck holds is updated in the deck's own frame by its unmodified vanilla code;
+        // this class must not resolve it a second time. Asked by name rather than left to follow
+        // from where the body happens to stand during that update - in the shipyard, where every
+        // test below would read the deck as world terrain and decline by coincidence.
+        if (DeckFrameTick.holds(entity)) {
+            release(entity, "deckFrame");
+            return false;
+        }
         // Vanilla's own gate on travel(): an entity whose movement this side does not simulate (a mob
         // the client only interpolates) must be left alone. The gravity hook consults this method too,
         // so it has to know - otherwise gravity is handed over for a tick that never resolves.

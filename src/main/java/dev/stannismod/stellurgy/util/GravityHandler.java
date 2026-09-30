@@ -104,6 +104,14 @@ public class GravityHandler implements IGravityManager {
         //So I cannot, without much more effort than it's worth, set elytra flight. Therefore, they're magic.
         if ((!(entity instanceof EntityPlayer) && !(entity instanceof EntityFlying)) || (!(entity instanceof EntityFlying) && !(((EntityPlayer) entity).capabilities.isFlying || ((EntityLivingBase) entity).isElytraFlying()))) {
 
+            // A body a deck holds is being updated in that deck's own frame right now (this hook runs
+            // inside its update), where -Y IS deck-down and vanilla's own pull for its class is
+            // exactly the craft's ~1G. The dimension's gravity is not the craft's: scaling that pull
+            // by it left an item let go above a deck in a world without gravity hanging where it was.
+            if (dev.stannismod.stellurgy.integration.vs.DeckFrameTick.holds(entity)) {
+                return;
+            }
+
             // A living entity aboard a ship has its whole movement - gravity included - resolved in
             // the ship's frame by ShipFrameTravel. Applying a world-frame delta here as well would
             // pull it toward the deck twice, so we hand it over untouched. The two call sites must

@@ -1,7 +1,10 @@
 package dev.stannismod.stellurgy.integration.vs;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.item.EntityItem;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -17,11 +20,13 @@ import net.minecraft.world.World;
  * deck's axes, {@code move} collides against the deck's real blocks - and the result is mapped back
  * to the world, where everything else sees the entity.</p>
  *
- * <p>Velocity crosses the boundary relative to the deck: the carry added when the entity is mapped
- * out is subtracted exactly when it is mapped in next tick, so an impulse the world gave it between
- * the two survives and the craft's own acceleration does not leak into it.</p>
+ * <p>Velocity is held in the deck's frame, like the deck point. What the world adds to the entity's
+ * world motion between two updates - an impulse, a knockback - is exactly the difference from the
+ * world motion this class wrote, and that difference is taken into the deck's frame and added. So an
+ * impulse survives whole, and neither the craft's own acceleration nor its turning leaks into the
+ * velocity the entity has relative to its deck.</p>
  *
- * <p>Admits {@link EntityItem} only, for now.</p>
+ * <p>Admits items and living bodies other than players, for now.</p>
  */
 public final class DeckFrameTick {
 
@@ -40,19 +45,26 @@ public final class DeckFrameTick {
     private static final double STAY_REGION_MARGIN = 4.0;
 
     /**
-     * A deck's hold on one entity: which craft, the deck point its last update left it at, and the
-     * carry last added to its world motion.
+     * A deck's hold on one entity: which craft, the deck point and deck-frame velocity its last update
+     * left it with, and the world motion this class last wrote into it.
      */
     public static final class Episode {
         final String shipId;
         /** Whether {@code local*} has been written by an update yet. */
         boolean held;
         double localX, localY, localZ;
+        /** The entity's velocity relative to its deck, on the deck's axes, as its last update left it. */
+        double localMotionX, localMotionY, localMotionZ;
         /** True while this class, or the entity's own update in the deck frame, writes its position. */
         boolean writing;
         /** Somebody else wrote the entity's position since this class last did: adopt it. */
         boolean worldWritten;
-        double carryX, carryY, carryZ;
+        /**
+         * The world motion this class last wrote into the entity: its deck-frame velocity on world
+         * axes plus the deck's own carry at its point. Whatever the entity's world motion differs from
+         * this by, the world added.
+         */
+        double writtenX, writtenY, writtenZ;
 
         Episode(String shipId) {
             this.shipId = shipId;
@@ -98,6 +110,14 @@ public final class DeckFrameTick {
     }
 
     /**
+     * Whether a deck holds {@code entity} now. While it does, the deck's frame is the only place its
+     * movement is resolved, so every other mechanism that would move it must stand down.
+     */
+    public static boolean holds(Entity entity) {
+        return entity instanceof DeckHeld && ((DeckHeld) entity).stellurgy$deckEpisode() != null;
+    }
+
+    /**
      * Update {@code entity} in its deck's frame if a deck holds it or takes it now.
      *
      * @return {@code true} when the entity was updated here and the caller must not update it again
@@ -109,21 +129,28 @@ public final class DeckFrameTick {
         }
         DeckHeld slot = (DeckHeld) entity;
         Episode episode = slot.stellurgy$deckEpisode();
+        if (episode != null && !admissible(entity)) {
+            release(entity, "excludedState");
+            return false;
+        }
         if (episode == null) {
             String shipId = admissionFor(entity);
             if (shipId == null) {
                 return false;
             }
             trace(entity, "admit ship=" + shipId);
+            forgetPath(entity);
             episode = new Episode(shipId);
             // A body arriving from the world moves with its real world velocity, of which the
-            // craft's own motion at that point is the part the deck already accounts for.
+            // craft's own motion at that point is the part the deck already accounts for: it enters
+            // with no velocity of its own on the deck, and everything beyond the carry counts as
+            // what the world gave it.
             double[] v = VSIntegration.shipVelocityAtPointFor(world, shipId,
                     entity.posX, entity.posY, entity.posZ);
             if (v != null) {
-                episode.carryX = v[0] * TICK_SECONDS;
-                episode.carryY = v[1] * TICK_SECONDS;
-                episode.carryZ = v[2] * TICK_SECONDS;
+                episode.writtenX = v[0] * TICK_SECONDS;
+                episode.writtenY = v[1] * TICK_SECONDS;
+                episode.writtenZ = v[2] * TICK_SECONDS;
             }
             slot.stellurgy$setDeckEpisode(episode);
         }
@@ -148,19 +175,25 @@ public final class DeckFrameTick {
         }
         AxisAlignedBB stay = VSIntegration.subspaceStayRegion(world, shipId, STAY_REGION_MARGIN);
         if (local == null || stay == null || !stay.contains(new Vec3d(local[0], local[1], local[2]))) {
-            slot.stellurgy$setDeckEpisode(null);
-            trace(entity, "release " + (local == null || stay == null ? "shipUnloaded" : "leftShipRegion"));
+            release(entity, local == null || stay == null ? "shipUnloaded" : "leftShipRegion");
             return false;
         }
-        double[] motion = VSIntegration.rotateToShipFrameFor(world, shipId,
-                entity.motionX - episode.carryX,
-                entity.motionY - episode.carryY,
-                entity.motionZ - episode.carryZ);
-        if (motion == null) {
-            slot.stellurgy$setDeckEpisode(null);
-            trace(entity, "release shipUnloaded");
+        // WHAT THE ENTITY IS DOING ON THE DECK: the velocity its last update left it, plus whatever the
+        // world has added since, taken into the deck's frame. Never the whole world motion rotated in.
+        // Measured 2026-09-29: an armor stand resting on a craft slewing to 150 deg of roll moved 0.41
+        // blocks along the deck when its velocity crossed through the world every tick - a body at rest
+        // keeps gravity's last step as a velocity into the deck, and handing it out through one pose
+        // and back in through the next turns every step of the craft's rotation into a push along it.
+        double[] added = VSIntegration.rotateToShipFrameFor(world, shipId,
+                entity.motionX - episode.writtenX,
+                entity.motionY - episode.writtenY,
+                entity.motionZ - episode.writtenZ);
+        if (added == null) {
+            release(entity, "shipUnloaded");
             return false;
         }
+        double[] motion = {episode.localMotionX + added[0], episode.localMotionY + added[1],
+                episode.localMotionZ + added[2]};
 
         // Where the world put the entity before this update; the entity's own update overwrites its
         // previous-position fields with deck coordinates, which nothing outside may ever see.
@@ -193,6 +226,15 @@ public final class DeckFrameTick {
         Episode episode = ((DeckHeld) entity).stellurgy$deckEpisode();
         if (episode != null && !episode.writing) {
             episode.worldWritten = true;
+            if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()) {
+                StackTraceElement[] at = Thread.currentThread().getStackTrace();
+                StringBuilder by = new StringBuilder();
+                for (int i = 3; i < Math.min(at.length, 9); i++) {
+                    by.append(' ').append(at[i].getClassName().replaceAll(".*\\.", ""))
+                            .append('.').append(at[i].getMethodName()).append(':').append(at[i].getLineNumber());
+                }
+                trace(entity, "worldWrite by" + by);
+            }
         }
     }
 
@@ -206,8 +248,7 @@ public final class DeckFrameTick {
         if (pos == null || motion == null) {
             // The craft went away during the update. The entity cannot stay in deck coordinates,
             // and the only world position still known for it is where the world last had it.
-            ((DeckHeld) entity).stellurgy$setDeckEpisode(null);
-            trace(entity, "release shipGoneDuringUpdate");
+            release(entity, "shipGoneDuringUpdate");
             entity.setPosition(lastX, lastY, lastZ);
             entity.motionX = 0.0;
             entity.motionY = 0.0;
@@ -218,15 +259,18 @@ public final class DeckFrameTick {
         episode.localX = entity.posX;
         episode.localY = entity.posY;
         episode.localZ = entity.posZ;
+        episode.localMotionX = entity.motionX;
+        episode.localMotionY = entity.motionY;
+        episode.localMotionZ = entity.motionZ;
         episode.held = true;
         double[] v = VSIntegration.shipVelocityAtPointFor(world, shipId, pos[0], pos[1], pos[2]);
-        episode.carryX = v == null ? 0.0 : v[0] * TICK_SECONDS;
-        episode.carryY = v == null ? 0.0 : v[1] * TICK_SECONDS;
-        episode.carryZ = v == null ? 0.0 : v[2] * TICK_SECONDS;
+        episode.writtenX = motion[0] + (v == null ? 0.0 : v[0] * TICK_SECONDS);
+        episode.writtenY = motion[1] + (v == null ? 0.0 : v[1] * TICK_SECONDS);
+        episode.writtenZ = motion[2] + (v == null ? 0.0 : v[2] * TICK_SECONDS);
         entity.setPosition(pos[0], pos[1], pos[2]);
-        entity.motionX = motion[0] + episode.carryX;
-        entity.motionY = motion[1] + episode.carryY;
-        entity.motionZ = motion[2] + episode.carryZ;
+        entity.motionX = episode.writtenX;
+        entity.motionY = episode.writtenY;
+        entity.motionZ = episode.writtenZ;
         restorePrevious(entity, lastX, lastY, lastZ);
         // The substrate would otherwise go on dragging a body it still thinks is standing on its
         // hull, on top of the carry the deck has just given it.
@@ -302,17 +346,62 @@ public final class DeckFrameTick {
     }
 
     /**
+     * Whether a deck may hold {@code entity} at all, as it is now - asked before taking it and on
+     * every update while holding it, so the two can never disagree.
+     *
+     * <p>A living body is the deck's in exactly the states the travel resolver would hold it in, by
+     * asking the resolver's own predicate, and only on the server, which simulates it; one that is
+     * riding or ridden belongs to its vehicle. A player's movement is his client's and is not
+     * admitted yet. An item in water or lava is left
+     * to the world - which states exclude a body that is not living is an open question, and this
+     * is only where the first admission put the line.</p>
+     */
+    private static boolean admissible(Entity entity) {
+        if (entity.isDead || entity.isBeingRidden()) {
+            return false;
+        }
+        if (entity instanceof EntityItem) {
+            return !entity.isInWater() && !entity.isInLava();
+        }
+        // Only where the body is simulated: a client moves a mob by interpolating toward the world
+        // positions the server sends, so its update run in the deck's frame would walk it toward a
+        // world point read as a deck point. Measured 2026-09-29: a cow carried on a rolled deck was
+        // never drawn by the client once its update ran here.
+        return entity instanceof EntityLivingBase && !(entity instanceof EntityPlayer)
+                && !entity.world.isRemote
+                && !ShipFrameTravel.isExcludedFromCapture((EntityLivingBase) entity);
+    }
+
+    /** Stop holding {@code entity}; from its next update the world moves it again. */
+    private static void release(Entity entity, String reason) {
+        ((DeckHeld) entity).stellurgy$setDeckEpisode(null);
+        forgetPath(entity);
+        trace(entity, "release " + reason);
+    }
+
+    /**
+     * Drop a mob's planned path when it crosses between the world and a deck: the path is a list of
+     * block positions in the frame it was planned in, and in the other frame it names somewhere
+     * else entirely.
+     */
+    private static void forgetPath(Entity entity) {
+        if (entity instanceof EntityLiving) {
+            ((EntityLiving) entity).getNavigator().clearPath();
+        }
+    }
+
+    /**
      * The craft whose deck the entity is lying on now, measured in that craft's own frame, or
-     * {@code null}. Never an entity on world terrain, and only the classes admitted so far.
+     * {@code null}. Never an entity on world terrain.
      */
     private static String admissionFor(Entity entity) {
-        if (!(entity instanceof EntityItem) || entity.isDead
-                || entity.isInWater() || entity.isInLava()) {
+        if (!admissible(entity)) {
             return null;
         }
         World world = entity.world;
         AxisAlignedBB box = entity.getEntityBoundingBox();
-        java.util.List<String> candidates = VSIntegration.shipIdsAt(world, entity.posX, entity.posY, entity.posZ);        if (!world.getCollisionBoxes(entity, new AxisAlignedBB(box.minX, box.minY - SUPPORT_PROBE,
+        java.util.List<String> candidates = VSIntegration.shipIdsAt(world, entity.posX, entity.posY, entity.posZ);
+        if (!world.getCollisionBoxes(entity, new AxisAlignedBB(box.minX, box.minY - SUPPORT_PROBE,
                 box.minZ, box.maxX, box.minY, box.maxZ)).isEmpty()) {
             if (!candidates.isEmpty()) {
                 trace(entity, "decline worldTerrain ships=" + candidates);

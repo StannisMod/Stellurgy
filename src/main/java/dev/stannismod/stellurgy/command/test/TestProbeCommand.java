@@ -2238,10 +2238,14 @@ public class TestProbeCommand extends CommandBase {
             spawned.motionY = 0;
             spawned.motionZ = 0;
             // Persistent: a mob that despawns mid-window would silently empty the subject out from
-            // under a render assertion.
+            // under a render assertion. No AI unless the trailing "ai" asks for it: a render subject
+            // must hold still, while a MOVEMENT subject must not - vanilla skips the whole movement
+            // of a mob whose AI is off (EntityLiving.isServerWorld), so it reads perfectly still on
+            // anything it stands on.
+            boolean keepAi = args.length >= 7 && "ai".equalsIgnoreCase(args[6]);
             if (spawned instanceof net.minecraft.entity.EntityLiving) {
                 ((net.minecraft.entity.EntityLiving) spawned).enablePersistence();
-                ((net.minecraft.entity.EntityLiving) spawned).setNoAI(true);
+                ((net.minecraft.entity.EntityLiving) spawned).setNoAI(!keepAi);
             }
             boolean ok = world.spawnEntity(spawned);
             // Report the LOOKUP, not just the spawn call: "spawnEntity returned true" and "the
@@ -2516,6 +2520,14 @@ public class TestProbeCommand extends CommandBase {
             m.put("motionX", subject.motionX);
             m.put("motionY", subject.motionY);
             m.put("motionZ", subject.motionZ);
+            // A mob whose AI is off does not move itself at all, so "it stayed where it was" says
+            // nothing about it; its yaw is what its idle look turns, the cheapest sign the AI runs.
+            m.put("rotationYaw", subject.rotationYaw);
+            if (subject instanceof net.minecraft.entity.EntityLiving) {
+                net.minecraft.entity.EntityLiving mob = (net.minecraft.entity.EntityLiving) subject;
+                m.put("aiDisabled", mob.isAIDisabled());
+                m.put("hasPath", !mob.getNavigator().noPath());
+            }
             // Optional fourth argument: a ship id, and the subject's position IN THAT SHIP'S FRAME,
             // mapped from the same position read above in this one call. "Did this body move along
             // the deck" can only be answered this way: a world position differenced against a pose
@@ -2530,6 +2542,9 @@ public class TestProbeCommand extends CommandBase {
                 dev.stannismod.stellurgy.integration.vs.DeckFrameTick.Episode episode =
                         ((dev.stannismod.stellurgy.integration.vs.DeckHeld) subject).stellurgy$deckEpisode();
                 m.put("deckHeldBy", episode == null ? null : episode.shipId());
+                // ...or the travel resolver, which owns a living body's movement by its own sweep.
+                m.put("resolverHeldBy",
+                        dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.capturedShipId(subject));
                 if (local != null) {
                     m.put("bodyShipFrameX", local[0]);
                     m.put("bodyShipFrameY", local[1]);
@@ -19200,6 +19215,21 @@ public class TestProbeCommand extends CommandBase {
             entity.velocityChanged = true;
             send(sender, "{\"ok\":true,\"entityId\":" + id + ",\"motionX\":" + entity.motionX
                     + ",\"motionY\":" + entity.motionY + ",\"motionZ\":" + entity.motionZ + "}");
+            return;
+        }
+        if (args.length >= 4 && "ignite".equalsIgnoreCase(args[0])) {
+            // entity ignite <dim> <entityId> <seconds> - set an entity on fire. A burning animal
+            // PANICS (EntityAIPanic runs on isBurning alone), which is the one way to make a mob
+            // move itself on the next tick without a player or another mob to react to.
+            net.minecraft.world.WorldServer world = server.getWorld(parseIntOr(args[1], Integer.MIN_VALUE));
+            net.minecraft.entity.Entity entity = world == null ? null : world.getEntityByID(parseIntOr(args[2], -1));
+            if (entity == null) {
+                send(sender, "{\"error\":\"entity not found\"}");
+                return;
+            }
+            entity.setFire(parseIntOr(args[3], 1));
+            send(sender, "{\"ok\":true,\"entityId\":" + entity.getEntityId() + ",\"burning\":"
+                    + entity.isBurning() + "}");
             return;
         }
         if (args.length >= 4 && "set-no-gravity".equalsIgnoreCase(args[0])) {

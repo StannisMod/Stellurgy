@@ -1,17 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.GameTicks;
-import dev.stannismod.stellurgy.test.PilotSeat;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.RocketFixture;
-import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.test.ShipReadiness;
 
-import org.junit.Before;
 import org.junit.Test;
-
-import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
@@ -28,38 +21,12 @@ import static org.junit.Assert.assertTrue;
  * its own gravity and ground friction, distinct from a living body's, so it asks whether the deck
  * holds an entity by the rules of THAT entity rather than by a copy written for crew members.
  *
- * <h2>How it reads</h2>
- *
- * Every position is read in the SHIP's frame, in one snapshot per reading, so the craft's own
- * station-keeping cannot be mistaken for the item moving, and every reading is split ALONG the deck
- * and ACROSS it: an item settling the last hair onto the surface and an item sliding are different
- * claims.
- *
  * <p>Gated on the server's real VS presence; skips cleanly otherwise.</p>
  */
-public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
+public class VSItemOnADeckE2ETest extends AbstractDeckBodyE2ETest {
 
-    /** How far the attitude hold may park from the commanded roll, as the deck-up vector's world Y. */
-    private static final double DECK_UP_Y_TOLERANCE = 0.02;
-
-    /**
-     * The OBSERVATION WINDOW the craft is given to slew, in server ticks. A converging value with no
-     * announcement to link on, so it is spent in full and read once after; 200 is what the yaw slew
-     * in {@code VSSeatDummyFacesTheShipE2ETest} takes for a turn of 90 deg.
-     */
-    private static final int SLEW_TICKS = 200;
-
-    /** How long the dropped item is given to land on the deck half a block below it. */
+    /** How long the dropped item is given to land on the deck a tenth of a block below it. */
     private static final int LAND_TICKS = 20;
-
-    /** The window the item is watched lying on the deck, in server ticks. */
-    private static final int REST_WINDOW_TICKS = 100;
-
-    /**
-     * How far an item at rest may move along the deck, or across it, in a window. An item lying on
-     * level ground moves by float noise; anything past this is something moving it.
-     */
-    private static final double AT_REST = 0.05;
 
     /**
      * The push given in the impulse scenario, in blocks per tick, and the least it must carry the
@@ -69,21 +36,6 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
      */
     private static final double PUSH = 0.3;
     private static final double PUSH_MUST_CARRY = 0.25;
-
-    @Before
-    public void clearCraft() throws Exception {
-        ShipReadiness.clearCraftFrom(this::exec, 0);
-        exec("stellurgytest chunk release");
-    }
-
-    /**
-     * Chunks held around the craft, in chunks: 3 covers 48 blocks, past the 32 within which vanilla
-     * requires every chunk loaded before it ticks a non-player entity at all
-     * ({@code World.updateEntityWithOptionalForce}). The site's own fill loads only its own volume,
-     * and measured 2026-09-29 the third plot of this class had an unloaded chunk inside that range:
-     * its item was never ticked once and every "it stayed put" reading about it was about nothing.
-     */
-    private static final int HOLD_RADIUS_CHUNKS = 3;
 
     // -- an item falls toward the deck and rests on it, at any attitude ------------------------------------------------------
 
@@ -105,6 +57,35 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
     @Test
     public void anItemDroppedOnADeckRolled60DegreesStaysWhereItLanded() throws Exception {
         restsOnADeckRolledBy(60.0);
+    }
+
+    /**
+     * The deck is level and the world around it has no gravity at all. A craft carries its own for
+     * what lies on its deck, so an item let go a tenth of a block above it still falls onto it and
+     * lies there; the world's gravity is the world's.
+     *
+     * <p>The landing is the SUBJECT here, so it is asserted rather than gated: with no pull toward
+     * the deck the item hangs where it was let go, which is exactly the failure this reads.</p>
+     */
+    @Test
+    public void anItemLetGoAboveADeckInAWorldWithoutGravityFallsOntoIt() throws Exception {
+        withOverworldGravity(0.0, () -> {
+            Craft craft = buildCraft();
+            int itemId = dropOnDeck(craft, 1.5, 0.5, false);
+            double[] first = deckPoint(craft, itemId);
+            // WINDOW: a tenth of a block at a deck's 0.04 blocks/tick^2 is about three ticks; the
+            // window is the resting one, and overshoot only gives a hanging item longer to hang.
+            GameTicks.advance(client(), GameTicks.server(), REST_WINDOW_TICKS);
+            double[] later = deckPoint(craft, itemId);
+            simulatedBetween(first, later, REST_WINDOW_TICKS);
+            double offTheFace = Math.abs(later[1] - craft.seat.seatY);
+            String evidence = evidence(first, later, craft, itemId);
+            System.out.println("[deck-rest] zeroG offTheFace=" + offTheFace + " along=" + along(first, later)
+                    + evidence);
+            assertTrue("an item let go a tenth of a block above a deck, in a world without gravity, must"
+                    + " fall onto the deck and lie on it: it is " + offTheFace + " blocks off the top face;"
+                    + evidence, offTheFace <= AT_REST);
+        });
     }
 
     /**
@@ -178,9 +159,6 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
         exec("stellurgytest vs force-clear-by-id 0 " + craft.shipId);
     }
 
-    /** The steady roll rate, rad/s: 5 s of it turns the deck through about 143 deg, past inverted. */
-    private static final double ROLL_RATE = 0.5;
-
     // -- a position somebody writes is where the item is ----------------------------------------------
 
     /**
@@ -205,13 +183,11 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
         // it and lands a hair inside the face as often as above it, and an item placed there must lie
         // where it was put, as it does on the ground.
         double[] target = {craft.seat.seatX + 1.5, craft.seat.seatY, craft.seat.seatZ + 1.5};
-        Reply world = Reply.of(exec("stellurgytest vs to-world 0 id " + craft.shipId + " "
-                + target[0] + " " + target[1] + " " + target[2]));
-        requireArranged("the target must map to the world through this craft", world.ok());
+        double[] world = toWorld(craft, 1.5, 0.0, 1.5);
         requireArranged("the target must be a different deck point from where the item landed, or"
                 + " being pulled back and staying put read the same", along(landed, target) > 0.9);
         Reply placed = Reply.of(exec("stellurgytest entity set-pos 0 " + itemId + " "
-                + world.number("worldX") + " " + world.number("worldY") + " " + world.number("worldZ")));
+                + world[0] + " " + world[1] + " " + world[2]));
         requireArranged("the item must have been placed: " + placed, placed.ok());
 
         // WINDOW: an upper bound on how far the item is from where it was put; overshoot gives a
@@ -248,16 +224,11 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
 
         // Along the deck's own X axis, expressed in the world: a push into the deck would be
         // stopped by it and could not tell a felt push from a discarded one.
-        Reply axis = Reply.of(exec("stellurgytest vs to-world 0 id " + craft.shipId + " "
-                + (craft.seat.seatX + 1.0) + " " + craft.seat.seatY + " " + craft.seat.seatZ));
-        Reply origin = Reply.of(exec("stellurgytest vs to-world 0 id " + craft.shipId + " "
-                + craft.seat.seatX + " " + craft.seat.seatY + " " + craft.seat.seatZ));
-        requireArranged("the deck's X axis must map to the world", axis.ok() && origin.ok());
-        double ax = axis.number("worldX") - origin.number("worldX");
-        double ay = axis.number("worldY") - origin.number("worldY");
-        double az = axis.number("worldZ") - origin.number("worldZ");
+        double[] axis = toWorld(craft, 1.0, 0.0, 0.0);
+        double[] origin = toWorld(craft, 0.0, 0.0, 0.0);
         Reply pushed = Reply.of(exec("stellurgytest entity set-motion 0 " + itemId + " "
-                + ax * PUSH + " " + ay * PUSH + " " + az * PUSH));
+                + (axis[0] - origin[0]) * PUSH + " " + (axis[1] - origin[1]) * PUSH + " "
+                + (axis[2] - origin[2]) * PUSH));
         requireArranged("the push must have been applied: " + pushed, pushed.ok());
 
         // EXPERIMENT: the push's whole run, then a second stretch in which it must be over.
@@ -358,11 +329,9 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
         // the hull presents uppermost there - the arrangement asks only that it came to rest on a
         // face of THIS craft, not which one (the fixture carries blocks below its deck whose extent
         // this scenario does not need to know).
-        Reply drop = Reply.of(exec("stellurgytest vs to-world 0 id " + craft.shipId + " "
-                + (craft.seat.seatX + 2.5) + " " + (craft.seat.seatY - 1.0) + " " + (craft.seat.seatZ + 2.5)));
-        requireArranged("the drop point must map to the world through this ship", drop.ok());
-        int itemId = Reply.of(exec("stellurgytest vs drop-item 0 " + drop.number("worldX") + " "
-                + (drop.number("worldY") + HULL_DROP_HEIGHT) + " " + drop.number("worldZ"))).integer("entityId");
+        double[] drop = toWorld(craft, 2.5, -1.0, 2.5);
+        int itemId = Reply.of(exec("stellurgytest vs drop-item 0 " + drop[0] + " "
+                + (drop[1] + HULL_DROP_HEIGHT) + " " + drop[2])).integer("entityId");
         // STIMULUS: a fall of HULL_DROP_HEIGHT blocks and more; 60 ticks cover it with room to settle.
         GameTicks.advance(client(), GameTicks.server(), 60);
         requireTicked(craft, itemId);
@@ -423,55 +392,6 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
                 + " blocks across the deck;" + evidence, across <= AT_REST);
     }
 
-    // -- arrangement -----------------------------------------------------------------------------
-
-    private static final class Craft {
-        final String shipId;
-        final PilotSeat seat;
-
-        Craft(String shipId, PilotSeat seat) {
-            this.shipId = shipId;
-            this.seat = seat;
-        }
-    }
-
-    private Craft buildCraft() throws Exception {
-        int[] bp = RocketFixture.placeAt(site(), this::exec, "with-pilot-deck", 4, 12,
-                "the craft whose deck the item lies on stands in this volume");
-        String asm = exec("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
-        requireArranged("the pilot-deck build must route to a ship, not a rocket: " + asm,
-                Reply.of(asm).integer("rocketCount") == 0);
-        String shipId = ShipIdentity.physicsIdOf(this::exec, 0, ShipIdentity.nameFromAssembly(asm));
-        PilotSeat seat = PilotSeat.byId(this::exec, 0, shipId)
-                .requireFound("the seat locates the deck in subspace; without it there is nowhere to drop");
-        Reply held = Reply.of(exec("stellurgytest chunk hold 0 " + seat.shipWorldX + " "
-                + seat.shipWorldY + " " + seat.shipWorldZ + " " + HOLD_RADIUS_CHUNKS));
-        requireArranged("the chunks around the craft must be held, or the world may not tick what"
-                + " lies on its deck: " + held, held.ok());
-        return new Craft(shipId, seat);
-    }
-
-    /** Hold the craft at {@code rollDeg} about its X axis, and check it got there. */
-    private void rollTo(Craft craft, double rollDeg) throws Exception {
-        double half = Math.toRadians(rollDeg) / 2.0;
-        requireArranged("the attitude hold must accept the roll command",
-                Reply.of(exec("stellurgytest vs point-by-id 0 " + craft.shipId + " "
-                        + Math.cos(half) + " " + Math.sin(half) + " 0.0 0.0")).bool("commanded"));
-        // WINDOW: a slew is a converging value and nothing announces its end, so the stretch is
-        // spent in full and the attitude is read once after it; the gate names the reading, so a
-        // slow box that did not finish fails as an arrangement, never as the subject.
-        GameTicks.advance(client(), GameTicks.server(), SLEW_TICKS);
-        double upY = deckUpY(craft);
-        double wanted = Math.cos(Math.toRadians(rollDeg));
-        requireArranged("the deck must be held at " + rollDeg + " degrees of roll (deck-up world Y "
-                + upY + ", wanted " + wanted + ")", Math.abs(upY - wanted) <= DECK_UP_Y_TOLERANCE);
-    }
-
-    private double deckUpY(Craft craft) throws Exception {
-        ShipInfo ship = ShipInfo.byId(this::exec, 0, craft.shipId);
-        return new FreeFlightPhysics.Quat(ship.qw, ship.qx, ship.qy, ship.qz).rotate(0.0, 1.0, 0.0)[1];
-    }
-
     /**
      * Drop an item a tenth of a block over a deck cell at {@code (dx, dz)} from the seat, and give it
      * time to land. Low on purpose: a longer fall is spent under whatever holds the item BEFORE the
@@ -484,12 +404,9 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
      * a STIMULUS of fixed length, and every caller follows it with {@link #onTheDeckTop}.</p>
      */
     private int dropOnDeck(Craft craft, double dx, double dz, boolean mergeable) throws Exception {
-        Reply drop = Reply.of(exec("stellurgytest vs to-world 0 id " + craft.shipId + " "
-                + (craft.seat.seatX + dx) + " " + (craft.seat.seatY + 0.1) + " "
-                + (craft.seat.seatZ + dz)));
-        requireArranged("the drop point must map to the world through this ship", drop.ok());
-        String dropped = exec("stellurgytest vs drop-item 0 " + drop.number("worldX") + " "
-                + drop.number("worldY") + " " + drop.number("worldZ") + (mergeable ? " mergeable" : ""));
+        double[] drop = toWorld(craft, dx, 0.1, dz);
+        String dropped = exec("stellurgytest vs drop-item 0 " + drop[0] + " " + drop[1] + " " + drop[2]
+                + (mergeable ? " mergeable" : ""));
         int itemId = Reply.of(dropped).integer("entityId");
         // STIMULUS: a tenth of a block of fall at 0.04 blocks/tick^2 lands in about three ticks.
         GameTicks.advance(client(), GameTicks.server(), LAND_TICKS);
@@ -499,73 +416,5 @@ public class VSItemOnADeckE2ETest extends AbstractSharedServerTest {
             requireTicked(craft, itemId);
         }
         return itemId;
-    }
-
-    /** Gate: the world is ticking the item where it lies - vanilla's own update-area test. */
-    private void requireTicked(Craft craft, int itemId) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + itemId + " " + craft.shipId));
-        requireArranged("the world must be ticking the item where it lies (vanilla's own update-area"
-                + " test), or nothing below is a reading of what the deck does with it: " + r,
-                r.bool("updateAreaLoaded"));
-    }
-
-    /**
-     * The item's deck point, gated on its lying ON the deck's top face - within {@link #AT_REST} of
-     * it, not merely somewhere above. An item hanging where it was dropped is an item that never
-     * landed, and every "it stayed put" read after that is about nothing.
-     */
-    private double[] onTheDeckTop(Craft craft, int itemId, String deck) throws Exception {
-        double[] p = deckPoint(craft, itemId);
-        if (Math.abs(p[1] - craft.seat.seatY) > AT_REST) {
-            Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + itemId + " " + craft.shipId));
-            requireArranged("the item must have landed ON " + deck + "'s top face (ship-frame Y " + p[1]
-                    + ", deck top " + craft.seat.seatY + "; ticksExisted " + p[3] + " after " + LAND_TICKS
-                    + " ticks; ships containing it " + exec("stellurgytest vs ships-at 0 "
-                    + r.number("playerX") + " " + r.number("playerY") + " " + r.number("playerZ"))
-                    + "; " + r + ")", false);
-        }
-        return p;
-    }
-
-    /**
-     * The item's position in the craft's frame, from one snapshot, as {x, y, z, ticksExisted}.
-     *
-     * <p>The fourth value is what lets a reading say it was blind: an item the world is not ticking
-     * stands perfectly still, so every "it did not move" verdict below also asks that it WAS moved -
-     * see {@link #simulatedBetween}.</p>
-     */
-    private double[] deckPoint(Craft craft, int itemId) throws Exception {
-        Reply r = Reply.of(exec("stellurgytest vs player-ship-data 0 " + itemId + " " + craft.shipId));
-        requireArranged("the item must exist and be readable in the ship's frame: " + r,
-                r.bool("shipResolved"));
-        return new double[]{r.number("bodyShipFrameX"), r.number("bodyShipFrameY"),
-                r.number("bodyShipFrameZ"), r.integer("ticksExisted")};
-    }
-
-    /** Gate: the world simulated the item for most of the window between two readings. */
-    private static void simulatedBetween(double[] first, double[] second, int window) {
-        double ticked = second[3] - first[3];
-        requireArranged("the world must have been simulating the item across the window, or a"
-                + " reading of \"it stayed put\" is about nothing (ticked " + ticked + " of " + window
-                + ")", ticked >= window / 2.0);
-    }
-
-    private static double along(double[] a, double[] b) {
-        return Math.hypot(b[0] - a[0], b[2] - a[2]);
-    }
-
-    private static double across(double[] a, double[] b) {
-        return Math.abs(b[1] - a[1]);
-    }
-
-    private String evidence(double[] from, double[] to, Craft craft, int itemId) throws Exception {
-        return " from=(" + from[0] + "," + from[1] + "," + from[2] + ") to=(" + to[0] + "," + to[1]
-                + "," + to[2] + ") deckUpY=" + deckUpY(craft) + " deckHeldBy="
-                + Reply.of(exec("stellurgytest vs player-ship-data 0 " + itemId + " " + craft.shipId))
-                        .textOr("deckHeldBy", "none");
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
     }
 }
