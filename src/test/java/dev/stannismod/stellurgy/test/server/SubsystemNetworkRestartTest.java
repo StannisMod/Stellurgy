@@ -83,9 +83,12 @@ public class SubsystemNetworkRestartTest {
      * reading the bias back: "the console's resistance bias must survive the restart … expected:&lt;0.75&gt;
      * but was:&lt;0.5&gt;". The first boot's premises are arrangements and are not witnessed.</p>
      *
-     * <p>Not asserted: the ventilation network's membership count, because on a network with no
-     * controller it is the cable, source and sink counts added up, so it could not differ while the
-     * three verdicts on them hold.</p>
+     * <p>Not asserted: that the ventilation network's membership comes back the same. The verdict
+     * compares two builds by the same code, and the member set is the positions of the component's
+     * role maps — so it can only differ across the restart if some node came back with a different
+     * set of roles, which moves one of the three counts above. (A fault that drops membership outright
+     * would drop it before the restart too and leave the comparison equal; that is not this test's
+     * contract.)</p>
      */
     @Test
     public void theNetworkIsRebuiltFromTheWorldWhileItsSettingsAreRestoredFromTheirBlocks()
