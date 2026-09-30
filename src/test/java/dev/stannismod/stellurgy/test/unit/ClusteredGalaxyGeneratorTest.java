@@ -529,6 +529,11 @@ public class ClusteredGalaxyGeneratorTest {
         assertTrue(checkedAny);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `ClusteredGalaxyGenerator.claimSeat:703` placing orbits at
+     * twice the blocks per distance unit, this fails with "body at orbit 104997 of system … must
+     * stand that far from its star expected:&lt;4.19988E7&gt; but was:&lt;8.399759966695575E7&gt;".
+     */
     @Test
     public void aBodyStandsExactlyWhereItsOrbitalDistanceSaysItDoes() {
         // The acceptance the whole scale rework exists for: ONE law, ONE constant. A body at orbital
