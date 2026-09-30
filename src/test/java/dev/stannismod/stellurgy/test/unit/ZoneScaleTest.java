@@ -42,9 +42,15 @@ import static org.junit.Assert.assertTrue;
  */
 public class ZoneScaleTest {
 
-    /** Metres per chart block — the metric, restated here only to convert the reference values. */
-    private static final double D = 250d;
-    private static final double SOL_MASS_EARTHS = 332_946d;
+    /**
+     * Metres per chart block and Sol's mass in Earth masses — READ from production, never restated:
+     * a copy here would keep converting the reference values at the old metric after the metric
+     * moved, and the lattice under test would be judged against bodies of the wrong size.
+     */
+    private static final double D = dev.stannismod.stellurgy.util.AstronomicalBodyHelper
+            .METRES_PER_CHART_BLOCK;
+    private static final double SOL_MASS_EARTHS = dev.stannismod.stellurgy.util.AstronomicalBodyHelper
+            .EARTH_MASSES_PER_SOLAR_MASS;
 
     private static long blocks(double km) {
         return Math.round(km * 1000d / D);
@@ -179,7 +185,8 @@ public class ZoneScaleTest {
         assertTrue("arrangement: the moon's sphere must be its own and not the realization cap ("
                 + sphere + " against a cap of " + GalacticCoord.HALF_CELL + ")",
                 sphere < GalacticCoord.HALF_CELL);
-        assertEquals("...so its one cell spans exactly its sphere", 2L * sphere, cell, 1d);
+        // Exact, no tolerance: a one-cell zone's width is ceil(2r / 1) of a whole-block radius.
+        assertEquals("...so its one cell spans exactly its sphere", 2L * sphere, cell);
     }
 
     /**
@@ -255,7 +262,6 @@ public class ZoneScaleTest {
             this.innermostMoonOrbitKm = innermostMoonOrbitKm;
         }
 
-        /** The body, standing at its real distance from Sol so its sphere is the real one. */
         /** How far this body's INNERMOST moon sits from it, in blocks; 0 when it has none. */
         long tightestMoonBlocks() {
             return innermostMoonOrbitKm <= 0d ? 0L : blocks(innermostMoonOrbitKm);
@@ -289,6 +295,7 @@ public class ZoneScaleTest {
                     100, moonRadiusEarths, moonMassEarths);
         }
 
+        /** The body, standing at its real distance from Sol so its sphere is the real one. */
         SystemBody body() {
             BodyEphemeris orbit = BodyEphemeris.fixed(blocks(orbitKm), 0L, 0L);
             return new SystemBody(GalacticCoord.ORIGIN,

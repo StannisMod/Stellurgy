@@ -506,12 +506,6 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
     }
 
     /**
-     * The controller's decision on the craft in {@code slot} is "stays". Asked, not waited for: the
-     * trigger that would carry it is not ticking here, so a quiet window would pin nothing; the
-     * decision is a reading. A refusal carries a {@code reason} and decided nothing, so it is told
-     * apart first.
-     */
-    /**
      * Move the just-carried craft into the hysteresis band and assert the controller leaves it
      * there. Returns where it stands, so the caller can assert the POSITIVE half in the same method
      * (STEP 7): a "stays" is only the hysteresis if the same crossing, further on, does fire.
@@ -535,6 +529,12 @@ public class VSShipZoneSphereE2ETest extends AbstractSharedServerTest {
         return band;
     }
 
+    /**
+     * The controller's decision on the craft in {@code slot} is "stays". Asked, not waited for: the
+     * trigger that would carry it is not ticking here, so a quiet window would pin nothing; the
+     * decision is a reading. A refusal carries a {@code reason} and decided nothing, so it is told
+     * apart first.
+     */
     private void assertStays(int slot, String durableId, String craft) throws Exception {
         Reply decision = Reply.of(exec("stellurgytest space seam-carry " + slot + " id " + durableId));
         assertFalse("the craft was refused rather than judged, so nothing was asked: " + decision,

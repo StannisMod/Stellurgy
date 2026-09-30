@@ -94,6 +94,12 @@ public class DimensionPropertiesTest {
         assertNotNull(props.sunriseSunsetColors);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `DimensionProperties:2461` writing {@code orbitalDist} through a
+     * {@code (short)} cast, this fails with "expected:&lt;1495979&gt; but was:&lt;-11349&gt;". At the
+     * old one-AU value of {@code 100} the same truncation would pass: the new fixture is what makes
+     * a narrowed write visible.
+     */
     @Test
     public void nbtRoundTripPreservesPlanetIdentity() {
         DimensionProperties original = earthLike();

@@ -125,7 +125,8 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * <p>red-witnessed: 2026-09-29, with `CellSeam.hasEnteredZone:141` made to answer {@code false}
      * always, this fails with *"a craft inside a child's sphere must be taken into that child's
      * zone"* while the outward and hysteresis scenarios stay green — so the red is this path's and
-     * not the seam's in general.</p>
+     * not the seam's in general. Re-run 2026-09-30 (`:142`) after the arrangement began asserting
+     * the craft's distance from the moon: same verdict, the arrangement held.</p>
      */
     @Test
     public void aCraftEnteringAMoonsSphereLandsInTheMoonsOwnZone() {
@@ -137,6 +138,15 @@ public class ZoneCrossingAimsAtTheRightCellTest {
         // Well inside Luna's sphere, but addressed in EARTH's zone — a craft that has flown in.
         long in = (long) (lunaSphere * 0.5d);
         GalacticCoord craft = inEarthsZoneNearLuna(home, in);
+        // ARRANGEMENT, as the quantity the threshold compares: the craft's distance from the MOON,
+        // against the entry threshold production states. The address is in Earth's zone, so the
+        // zone distance would measure from the wrong body; this reads where the craft actually is.
+        // Plain arithmetic on purpose, NOT `hasEnteredZone`: that predicate is what this scenario's
+        // red-witness breaks, and an arrangement that called it would take the red on itself.
+        double fromLuna = absoluteOf(home.reg, craft).distanceTo(home.luna.absoluteAt(TICK));
+        assertTrue("arrangement: the craft must be inside the moon's entry threshold (" + fromLuna
+                        + " blocks, sphere " + lunaSphere + ")",
+                fromLuna < lunaSphere * (1d - CellSeam.SPHERE_REENTRY_FRACTION));
 
         GalacticCoord named = SpaceSubsystem.zoneMembershipIn(home.reg, craft, TICK);
         assertNotNull("a craft inside a child's sphere must be taken into that child's zone", named);
@@ -158,7 +168,8 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * fails with *"must be left where it is expected null, but was: GalacticCoord[zone=19_0_0@1849294,
      * sector=(1,0,0) …]"*, and the other two scenarios stay green ON that same inversion, which is
      * precisely why a control is needed: they cannot tell the difference. Re-run the same day after
-     * the positive half below was added, with the same result.</p>
+     * the positive half below was added, with the same result, and again 2026-09-30 (`:129`) after
+     * the arrangement began asserting the craft's distance: same verdict, the arrangement held.</p>
      *
      * <p><b>The positive half, and the inversion that shows why it is here</b>: with
      * `SystemBody.definesFrame:326` no longer counting a MOON, {@code zoneMembershipIn} cannot resolve
@@ -180,6 +191,13 @@ public class ZoneCrossingAimsAtTheRightCellTest {
                 SpaceSubsystem.zoneMembershipIn(home.reg, inLunasZone(home, out), TICK));
 
         GalacticCoord craft = inLunasZone(home, lunaSphere / 2L);
+        // Plain arithmetic, not `hasLeftZone`: that predicate is what this control's red-witness
+        // breaks, and an arrangement that called it would take the red on itself.
+        double fromLuna = CellSeam.distanceFromZoneBody(craft);
+        assertTrue("arrangement: the craft must be inside the exit threshold (" + fromLuna
+                        + " blocks, sphere " + lunaSphere + "), or a null below is the geometry and "
+                        + "not the hysteresis",
+                fromLuna >= 0d && fromLuna < lunaSphere * (1d + CellSeam.SPHERE_CARRY_FRACTION));
         assertNull("a craft inside its own zone and inside nothing else must be left where it is",
                 SpaceSubsystem.zoneMembershipIn(home.reg, craft, TICK));
     }

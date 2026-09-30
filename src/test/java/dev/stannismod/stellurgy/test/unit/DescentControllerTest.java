@@ -500,6 +500,8 @@ public class DescentControllerTest {
         // The negative leg, without which "it found something" is satisfiable by a method that
         // always answers with the first candidate.
         AbsolutePos outside = luna.absoluteAt(tick).plus(r * 3L, 0L, 0L);
+        assertTrue("arrangement: the far point must be out of range of the planet as well",
+                outside.distanceTo(earth.absoluteAt(tick)) > r);
         assertNull("nothing is in range out there",
                 DescentController.nearestDescentTarget(system, outside, tick, r));
     }
@@ -512,9 +514,10 @@ public class DescentControllerTest {
      * happened to hold first" is a landing site decided by iteration order, and the list's order is
      * the registry's, which no pilot can see.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `DescentController.nearestDescentTarget:156` keeping the FIRST
-     * in-range candidate instead of the nearer one, this fails with "beside the moon, the moon expected
-     * same:&lt;SystemBody[MOON …]&gt; was not:&lt;SystemBody[PLANET …]&gt;".</p>
+     * <p>red-witnessed: 2026-09-30 (re-run after the radius was widened off the threshold and both
+     * candidates were asserted in range), with `DescentController.nearestDescentTarget:156` keeping
+     * the FIRST in-range candidate instead of the nearer one, this fails with "beside the moon, the
+     * moon expected same:&lt;SystemBody[MOON …]&gt; was not:&lt;SystemBody[PLANET …]&gt;".</p>
      */
     @Test
     public void withAMoonAndItsPlanetBothInRangeTheNearestWins() {
@@ -524,14 +527,23 @@ public class DescentControllerTest {
         List<SystemBody> system = java.util.Arrays.asList(sol(), earth, luna);
 
         double separation = earth.absoluteAt(tick).distanceTo(luna.absoluteAt(tick));
-        // A radius wide enough to hold both, so the choice is genuinely between two candidates.
-        long wide = (long) separation + 1_000L;
+        // A radius that holds both from EITHER probe point, with room to spare. It was
+        // `separation + 1000`, and the probe beside the moon — 1 000 blocks further out along the
+        // same axis — then stood exactly on the planet's threshold, in range or not by a rounding.
+        long wide = (long) (separation * 2d);
 
         AbsolutePos justOffLuna = luna.absoluteAt(tick).plus(1_000L, 0L, 0L);
+        AbsolutePos justOffEarth = earth.absoluteAt(tick).plus(1_000L, 0L, 0L);
+        // ARRANGEMENT, as the quantity the threshold compares: both bodies are in range of both
+        // probes, so each answer below is a CHOICE between two candidates, not the only one left.
+        assertTrue("arrangement: beside the moon, the planet must be in range too",
+                justOffLuna.distanceTo(earth.absoluteAt(tick)) < wide);
+        assertTrue("arrangement: beside the planet, the moon must be in range too",
+                justOffEarth.distanceTo(luna.absoluteAt(tick)) < wide);
+
         assertSame("beside the moon, the moon", luna,
                 DescentController.nearestDescentTarget(system, justOffLuna, tick, wide));
 
-        AbsolutePos justOffEarth = earth.absoluteAt(tick).plus(1_000L, 0L, 0L);
         assertSame("beside the planet, the planet", earth,
                 DescentController.nearestDescentTarget(system, justOffEarth, tick, wide));
 

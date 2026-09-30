@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.AbsolutePos;
+import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.DescentShell;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
@@ -43,8 +44,14 @@ public class ParkedCraftKeepsStationTest {
      *
      * <p>Both are the test's own sensitivity bars on the ARRANGEMENT: keeping station with a body
      * that did not move costs nothing, so a leg run against a stationary body proves nothing about
-     * station-keeping. The planet's bar is ten thousand blocks and the moon's a hundred
-     * thousand.</p>
+     * station-keeping.</p>
+     *
+     * <p><b>What they have to clear, measured 2026-09-30</b>: the drift verdict's tolerance is one
+     * block, and over this window the planet travels 6.52E7 blocks about its star and the moon
+     * about 2.9E5 about its planet (both printed by the legs). A craft carried by the wrong frame
+     * drifts by that relative travel — the moon leg's pre-fix red read 287 930 — so any bar far
+     * above one block and far below the measured travel discriminates; these sit two to four orders
+     * of magnitude inside that span on each side. They are sensitivity bars, not tuned values.</p>
      */
     private static final double PLANET_TRAVELLED_BLOCKS = 10_000d;
     /** @see #PLANET_TRAVELLED_BLOCKS */
@@ -143,7 +150,9 @@ public class ParkedCraftKeepsStationTest {
      * verbatim. <b>The version of this test before that date stayed GREEN on the same inversion</b>
      * (both methods PASSED, run the same day): it resolved the parked address through
      * {@code body.frame()}, a frame the test chose, instead of through {@code UniverseRegistry.originAt}
-     * as production does.</p>
+     * as production does. Re-run 2026-09-30 after the arrangement began measuring the moon's travel
+     * RELATIVE to its planet: same verdict and drift, "while the moon itself travelled
+     * 294235.96…" — the drift is that relative travel, less the start-to-end chord's curvature.</p>
      */
     @Test
     public void aCraftParkedOneDescentShellOutFromAMoonKeepsStationWithIt() {
@@ -151,12 +160,23 @@ public class ParkedCraftKeepsStationTest {
         SystemBody luna = bodyOf(reg.systemBodiesAt(GalacticCoord.ORIGIN), LUNA_DIM);
         assertNotNull("the fixture must produce the moon", luna);
 
-        // ARRANGEMENT: the moon must actually TRAVEL over the window, or a craft that stayed with it
-        // proves nothing. The reading is absolute, because what the moon must not do any more is
-        // move relative to its own cell — that is the thing being asserted, not the arrangement.
-        double moonTravel = luna.absoluteAt(0L).minus(luna.absoluteAt(ABANDONED_TICKS)).length();
-        assertTrue("the moon must move over the window, or keeping station with it is vacuous "
-                        + "(travelled " + moonTravel + " blocks)", moonTravel > MOON_TRAVELLED_BLOCKS);
+        SystemBody earth = bodyOf(reg.systemBodiesAt(GalacticCoord.ORIGIN), EARTH_DIM);
+        assertNotNull("the fixture must produce the planet", earth);
+
+        // ARRANGEMENT: the moon must travel ROUND ITS PLANET over the window — measured relative to
+        // the planet, because the planet's frame is the one a mis-carried craft would ride. It was
+        // the moon's ABSOLUTE travel, 6.55E7 blocks, of which 6.52E7 is Earth's own orbit: a moon
+        // that never went round its planet would have passed that bar on Earth's motion alone, and a
+        // craft riding Earth's frame beside it would then keep station for the wrong reason.
+        BlockDelta at0FromEarth = luna.absoluteAt(0L).minus(earth.absoluteAt(0L));
+        BlockDelta atEndFromEarth = luna.absoluteAt(ABANDONED_TICKS)
+                .minus(earth.absoluteAt(ABANDONED_TICKS));
+        double moonTravel = Math.sqrt(sq(atEndFromEarth.dx() - at0FromEarth.dx())
+                + sq(atEndFromEarth.dy() - at0FromEarth.dy())
+                + sq(atEndFromEarth.dz() - at0FromEarth.dz()));
+        assertTrue("the moon must move round its planet over the window, or keeping station with it "
+                        + "is vacuous (travelled " + moonTravel + " blocks relative to the planet)",
+                moonTravel > MOON_TRAVELLED_BLOCKS);
 
         long shell = DescentShell.radiusAround(luna);
         GalacticCoord parked = parkedBeside(reg, luna, 0L);
@@ -172,7 +192,7 @@ public class ParkedCraftKeepsStationTest {
         double at0 = rangeFrom(reg, luna, parked, 0L);
         double atEnd = rangeFrom(reg, luna, parked, ABANDONED_TICKS);
 
-        System.out.println("[parked-craft] moon: travel=" + moonTravel + " shell=" + shell
+        System.out.println("[parked-craft] moon: travelRoundPlanet=" + moonTravel + " shell=" + shell
                 + " cell=" + luna.name().cellBlocks()
                 + " range@0=" + at0 + " range@" + ABANDONED_TICKS + "=" + atEnd);
 
@@ -265,6 +285,10 @@ public class ParkedCraftKeepsStationTest {
         AbsolutePos craft = reg.originAt(parked.cellCentre(), tick)
                 .plus(parked.localX(), parked.localY(), parked.localZ());
         return craft.distanceTo(body.absoluteAt(tick));
+    }
+
+    private static double sq(long v) {
+        return (double) v * v;
     }
 
     private static SystemBody bodyOf(List<SystemBody> bodies, int dimId) {

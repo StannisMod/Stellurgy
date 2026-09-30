@@ -671,10 +671,8 @@ public class ClusteredGalaxyGeneratorTest {
      * along +X from the origin — the origin being the home galaxy's centre. Sampling a BLOCK rather
      * than a single super-cell is what makes the count a reading of the density there instead of one
      * coin toss.
-     */
-    /**
-     * How many STAR seats a block of super-cells holds — never how many seats of any kind.
      *
+     * <p>STAR seats — never seats of any kind.</p>
      * <p>The difference is load-bearing at the shipped tuning. Free-floating worlds are drawn on the
      * same lattice at a MEASURED twenty-one per star, which saturates it: past {@code 1/density} every
      * cube the star draw passed over holds something, so a count of occupied seats is the constant

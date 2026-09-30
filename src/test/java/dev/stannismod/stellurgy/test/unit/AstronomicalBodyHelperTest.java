@@ -84,6 +84,11 @@ public class AstronomicalBodyHelperTest {
         assertEquals(48.0, AstronomicalBodyHelper.getOrbitalPeriod(AU, 1.0f), 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.getOrbitalPeriod:265` raising the
+     * distance to the power -3 instead of 3, this fails with "inner planet must orbit faster than
+     * Earth". (A distance-unit inversion leaves it green: it asserts an order.)
+     */
     @Test
     public void orbitalPeriodGrowsWithDistance() {
         double inner = AstronomicalBodyHelper.getOrbitalPeriod(AU * 50 / 100, 1.0f);
@@ -108,6 +113,10 @@ public class AstronomicalBodyHelperTest {
                         AstronomicalBodyHelper.MOON_REFERENCE_UNITS, 1.0f), 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.fluxOf:498` dividing by the distance
+     * to the power -2 instead of 2, this fails with "brightness must drop with distance".
+     */
     @Test
     public void stellarBrightnessMonotonicWithDistance() {
         StellarBody star = sunLikeStar();
@@ -133,6 +142,10 @@ public class AstronomicalBodyHelperTest {
         assertEquals(1.0, AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU), 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.fluxOf:496` multiplying a black hole's
+     * luminosity by 1 instead of 0.25, this fails with "expected:&lt;0.25&gt; but was:&lt;1.0&gt;".
+     */
     @Test
     public void blackHoleStarReducesBrightness() {
         StellarBody star = sunLikeStar();
@@ -168,6 +181,17 @@ public class AstronomicalBodyHelperTest {
                 2 * alone, AstronomicalBodyHelper.getStellarBrightness(contactPair, AU), 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.fluxOf:498` dividing by the distance
+     * to the power -2 instead of 2, this fails with "a distant one adds only a little".
+     *
+     * <p><b>The fixture's distances are in the WRONG unit, and the test passes because of it.</b>
+     * {@code 5} and {@code 2_000} are hundredths of an AU. That is the unit
+     * {@code StellarBody.offsetFromSystemAu} still divides by ({@code / 100d}), while the generator
+     * places a companion — and every other reader of a distance — in units of 100 km. So this test
+     * agrees with the stale reader and pins the disagreement as it stands: in today's unit "20 AU" is
+     * 200 000 km. Converting the fixture turns this red, and the fix it asks for is in production.</p>
+     */
     @Test
     public void aCompanionsContributionFallsOffWithItsOwnDistance() {
         // The defect: every companion used to be fed the PRIMARY's distance, so a companion twenty AU
@@ -223,6 +247,10 @@ public class AstronomicalBodyHelperTest {
      * which the luminosity was taken from the BLACK HOLE's own size and temperature at FULL strength —
      * so a black hole with a companion came out brighter than a bare one and lit by the wrong body,
      * while the companion contributed nothing.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.fluxOf:496` multiplying a black hole's
+     * luminosity by 1 instead of 0.25, this fails with "the hole stays dimmed: the pair is never as
+     * bright as two ordinary stars".</p>
      */
     @Test
     public void aCompanionDoesNotTurnABlackHoleBackIntoAStar() {
@@ -262,6 +290,11 @@ public class AstronomicalBodyHelperTest {
         assertEquals(1.0 / 1.5, halfFlux, 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.getAverageTemperature:399-400` dropping
+     * the atmosphere multiplier, this fails with "thicker atmosphere must imply higher surface
+     * temperature".
+     */
     @Test
     public void averageTemperatureIsThicknessSensitive() {
         StellarBody star = sunLikeStar();
@@ -273,6 +306,10 @@ public class AstronomicalBodyHelperTest {
                 thickAtmosphereTemp > thinAtmosphereTemp);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.fluxOf:498` dividing by the distance
+     * to the power -2 instead of 2, this fails with "planet farther from the star must be cooler".
+     */
     @Test
     public void averageTemperatureIsDistanceSensitive() {
         StellarBody star = sunLikeStar();
@@ -282,6 +319,11 @@ public class AstronomicalBodyHelperTest {
         assertTrue("planet farther from the star must be cooler", outerPlanet < innerPlanet);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.fluxOf:498` dividing by the distance
+     * to the power -2 instead of 2, this fails with "PLM at d=747989 was 0.44444410352775, expected
+     * within [2.2, 2.3]".
+     */
     @Test
     public void planetaryLightMultiplierWithinExpectedBounds() {
         // for a sun-like baseline, sweep across astronomical

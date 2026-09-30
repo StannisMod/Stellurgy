@@ -150,7 +150,9 @@ public class CellSeamTest {
      */
     @Test
     public void distanceIsMeasuredFromTheBodyAndNotFromTheCell() {
-        // The body's own cell, a third of a cell out: the offset IS the distance.
+        // The body's own cell, a third of a cell out: the offset IS the distance. The 1-block
+        // tolerance on both reads is the offset's own rounding — an in-cell offset is a whole block,
+        // and ZONE_CELL / 3 in long arithmetic drops the .33 that ZONE_CELL / 3d keeps.
         GalacticCoord atHome = GalacticCoord.inZone(ZONE, ZONE_CELL, 0, 0, 0, ZONE_CELL / 3L, 0L, 0L);
         assertEquals(ZONE_CELL / 3d, CellSeam.distanceFromZoneBody(atHome), 1d);
 
