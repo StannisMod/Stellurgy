@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
@@ -15,7 +16,7 @@ import org.junit.Test;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.assertEquals;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -157,7 +158,7 @@ public class ShipGravityFollowsTheBodyItFallsToE2ETest extends AbstractHeadlessS
                 + fallTicks + " ticks - ratio " + (lowFell / earthFell));
 
         // --- control: the Earth craft must fall, or the comparison below is between two non-events --
-        assertTrue("ARRANGEMENT/CONTROL: released over Earth the craft must fall, and this one moved "
+        requireArranged("CONTROL: released over Earth the craft must fall, and this one moved "
                         + earthFell + " blocks in " + fallTicks + " ticks. Until a released craft"
                         + " demonstrably falls here, the low-gravity craft holding still would say"
                         + " nothing about gravity - it is what a craft that was never released, or"
@@ -190,11 +191,11 @@ public class ShipGravityFollowsTheBodyItFallsToE2ETest extends AbstractHeadlessS
         exec("ar planet generate 0 LowGravityWitness");
         Set<Integer> after = registeredDims();
         after.removeAll(fresh);
-        assertEquals("planet generate must add exactly one dim - got " + after, 1, after.size());
+        requireArranged("planet generate must add exactly one dim - got " + after, after.size() == 1);
         int dim = after.iterator().next();
 
         String load = exec("stellurgytest dim load " + dim);
-        assertTrue("the authored body never loaded: " + load, Reply.of(load).bool("loaded"));
+        requireArranged("the authored body never loaded: " + load, Reply.of(load).bool("loaded"));
 
         // The SHIPPED command, not a test-only setter: it is what an operator would use, it refuses
         // a dimension that is not a registered body instead of silently writing to Earth's
@@ -204,7 +205,9 @@ public class ShipGravityFollowsTheBodyItFallsToE2ETest extends AbstractHeadlessS
         // solver will ask is the registry, and this is the one moment the arrangement can be checked
         // against the same source.
         double gravity = Reply.of(exec("stellurgytest planet info " + dim)).number("gravity");
-        assertEquals("the authored body does not carry the gravity it was given", LOW_GRAVITY, gravity, 1e-4);
+        // Exact: the multiplier is stored as a float, and 0.25 is exact in one.
+        requireArranged("the authored body does not carry the gravity it was given (" + gravity + ")",
+                gravity == LOW_GRAVITY);
         return dim;
     }
 
@@ -221,33 +224,32 @@ public class ShipGravityFollowsTheBodyItFallsToE2ETest extends AbstractHeadlessS
         long buildMark = events.markInstrumented();
         String asm = RocketFixture.assembleAt(FixtureSite.openAir(dim, BASE_X, BASE_Z), this::exec,
                 "with-pilot-seat", 4, 12, "the craft released over this world is built here");
-        assertEquals("with the physics mod an AFC-bearing build must become a ship, not a rocket (dim "
-                + dim + "): " + asm, 0, Reply.of(asm).integer("rocketCount"));
-        String id = ShipIdentity.awaitPhysicsIdOf(this::exec, events, dim,
-                ShipIdentity.nameFromAssembly(asm), WAIT_TICKS);
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket (dim "
+                + dim + "): " + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String id = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+                dim, ShipIdentity.nameFromAssembly(asm), WAIT_TICKS));
         // Usable, not merely named: an unsimulated craft passes the HOLD control for free.
         ShipIdentity.awaitUsable(events, buildMark, id, dim,
-                "ARRANGEMENT: the craft in dim " + dim + " must be simulated before its hold is measured",
-                WAIT_TICKS);
-        ShipLift.toAltitude(this::exec, client(), dim, id, SKY_Y,
+                "the craft in dim " + dim + " must be simulated before its hold is measured", WAIT_TICKS);
+        ShipLift.toAltitude(this::exec, events, client(), dim, id, SKY_Y,
                 "a craft released on its pad lands on the pad at once, which reads as not falling");
         return new Craft(dim, id);
     }
 
     private void hold(Craft craft) throws Exception {
-        assertTrue("could not reach the flight computer of the craft in dim " + craft.dim,
+        requireArranged("could not reach the flight computer of the craft in dim " + craft.dim,
                 Reply.of(exec("stellurgytest vs fa-by-id " + craft.dim + " " + craft.id + " true"))
                         .bool("afcResolved"));
     }
 
     private void release(Craft craft) throws Exception {
-        assertTrue("could not release the craft in dim " + craft.dim,
+        requireArranged("could not release the craft in dim " + craft.dim,
                 Reply.of(exec("stellurgytest vs fa-by-id " + craft.dim + " " + craft.id + " false"))
                         .bool("afcResolved"));
     }
 
     private void assertHeld(Craft craft, double fromY, double heldY) {
-        assertTrue("ARRANGEMENT/CONTROL: with Flight Assist on the craft in dim " + craft.dim
+        requireArranged("PREMISE: with Flight Assist on the craft in dim " + craft.dim
                         + " must keep station, and this one moved to " + heldY + " from " + fromY
                         + ". Drift DOWN means it is not being held at all, so the fall measured"
                         + " afterwards would not be caused by the release; drift UP means the flight"

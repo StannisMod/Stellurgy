@@ -85,6 +85,10 @@ public class RocketAssemblySmokeTest extends AbstractSharedServerTest {
      * capacity for at least one type is non-zero — the StatsRocket invariants
      * the production launch-readiness check relies on.
      */
+    /**
+     * <p>red-witnessed, for the dry-mass verdict only (the others predate this branch): with
+     * {@code StatsRocket:181} answering a dry mass of 0, fails "dry_mass_kg must be > 0", 2026-09-30.</p>
+     */
     @Test
     public void statsRocketIsCalculatedFromComponents() throws Exception {
         int entityId = buildAndAssemble(FixtureSite.openAir(0, 580, 500), "simple");

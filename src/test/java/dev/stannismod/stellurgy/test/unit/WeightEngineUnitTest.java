@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -100,7 +101,11 @@ public class WeightEngineUnitTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code WeightEngine:370} no longer stamping formatVersion in save(), fails "retired again", 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code WeightEngine:238} checking no schema
+     * version fails "must NOT be read" (0.1); {@code :305} deleting the file instead of setting it aside
+     * fails "must be kept beside the new one"; {@code :311}'s reseed skipped fails "must be reseeded"
+     * (held entry 7.0); {@code :312}'s save skipped fails "must write a fresh table"; {@code :370} not
+     * stamping the version fails "retired again".</p>
      */
     @Test
     public void aTableFromAnotherSchemaIsSetAsideRatherThanRead() throws Exception {
@@ -115,7 +120,7 @@ public class WeightEngineUnitTest {
         File retired = new File(table.getPath() + ".v1.bak");
         try {
             if (retired.exists()) {
-                assertTrue("could not clear a stale backup from an earlier run", retired.delete());
+                requireArranged("could not clear a stale backup from an earlier run", retired.delete());
             }
             File parent = table.getParentFile();
             if (parent != null) {
@@ -129,19 +134,26 @@ public class WeightEngineUnitTest {
                         + "\"fallback\":0.1,\"fluidFallback\":0.001}");
             }
 
+            // What the tables held before the load, so a reseed is OBSERVABLE: the other tests leave
+            // defaults behind, and a verdict that only counted materials would be green with no
+            // reseed at all.
+            we.setIndividual("ar:held_before_load", 7.0);
+
             we.load();
 
             assertNull("a table from another schema must NOT be read into the live tables",
                     we.rawIndividual("ar:legacy_probe"));
             assertTrue("the incompatible file must be kept beside the new one, not dropped",
                     retired.exists());
-            assertTrue("defaults must be reseeded so the engine stays usable", we.materialCount() > 10);
+            assertTrue("the tables must be reseeded with defaults, replacing what they held (held entry "
+                    + we.rawIndividual("ar:held_before_load") + ", materials " + we.materialCount() + ")",
+                    we.rawIndividual("ar:held_before_load") == null && we.materialCount() > MIN_MATERIALS);
 
             // The file just written must survive its own version check, i.e. save() stamps it. A file
             // that fails the check is RETIRED again — which re-creates the backup — and then reseeded,
             // which leaves the tables looking healthy; so the backup is the discriminating reading and
             // the material count is not.
-            assertTrue("could not clear the first backup before the second load", retired.delete());
+            requireArranged("could not clear the first backup before the second load", retired.delete());
             // The reseed must have WRITTEN a table: with no file, the next load takes the no-file branch,
             // retires nothing, and an absent backup would read as a passed check on a file that was
             // never there.

@@ -8,6 +8,7 @@ import org.lwjgl.input.Keyboard;
 
 
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.PlayerShipData;
 import dev.stannismod.stellurgy.test.DeckCapture;
 import dev.stannismod.stellurgy.test.Events;
@@ -1696,10 +1697,15 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     /**
      * A pilot who stands up and is taken onto his deck stays on it while the deck falls.
      *
-     * <p>red-witnessed: NOT YET, and one attempt is on record as a non-witness. With
-     * {@code ShipFrameTravel.FLOOR_PROBE_DEPTH} at 0 — the {@code noDeckBelow} release gate finding no
-     * floor at all — this stayed GREEN (2026-09-29), so on this fixture the body is kept by something
-     * other than that gate (the roofed-interior exception beside it is the unverified candidate).</p>
+     * <p>red-witnessed: NOT YET — three attempts, all GREEN. (1) {@code ShipFrameTravel.FLOOR_PROBE_DEPTH}
+     * at 0, 2026-09-29: with no floor in reach a body still touching the hull goes to HULL-STAND
+     * ({@code ShipFrameTravel:327}), which keeps the episode open, so no release is recorded.
+     * (2) {@code ShipFrameTravel:1653} handing every aboard body to vanilla's world-frame travel,
+     * 2026-09-30. (3) that, plus Valkyrien Skies' own carry off ({@code EntityDraggable:36}),
+     * 2026-09-30. So the body is kept by more than one mechanism — the ship-frame resolver and the
+     * substrate's world-frame collision — and none of the three drove the resolver to a release, which
+     * is the only thing this verdict reads. What would turn it red is a release on a falling deck; the
+     * production line that decides one there is not yet identified.</p>
      */
     @Test
     public void yABodyTakenOntoADeckIsKeptWhileTheDeckFalls() throws Exception {
@@ -1719,11 +1725,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // STIMULUS: the sneak key held across client ticks, as a player holds it to stand up.
         bot().waitTicks(4);
         bot().releaseKey(Keyboard.KEY_LSHIFT);
-        events().await(dismountMark, "dismount", "the real sneak key must take the pilot out of his"
-                + " seat before anything about the deck can be asked", DECK_LINK_BUDGET_TICKS);
-        clientEvents.awaitField(clientMark, "deck_entered", "ship", scenarioShipId,
-                "the ex-pilot's OWN client must take him onto THIS ship's deck when he stands up",
-                DECK_LINK_BUDGET_TICKS);
+        ArrangementFailure.arranged(() -> events().await(dismountMark, "dismount", "the real sneak key"
+                + " must take the pilot out of his seat before anything about the deck can be asked",
+                DECK_LINK_BUDGET_TICKS));
+        ArrangementFailure.arranged(() -> clientEvents.awaitField(clientMark, "deck_entered", "ship",
+                scenarioShipId, "the ex-pilot's OWN client must take him onto THIS ship's deck when he"
+                        + " stands up", DECK_LINK_BUDGET_TICKS));
 
         // Release the craft. Flight Assist is the unmanned mode switch: on, an unpiloted craft holds;
         // off, it is handed to the field.
@@ -1739,6 +1746,7 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + " falling deck: it went from " + deckFrom + " to " + deckTo + " in "
                 + DECK_FALL_TICKS + " ticks", deckFrom - deckTo >= DECK_FELL_MIN);
 
+        scenario().asserting("the body taken onto the deck is still held by it after the fall");
         assertTrue("a body taken onto a deck must still be held by it after the deck has fallen "
                         + (deckFrom - deckTo) + " blocks. The releases in the window, with production's"
                         + " own reason for each: " + clientEvents.since(clientMark, "deck_released")

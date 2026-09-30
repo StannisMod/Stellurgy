@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -11,7 +12,7 @@ import dev.stannismod.stellurgy.test.ShipLift;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -37,7 +38,9 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>red-witnessed: with the unmanned branch's {@code !flightAssistEnabled} release in
  * {@code TileAdvancedFlightComputer} ({@code :734}) never taken, the fall verdict fails — "sank only
- * 0.0 blocks in 61 ticks" — after the hold control passed, 2026-09-29.</p>
+ * 0.0 blocks in 61 ticks" — after the hold passed, 2026-09-29. With that branch taken ALWAYS
+ * ({@code :734} to {@code if (true)}), the hold verdict fails — "must keep station, and this one moved
+ * from 235.7 to 57.1" — 2026-09-30.</p>
  */
 public class AnUnpilotedShipFallsWithoutFlightAssistE2ETest extends AbstractHeadlessServerTest {
 
@@ -81,32 +84,32 @@ public class AnUnpilotedShipFallsWithoutFlightAssistE2ETest extends AbstractHead
         long buildMark = events.markInstrumented();
         String asm = RocketFixture.assembleAt(FixtureSite.openAir(0, BASE_X, BASE_Z), this::exec,
                 "with-pilot-seat", 4, 12, "the craft that is held and then released is built here");
-        assertEquals("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
-                0, Reply.of(asm).integer("rocketCount"));
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0,
-                ShipIdentity.nameFromAssembly(asm), WAIT_TICKS);
-        // Usable, not merely named: an unsimulated craft passes the HOLD control below for free.
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
+                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec,
+                events, 0, ShipIdentity.nameFromAssembly(asm), WAIT_TICKS));
+        // Usable, not merely named: an unsimulated craft passes the HOLD leg below for free.
         ShipIdentity.awaitUsable(events, buildMark, shipId, 0,
-                "ARRANGEMENT: the craft must be simulated before its hold can be measured", WAIT_TICKS);
-        ShipLift.toAltitude(this::exec, client(), 0, shipId, SKY_Y,
+                "the craft must be simulated before its hold can be measured", WAIT_TICKS);
+        ShipLift.toAltitude(this::exec, events, client(), 0, shipId, SKY_Y,
                 "a craft released on its pad lands on the pad at once, which reads as holding");
 
-        // --- control: Flight Assist ON must HOLD -------------------------------------------------
-        assertTrue("could not reach this ship's flight computer to arm the control leg",
+        // --- first half: Flight Assist ON must HOLD ----------------------------------------------
+        requireArranged("could not reach this ship's flight computer to arm the hold",
                 Reply.of(exec("stellurgytest vs fa-by-id 0 " + shipId + " true")).bool("afcResolved"));
         double heldFrom = ShipInfo.byId(this::exec, 0, shipId).y;
         // WINDOW: the altitude is read before and after this stretch and the claim is an UPPER bound
         // on the difference, so a longer stretch than asked can only make a leaking hold show.
         long heldTicks = GameTicks.advanceObserved(client(), GameTicks.server(), SAMPLE_TICKS);
         double heldTo = ShipInfo.byId(this::exec, 0, shipId).y;
-        assertTrue("ARRANGEMENT/CONTROL: with Flight Assist ON an unpiloted craft must keep station,"
+        assertTrue("with Flight Assist ON an unpiloted craft must keep station,"
                         + " and this one moved from " + heldFrom + " to " + heldTo + " in " + heldTicks
                         + " ticks. Without a working hold, the fall asserted below would say nothing - a"
                         + " craft that cannot hold falls whatever the mode switch does.",
                 Math.abs(heldFrom - heldTo) <= HELD_TOLERANCE);
 
         // --- the subject: Flight Assist OFF must RELEASE ------------------------------------------
-        assertTrue("could not reach this ship's flight computer to release it",
+        requireArranged("could not reach this ship's flight computer to release it",
                 Reply.of(exec("stellurgytest vs fa-by-id 0 " + shipId + " false")).bool("afcResolved"));
         double releasedFrom = ShipInfo.byId(this::exec, 0, shipId).y;
         // EXPERIMENT: the dose is SAMPLE_TICKS of release. The claim is a LOWER bound, which extra

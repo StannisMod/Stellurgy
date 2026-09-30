@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -10,7 +11,7 @@ import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
  * A ship is re-weighed on a CADENCE, with no event to trigger it.
@@ -67,17 +68,17 @@ public class AShipIsReWeighedOnACadenceE2ETest extends AbstractHeadlessServerTes
         long assemblyMark = events.markInstrumented();
         String asm = RocketFixture.assembleAt(FixtureSite.openAir(0, BASE_X, BASE_Z), this::exec,
                 "with-pilot-seat", 4, 12, "the craft that is re-weighed stands in this volume");
-        assertEquals("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, 0, Reply.of(asm).integer("rocketCount"));
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0,
-                ShipIdentity.nameFromAssembly(asm), WAIT_TICKS);
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
+                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+                0, ShipIdentity.nameFromAssembly(asm), WAIT_TICKS));
 
         // The assembly's own measurement first, on the record. Marking the round window only after it
         // is what keeps the assembly's recompute out of the round's count — without this the test
         // would pass on a build with no cadence at all.
-        events.awaitRecordWithFields(assemblyMark, "ship_mass_measured",
-                "ARRANGEMENT: the craft's assembly must be measured before a round can be told apart"
-                        + " from it", WAIT_TICKS, "ship", shipId, "path", "event");
+        ArrangementFailure.arranged(() -> events.awaitRecordWithFields(assemblyMark, "ship_mass_measured",
+                "the craft's assembly must be measured before a round can be told apart from it",
+                WAIT_TICKS, "ship", shipId, "path", "event"));
 
         long roundMark = events.markInstrumented();
         events.awaitRecordWithFields(roundMark, "ship_mass_measured",

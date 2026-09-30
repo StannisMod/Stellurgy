@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
@@ -8,6 +9,7 @@ import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.TransitSetup;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -80,30 +82,30 @@ public class AShipInASpaceCellDoesNotFallE2ETest extends AbstractSharedServerTes
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     @Test
-    public void aReleasedCraftInACellKeepsItsAltitudeAndIsStillBeingSimulated() throws Exception {
+    public void aReleasedCraftInACellKeepsItsAltitude() throws Exception {
 
         long setupMark = events.markInstrumented();
         TransitSetup setup = TransitSetup.piloted(this::exec);
         int cellDim = setup.originDim;
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, cellDim,
-                setup.requireDurableId(), WAIT_TICKS);
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+                cellDim, setup.requireDurableId(), WAIT_TICKS));
         // USABLE, as its own link, and not merely named. The id above answers as soon as the craft
         // is REGISTERED; a registered craft whose physics has not started yet sits exactly as still
         // as a weightless one. Measured 2026-09-29: the subject window opened on `ready:false`, and
         // under load a planet's gravity in the cell then sank the craft 1.48 blocks in 76 ticks —
         // green, because it was not being simulated for most of the window.
         ShipIdentity.awaitUsable(events, setupMark, shipId, cellDim,
-                "ARRANGEMENT: the craft must be USABLE before its stillness can mean anything", WAIT_TICKS);
+                "the craft must be USABLE before its stillness can mean anything", WAIT_TICKS);
 
         // A craft placed by a paste is rigid until something hands it back, and a rigid craft is
         // exactly as still as a weightless one.
         String unparked = exec("stellurgytest vs unpark-by-id " + cellDim + " " + shipId);
-        assertTrue("ARRANGEMENT: the pasted craft must be handed back to physics: " + unparked,
+        requireArranged("the pasted craft must be handed back to physics: " + unparked,
                 Reply.of(unparked).ok());
 
         // Release it: Flight Assist off is what hands an unpiloted craft to the field, whatever the
         // field turns out to be. Over a planet this is what makes it fall.
-        assertTrue("could not reach the flight computer to release the craft",
+        requireArranged("could not reach the flight computer to release the craft",
                 Reply.of(exec("stellurgytest vs fa-by-id " + cellDim + " " + shipId + " false"))
                         .bool("afcResolved"));
 
@@ -121,7 +123,7 @@ public class AShipInASpaceCellDoesNotFallE2ETest extends AbstractSharedServerTes
         // Taken second so the drive cannot disturb the altitude it is vouching for, and asserted first
         // so a craft nobody is simulating fails HERE, on a leg that says so.
         double zBefore = ShipInfo.byId(this::exec, cellDim, shipId).z;
-        assertTrue("could not command the craft's flight computer: the control leg cannot run",
+        requireArranged("could not command the craft's flight computer: the control leg cannot run",
                 Reply.of(exec("stellurgytest vs force-vel-by-id " + cellDim + " " + shipId + " 0 0 "
                         + DRIVE_VZ)).bool("afcResolved"));
         // EXPERIMENT: the dose is SAMPLE_TICKS of commanded drive, and the claim is a LOWER bound —
@@ -133,7 +135,7 @@ public class AShipInASpaceCellDoesNotFallE2ETest extends AbstractSharedServerTes
                 + travelled + " in " + driven + " ticks; at release " + atRelease.raw()
                 + " after " + afterStill.raw());
 
-        assertTrue("ARRANGEMENT/CONTROL: the craft must be under the solver's hand for its stillness to"
+        requireArranged("CONTROL: the craft must be under the solver's hand for its stillness to"
                         + " mean anything. Commanded at " + DRIVE_VZ + " blocks/s it moved " + travelled
                         + " blocks in " + driven + " ticks, needing " + required + ". In zero gravity a"
                         + " craft nobody simulates sits exactly as still as one that is weightless, so"

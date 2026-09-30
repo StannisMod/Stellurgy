@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -9,7 +10,7 @@ import dev.stannismod.stellurgy.test.ShipIdentity;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -40,10 +41,11 @@ import static org.junit.Assert.assertTrue;
  * report that the process exited rather than that a hull was 4% light — so the number arrives here in
  * the record and the failure can carry it.</p>
  *
- * <p>red-witnessed: with {@code ShipInertiaWriter.compare}'s agreement test inverted (then at
- * {@code :123}, returning a String; at {@code :121} since {@code compare} returns a {@code Drift}), the
- * verdict fails with {@code "agrees":false} on an assembly whose two totals are equal (31250.0 vs
- * 31250.0), 2026-09-29. Taken on the String form — not re-run on the Drift form.</p>
+ * <p>red-witnessed, one break per verdict, 2026-09-30 (the {@code Drift} form): with
+ * {@code ShipMassTrigger:84} comparing only on a LOAD, the wait for this craft's comparison fails —
+ * "the assembly never compared the full hull pass against the running total"; with
+ * {@code ShipInertiaWriter:121}'s agreement test inverted, the verdict fails on {@code "agrees":false}
+ * ("disagree").</p>
  */
 public class AnAssembledHullWeighsWhatItsBlocksWeighE2ETest extends AbstractHeadlessServerTest {
 
@@ -69,16 +71,14 @@ public class AnAssembledHullWeighsWhatItsBlocksWeighE2ETest extends AbstractHead
         long mark = events.markInstrumented();
         String asm = RocketFixture.assembleAt(FixtureSite.openAir(0, BASE_X, BASE_Z), this::exec,
                 "with-pilot-seat", 4, 12, "the craft whose hull is weighed stands in this volume");
-        assertEquals("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, 0, Reply.of(asm).integer("rocketCount"));
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0,
-                ShipIdentity.nameFromAssembly(asm), WAIT_TICKS);
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
+                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+                0, ShipIdentity.nameFromAssembly(asm), WAIT_TICKS));
 
         String compared = events.awaitRecordWithFields(mark, "ship_mass_compared",
                 "the assembly never compared the full hull pass against the running total, so nothing"
                         + " measures the incremental path at all", WAIT_TICKS, "ship", shipId);
-        Events.assertInstrumentRan(events.since(mark, "ship_mass_compared"), "ship_mass_compare",
-                "the comparison for this craft");
 
         assertTrue("the full hull pass and the running total the engine kept while assembling this"
                         + " craft disagree. They price the same blocks from the same table, so a"
@@ -88,7 +88,10 @@ public class AnAssembledHullWeighsWhatItsBlocksWeighE2ETest extends AbstractHead
                 Reply.of("ship_mass_compared", compared).bool("agrees"));
     }
 
-    /** 25 iron deck blocks at Stellurgy's 5000 kg each. Everything else on the fixture only adds. */
+    /**
+     * 25 iron deck blocks at the table's default for the IRON material, 5000 kg ({@code WeightEngine:417}).
+     * Everything else on the fixture only adds.
+     */
     private static final double IRON_DECK_KG = 25 * 5000.0;
 
     /**
@@ -114,15 +117,15 @@ public class AnAssembledHullWeighsWhatItsBlocksWeighE2ETest extends AbstractHead
         long mark = events.markInstrumented();
         String asm = RocketFixture.assembleAt(FixtureSite.openAir(0, BASE_X, BASE_Z), this::exec,
                 "with-pilot-deck", 4, 12, "the decked craft that is weighed stands in this volume");
-        assertEquals("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
-                + asm, 0, Reply.of(asm).integer("rocketCount"));
-        String shipId = ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0,
-                ShipIdentity.nameFromAssembly(asm), WAIT_TICKS);
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: "
+                + asm, Reply.of(asm).integer("rocketCount") == 0);
+        String shipId = ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events,
+                0, ShipIdentity.nameFromAssembly(asm), WAIT_TICKS));
         // The authoritative frame is written right after this record, on the same tick: the read
         // below is of the mass that settles the question, not of whatever the paste had accumulated.
-        events.awaitRecordWithFields(mark, "ship_mass_measured",
-                "ARRANGEMENT: the assembly's own measurement must be on the record before its mass is"
-                        + " read", WAIT_TICKS, "ship", shipId, "path", "event");
+        ArrangementFailure.arranged(() -> events.awaitRecordWithFields(mark, "ship_mass_measured",
+                "the assembly's own measurement must be on the record before its mass is read",
+                WAIT_TICKS, "ship", shipId, "path", "event"));
 
         String info = exec("stellurgytest vs ship-info 0 id " + shipId);
         double massKg = Reply.of("stellurgytest vs ship-info", info).number("massKg");

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -11,8 +12,8 @@ import dev.stannismod.stellurgy.test.ShipReadiness;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Becoming a ship, and stopping being one, is announced exactly once per transition — and the
@@ -45,7 +46,14 @@ import static org.junit.Assert.assertTrue;
  * once" and the crossing with "no `ship_lifecycle` carrying … cause = PASTED was recorded within 200
  * ticks", 2026-09-29. With the UNLOADED note ({@code :592}) removed, the cycle fails "dropping the
  * ship object must be announced — no … cause = UNLOADED … within 200 ticks"; with the LOADED note
- * ({@code :529}) made twice, it fails "coming back must be announced exactly once", 2026-09-29.</p>
+ * ({@code :529}) made twice, it fails "coming back must be announced exactly once", 2026-09-29.
+ * One break per remaining verdict, 2026-09-30: the spawn note at {@code :405} removed fails "a craft
+ * that has just been built must be announced"; the LOADED note at {@code :529} removed fails "coming
+ * back must be announced"; the UNLOADED note at {@code :592} made twice fails "dropping … exactly
+ * once"; a PASTED note added beside {@code :529}'s LOADED fails "nothing here was cut and pasted"; a
+ * DESTROYED note added beside {@code :592}'s UNLOADED fails "an unloaded craft still EXISTS"; a
+ * PASTED spawn at {@code :405} noted twice fails "announced as PASTED exactly once"; a PASTED spawn at
+ * {@code :405} also noted as ASSEMBLED fails "a crossing is not a new build".</p>
  */
 public class ShipNamingEdgeIsAnnouncedOncePerTransitionE2ETest extends AbstractHeadlessServerTest {
 
@@ -103,7 +111,8 @@ public class ShipNamingEdgeIsAnnouncedOncePerTransitionE2ETest extends AbstractH
 
         long mark = events.mark();
         String shipId = buildShipAt(LANE_CROSS_X);
-        awaitAnnounced(mark, shipId, "ASSEMBLED", "ARRANGEMENT: the craft must exist before it can cross");
+        ArrangementFailure.arranged(() -> awaitAnnounced(mark, shipId, "ASSEMBLED",
+                "the craft must exist before it can cross"));
 
         // The production crossing: the blocks are cut out and pasted elsewhere, and the craft is
         // re-registered around them. Told WHICH craft to cut; the source pose is only where the
@@ -112,7 +121,7 @@ public class ShipNamingEdgeIsAnnouncedOncePerTransitionE2ETest extends AbstractH
         String repack = exec("stellurgytest vs ship-repack 0 id " + shipId + " "
                 + (int) source.x + " " + (int) source.y + " " + (int) source.z + " "
                 + (LANE_CROSS_X + HOP) + " " + FixtureSite.OPEN_AIR_Y + " " + BASE_Z);
-        assertTrue("ARRANGEMENT: the crossing must actually run, or nothing below is a paste: " + repack,
+        requireArranged("the crossing must actually run, or nothing below is a paste: " + repack,
                 Reply.of(repack).ok());
         // The identity the craft came out under, as the crossing itself reports it.
         String crossedId = Reply.of("stellurgytest vs ship-repack", repack).text("shipUuid");
@@ -152,10 +161,10 @@ public class ShipNamingEdgeIsAnnouncedOncePerTransitionE2ETest extends AbstractH
     private String buildShipAt(int baseX) throws Exception {
         String asm = RocketFixture.assembleAt(FixtureSite.openAir(0, baseX, BASE_Z), this::exec,
                 "with-pilot-seat", 4, 12, "the craft whose naming edges are counted stands in this volume");
-        assertEquals("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
-                0, Reply.of(asm).integer("rocketCount"));
-        return ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0, ShipIdentity.nameFromAssembly(asm),
-                WAIT_TICKS);
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
+                Reply.of(asm).integer("rocketCount") == 0);
+        return ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0,
+                ShipIdentity.nameFromAssembly(asm), WAIT_TICKS));
     }
 
     private String exec(String cmd) throws Exception {

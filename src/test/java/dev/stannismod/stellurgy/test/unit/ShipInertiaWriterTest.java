@@ -25,6 +25,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShipInertiaWriterTest {
 
+    /** Slack for rounding only: measured 2026-09-30 with it at zero, every verdict here is exact. */
+    private static final double ROUNDING = 1e-9;
+
     /** A frame with a genuinely three-dimensional mass distribution, so its tensor is invertible. */
     private static ShipMassFrame hull() {
         return new ShipMassFrameBuilder()
@@ -36,7 +39,11 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipInertiaWriter:103}'s tensor write skipped, fails "the tensor must be the frame's", 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipInertiaWriter:94}'s refusal taken
+     * for every tensor fails "a well-formed frame must be accepted"; {@code :101}'s mass write skipped
+     * fails "total mass must be the frame's" (0.0); {@code :102}'s centre write skipped fails "centre
+     * of mass must be the frame's" (1.346); {@code :103}'s tensor write skipped fails "the tensor must
+     * be the frame's".</p>
      */
     @Test
     public void aWriteMovesMassCentreAndTensorTogether() {
@@ -49,16 +56,18 @@ public class ShipInertiaWriterTest {
                 ShipInertiaWriter.applyTo(record, frame, "unit-hull"));
 
         assertEquals("total mass must be the frame's", frame.getTotalMass(),
-                record.getGameTickMass(), 1e-9);
+                record.getGameTickMass(), ROUNDING);
         assertEquals("centre of mass must be the frame's", 0.0,
                 new Vector3d(frame.getCentreOfMass())
-                        .sub(new Vector3d(record.getGameTickCenterOfMass())).length(), 1e-9);
+                        .sub(new Vector3d(record.getGameTickCenterOfMass())).length(), ROUNDING);
         assertEquals("the tensor must be the frame's", new Matrix3d(frame.getInertia()),
                 new Matrix3d(record.getGameMoITensor()));
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipInertiaWriter:171} answering every tensor invertible, fails "must be refused", 2026-09-29.</p>
+     * <p>red-witnessed, 2026-09-30: {@code ShipInertiaWriter:173} answering every tensor invertible
+     * fails "must be refused"; the mass written before the check at {@code :93} fails "must leave the
+     * record untouched".</p>
      */
     @Test
     public void aSingularTensorIsRefusedBeforeItReachesThePhysicsTick() {
@@ -81,7 +90,7 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "cannot be in drift" (a drift was returned), 2026-09-29.</p>
+     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "cannot be in drift" (a drift was returned), 2026-09-30.</p>
      */
     @Test
     public void aRecordThatAgreesWithTheAuthorityReportsNothing() {
@@ -94,7 +103,10 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "a 20% mass disagreement must be reported", 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipInertiaWriter:121}'s agreement
+     * test inverted fails "must be reported"; {@code :124} naming the ship "?" fails "must name the
+     * ship"; {@code :124} with the sign flipped fails "-0.20 of the authority"; the record repaired
+     * inside {@code compare} before {@code :124} fails "must not repair the record".</p>
      */
     @Test
     public void driftIsReportedWithItsSignAndMagnitudeAndTheRecordIsLEFTALONE() {
@@ -114,14 +126,14 @@ public class ShipInertiaWriterTest {
         // Sign AND magnitude in one number: -0.20 is "20% light". A light record and a heavy one point
         // at different missing triggers, so a report that loses the sign loses the diagnosis.
         assertEquals("a 20% light record must be reported as -0.20 of the authority: " + drift,
-                -0.20, drift.relativeMassError, 1e-9);
+                -0.20, drift.relativeMassError, ROUNDING);
 
         assertEquals("compare() must not repair the record it is describing",
                 stale, record.getGameTickMass(), 0.0);
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "half a percent is accumulation" (a drift was returned), 2026-09-29.</p>
+     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "half a percent is accumulation" (a drift was returned), 2026-09-30.</p>
      */
     @Test
     public void aDisagreementSmallerThanTheToleranceIsNotDrift() {
@@ -138,7 +150,9 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "must be reported", 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipInertiaWriter:121} comparing mass
+     * only fails "must be reported"; {@code :124} doubling the centre offset fails "how far the centre
+     * moved"; {@code :124} reporting the centre error as the mass error fails "must not blame it".</p>
      */
     @Test
     public void aCentreThatHasWalkedAwayIsDriftEvenWhenTheMassAgrees() {
@@ -154,8 +168,8 @@ public class ShipInertiaWriterTest {
         ShipInertiaWriter.Drift drift = ShipInertiaWriter.compare(record, frame, "unit-hull");
         assertNotNull("a centre of mass a block and a half out must be reported", drift);
         assertEquals("the report must say how far the centre moved: " + drift,
-                1.5, drift.centreOffBlocks, 1e-9);
+                1.5, drift.centreOffBlocks, ROUNDING);
         assertEquals("the mass agreed, so the report must not blame it: " + drift,
-                0.0, drift.relativeMassError, 1e-9);
+                0.0, drift.relativeMassError, ROUNDING);
     }
 }

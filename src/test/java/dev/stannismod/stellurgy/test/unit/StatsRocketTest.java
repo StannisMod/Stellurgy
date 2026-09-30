@@ -69,6 +69,10 @@ public class StatsRocketTest {
         return stats;
     }
 
+    /**
+     * <p>red-witnessed, for the dry-mass verdict only (the others predate this branch): with
+     * {@code StatsRocket:819} not reading {@code mass}, fails expected 987.5 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
+     */
     @Test
     public void statsRocketNbtRoundTrip() {
         StatsRocket original = sample();
@@ -266,6 +270,10 @@ public class StatsRocketTest {
      * tolerates missing keys (defaults to zero) without throwing — saves from
      * earlier Stellurgy versions must not crash on load.
      */
+    /**
+     * <p>red-witnessed, for the dry-mass verdict only (the others predate this branch): with
+     * {@code StatsRocket:819} not reading {@code mass}, fails expected 12.5 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
+     */
     @Test
     public void rocketStatsBackwardCompatibleWithOldNbt() {
         NBTTagCompound stats = new NBTTagCompound();
@@ -311,6 +319,11 @@ public class StatsRocketTest {
         assertEquals(0, restored.getNumPassengerSeats()); // passenger list still empty
     }
 
+    /**
+     * <p>red-witnessed, for the two verdicts this branch changed, 2026-09-30: {@code StatsRocket:294}'s
+     * massless guard skipped fails the TWR (Infinity); {@code :313}'s weight-system switch inverted
+     * fails the refused launch.</p>
+     */
     @Test
     public void accelerationOnMasslessRocketIsZeroNotInfinite() {
         // getAcceleration divides by mass; a massless rocket must not yield
@@ -335,7 +348,10 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code StatsRocket:261} weighing without the gravity multiplier, fails expected 4.0 but was 2.0, 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:261} weighing the mass
+     * without {@code STANDARD_GRAVITY} fails "TWR 2 at one gee" (19.62); {@code :261} weighing without
+     * the gravity multiplier fails "twice the TWR at half the gravity" (2.0). Tolerances measured the
+     * same day at zero: residuals 1.2e-7 and 2.4e-7, one float ulp each.</p>
      */
     @Test
     public void thrustToWeightRatioIsThrustOverLocalWeight() {
@@ -362,7 +378,10 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code StatsRocket:261} weighing without the gravity multiplier, fails "clears the gate at one sixth gee", 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:313}'s weight-system switch
+     * inverted fails "cannot lift itself at one gee"; {@code :261} weighing without the gravity
+     * multiplier fails "clears the gate at one sixth gee"; {@code :279} climbing against one gee fails
+     * "on the light body"; {@code :280} losing the climb's sign fails "at one gee".</p>
      */
     @Test
     public void launchGateFollowsLocalGravityNotEarthGravity() {
@@ -396,7 +415,10 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code StatsRocket:256} ignoring {@code gravityAffectsFuel}, fails expected 2.0 but was 20.0, 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:256} ignoring
+     * {@code gravityAffectsFuel} fails "a light world reads the same as earth"; {@code :279} weighing the
+     * climb with the raw multiplier, past the switch, fails the acceleration (0.08 vs 0.152).
+     * Tolerances measured the same day at zero: both exact.</p>
      */
     @Test
     public void gravityMayBeDetachedFromTheModelEntirely() {
@@ -421,6 +443,11 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:316} demanding the
+     * threshold + 0.2 fails "above the threshold must allow"; − 0.2 fails "below the threshold must
+     * block"; {@code >} for {@code >=} fails "exactly at the threshold must allow".</p>
+     */
     @Test
     public void canLaunchRespectsMinLaunchTWR() {
         double prevTWR = StellurgyConfiguration.getCurrentConfig().minLaunchTWR;
@@ -442,7 +469,10 @@ public class StatsRocketTest {
             stats.setThrust(Math.round(1.4f * earthWeight)); // TWR 1.4 < 1.5
             assertFalse("TWR below the threshold must block launch", stats.canLaunch(1f));
 
-            stats.setThrust((int) Math.ceil(1.5f * earthWeight)); // boundary is inclusive
+            // Boundary is inclusive. An integer thrust cannot land on 1.5 * 981 N exactly, so the
+            // threshold is moved onto the ratio the rocket actually has instead of the other way round.
+            stats.setThrust((int) Math.ceil(1.5f * earthWeight));
+            StellurgyConfiguration.getCurrentConfig().minLaunchTWR = stats.getThrustToWeightRatio(1f);
             assertTrue("TWR exactly at the threshold must allow launch", stats.canLaunch(1f));
         } finally {
             StellurgyConfiguration.getCurrentConfig().minLaunchTWR = prevTWR;
@@ -450,6 +480,11 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:313}'s switch inverted
+     * fails "the gate rejects this rocket while the system is on"; the switch ignored (gate always on)
+     * fails "must not block launch".</p>
+     */
     @Test
     public void canLaunchIgnoresTwrGateWhenWeightSystemDisabled() {
         // Disableability contract: with advancedWeightSystem off, the weight-based
@@ -479,6 +514,11 @@ public class StatsRocketTest {
         }
     }
 
+    /**
+     * <p>red-witnessed, for the two verdicts this branch changed, 2026-09-30: {@code StatsRocket:280}
+     * negating the climb fails "positive dry acceleration"; {@code :280} capping the net force at 1 N
+     * fails "more thrust must accelerate the dry rocket harder".</p>
+     */
     @Test
     public void dryAccelerationUsesEmptyTankWeight() {
         boolean prevGravity = StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel;
@@ -511,7 +551,9 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code StatsRocket:280} dividing by a fixed 250 kg instead of the mass, fails "net climb must be scale-free", 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:266} weighing a 10 kg tare
+     * on top of the mass fails "TWR must be scale-free"; {@code :280} dividing by a fixed 250 kg fails
+     * "net climb must be scale-free". Tolerances measured the same day at zero: both exact.</p>
      */
     @Test
     public void accelerationDependsOnlyOnTheThrustToWeightRatio() {
@@ -546,7 +588,10 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code BlockRocketMotor:63} rated 480_000 N, fails expected 1.0 but was 0.9786, 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code BlockRocketMotor:63} rated 480_000 N
+     * fails "exactly TWR 1" (0.9786); {@code StatsRocket:279} climbing against 99% of the weight fails
+     * "hovers and climbs nowhere". Tolerances measured the same day at zero: residuals 6.0e-8 (one
+     * float ulp of 1.0) and 5.1e-9.</p>
      */
     @Test
     public void oneBasicMotorExactlyHoldsAHundredOrdinaryBlocks() {
@@ -578,7 +623,7 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code StatsRocket:176} a plain narrowing cast, fails expected 2147483647 but was 2147483645, 2026-09-29.</p>
+     * <p>red-witnessed: with {@code StatsRocket:176} a plain narrowing cast, fails expected 2147483647 but was 2147483645, 2026-09-30.</p>
      */
     @Test
     public void thrustSaturatesInsteadOfWrapping() {
@@ -589,6 +634,10 @@ public class StatsRocketTest {
         assertEquals(Integer.MAX_VALUE, stats.getThrust());
     }
 
+    /**
+     * <p>red-witnessed, for the dry-mass verdict only (the other predates this branch): with
+     * {@code StatsRocket:367} copying no mass, fails expected 50.0 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
+     */
     @Test
     public void copyProducesIndependentInstance() {
         StatsRocket original = new StatsRocket();

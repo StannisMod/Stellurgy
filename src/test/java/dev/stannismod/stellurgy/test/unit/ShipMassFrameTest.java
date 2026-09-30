@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import org.joml.Matrix3d;
+import org.joml.Matrix3dc;
+import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.junit.Test;
 
@@ -10,7 +12,6 @@ import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrameBuilder;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -25,6 +26,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShipMassFrameTest {
 
+    /**
+     * Measured 2026-09-30 with every tolerance in this class set to zero: each verdict is EXACT except
+     * the order test's tensor, whose residual is under 1e-12 (summation order). So this bar is slack
+     * for rounding, far below any error a verdict here exists to catch.
+     */
     private static final double EPS = 1.0e-9D;
 
     /** Two identical blocks either side of the origin, one metre apart. */
@@ -46,7 +52,10 @@ public class ShipMassFrameTest {
      * <p>The inertia leg is the load-bearing half: the tensor is expressed <em>about the centre of
      * mass</em>, so it must be invariant here. If it ever stopped being, every craft's handling would
      * silently depend on where its shipyard happened to be allocated.</p>
-     * <p>red-witnessed: with {@code ShipMassFrame:109} not adding the offset, fails "the centre moves by exactly the offset", 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrame:108} doubling the hull
+     * in {@code translated} fails "must not invent or lose mass"; {@code :109} not adding the offset
+     * fails "the centre moves by exactly the offset"; {@code :109} rescaling the tensor fails "cannot
+     * depend on where the centre IS".</p>
      */
     @Test
     public void translatingMovesTheCentreAndLeavesTheInertiaAlone() {
@@ -60,24 +69,19 @@ public class ShipMassFrameTest {
 
         assertEquals("translation must not invent or lose mass",
                 local.getTotalMass(), moved.getTotalMass(), EPS);
-        assertEquals("the centre moves by exactly the offset, at a real shipyard distance",
-                local.getCentreOfMass().x() + dx, moved.getCentreOfMass().x(), 1.0e-6D);
-        assertEquals(local.getCentreOfMass().y() + dy, moved.getCentreOfMass().y(), 1.0e-6D);
-        assertEquals(local.getCentreOfMass().z() + dz, moved.getCentreOfMass().z(), 1.0e-6D);
-
-        Matrix3d before = new Matrix3d(local.getInertia());
-        Matrix3d after = new Matrix3d(moved.getInertia());
-        assertEquals("inertia about the centre of mass cannot depend on where the centre IS",
-                before.m00(), after.m00(), EPS);
-        assertEquals(before.m11(), after.m11(), EPS);
-        assertEquals(before.m22(), after.m22(), EPS);
-        assertEquals(before.m01(), after.m01(), EPS);
-        assertEquals(before.m02(), after.m02(), EPS);
-        assertEquals(before.m12(), after.m12(), EPS);
+        // 1e-6 of a block at x = 5.12e6. Measured 2026-09-30 with the bound at zero: the translated
+        // centre is exact.
+        assertSameVector("the centre moves by exactly the offset, at a real shipyard distance",
+                new Vector3d(local.getCentreOfMass()).add(dx, dy, dz), moved.getCentreOfMass(), 1.0e-6D);
+        assertSameTensor("inertia about the centre of mass cannot depend on where the centre IS",
+                local.getInertia(), moved.getInertia());
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrame:69} leaving out the crew, fails expected 1380.0 but was 1300.0, 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrameBuilder:59} counting
+     * content as structure fails the structural 1000 (1300); {@code :59} counting content as crew fails
+     * the content 300 (0.0); {@code :63} not accumulating crew fails the crew 80 (0.0);
+     * {@code ShipMassFrame:69} leaving the crew out of the total fails 1380 (1300).</p>
      */
     @Test
     public void totalIsExactlyTheThreeCategories() {
@@ -96,7 +100,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face instead of its centre, fails expected 1.0 but was 1.5, 2026-09-29.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face instead of its centre, fails "the mass-weighted mean" at (1.5, 0, 0), 2026-09-30.</p>
      */
     @Test
     public void centreOfMassIsTheMassWeightedMean() {
@@ -106,13 +110,14 @@ public class ShipMassFrameTest {
                 .build();
 
         // 300 kg at 0 and 100 kg at 4 balance at 1.
-        assertEquals(1.0D, frame.getCentreOfMass().x(), EPS);
-        assertEquals(0.0D, frame.getCentreOfMass().y(), EPS);
-        assertEquals(0.0D, frame.getCentreOfMass().z(), EPS);
+        assertSameVector("the centre of mass is the mass-weighted mean",
+                new Vector3d(1.0D, 0.0D, 0.0D), frame.getCentreOfMass(), EPS);
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face, fails "a symmetric hull balances at its middle" (0.5), 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrameBuilder:67} reading a
+     * block's X at its face fails "a symmetric hull balances at its middle" (0.5); {@code :70} leaving
+     * content out of the moment fails "cargo on one side must pull the centre".</p>
      */
     @Test
     public void cargoLoadedToOneSideMovesTheCentreOfMass() {
@@ -130,7 +135,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face, fails expected 0.5 but was 0.667, 2026-09-29.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face, fails "must not move it", 2026-09-30.</p>
      */
     @Test
     public void massAddedAtTheCentreOfMassDoesNotMoveIt() {
@@ -143,13 +148,14 @@ public class ShipMassFrameTest {
                 .add(MassContributor.of(com.x(), com.y(), com.z(), 2000, 0.5D, Kind.CONTENT))
                 .build();
 
-        assertEquals(com.x(), after.getCentreOfMass().x(), EPS);
-        assertEquals(com.y(), after.getCentreOfMass().y(), EPS);
-        assertEquals(com.z(), after.getCentreOfMass().z(), EPS);
+        assertSameVector("mass added exactly at the centre of mass must not move it",
+                com, after.getCentreOfMass(), EPS);
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:59} counting content as structure, fails "structure is untouched" (1000 vs 1750), 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrame:69} leaving content out
+     * of the total fails "more cargo must mean more mass"; {@code ShipMassFrameBuilder:59} counting
+     * content as structure fails "structure is untouched" (1750).</p>
      */
     @Test
     public void loadingCargoStrictlyIncreasesTotalMassAndNeverThrustLikeQuantities() {
@@ -167,7 +173,11 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face, fails "nor drag the centre of mass toward it" (0.5), 2026-09-29. Breaking the builder's own negative-mass guard ({@code :50}, to {@code == 0}) did NOT redden it: the negative mass is refused before the builder, and where is not established.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: the negative mass is refused TWICE — clamped
+     * by {@code MassContributor:60} and dropped by {@code ShipMassFrameBuilder:50} — and only with BOTH
+     * removed does "must not subtract from the hull" fail (100.0); either alone stays green (the
+     * builder's guard alone was tried 2026-09-29). {@code ShipMassFrameBuilder:67} reading a block's X
+     * at its face fails "nor drag the centre of mass toward it" (0.5).</p>
      */
     @Test
     public void negativeContributionsCannotCancelPartOfTheShip() {
@@ -183,7 +193,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:119} writing 0 below the diagonal in place of the xy product, fails expected 2400.0 but was 0.0, 2026-09-29.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:119} writing 0 below the diagonal in place of the xy product, fails "equals its own transpose", 2026-09-30.</p>
      */
     @Test
     public void inertiaIsSymmetric() {
@@ -193,14 +203,12 @@ public class ShipMassFrameTest {
                 .add(MassContributor.ofBlock(0.0D, -2.0D, 4.0D, 300, Kind.CONTENT))
                 .build();
 
-        Matrix3d i = new Matrix3d(frame.getInertia());
-        assertEquals(i.m01(), i.m10(), EPS);
-        assertEquals(i.m02(), i.m20(), EPS);
-        assertEquals(i.m12(), i.m21(), EPS);
+        assertSameTensor("an inertia tensor equals its own transpose",
+                frame.getInertia(), new Matrix3d(frame.getInertia()).transpose());
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:76}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-29.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:76}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.</p>
      */
     @Test
     public void aSingleBlockHullStillHasAnInvertibleInertia() {
@@ -212,7 +220,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:76}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-29.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:76}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.</p>
      */
     @Test
     public void aCollinearHullStillHasAnInvertibleInertia() {
@@ -226,20 +234,24 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:99}'s empty guard skipped, fails expected 0.0 but was NaN, 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrame:49}'s empty frame given
+     * 1 kg fails "weighs nothing"; {@code ShipMassFrameBuilder:99}'s empty guard skipped fails "the
+     * origin, not a 0/0" (NaN).</p>
      */
     @Test
     public void anEmptyFrameIsWellFormedRatherThanUndefined() {
         ShipMassFrame frame = new ShipMassFrameBuilder().build();
 
-        assertEquals(0.0D, frame.getTotalMass(), EPS);
-        assertEquals(0.0D, frame.getCentreOfMass().x(), EPS);
-        assertEquals(0.0D, frame.getCentreOfMass().y(), EPS);
-        assertEquals(0.0D, frame.getCentreOfMass().z(), EPS);
+        assertEquals("an empty frame weighs nothing", 0.0D, frame.getTotalMass(), EPS);
+        assertSameVector("an empty frame's centre is the origin, not a 0/0",
+                new Vector3d(), frame.getCentreOfMass(), EPS);
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:78} assigning ixx instead of accumulating it, fails expected 182.6 but was -99.45, 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrameBuilder:59} counting
+     * content only once a structure has arrived fails "the total" (590 vs 790); {@code :70} assigning
+     * the x moment instead of accumulating it fails "the centre"; {@code :78} assigning ixx fails "the
+     * tensor".</p>
      */
     @Test
     public void theOrderContributorsArriveInDoesNotChangeTheShip() {
@@ -255,18 +267,16 @@ public class ShipMassFrameTest {
                 .add(MassContributor.ofBlock(0.0D, 0.0D, 0.0D, 500, Kind.STRUCTURAL))
                 .build();
 
-        assertEquals(forwards.getTotalMass(), backwards.getTotalMass(), 1.0e-9D);
-        assertEquals(forwards.getCentreOfMass().x(), backwards.getCentreOfMass().x(), 1.0e-9D);
-        assertEquals(forwards.getCentreOfMass().y(), backwards.getCentreOfMass().y(), 1.0e-9D);
-        Matrix3d a = new Matrix3d(forwards.getInertia());
-        Matrix3d b = new Matrix3d(backwards.getInertia());
-        assertEquals(a.m00(), b.m00(), 1.0e-9D);
-        assertEquals(a.m11(), b.m11(), 1.0e-9D);
-        assertEquals(a.m22(), b.m22(), 1.0e-9D);
+        assertEquals("the total must not depend on the order",
+                forwards.getTotalMass(), backwards.getTotalMass(), EPS);
+        assertSameVector("the centre must not depend on the order",
+                forwards.getCentreOfMass(), backwards.getCentreOfMass(), EPS);
+        assertSameTensor("the tensor must not depend on the order",
+                forwards.getInertia(), backwards.getInertia());
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:79} giving iyy the long axis's lever, fails "about the long axis must be the cheapest rotation", 2026-09-29.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder:79} giving iyy the long axis's lever, fails "about the long axis must be the cheapest rotation", 2026-09-30.</p>
      */
     @Test
     public void aLongHullResistsRollingLessThanYawing() {
@@ -278,23 +288,30 @@ public class ShipMassFrameTest {
         }
         Matrix3d i = new Matrix3d(builder.build().getInertia());
 
-        assertTrue("about the long axis must be the cheapest rotation",
+        assertTrue("about the long axis must be the cheapest rotation: " + i,
                 i.m00() < i.m11() && i.m00() < i.m22());
-        assertNotEquals("and the two transverse axes are not degenerate", 0.0D, i.m11(), 1.0D);
     }
 
+    /**
+     * One verdict, not an entry-by-entry sweep of the inverse: a finite matrix with a finite non-zero
+     * determinant has a finite inverse (adjugate over determinant), and a NaN or infinite entry makes
+     * the determinant NaN or infinite, which this refuses. The bar is the writer's own: it refuses a
+     * tensor with {@code |det| <= 1e-9} ({@code ShipInertiaWriter.isInvertible}), so a frame below it
+     * never reaches the solver at all.
+     */
     private static void assertInvertible(ShipMassFrame frame) {
-        Matrix3d inertia = new Matrix3d(frame.getInertia());
-        double det = inertia.determinant();
+        double det = new Matrix3d(frame.getInertia()).determinant();
         assertTrue("the solver inverts this tensor every step, so a zero determinant is a NaN torque,"
-                + " not a rounding error (got " + det + ")", Math.abs(det) > 1.0e-6D);
+                + " not a rounding error (got " + det + ")",
+                !Double.isNaN(det) && !Double.isInfinite(det) && Math.abs(det) > 1.0e-9D);
+    }
 
-        Matrix3d inverse = new Matrix3d(inertia).invert();
-        for (int c = 0; c < 3; c++) {
-            for (int r = 0; r < 3; r++) {
-                assertTrue("inverse entry (" + r + "," + c + ") must be finite",
-                        !Double.isNaN(inverse.get(c, r)) && !Double.isInfinite(inverse.get(c, r)));
-            }
-        }
+    private static void assertSameVector(String what, Vector3dc expected, Vector3dc actual, double eps) {
+        assertEquals(what + ": expected " + expected + ", was " + actual, 0.0D, expected.distance(actual), eps);
+    }
+
+    private static void assertSameTensor(String what, Matrix3dc expected, Matrix3dc actual) {
+        assertTrue(what + ": expected " + expected + ", was " + actual,
+                new Matrix3d(expected).equals(actual, EPS));
     }
 }

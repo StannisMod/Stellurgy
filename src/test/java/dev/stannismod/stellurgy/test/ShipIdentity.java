@@ -190,14 +190,17 @@ public final class ShipIdentity {
      * held or a weightless one, and a scenario whose control or subject is stillness reads it as a
      * pass. Measured 2026-09-29 — a cell scenario opened its window on {@code ready:false}.</p>
      *
+     * <p>An ARRANGEMENT wait: every caller needs a usable craft before its subject exists, so a craft
+     * that never becomes usable fails as {@link ArrangementFailure}.</p>
+     *
      * @param mark a mark on the server log taken BEFORE whatever created or loaded the craft
      */
     public static void awaitUsable(Events serverLog, long mark, String shipId, int dim, String what,
                                    int tickBudget) throws Exception {
-        serverLog.awaitMatching(mark, "ship_usable",
+        ArrangementFailure.arranged(() -> serverLog.awaitMatching(mark, "ship_usable",
                 usable -> endsUsable(usable, serverLog.since(mark, "ship_unloaded"), shipId, dim),
                 "carrying ship " + shipId + " in dim " + dim + ", later than every unload of it",
-                what, tickBudget);
+                what, tickBudget));
     }
 
     /**

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.client;
 
 import com.google.gson.JsonObject;
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.PilotSeat;
@@ -12,7 +13,6 @@ import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -90,9 +90,12 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
      * the interaction rather than a mining-speed budget. The block read back is the one the crosshair
      * itself named.</p>
      *
-     * <p>red-witnessed: with {@code MixinCPacketPlayerDigging.getPacketParent} (Valkyrien Skies,
-     * vendored) answering null, so the digging packet is served with the player left in the world
-     * frame, the verdict fails — no {@code block_broken} at the aimed subspace position — 2026-09-29.</p>
+     * <p>red-witnessed, one break per verdict: with {@code MixinCPacketPlayerDigging:37}
+     * ({@code getPacketParent}, Valkyrien Skies, vendored) answering null, so the digging packet is
+     * served with the player left in the world frame, the wait fails — no {@code block_broken} at the
+     * aimed subspace position — 2026-09-29. With {@code MixinChunk:62} refusing to write AIR into a
+     * ship's chunk, the break event still stands and the read-back fails — "the block must be gone
+     * now" ({@code minecraft:iron_block}) — 2026-09-30.</p>
      */
     @Test
     public void aRealAttackKeyPressBreaksABlockOfAnAssembledShip() throws Exception {
@@ -106,6 +109,7 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
 
         Events events = events();
         long pressMark = events.markInstrumented();
+        scenario().asserting("a real attack-key press on the aimed ship block, and the server's verdict on it");
         bot().setKey(KEY_ATTACK, true);
         // STIMULUS: the attack key held across client ticks, as a mouse button is.
         bot().waitTicks(10);
@@ -127,10 +131,12 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
      * A real use-key press with a block in hand, aimed at an assembled ship's deck, places that block
      * onto the ship — at the subspace position the crosshair's own side-hit names.
      *
-     * <p>red-witnessed: NOT YET, and one attempt is on record as a non-witness. With
-     * {@code MixinCPacketPlayerTryUseItemOnBlock.getPacketParent} answering null — the twin of the
-     * break that reddens the attack leg — this leg stayed GREEN (2026-09-29), so its verdict does not
-     * rest on that transform, and what it does rest on is not established.</p>
+     * <p>red-witnessed: the placement passes the server's reach check by TWO routes, and only with
+     * both removed does the wait fail — no {@code block_placed} at the aimed position — 2026-09-30:
+     * the packet transform ({@code MixinCPacketPlayerTryUseItemOnBlock:38}, {@code getPacketParent}
+     * answering null) and the ship-aware distance ({@code MixinEntity:133}, whose {@code @Overwrite}
+     * of {@code getDistanceSq} maps a subspace position to the world). The transform alone was broken
+     * on 2026-09-29 and the leg stayed GREEN, which is how the second route was found.</p>
      */
     @Test
     public void aRealUseKeyPressPlacesABlockOnAnAssembledShip() throws Exception {
@@ -145,9 +151,9 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
         emptyTheHandOnClient("the bot's hand must be empty before it is given the stone to place");
         long giveMark = clientEvents().mark();
         exec("give @a minecraft:stone 8");
-        clientEvents().awaitField(giveMark, "client_slot_set", "item", "minecraft:stone",
-                "the given stone must reach the client's inventory before it can be placed",
-                LINK_BUDGET_TICKS);
+        ArrangementFailure.arranged(() -> clientEvents().awaitField(giveMark, "client_slot_set", "item",
+                "minecraft:stone", "the given stone must reach the client's inventory before it can be"
+                        + " placed", LINK_BUDGET_TICKS));
         JsonObject items = bot().reportPlayerItems();
         String heldId = items.has("held") && items.getAsJsonObject("held").has("id")
                 ? items.getAsJsonObject("held").get("id").getAsString() : "?";
@@ -168,6 +174,7 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
 
         Events events = events();
         long pressMark = events.markInstrumented();
+        scenario().asserting("a real use-key press with stone in hand, and the server's verdict on it");
         bot().setKey(KEY_USE_ITEM, true);
         // STIMULUS: the use key held across client ticks, as a mouse button is.
         bot().waitTicks(5);
@@ -180,9 +187,10 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
                         + " losing the position, not a missed aim." + deck.diag,
                 LINK_BUDGET_TICKS, "x", String.valueOf(deck.x), "y", String.valueOf(deck.y + 1),
                 "z", String.valueOf(deck.z));
-        String placed = blockAt(deck.x, deck.y + 1, deck.z);
-        assertEquals("the server recorded the placement standing, so the block must be there now: "
-                + placed + deck.diag, "minecraft:stone", Reply.of(placed).text("block"));
+        // No read-back of the block here, unlike the break leg. A placement's event fires AFTER the
+        // block is in the world, and an uncancelled one at LOWEST is the placement standing — so a
+        // read after it could fail only if something removed the block later, which is not this
+        // contract. The break's event fires BEFORE the removal, which is why that leg reads back.
     }
 
     // ---- arrangement ---------------------------------------------------------------------------
@@ -226,14 +234,14 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
                 "the hull, and the air the player stands and clicks in on its deck");
         scenario().requireArranged("a " + VARIANT + " build must route to a ship: " + assemble,
                 Reply.of(assemble).ok());
-        shipUuid = awaitShipSpawned(events, spawnMark, "the assembly must create a VS ship before"
-                + " anything can be aimed at it (the spawn is asynchronous)");
+        shipUuid = ArrangementFailure.arranged(() -> awaitShipSpawned(events, spawnMark, "the assembly"
+                + " must create a VS ship before anything can be aimed at it (the spawn is asynchronous)"));
 
         long approachMark = clientEvents().mark();
         exec("tp @a " + (bx + 0.5) + " " + (by + 8) + " " + (bz + 0.5) + " 0 0");
         awaitClientPlacedNear(approachMark, bx + 0.5, bz + 0.5,
                 "the client's arrival is what loads the ship here");
-        awaitShipUsable(events, spawnMark, shipUuid, LINK_BUDGET_TICKS);
+        ArrangementFailure.arranged(() -> awaitShipUsable(events, spawnMark, shipUuid, LINK_BUDGET_TICKS));
         String atBase = exec("stellurgytest vs ship-info 0 id " + shipUuid);
         scenario().requireArranged("the ship must LOAD with the client present: " + atBase,
                 ShipInfo.isLoaded(atBase));
