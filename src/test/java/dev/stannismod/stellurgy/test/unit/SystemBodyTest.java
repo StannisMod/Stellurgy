@@ -85,6 +85,10 @@ public class SystemBodyTest {
     /**
      * A moon shares its parent's cell NAME and rides its parent's frame, while keeping its own live
      * offset inside it — that is what makes a planet-and-its-moons one destination.
+     *
+     * <p>red-witnessed: 2026-09-30, with `SystemBody.inCellOffsetAt:230` reading the offset law at
+     * tick 0 instead of the tick asked, this fails with "a moon's offset inside its parent's cell is
+     * live. Actual: BlockDelta[120000,0,0]" — 300 units at 400 blocks each, the fixture printed.</p>
      */
     @Test
     public void aMoonKeepsItsParentsNameAndMovesInsideIt() {

@@ -58,6 +58,11 @@ public class AstronomicalBodyHelperOrbitalThetaTest {
         proxyField.set(null, originalProxy);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.getOrbitalThetaAt:316` dropping the
+     * modulo by the period, this fails at the one-orbit wrap with "expected:&lt;0.0&gt; but
+     * was:&lt;6.283185307179586&gt;".
+     */
     @Test
     public void orbitalAngleWrapsCorrectly() {
         // Earth-baseline orbit: distance=100, solarSize=1.0 -> period=48 (per

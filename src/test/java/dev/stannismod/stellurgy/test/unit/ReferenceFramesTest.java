@@ -54,6 +54,11 @@ public class ReferenceFramesTest {
      * the ones C19 tabulates — Earth 926 000 km, Luna 66 000 km — and they are quoted from outside
      * this codebase, so a formula that drifted to read a radius or a surface gravity would miss them
      * however self-consistent it stayed.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, both directions. With `ReferenceFrames.orbitalRadiusBlocks:94`
+     * divided by 1000 this fails with "Earth's sphere of influence, against the published 926 000 km
+     * expected:&lt;3704000.0&gt; but was:&lt;3698.588…&gt;"; with `ReferenceFrames.soiRadiusBlocks:80`
+     * multiplied by 10 it fails with the same message and "was:&lt;3.698…E7&gt;".</p>
      */
     @Test
     public void aSpheresRadiusMatchesThePublishedValueForEarthAndForLuna() {
@@ -83,6 +88,9 @@ public class ReferenceFramesTest {
      * sibling planet is tens of millions of kilometres away in both cases. So both pass, the
      * criterion does not separate them, and this test's job is to say so rather than to pretend the
      * measurement decided it.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with `ReferenceFrames.orbitalRadiusBlocks:94` divided by 1000,
+     * this fails with "Laplace must contain Luna's orbit, or it is inadmissible".</p>
      */
     @Test
     public void bothCandidateFormulaeNestCorrectlySoTheCriterionDoesNotSeparateThem() {
@@ -109,6 +117,10 @@ public class ReferenceFramesTest {
     /**
      * A craft close to a moon is in the MOON's frame, not its planet's — the nesting C19 FRAME-2
      * asks for and the defect measured in {@code ParkedCraftKeepsStationTest}.
+     *
+     * <p>red-witnessed: 2026-09-30, with `ReferenceFrames.orbitalRadiusBlocks:94` divided by 1000
+     * (Luna's sphere shrinks below 20 000 blocks), this fails with "a craft 20 000 blocks from Luna
+     * is inside Luna's 264 000-block sphere and must be in its frame, not in Earth's".</p>
      */
     @Test
     public void aCraftInsideAMoonsSphereIsInTheMoonsFrame() {
@@ -125,7 +137,13 @@ public class ReferenceFramesTest {
                 + "be in its frame, not in Earth's", luna, frame);
     }
 
-    /** A craft far from every moon falls back to the planet, which is the right answer and not a fallback. */
+    /**
+     * A craft far from every moon falls back to the planet, which is the right answer and not a fallback.
+     *
+     * <p>red-witnessed: 2026-09-30, with `ReferenceFrames.soiRadiusBlocks:80` multiplied by 10 (Luna's
+     * sphere then reaches Earth), this fails with "a craft beside Earth and far from Luna is in
+     * Earth's frame".</p>
+     */
     @Test
     public void aCraftOutsideEveryMoonsSphereIsInThePlanetsFrame() {
         SystemBody earth = earth();
@@ -151,6 +169,11 @@ public class ReferenceFramesTest {
      * <p>What still moves is read off the FRAME, and this pins that too: the moon's cell goes round
      * its planet at the moon's own orbital speed — the same number, now describing the cell rather
      * than the body inside it.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with `BodyEphemeris.velocityBlocksPerTickAt:147` taking half the
+     * blocks per distance unit — the old 200-block moon step against today's 400 — this fails with "a
+     * moon's CELL travels at the moon's orbital speed about its parent expected:&lt;14.734…&gt; but
+     * was:&lt;7.367…&gt;".</p>
      */
     @Test
     public void neitherAPlanetNorAMoonMovesInsideItsOwnCellWhileTheMoonsCellCarriesTheOrbit() {

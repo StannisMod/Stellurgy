@@ -359,6 +359,11 @@ public class SystemRetinueTest {
         assertTrue(checked > MIN_SYSTEMS_FOR_STAR_COUNTS);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with `ClusteredGalaxyGenerator.claimSeat:703` placing orbits at
+     * twice the blocks per distance unit, this fails with "a companion stands at the separation its
+     * own elements state expected:&lt;4.31384E7&gt; but was:&lt;8.627679969687484E7&gt;".
+     */
     @Test
     public void aCompanionIsABodyOfItsSystemStandingAtItsOwnSeparation() {
         // A companion that existed only on the star object would light the worlds here and appear at
