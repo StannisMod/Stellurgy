@@ -79,6 +79,10 @@ public class SpaceArmorContractTest {
 
     // ───────────────────── the protection matrix ─────────────────────────
 
+    /**
+     * <p>red-witnessed: with {@code ItemSpaceArmor:249} dropping protection from heat: "space armor must
+     * protect from HEAT", 2026-09-30.</p>
+     */
     @Test
     public void protectsFromEveryHazardTheModelCanRaise() {
         ItemSpaceArmor armor = chest();
@@ -93,6 +97,10 @@ public class SpaceArmorContractTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code ItemSpaceArmor:249} answering yes unconditionally: "air that raises
+     * no hazard needs no protecting from", 2026-09-30.</p>
+     */
     @Test
     public void protectsFromNothingWhereThereIsNoHazard() {
         ItemSpaceArmor armor = chest();
@@ -104,6 +112,12 @@ public class SpaceArmorContractTest {
                 armor.protectsFrom(Collections.<AtmosphereHazard>emptySet(), false, stack, false));
     }
 
+    /**
+     * <p>red-witnessed: with {@code ItemSpaceArmor:249} answering yes whenever it is acted on: "protect
+     * decision must be commit-invariant for [] expected:&lt;true&gt; but was:&lt;false&gt;",
+     * 2026-09-30. This asks the base piece, whose answer never read the commit flag; the chest that
+     * does spend on commit ({@code ItemSpaceChest:280}) is not what it calls.</p>
+     */
     @Test
     public void theProtectionDecisionIsTheSameWhetherOrNotItIsActedOn() {
         // Asking must not change the answer: the commit flag exists so that speculative callers

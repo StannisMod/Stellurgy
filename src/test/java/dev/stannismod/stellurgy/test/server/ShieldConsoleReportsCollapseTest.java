@@ -32,6 +32,14 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
     /** The row the network stands on, one above this scenario's own site. */
     private int y;
 
+    /**
+     * <p>red-witnessed: with {@code TileEntityShieldConsole:143} latching {@code networkConnected}
+     * once it has been true: "a console whose network lost its last source must stop reporting it as
+     * live: … \"networkConnected\":true", 2026-09-30. The live-network reading at its head is an
+     * arrangement and is not witnessed. The status verdict is not witnessed: a console that kept
+     * its previous status stays green, because the working network already reports the
+     * disconnected status.</p>
+     */
     @Test
     public void aConsoleStopsReportingANetworkThatLostItsLastSource() throws Exception {
         FixtureSite site = clearedSite(2, 2, "a shield source, sink and console in a row");

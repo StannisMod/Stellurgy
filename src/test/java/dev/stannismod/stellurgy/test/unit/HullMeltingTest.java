@@ -25,6 +25,11 @@ public class HullMeltingTest {
         MinecraftBootstrap.ensure();
     }
 
+    /**
+     * <p>red-witnessed: with {@code HullMelting:59} reading the reference point off a curve twice as
+     * bright as the one a radiator sheds on: "a surface in exactly the flux it radiates sits at that
+     * temperature expected:&lt;500.0&gt; but was:&lt;420.44820762685725&gt;", 2026-09-30.</p>
+     */
     @Test
     public void theEquilibriumTemperatureIsTheRadiationCurveReadBackwards() {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
@@ -41,6 +46,11 @@ public class HullMeltingTest {
                 500.0D, atReference, 0.0D);
     }
 
+    /**
+     * <p>red-witnessed: with {@code HullMelting:63} taking the square root of the flux ratio instead
+     * of the fourth: "sixteen times the flux is twice the temperature ... expected:&lt;2.0&gt; but
+     * was:&lt;4.0&gt;", 2026-09-30. The premise before it is an arrangement and is not witnessed.</p>
+     */
     @Test
     public void moreFluxIsAHotterSurfaceButOnlyToTheFourthRoot() {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
@@ -58,6 +68,11 @@ public class HullMeltingTest {
                 2.0D, sixteenfold / single, Math.ulp(2.0D));
     }
 
+    /**
+     * <p>red-witnessed: with {@code HullMelting:55} answering 1 K for no incident flux: "an unlit
+     * surface is not driven anywhere by the environment expected:&lt;0.0&gt; but was:&lt;1.0&gt;",
+     * 2026-09-30.</p>
+     */
     @Test
     public void nothingArrivingIsNoTemperatureAtAll() {
         assertEquals("an unlit surface is not driven anywhere by the environment", 0.0D,

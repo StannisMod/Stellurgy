@@ -72,6 +72,18 @@ public class SubsystemNetworkRestartTest {
         if (secondBoot != null) secondBoot.close();
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CABLES — {@code
+     * TileVentilationDuct:59} ({@code onLoad}) not re-registering a duct restored from the save: "the
+     * ventilation graph must come back with the same cable count … \"cables\":0". SOURCES — the same
+     * in {@code TileLifeSupportPlant:196}: "and the same source count: … \"sources\":0". SINKS — the
+     * same in {@code TileOxygenVent:509}: "and the same sink count: … \"sinks\":0". PRIORITY — {@code
+     * TileOxygenVent:824} not reading the priority back: "the vent's zone priority must survive the
+     * restart … expected:&lt;1&gt; but was:&lt;0&gt;". BIAS — {@code TileEntityShieldConsole:481} not
+     * reading the bias back: "the console's resistance bias must survive the restart … expected:&lt;0.75&gt;
+     * but was:&lt;0.5&gt;". Not witnessed: the membership count, which is the three counts above
+     * added up, and the first boot's premises.</p>
+     */
     @Test
     public void theNetworkIsRebuiltFromTheWorldWhileItsSettingsAreRestoredFromTheirBlocks()
             throws Exception {
@@ -152,6 +164,15 @@ public class SubsystemNetworkRestartTest {
      *
      * <p>Read per BLOCK first and per LOOP second, deliberately. The loop's figure alone could not
      * tell energy that came back from the blocks from energy that was never gone.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OFF THE BLOCKS — {@code
+     * TileHeatLoopBlock:115} not reading the stored heat back: "every heat unit must come back off the
+     * blocks that were holding it … expected:&lt;4531&gt; but was:&lt;0&gt;". REBUILT —
+     * {@code TileHeatLoopBlock:85} ({@code onLoad}) not re-registering a block restored from the
+     * save: "the loop must be REBUILT with the same membership — nothing persisted it: …
+     * \"members\":0". Not witnessed: the loop's capacity, heat and temperature, which the loop sums
+     * from the same member blocks each solve, so they cannot differ while the two verdicts above
+     * hold; and the first boot's premises.</p>
      */
     @Test
     public void aCoolantLoopsEnergyComesBackFromItsBlocks() throws Exception {

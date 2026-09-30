@@ -51,6 +51,15 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         return cy + 1;
     }
 
+    /**
+     * <p>red-witnessed: with {@code AtmosphereAssertions:37} holding "not breathable" everywhere:
+     * "breathable air must not satisfy \"not breathable\" (after a forced sample): …
+     * expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. The sealed-zone premise is an
+     * arrangement and is not witnessed. The two later verdicts are not witnessed: the room's vent is
+     * switched on by this detector's own redstone, so the first verdict switching the detector off
+     * lets the vent clear the zone, and a red on the second can come from that as well as from the
+     * code.</p>
+     */
     @Test
     public void theDetectorFollowsItsStatementAsTheAirChanges() throws Exception {
         int cx = stand("a sealed room with a detector in its wall watching \"not breathable\"");
@@ -73,6 +82,13 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
         assertPowered(cx, false, "and refilling the room must switch it off again");
     }
 
+    /**
+     * <p>red-witnessed: with {@code AtmosphereAssertions:47} calling any zone air toxic: "clean air
+     * must not read as poisonous (after a forced sample): … expected:&lt;false&gt; but
+     * was:&lt;true&gt;", 2026-09-30. The sealed-zone premise is an arrangement and is not witnessed;
+     * the poisonous-room verdict is not witnessed, for the reason given on
+     * {@link #theDetectorFollowsItsStatementAsTheAirChanges}.</p>
+     */
     @Test
     public void theDetectorCanWatchForSomethingNoNamedAtmosphereEverSaid() throws Exception {
         int cx = stand("a sealed room with a detector in its wall watching \"toxic\"");

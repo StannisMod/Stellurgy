@@ -107,6 +107,11 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * legs sit at the same temperature, so what each cell RADIATES is identical and cancels, and the
      * whole gap between the two nets must be the gap between the two reported fluxes. A star wired as
      * its own mechanism would move one of those and not the other.</p>
+     *
+     * <p>red-witnessed: with {@code HeatEnvironment:97} putting twice the reported flux into each
+     * cell: "a warm world and a distant star must reach a radiator through ONE term: … netted 50 on a
+     * world and -1129 in space, a difference of 1179.0, against a reported flux difference of
+     * 589.965", 2026-09-30. The premises on both legs are arrangements and are not witnessed.</p>
      */
     @Test
     public void aWorldsWarmthAndAStarArriveThroughTheSameTerm() throws Exception {
@@ -172,6 +177,15 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * stay at zero — a radiating cell is the ship's coupling to the outside in both directions, so a
      * ship that built none is not warmed by one. Without that control this scenario would also pass on
      * a bug that simply added the environment to every loop in the world.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BACKWARDS — {@code HeatNetwork:757}
+     * exchanging only positive shares: "under a star this strong the net must run BACKWARDS … \"rejected\":0".
+     * IN THE LOOP — {@code HeatNetwork:286} subtracting only positive rejection: "and the energy must
+     * actually be in the loop, not merely reported: … \"rejected\":-76764,\"heatStored\":0". NO
+     * RADIATING SURFACE — {@code HeatNetwork:741} giving a loop with no cells the incident flux:
+     * "a loop with no radiating surface must take nothing from the environment … expected:&lt;0&gt;
+     * but was:&lt;76800&gt;". The three premises before the star is turned up are arrangements and are
+     * not witnessed.</p>
      */
     @Test
     public void aShipUnderAFierceStarHeatsThroughItsRadiators() throws Exception {
@@ -224,6 +238,12 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
      * must gain far less than an identical unshielded one under the same star — and it is bounded: the
      * shielded loop must still gain something, with the configuration demanding a hundred percent. That
      * second assertion is the clause: the refusal lives in the code, so no setting can reach it.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MOST — {@code HeatEnvironment:94}
+     * treating no cell as covered: "a raised shield must take most of the incident flux off the ship
+     * (shielded=76764 unshielded=76764)". NOT ALL — {@code HeatEnvironment:53} letting the shield take
+     * everything: "and it must NOT take all of it, however much the configuration asks for … (shielded=0)".
+     * The emitter premise and the unshielded premise are arrangements and are not witnessed.</p>
      */
     @Test
     public void aShieldThinsTheFluxAndNeverRemovesIt() throws Exception {

@@ -52,6 +52,12 @@ public class SlugStaysAnEmergencyTest {
     /**
      * The other half of the same bargain: a slug is SPENT. Whatever it carries away leaves the ship
      * with it, so the material is a consumable and not a heat exchanger that keeps working.
+     *
+     * <p>red-witnessed: with {@code ThermalMaterials:190} making every slug carry ten times its heat:
+     * "one whole block of iron must buy SECONDS rather than a steady state ...: 1253.3085 s",
+     * 2026-09-30. That shows the bound can fail, not where it belongs: the 600 s it compares against
+     * has no derivation, and today's block buys about 125 s. The premise before it is an arrangement
+     * and is not witnessed.</p>
      */
     @Test
     public void whatTheSlugCarriesLeavesWithIt() {

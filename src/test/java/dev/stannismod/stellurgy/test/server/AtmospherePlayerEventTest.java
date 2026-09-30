@@ -169,7 +169,15 @@ public class AtmospherePlayerEventTest {
                 "true", field(PLAYER_BREATHABLE, resp));
     }
 
-    /** An airless planet resolves as unbreathable for a player standing on it. */
+    /**
+     * An airless planet resolves as unbreathable for a player standing on it.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SOMETHING — {@code
+     * AtmosphereHandler:672} answering nothing for an unbreathable dimension: "the gate must answer
+     * SOMETHING for a player on a Stellurgy planet: … \"hasAtmosphere\":false". UNBREATHABLE — the
+     * same line answering {@code AIR} for every dimension: "a planet declared with zero atmosphere
+     * must resolve as unbreathable … \"breathable\":true".</p>
+     */
     @Test
     public void aPlayerOnAnAirlessPlanetResolvesUnbreathableAir() throws Exception {
         enterDimAndAwaitResolution(DIM_VAC);
@@ -180,7 +188,18 @@ public class AtmospherePlayerEventTest {
                 + "player standing on it: " + resp, "false", field(PLAYER_BREATHABLE, resp));
     }
 
-    /** Dim change clears the entry; the new dim repopulates with its own. */
+    /**
+     * Dim change clears the entry; the new dim repopulates with its own.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler:672}.
+     * SOMETHING BEFORE — answering nothing for an unbreathable dimension: "the airless planet must
+     * resolve to SOMETHING before the move". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:
+     * "the airless planet must resolve as unbreathable before the move: … \"breathable\":true".
+     * BREATHABLE AFTER — answering {@code NoO2} for a breathable planet: "the breathable planet must
+     * resolve as breathable after the move: … \"NoO2\"". Not witnessed, and not witnessable: the
+     * resolver-dim assertion reads a field of the very record the await selected by that field, and
+     * "must not survive the move" is implied by the two breathability verdicts around it.</p>
+     */
     @Test
     public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
         enterDimAndAwaitResolution(DIM_VAC);

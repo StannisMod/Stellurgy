@@ -69,7 +69,16 @@ public class AirCarriesHeatBothWaysTest {
         return AirState.earthLike();
     }
 
-    /** Heat put in comes back out as temperature, at the capacity the room actually has. */
+    /**
+     * Heat put in comes back out as temperature, at the capacity the room actually has.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ALL ACCEPTED - {@code AirState:361}
+     * answering half the energy as accepted: "all of it is accepted: air has no ceiling short of the
+     * model's own expected:&lt;24000&gt; but was:&lt;12000&gt;". THIRTY KELVIN - {@code AirState:356}
+     * raising the air by half the energy over its capacity: "thirty kelvin of energy is thirty kelvin
+     * of temperature expected:&lt;323000&gt; but was:&lt;308000&gt;". The premise before them is an
+     * arrangement and is not witnessed.</p>
+     */
     @Test
     public void warmingAirRaisesItsTemperatureByTheEnergyOverItsCapacity() {
         AirState air = room();
@@ -90,6 +99,10 @@ public class AirCarriesHeatBothWaysTest {
     /**
      * The rung a hot ship is supposed to reach. Nothing in production could put a compartment here
      * before, so the two thresholds that read it described a mechanic that never ran.
+     *
+     * <p>red-witnessed: with {@code AirState:356} raising the air by half the energy over its
+     * capacity: "a room the loop has been warming must be able to reach the hostile rung: 308.5 K
+     * against 323", 2026-09-30. The premise before it is an arrangement and is not witnessed.</p>
      */
     @Test
     public void aCompartmentCanBeDrivenPastTheCrewHazardThresholds() {
@@ -106,7 +119,15 @@ public class AirCarriesHeatBothWaysTest {
                 air.getTemperatureKelvin() >= veryHot);
     }
 
-    /** What is put in can be taken out again, and no more than that. */
+    /**
+     * What is put in can be taken out again, and no more than that.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. THE BUDGET GROWS -
+     * {@code AirState:356} raising the air by half the energy over its capacity: "the removable budget
+     * grows by exactly what was added expected:&lt;242400.0&gt; but was:&lt;238400.0&gt;". TAKEN BACK
+     * - {@code AirState:316} taking half of what was asked: "and taking it back leaves the room where
+     * it started expected:&lt;8000&gt; but was:&lt;4000&gt;".</p>
+     */
     @Test
     public void whatWasPutInIsWhatCanBeTakenOut() {
         AirState air = room();
@@ -128,6 +149,12 @@ public class AirCarriesHeatBothWaysTest {
     /**
      * The reading a chiller has to consult before it charges. Air with nothing left to give answers
      * zero, which is what stops the machine paying full price to move nothing.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING TO SELL - {@code AirState:320}
+     * flooring the air at 1 K instead of 0: "a room already at the floor has no heat to sell
+     * expected:&lt;0&gt; but was:&lt;800&gt;". NOTHING TO TAKE - {@code AirState:316} taking what is
+     * asked whatever is there: "and none can be taken from it expected:&lt;0&gt; but
+     * was:&lt;1000&gt;".</p>
      */
     @Test
     public void airWithNothingLeftToGiveOffersNothingToTake() {
@@ -138,7 +165,15 @@ public class AirCarriesHeatBothWaysTest {
         assertEquals("and none can be taken from it", 0L, air.removeHeat(1000L, VOLUME));
     }
 
-    /** A vacuum is not a reservoir: there is no body there to warm. */
+    /**
+     * A vacuum is not a reservoir: there is no body there to warm.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING TO WARM - {@code AirState:354}
+     * no longer refusing air with no heat capacity: "nothing to warm expected:&lt;0&gt; but
+     * was:&lt;1000000&gt;". NOTHING TO COOL - {@code AirState:334} answering the ambient temperature
+     * for air with no heat capacity: "and nothing to cool expected:&lt;0&gt; but
+     * was:&lt;293&gt;".</p>
+     */
     @Test
     public void vacuumTakesNoHeatAtAll() {
         AirState vacuum = AirState.vacuum();

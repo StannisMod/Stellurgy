@@ -53,7 +53,13 @@ public class ChillerPriceIsCarnotTest {
         StellurgyConfiguration.getCurrentConfig().shipHeatChillerMaxCop = prevMaxCop;
     }
 
-    /** Half of the Carnot ideal, and the ideal is the COOLING one. */
+    /**
+     * Half of the Carnot ideal, and the ideal is the COOLING one.
+     *
+     * <p>red-witnessed: with {@code HeatNetwork:663} pricing on the heating coefficient
+     * {@code Th/(Th-Tc)}: "half of Tc/(Th-Tc), not half of Th/(Th-Tc)
+     * expected:&lt;0.7077294685990339&gt; but was:&lt;1.2077294685990339&gt;", 2026-09-30.</p>
+     */
     @Test
     public void theCoefficientIsTheCoolingOneScaledByWhatARealMachineManages() {
         double cop = HeatNetwork.coefficientOfPerformance(293.0D, 500.0D);
@@ -70,6 +76,9 @@ public class ChillerPriceIsCarnotTest {
     /**
      * The clause a floor of 1.0 used to destroy. Past a certain gradient a chiller costs more work
      * than the heat it moves, and that is what makes driving the hot side further cost more for less.
+     *
+     * <p>red-witnessed: with {@code HeatNetwork:669} flooring the coefficient at 1.0 again: "a
+     * cooling coefficient below one is ordinary physics and must be reachable: 1.0", 2026-09-30.</p>
      */
     @Test
     public void aWideGradientCostsMoreWorkThanTheHeatItMoves() {
@@ -79,7 +88,14 @@ public class ChillerPriceIsCarnotTest {
                 cop < 1.0D);
     }
 
-    /** Monotone in the right direction: the wider the gap, the worse the deal. */
+    /**
+     * Monotone in the right direction: the wider the gap, the worse the deal.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NARROW IS CHEAPEST -
+     * {@code HeatNetwork:663} pricing on {@code (Th-Tc)/Tc}: "a narrow gradient is the cheapest". WIDE
+     * IS DEAREST - {@code HeatNetwork:669} flooring the coefficient at 1.0: "and a wide one the
+     * dearest".</p>
+     */
     @Test
     public void wideningTheGapAlwaysMakesTheDealWorse() {
         double narrow = HeatNetwork.coefficientOfPerformance(293.0D, 350.0D);
@@ -90,7 +106,15 @@ public class ChillerPriceIsCarnotTest {
         assertTrue("and a wide one the dearest", middle > wide);
     }
 
-    /** Colder is dearer, at a fixed hot side — the third law showing up as a price. */
+    /**
+     * Colder is dearer, at a fixed hot side — the third law showing up as a price.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. COLDER COSTS MORE -
+     * {@code HeatNetwork:669} flooring the coefficient at 1.0: "pulling heat out of something colder
+     * must cost more, not the same: 1.0 against 1.0". RUINOUS NEAR ZERO - {@code HeatNetwork:663}
+     * pricing on the heating coefficient {@code Th/(Th-Tc)}: "and near absolute zero it must be
+     * ruinous rather than clamped to parity".</p>
+     */
     @Test
     public void aColderRoomCostsMorePerUnitMoved() {
         double warm = HeatNetwork.coefficientOfPerformance(293.0D, 600.0D);
@@ -102,7 +126,14 @@ public class ChillerPriceIsCarnotTest {
                 HeatNetwork.coefficientOfPerformance(1.0D, 600.0D) < 0.05D);
     }
 
-    /** No gradient to fight is not a licence to divide by zero. */
+    /**
+     * No gradient to fight is not a licence to divide by zero.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CHEAP - {@code HeatNetwork:662}
+     * answering 0.5 when the hot side is no hotter: "heat flowing downhill is cheap". FINITE -
+     * {@code HeatNetwork:86} returning an infinite ceiling: "but still a finite number the caller can
+     * divide by".</p>
+     */
     @Test
     public void aHotSideNoHotterThanTheColdOneIsBoundedRatherThanInfinite() {
         double cop = HeatNetwork.coefficientOfPerformance(500.0D, 400.0D);

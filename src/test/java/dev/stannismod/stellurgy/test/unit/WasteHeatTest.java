@@ -52,6 +52,13 @@ public class WasteHeatTest {
         return StellurgyConfiguration.getCurrentConfig().shipHeatWasteFraction;
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SOMETHING TO PICK UP -
+     * {@code WasteHeat:45} making nothing: "a machine that spent energy must offer a loop something to
+     * pick up". THE CONFIGURED SHARE - {@code WasteHeat:45} dividing by 2000 instead of 1000: "and it
+     * is the configured share of what was actually spent expected:&lt;3000&gt; but
+     * was:&lt;1500&gt;".</p>
+     */
     @Test
     public void spendingEnergyLeavesHeatForALoopToCollect() {
         WasteHeat waste = new WasteHeat();
@@ -63,7 +70,12 @@ public class WasteHeatTest {
                 10_000L * fraction() / 1000L, waste.getPendingHeat());
     }
 
-    /** Half the work, half the heat — the same relation the power cost already has. */
+    /**
+     * Half the work, half the heat — the same relation the power cost already has.
+     *
+     * <p>red-witnessed: with {@code WasteHeat:45} adding a flat 100 units to every spend: "a tenth of
+     * the work is a tenth of the heat expected:&lt;310.0&gt; but was:&lt;400.0&gt;", 2026-09-30.</p>
+     */
     @Test
     public void aMachineRunningSlowerHeatsAShipProportionallyLess() {
         WasteHeat busy = new WasteHeat();
@@ -76,6 +88,16 @@ public class WasteHeatTest {
                 busy.getPendingHeat() / 10, idle.getPendingHeat(), 1.0D);
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. WHAT IT ASKED FOR - {@code WasteHeat:57}
+     * handing over one unit more than asked: "a loop gets what it asked for expected:&lt;1500&gt; but
+     * was:&lt;1501&gt;". NO LONGER HELD - {@code WasteHeat:58} removing only half of what was taken:
+     * "and the machine no longer holds it expected:&lt;1500&gt; but was:&lt;2250&gt;". NOT TWICE -
+     * {@code WasteHeat:57} handing over one unit more than is pending: "a second taker cannot have the
+     * same heat twice expected:&lt;1500&gt; but was:&lt;1501&gt;". EMPTY AFTERWARDS -
+     * {@code WasteHeat:58} always leaving one unit behind: "and the buffer is empty afterwards
+     * expected:&lt;0&gt; but was:&lt;1&gt;".</p>
+     */
     @Test
     public void whatALoopTakesIsGoneFromTheMachine() {
         WasteHeat waste = new WasteHeat();
@@ -108,7 +130,13 @@ public class WasteHeatTest {
                 waste.getPendingHeat() <= perTick * 20L);
     }
 
-    /** The subsystem's off switch reaches its supply side too, or the gate does not fully disable. */
+    /**
+     * The subsystem's off switch reaches its supply side too, or the gate does not fully disable.
+     *
+     * <p>red-witnessed: with {@code WasteHeat:40} no longer asking whether the thermal system is on: "a
+     * disabled mechanic produces nothing for anyone to collect expected:&lt;0&gt; but
+     * was:&lt;300000&gt;", 2026-09-30.</p>
+     */
     @Test
     public void withTheThermalSystemOffNothingIsProducedAtAll() {
         StellurgyConfiguration.getCurrentConfig().shipHeat = false;

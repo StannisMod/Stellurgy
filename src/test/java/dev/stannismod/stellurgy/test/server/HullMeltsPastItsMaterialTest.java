@@ -108,6 +108,12 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
         }
     }
 
+    /**
+     * red-witnessed: with {@code HullMelting:120} melting nothing until 1000 K past a material's
+     * ceiling: "past its own limit the block is not damaged, it is gone - and rock leaves lava
+     * behind: … expected:&lt;minecraft:[lava]&gt; but was:&lt;minecraft:[stone]&gt;", 2026-09-30. The
+     * two premises at its head are arrangements and are not witnessed.
+     */
     @Test
     public void aLoopPastTheMaterialsCeilingTakesTheBlockAndLeavesLava() throws Exception {
         int xMelt = stand("a coolant loop with a block of stone against it, cooked past stone's limit");
@@ -125,6 +131,11 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
                 + " behind: " + after, "minecraft:lava", after.text("block"));
     }
 
+    /**
+     * red-witnessed: with {@code HullMelting:120} melting from 300 K below a material's ceiling:
+     * "below the limit the rung must not fire at all - a block is lost at a temperature, not at a
+     * mood: … expected:&lt;minecraft:[stone]&gt; but was:&lt;minecraft:[lava]&gt;", 2026-09-30.
+     */
     @Test
     public void theSameRigBelowTheCeilingLeavesTheBlockStanding() throws Exception {
         int xCold = stand("a coolant loop with a block of stone against it, kept below stone's limit");
@@ -146,6 +157,12 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
      * <p>Read as two things, because either alone passes on the wrong world: {@code subnet info}
      * answers {@code inNetwork:false} for a position that never held a loop at all, so the pipe's own
      * block is asked too — it must no longer be the block that was placed there.</p>
+     *
+     * <p>red-witnessed: with {@code HullMelting:120} melting nothing until 1000 K past a material's
+     * ceiling: "a loop hotter than its own pipes has no pipes: … \"inNetwork\":true", 2026-09-30.
+     * The GONE verdict is not witnessed: the pipe was placed and solved into a loop, so a position
+     * that is in no network any more no longer holds a loop block, and it follows from the verdict
+     * above it. The premise at its head is an arrangement and is not witnessed.</p>
      */
     @Test
     public void aLoopPastItsOwnMaterialConsumesItself() throws Exception {

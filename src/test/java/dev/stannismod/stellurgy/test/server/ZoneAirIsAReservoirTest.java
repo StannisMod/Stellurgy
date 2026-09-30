@@ -52,6 +52,13 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * between the two and much nearer its own starting point, because there is far more room-air than
      * admitted gas — and the test derives exactly where from the pressures before and after, so the
      * assertion is the law and not a number.</p>
+     *
+     * <p>red-witnessed: with {@code AirState:389} mixing by the plain average of the two
+     * temperatures: "the room must end up at the enthalpy-weighted mean … expected 314.648… K …
+     * measured 293.001 K", 2026-09-30. The four premises are arrangements and are not witnessed. The
+     * "not the plain average" verdict is not witnessed and cannot go red on its own: the second
+     * premise puts the expected value more than twice the bound from the average, so any reading
+     * within the bound of the expected value is already more than the bound from the average.</p>
      */
     @Test
     public void gasArrivingMixesByHowMuchOfEachThereIs() throws Exception {
@@ -131,6 +138,11 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * same gas at the same temperature, there is simply less of it. The capacity falling is the other
      * half — without it the assertion would also pass on an implementation where nothing happened at
      * all.</p>
+     *
+     * <p>red-witnessed: with {@code AirState:129} ({@code draw}) cooling what is left by a percent on
+     * every draw: "what is left is the same gas at the same temperature — removing part of a body
+     * does not cool the rest: … \"airTempMilliK\":361749", 2026-09-30. The three premises are
+     * arrangements and are not witnessed.</p>
      */
     @Test
     public void drawingGasOutLeavesTheTemperatureAndLowersTheCapacity() throws Exception {
@@ -165,6 +177,13 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * <p>A zone pumped down to vacuum must report the ambient every other reader assumes, not the
      * number it was holding when it still had air in it. A stale reading here would hand the failure
      * ladder a hot compartment where there is nothing to be hot.</p>
+     *
+     * <p>red-witnessed: with {@code AirState:282} giving air a heat capacity whatever its pressure:
+     * "and must hold no heat at all: … \"airO2\":52631 … expected:&lt;0&gt; but was:&lt;760&gt;",
+     * 2026-09-30. The hot-room premise is an arrangement and is not witnessed. The ambient-temperature
+     * verdict is not witnessed: with {@code AirState:259}'s empty-air rule removed it stays green,
+     * because the powered vent tops the emptied room up with oxygen at ambient before the read — the
+     * reply above shows it holding some.</p>
      */
     @Test
     public void airThatIsNotThereHasNoTemperature() throws Exception {

@@ -61,6 +61,30 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * <p>All three halves matter. If the power did not collapse, going dark would be pointless. If it
      * collapsed to zero, going dark would be a cloak. And the range must move with the power, or the
      * detection term is not the one the clause names.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SILENCED — {@code ThermalBody:294}
+     * stopping after the first cell it shuts: "silencing failed: … \"changed\":1,\"silent\":false".
+     * NOT WORKING SURFACE — {@code TileHeatRadiator:75} ignoring the shut flag: "a shut cell is not
+     * working surface: … expected:&lt;0&gt; but was:&lt;3&gt;". MOST OF IT — {@code ThermalBody:259}
+     * counting every radiator, shut or not, at the loop's temperature: "shutting the sinks must take
+     * most of what the ship radiates away … lit=6504393 silent=6557149". A FLOOR — {@code
+     * ThermalBody:259} leaving a hundredth of a cell per shut radiator at the loop's temperature:
+     * "with every sink shut, what a ship shows may not depend on how much heat it is carrying … hot=919598
+     * cold=863715". RANGE FALLS — {@code ThermalSignature:129} answering the sensor's own range for
+     * any power: "and the range must fall with it … lit=2000000 silent=2000000". STILL FOUND — {@code
+     * ThermalBody:257} dropping the hull term: "but the hull is still warmer than space, so a silent
+     * ship is found CLOSER and never not at all: … \"radiatedPowerMilli\":0". SHEDS NOTHING — {@code
+     * HeatNetwork:733} and {@code :747} rejecting through every exchanger, shut or not: "a shut array
+     * may shed nothing: … expected:&lt;0&gt; but was:&lt;5598&gt;". STILL ABOARD — {@code
+     * HeatNetwork:286} losing one unit a tick outside rejection: "so the heat that used to leave is
+     * still on the ship: … expected:&lt;3030000&gt; but was:&lt;3029999&gt;". REOPENED — {@code
+     * TileHeatRadiator:85} refusing to open a shut cell: "opening the sinks failed: …
+     * \"silent\":true". Not witnessed: ONE ORDER, since three cells all open before and all shut after
+     * make the count three and SILENCED already reds on anything less; LOCKABLE, since radiance is
+     * the cell power at the peak temperature and the hull surface carries its skin temperature
+     * whenever it carries power, so it follows from STILL FOUND; COMES BACK, since the same cells
+     * were shedding before they were shut and it follows from REOPENED. The three premises at its
+     * head are arrangements and are not witnessed.</p>
      */
     @Test
     public void aShipRunningSilentIsFoundCloserAndIsStillFound() throws Exception {
@@ -141,6 +165,14 @@ public class RunningSilentTest extends AbstractSharedServerTest {
      * <p>The second half is what a body IS off a ship: two loops threading one sealed room are one
      * hull, not two. If they were two, each would claim the whole floor and a sensor summing them
      * would see a ship twice as bright as the one that is there.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ONE BODY — {@code ThermalBody:133}
+     * never looking past the loop asked about: "two loops in one sealed room are ONE body … expected:&lt;2&gt;
+     * but was:&lt;1&gt;". HOTTER SKIN — {@code ThermalBody:239} holding the skin at the environment's
+     * temperature: "a hotter cabin must show a hotter skin … cool=286000 hot=286000". FOUND FURTHER
+     * — {@code ThermalBody:257} dropping the hull term: "so a ship that cooks itself while hiding is
+     * found further away the longer it hides: cool=0 hot=0". The three premises are arrangements and
+     * are not witnessed.</p>
      */
     @Test
     public void theHullGlowsWithTheAirItEncloses() throws Exception {

@@ -205,6 +205,11 @@ public class XMLPlanetLoaderTest {
 
     // ---- Clamping ------------------------------------------------------------
 
+    /**
+     * <p>red-witnessed: with {@code XMLPlanetLoader:1223} dropping the upper clamp: "atmosphere density
+     * must clamp to MAX_ATM_PRESSURE expected:&lt;2147483&gt; but was:&lt;2147484&gt;",
+     * 2026-09-30.</p>
+     */
     @Test
     public void atmosphereDensityClampsAboveMax() throws Exception {
         // The value is COMPUTED from the ceiling rather than written out: a hard-coded number stops

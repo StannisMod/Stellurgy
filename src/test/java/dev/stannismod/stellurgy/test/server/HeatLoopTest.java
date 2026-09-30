@@ -52,6 +52,12 @@ public class HeatLoopTest extends AbstractSharedServerTest {
     /**
      * A machine cooled by a loop heats it. Nothing rejects heat yet, so the only place the energy
      * can be is in the pipes — which is exactly what a ship with no radiators should experience.
+     *
+     * <p>red-witnessed: with {@code HeatNetwork:834} collecting no machine's pending heat: "the
+     * plant's waste heat must end up in the loop it touches (stored=0)", 2026-09-30. The HOTTER
+     * verdict is not witnessed: a loop's temperature is ambient plus stored over capacity, so it
+     * follows from the one above. The four premises at its head are arrangements and are not
+     * witnessed.</p>
      */
     @Test
     public void aMachineOnACoolantLoopWarmsIt() throws Exception {
@@ -91,6 +97,11 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * <p>The heat each loop actually received is asserted as a PREMISE, not read past: a longer
      * loop that simply collected less would also come out colder, and that would say nothing about
      * capacity at all.</p>
+     *
+     * <p>red-witnessed: with {@code HeatNetwork:308} publishing the temperature against one block's
+     * capacity instead of the loop's: "a loop with twice the thermal mass must warm markedly less on
+     * the same heat (short rose 226500 milliK, long rose 226500)", 2026-09-30. The four premises
+     * before it are arrangements and are not witnessed.</p>
      */
     @Test
     public void theSameHeatInALongerLoopIsALowerTemperature() throws Exception {
@@ -136,6 +147,16 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * stop is the heat: nothing stored, and the loop sitting at ambient. An assertion that the loop
      * reads zero would pass on a rig that simply never ran, so the same rig is driven again with
      * the flag back on and required to warm up.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. STORES NO HEAT — {@code
+     * HeatNetwork:106} ignoring the flag: "with the thermal system off a loop must store no heat: …
+     * \"heatStored\":4530". NO CAPACITY — {@code HeatNetwork:204} and {@code TileHeatPipe:18} both
+     * ignoring the flag, the waste-heat guard left standing: "and must report no capacity to store it
+     * in: … \"heatCapacity\":60". HEATS AGAIN — {@code HeatNetwork:834} collecting no machine's
+     * pending heat: "the same rig with the flag back on must heat, or the assertions above measured
+     * nothing: … \"heatStored\":0". Not witnessed: the two AT AMBIENT / ABOVE AMBIENT verdicts, since
+     * a loop's temperature is ambient plus stored over capacity and each follows from the stored
+     * verdict before it.</p>
      */
     @Test
     public void withTheThermalSystemOffNothingHeats() throws Exception {
@@ -177,6 +198,12 @@ public class HeatLoopTest extends AbstractSharedServerTest {
      * worked out its neighbours once and never again would go on believing it is cooling nothing.
      * The loop block's own neighbour notification is what closes it, and this is what would fail if
      * that were removed.</p>
+     *
+     * <p>red-witnessed: with {@code HeatNetwork:132} no longer marking the domain dirty when a loop's
+     * neighbour changes: "a machine placed against a finished loop must be found by it (stored=0)",
+     * 2026-09-30. The WARM verdict is not witnessed: it follows from the stored verdict, since a
+     * loop's temperature is ambient plus stored over capacity. The premise at its head is an
+     * arrangement and is not witnessed.</p>
      */
     @Test
     public void aMachineBuiltAfterTheLoopIsStillPickedUp() throws Exception {

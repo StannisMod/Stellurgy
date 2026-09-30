@@ -77,6 +77,10 @@ public class AirStateTest {
         return new AirState(ppm(790_000), ppm(210_000), 0L, kelvin * 1000);
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:192} dividing by a fiftieth of an atmosphere:
+     * "expected:&lt;100&gt; but was:&lt;50&gt;", 2026-09-30.</p>
+     */
     @Test
     public void breathableAirReadsAsOneAtmosphere() {
         // The pressure a sealed zone reports is what the analyser turns into "1.00 atm"; it read
@@ -84,6 +88,15 @@ public class AirStateTest {
         assertEquals(100, AirState.earthLike().getPressureCentiAtm());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OXYGEN FALLS - {@code AirState:129}
+     * removing half of what was drawn: "oxygen must fall by exactly what was breathed
+     * expected:&lt;200000000&gt; but was:&lt;205000000&gt;". SAME AMOUNT AS CO2 -
+     * {@code AirState:204} adding twice the carbon dioxide: "the same amount must appear as CO2
+     * expected:&lt;10000000&gt; but was:&lt;20000000&gt;". PRESSURE UNCHANGED - {@code AirState:204}
+     * followed by taking the converted amount out of the nitrogen too: "respiration rearranges air, it
+     * does not consume it expected:&lt;1000000000&gt; but was:&lt;990000000&gt;".</p>
+     */
     @Test
     public void breathingConvertsOxygenIntoCarbonDioxideWithoutChangingPressure() {
         AirState air = AirState.earthLike();
@@ -96,6 +109,14 @@ public class AirStateTest {
         assertEquals("respiration rearranges air, it does not consume it", before, air.getTotalPressure());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ONLY WHAT IS PRESENT -
+     * {@code AirState:127} no longer clamping a draw to what is there: "only the oxygen present may be
+     * converted expected:&lt;5000000&gt; but was:&lt;50000000&gt;". NONE LEFT - {@code AirState:129}
+     * removing half of what was drawn: "expected:&lt;0&gt; but was:&lt;2500000&gt;". AS CO2 -
+     * {@code AirState:204} adding twice the carbon dioxide: "expected:&lt;5000000&gt; but
+     * was:&lt;10000000&gt;".</p>
+     */
     @Test
     public void breathingCannotTakeOxygenThatIsNotThere() {
         AirState air = new AirState(ppm(790_000), ppm(5_000), 0L);
@@ -107,6 +128,17 @@ public class AirStateTest {
         assertEquals(ppm(5_000), air.getCarbonDioxide());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ALL BACK AS OXYGEN -
+     * {@code AirState:218} returning half of it: "all of it must come back as oxygen
+     * expected:&lt;210000000&gt; but was:&lt;195000000&gt;". NO CO2 LEFT - {@code AirState:204}
+     * making twice the carbon dioxide while breathing, so regeneration leaves half behind:
+     * "expected:&lt;0&gt; but was:&lt;30000000&gt;". THE CARBON - {@code AirState:219} reporting half
+     * of what was converted: "the carbon that left the air is what the machine must now handle
+     * expected:&lt;30000000&gt; but was:&lt;15000000&gt;". PRESSURE UNCHANGED - {@code AirState:218}
+     * followed by taking the converted amount out of the nitrogen too: "pressure is unchanged: the
+     * solid carbon never held any expected:&lt;1000000000&gt; but was:&lt;970000000&gt;".</p>
+     */
     @Test
     public void regenerationIsBreathingRunBackwards() {
         AirState air = AirState.earthLike();
@@ -121,6 +153,14 @@ public class AirStateTest {
         assertEquals("pressure is unchanged: the solid carbon never held any", pressureWithCrewAboard, air.getTotalPressure());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ONLY WHAT IS PRESENT -
+     * {@code AirState:127} no longer clamping a draw to what is there: "only the CO2 present may be
+     * processed expected:&lt;10000000&gt; but was:&lt;50000000&gt;". NONE LEFT - {@code AirState:129}
+     * removing half of what was drawn: "expected:&lt;0&gt; but was:&lt;5000000&gt;". AS OXYGEN -
+     * {@code AirState:218} returning half of it: "expected:&lt;210000000&gt; but
+     * was:&lt;205000000&gt;".</p>
+     */
     @Test
     public void regenerationCannotInventCarbonDioxide() {
         AirState air = new AirState(ppm(790_000), ppm(200_000), ppm(10_000));
@@ -132,6 +172,11 @@ public class AirStateTest {
         assertEquals(ppm(210_000), air.getOxygen());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:218} putting no oxygen back: "and regeneration must be able
+     * to undo that, not merely stop it", 2026-09-30. The premise before it is an arrangement and is not
+     * witnessed.</p>
+     */
     @Test
     public void aRecirculatorCanBringAStaleRoomBackIntoTheBand() {
         AirState air = AirState.earthLike();
@@ -144,23 +189,43 @@ public class AirStateTest {
                 air.deriveAtmosphere().isBreathable());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:545} doubling the lower edge of the band: an
+     * AssertionError with no message at the assertion, 2026-09-30.</p>
+     */
     @Test
     public void airInsideTheSafeBandIsBreathable() {
         assertTrue(AirState.earthLike().deriveAtmosphere().isBreathable());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:545} moving the lower edge of the band down by 10: "expected
+     * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void oxygenBelowTheBandSuffocates() {
         AirState air = new AirState(ppm(790_000), SAFE_MIN - 1, ppm(10_000));
         assertSame(Atmosphere.LOWOXYGEN, air.deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:546} calling air with no oxygen at all merely low on it:
+     * "expected same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void airWithNoOxygenLeftIsNotMerelyLowOnIt() {
         AirState air = new AirState(ppm(790_000), 0L, ppm(210_000));
         assertSame(Atmosphere.NOO2, air.deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HIGH OXYGEN - {@code AirState:547}
+     * moving the upper edge of the band up by 10: "expected same:&lt;Atmosphere@...&gt; was
+     * not:&lt;Atmosphere@...&gt;". STILL FEEDS FIRE - {@code Atmosphere:45} declaring the label
+     * non-flammable: "an oxygen-rich room being flammable is the hazard, not a bug". NOT BREATHABLE -
+     * {@code Atmosphere:45} declaring the label breathable: an AssertionError with no message. The last
+     * two read the label's hand-assigned flags, not the air.</p>
+     */
     @Test
     public void oxygenAboveTheBandIsToxicAndStillFeedsFire() {
         AirState air = new AirState(ppm(400_000), SAFE_MAX + 1, 0L);
@@ -178,23 +243,42 @@ public class AirStateTest {
     // the room's temperature decides the rung and its gases only decide which variant of it - never
     // that a particular number is dangerous, which is config.
 
+    /**
+     * <p>red-witnessed: with {@code AirState:535} comparing strictly above the rung: "a breathable room
+     * can still be a room that cooks you expected same:&lt;Atmosphere@...&gt; was
+     * not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void airHotEnoughToHurtIsTheSameHostileAtmosphereAScorchingPlanetPresents() {
         assertSame("a breathable room can still be a room that cooks you",
                 Atmosphere.VERYHOT, earthLikeAt(VERY_HOT).deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:535} starting the rung one kelvin early: "the rung is a
+     * threshold, not a slope: below it the gases decide alone expected same:&lt;Atmosphere@...&gt; was
+     * not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void airJustBelowTheRungIsUnaffectedByHowWarmItIs() {
         assertSame("the rung is a threshold, not a slope: below it the gases decide alone",
                 Atmosphere.PRESSURIZEDAIR, earthLikeAt(VERY_HOT - 1).deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:533} comparing strictly above the harsher rung: "expected
+     * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void lethallyHotAirIsTheHarsherOfTheTwoRungs() {
         assertSame(Atmosphere.SUPERHEATED, earthLikeAt(SUPERHEATED).deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:534} answering the breathable variant for unbreathable air:
+     * "the NoO2 variants exist precisely so neither hazard hides the other expected
+     * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void hotAirWithNothingToBreatheSaysBothThingsAtOnce() {
         AirState suffocatingAndHot = new AirState(ppm(1_000_000), 0L, 0L, SUPERHEATED * 1000);
@@ -203,6 +287,11 @@ public class AirStateTest {
                 Atmosphere.SUPERHEATEDNOO2, suffocatingAndHot.deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:531} asking about heat only while the oxygen is under its
+     * ceiling: "a room that is burning its crew is not made safe by its gas mix expected
+     * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void heatOutranksAnOxygenSurplus() {
         AirState enrichedAndHot = new AirState(ppm(400_000), SAFE_MAX + 1, 0L, VERY_HOT * 1000);
@@ -211,6 +300,13 @@ public class AirStateTest {
                 Atmosphere.VERYHOT, enrichedAndHot.deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with BOTH {@code AirState:511} no longer calling an empty zone a vacuum AND
+     * {@code AirState:252} no longer reporting an empty zone at ambient: "there is no body left in the
+     * room to be hot expected same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.
+     * With {@code AirState:511} alone it also goes red, but on the no-oxygen reading
+     * {@code aZoneWithNoGasInItIsVacuumWhateverItsComposition} already pins, not on heat.</p>
+     */
     @Test
     public void aVacuumIsNotHotHoweverHotTheGasThatLeftItWas() {
         AirState breached = new AirState(0L, 0L, 0L, SUPERHEATED * 1000);
@@ -219,6 +315,11 @@ public class AirStateTest {
                 Atmosphere.VACUUM, breached.deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:535} no longer treating a zero threshold as no rung: "an
+     * unloaded or switched-off threshold must not make every room lethal expected
+     * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void aThresholdOfZeroIsNoRungRatherThanARungEveryRoomTrips() {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
@@ -229,6 +330,11 @@ public class AirStateTest {
                 Atmosphere.PRESSURIZEDAIR, earthLikeAt(1_000).deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:531} running the heat rungs whatever the flag says: "the
+     * flag that removes the mechanic removes its hazard too expected same:&lt;Atmosphere@...&gt; was
+     * not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void withShipHeatOffARoomNeverCooksItsCrew() {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
@@ -238,11 +344,20 @@ public class AirStateTest {
                 Atmosphere.PRESSURIZEDAIR, earthLikeAt(1_000).deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:511} no longer calling an empty zone a vacuum: "expected
+     * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
+     */
     @Test
     public void aZoneWithNoGasInItIsVacuumWhateverItsComposition() {
         assertSame(Atmosphere.VACUUM, AirState.vacuum().deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with the guard at {@code AirState:541} disabled: "no usable band means no
+     * governor, not a hazard expected same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;",
+     * 2026-09-30.</p>
+     */
     @Test
     public void anUnconfiguredSafeBandGovernsNothing() {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
@@ -253,6 +368,11 @@ public class AirStateTest {
                 Atmosphere.PRESSURIZEDAIR, AirState.earthLike().deriveAtmosphere());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:405} measuring to twice the ceiling: "headroom is the
+     * distance to the ceiling, not to infinity expected:&lt;90000000&gt; but was:&lt;390000000&gt;",
+     * 2026-09-30.</p>
+     */
     @Test
     public void theGovernorLeavesRoomOnlyUpToTheToxicityCeiling() {
         AirState air = AirState.earthLike();
@@ -261,6 +381,11 @@ public class AirStateTest {
                 SAFE_MAX - ppm(210_000), air.oxygenHeadroom());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AirState:405} no longer flooring the headroom at zero: "a combiner
+     * must be unable to make a fire hazard worse expected:&lt;0&gt; but was:&lt;-50000000&gt;",
+     * 2026-09-30.</p>
+     */
     @Test
     public void anAlreadyEnrichedRoomGetsNoMoreOxygen() {
         AirState air = new AirState(ppm(400_000), SAFE_MAX + ppm(50_000), 0L);
@@ -268,6 +393,11 @@ public class AirStateTest {
         assertEquals("a combiner must be unable to make a fire hazard worse", 0L, air.oxygenHeadroom());
     }
 
+    /**
+     * <p>red-witnessed: with the guard at {@code AirState:403} disabled: "with no band there is no
+     * governor, in both directions expected:&lt;9223372036854775807&gt; but was:&lt;0&gt;",
+     * 2026-09-30.</p>
+     */
     @Test
     public void anUnconfiguredBandImposesNoCeilingEither() {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
@@ -278,6 +408,16 @@ public class AirStateTest {
                 Long.MAX_VALUE, AirState.earthLike().oxygenHeadroom());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CO2 TAKEN - {@code AirState:234} drawing
+     * half of what was asked: "expected:&lt;50000000&gt; but was:&lt;25000000&gt;". N2 TAKEN -
+     * {@code AirState:228} drawing half of what was asked: "expected:&lt;40000000&gt; but
+     * was:&lt;20000000&gt;". OXYGEN UNTOUCHED - {@code AirState:228} drawing the same amount of oxygen
+     * too: "splitting must not touch the oxygen the crew are breathing expected:&lt;210000000&gt; but
+     * was:&lt;170000000&gt;". CO2 LEFT - {@code AirState:129} removing half of what was drawn:
+     * "expected:&lt;40000000&gt; but was:&lt;65000000&gt;". N2 LEFT - {@code AirState:228} drawing half
+     * and reporting twice that: "expected:&lt;750000000&gt; but was:&lt;770000000&gt;".</p>
+     */
     @Test
     public void aSeparatorTakesTheStaleGasAndLeavesTheBreathableOne() {
         AirState air = new AirState(ppm(790_000), ppm(210_000), ppm(90_000));
@@ -298,6 +438,12 @@ public class AirStateTest {
     // the model stores those with is an implementation choice, and these say what that choice has to
     // be good enough FOR — the two ends of the solar system at once, and an honest zero underneath.
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. 21% - {@code AirState:163} making
+     * sea-level air 20% oxygen: "sea-level air is 21% oxygen expected:&lt;0.21&gt; but
+     * was:&lt;0.20202020202020202&gt;". ONE ATMOSPHERE - {@code AirState:192} dividing by a fiftieth of
+     * an atmosphere: "and one whole atmosphere of it expected:&lt;100&gt; but was:&lt;50&gt;".</p>
+     */
     @Test
     public void aRoomIsItsFractionsAndNotTheNumbersUnderneathThem() {
         AirState air = AirState.earthLike();
@@ -310,6 +456,13 @@ public class AirStateTest {
         assertEquals("and one whole atmosphere of it", 100, air.getPressureCentiAtm());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. THE FRACTION SURVIVES -
+     * {@code AirState:102} storing whole parts per million only: "the oxygen fraction survives being
+     * stored expected:&lt;0.0013&gt; but was:&lt;0.0011824324324324325&gt;". THINNER READS THINNER -
+     * {@code AirState:102} rounding every amount to 150 units: "a trace 1% thinner must read as
+     * thinner, not as the same integer: 7650 vs 7650".</p>
+     */
     @Test
     public void aTraceOnAThinWorldKeepsItsDigits() {
         // Mars: six millibars of air, of which 0.13% is oxygen. That trace is what decides whether a
@@ -330,6 +483,14 @@ public class AirStateTest {
                 poorer.getOxygen() < mars.getOxygen());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOT SATURATED - {@code AirState:102}
+     * capping every amount at a thousand atmospheres: "five thousand atmospheres is a number, not a
+     * saturated ceiling expected:&lt;5000000000000&gt; but was:&lt;1000000000000&gt;". THE TRACE -
+     * {@code AirState:102} dropping anything under ten units: "and three parts per billion of ammonia
+     * is still there beside it expected:&lt;3&gt; but was:&lt;0&gt;". THE TOTAL - {@code AirState:185}
+     * summing through an int: "expected:&lt;5000000000003&gt; but was:&lt;658067459&gt;".</p>
+     */
     @Test
     public void oneCompositionHoldsAGasGiantAndATraceAtTheSameTime() {
         // The two ends the model has to span at once: a giant's depths in one gas and a few parts per
@@ -346,6 +507,14 @@ public class AirStateTest {
         assertEquals(deep + 3L, giant.getTotalPressure());
     }
 
+    /**
+     * <p>red-witnessed: the first two verdicts, one inversion each, 2026-09-30. NOTHING LEFT -
+     * {@code AirState:129} removing half of what was drawn: "nothing is left of it expected:&lt;0&gt;
+     * but was:&lt;500&gt;". NOT IN THE COMPOSITION - {@code AirState:103} keeping an entry that reached
+     * zero: "and it is not in the composition either: {... carbondioxide [WASTE]]=0}". The pressure
+     * verdict is not witnessed: the pressure is the sum of the entries, so once the first verdict
+     * holds a gone gas contributes nothing to it.</p>
+     */
     @Test
     public void whatIsGoneIsAbsentEverywhereRatherThanKeptAsAZero() {
         AirState air = new AirState(ppm(790_000), ppm(210_000), ppm(1));
@@ -362,6 +531,12 @@ public class AirStateTest {
         assertEquals("nor counted in the pressure", ppm(1_000_000), air.getTotalPressure());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each at {@code AirState:560} writing one
+     * gas at half its amount. NITROGEN: "expected:&lt;700000000&gt; but was:&lt;350000000&gt;". OXYGEN:
+     * "expected:&lt;180000000&gt; but was:&lt;90000000&gt;". CARBON DIOXIDE: "expected:&lt;40000000&gt;
+     * but was:&lt;20000000&gt;".</p>
+     */
     @Test
     public void gasesSurviveASaveAndReload() {
         AirState air = new AirState(ppm(700_000), ppm(180_000), ppm(40_000));

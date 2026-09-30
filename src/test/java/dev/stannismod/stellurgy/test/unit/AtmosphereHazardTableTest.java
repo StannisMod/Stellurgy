@@ -59,12 +59,35 @@ public class AtmosphereHazardTableTest {
 
     // ─── the fourteen cells, as hazard sets ────────────────────────────────────────────────────
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a row given to an air atmosphere in
+     * the table at {@code AtmosphereHazards:146}. AIR: "air is what raises nothing". PRESSURIZED AIR:
+     * "and so is pressurised air".</p>
+     */
     @Test
     public void breathableAirDoesNothingToAnybody() {
         assertTrue("air is what raises nothing", of(Atmosphere.AIR).isEmpty());
         assertTrue("and so is pressurised air", of(Atmosphere.PRESSURIZEDAIR).isEmpty());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows in
+     * {@code AtmosphereHazards:133-145}. VACUUM ({@code :133}, given suffocation instead):
+     * "expected:&lt;[DECOMPRESSION]&gt; but was:&lt;[SUFFOCATION]&gt;". NOO2 ({@code :134}, a pressure
+     * row added): "expected:&lt;[SUFFOCATION]&gt; but was:&lt;[SUFFOCATION, PRESSURE]&gt;". LOWOXYGEN
+     * ({@code :135}, a pressure row added): the same text. HIGHOXYGEN ({@code :136}, a pressure row
+     * added): "expected:&lt;[OXYGEN_TOXICITY]&gt; but was:&lt;[OXYGEN_TOXICITY, PRESSURE]&gt;".
+     * HIGHPRESSURE ({@code :137}, given oxygen toxicity instead): "expected:&lt;[PRESSURE]&gt; but
+     * was:&lt;[OXYGEN_TOXICITY]&gt;". SUPERHIGHPRESSURE ({@code :138}, a heat row added):
+     * "expected:&lt;[PRESSURE]&gt; but was:&lt;[PRESSURE, HEAT]&gt;". VERYHOT ({@code :139}, given
+     * oxygen toxicity instead): "expected:&lt;[HEAT]&gt; but was:&lt;[OXYGEN_TOXICITY]&gt;".
+     * SUPERHEATED ({@code :140}, a pressure row added): "expected:&lt;[HEAT]&gt; but was:&lt;[PRESSURE,
+     * HEAT]&gt;". HIGHPRESSURENOO2 ({@code :141}, a heat row added): "expected:&lt;[SUFFOCATION,
+     * PRESSURE]&gt; but was:&lt;[SUFFOCATION, PRESSURE, HEAT]&gt;". SUPERHIGHPRESSURENOO2
+     * ({@code :142}, a heat row added): the same text. VERYHOTNOO2 ({@code :144}, a pressure row
+     * added): "expected:&lt;[SUFFOCATION, HEAT]&gt; but was:&lt;[SUFFOCATION, PRESSURE, HEAT]&gt;".
+     * SUPERHEATEDNOO2 ({@code :145}, a pressure row added): the same text.</p>
+     */
     @Test
     public void eachNamedAtmosphereRaisesWhatItAlwaysDid() {
         assertEquals(EnumSet.of(AtmosphereHazard.DECOMPRESSION), hazardsOf(Atmosphere.VACUUM));
@@ -89,6 +112,17 @@ public class AtmosphereHazardTableTest {
 
     // ─── what a suit must cover, and what it spends ────────────────────────────────────────────
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows in
+     * {@code AtmosphereHazards:133-145}. LOWOXYGEN ({@code :135}, a pressure row added): "thin air is a
+     * breathing problem". NOO2 ({@code :134}, a pressure row added): "so is airless air". HIGHOXYGEN
+     * ({@code :136}, a pressure row added): "so is too much oxygen". VACUUM ({@code :133}, given
+     * suffocation instead): "a vacuum is not". HIGHPRESSURE ({@code :137}, given oxygen toxicity
+     * instead): "nor is depth". VERYHOT ({@code :139}, given oxygen toxicity instead): "nor is heat".
+     * HIGHPRESSURENOO2 ({@code :141}, its pressure row dropped): "suffocating AND crushed still needs
+     * the whole suit". SUPERHEATEDNOO2 ({@code :145}, its heat row dropped): "suffocating AND cooking
+     * too".</p>
+     */
     @Test
     public void aSealedFaceIsEnoughOnlyWhereTheHarmIsWhatYouBreathe() {
         assertFalse("thin air is a breathing problem", of(Atmosphere.LOWOXYGEN).needsFullSuit());
@@ -107,6 +141,17 @@ public class AtmosphereHazardTableTest {
                 of(Atmosphere.SUPERHEATEDNOO2).needsFullSuit());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. Six assertions carry no message and went
+     * red as a bare AssertionError at their own line. VACUUM - {@code AtmosphereHazards:53} the
+     * decompression row no longer supplying oxygen: "nothing outside to work with". NOO2 -
+     * {@code :59} the suffocation row no longer supplying it. HIGHPRESSURENOO2 - {@code :69} the
+     * dense-suffocation row no longer supplying it. SUPERHEATEDNOO2 - {@code :145} suffocating
+     * through the thin-air row instead. LOWOXYGEN - {@code :75} the thin-air row supplying oxygen:
+     * "thin air can be concentrated". HIGHOXYGEN - {@code :81} the toxicity row supplying it.
+     * HIGHPRESSURE - {@code :87} the pressure row supplying it. VERYHOT - {@code :111} the heat row
+     * supplying it.</p>
+     */
     @Test
     public void aSuitSpendsItsTankOnlyWhereThereIsNoOxidiserToConcentrate() {
         assertTrue("nothing outside to work with", of(Atmosphere.VACUUM).needsSuppliedOxygen());
@@ -122,6 +167,19 @@ public class AtmosphereHazardTableTest {
         assertFalse(of(Atmosphere.VERYHOT).needsSuppliedOxygen());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. VACUUM - {@code AtmosphereHazards:53}
+     * the row's key changed: "expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[vacuum]&gt;". LOWOXYGEN -
+     * {@code :75}: "expected:&lt;msg.[noOxyge]n&gt; but was:&lt;msg.[thi]n&gt;". HIGHOXYGEN - {@code :82}:
+     * "expected:&lt;msg.[highOxygen]&gt; but was:&lt;msg.[x]&gt;". HIGHPRESSURE - {@code :87}:
+     * "expected:&lt;msg.[tooDense]&gt; but was:&lt;msg.[y]&gt;". SUPERHIGHPRESSURE - {@code :97}:
+     * "expected:&lt;msg.[muchTooDense]&gt; but was:&lt;msg.[z]&gt;". VERYHOT - {@code :139} given oxygen
+     * toxicity instead: "expected:&lt;msg.[tooHot]&gt; but was:&lt;msg.[highOxygen]&gt;".
+     * SUPERHEATEDNOO2 - {@code HazardExposure:103} taking the LEAST severe hazard's message:
+     * "expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[tooHot]&gt;". HIGHPRESSURENOO2 -
+     * {@code AtmosphereHazards:69} the dense-suffocation row's key changed:
+     * "expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[w]&gt;".</p>
+     */
     @Test
     public void theWarningNamesTheMostUrgentThingWrong() {
         assertEquals("msg.noOxygen", of(Atmosphere.VACUUM).messageKey());
@@ -139,6 +197,19 @@ public class AtmosphereHazardTableTest {
 
     // ─── the numbers, as they were ─────────────────────────────────────────────────────────────
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30; the assertions without a message went red
+     * as a bare AssertionError at their own line. NOO2 FIRES ON 10 - {@code AtmosphereHazards:57}
+     * period 20: "suffocating outright acts twice as often as merely running short
+     * expected:&lt;true&gt; but was:&lt;false&gt;". LOWOXYGEN NOT ON 10 - {@code :73} period 10.
+     * LOWOXYGEN ON 20 - {@code :73} period 40. HIGHOXYGEN NOT ON 20 - {@code :79} period 20: "oxygen
+     * toxicity is the slowest of them expected:&lt;false&gt; but was:&lt;true&gt;". HIGHOXYGEN ON 40 -
+     * {@code :79} period 80. VERYHOT DAMAGE - {@code :110} damage 2: "the two heat rungs differ by their
+     * damage and nothing else expected:&lt;1&gt; but was:&lt;2&gt;". SUPERHEATED DAMAGE - {@code :120}
+     * damage 3: "expected:&lt;4&gt; but was:&lt;3&gt;". NOO2 SLOWNESS - {@code :59} slowness 3: "and
+     * the two suffocation rungs by how hard they hit expected:&lt;4&gt; but was:&lt;3&gt;". LOWOXYGEN
+     * SLOWNESS - {@code :75} slowness 3: "expected:&lt;2&gt; but was:&lt;3&gt;".</p>
+     */
     @Test
     public void theRungsKeepTheirPeriodsAndTheirSeverities() {
         assertEquals("suffocating outright acts twice as often as merely running short",
@@ -166,6 +237,14 @@ public class AtmosphereHazardTableTest {
     // each is a candidate for deletion on its own merits. A failure here means somebody removed one
     // — which may well be right, but it is a decision about the GAME and must be made as one.
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30; the assertions without a message went red
+     * as a bare AssertionError at their own line. VERYHOT - {@code AtmosphereHazards:111} the heat row
+     * not igniting: "a hot breathable room sets you alight". SUPERHEATED - {@code :121} the searing row
+     * not igniting. VERYHOTNOO2 - {@code :116} the airless heat row igniting: "and the same heat with
+     * no oxygen does not — deliberately preserved". SUPERHEATEDNOO2 - {@code :126} the airless
+     * searing row igniting.</p>
+     */
     @Test
     public void hotAirIgnitesYouOnlyWhereYouCouldHaveBreathedIt() {
         assertTrue("a hot breathable room sets you alight",
@@ -177,6 +256,12 @@ public class AtmosphereHazardTableTest {
         assertFalse(row(Atmosphere.SUPERHEATEDNOO2, AtmosphereHazard.HEAT).ignites());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BREATHABLE DEEP - {@code AtmosphereHazards:96}
+     * damage 2: "crushing breathable air draws blood expected:&lt;1&gt; but was:&lt;2&gt;". AIRLESS
+     * DEEP - {@code :101} given a damage source and an amount of 1: "crushing airless air does not —
+     * deliberately preserved expected:&lt;0&gt; but was:&lt;1&gt;".</p>
+     */
     @Test
     public void theDeepestRungInjuresOnlyWhereTheAirIsBreathable() {
         assertEquals("crushing breathable air draws blood", 1,
@@ -185,6 +270,11 @@ public class AtmosphereHazardTableTest {
                 row(Atmosphere.SUPERHIGHPRESSURENOO2, AtmosphereHazard.PRESSURE).damageAmount());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. AIRLESS DEEP - {@code AtmosphereHazards:101}
+     * narcosis off: "the airless deep takes your jump — deliberately preserved". BREATHABLE DEEP -
+     * {@code :97} narcosis on: "and the breathable deep does not".</p>
+     */
     @Test
     public void narcosisBelongsToTheAirlessDepthsAlone() {
         assertTrue("the airless deep takes your jump — deliberately preserved",
@@ -193,6 +283,15 @@ public class AtmosphereHazardTableTest {
                 row(Atmosphere.SUPERHIGHPRESSURE, AtmosphereHazard.PRESSURE).narcosis());
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HIGHPRESSURENOO2 -
+     * {@code AtmosphereHazards:69} nausea 1: "depth makes suffocation more nauseating — deliberately
+     * preserved expected:&lt;2&gt; but was:&lt;1&gt;". SUPERHIGHPRESSURENOO2 - {@code :142} suffocating
+     * through the plain row: "expected:&lt;2&gt; but was:&lt;1&gt;". VERYHOTNOO2 - {@code :144}
+     * suffocating through the dense row: "while heat does not expected:&lt;1&gt; but was:&lt;2&gt;".
+     * NOO2 - {@code :134} suffocating through the dense row: "expected:&lt;1&gt; but
+     * was:&lt;2&gt;".</p>
+     */
     @Test
     public void suffocatingUnderPressureIsQueasierThanSuffocatingAnywhereElse() {
         assertEquals("depth makes suffocation more nauseating — deliberately preserved", 2,
@@ -203,6 +302,10 @@ public class AtmosphereHazardTableTest {
         assertEquals(1, row(Atmosphere.NOO2, AtmosphereHazard.SUFFOCATION).nausea());
     }
 
+    /**
+     * <p>red-witnessed: with {@code AtmosphereHazards:133} giving the vacuum suffocation instead of
+     * decompression: "nothing in the game can inflict [DECOMPRESSION]", 2026-09-30.</p>
+     */
     @Test
     public void everyHazardTheModelDeclaresIsRaisedBySomething() {
         // The other half of "no storage without a consumer": a kind of harm nothing can inflict is

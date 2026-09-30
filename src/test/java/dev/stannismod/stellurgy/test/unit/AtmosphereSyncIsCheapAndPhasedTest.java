@@ -24,6 +24,14 @@ public class AtmosphereSyncIsCheapAndPhasedTest {
     /** Two seconds of ticks: long enough to count a rate rather than catch a moment. */
     private static final int WINDOW = 40;
 
+    /**
+     * <p>red-witnessed: with {@code AtmosphereHandler:468} serving on half the period: "a readout
+     * nobody decides anything with must not cost more than one packet a second per player
+     * expected:&lt;2&gt; but was:&lt;4&gt;", 2026-09-30. This does not see the period itself: the
+     * expectation is computed from {@code AtmosphereHandler.SYNC_PERIOD_TICKS}, and with
+     * {@code AtmosphereHandler:452} set to 1 - a packet every tick - all three methods here stay
+     * green.</p>
+     */
     @Test
     public void aPlayerIsToldOnceASecondAndNotMoreOften() {
         int told = 0;
@@ -37,6 +45,11 @@ public class AtmosphereSyncIsCheapAndPhasedTest {
                 WINDOW / AtmosphereHandler.SYNC_PERIOD_TICKS, told);
     }
 
+    /**
+     * <p>red-witnessed: with {@code AtmosphereHandler:468} serving on the first two ticks of every
+     * period: "players whose ages differ by 1 ticks must never be served on the same tick ...
+     * expected:&lt;0&gt; but was:&lt;2&gt;", 2026-09-30.</p>
+     */
     @Test
     public void twoPlayersWhoJoinedAtDifferentMomentsAreNotToldOnTheSameTick() {
         // Ages differing by anything that is not a whole period. A shared clock — world time, say —
@@ -57,6 +70,10 @@ public class AtmosphereSyncIsCheapAndPhasedTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code AtmosphereHandler:468} never answering yes: "a player joining at
+     * offset 0 must still hear about the air", 2026-09-30.</p>
+     */
     @Test
     public void everyPlayerIsToldEventually() {
         // The mirror of the two above: phasing that spread players out by NEVER telling some of them

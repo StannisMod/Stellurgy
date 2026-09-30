@@ -87,6 +87,14 @@ public class ThermalSignatureTest {
     /**
      * Two ships shedding the same total power, one compact and hot, one large and cool. They must be
      * found at the same distance and be nothing alike to lock onto.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SAME RANGE -
+     * {@code ThermalSignature:129} letting the peak temperature into the range: "the DETECTION term is
+     * total power, so the same power must be the same range ... expected:&lt;44721.359549995796&gt; but
+     * was:&lt;37606.03093086394&gt;". TWO LOCKS - {@code ThermalSignature:113} reporting total power
+     * as the radiance: "but the LOCK term is radiance, a function of temperature alone ...
+     * expected:&lt;4.0&gt; but was:&lt;0.9999999999999998&gt;". The two premises before them are
+     * arrangements and are not witnessed.</p>
      */
     @Test
     public void theSamePowerAtTwoTemperaturesIsOneRangeAndTwoDifferentLocks() {
@@ -116,6 +124,11 @@ public class ThermalSignatureTest {
     /**
      * Range goes as the square root of power, which is what makes shedding twice as much cost so
      * little in stealth - and what makes hiding by shedding less such a poor deal.
+     *
+     * <p>red-witnessed: with {@code ThermalSignature:129} dropping the square root: "twice the power
+     * must extend the range by the square root of two and no more: once=2000.0 twice=4000.0
+     * expected:&lt;1.4142135623730951&gt; but was:&lt;2.0&gt;", 2026-09-30. The premise before it is
+     * an arrangement and is not witnessed.</p>
      */
     @Test
     public void rangeGoesAsTheSquareRootOfPower() {
@@ -135,6 +148,12 @@ public class ThermalSignatureTest {
      *
      * <p>The maximum, not a mean, is the clause a seeker depends on - a glowing drive housing behind
      * a hull's worth of cold plating is still a lock.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. POWERS ADD - {@code ThermalSignature:94}
+     * keeping the larger power instead of the sum: "the powers of two surfaces add
+     * expected:&lt;1471.875&gt; but was:&lt;1171.875&gt;". HOTTEST PART - {@code ThermalSignature:113}
+     * reporting total power as the radiance: "and the object is locked on its hottest part, however
+     * little of it there is expected:&lt;300.0&gt; but was:&lt;1471.875&gt;".</p>
      */
     @Test
     public void oneObjectIsLockedOnItsBrightestPart() {
@@ -156,6 +175,13 @@ public class ThermalSignatureTest {
      * <p>HEAT-16 is that silence reduces the range a ship is found from and never drives the
      * signature to zero. A fraction clamped where it is READ is what makes that true of every
      * configuration rather than of the shipped one.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. REFUSED - {@code ThermalBody:245}
+     * clamping at zero instead of the minimum skin fraction: "a hull that lets nothing out is not a
+     * setting: asked for 0, got 0.0". STILL RADIATING - {@code ThermalSignature:76} treating a surface
+     * at or below 20 K as not emitting: "and a hull at that fraction must still be radiating:
+     * ThermalSignature[power=0.0, ...]". The premise before them is an arrangement and is not
+     * witnessed.</p>
      */
     @Test
     public void aPerfectlyColdSkinIsRefused() {
@@ -186,6 +212,16 @@ public class ThermalSignatureTest {
      * <p>None of that is written down: it falls out of one temperature being far above the other on a
      * fourth-power curve. What is asserted is the RELATION, so a rebalance that moves either
      * temperature moves the decoy's worth with it.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. PREFERRED BY A SEEKER -
+     * {@code ThermalSignature:113} reporting total power as the radiance: "a seeker homing on radiance
+     * must prefer the slug by a wide margin, or it is not worth throwing". OUTSHINES THE ARRAY -
+     * {@code ThermalSignature:159} giving the slug a quarter of its radiating cell: "and one white-hot
+     * lump must outshine the whole array it left ...". THE SURFACE IT COOLS THROUGH -
+     * {@code ThermalSignature:159} giving the slug twice its radiating cells: "and it must show exactly
+     * the surface it cools through ... expected:&lt;41137.8201861168&gt; but
+     * was:&lt;82275.6403722336&gt;". The premise before them is an arrangement and is not
+     * witnessed.</p>
      */
     @Test
     public void aThrownSlugOutshinesTheArrayItLeft() {

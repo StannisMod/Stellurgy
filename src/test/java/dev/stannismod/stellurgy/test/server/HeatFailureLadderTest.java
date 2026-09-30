@@ -74,6 +74,12 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * <p>The second half is what makes the first a measurement. "The room reports VeryHot" would
      * also be true of a build that reported VeryHot for every room, and of one that latched on the
      * first hazard it ever saw - which is a real failure mode this very code path has had.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HOSTILE — {@code AirState:535} raising
+     * the rung 1000 K: "past the threshold the room itself is the hazard … expected:&lt;[VeryHot]&gt;
+     * but was:&lt;[PressurizedAir]&gt;". BACK — {@code AreaBlob:45} refusing to publish over a VeryHot
+     * zone: "and the room must come BACK when it is cooled … expected:&lt;[PressurizedAir]&gt; but
+     * was:&lt;[VeryHot]&gt;". The two premises at its head are arrangements and are not witnessed.</p>
      */
     @Test
     public void anOverheatedCompartmentTurnsHostileAndCoolingItGivesTheRoomBack() throws Exception {
@@ -103,6 +109,13 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * <p>Two facts about one room - it is cooking you and there is nothing to breathe - and the
      * existing atmosphere types say both at once. Asserting the plain variant alongside is what
      * stops this passing on a build that simply always answers with the NoO2 one.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BOTH HAZARDS — {@code AirState:534}
+     * always answering the breathable variant: "a suffocating room that is also lethally hot must say
+     * so expected:&lt;Superheated[NoOxygen]&gt; but was:&lt;Superheated[]&gt;". THE PLAIN ONE — {@code
+     * AirState:534} always answering the NoO2 variant: "and the same temperature with air to breathe
+     * is the plain lethal one expected:&lt;Superheated[]&gt; but was:&lt;Superheated[NoOxygen]&gt;".
+     * The premise at its head is an arrangement and is not witnessed.</p>
      */
     @Test
     public void hotAirWithNothingToBreatheIsBothHazardsAtOnce() throws Exception {
@@ -127,6 +140,20 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * <p>The unspent capacitor is half the clause. A refusal raised below the commit line costs the
      * pilot nothing, and the whole reason this check lives at the gate rather than at the burst is
      * that a paid refusal is the failure the jump sequence is built to prevent.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MUST NOT FIRE — {@code JumpGate:368}
+     * raising the refusal 10000 K: "a drive whose coolant is past the threshold must not fire: …
+     * \"allowed\":true". WHICH REFUSAL — {@code JumpGate:369} raising the no-drive message instead:
+     * "and the pilot must be told which of the refusals this is: … \"message\":\"msg.jumpgate.nodrive\"".
+     * NOT WOUND UP — {@code JumpTrigger:121} ignoring the verdict: "a refused jump must not wind the
+     * drive up: {\"ok\":true,\"spooling\":true}". COSTS NOTHING — {@code JumpTrigger:122} firing the
+     * burst before refusing: "and must cost the pilot nothing … \"charge\":720000". REMEMBERS NOTHING
+     * — {@code JumpTrigger:122} clearing the aim on a refusal: "cooling the ship is the whole of the
+     * fix - the gate is read-only and remembers nothing: … \"allowed\":false". Not witnessed: READS
+     * THE LOOP — the gate raises the overheated message only when the same {@code
+     * driveCoolantKelvin} this reads is past the threshold, so it follows from WHICH REFUSAL. The
+     * premises at its head and the two after the cook and the cool are arrangements and are not
+     * witnessed.</p>
      */
     @Test
     public void anOverheatedDriveRefusesToFireAndTheRefusalIsFree() throws Exception {
@@ -181,6 +208,11 @@ public class HeatFailureLadderTest extends AbstractSharedServerTest {
      * <p>Zero is the answer for "nobody is watching this", and it must not read as "cold enough" by
      * accident nor as "too hot" by defaulting the safe way: a ship built before anyone laid a pipe
      * has to keep flying.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING TO READ — {@code
+     * ShipDrive:200} starting the reading at ambient: "with nothing bolted to the drive there is
+     * nothing to read: … \"driveCoolantMilliK\":293000". ALLOWED — {@code JumpGate:368} refusing an
+     * unmeasured drive: "and an unmeasured drive must still be allowed to jump: … \"allowed\":false".</p>
      */
     @Test
     public void aDriveWithNoCoolantAgainstItIsNotMeasuredAndNotRefused() throws Exception {

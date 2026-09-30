@@ -62,6 +62,17 @@ public class PacketSerializationTest {
         field.set(target, value);
     }
 
+    /**
+     * <p>red-witnessed: one inversion per verdict on the readout, 2026-09-30. PRESSURE -
+     * {@code PacketAtmSync:46} writing half the pressure: "expected:&lt;850&gt; but was:&lt;425&gt;".
+     * BREATHABLE - {@code PacketAtmSync:71} reading the flag negated: "expected:&lt;false&gt; but
+     * was:&lt;true&gt;". WARNING - {@code PacketAtmSync:72} reading the warning under another key:
+     * "expected:&lt;[msg.noOxygen]&gt; but was:&lt;[]&gt;". STATEMENTS IN ORDER -
+     * {@code PacketAtmSync:69} prepending each statement instead of appending it: "the statements must
+     * survive in order ... expected:&lt;[NOT_BREATHABLE, TOXIC]&gt; but was:&lt;[TOXIC,
+     * NOT_BREATHABLE]&gt;". The readable-bytes check was not part of this change and is not
+     * witnessed here.</p>
+     */
     @Test
     public void packetAtmSyncRoundTrip() {
         // A readout, not a model: a pressure, whether it can be breathed, a warning to show, and the
@@ -275,6 +286,10 @@ public class PacketSerializationTest {
         }
     }
 
+    /**
+     * <p>red-witnessed: with {@code PacketAtmSync:65} preceded by clearing the summary before the tag
+     * is read: "expected same:&lt;...AtmosphereSummary@...&gt; was not:&lt;null&gt;", 2026-09-30.</p>
+     */
     @Test
     public void packetAtmSyncReadClientEmptyBufferLeavesDefaults() {
         ByteBuf empty = newBuffer();
@@ -288,6 +303,10 @@ public class PacketSerializationTest {
                 PacketSerializationTest.field(packet, "summary"));
     }
 
+    /**
+     * <p>red-witnessed: with {@code PacketAtmSync:65} preceded by clearing the summary before the tag
+     * is read: "expected same:&lt;...AtmosphereSummary@...&gt; was not:&lt;null&gt;", 2026-09-30.</p>
+     */
     @Test
     public void packetAtmSyncReadClientGarbageBytesLeavesDefaults() {
         // Random bytes that don't form a valid NBT compound. Either the

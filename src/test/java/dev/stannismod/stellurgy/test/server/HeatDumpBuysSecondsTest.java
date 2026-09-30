@@ -101,6 +101,11 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
      * <p>This asserts the CURRENT violation. Rebalancing the defaults so a dump sheds less than one
      * cell turns it red on purpose — at which point the assertion flips to {@code dump < cell} and
      * the known-bug note goes.</p>
+     *
+     * <p>red-witnessed: with the shipped default at {@code StellurgyConfiguration:749} lowered from
+     * 40000 to 4000, below one cell's 6000: "KNOWN BUG: at the shipped defaults a dump's sustained
+     * throughput is at or above what the cheapest radiator (one cell) sheds … dump=4000 cell=6000",
+     * 2026-09-30. The cell premise is an arrangement and is not witnessed.</p>
      */
     @Test
     public void atTheShippedDefaultsOneDumpOutshedsOneRadiatingCell() throws Exception {
@@ -115,6 +120,16 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
                 dump >= cell);
     }
 
+    /**
+     * red-witnessed: one inversion per verdict, 2026-09-30. INTO THE SLUG — {@code TileHeatDump:92}
+     * asking for heat only at ten times the trigger: "the dump must have taken heat off the loop and
+     * put it in the slug: … \"charge\":0 … \"hasStack\":true". POORER — {@code HeatNetwork:578}
+     * charging the slug without counting it as drained: "and the loop must be poorer by what left
+     * it: … \"heatStored\":36420 … \"sunk\":0". The second verdict reads the {@code sunk} figure,
+     * not the loop's energy: with {@code HeatNetwork:281} alone removed, so that the slug is charged
+     * and reported sunk while the loop keeps every unit, it stays green. The two premises at its head
+     * are arrangements and are not witnessed.
+     */
     @Test
     public void aLoopPastTheTriggerLosesHeatIntoTheSlugAndThrowsItOut() throws Exception {
         int cx = stand("a coolant loop with a loaded dump, about to be driven past its trigger");
@@ -137,6 +152,14 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
                 cooked.longInteger("sunk") > 0);
     }
 
+    /**
+     * red-witnessed: one inversion per verdict, 2026-09-30. NOTHING AT ALL — {@code TileHeatDump:92}
+     * dropping the trigger temperature: "below the trigger the dump must do nothing at all … expected:&lt;0&gt;
+     * but was:&lt;6000&gt;". STILL HOLDING — {@code TileHeatDump:93} firing the slug whenever it is
+     * below the trigger: "and it must still be holding the slug it was given: … \"hasStack\":false".
+     * LOSES NOTHING — {@code HeatNetwork:580} draining one unit into a dump that took none: "and the
+     * loop must lose nothing to it: … expected:&lt;0&gt; but was:&lt;1&gt;".
+     */
     @Test
     public void aShipThatIsCopingThrowsNothingAway() throws Exception {
         int cx = stand("a coolant loop with a loaded dump, kept below its trigger");

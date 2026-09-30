@@ -56,6 +56,20 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * in whatever order the solver reaches it, so a test that compared one loop's tick against the
      * other's would be measuring the visit order as much as the physics. The hot loop's own arrival
      * figure is asserted too, as an independent witness that the energy really landed.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OWN THERMAL MASS — {@code
+     * HeatNetwork:245} leaving a bolted chiller out of the loop's capacity: "a chiller bolted onto the
+     * hot loop must add its own thermal mass to it … (cold=60 hot=60)". HOLDING — {@code
+     * HeatNetwork:452} depositing nothing in the hot loop: "the hot loop must be HOLDING the energy
+     * that was handed to it (delivered=6240): … \"heatStored\":0". Not witnessed: ONLY TO THE HOT SIDE
+     * — the chiller's mass leaking onto the cold loop ({@code HeatNetwork:343} and {@code :352} both
+     * opened) reds OWN THERMAL MASS first, "(cold=260 hot=260)", because the two runs are equal and a
+     * leak makes them tie; only a change to the pipe's own capacity reaches this one. THE CLAUSE —
+     * it compares the {@code delivered} figure, which is counted apart from what is deposited: with
+     * {@code HeatNetwork:452} depositing a tenth of heat plus work, the whole method stays green.
+     * ABOVE AMBIENT — follows from HOLDING, since a loop's temperature is ambient plus stored over
+     * capacity. The four premises at its head and the two after the cycle are arrangements and are
+     * not witnessed.</p>
      */
     @Test
     public void theHotLoopReceivesTheHeatPlusTheWork() throws Exception {
@@ -115,6 +129,18 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * Nobody sets the hot loop's temperature: it is what its own capacity makes of the energy it has
      * been given. So a chiller run for a while must leave the hot loop measurably hotter than the cold
      * one — which is the whole reason the tier exists, since rejection is quartic in temperature.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SHIFTS NOTHING — {@code
+     * TileHeatChiller:92} and {@code :104} both answering as if powered: "an unpowered chiller shifts
+     * nothing: … expected:&lt;0&gt; but was:&lt;6000&gt;". WITH POWER — {@code TileHeatChiller:94}
+     * offering no throughput: "the same chiller with power must shift heat, or the zeros above
+     * measured nothing: … \"pumpedOut\":0". HOTTER THAN AMBIENT — {@code HeatNetwork:452} depositing
+     * nothing in the hot loop: "the hot loop must be hotter than it was left at ambient (293000 →
+     * 293000)". Not witnessed: PAYS NOTHING — the pump moves heat exactly when it is paid, so any
+     * fault that pays reds SHIFTS NOTHING first. HOTTER THAN THE COLD LOOP — one tick of chiller
+     * throughput is the whole 100 K charge, so the cold loop reads ambient after the cycle and this
+     * follows from HOTTER THAN AMBIENT: with {@code HeatNetwork:452} depositing a tenth, it stays
+     * green. The premise at its head is an arrangement and is not witnessed.</p>
      */
     @Test
     public void theHotLoopIsHotterBecauseEnergyAccumulatesInIt() throws Exception {

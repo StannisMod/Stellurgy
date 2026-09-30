@@ -471,6 +471,13 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * rather than as a chain link because the gate's recorder is edge-only — a decision that repeats
      * is not recorded — and only the flip itself is guaranteed to be an edge: the tank starts with
      * oxygen, so the run of {@code true}s before it is what makes the {@code false} a change.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. DAMAGE — {@code HazardExposure:145}
+     * no longer applying a row's damage: "vacuum damage must apply once the tank is drained … no
+     * `living_hurt` carrying source = Vacuum". REFUSAL RECORDED — {@code Atmosphere:137} applying
+     * the exposure even to a player the suit protects: "the suit gate must be recorded turning the
+     * player DOWN — that flip is the contract …". Not witnessed: the drain link, the client's health
+     * and the emptied tank.</p>
      */
     @Test
     public void drainedChestTankTransitionsToVacuumDamage() throws Exception {
@@ -751,6 +758,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * reaches {@code attackEntityFrom} when the suit gate has turned the player down, so a
      * {@code living_hurt} from {@code Vacuum} proves the atmosphere tick ran on THIS player, and the
      * empty drain log then says the missing chest never entered a decrement path.</p>
+     *
+     * <p>red-witnessed: with {@code HazardExposure:145} no longer applying a row's damage: "vacuum
+     * damage must apply to a bare-skinned player — no `living_hurt`", 2026-09-30. Only that link is
+     * witnessed; the empty drain log, the client's health and the chest reading are not.</p>
      */
     @Test
     public void unsuitedPlayerInVacuumLosesNoAirAndTakesDamage() throws Exception {
@@ -803,6 +814,10 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * <p>Kept alongside {@link #unsuitedPlayerInVacuumLosesNoAirAndTakesDamage()}, which asserts the
      * same damage plus the no-chest decrement contract: this one is the narrower, older pin and the
      * one the suit tests cross-check themselves against.</p>
+     *
+     * <p>red-witnessed: with {@code HazardExposure:145} no longer applying a row's damage: "the
+     * vacuum must damage the player at all before the client can be shown it — no `living_hurt`",
+     * 2026-09-30. The client-health link after it is not witnessed.</p>
      */
     @Test
     public void vacuumDamageReachesTheClient() throws Exception {
@@ -1059,6 +1074,15 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * player stands in the very same sealed room at cabin temperature, in survival, with
      * regeneration off, and must come out of it untouched. Without it, "his health fell" is also
      * what suffocating in a badly built box looks like.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CONTROL — {@code PressurizedAir}
+     * made a ticking, unbreathable atmosphere ({@code Atmosphere:41}) that raises the heat row
+     * ({@code AtmosphereHazards:139}): "control leg: the room itself must not hurt him while it is at
+     * cabin temperature … start=20.0 after=16.0". HURTS — {@code AtmosphereHazards:139} dropping the
+     * heat row: "a compartment past the crew threshold must hurt the person in it … no
+     * `client_health_updated` below 20.0". Removing only the row's damage ({@code HazardExposure:145})
+     * is not enough to turn this red: the heat row also sets him alight, and the fire alone hurts
+     * him. The rung and cabin premises are arrangements and are not witnessed.</p>
      */
     @Test
     public void overheatedZoneAirHurtsAnUnsuitedCrewman() throws Exception {
@@ -1142,6 +1166,13 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * <p>This is the half of the suit-fallback contract that is NOT a breach. A breach is already
      * covered by this class's vacuum scenarios; this is the other failure the life-support design
      * names — regeneration not keeping up, leaving a room still full of gas and still lethal.</p>
+     *
+     * <p>red-witnessed: with {@code HazardExposure:145} no longer applying a row's damage: "a
+     * pressurised room below the breathable oxygen floor must hurt an unsuited player, and the CLIENT
+     * must be told it (he started at 20.0) — no `client_health_updated` below 20.0", 2026-09-30. The
+     * closing
+     * {@code healthAfter < healthStart} is not witnessed: it compares the health that wait returned,
+     * which is below the start unless he healed inside the same window with regeneration off.</p>
      */
     @Test
     public void staleZoneAirHurtsAnUnsuitedPlayer() throws Exception {
@@ -1184,6 +1215,16 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * health alone is what a room that never went stale looks like (which is what the control above
      * rules out), and a falling air buffer alone is what a suit draining without protecting anybody
      * looks like.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. DRAIN — {@code AtmosphereHazards:135}
+     * dropping the low-oxygen row: "the stale air must reach the suit's buffer … no
+     * `suit_air_drained` carrying route = enchanted". NO REFUSAL — {@code ItemAirUtils:177} spending
+     * the air and then refusing protection anyway: "the suit must protect its wearer from stale zone
+     * air; decisions since the window opened: …". NO HEALTH — {@code Atmosphere:137} applying the
+     * exposure even to a protected player: "and no health may have been spent on it;
+     * healthStart=20.0 healthAfter=19.0". PAYS — {@code ItemAirUtils:77} reporting the air spent
+     * without writing it: "and it must PAY for that protection … before=1000 after=1000". Not
+     * witnessed: the client's rendering of the drained suit, and the full-suit premise.</p>
      */
     @Test
     public void staleZoneAirDrainsTheSuitAndNotTheCrew() throws Exception {

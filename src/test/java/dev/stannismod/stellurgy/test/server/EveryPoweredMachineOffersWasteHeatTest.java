@@ -32,23 +32,45 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
  */
 public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServerTest {
 
-    /** A recipe machine — the branch of the hierarchy under {@code TileWasteHeatMachine}. */
+    /**
+     * A recipe machine — the branch of the hierarchy under {@code TileWasteHeatMachine}.
+     *
+     * <p>red-witnessed: with {@code TileWasteHeatMachine:41} no longer answering the heat
+     * capability: "stellurgy:electrolyser must offer a coolant loop its waste heat … \"present\":false",
+     * 2026-09-30. The tile premise is an arrangement and is not witnessed.</p>
+     */
     @Test
     public void anElectrolyserOffersItsWasteHeat() throws Exception {
         assertOffersWasteHeat("stellurgy:electrolyser");
     }
 
+    /**
+     * red-witnessed: with {@code TileWasteHeatMachine:41} no longer answering the heat capability:
+     * "stellurgy:arcfurnace must offer a coolant loop its waste heat … \"present\":false", 2026-09-30.
+     * The tile premise is an arrangement and is not witnessed.
+     */
     @Test
     public void anArcFurnaceOffersItsWasteHeat() throws Exception {
         assertOffersWasteHeat("stellurgy:arcfurnace");
     }
 
-    /** A plain power consumer — the other branch, under {@code TileWasteHeatPowerConsumer}. */
+    /**
+     * A plain power consumer — the other branch, under {@code TileWasteHeatPowerConsumer}.
+     *
+     * <p>red-witnessed: with {@code TileWasteHeatPowerConsumer:45} no longer answering the heat
+     * capability: "stellurgy:observatory must offer a coolant loop its waste heat …
+     * \"present\":false", 2026-09-30. The tile premise is an arrangement and is not witnessed.</p>
+     */
     @Test
     public void anObservatoryOffersItsWasteHeat() throws Exception {
         assertOffersWasteHeat("stellurgy:observatory");
     }
 
+    /**
+     * red-witnessed: with {@code TileWasteHeatPowerConsumer:45} no longer answering the heat
+     * capability: "stellurgy:railgun must offer a coolant loop its waste heat … \"present\":false",
+     * 2026-09-30. The tile premise is an arrangement and is not witnessed.
+     */
     @Test
     public void aRailgunOffersItsWasteHeat() throws Exception {
         assertOffersWasteHeat("stellurgy:railgun");
@@ -58,6 +80,10 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
      * The machine that was already the subject of the loop-warming scenario, asserted here beside the
      * others so that all three cases — both bases and the hand-written one — answer to one rule
      * rather than to one rule and one habit.
+     *
+     * <p>red-witnessed: with {@code TileLifeSupportPlant:164} no longer answering the heat
+     * capability: "stellurgy:lifeSupportPlant must offer a coolant loop its waste heat …
+     * \"present\":false", 2026-09-30. The tile premise is an arrangement and is not witnessed.</p>
      */
     @Test
     public void theLifeSupportPlantOffersItsWasteHeatToo() throws Exception {
@@ -90,6 +116,10 @@ public class EveryPoweredMachineOffersWasteHeatTest extends AbstractSharedServer
      * <p>It has to HAVE a tile, or production is never asked: for an empty position the probe answers
      * {@code present:false} from its own no-tile branch without consulting the capability at all. A
      * chest is a tile entity that does no work, so its {@code false} is the capability's answer.</p>
+     *
+     * <p>red-witnessed: with {@code CapabilityHeatEmitter:35} handing a default emitter to a tile
+     * that offers none: "a chest does no work and so has no waste heat to offer: … \"present\":true",
+     * 2026-09-30. The tile premise is an arrangement and is not witnessed.</p>
      */
     @Test
     public void aTileThatIsNotAMachineOffersNothing() throws Exception {
