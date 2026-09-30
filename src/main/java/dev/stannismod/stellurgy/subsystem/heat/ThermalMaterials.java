@@ -14,6 +14,8 @@ import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.oredict.OreDictionary;
+import org.apache.logging.log4j.LogManager;
+import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 
 import java.io.File;
@@ -362,7 +364,30 @@ public enum ThermalMaterials {
                     parsed.put(entry.getKey().toLowerCase(Locale.ROOT), material);
                 }
             }
-            materials = parsed.isEmpty() ? defaults() : parsed;
+            if (parsed.isEmpty()) {
+                materials = defaults();
+                return;
+            }
+            // A row the player wrote wins; a row the file has never heard of comes from the shipped
+            // table. Without this merge a file written by an older version shadows every material
+            // added since, and a wooden hull reads as a substance nobody knows - with nothing to say
+            // so, because the table it did load looks healthy.
+            List<String> added = new ArrayList<>();
+            for (Map.Entry<String, ThermalMaterial> shipped : defaults().entrySet()) {
+                if (!parsed.containsKey(shipped.getKey())) {
+                    parsed.put(shipped.getKey(), shipped.getValue());
+                    added.add(shipped.getKey());
+                }
+            }
+            materials = parsed;
+            if (!added.isEmpty()) {
+                // Looked up here rather than held in a field: an enum's static fields are initialised
+                // after its constants, so a field would still be null while INSTANCE's constructor runs.
+                LogManager.getLogger(Constants.modId).info(
+                        "{} predates the shipped materials {}; added them with their shipped values",
+                        file, added);
+                save();
+            }
         } catch (Exception e) {
             e.printStackTrace();
             materials = defaults();
