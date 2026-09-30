@@ -70,6 +70,14 @@ public class AstronomicalBodyHelper {
      */
     public static final int DISTANCE_UNITS_PER_AU =
             (int) Math.round(METRES_PER_AU / METRES_PER_DISTANCE_UNIT);
+
+    /**
+     * The widest orbital distance the field can HOLD, in distance units: an orbital distance is an
+     * {@code int}, so at 100 km a unit this is about 1 436 AU. A bound on what can be represented,
+     * not on what is reasonable — a derivation that asks for more is cut here, and says it is cut by
+     * using this name rather than a bare {@code Integer.MAX_VALUE}.
+     */
+    public static final int MAX_REPRESENTABLE_ORBIT_UNITS = Integer.MAX_VALUE;
     /** Metres in one Julian light year. */
     public static final double METRES_PER_LIGHT_YEAR = 9.460_730_472_580_8e15d;
     /**

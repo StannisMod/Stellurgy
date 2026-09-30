@@ -21,15 +21,16 @@ public class StellarBody {
     private static final double MAIN_SEQUENCE_MASS_EXPONENT = 1.25d;
 
     /**
-     * How far a companion orbits its primary when nothing has said — in the same distance units a
-     * planet's orbit is in (100 = 1 AU), so this is 0.05 AU: a close pair, the kind that reads as two
-     * suns in one sky rather than as a second star elsewhere in the system.
+     * How far a companion orbits its primary when nothing has said, in the distance units a planet's
+     * orbit is in — written as 0.05 AU: a close pair, the kind that reads as two suns in one sky rather
+     * than as a second star elsewhere in the system.
      *
      * <p>The field this replaces was an ANGLE with the same default of 5, applied to the sky as a
      * tilt. An angle cannot say where a companion is — only how far off the primary it looks from one
      * particular world — so nothing could place it, light a planet by it, or let it move.</p>
      */
-    public static final int DEFAULT_COMPANION_ORBIT = 5;
+    public static final int DEFAULT_COMPANION_ORBIT = (int) Math.round(
+            0.05d * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
 
     /**
      * Solar-map units per AU — the multiplier {@code DimensionProperties.getSpacePosition} lays a
@@ -52,7 +53,7 @@ public class StellarBody {
     private float mass = MASS_UNSET;
     String name;
     short posX, posZ;
-    /** This star's orbit about its primary, in distance units (100 = 1 AU). Zero for a primary. */
+    /** This star's orbit about its primary, in distance units (a planet's; see AstronomicalBodyHelper). */
     private int orbitalDistance;
     /** Its angle on that orbit at tick zero, in radians; {@link #THETA_UNSTATED} until bound. */
     private double baseTheta = THETA_UNSTATED;
@@ -134,8 +135,8 @@ public class StellarBody {
     }
 
     /**
-     * How far this star orbits its primary, in distance units (100 = 1 AU) — the same field a planet
-     * carries, meaning the same thing. Zero, and meaningless, for a star that is nobody's companion.
+     * How far this star orbits its primary, in distance units — the same field a planet carries,
+     * meaning the same thing ({@code AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} to the AU). Zero, and meaningless, for a star that is nobody's companion.
      */
     public int getOrbitalDistance() {
         return orbitalDistance;
@@ -167,7 +168,8 @@ public class StellarBody {
             return new double[] {0d, 0d};
         }
         double[] parent = parentStar.offsetFromSystemAu();
-        double a = orbitalDistance / 100d; // 100 distance units to the AU
+        double a = orbitalDistance
+                / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         double theta = getBaseTheta();
         return new double[] {parent[0] + a * Math.cos(theta), parent[1] + a * Math.sin(theta)};
     }

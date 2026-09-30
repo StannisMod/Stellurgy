@@ -185,12 +185,13 @@ public class AstronomicalBodyHelperTest {
      * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.fluxOf:498` dividing by the distance
      * to the power -2 instead of 2, this fails with "a distant one adds only a little".
      *
-     * <p><b>The fixture's distances are in the WRONG unit, and the test passes because of it.</b>
-     * {@code 5} and {@code 2_000} are hundredths of an AU. That is the unit
-     * {@code StellarBody.offsetFromSystemAu} still divides by ({@code / 100d}), while the generator
-     * places a companion — and every other reader of a distance — in units of 100 km. So this test
-     * agrees with the stale reader and pins the disagreement as it stands: in today's unit "20 AU" is
-     * 200 000 km. Converting the fixture turns this red, and the fix it asks for is in production.</p>
+     * <p>The fixture's distances are written as the quantities they are, through
+     * {@code DISTANCE_UNITS_PER_AU}. Until 2026-09-30 they were the bare {@code 5} and {@code 2_000} —
+     * hundredths of an AU, the unit {@code StellarBody.offsetFromSystemAu} also still divided by, so
+     * fixture and reader agreed and the test pinned a reader 14 960× wrong.</p>
+     *
+     * <p>red-witnessed: with {@code StellarBody.offsetFromSystemAu} back on {@code / 100d}: "a close
+     * companion nearly doubles the light", 2026-09-30.</p>
      */
     @Test
     public void aCompanionsContributionFallsOffWithItsOwnDistance() {
@@ -201,12 +202,13 @@ public class AstronomicalBodyHelperTest {
 
         StellarBody close = sunLikeStar();
         StellarBody nearby = sunLikeStar();
-        nearby.setOrbitalDistance(5); // 0.05 AU
+        nearby.setOrbitalDistance((int) Math.round(0.05d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU));
         close.addSubStar(nearby);
 
         StellarBody wide = sunLikeStar();
         StellarBody distant = sunLikeStar();
-        distant.setOrbitalDistance(2_000); // 20 AU, an Alpha-Centauri-like pair
+        // 20 AU, an Alpha-Centauri-like pair
+        distant.setOrbitalDistance(20 * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
         wide.addSubStar(distant);
 
         double closeBrightness = AstronomicalBodyHelper.getStellarBrightness(close, AU);

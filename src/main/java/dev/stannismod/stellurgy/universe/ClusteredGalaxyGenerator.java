@@ -84,8 +84,11 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
     private static final int ID_SLOTS_PER_SYSTEM = 1 + COMPANION_COUNT_WEIGHTS.length;
 
     /**
-     * Separation band for a companion, in orbital-distance units — 0.01 AU to 2 000 AU, drawn
-     * log-uniformly, which is roughly how real separations are distributed over that range.
+     * Separation band for a companion, in orbital-distance units — one cell's orbit (about 0.05 AU)
+     * to 2 000 AU, drawn log-uniformly, which is roughly how real separations are distributed over
+     * that range. The ceiling is written as the quantity it is; an orbital distance cannot hold more
+     * than {@link AstronomicalBodyHelper#MAX_REPRESENTABLE_ORBIT_UNITS} (about 1 436 AU at 100 km a
+     * unit), so the widest pairs are cut there.
      *
      * <p>The floor IS one cell's worth of orbit ({@link AstronomicalBodyHelper#MIN_ADDRESSABLE_ORBIT_UNITS}),
      * so a companion always gets a cell of its own to be addressed by — derived rather than written
@@ -97,7 +100,9 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      */
     private static final int COMPANION_MIN_SEPARATION =
             AstronomicalBodyHelper.MIN_ADDRESSABLE_ORBIT_UNITS;
-    private static final int COMPANION_MAX_SEPARATION = 200_000;
+    private static final int COMPANION_MAX_SEPARATION = (int) Math.min(
+            AstronomicalBodyHelper.MAX_REPRESENTABLE_ORBIT_UNITS,
+            Math.round(2_000d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU));
     /**
      * A retinue cannot survive inside a companion's orbit, nor a companion inside the retinue's: a
      * body between roughly a third of the separation and three times it is on an unstable orbit. So a
