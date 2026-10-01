@@ -1020,6 +1020,37 @@ public final class VSIntegration {
         return VSBridge.getShipAttitude(world, pos);
     }
 
+    /** The attitude the ship managing {@code pos} had at the previous game tick, or {@code null}. */
+    public static FreeFlightPhysics.Quat getShipPrevAttitude(World world, BlockPos pos) {
+        return quat(VSBridge.shipPrevAttitude(world, pos));
+    }
+
+    /**
+     * The attitude of the ship managing {@code pos} at {@code partialTicks} between its previous and
+     * current game tick, or {@code null} if no ship manages it. What a camera locked to the ship
+     * draws: the raw attitude steps at 20 Hz, and a station-keeping ship's hunting then shows as
+     * jitter at any frame rate.
+     */
+    public static FreeFlightPhysics.Quat getShipAttitude(World world, BlockPos pos, float partialTicks) {
+        FreeFlightPhysics.Quat cur = VSBridge.getShipAttitude(world, pos);
+        FreeFlightPhysics.Quat prev = getShipPrevAttitude(world, pos);
+        return cur == null || prev == null ? null : FreeFlightPhysics.slerp(prev, cur, partialTicks);
+    }
+
+    /** {@link #getShipAttitude(World, BlockPos, float)} for the ship {@code shipId}. */
+    public static FreeFlightPhysics.Quat shipAttitudeForId(World world, String shipId, float partialTicks) {
+        if (shipId == null) {
+            return null;
+        }
+        FreeFlightPhysics.Quat cur = shipAttitudeForId(world, shipId);
+        FreeFlightPhysics.Quat prev = quat(VSBridge.shipPrevAttitudeForId(world, shipId));
+        return cur == null || prev == null ? null : FreeFlightPhysics.slerp(prev, cur, partialTicks);
+    }
+
+    private static FreeFlightPhysics.Quat quat(double[] q) {
+        return q == null ? null : new FreeFlightPhysics.Quat(q[0], q[1], q[2], q[3]);
+    }
+
     /**
      * Move a point or a direction between the world frame and the frame of the ship {@code entity}
      * is aboard. In the ship's own frame the deck is axis-aligned and "down" is plain {@code -Y}, so

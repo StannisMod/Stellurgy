@@ -46,7 +46,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
     private static final String POOL_DIMS = "dims";
     /** The slot the settle actually bound the cell to — the one place that decides it. */
     private static final String BOUND_DIM = "slotDim";
-    private static final String CLOCK = "dev.stannismod.stellurgy.space.SpaceClockSync";
+    private static final String SERVER_VIEW = "dev.stannismod.stellurgy.client.ServerView";
 
     /** How far the server's clock is jumped. Far past anything a sync period could account for. */
     private static final long JUMP_TICKS = 1_000_000L;
@@ -300,7 +300,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
 
     /**
      * From {@code SystemBodiesClientSyncE2ETest}. A REAL separate-JVM client receives the server's
-     * per-slot system-body broadcast and stores it in {@code PacketSystemBodiesSync.CLIENT_BODIES} —
+     * per-slot system-body broadcast and stores it in its {@code ServerView} —
      * the client half of the {@code SystemBodiesProducer} render feed (the data {@code BoundarySky}
      * draws). The billboard APPEARANCE is {@code BoundarySkyRendersInSlotCellE2ETest}'s.
      *
@@ -391,7 +391,7 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
             // the store wholesale.
             String stored = Events.lastRecord(clientLog.since(insideMark, "system_bodies_received"));
             String value = stored == null ? "" : Events.text(stored, "stored");
-            assertTrue("client CLIENT_BODIES must carry the slot dim's bodies, got: " + value
+            assertTrue("the client's sky store must carry the slot dim's bodies, got: " + value
                             + " (the arrival itself was recorded: " + received + ")",
                     value.contains(slotDim + "=[") && value.contains("RenderBody{"));
             assertTrue("descend-target flag survived to the client: " + value,
@@ -493,12 +493,12 @@ public class SpaceSubsystemClientSyncGroupE2ETest extends AbstractSharedClientE2
     }
 
     private long clientClock() throws Exception {
-        JsonObject answer = bot().invokeStaticInt(CLOCK, "now");
-        return Long.parseLong(answer.get("returned").getAsString().trim());
+        JsonObject answer = bot().invokeStaticChain(SERVER_VIEW, "current,clock,now");
+        return Long.parseLong(answer.get("result").getAsString().trim());
     }
 
     private String clientHasSync() throws Exception {
-        return bot().invokeStaticInt(CLOCK, "hasSync").get("returned").getAsString().trim();
+        return bot().invokeStaticChain(SERVER_VIEW, "current,clock,hasSync").get("result").getAsString().trim();
     }
 
     private long serverClock() throws Exception {

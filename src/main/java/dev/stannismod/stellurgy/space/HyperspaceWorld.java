@@ -134,25 +134,15 @@ public final class HyperspaceWorld {
     }
 
     /**
-     * The hyperspace dim id as the connected server reports it. The client's ONLY source, with no
-     * fallback to a local registration: an id this JVM minted for a world of its own says nothing
-     * about the server on the other end of the connection, and a wrong id here draws the transit
-     * corridor over an ordinary cell (or leaves a jump with a static sky) rather than failing loudly.
-     *
-     * <p>Kept in its own field rather than written into {@link #dimId} so a client that later hosts
-     * a world of its own does not start out believing another server's id is registered here — it is
-     * not, and {@link #register()} would then skip the registration entirely.</p>
-     */
-    private static int adoptedDimId = Integer.MIN_VALUE;
-
-    /**
      * Is {@code world} hyperspace?
      *
      * <p>Asked as one question rather than handed out as an id, because the id alone is not an
      * answer: which dimension hyperspace is depends on the SIDE, and the side is a property of the
      * world, not something a call site should be trusted to know about itself — a tile entity, a
      * world provider and a sky renderer all run on both. A server compares against the registration
-     * it made; a client against what its server reported, and against nothing else.</p>
+     * it made; a client against what its server reported, and against nothing else — never against an
+     * id this JVM minted for a world of its own, which says nothing about the server on the other end
+     * of the connection.</p>
      *
      * <p>False whenever this side does not know yet: an unsynced client says "not here" everywhere
      * rather than picking a dimension at random. {@code null} is not hyperspace either.</p>
@@ -161,24 +151,8 @@ public final class HyperspaceWorld {
         if (world == null) {
             return false;
         }
-        int hyper = world.isRemote ? adoptedDimId : dimId;
+        int hyper = world.isRemote ? dev.stannismod.stellurgy.Stellurgy.proxy.clientHyperspaceDimId() : dimId;
         return hyper != Integer.MIN_VALUE && world.provider.getDimension() == hyper;
-    }
-
-    /** Learn the server's hyperspace dim id. {@link Integer#MIN_VALUE} means "none yet" — ignored. */
-    public static void adoptFromServer(int id) {
-        if (id != Integer.MIN_VALUE) {
-            adoptedDimId = id;
-        }
-    }
-
-    /**
-     * Forget the connected server's hyperspace id. Called when the client disconnects: the next
-     * server's id has nothing to do with this one, and a value kept across the gap would let the
-     * client answer confidently about a world it has left.
-     */
-    public static void forgetServerId() {
-        adoptedDimId = Integer.MIN_VALUE;
     }
 
     /**

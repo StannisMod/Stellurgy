@@ -176,6 +176,15 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
      */
     public volatile FreeFlightInput pilotInput = null;
 
+    /** What this client's pilot is commanding this ship; written only on the client. */
+    private final dev.stannismod.stellurgy.client.PilotCommand pilotCommand =
+            new dev.stannismod.stellurgy.client.PilotCommand();
+
+    /** What this client's pilot is commanding this ship. */
+    public dev.stannismod.stellurgy.client.PilotCommand pilotCommand() {
+        return pilotCommand;
+    }
+
     /**
      * The pilot's commanded world-frame velocity (blocks/s) that the force controller realizes,
      * or {@code null} when this computer commands nothing. Written by {@link #update()} from the

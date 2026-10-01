@@ -29,7 +29,7 @@ import static org.junit.Assert.assertTrue;
  * The sky a pilot actually SEES inside a space slot cell, measured in PIXELS off a real client.
  *
  * <p>Everything upstream of rasterization already had coverage: the server producer, the broadcast, and
- * the client store {@code PacketSystemBodiesSync.CLIENT_BODIES}. None of it could tell a pilot staring at
+ * the client store in {@code ServerView}. None of it could tell a pilot staring at
  * an empty sky which half was empty, because a primitive that is emitted and then discarded by the
  * rasterizer is indistinguishable from one that was never emitted. So this test looks at the frame.</p>
  *

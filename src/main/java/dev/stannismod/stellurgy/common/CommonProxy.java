@@ -33,10 +33,12 @@ public class CommonProxy {
     }
 
 
+    /** A scrolling list for a machine GUI; {@code memory} is where the machine keeps its position. */
     public ModuleBase createScrollListPan(
             int baseX, int baseY,
             List<ModuleBase> list,
-            int sizeX, int sizeY
+            int sizeX, int sizeY,
+            dev.stannismod.stellurgy.inventory.modules.ScrollMemory memory
     ) {
         return new ModuleContainerPanYOnly(
                 baseX, baseY,
@@ -46,20 +48,6 @@ public class CommonProxy {
                 0, -48,
                 0, 72
         );
-    }
-
-    /** Generic clear for any UI scroll cache (no-op on server) */
-    public void clearScrollCache() {
-        // no-op on server/common
-    }
-
-    // Keep existing Observatory API working (optional wrappers)
-    public ModuleBase createObservatoryAsteroidListPan(int baseX, int baseY, List<ModuleBase> list2, int sizeX, int sizeY) {
-        return createScrollListPan(baseX, baseY, list2, sizeX, sizeY);
-    }
-
-    public void clearObservatoryScrollCache() {
-        clearScrollCache();
     }
 
     public void spawnParticle(String particle, World world, double x, double y,
@@ -147,12 +135,14 @@ public class CommonProxy {
         return dev.stannismod.stellurgy.Stellurgy.serverDimensions();
     }
 
-    /**
-     * The galaxy kept on a CLIENT connection, open or closing, or {@code null} when it has none. A
-     * dedicated server holds no client connections, so it has none.
-     */
-    public dev.stannismod.stellurgy.dimension.DimensionManager connectionDimensions(net.minecraft.network.NetworkManager manager) {
-        return null;
+    /** The space clock as the connected client has been told it. A dedicated server is no client. */
+    public long clientSpaceClock() {
+        throw new IllegalStateException("a dedicated server has no client copy of the space clock");
+    }
+
+    /** The connected server's hyperspace dimension, as this client was told it. A dedicated server is no client. */
+    public int clientHyperspaceDimId() {
+        throw new IllegalStateException("a dedicated server has no client view of a server");
     }
 
     /** The configuration in force for the caller: a server always runs its own. */

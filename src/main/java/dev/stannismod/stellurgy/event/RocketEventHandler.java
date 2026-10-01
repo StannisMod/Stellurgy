@@ -208,15 +208,16 @@ public class RocketEventHandler extends Gui {
             return;
         }
 
-        // Tier-2 ship: the pilot rides a seat dummy, not a rocket. Lock the camera to the ship
-        // attitude the client sampled this tick (KeyBindings), slerped prev->current by partialTicks
-        // for a smooth per-frame view - the same nose-lock + no-free-look behaviour as the rocket.
-        // Without this the ship view jitters (mouse leaks into free-look between ticks).
+        // Tier-2 ship: the pilot rides a seat dummy, not a rocket. Lock the camera to the ship's
+        // attitude, slerped from its previous to its current tick by partialTicks for a smooth
+        // per-frame view - the same nose-lock + no-free-look behaviour as the rocket. Without this
+        // the ship view jitters (mouse leaks into free-look between ticks).
         TilePilotSeat seat = TilePilotSeat.forRider(ridden, Minecraft.getMinecraft().world);
-        if (seat != null && seat.isLinked()) {
-            dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat cq =
-                    dev.stannismod.stellurgy.api.FreeFlightPhysics.slerp(
-                            KeyBindings.shipPrevQuat(), KeyBindings.shipQuat(), p);
+        dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat cq = seat != null && seat.isLinked()
+                ? dev.stannismod.stellurgy.integration.vs.VSIntegration.getShipAttitude(
+                        Minecraft.getMinecraft().world, seat.getPos(), p)
+                : null;
+        if (cq != null) {
             float[] e = dev.stannismod.stellurgy.api.FreeFlightPhysics.eulerFromQuat(cq);
             event.setYaw(e[0] + 180f);
             event.setPitch(e[1]);
@@ -430,27 +431,21 @@ public class RocketEventHandler extends Gui {
 
             long worldTime = mc.world.getTotalWorldTime();
             HudState hud = hudOf(mc.world);
+            ClientAtmosphere air = ClientAtmosphere.of(mc.world);
 
-            // First frame in this world (a dimension change, a respawn or a new connection each build
-            // one): drop a warning carried in from the last world and hold the next for 40 ticks.
+            // First frame in this world (a dimension change or a new connection each build one): hold
+            // the warning for 40 ticks.
             if (!hud.arrived) {
                 hud.arrived = true;
-                ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
                 hud.suppressWarningUntil = worldTime + 40;
             }
 
-            // In event of world change make sure the warning isn't displayed
-            if (worldTime - ClientAtmosphere.lastSuffocationTime() < 0) {
-                ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
-            }
-
             // Tell the player he's suffocating if needed
-            if (worldTime >= hud.suppressWarningUntil &&
-                    worldTime - ClientAtmosphere.lastSuffocationTime() < numTicksToDisplay) {
+            if (worldTime >= hud.suppressWarningUntil && air.suffocatedWithin(worldTime, numTicksToDisplay)) {
                 FontRenderer fontRenderer = mc.fontRenderer;
                 String str = "";
-                if (ClientAtmosphere.atmosphere() != null) {
-                    str = ClientAtmosphere.atmosphere().getDisplayMessage();
+                if (air.atmosphere() != null) {
+                    str = air.atmosphere().getDisplayMessage();
                 }
 
                 int screenX = event.getResolution().getScaledWidth() / 6 - fontRenderer.getStringWidth(str) / 2;

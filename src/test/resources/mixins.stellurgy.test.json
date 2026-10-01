@@ -94,6 +94,7 @@
     "MixinRocketEventHandlerViewState",
     "MixinShipFrameCameraEvents",
     "MixinDeckLookEvents",
+    "PilotInputAccessor",
     "MixinRocketEventHandlerCameraFrame",
     "MixinEntityRendererEyeProbe",
     "MixinNetHandlerPosLookCount",

@@ -1684,7 +1684,12 @@ public final class ForgeTestClientBootstrap {
                         }
                         response.addProperty("result", String.valueOf(target));
                     } catch (Throwable t) {
-                        return error("invoke_static_chain failed: " + t);
+                        // A method that THREW reaches here wrapped by reflection, and the wrapper's
+                        // text says only that it was wrapped. The test asked what the chain answered,
+                        // and a refusal's answer is the exception the method itself threw.
+                        Throwable thrown = t instanceof java.lang.reflect.InvocationTargetException
+                                && t.getCause() != null ? t.getCause() : t;
+                        return error("invoke_static_chain failed: " + thrown);
                     }
                     return response;
                 });

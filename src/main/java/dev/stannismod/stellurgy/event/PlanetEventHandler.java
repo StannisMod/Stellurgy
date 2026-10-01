@@ -37,7 +37,6 @@ import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.Event.Result;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ServerConnectionFromClientEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -55,6 +54,7 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.dimension.watersourcelocked;
 import dev.stannismod.stellurgy.world.TemplateImporter;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.network.PacketConfigSync;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
@@ -88,10 +88,17 @@ public class PlanetEventHandler {
      * "frozen at N" and "counting from N" were the same reading.</p>
      */
     public static long time = 0;
-    /** The warp-transition flash. OWNER: the CLIENT — {@code runBurst} is client-only and the read
-     *  at the bottom of this file goes through {@code Minecraft}; LIFETIME: one connection, released
-     *  in {@link #disconnected}. NOT released by the server hook below, which is a different owner. */
-    private static long endTime, duration;
+
+    /**
+     * The warp-transition flash a client WORLD is showing. Owned by that world ({@link WorldRuntime})
+     * because its end is a moment on that world's clock: carried to another world it would be compared
+     * against a clock that knows nothing about it.
+     */
+    private static final class WarpFlash {
+        long endTime;
+        long duration;
+    }
+
     /** Entity moves this server owes at a future world time. OWNER: the SERVER; LIFETIME: one
      *  server. Holds live {@code Entity} references, so it is emptied by the release below rather
      *  than carried into the next world. */
@@ -113,16 +120,12 @@ public class PlanetEventHandler {
         transitionMap.clear();
     }
 
-    /**
-     * Starts a burst, used for move to warp effect
-     *
-     * @param endTime
-     * @param duration
-     */
+    /** Flash {@code world}'s fog white for {@code durationTicks} of its clock — the move-to-warp effect. */
     @SideOnly(Side.CLIENT)
-    public static void runBurst(long endTime, long duration) {
-        PlanetEventHandler.endTime = endTime;
-        PlanetEventHandler.duration = duration;
+    public static void runBurst(World world, long durationTicks) {
+        WarpFlash flash = WorldRuntime.of(world, WarpFlash.class, WarpFlash::new);
+        flash.endTime = world.getTotalWorldTime() + durationTicks;
+        flash.duration = durationTicks;
     }
 /*
     public static void modifyChunk(World world, WorldProviderPlanet provider, Chunk chunk) {
@@ -346,26 +349,6 @@ public class PlanetEventHandler {
         }
     }
 
-    @SubscribeEvent
-    public void disconnected(ClientDisconnectionFromServerEvent event) {
-        // The galaxy and the configuration the server sent go with the connection that owns them; what
-        // the galaxy left behind outside itself is the Forge dimension registrations its planets made
-        // on this client. Only a remote
-        // server's: in single player those are the integrated server's, which withdraws its own when
-        // it stops.
-        DimensionManager galaxy = dev.stannismod.stellurgy.Stellurgy.proxy.connectionDimensions(event.getManager());
-        if (galaxy != null && !event.getManager().isLocalChannel()) {
-            galaxy.unregisterAllDimensions();
-        }
-        // Released here, by the owner: the warp flash is this CLIENT's, and its end time is a moment
-        // on the world it was started in. Carried across the gap it is compared against the NEXT
-        // world's clock, which knows nothing about it — so the overlay either draws for no reason or
-        // is already expired, and which one you get depends on where that world's day count happens
-        // to stand. Nothing but this client writes these two.
-        endTime = 0;
-        duration = 0;
-    }
-
     //Tick dimensions, needed for satellites, and GUIs
     @SubscribeEvent
     public void tick(TickEvent.ServerTickEvent event) {
@@ -485,10 +468,12 @@ public class PlanetEventHandler {
                 }
             }
 
-            if (endTime > 0) {
-                double amt = (endTime - Minecraft.getMinecraft().world.getTotalWorldTime()) / (double) duration;
+            World world = event.getEntity().world;
+            WarpFlash flash = WorldRuntime.of(world, WarpFlash.class, WarpFlash::new);
+            if (flash.endTime > 0) {
+                double amt = (flash.endTime - world.getTotalWorldTime()) / (double) flash.duration;
                 if (amt < 0) {
-                    endTime = 0;
+                    flash.endTime = 0;
                 } else {
                     event.setRed((float) amt);
                     event.setGreen((float) amt);
@@ -595,10 +580,9 @@ public class PlanetEventHandler {
             }
 
             //Check environment
-            if (dev.stannismod.stellurgy.client.ClientAtmosphere.pressure()
-                    != dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING) {
-                atmosphere = Math.min(
-                        dev.stannismod.stellurgy.client.ClientAtmosphere.pressure(), 200);
+            int reported = dev.stannismod.stellurgy.client.ClientAtmosphere.of(event.getEntity().world).pressure();
+            if (reported != dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING) {
+                atmosphere = Math.min(reported, 200);
             }
 
             if (atmosphere > 100) {

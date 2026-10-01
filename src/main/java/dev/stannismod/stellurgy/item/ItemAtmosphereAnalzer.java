@@ -145,10 +145,10 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
         int screenX = RocketEventHandler.atmBar.getRenderX();//8;
         int screenY = RocketEventHandler.atmBar.getRenderY();//event.getResolution().getScaledHeight() - fontRenderer.FONT_HEIGHT*3;
 
+        World world = Minecraft.getMinecraft().world;
+        dev.stannismod.stellurgy.client.ClientAtmosphere air = dev.stannismod.stellurgy.client.ClientAtmosphere.of(world);
         List<ITextComponent> str = getAtmosphereReadout(componentStack,
-                (AtmosphereType) dev.stannismod.stellurgy.client.ClientAtmosphere.atmosphere(),
-                Minecraft.getMinecraft().world,
-                dev.stannismod.stellurgy.client.ClientAtmosphere.pressure());
+                (AtmosphereType) air.atmosphere(), world, air.pressure());
         //Draw BG
         gui.drawString(fontRenderer, str.get(0).getFormattedText(), screenX, screenY, 0xaaffff);
         gui.drawString(fontRenderer, str.get(1).getFormattedText(), screenX, screenY + fontRenderer.FONT_HEIGHT * 4 / 3, 0xaaffff);

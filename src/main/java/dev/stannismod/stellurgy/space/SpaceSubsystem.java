@@ -838,7 +838,7 @@ public final class SpaceSubsystem {
 
     public static long spaceClock() {
         return FMLCommonHandler.instance().getEffectiveSide().isClient()
-                ? SpaceClockSync.now()
+                ? dev.stannismod.stellurgy.Stellurgy.proxy.clientSpaceClock()
                 : spaceTick;
     }
 

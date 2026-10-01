@@ -266,6 +266,7 @@ public class ClientProxy extends CommonProxy {
 
     @Override
     public void preinit() {
+        PilotInput.register();
         OBJLoader.INSTANCE.addDomain("stellurgy");
         registerRenderers();
         // Hand the aboard-movement resolution this side's look/input answers. Here, and not from a
@@ -321,7 +322,74 @@ public class ClientProxy extends CommonProxy {
     }
 
     /**
-     * Advance this client's copy of the space clock by one tick.
+     * The server this client is connected to, as it has been told about it, or {@code null} between
+     * connections. Static by transitivity — a field of the {@code @SidedProxy} object — and approved
+     * as such by the maintainer on 2026-10-01. WRITER: {@link #viewConnection} when a connection is
+     * made; RELEASED by {@link #releaseLeftServer} on the game thread, once the client has unloaded the
+     * last world it showed of that server with the connection already closed. The release waits for
+     * the world because the channel closes on the network thread while the game thread is still
+     * rendering that world, and the sky reads the galaxy every frame of that gap.
+     */
+    private volatile ServerView serverView;
+
+    /** The server this client is connected to, or {@code null}; {@link ServerView#current()} is the way in. */
+    ServerView serverView() {
+        return serverView;
+    }
+
+    /** Every local player is built with a fresh {@link PilotInput}. */
+    @SubscribeEvent
+    public static void attachPilotInput(net.minecraftforge.event.AttachCapabilitiesEvent<net.minecraft.entity.Entity> event) {
+        PilotInput.attach(event);
+    }
+
+    /** A connection was made: the client starts knowing nothing about the server on its other end. */
+    @SubscribeEvent
+    public static void viewConnection(net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientConnectedToServerEvent event) {
+        ClientProxy proxy = (ClientProxy) Stellurgy.proxy;
+        ServerView previous = proxy.serverView;
+        if (previous != null) {
+            if (previous.connection.isChannelOpen()) {
+                throw new IllegalStateException("A connection was made while the client is still connected to another server");
+            }
+            // The previous connection closed before the client showed any world of it, so no unload
+            // released it.
+            proxy.release(previous);
+        }
+        proxy.serverView = new ServerView(event.getManager());
+    }
+
+    /**
+     * The client unloaded a world. When the connection behind it is closed, that was the last world
+     * of that server the client will show, and the view of it goes. A dimension change unloads a
+     * world too, with the connection still open, and keeps the view.
+     */
+    @SubscribeEvent
+    public static void releaseLeftServer(net.minecraftforge.event.world.WorldEvent.Unload event) {
+        if (!event.getWorld().isRemote) {
+            return;
+        }
+        ClientProxy proxy = (ClientProxy) Stellurgy.proxy;
+        ServerView view = proxy.serverView;
+        if (view != null && !view.connection.isChannelOpen()) {
+            proxy.release(view);
+        }
+    }
+
+    /**
+     * Drops {@code view}. What its galaxy left behind outside itself is the Forge dimension
+     * registrations its planets made on this client — withdrawn here for a remote server only: in
+     * single player those are the integrated server's, which withdraws its own when it stops.
+     */
+    private void release(ServerView view) {
+        if (view.remote()) {
+            view.dimensions.unregisterAllDimensions();
+        }
+        serverView = null;
+    }
+
+    /**
+     * Advance this client's copy of the space clock and the orbits of the bodies in its sky by one tick.
      *
      * <p>The space clock is the server's counter, and the server sends a baseline rather than a
      * value per tick; between baselines the client carries it forward itself. Deliberately NOT read
@@ -330,24 +398,15 @@ public class ClientProxy extends CommonProxy {
      * in would answer with a different quantity every time it changed dimension.</p>
      */
     @SubscribeEvent
-    public static void advanceSpaceClock(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) {
-            dev.stannismod.stellurgy.space.SpaceClockSync.onClientTick();
+    public static void tickServerView(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
         }
-    }
-
-    /**
-     * Forget what this client learned from the server it is leaving — the space-clock baseline and
-     * which dimension hyperspace was. The next server's counter and the next server's dim ids have
-     * nothing to do with this one, and either value kept across the gap would let the client answer
-     * confidently about a world it has left.
-     */
-    @SubscribeEvent
-    public static void forgetServerState(
-            net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
-        dev.stannismod.stellurgy.space.SpaceClockSync.reset();
-        dev.stannismod.stellurgy.space.HyperspaceWorld.forgetServerId();
-        ClientAtmosphere.reset();
+        ServerView view = ServerView.currentOrNull();
+        if (view != null) {
+            view.clock().onClientTick();
+            view.dimensions.tickDimensionsClient();
+        }
     }
 
     /**
@@ -404,10 +463,10 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void registerEventHandlers() {
         super.registerEventHandlers();
-        MinecraftForge.EVENT_BUS.register(ConnectionGalaxy.Events.class);
         MinecraftForge.EVENT_BUS.register(new RocketEventHandler());
         MinecraftForge.EVENT_BUS.register(new DelayedParticleRenderingEventHandler());
         MinecraftForge.EVENT_BUS.register(ModuleContainerPan.class);
+        MinecraftForge.EVENT_BUS.register(new ModuleContainerPanYOnlyWithScrollCache.WheelRouter());
         MinecraftForge.EVENT_BUS.register(new RenderComponents());
         // The client ticks its ships from the client tick event, not the world one, so the
         // re-seat that follows them needs its own handler on this side.
@@ -423,7 +482,7 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void fireFogBurst(ISpaceObject station) {
         try {
-            PlanetEventHandler.runBurst(Minecraft.getMinecraft().world.getTotalWorldTime() + 20, 20);
+            PlanetEventHandler.runBurst(Minecraft.getMinecraft().world, 20);
         } catch (NullPointerException e) {
         }
     }
@@ -591,12 +650,12 @@ public class ClientProxy extends CommonProxy {
      */
     @Override
     public dev.stannismod.stellurgy.dimension.DimensionManager getDimensionManager() {
-        return isServerThread() ? super.getDimensionManager() : ConnectionGalaxy.current().dimensions;
+        return isServerThread() ? super.getDimensionManager() : ServerView.current().dimensions;
     }
 
     @Override
     public dev.stannismod.stellurgy.stations.SpaceObjectManager getSpaceObjectManager() {
-        return isServerThread() ? super.getSpaceObjectManager() : ConnectionGalaxy.current().spaceObjects;
+        return isServerThread() ? super.getSpaceObjectManager() : ServerView.current().spaceObjects;
     }
 
     @Override
@@ -604,20 +663,24 @@ public class ClientProxy extends CommonProxy {
         if (isServerThread()) {
             return own;
         }
-        ConnectionGalaxy connection = ConnectionGalaxy.currentOrNull();
-        dev.stannismod.stellurgy.api.StellurgyConfiguration sent = connection == null ? null : connection.serverConfig();
+        ServerView view = ServerView.currentOrNull();
+        dev.stannismod.stellurgy.api.StellurgyConfiguration sent = view == null ? null : view.serverConfig();
         return sent == null ? own : sent;
     }
 
     @Override
     public void adoptServerConfig(dev.stannismod.stellurgy.api.StellurgyConfiguration config) {
-        ConnectionGalaxy.current().adoptServerConfig(config);
+        ServerView.current().adoptServerConfig(config);
     }
 
     @Override
-    public dev.stannismod.stellurgy.dimension.DimensionManager connectionDimensions(net.minecraft.network.NetworkManager manager) {
-        ConnectionGalaxy galaxy = ConnectionGalaxy.keptOn(manager);
-        return galaxy == null ? null : galaxy.dimensions;
+    public long clientSpaceClock() {
+        return ServerView.current().clock().now();
+    }
+
+    @Override
+    public int clientHyperspaceDimId() {
+        return ServerView.current().hyperspaceDimId();
     }
 
     private static boolean isServerThread() {
@@ -642,7 +705,8 @@ public class ClientProxy extends CommonProxy {
     public ModuleBase createScrollListPan(
             int baseX, int baseY,
             List<ModuleBase> list,
-            int sizeX, int sizeY
+            int sizeX, int sizeY,
+            dev.stannismod.stellurgy.inventory.modules.ScrollMemory memory
     ) {
         return new ModuleContainerPanYOnlyWithScrollCache(
                 baseX, baseY,
@@ -650,23 +714,9 @@ public class ClientProxy extends CommonProxy {
                 null,
                 sizeX - 2, sizeY,
                 0, -48,
-                0, 72
+                0, 72,
+                memory
         );
-    }
-
-    @Override
-    public void clearScrollCache() {
-        ModuleContainerPanYOnlyWithScrollCache.clearScrollCache();
-    }
-
-    @Override
-    public ModuleBase createObservatoryAsteroidListPan(int baseX, int baseY, List<ModuleBase> list2, int sizeX, int sizeY) {
-        return createScrollListPan(baseX, baseY, list2, sizeX, sizeY);
-    }
-
-    @Override
-    public void clearObservatoryScrollCache() {
-        clearScrollCache();
     }
 
     private static class FluidItemMeshDefinition implements ItemMeshDefinition {

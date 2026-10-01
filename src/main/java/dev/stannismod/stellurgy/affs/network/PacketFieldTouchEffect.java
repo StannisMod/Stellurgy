@@ -81,8 +81,7 @@ public class PacketFieldTouchEffect implements IMessage {
             Minecraft.getMinecraft().addScheduledTask(() -> ClientFieldTouchEffectCache.addEffect(
                 message.dimension,
                 message.generatorPos,
-                new Vec3d(message.touchX, message.touchY, message.touchZ),
-                Minecraft.getMinecraft().world == null ? -1L : Minecraft.getMinecraft().world.getTotalWorldTime()
+                new Vec3d(message.touchX, message.touchY, message.touchZ)
             ));
             return null;
         }

@@ -186,6 +186,15 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      *  {@link IFlightBackend}). Legacy backend owns the entity transform
      *  exactly as before; a ship-physics backend would own displacement instead. */
     private final IFlightBackend flightBackend = new LegacyFlightBackend();
+    /** What this client's pilot is commanding this rocket; written only on the client. */
+    private final dev.stannismod.stellurgy.client.PilotCommand pilotCommand =
+            new dev.stannismod.stellurgy.client.PilotCommand();
+
+    /** What this client's pilot is commanding this rocket. */
+    public dev.stannismod.stellurgy.client.PilotCommand pilotCommand() {
+        return pilotCommand;
+    }
+
     /** FF attitude source of truth (body&rarr;world quaternion).
      *  Integrated by BODY rates on the server; on the client it is the smoothed
      *  local estimate (predict from input + slerp toward the replicated

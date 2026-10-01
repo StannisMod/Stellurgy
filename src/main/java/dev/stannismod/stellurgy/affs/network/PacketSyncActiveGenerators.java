@@ -85,7 +85,8 @@ public class PacketSyncActiveGenerators implements IMessage {
             if (!ctx.side.isClient()) {
                 return null;
             }
-            Minecraft.getMinecraft().addScheduledTask(() -> ClientForceFieldRenderCache.replaceSnapshot(message.dimension, message.entries));
+            Minecraft.getMinecraft().addScheduledTask(() -> ClientForceFieldRenderCache.replaceSnapshot(
+                    message.dimension, message.entries));
             return null;
         }
     }

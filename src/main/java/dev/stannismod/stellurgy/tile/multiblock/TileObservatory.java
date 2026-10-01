@@ -67,6 +67,10 @@ import dev.stannismod.stellurgy.Stellurgy;
 
 public class TileObservatory extends TileMultiPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
 
+    /** Where this observatory's asteroid list was scrolled to, on the client. */
+    private final dev.stannismod.stellurgy.inventory.modules.ScrollMemory listScroll =
+            new dev.stannismod.stellurgy.inventory.modules.ScrollMemory();
+
     private static final org.apache.logging.log4j.Logger LOGGER =
             org.apache.logging.log4j.LogManager.getLogger("Stellurgy|Observatory");
 
@@ -463,7 +467,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         characteriseWholeSystem = !nbt.hasKey("scanWholeSystem") || nbt.getBoolean("scanWholeSystem");
 
         if (world != null && world.isRemote && prevSeed != lastSeed) {
-            dev.stannismod.stellurgy.Stellurgy.proxy.clearObservatoryScrollCache();
+            listScroll.clear();
         }
     }
 
@@ -694,7 +698,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             // ---- LEFT asteroid list: wheel-enabled + cached
             if (lastSeed != -1) {
                 modules.add(dev.stannismod.stellurgy.Stellurgy.proxy
-                    .createObservatoryAsteroidListPan(baseX, baseY, list2, sizeX, sizeY));
+                    .createScrollListPan(baseX, baseY, list2, sizeX, sizeY, listScroll));
             }
 
 
@@ -1262,7 +1266,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             lastType = ""; // since scan resets it
             isOpen = nbt.getBoolean("io");
 
-            dev.stannismod.stellurgy.Stellurgy.proxy.clearObservatoryScrollCache();
+            listScroll.clear();
 
             if (pendingReopenAfterSeedSync) {
                 pendingReopenAfterSeedSync = false;
@@ -1684,10 +1688,6 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         lastSeed = -1;
         lastButton = -1;
         lastType = "";
-        if (world != null && world.isRemote) {
-            dev.stannismod.stellurgy.Stellurgy.proxy.clearObservatoryScrollCache();
-        }
-
 
         savedDataBusNbt.clear();
     }
@@ -1696,10 +1696,6 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
     public void onChunkUnload() {
         super.onChunkUnload();
         dataCables.clear();
-        if (world != null && world.isRemote) {
-            dev.stannismod.stellurgy.Stellurgy.proxy.clearObservatoryScrollCache();
-        }
-
 
         savedDataBusNbt.clear();
     }

@@ -255,6 +255,35 @@ final class VSBridge {
     }
 
     /**
+     * The attitude the ship managing the block at {@code pos} had at the PREVIOUS game tick, as
+     * {@code {w,x,y,z}}, or {@code null} if no ship manages it. With {@link #getShipAttitude} it is the
+     * pair a frame interpolates between; the ship advances both together once per tick.
+     */
+    static double[] shipPrevAttitude(World world, BlockPos pos) {
+        Optional<PhysicsObject> managing = ValkyrienUtils.getPhysoManagingBlock(world, pos);
+        return managing.isPresent() ? prevTickRotation(managing.get()) : null;
+    }
+
+    /** {@link #shipPrevAttitude}'s by-id sibling: the previous-tick attitude of ship {@code shipId}. */
+    static double[] shipPrevAttitudeForId(World world, String shipId) {
+        try {
+            PhysicsObject physo = physoById(world, shipId);
+            return physo == null ? null : prevTickRotation(physo);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** The previous tick's rotation; a ship that has not ticked yet has no previous tick and answers
+     *  its current one, which is what an interpolation over a ship that has not moved means. */
+    private static double[] prevTickRotation(PhysicsObject physo) {
+        ShipTransform prev = physo.getShipData().getPrevTickShipTransform();
+        Quaterniond q = (prev != null ? prev : physo.getShipData().getShipTransform())
+                .rotationQuaternion(TransformType.SUBSPACE_TO_GLOBAL);
+        return new double[]{q.w, q.x, q.y, q.z};
+    }
+
+    /**
      * The world-frame POSITION {@code [x,y,z]} of the ship managing the block at {@code pos}
      * (its transform position — where the ship's pose actually is right now), or {@code null}
      * if no ship manages it. Managed-block-keyed like {@link #getShipAttitude}, so on a shared

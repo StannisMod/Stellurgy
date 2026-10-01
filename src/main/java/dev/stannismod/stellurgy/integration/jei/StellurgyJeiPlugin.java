@@ -111,51 +111,37 @@ public class StellurgyJeiPlugin implements IModPlugin {
     private static IJeiHelpers jeiHelpers;
 
     private static IJeiRuntime jeiRuntime;
-    private static final List<GasGiantWrapper> currentGasGiantRecipes = new ArrayList<>();
-    private static boolean gasRefreshQueued = false;
-
-
 
     @Override
     public void onRuntimeAvailable(IJeiRuntime runtime) {
         jeiRuntime = runtime;
-        //debug
-        //Stellurgy.logger.info("[JEI][GasGiants] onRuntimeAvailable");
     }
 
-    public static void requestGasGiantRefresh() {
-        gasRefreshQueued = true;
-    }
-    public static boolean hasQueuedGasGiantRefresh() {
-        return gasRefreshQueued;
-    }
-    public static void tryApplyQueuedGasGiantRefresh() {
-        if (!gasRefreshQueued) return;
-
+    /**
+     * Replace the gas-giant recipes JEI shows with the ones the connected server's galaxy holds.
+     * What is removed is asked of JEI's own registry, which is the only list of what JEI shows.
+     *
+     * @return whether the refresh ran; false while JEI's runtime or the client world is not up yet,
+     *         and the caller tries again later
+     */
+    @SuppressWarnings("unchecked")
+    public static boolean refreshGasGiantRecipes() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc == null || mc.world == null) return;
-        if (jeiRuntime == null) return;
+        if (mc == null || mc.world == null || jeiRuntime == null) return false;
 
         IRecipeRegistry recipeRegistry = jeiRuntime.getRecipeRegistry();
-        if (recipeRegistry == null) return;
-
-        //Stellurgy.logger.info("[JEI][GasGiants] removing old recipes count=" + currentGasGiantRecipes.size());
-        for (GasGiantWrapper recipe : currentGasGiantRecipes) {
-            recipeRegistry.removeRecipe(recipe, gasGiantsUUID);
+        if (recipeRegistry == null) return false;
+        mezz.jei.api.recipe.IRecipeCategory<GasGiantWrapper> category =
+                recipeRegistry.getRecipeCategory(gasGiantsUUID);
+        if (category != null) {
+            for (GasGiantWrapper shown : new ArrayList<>(recipeRegistry.getRecipeWrappers(category))) {
+                recipeRegistry.removeRecipe(shown, gasGiantsUUID);
+            }
         }
-        currentGasGiantRecipes.clear();
-
-        List<GasGiantWrapper> rebuilt = GasGiantRecipeMaker.getRecipes(jeiHelpers);
-        //Stellurgy.logger.info("[JEI][GasGiants] rebuilt recipe count=" + rebuilt.size());
-
-        for (GasGiantWrapper recipe : rebuilt) {
-            //Stellurgy.logger.info("[JEI][GasGiants] adding recipe dim=" + recipe.getDimId() + " planet=" + recipe.getPlanetName());
+        for (GasGiantWrapper recipe : GasGiantRecipeMaker.getRecipes(jeiHelpers)) {
             recipeRegistry.addRecipe(recipe, gasGiantsUUID);
         }
-        currentGasGiantRecipes.addAll(rebuilt);
-
-        gasRefreshQueued = false;
-        //Stellurgy.logger.info("[JEI][GasGiants] applied runtime recipe refresh, count=" + currentGasGiantRecipes.size());
+        return true;
     }
 
     /* newer JEI doesnt have this

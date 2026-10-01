@@ -9,6 +9,7 @@
     "MixinEntityCellVoid",
     "MixinEntityGravity",
     "MixinEntityLivingShipTravel",
+    "MixinEntityPlayerJetpackKeys",
     "MixinEntityPlayerShipFlight",
     "MixinEntityShipEyes",
     "MixinEntityShipLocalMove",

@@ -3948,8 +3948,8 @@ public class TestProbeCommand extends CommandBase {
 
         // bodies: what the sky in a slot world is BEING TOLD to draw, read from the server side.
         //
-        // The client store the renderer reads (PacketSystemBodiesSync.CLIENT_BODIES) is a private
-        // static that only the test harness can reach, so a player looking at an empty sky has no
+        // The client store the renderer reads is the client's view of the server, which only the
+        // test harness can reach, so a player looking at an empty sky has no
         // way to tell WHICH half is empty: the ledger (no settled ship -> nothing is produced for
         // anyone), the registry (a cell with genuinely nothing in it), or the drawing. This reports
         // the first two exactly, so "I see no planet" stops being a guess. Read-only.

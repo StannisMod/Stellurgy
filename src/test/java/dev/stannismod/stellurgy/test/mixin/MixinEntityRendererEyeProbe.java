@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.client.DeckLook;
+import dev.stannismod.stellurgy.test.trace.DeckReference;
 import dev.stannismod.stellurgy.test.trace.DeckCameraState;
 import dev.stannismod.stellurgy.test.trace.FrameStepWindow;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
@@ -74,9 +74,7 @@ public abstract class MixinEntityRendererEyeProbe {
         double px = view.prevPosX + (view.posX - view.prevPosX) * partialTicks;
         double py = view.prevPosY + (view.posY - view.prevPosY) * partialTicks;
         double pz = view.prevPosZ + (view.posZ - view.prevPosZ) * partialTicks;
-        // The deck reference comes from production's public DeckLook.refWorldAt, so the relative
-        // half of the smoothness measure is against the same frame-lerped point production used.
-        FrameStepWindow.sample(px, py, pz, DeckLook.refWorldAt(partialTicks));
+        FrameStepWindow.sample(px, py, pz, DeckReference.worldAt(partialTicks));
         float eyeHeight = view.getEyeHeight();
         DeckCameraState.noteEye(px + eyeHeight * up[0], py + eyeHeight * up[1],
                 pz + eyeHeight * up[2]);

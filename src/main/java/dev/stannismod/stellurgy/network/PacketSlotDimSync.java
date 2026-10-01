@@ -97,12 +97,13 @@ public class PacketSlotDimSync extends BasePacket {
     }
 
     @Override
+    @net.minecraftforge.fml.relauncher.SideOnly(net.minecraftforge.fml.relauncher.Side.CLIENT)
     public void executeClient(EntityPlayer player) {
         // Ahead of the DimensionType handling below, and deliberately: which dimension hyperspace IS
         // does not depend on the type registering cleanly, and the sky renderer's gate reads it. A
         // client that bailed out on a type collision would otherwise draw a descent boundary in the
         // transit corridor on top of everything else that is already wrong.
-        HyperspaceWorld.adoptFromServer(hyperDim);
+        dev.stannismod.stellurgy.client.ServerView.current().adoptHyperspaceDimId(hyperDim);
         if (typeId == Integer.MIN_VALUE) {
             return;
         }
