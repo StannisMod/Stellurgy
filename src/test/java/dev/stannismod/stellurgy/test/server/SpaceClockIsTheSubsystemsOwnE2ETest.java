@@ -275,7 +275,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
     // `theClockComesBackWithTheSubsystemTurnedOff` stood here until 2026-09-18. It booted a server
     // with `enableSpaceSubsystem=false` and pinned the one thing only a stood-down server can show:
     // that the clock ADVANCES and SURVIVES A REBOOT on a session where the controller was never
-    // built -- the reason `SpaceSubsystem.advanceClock()` sits ABOVE the `live == null` return in
+    // built -- the reason the clock's advance (`ServerState.advanceSpaceClock()`) sits ABOVE the `live == null` return in
     // `SpaceSubsystemEvents`, and the reason the clock restore in `onServerStarted` sits above the
     // same check.
     //
@@ -292,7 +292,7 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
     //     It is not a weakened assertion, it is an absent one, which is why it is written down here
     //     instead of being quietly dropped.
     //
-    // Recovering it needs a seam rather than a flag: `advanceClock()` and `onServerStarted(live)`
+    // Recovering it needs a seam rather than a flag: the tick handler and `onServerStarted(live)`
     // both already take the subsystem as a PARAMETER (they are static-free by design), so a unit
     // test calling them with `null` would pin the order without any server and without giving an
     // operator a switch for the mod's own subject.

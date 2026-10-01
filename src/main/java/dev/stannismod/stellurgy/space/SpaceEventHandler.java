@@ -474,7 +474,7 @@ public final class SpaceEventHandler {
 
     /** Whether {@code dimId} is one of the subsystem's own worlds (a pool slot or hyperspace). */
     private static boolean isSubsystemWorld(int dimId) {
-        return SpaceSlotPool.slotDims().contains(dimId) || dimId == HyperspaceWorld.dimId();
+        return dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().contains(dimId) || dimId == dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
     }
 
     /**

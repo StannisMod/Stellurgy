@@ -250,7 +250,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
                                                           String shipId,
                                                           HyperspaceTiles.Tile tile) {
         WorldServer src = DimensionManager.getWorld(srcSlotDim);
-        WorldServer hyper = HyperspaceWorld.getOrCreate();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getOrCreate();
         // Three different reasons a departure never even starts, told apart. Rolled into one null they
         // are indistinguishable from a crossing that ran and failed, and the caller's log then blames
         // the cut for something that happened before it.
@@ -321,7 +321,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
     @Override
     public ShipCrossingService.Crossed arriveFromHyperspace(String shipId, HyperspaceTiles.Tile tile,
                                                             BlockPos hyperAnchor, int targetSlotDim) {
-        WorldServer hyper = HyperspaceWorld.getOrCreate();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getOrCreate();
         WorldServer dst = DimensionManager.getWorld(targetSlotDim);
         if (hyper == null || dst == null || hyperAnchor == null) {
             // An arrival that never even reaches the crossing used to be a bare null, repeated once per
@@ -481,7 +481,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
     @Override
     public net.minecraft.nbt.NBTTagCompound snapshotParked(HyperspaceTiles.Tile tile,
                                                           BlockPos hyperAnchor, String shipId) {
-        WorldServer hyper = HyperspaceWorld.getOrCreate();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getOrCreate();
         if (hyper == null || hyperAnchor == null) {
             return null;
         }
@@ -668,7 +668,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
     @Override
     public int parkedDim() {
-        return HyperspaceWorld.dimId();
+        return dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
     }
 
     @Override
@@ -679,7 +679,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
     @Override
     public boolean parkedShipPresent(BlockPos hyperAnchor) {
-        WorldServer hyper = HyperspaceWorld.getIfLoaded();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getIfLoaded();
         if (hyper == null || hyperAnchor == null) {
             return false;
         }
@@ -693,7 +693,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
     @Override
     public List<Integer> parkedShipLanes() {
         List<Integer> lanes = new ArrayList<>();
-        WorldServer hyper = HyperspaceWorld.getIfLoaded();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getIfLoaded();
         if (hyper == null) {
             return lanes;
         }
@@ -716,7 +716,7 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
 
     @Override
     public boolean disposeParkedLane(int laneIndex) {
-        WorldServer hyper = HyperspaceWorld.getIfLoaded();
+        WorldServer hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.getIfLoaded();
         if (hyper == null) {
             return false;
         }

@@ -29,7 +29,7 @@ public final class SpaceSubsystemEvents {
     @SubscribeEvent
     public void onPlayerLoggedIn(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.player instanceof net.minecraft.entity.player.EntityPlayerMP)
-                || SpaceSlotPool.slotDims().isEmpty()) {
+                || dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().isEmpty()) {
             return;
         }
         dev.stannismod.stellurgy.network.PacketSlotDimSync sync =
@@ -73,7 +73,7 @@ public final class SpaceSubsystemEvents {
         // stand-down. Nothing else in the mod may increment it; the other server-tick handler in
         // this subsystem (SpaceEventHandler) deliberately only READS it, because two writers on
         // the same event would run the clock at twice the tick rate and nothing would report it.
-        SpaceSubsystem.advanceClock();
+        Stellurgy.serverState().advanceSpaceClock();
         // One read of the server's stack per tick: the five used to be read through five independent
         // accessors, so a swap landing mid-tick could tick one stack's transits against another's
         // entries.

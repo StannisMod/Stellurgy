@@ -3648,7 +3648,7 @@ public class TestProbeCommand extends CommandBase {
                 targetAbs = absTriple(aimAt);
             }
             if (targetDim != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET) {
-                slotWorld = dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims().contains(targetDim);
+                slotWorld = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().contains(targetDim);
                 dev.stannismod.stellurgy.universe.UniverseRegistry reg =
                         dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
                 java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> where =
@@ -3712,7 +3712,7 @@ public class TestProbeCommand extends CommandBase {
                 // a real planet. Reported without loading the world, so it is safe to ask about a
                 // body a caller has not decided to visit yet.
                 .append(",\"slotWorld\":").append(
-                        dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims().contains(b.dimId()))
+                        dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().contains(b.dimId()))
                 .append('}');
     }
 
@@ -4114,7 +4114,7 @@ public class TestProbeCommand extends CommandBase {
             // that persisted a slot id across the restart (a ledger entry, a saved player) has to be
             // checked against this list rather than assumed stable.
             StringBuilder slots = new StringBuilder();
-            for (Integer d : dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims()) {
+            for (Integer d : dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims()) {
                 if (slots.length() > 0) {
                     slots.append(',');
                 }
@@ -4127,7 +4127,7 @@ public class TestProbeCommand extends CommandBase {
             // Forge's free-id scan cannot see Stellurgy's body ids (a gas giant is never registered with
             // Forge), which is exactly how the two collided.
             StringBuilder collisions = new StringBuilder();
-            for (Integer d : dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims()) {
+            for (Integer d : dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims()) {
                 if (dev.stannismod.stellurgy.dimension.DimensionManager.getInstance()
                         .getDimensionPropertiesOrNull(d) != null) {
                     if (collisions.length() > 0) {
@@ -4138,7 +4138,7 @@ public class TestProbeCommand extends CommandBase {
             }
             send(sender, "{\"registered\":"
                     + (spaceStack != null)
-                    + ",\"pool\":" + dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims().size()
+                    + ",\"pool\":" + dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().size()
                     + ",\"slotDims\":[" + slots + "]"
                     + ",\"slotDimsAlsoBodies\":[" + collisions + "]"
                     + ",\"ledger\":" + (led == null ? -1 : led.size())
@@ -4419,10 +4419,10 @@ public class TestProbeCommand extends CommandBase {
         // pool changed. Registering a second pool would not merely waste dimension ids, it would shift
         // the slot ids out from under everything already bound to the first one.
         if (args.length >= 1 && "pool-idempotence".equalsIgnoreCase(args[0])) {
-            java.util.List<Integer> before = dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims();
-            int[] returned = dev.stannismod.stellurgy.space.SpaceSlotPool.registerPool(
+            java.util.List<Integer> before = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims();
+            int[] returned = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerPool(
                     Math.max(1, before.size()));
-            java.util.List<Integer> after = dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims();
+            java.util.List<Integer> after = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims();
             boolean sameIds = returned.length == before.size();
             for (int i = 0; sameIds && i < returned.length; i++) {
                 sameIds = returned[i] == before.get(i);
@@ -4484,8 +4484,8 @@ public class TestProbeCommand extends CommandBase {
         // 3x3 deck has no propulsion (it can neither hold station nor climb), so a test that must FLY
         // builds the real with-pilot-seat fixture in the empty origin cell with the real assembler.
         if (args.length >= 1 && "transit-setup-empty".equalsIgnoreCase(args[0])) {
-            int[] transitSlots = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(2);
-            dev.stannismod.stellurgy.space.HyperspaceWorld.register();
+            int[] transitSlots = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(2);
+            dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.register();
             // THE SERVER'S OWN SUBSYSTEM. This fixture used to construct a second one — its own
             // clock, its own manager, a binder narrowed so the two could not fight over the pool —
             // and the server never ticked it, so every transit e2e had to drive the jump by hand
@@ -4523,8 +4523,8 @@ public class TestProbeCommand extends CommandBase {
         // a bot and carry it through the jump. Returns the ship anchor, the ship's world position (for
         // `space enter`), and the pilot seat's post-assembly subspace position (for `seat-mount-at`).
         if (args.length >= 1 && "transit-setup-piloted".equalsIgnoreCase(args[0])) {
-            int[] transitSlots = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(2);
-            dev.stannismod.stellurgy.space.HyperspaceWorld.register();
+            int[] transitSlots = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(2);
+            dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.register();
             // THE SERVER'S OWN SUBSYSTEM. This fixture used to construct a second one — its own
             // clock, its own manager, a binder narrowed so the two could not fight over the pool —
             // and the server never ticked it, so every transit e2e had to drive the jump by hand
@@ -5010,7 +5010,7 @@ public class TestProbeCommand extends CommandBase {
             // claims it.
             transitTm = new dev.stannismod.stellurgy.space.ShipTransitManager(
                     transitMgr,
-                    dev.stannismod.stellurgy.space.HyperspaceWorld.lanes(),
+                    dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.lanes(),
                     new dev.stannismod.stellurgy.space.VSShipCrosser());
             transitTm.setFrames(dev.stannismod.stellurgy.space.SpaceSubsystem::cellFrameOriginAt);
             for (dev.stannismod.stellurgy.space.TransitRecord r : transitExport) {
@@ -5065,7 +5065,7 @@ public class TestProbeCommand extends CommandBase {
             // `spaceCellPoolSize` (10 by default) is the number a server runs on, so it is the number
             // a scenario should be arranged against too: a fixture that needs a bigger pool than
             // production has is testing a world the player never gets.
-            java.util.List<Integer> pool = dev.stannismod.stellurgy.space.SpaceSlotPool.slotDims();
+            java.util.List<Integer> pool = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims();
             entrySlotDims = new int[pool.size()];
             for (int i = 0; i < entrySlotDims.length; i++) {
                 entrySlotDims[i] = pool.get(i);
@@ -5087,7 +5087,7 @@ public class TestProbeCommand extends CommandBase {
             // loads until a first jump. (The `transit-setup-*` probes arrange the SAME server stack;
             // they hold their own handles to it only because their report describes a target cell the
             // SCENARIO chose, which no world reader can supply.)
-            dev.stannismod.stellurgy.space.HyperspaceWorld.register();
+            dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.register();
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"dims\":[");
             for (int i = 0; i < entrySlotDims.length; i++) {
                 if (i > 0) sb.append(',');
@@ -6076,7 +6076,7 @@ public class TestProbeCommand extends CommandBase {
         // beside the new value so a caller can see that it did not move.
         if (args.length >= 2 && "set-clock".equalsIgnoreCase(args[0])) {
             long before = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
-            dev.stannismod.stellurgy.space.SpaceSubsystem.setSpaceClock(
+            dev.stannismod.stellurgy.Stellurgy.serverState().setSpaceClock(
                     parseLongOr(args[1], before));
             net.minecraft.world.WorldServer overworld = server.getWorld(0);
             send(sender, "{\"ok\":true,\"before\":" + before + ",\"spaceClock\":"
@@ -6614,7 +6614,7 @@ public class TestProbeCommand extends CommandBase {
             // auto-unload and no lag-corrupted response capture): place a marker in cell A, rebind
             // through cell B (which must not see A's marker), place a marker in B, rebind back to A.
             // Pass iff A's marker persisted and B's marker did not bleed into A (folder isolation).
-            int slot = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
+            int slot = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(1)[0];
             net.minecraft.util.math.BlockPos p1 = new net.minecraft.util.math.BlockPos(0, 64, 0);
             net.minecraft.util.math.BlockPos p2 = new net.minecraft.util.math.BlockPos(1, 64, 1);
             net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
@@ -6654,7 +6654,7 @@ public class TestProbeCommand extends CommandBase {
             // enough free slots that nothing is ever evicted, and the probe reports pass=false while
             // measuring nothing - the eviction it exists to test never happens.
             final int[] scratchSlot =
-                    dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(1);
+                    dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(1);
             dev.stannismod.stellurgy.space.SlotBinder ownSlotOnly =
                     new dev.stannismod.stellurgy.space.SlotBinder() {
                         private final dev.stannismod.stellurgy.space.PoolSlotBinder real =
@@ -6749,7 +6749,7 @@ public class TestProbeCommand extends CommandBase {
         if (args.length >= 1 && "vs-assemble".equalsIgnoreCase(args[0])) {
             // Assemble a small VS ship in a fresh pool slot (a 3x3x3 stone cube floating in void).
             String cell = args.length >= 2 ? args[1] : "deep";
-            int slot = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
+            int slot = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(1)[0];
             net.minecraft.world.WorldServer w =
                     dev.stannismod.stellurgy.space.SpaceSlotPool.loadScratch(slot, cell);
             net.minecraft.block.state.IBlockState stone = net.minecraft.init.Blocks.STONE.getDefaultState();
@@ -6811,7 +6811,7 @@ public class TestProbeCommand extends CommandBase {
             // Does Valkyrien Skies' per-world ship manager attach to a dynamically-created pool
             // world? (Layer-1 gate: VS ships can only live in a slot if VS lights up there.)
             String cell = args.length >= 2 ? args[1] : "vscap";
-            int slot = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(1)[0];
+            int slot = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(1)[0];
             net.minecraft.world.WorldServer w =
                     dev.stannismod.stellurgy.space.SpaceSlotPool.loadScratch(slot, cell);
             boolean support = dev.stannismod.stellurgy.integration.vs.VSIntegration.hasShipSupport(w);
@@ -6851,7 +6851,7 @@ public class TestProbeCommand extends CommandBase {
         }
         if (args.length >= 1 && "pool-register".equalsIgnoreCase(args[0])) {
             int n = args.length >= 2 ? parseIntOr(args[1], 1) : 1;
-            int[] ids = dev.stannismod.stellurgy.space.SpaceSlotPool.registerAdditionalSlots(n);
+            int[] ids = dev.stannismod.stellurgy.Stellurgy.serverState().slots.registerAdditionalSlots(n);
             StringBuilder sb = new StringBuilder("{\"ok\":true,\"dims\":[");
             for (int i = 0; i < ids.length; i++) {
                 if (i > 0) sb.append(',');
@@ -17478,7 +17478,7 @@ public class TestProbeCommand extends CommandBase {
                 // probe asking about a transit that does not exist under that key.
                 + ",\"crewDim\":" + transitTm.crewDimensionOf(
                         transitDurableId == null ? "t" : transitDurableId.toString())
-                + ",\"hyperDim\":" + dev.stannismod.stellurgy.space.HyperspaceWorld.dimId()
+                + ",\"hyperDim\":" + dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId()
                 // How many arrived ships are still retrying their crew re-seat. This tells a
                 // never-seated crew apart from a re-seat that RAN OUT of retries: >0 means the
                 // loop is still trying (the caller simply stopped ticking), 0 with an unseated

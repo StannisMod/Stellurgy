@@ -117,7 +117,7 @@ public final class HyperspaceVoid {
         if (server == null) {
             return;
         }
-        int hyperDim = HyperspaceWorld.dimId();
+        int hyperDim = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
         if (hyperDim == Integer.MIN_VALUE) {
             adriftTicks.clear(); // no hyperspace this boot: nobody can be adrift in it
             return;

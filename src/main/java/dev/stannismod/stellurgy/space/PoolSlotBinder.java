@@ -11,7 +11,7 @@ public final class PoolSlotBinder implements SlotBinder {
 
     @Override
     public int[] slotDims() {
-        List<Integer> dims = SpaceSlotPool.slotDims();
+        List<Integer> dims = dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims();
         int[] out = new int[dims.size()];
         for (int i = 0; i < out.length; i++) {
             out[i] = dims.get(i);

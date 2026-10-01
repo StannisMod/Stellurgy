@@ -25,7 +25,33 @@ import dev.stannismod.stellurgy.Stellurgy;
  */
 public final class SpaceSlotPool {
 
-    private SpaceSlotPool() {}
+    /** One per server, held by its {@link dev.stannismod.stellurgy.ServerState}. */
+    public SpaceSlotPool() {}
+
+    /** This server's slot dimension ids, chosen against its own planets. */
+    private final List<Integer> slotDims = new CopyOnWriteArrayList<>();
+
+    /** Register the slot {@link DimensionType}. Pre-init, once, on both sides. */
+    public static void registerType() {
+        if (slotType != null) {
+            throw new IllegalStateException("the space slot dimension type is registered once, in pre-init");
+        }
+        // keepLoaded = false: no spawn-chunk force-load (which lagged the server). Lifecycle is
+        // controlled EXPLICITLY (load / synchronous unload); load() takes a per-dimension keep-loaded
+        // hold, so a bound slot is not eligible for Forge's auto-unload sweep.
+        slotType = DimensionType.register(
+                "stellurgyspacepoolslot", "stellurgyspacepoolslot", nextFreeDimensionTypeId(),
+                WorldProviderSpaceSlot.class, false);
+    }
+
+    /** Withdraw this server's slot registrations; the next server picks its own ids. */
+    public void release() {
+        for (Integer d : slotDims) {
+            if (DimensionManager.isDimensionRegistered(d)) {
+                DimensionManager.unregisterDimension(d);
+            }
+        }
+    }
 
     /**
      * The shared slot {@link DimensionType} (provider = {@link WorldProviderSpaceSlot}).
@@ -36,17 +62,17 @@ public final class SpaceSlotPool {
      * server the launch runs. That is why nothing clears it at server stop: forgetting it would only
      * make the next server-start try to register a name Forge already has.</p>
      *
-     * <p>Two writers, and both are the same registration seen from one side each: the server mints
-     * it at server-start, and a client adopts the server's id from the sync packet — which is also
-     * where the "already registered in this JVM" and id-mismatch cases are decided.</p>
+     * <p>Effectively final, process lifetime: written once by the mod in pre-init
+     * ({@link #registerType()}) on both sides; a client only checks the server's id against it.
+     * Approved 2026-10-01.</p>
      */
     public static DimensionType slotType;
 
     /**
      * A {@link DimensionType} id guaranteed free right now: one past the highest currently-registered
-     * type id. Called at server-start, after every other mod has registered its {@code DimensionType}s,
-     * so it never collides — unlike a hardcoded id. Server thread only; call sequentially (the caller
-     * registers the type before the next call scans, so two consecutive calls yield distinct ids).
+     * type id. Called in pre-init, so it never collides with a type registered before it — unlike a
+     * hardcoded id. Call sequentially (the caller registers the type before the next call scans, so
+     * two consecutive calls yield distinct ids).
      */
     public static int nextFreeDimensionTypeId() {
         int max = Integer.MIN_VALUE;
@@ -82,9 +108,6 @@ public final class SpaceSlotPool {
         }
         return id;
     }
-
-    /** Registered slot dimension ids. */
-    private static final List<Integer> SLOT_DIMS = new CopyOnWriteArrayList<>();
 
     /**
      * The running server's bindings. A slot world exists only on a running server, so there is
@@ -129,27 +152,22 @@ public final class SpaceSlotPool {
     }
 
     /** Registered slot dimension ids (snapshot). */
-    public static List<Integer> slotDims() {
-        return new CopyOnWriteArrayList<>(SLOT_DIMS);
+    public List<Integer> slotDims() {
+        return new CopyOnWriteArrayList<>(slotDims);
     }
 
     /**
-     * Register the slot {@link DimensionType} (once) and ensure the pool holds at least {@code n}
-     * slot dimensions, returning the pool's dimension ids. <b>Idempotent:</b> a pool already
-     * registered in this JVM is REUSED — a second call mints nothing and returns the existing ids.
-     *
-     * <p>Idempotence is what makes this safe to call from more than one place in a single JVM (the
-     * production server-start hook and, in a harness run, a test that drives that hook itself).
-     * {@code DimensionManager} registration is JVM-global, so minting a second pool would not merely
-     * waste ids — it would shift the slot ids out from under everything already bound to the first.
-     * A caller that genuinely wants {@code n} ADDITIONAL scratch dimensions must say so explicitly
-     * via {@link #registerAdditionalSlots(int)}.</p>
+     * Ensure this server's pool holds at least {@code n} slot dimensions, returning the pool's
+     * dimension ids. <b>Idempotent within a server:</b> a pool already registered is REUSED — a second
+     * call mints nothing and returns the existing ids, so the server-start hook and a test driving that
+     * hook itself cannot shift the slot ids out from under what is bound to them. A caller that wants
+     * {@code n} ADDITIONAL scratch dimensions says so via {@link #registerAdditionalSlots(int)}.
      */
-    public static synchronized int[] registerPool(int n) {
-        if (!SLOT_DIMS.isEmpty()) {
-            int[] existing = new int[SLOT_DIMS.size()];
+    public synchronized int[] registerPool(int n) {
+        if (!slotDims.isEmpty()) {
+            int[] existing = new int[slotDims.size()];
             for (int i = 0; i < existing.length; i++) {
-                existing[i] = SLOT_DIMS.get(i);
+                existing[i] = slotDims.get(i);
             }
             // Re-broadcast anyway: the caller's contract is "after this returns, the pool is
             // registered AND every online client knows it", and a late second call may be the first
@@ -161,32 +179,19 @@ public final class SpaceSlotPool {
     }
 
     /**
-     * Register the slot {@link DimensionType} (once) and {@code n} FRESH slot dimensions (not yet
-     * initialised), appending them to the pool. Returns the newly minted dimension ids — never
-     * previously registered ones. Server thread only.
+     * Register {@code n} FRESH slot dimensions (not yet initialised) for this server, appending them
+     * to the pool. Returns the newly minted dimension ids — never previously registered ones. Server
+     * thread only.
      *
      * <p>This is the non-idempotent primitive: each call grows the pool. Use {@link #registerPool}
      * unless you specifically need dimensions disjoint from whatever is already registered.</p>
      */
-    public static synchronized int[] registerAdditionalSlots(int n) {
-        if (slotType == null) {
-            // keepLoaded = false: no spawn-chunk force-load (which lagged the server). Lifecycle is
-            // controlled EXPLICITLY (load / synchronous unload). This used to carry a warning that a slot
-            // left loaded across ticks with no occupant would be taken by Forge's auto-unload - which is
-            // exactly what the controller does, on purpose, because eviction there is lazy. The warning
-            // described a real hazard nobody could obey; load() now takes a per-dimension keep-loaded hold
-            // instead, so a bound slot is not eligible for that sweep at all.
-            // Dynamic type id (scan-max) instead of a hardcoded one, so it never collides with another
-            // mod's DimensionType.
-            slotType = DimensionType.register(
-                    "stellurgyspacepoolslot", "stellurgyspacepoolslot", nextFreeDimensionTypeId(),
-                    WorldProviderSpaceSlot.class, false);
-        }
+    public synchronized int[] registerAdditionalSlots(int n) {
         int[] ids = new int[n];
         for (int i = 0; i < n; i++) {
             int id = nextFreeDimensionId();
             DimensionManager.registerDimension(id, slotType);
-            SLOT_DIMS.add(id);
+            slotDims.add(id);
             ids[i] = id;
         }
         // Sync the (grown) pool to every online client BEFORE anything can move a player into a fresh

@@ -234,7 +234,7 @@ public final class SystemBodiesProducer {
         int dim = player.world == null ? player.dimension : player.world.provider.getDimension();
         List<RenderBody> bodies = byDim.get(dim);
         if (bodies == null) {
-            if (!SpaceSlotPool.slotDims().contains(dim)) {
+            if (!dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().contains(dim)) {
                 return; // not a cell world: this channel has nothing to say about it
             }
             bodies = Collections.emptyList();

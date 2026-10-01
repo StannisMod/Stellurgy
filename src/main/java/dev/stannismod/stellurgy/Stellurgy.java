@@ -293,38 +293,35 @@ public class Stellurgy {
     }
 
     /**
-     * The running server's galaxy and its stations. Static by transitivity (fields of the mod object);
-     * effectively final, SERVER lifetime: built by {@link #beginServerLifetime()} when a server is about
-     * to start and released by {@link #endServerLifetime()} when it has stopped. Nothing in them is
-     * ever cleared for reuse — the next server builds its own.
+     * What the running server owns ({@link ServerState}). Static by transitivity (a field of the mod
+     * object); effectively final, SERVER lifetime, approved by the maintainer 2026-10-01: built by
+     * {@link #beginServerLifetime()} when a server is about to start and released by
+     * {@link #endServerLifetime()} when it has stopped. Nothing in it is cleared for reuse — the next
+     * server builds its own.
      */
-    private DimensionManager serverDimensions;
-    private SpaceObjectManager serverSpaceObjects;
+    private ServerState server;
 
     /**
-     * The running server's galaxy.
+     * What the running server owns.
      *
      * @throws IllegalStateException when no server is running
      */
-    public static DimensionManager serverDimensions() {
-        DimensionManager dimensions = instance == null ? null : instance.serverDimensions;
-        if (dimensions == null) {
-            throw new IllegalStateException("No server is running: there is no server galaxy");
+    public static ServerState serverState() {
+        ServerState state = instance == null ? null : instance.server;
+        if (state == null) {
+            throw new IllegalStateException("No server is running: there is no server state");
         }
-        return dimensions;
+        return state;
     }
 
-    /**
-     * The running server's stations.
-     *
-     * @throws IllegalStateException when no server is running
-     */
+    /** The running server's galaxy. @throws IllegalStateException when no server is running */
+    public static DimensionManager serverDimensions() {
+        return serverState().dimensions;
+    }
+
+    /** The running server's stations. @throws IllegalStateException when no server is running */
     public static SpaceObjectManager serverSpaceObjects() {
-        SpaceObjectManager spaceObjects = instance == null ? null : instance.serverSpaceObjects;
-        if (spaceObjects == null) {
-            throw new IllegalStateException("No server is running: there are no server stations");
-        }
-        return spaceObjects;
+        return serverState().spaceObjects;
     }
 
     /**
@@ -332,20 +329,18 @@ public class Stellurgy {
      * headless test bootstrap, which runs no server and arranges the server's state the same way.
      */
     public void beginServerLifetime() {
-        if (serverDimensions != null || serverSpaceObjects != null) {
+        if (server != null) {
             throw new IllegalStateException("A server lifetime is already open; a second begin is a lifecycle bug");
         }
-        serverDimensions = new DimensionManager(dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().minDimension);
-        serverSpaceObjects = new SpaceObjectManager();
+        server = new ServerState(dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().minDimension);
     }
 
     /** Releases the state {@link #beginServerLifetime()} built, undoing its Forge dimension registrations. */
     public void endServerLifetime() {
-        if (serverDimensions != null) {
-            serverDimensions.unregisterAllDimensions();
+        if (server != null) {
+            server.release();
         }
-        serverDimensions = null;
-        serverSpaceObjects = null;
+        server = null;
     }
 
     /**
@@ -487,6 +482,10 @@ public class Stellurgy {
         version = event.getModMetadata().version;
 
         dev.stannismod.stellurgy.world.WorldRuntime.register();
+        // Forge cannot withdraw a DimensionType, so the two space types are registered once, here, on
+        // both sides; the dimension IDS that use them are each server's own.
+        dev.stannismod.stellurgy.space.SpaceSlotPool.registerType();
+        dev.stannismod.stellurgy.space.HyperspaceWorld.registerType();
         MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.world.WorldRuntime.Attach.class);
 
         //Init API
@@ -1474,9 +1473,9 @@ public class Stellurgy {
 
     @EventHandler
     public void serverStarted(FMLServerStartedEvent event) {
-        for (int dimId : serverDimensions.getLoadedDimensions()) {
-            DimensionProperties properties = serverDimensions.getDimensionProperties(dimId);
-            if (!properties.isNativeDimension && properties.getId() == serverDimensions.getMoonId() && !Loader.isModLoaded("GalacticraftCore")) {
+        for (int dimId : serverDimensions().getLoadedDimensions()) {
+            DimensionProperties properties = serverDimensions().getDimensionProperties(dimId);
+            if (!properties.isNativeDimension && properties.getId() == serverDimensions().getMoonId() && !Loader.isModLoaded("GalacticraftCore")) {
                 properties.isNativeDimension = true;
             }
         }
@@ -1492,14 +1491,14 @@ public class Stellurgy {
         // together in serverStopped. Here rather than in either object's constructor: a constructor
         // runs from its class's own static initialiser, at whatever moment something first touches
         // the class, which may be before Forge has assigned this mod instance at all.
-        attachServerServices(serverSpaceObjects, serverDimensions);
+        attachServerServices(serverSpaceObjects(), serverDimensions());
     }
 
     @EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
         beginServerLifetime();
         // Populate dimension properties before worlds get loaded
-        serverDimensions.createAndLoadDimensions(resetFromXml);
+        serverDimensions().createAndLoadDimensions(resetFromXml);
     }
 
     @EventHandler
@@ -1556,7 +1555,7 @@ public class Stellurgy {
         try {
             if (load.loadFile(file)) {
                 for (Asteroid asteroid : load.loadPropertyFile()) {
-                    serverDimensions.getAsteroidTypes().put(asteroid.ID, asteroid);
+                    serverDimensions().getAsteroidTypes().put(asteroid.ID, asteroid);
                 }
             }
         } catch (IOException e) {

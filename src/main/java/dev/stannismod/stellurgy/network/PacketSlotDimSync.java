@@ -4,12 +4,10 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
-import net.minecraft.world.DimensionType;
 
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.space.HyperspaceWorld;
 import dev.stannismod.stellurgy.space.SpaceSlotPool;
-import dev.stannismod.stellurgy.space.WorldProviderSpaceSlot;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.util.ArrayList;
@@ -20,15 +18,16 @@ import java.util.List;
  * hyperspace world). Slot dims are registered SERVER-side at pool registration; on a dedicated
  * server the client knows nothing about them, so moving a player into one (entry, descent, login
  * restore, station docking) would respawn him into a dimension his Forge {@code DimensionManager}
- * has never heard of. This packet registers the slot {@link DimensionType} and the current slot dim
- * ids client-side. It is sent to each player at login and broadcast whenever the pool (re)registers
- * or grows — always BEFORE anything can relocate a player into a slot (the sequencing contract).
+ * has never heard of. This packet checks the server's slot dimension-type id against the client's
+ * (both register the type in pre-init) and registers the current slot dim ids client-side. It is
+ * sent to each player at login and broadcast whenever the pool (re)registers or grows — always
+ * BEFORE anything can relocate a player into a slot (the sequencing contract).
  *
  * <p>Wire contract (same-version): the server's slot {@code DimensionType} id, then the hyperspace
  * dim id ({@code Integer.MIN_VALUE} when hyperspace is not registered), then a count-prefixed list
- * of dim ids. The client registers the type under the SERVER's id; a client-side id collision means
- * a mismatched client/server mod set and is logged, never masked. On an integrated server both
- * sides share the JVM-global registration, so this is a no-op.</p>
+ * of dim ids. A type id that differs from the client's means a mismatched client/server mod set; it
+ * is logged and no dim is registered, never masked. On an integrated server both sides share the
+ * JVM-global {@code DimensionManager}, so the dim registration finds every id already present.</p>
  *
  * <p><b>Why hyperspace is NAMED and not merely listed.</b> Every id in the list is registered the
  * same way, so the list says which dimensions exist and not which one is which. The client has its
@@ -38,8 +37,6 @@ import java.util.List;
  */
 public class PacketSlotDimSync extends BasePacket {
 
-    /** Must match the server-side registration name in {@link SpaceSlotPool#registerPool}. */
-    private static final String SLOT_TYPE_NAME = "stellurgyspacepoolslot";
 
     private int typeId = Integer.MIN_VALUE;
     private int hyperDim = Integer.MIN_VALUE;
@@ -52,8 +49,8 @@ public class PacketSlotDimSync extends BasePacket {
     public static PacketSlotDimSync current() {
         PacketSlotDimSync p = new PacketSlotDimSync();
         p.typeId = SpaceSlotPool.slotType == null ? Integer.MIN_VALUE : SpaceSlotPool.slotType.getId();
-        p.dims.addAll(SpaceSlotPool.slotDims());
-        int hyper = HyperspaceWorld.dimId();
+        p.dims.addAll(dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims());
+        int hyper = dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
         if (hyper != Integer.MIN_VALUE) {
             // Listed like any other slot dim, because it has to be REGISTERED like one, and named
             // separately because the client also has to tell it apart from one.
@@ -107,28 +104,8 @@ public class PacketSlotDimSync extends BasePacket {
         if (typeId == Integer.MIN_VALUE) {
             return;
         }
-        if (SpaceSlotPool.slotType == null) {
-            DimensionType existing = null;
-            for (DimensionType t : DimensionType.values()) {
-                if (t.getId() == typeId) {
-                    existing = t;
-                    break;
-                }
-            }
-            if (existing != null) {
-                if (SLOT_TYPE_NAME.equals(existing.getName())) {
-                    SpaceSlotPool.slotType = existing; // already registered in this JVM
-                } else {
-                    Stellurgy.logger.error("[SPACE] client DimensionType id {} is already taken by "
-                            + "'{}' - client/server mod sets differ; slot dims will NOT register",
-                            typeId, existing.getName());
-                    return;
-                }
-            } else {
-                SpaceSlotPool.slotType = DimensionType.register(
-                        SLOT_TYPE_NAME, SLOT_TYPE_NAME, typeId, WorldProviderSpaceSlot.class, false);
-            }
-        } else if (SpaceSlotPool.slotType.getId() != typeId) {
+        // Both sides register the slot type in pre-init; the server's id must be the client's.
+        if (SpaceSlotPool.slotType.getId() != typeId) {
             Stellurgy.logger.error("[SPACE] slot DimensionType id mismatch: client {} vs server {} - "
                     + "slot dims will NOT register", SpaceSlotPool.slotType.getId(), typeId);
             return;

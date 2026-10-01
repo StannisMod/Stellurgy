@@ -28,8 +28,14 @@ import net.minecraftforge.common.DimensionManager;
  */
 public final class HyperspaceWorld {
 
+    /**
+     * The hyperspace {@link DimensionType}. Effectively final, process lifetime: registered once by the
+     * mod in pre-init ({@link #registerType()}) — Forge cannot withdraw a type. Approved 2026-10-01.
+     */
     private static DimensionType type;
-    private static int dimId = Integer.MIN_VALUE;
+
+    /** This server's hyperspace dimension id, or {@link Integer#MIN_VALUE} until registered. */
+    private int dimId = Integer.MIN_VALUE;
 
 
     /**
@@ -43,27 +49,32 @@ public final class HyperspaceWorld {
      * 2026-08-13 as two registered ships at the identical position, after which every position-keyed
      * lookup at that anchor is ambiguous and the arrival cuts whichever hull it happens to reach.</p>
      */
-    private static HyperspaceTiles lanes = new HyperspaceTiles();
+    private final HyperspaceTiles lanes = new HyperspaceTiles();
 
-    private HyperspaceWorld() { }
+    /** One per server, held by its {@link dev.stannismod.stellurgy.ServerState}. */
+    public HyperspaceWorld() { }
 
     /** This world's one lane allocator. */
-    public static HyperspaceTiles lanes() {
+    public HyperspaceTiles lanes() {
         return lanes;
     }
 
-    /**
-     * Register the hyperspace {@link DimensionType} and dimension id (no world loaded — one Forge map
-     * entry, like {@link SpaceSlotPool#registerPool}). Idempotent + JVM-global: safe to call every
-     * server start; the id survives a single-player re-open. Called upfront from {@code SpaceSubsystem}
-     * so the world is never lazily registered mid-transit. Uses a dynamic (scan-max) type id so it never
-     * collides with another mod's {@code DimensionType}. Server thread only.
-     */
-    public static void register() {
-        if (type == null) {
-            type = DimensionType.register("stellurgyhyperspace", "stellurgyhyperspace",
-                    SpaceSlotPool.nextFreeDimensionTypeId(), WorldProviderSpaceSlot.class, false);
+    /** Register the hyperspace {@link DimensionType}. Pre-init, once, on both sides. */
+    public static void registerType() {
+        if (type != null) {
+            throw new IllegalStateException("the hyperspace dimension type is registered once, in pre-init");
         }
+        type = DimensionType.register("stellurgyhyperspace", "stellurgyhyperspace",
+                SpaceSlotPool.nextFreeDimensionTypeId(), WorldProviderSpaceSlot.class, false);
+    }
+
+    /**
+     * Register this server's hyperspace dimension id (no world loaded — one Forge map entry, like
+     * {@link SpaceSlotPool#registerPool}). Idempotent within a server; the id is chosen against THIS
+     * save's planets and withdrawn when the server stops ({@link #release()}). Called upfront from
+     * {@code SpaceSubsystem} so the world is never lazily registered mid-transit. Server thread only.
+     */
+    public void register() {
         if (dimId == Integer.MIN_VALUE) {
             // Same combined free-id scan the pool uses: an id Forge calls free may still belong to a
             // surface-less Stellurgy body (see SpaceSlotPool#nextFreeDimensionId).
@@ -78,7 +89,7 @@ public final class HyperspaceWorld {
      * only worth loading once a ship actually transits). If called before {@link #register()} it
      * registers as a fallback (test parity). Returns {@code null} only if the world could not init.
      */
-    public static WorldServer getOrCreate() {
+    public WorldServer getOrCreate() {
         register();
         // Init ONLY when not already loaded: calling initDimension on a live dimension reloads it, which
         // wipes VS's per-world ship registry (a ship crossed here would vanish on the next getOrCreate).
@@ -113,7 +124,7 @@ public final class HyperspaceWorld {
      * restore, which adopts hulls and collects unclaimed ones — must load hyperspace itself before
      * asking, or it will be told an empty world every time and never notice.</p>
      */
-    public static WorldServer getIfLoaded() {
+    public WorldServer getIfLoaded() {
         return dimId == Integer.MIN_VALUE ? null : DimensionManager.getWorld(dimId);
     }
 
@@ -125,11 +136,9 @@ public final class HyperspaceWorld {
      *
      * <p>It exists for the one caller that needs the NUMBER rather than the answer: the slot-dim sync
      * packet, which sends it. Anything asking whether a world IS hyperspace wants
-     * {@link #isHyperspace(World)} instead — both ids live in JVM-global statics, and a client that
-     * hosted a single-player world earlier in the same launch still has one of them, naming a world
-     * that is gone rather than the server it is now connected to.</p>
+     * {@link #isHyperspace(World)} instead, which picks the right side's answer.</p>
      */
-    public static int dimId() {
+    public int dimId() {
         return dimId;
     }
 
@@ -151,23 +160,23 @@ public final class HyperspaceWorld {
         if (world == null) {
             return false;
         }
-        int hyper = world.isRemote ? dev.stannismod.stellurgy.Stellurgy.proxy.clientHyperspaceDimId() : dimId;
+        int hyper = world.isRemote ? dev.stannismod.stellurgy.Stellurgy.proxy.clientHyperspaceDimId() : dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId;
         return hyper != Integer.MIN_VALUE && world.provider.getDimension() == hyper;
     }
 
     /**
-     * Server-stop teardown: release the keep-loaded pin. The dim id is kept STABLE across a same-JVM
-     * re-open, which costs nothing and avoids the churn of one leaked dim registration per re-open. It is
-     * no longer load-bearing either way: the world's content is keyed by its FOLDER, not by its id. The
-     * {@link DimensionType} and the dimension registration both stay JVM-global; a later re-open re-inits
-     * the same world, with everything that was parked in it still there.
+     * Server-stop teardown, by the server state that owns this world: release the keep-loaded pin and
+     * withdraw the dimension registration. The world's content is keyed by its FOLDER, not by its id,
+     * so the next server re-registers under whatever id is free against its own planets and re-inits
+     * the same world, with everything that was parked in it still there. The lanes go with this
+     * object.
      */
-    public static void reset() {
+    public void release() {
         if (dimId != Integer.MIN_VALUE) {
             DimensionManager.keepDimensionLoaded(dimId, false);
+            if (DimensionManager.isDimensionRegistered(dimId)) {
+                DimensionManager.unregisterDimension(dimId);
+            }
         }
-        // The lanes go with the world's contents. A server stop discards every parked hull, so
-        // carrying the allocator's used set into the next session would retire lanes nothing is in.
-        lanes = new HyperspaceTiles();
     }
 }
