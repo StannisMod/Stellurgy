@@ -6,7 +6,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.util.math.Vec3d;
 import dev.stannismod.stellurgy.api.projectile.ShotSpec;
-import dev.stannismod.stellurgy.client.ClientShotTracker;
+import dev.stannismod.stellurgy.client.ClientWorldDrawings;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
@@ -92,8 +92,8 @@ public class PacketShotSpawn extends BasePacket {
 
     @Override
     public void executeClient(EntityPlayer player) {
-        ClientShotTracker.spawn(id, new Vec3d(x, y, z), new Vec3d(vx, vy, vz), radius, lifetimeTicks,
-                gravityPerTickSquared);
+        ClientWorldDrawings.apply(drawings -> drawings.shots().spawn(id, new Vec3d(x, y, z),
+                new Vec3d(vx, vy, vz), radius, lifetimeTicks, gravityPerTickSquared));
     }
 
     @Override

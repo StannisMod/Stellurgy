@@ -16,15 +16,18 @@ import java.util.Set;
  * Keyed by domain so the graphs stay apart; a node names its own domain, so registering one into
  * the wrong graph is not expressible. Synchronized because tiles are created and invalidated off
  * the tick that reads them.
+ * <p>
+ * One per {@link SubsystemNetworkManager}, which is one per running server: the nodes of one server
+ * session are never in the set another session reads.
  */
-public final class SubsystemNetworkRegistry {
+final class SubsystemNetworkRegistry {
 
-    private static final Map<SubsystemNetworkDomain, Set<ISubsystemNetworkNode>> NODES = new HashMap<>();
+    private final Map<SubsystemNetworkDomain, Set<ISubsystemNetworkNode>> nodes = new HashMap<>();
 
-    private SubsystemNetworkRegistry() {
+    SubsystemNetworkRegistry() {
     }
 
-    public static synchronized void register(ISubsystemNetworkNode node) {
+    synchronized void register(ISubsystemNetworkNode node) {
         SubsystemNetworkDomain domain = node == null ? null : node.getNetworkDomain();
         if (domain == null) {
             return;
@@ -33,7 +36,7 @@ public final class SubsystemNetworkRegistry {
         log(domain, "register", node);
     }
 
-    public static synchronized void unregister(ISubsystemNetworkNode node) {
+    synchronized void unregister(ISubsystemNetworkNode node) {
         SubsystemNetworkDomain domain = node == null ? null : node.getNetworkDomain();
         if (domain == null) {
             return;
@@ -42,37 +45,37 @@ public final class SubsystemNetworkRegistry {
         log(domain, "unregister", node);
     }
 
-    public static synchronized Set<ISubsystemNetworkNode> snapshot(SubsystemNetworkDomain domain) {
+    synchronized Set<ISubsystemNetworkNode> snapshot(SubsystemNetworkDomain domain) {
         if (domain == null) {
             return Collections.emptySet();
         }
         return Collections.unmodifiableSet(new HashSet<>(nodesOf(domain)));
     }
 
-    /** Every domain that has ever registered a node — what the manager ticks. */
-    public static synchronized Set<SubsystemNetworkDomain> domains() {
-        return new LinkedHashSet<>(NODES.keySet());
+    /** Every domain that has registered a node on this server — what the manager ticks. */
+    synchronized Set<SubsystemNetworkDomain> domains() {
+        return new LinkedHashSet<>(nodes.keySet());
     }
 
-    public static synchronized void clearWorld(SubsystemNetworkDomain domain, World world) {
+    synchronized void clearWorld(SubsystemNetworkDomain domain, World world) {
         if (domain == null || world == null) {
             return;
         }
         int dim = world.provider.getDimension();
-        Set<ISubsystemNetworkNode> nodes = nodesOf(domain);
-        int before = nodes.size();
-        nodes.removeIf(node -> node != null && matchesDimension(node.getNodeWorld(), dim));
-        if (before != nodes.size() && domain.getLogger() != null) {
+        Set<ISubsystemNetworkNode> ofDomain = nodesOf(domain);
+        int before = ofDomain.size();
+        ofDomain.removeIf(node -> node != null && matchesDimension(node.getNodeWorld(), dim));
+        if (before != ofDomain.size() && domain.getLogger() != null) {
             domain.getLogger().info("[{}Network] clearWorld dim={} removed={} remaining={}",
-                    domain.getName(), dim, before - nodes.size(), nodes.size());
+                    domain.getName(), dim, before - ofDomain.size(), ofDomain.size());
         }
     }
 
-    private static Set<ISubsystemNetworkNode> nodesOf(SubsystemNetworkDomain domain) {
-        return NODES.computeIfAbsent(domain, key -> new HashSet<>());
+    private Set<ISubsystemNetworkNode> nodesOf(SubsystemNetworkDomain domain) {
+        return nodes.computeIfAbsent(domain, key -> new HashSet<>());
     }
 
-    private static void log(SubsystemNetworkDomain domain, String action, ISubsystemNetworkNode node) {
+    private void log(SubsystemNetworkDomain domain, String action, ISubsystemNetworkNode node) {
         if (domain.getLogger() == null) {
             return;
         }

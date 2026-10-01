@@ -314,6 +314,23 @@ public class Stellurgy {
     }
 
     /**
+     * The running server's subsystem networks — every shield, weapon and other domain node it holds,
+     * and each world's solved topology — or {@code null} when no server is running in this JVM.
+     *
+     * <p>OWNER: the running server; this mod object only holds the reference for it. Built in
+     * {@code serverAboutToStart}, before the first world loads and its tiles register, and RELEASED in
+     * {@code serverStopped}, so the next session in this JVM (an integrated server reopened from the
+     * title screen) starts from an empty one instead of inheriting the last one's nodes. Those two
+     * handlers are its only writers.</p>
+     */
+    private dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager subsystemNetworks;
+
+    /** @see dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager#of */
+    public static dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager subsystemNetworks() {
+        return instance == null ? null : instance.subsystemNetworks;
+    }
+
+    /**
      * Returns a player to the plain world — see {@link dev.stannismod.stellurgy.player.PlayerRelease}.
      *
      * <p><b>Lifetime: the MOD's, and stated because it differs from {@code spaceSubsystem} above.</b>
@@ -1542,6 +1559,10 @@ public class Stellurgy {
 
     @EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
+        // Before worlds load: the first tile to load registers into this server's networks.
+        subsystemNetworks = installOnce(subsystemNetworks,
+                new dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager(),
+                "the subsystem networks");
         // Populate dimension properties before worlds get loaded
         DimensionManager.getInstance().createAndLoadDimensions(resetFromXml);
     }
@@ -1672,6 +1693,7 @@ public class Stellurgy {
         dev.stannismod.stellurgy.event.PlanetEventHandler.onServerStopped();
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
         spaceSubsystem = null;
+        subsystemNetworks = null;
         detachServerServices();
         dev.stannismod.stellurgy.universe.UniverseRegistry.onServerStopped();
         AtmosphereHandler.clear();

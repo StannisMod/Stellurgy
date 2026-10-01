@@ -19,7 +19,6 @@ import javax.annotation.Nullable;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSource;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
 public class TileEntityShieldGenerator extends TileEntity implements ITickable, ISubsystemSource {
 
@@ -72,8 +71,8 @@ public class TileEntityShieldGenerator extends TileEntity implements ITickable, 
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] load generator at {} dim={}", pos, world.provider.getDimension());
             }
@@ -83,8 +82,8 @@ public class TileEntityShieldGenerator extends TileEntity implements ITickable, 
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] invalidate generator at {} dim={}", pos, world.provider.getDimension());
             }
@@ -95,8 +94,8 @@ public class TileEntityShieldGenerator extends TileEntity implements ITickable, 
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] chunk unload generator at {} dim={}", pos, world.provider.getDimension());
             }

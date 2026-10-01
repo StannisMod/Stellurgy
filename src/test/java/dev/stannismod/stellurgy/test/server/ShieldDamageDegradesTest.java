@@ -3,9 +3,11 @@ package dev.stannismod.stellurgy.test.server;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.Reply;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -29,19 +31,18 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     private static final int DIM = 0;
     private static final int Y = 64;
     private static final int Z = 830;
-    private static final long TIMEOUT_MS = 25_000L;
 
     /** How many stages one impact is allowed to buy, sized from the block's OWN stage cost. */
     private static final double STAGES_PER_IMPACT = 1.2D;
 
-    private static final Pattern RADIUS = Pattern.compile("\"radius\":(-?\\d+)");
-    private static final Pattern DECLARED = Pattern.compile("\"declaredRadius\":(-?\\d+)");
-    private static final Pattern CYCLE_COST = Pattern.compile("\"cycleCost\":(-?\\d+)");
-    private static final Pattern CONVERSION = Pattern.compile("\"conversionPerTick\":(-?\\d+)");
-    private static final Pattern THROUGHPUT = Pattern.compile("\"throughput\":(-?\\d+)");
-    private static final Pattern CAPACITY = Pattern.compile("\"shieldMaxEffective\":(-?\\d+)");
-    private static final Pattern STAGE = Pattern.compile("\"stage\":(-?\\d+)");
-    private static final Pattern STAGE_COST = Pattern.compile("\"stageCost\":(-?\\d+)");
+    private static final String RADIUS = "radius";
+    private static final String DECLARED = "declaredRadius";
+    private static final String CYCLE_COST = "cycleCost";
+    private static final String CONVERSION = "conversionPerTick";
+    private static final String THROUGHPUT = "throughput";
+    private static final String CAPACITY = "shieldMaxEffective";
+    private static final String STAGE = "stage";
+    private static final String STAGE_COST = "stageCost";
 
     /**
      * Impact identities, never reused — the service refuses a repeat and answers DUPLICATE_IMPACT,
@@ -51,6 +52,18 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      */
     private static int nextImpactId = 7000;
 
+    private final Events events =
+            new Events(ShieldDamageDegradesTest::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+
+    /**
+     * red-witnessed: with {@code TileEntityFieldGenerator#refreshEffectiveRadius} at {@code int derived = ShieldCondition.effectiveRadius(world, pos, radius, MIN_RADIUS);} deriving the effective radius as
+     * the declared one, this fails with "a damaged emitter must project a SMALLER field than it did
+     * pristine (4 vs 4)"; with {@code TileEntityFieldGenerator#protects} at {@code return distanceSqToCenter(target.getX() + 0.5D, target.getY() + 0.5D, target.getZ() + 0.5D) <= getFieldRadiusSq();}'s {@code protects} measured
+     * against the declared radius, it fails with "the shell drew in and the hull it uncovered is still
+     * reported as covered: {...covered:true...}"; with {@code TileEntityFieldGenerator#getShieldCycleCost} at {@code return estimateShieldCost(radius);}
+     * pricing the cycle off the effective radius, it fails with "a shrunken emitter was billed less
+     * than the field it declared (12060 -> 6780)". 2026-09-30.
+     */
     @Test
     public void aDamagedEmitterCoversLessAndIsStillBilledForWhatItDeclared() throws Exception {
         int gx = 1200, ex = 1201;
@@ -80,7 +93,7 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
 
         // It must still be lit, or "no longer covered" would be about the power, not the radius.
         assertTrue("the shield went dark, so the coverage assertions below would pass for the wrong"
-                + " reason:\n" + damaged, damaged.contains("\"powered\":true"));
+                + " reason:\n" + damaged, Reply.of(damaged).bool("powered"));
         assertTrue("the shell drew in and the hull it uncovered is still reported as covered:\n"
                 + readZone(edge), !covered(edge));
 
@@ -98,6 +111,22 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
         // NO_RECIPE for every block in this subsystem.
     }
 
+    /**
+     * Both verdicts are read off a real explosion's Detonate handler ({@code ForceFieldExplosionHandler},
+     * through {@code MixinForceFieldExplosionHandlerEvents}), which is where production combines the
+     * emitters — each live one takes out of the blast what it protects — and the emitters' lit-ness and
+     * radius are read off the same handler call that decided, so neither can drift between the two.
+     *
+     * <p>red-witnessed, one inversion per line, 2026-09-30: with {@code ForceFieldExplosionHandler.java:41}
+     * (each emitter's {@code filterAffectedBlocks}) removed, this fails at "a hole left by a damaged
+     * emitter must be closed by the neighbour that still reaches it ... the blast took the block there:
+     * {...destroyed:[...,"1234,64,830",...]} | as heard: {...emitters:[{pos:1238,64,830,powered:true,
+     * radius:4},{pos:1230,64,830,powered:true,radius:3}]}"; with {@code TileEntityFieldGenerator.java:327}'s
+     * {@code protects} measured against the declared radius, it fails at "the far side, which only the
+     * damaged emitter ever reached, is still protected from a blast while that emitter is lit and
+     * shrunk ... {...destroyed:["1225,64,830"]}" — the emitter at 1230 read powered:true, radius:3 in
+     * the same handler call.</p>
+     */
     @Test
     public void aNeighbourThatStillReachesClosesTheHoleAndOneThatDoesNotLeavesIt() throws Exception {
         // Two independent single-emitter shields eight blocks apart, so their fields just meet.
@@ -122,17 +151,114 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
         assertTrue("precondition: emitter A's field never shrank (" + radiusAfter + " vs "
                 + radiusBefore + "), so neither point below was ever uncovered by anything:\n"
                 + readShield(aEx), radiusAfter < radiusBefore);
-        assertTrue("precondition: emitter B must still be lit for its coverage to mean anything:\n"
-                + readShield(bEx), readShield(bEx).contains("\"powered\":true"));
+        // BOTH emitters must be lit when the two points are read: a dark A covers its far side no more
+        // than a shrunken one does, and a dark B closes no hole. Measured 2026-09-30: after the shots
+        // A read powered:false (shieldStored 4000 against a cycleCost of 12060), so the far-side
+        // verdict below had been going green on a shield that had merely lost power; and feeding A
+        // back up through its generator took long enough for B to go dark in turn. So both coils are
+        // filled at once and each emitter's tick is driven, which is what re-reads "powered" — the
+        // radius is set by the block's damage, which neither touches.
+        requireLit(aEx);
+        requireLit(bEx);
 
+        // What PRODUCTION decides, not what a probe adds up: a real explosion at each point, whose
+        // Detonate handler asks every live emitter in turn and lets each take out of the blast what
+        // it protects. A block of dirt stands at the point, so the blast has something to take. The
+        // emitters' state is read off the handler's own record at the moment it decided — lit, and
+        // A shrunk — so the verdict and the state it rests on are one reading, not two.
+        String[] hole = explodeAt(between);
+        requireArranged("the blast at the point between the emitters did not even reach the dirt"
+                + " there, so the handler had nothing to decide:\n" + hole[0],
+                listed(hole[0], "candidates", between));
+        requireEmitterAtTheBlast(hole[0], aEx, radiusBefore, true);
+        requireEmitterAtTheBlast(hole[0], bEx, radiusBefore, false);
         assertTrue("a hole left by a damaged emitter must be closed by the neighbour that still"
-                + " reaches it — the field is one blended surface, not a set of private bubbles:\n"
-                + readZone(between), covered(between));
-        assertTrue("the far side, which only the damaged emitter ever reached, is still reported as"
-                + " covered: then nothing was actually lost and the shrink costs a player nothing:\n"
-                + readZone(outboard), !covered(outboard));
+                + " reaches it — the field is one blended surface, not a set of private bubbles; the"
+                + " blast took the block there:\n" + hole[1] + "\nas heard: " + hole[0],
+                !listed(hole[1], "destroyed", between));
+
+        String[] far = explodeAt(outboard);
+        requireArranged("the blast on A's far side did not even reach the dirt there, so the handler"
+                + " had nothing to decide:\n" + far[0], listed(far[0], "candidates", outboard));
+        requireEmitterAtTheBlast(far[0], aEx, radiusBefore, true);
+        assertTrue("the far side, which only the damaged emitter ever reached, is still protected from"
+                + " a blast while that emitter is lit and shrunk: then nothing was actually lost and the"
+                + " shrink costs a player nothing:\n" + far[1] + "\nas heard: " + far[0],
+                listed(far[1], "destroyed", outboard));
     }
 
+    /**
+     * A small real explosion centred in a block of dirt at {@code x}, and the shield's Detonate
+     * handler's own account of it, as {@code {heard, decided}}: {@code shield_explosion_heard} is the
+     * handler's entry — the blast's candidate blocks and every emitter's state as the handler found
+     * it — and {@code shield_explosion_decided} its exit, the blocks the blast goes on to destroy once
+     * every emitter has taken what it protects. The explosion runs inside the probe command on the
+     * server thread, so both records are in the log when the reply is.
+     */
+    private String[] explodeAt(int x) throws Exception {
+        place("minecraft:dirt", x);
+        long mark = events.markInstrumented();
+        // Strength 1: enough to take the block it is centred in (dirt resists far less than one
+        // ray's weakest start), and too weak to reach an emitter four blocks away.
+        Reply.of(exec("stellurgytest shield explode " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
+                + (Z + 0.5D) + " 1.0")).requireOk("set off the blast");
+        String at = (x + 0.5D) + "," + (Y + 0.5D) + "," + (Z + 0.5D);
+        String heard = events.awaitRecordWithFields(mark, "shield_explosion_heard",
+                "the shield's explosion handler never heard the blast at " + x, 20, "at", at);
+        String decided = events.awaitRecordWithFields(mark, "shield_explosion_decided",
+                "the shield's explosion handler never finished deciding the blast at " + x, 20, "at", at);
+        return new String[]{heard, decided};
+    }
+
+    /** Whether the {@code field} list of an explosion record names the block at {@code x}. */
+    private static boolean listed(String decided, String field, int x) {
+        com.google.gson.JsonElement list = new com.google.gson.JsonParser().parse(decided)
+                .getAsJsonObject().get(field);
+        requireArranged("the explosion record carries no `" + field + "` list: " + decided,
+                list != null && list.isJsonArray());
+        String wanted = x + "," + Y + "," + Z;
+        for (com.google.gson.JsonElement pos : list.getAsJsonArray()) {
+            if (wanted.equals(pos.getAsString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The emitter at {@code ex}, as the handler found it when it decided: lit, and — when
+     * {@code shrunk} — projecting less than {@code radiusBefore}. A dark emitter protects nothing and a
+     * whole one still reaches its old edge, and either would decide the verdict for the wrong reason.
+     */
+    private static void requireEmitterAtTheBlast(String decided, int ex, int radiusBefore, boolean shrunk) {
+        String wanted = ex + "," + Y + "," + Z;
+        for (com.google.gson.JsonElement one : new com.google.gson.JsonParser().parse(decided)
+                .getAsJsonObject().getAsJsonArray("emitters")) {
+            com.google.gson.JsonObject emitter = one.getAsJsonObject();
+            if (!wanted.equals(emitter.get("pos").getAsString())) {
+                continue;
+            }
+            requireArranged("the emitter at " + ex + " was dark when the blast was decided, so the"
+                    + " verdict is about its power, not its radius:\n" + decided,
+                    emitter.get("powered").getAsBoolean());
+            if (shrunk) {
+                requireArranged("the emitter at " + ex + " was not shrunk when the blast was decided:\n"
+                        + decided, emitter.get("radius").getAsInt() < radiusBefore);
+            }
+            return;
+        }
+        requireArranged("the handler did not know the emitter at " + ex + " when it decided:\n" + decided,
+                false);
+    }
+
+    /**
+     * red-witnessed, one inversion per block: {@code TileEntityShieldGenerator.java:159} returning the
+     * rated conversion fails this with "a damaged shield generator must convert less than an intact one
+     * (4000 vs 4000)"; {@code TileEntityShieldCable.java:109} returning the rated throughput fails it
+     * with "a damaged cable must carry less than an intact one (20000 vs 20000)";
+     * {@code TileEntityShieldAccumulator.java:141} returning the full capacity fails it with "a damaged
+     * accumulator must hold less than an intact one (500000 vs 500000)". 2026-09-30.
+     */
     @Test
     public void aDamagedGeneratorCableAndAccumulatorEachDeliverLess() throws Exception {
         int genX = 1260, cableX = 1268, accX = 1276;
@@ -170,8 +296,10 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
      * numbers in hand rather than hanging here.
      */
     private int shootUntilFieldShrinks(int ex, int radiusBefore) throws Exception {
-        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
-        for (int shot = 0; shot < 12 && System.currentTimeMillis() < deadline; shot++) {
+        // STIMULUS: every iteration IS an impact plus the feed-and-tick that lets the emitter re-read
+        // its condition — all driven by the probe on the server thread, so the read that opens the
+        // next iteration sees what the last one did. Bounded by shot count, never by wall clock.
+        for (int shot = 0; shot < 12; shot++) {
             int radius = (int) readInt(RADIUS, readShield(ex));
             if (radius < radiusBefore) {
                 return radius;
@@ -180,7 +308,9 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
             // hand. Shooting on until the block is gone would replace "the field never shrank" with
             // "there is no emitter", which is a different sentence and a worse one to read.
             String damage = readStage(ex);
-            if (readInt(STAGE, damage) >= readInt(Pattern.compile("\"maxStage\":(-?\\d+)"), damage) - 1) {
+            // the producer always writes `stage` and `maxStage` on a `damage stage` reply for a
+            // standing block, so refusing on a missing one is the right failure.
+            if (readInt(STAGE, damage) >= readInt("maxStage", damage) - 1) {
                 break;
             }
             hit(ex);
@@ -199,8 +329,10 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
 
     /** Shoot a block until the world records a stage against it. */
     private void shootUntilStaged(int x) throws Exception {
-        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
-        for (int shot = 0; shot < 12 && System.currentTimeMillis() < deadline; shot++) {
+        // STIMULUS: each iteration is one synchronous impact; the stage it wrote is read at once.
+        for (int shot = 0; shot < 12; shot++) {
+            // the producer always writes `stage` on a `damage stage` reply, so refusing on a missing
+            // one is the right failure.
             if (readInt(STAGE, readStage(x)) > 0) {
                 return;
             }
@@ -219,39 +351,53 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
         int budget = (int) Math.ceil(readInt(STAGE_COST, readStage(x)) * STAGES_PER_IMPACT);
         String resp = exec("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
                 + (Z - 2.5D) + " 0 0 1 " + budget + " KINETIC " + (nextImpactId++));
-        assertTrue("the impact was refused, so the block is not being damaged at all: " + resp,
-                resp.contains("\"ok\":true"));
+        Reply.of(resp).requireOk("declare the impact");
         assertTrue("the impact spent nothing — it is not reaching the block, and every assertion"
                 + " after this would be about an undamaged one: " + resp,
-                readInt(Pattern.compile("\"spent\":(-?\\d+)"), resp) > 0);
+                readInt("spent", resp) > 0);
         assertTrue("the block was destroyed rather than damaged, so there is nothing left to degrade: "
-                + readStage(x), !readStage(x).contains("\"wasDestroyed\":true"));
+                + readStage(x), !Reply.of(readStage(x)).bool("wasDestroyed"));
     }
 
     /** Feed the generator until its emitter lights up. */
     private void powerUp(int gx, int ex) throws Exception {
-        for (int i = 0; i < 16 && !readShield(ex).contains("\"powered\":true"); i++) {
+        // STIMULUS: each iteration is a feed plus one probe-driven solve pass.
+        for (int i = 0; i < 16 && !Reply.of(readShield(ex)).bool("powered"); i++) {
             exec("stellurgytest energy inject " + DIM + " " + gx + " " + Y + " " + Z + " 4000");
             exec("stellurgytest tile force-tick " + DIM + " " + gx + " " + Y + " " + Z + " 1");
             exec("stellurgytest shield tick " + DIM);
         }
         assertTrue("precondition: the shield at " + ex + " never powered up:\n" + readShield(ex),
-                readShield(ex).contains("\"powered\":true"));
+                Reply.of(readShield(ex)).bool("powered"));
+    }
+
+    /**
+     * Fill the emitter at {@code ex}'s coil to its maximum and drive its tick, then require it lit. A
+     * full coil holds a tier-0 field for tens of ticks, which covers the reads that follow.
+     */
+    private void requireLit(int ex) throws Exception {
+        long max = readInt("shieldMax", readShield(ex));
+        Reply.of(exec("stellurgytest shield charge " + DIM + " " + ex + " " + Y + " " + Z + " " + max))
+                .requireOk("fill the emitter's coil");
+        Reply.of(exec("stellurgytest tile force-tick " + DIM + " " + ex + " " + Y + " " + Z + " 1"))
+                .requireOk("tick the emitter so it re-reads whether it is lit");
+        String now = readShield(ex);
+        requireArranged("the emitter at " + ex + " is dark with a full coil, so no coverage reading"
+                + " below would be about its radius:\n" + now, Reply.of(now).bool("powered"));
     }
 
     private void clearSite(int minX, int maxX) throws Exception {
-        assertTrue("chunk warmup failed", exec("stellurgytest chunk warmup " + DIM + " " + (minX >> 4) + " "
-                + ((Z - 8) >> 4) + " " + (maxX >> 4) + " " + ((Z + 8) >> 4)).contains("\"ok\":true"));
-        assertTrue("could not clear the site", exec("stellurgytest fill " + DIM + " " + minX + " " + (Y - 2)
-                + " " + (Z - 6) + " " + maxX + " " + (Y + 6) + " " + (Z + 6) + " minecraft:air")
-                .contains("\"ok\":true"));
+        Reply.of(exec("stellurgytest chunk warmup " + DIM + " " + (minX >> 4) + " " + ((Z - 8) >> 4) + " "
+                + (maxX >> 4) + " " + ((Z + 8) >> 4))).requireOk("warm the site's chunks");
+        Reply.of(exec("stellurgytest fill " + DIM + " " + minX + " " + (Y - 2) + " " + (Z - 6) + " " + maxX
+                + " " + (Y + 6) + " " + (Z + 6) + " minecraft:air")).requireOk("clear the site");
     }
 
     // ---- reading the world
 
     /** Whether ANY live emitter still holds the block at {@code x} — the emitter's own predicate. */
     private boolean covered(int x) throws Exception {
-        return readZone(x).contains("\"covered\":true");
+        return Reply.of(readZone(x)).bool("covered");
     }
 
     private String readZone(int x) throws Exception {
@@ -269,13 +415,11 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     private void place(String block, int x) throws Exception {
         String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + Z + ": " + resp,
-                resp.contains("\"placed\":true"));
+                Reply.of(resp).bool("placed"));
     }
 
-    private static long readInt(Pattern pattern, String json) {
-        Matcher m = pattern.matcher(json);
-        assertTrue("no " + pattern.pattern() + " field in probe response: " + json, m.find());
-        return Long.parseLong(m.group(1));
+    private static long readInt(String field, String json) {
+        return Reply.of(json).longInteger(field);
     }
 
     private static String exec(String command) throws Exception {

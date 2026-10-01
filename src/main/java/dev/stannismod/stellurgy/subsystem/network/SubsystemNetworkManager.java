@@ -3,11 +3,7 @@ package dev.stannismod.stellurgy.subsystem.network;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
-import net.minecraftforge.event.world.WorldEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
-import dev.stannismod.stellurgy.api.Constants;
+import dev.stannismod.stellurgy.Stellurgy;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -34,31 +30,87 @@ import java.util.TreeSet;
  * per-tick answer names WHICH constraint bound it ({@link SubsystemNetworkStatus}) instead of only
  * how much arrived. Under a deficit, sink demand is opened in descending priority tiers, so a
  * starved supply fills what the player marked important first and equal priorities share the rest.
+ *
+ * <h3>One per running server</h3>
+ * <p>An instance holds every network of one server session — which nodes exist and each world's
+ * solved topology. The mod object builds one when a server is about to start, before the first world
+ * loads and its tiles register, and drops it when that server has stopped; the next session gets a
+ * fresh one. So a node, a console setting or a solved flow can never outlive the server it belonged
+ * to, whether or not every world was unloaded cleanly on the way out. {@link SubsystemNetworkEvents}
+ * drives it from the world tick and world unload.</p>
  */
-@Mod.EventBusSubscriber(modid = Constants.modId)
 public final class SubsystemNetworkManager {
 
     private static final int INF = 1_000_000_000;
 
-    private static final Map<SubsystemNetworkDomain, Map<Integer, WorldState>> WORLD_STATES = new HashMap<>();
+    private final SubsystemNetworkRegistry registry = new SubsystemNetworkRegistry();
 
-    private SubsystemNetworkManager() {
+    private final Map<SubsystemNetworkDomain, Map<Integer, WorldState>> worldStates = new HashMap<>();
+
+    /** Built by the mod object's server-lifecycle hooks, one per server session. */
+    public SubsystemNetworkManager() {
+    }
+
+    /**
+     * The networks of the server running this world.
+     *
+     * @throws IllegalArgumentException for a null or client world: networks are solved on the server,
+     *                                  and a client world has none to join or to mark
+     * @throws IllegalStateException    when no server session is running, which with a server world in
+     *                                  hand means the lifecycle hooks did not run
+     */
+    public static SubsystemNetworkManager of(World world) {
+        if (world == null || world.isRemote) {
+            throw new IllegalArgumentException("subsystem networks belong to a server world, not to "
+                    + (world == null ? "no world" : "a client world"));
+        }
+        SubsystemNetworkManager current = Stellurgy.subsystemNetworks();
+        if (current == null) {
+            throw new IllegalStateException("no subsystem networks: the server holding dim "
+                    + world.provider.getDimension() + " has not started or has already stopped");
+        }
+        return current;
+    }
+
+    /**
+     * The network the block at this position belongs to, or null if it is in none.
+     *
+     * <p>Reads whatever server session this JVM is running, for a world of either side: a client JVM
+     * attached to a remote server runs no session and reads null, while an integrated server's client
+     * thread reads that server's state by dimension. The second is a cross-side read, and it is what
+     * the consoles' client-built readouts currently show in single player; it is not a contract.</p>
+     */
+    public static SubsystemNetworkState getState(SubsystemNetworkDomain domain, World world, BlockPos pos) {
+        SubsystemNetworkManager current = Stellurgy.subsystemNetworks();
+        return current == null ? null : current.stateAt(domain, world, pos);
+    }
+
+    public void register(ISubsystemNetworkNode node) {
+        registry.register(node);
+    }
+
+    public void unregister(ISubsystemNetworkNode node) {
+        registry.unregister(node);
+    }
+
+    /** Every node of this domain on this server, as a copy the caller may iterate freely. */
+    public Set<ISubsystemNetworkNode> snapshot(SubsystemNetworkDomain domain) {
+        return registry.snapshot(domain);
     }
 
     /** Call when the topology changed — a node placed, broken, or its connectivity altered. */
-    public static void markDirty(SubsystemNetworkDomain domain, World world) {
+    public void markDirty(SubsystemNetworkDomain domain, World world) {
         if (domain == null || world == null || world.isRemote) {
             return;
         }
-        getState(domain, world).dirty = true;
+        worldState(domain, world).dirty = true;
     }
 
-    /** The network the block at this position belongs to, or null if it is in none. */
-    public static SubsystemNetworkState getState(SubsystemNetworkDomain domain, World world, BlockPos pos) {
+    private SubsystemNetworkState stateAt(SubsystemNetworkDomain domain, World world, BlockPos pos) {
         if (domain == null || world == null || pos == null) {
             return null;
         }
-        Map<Integer, WorldState> byDim = WORLD_STATES.get(domain);
+        Map<Integer, WorldState> byDim = worldStates.get(domain);
         if (byDim == null) {
             return null;
         }
@@ -66,60 +118,37 @@ public final class SubsystemNetworkManager {
         return state == null ? null : state.stateByPos.get(pos);
     }
 
-    @SubscribeEvent
-    public static void onWorldTick(TickEvent.WorldTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) {
-            return;
-        }
-        World world = event.world;
-        if (world == null || world.isRemote) {
-            return;
-        }
-        for (SubsystemNetworkDomain domain : SubsystemNetworkRegistry.domains()) {
-            tick(domain, world);
+    /** Every domain's rebuild-if-dirty plus solve, for this world. */
+    void tick(World world) {
+        for (SubsystemNetworkDomain domain : registry.domains()) {
+            WorldState state = worldState(domain, world);
+            if (state.dirty) {
+                // Topology changes are expensive; only rebuild adjacency when the network actually changed.
+                state.rebuild(domain, world);
+            }
+            // Capacities and demands still change every tick, so max-flow is solved against the cached
+            // topology each tick.
+            state.solve();
         }
     }
 
-    /**
-     * One domain's rebuild-if-dirty plus solve, for this world. Extracted from the tick handler so
-     * the work has a name a caller can invoke: the event is one caller, and anything that needs the
-     * network advanced without waiting on the natural tick loop is another.
-     */
-    public static void tick(SubsystemNetworkDomain domain, World world) {
-        if (domain == null || world == null || world.isRemote) {
-            return;
-        }
-        WorldState state = getState(domain, world);
-        if (state.dirty) {
-            // Topology changes are expensive; only rebuild adjacency when the network actually changed.
-            state.rebuild(domain, world);
-        }
-        // Capacities and demands still change every tick, so max-flow is solved against the cached
-        // topology each tick.
-        state.solve();
-    }
-
-    @SubscribeEvent
-    public static void onWorldUnload(WorldEvent.Unload event) {
-        World world = event.getWorld();
-        if (world == null || world.isRemote) {
-            return;
-        }
-        for (SubsystemNetworkDomain domain : SubsystemNetworkRegistry.domains()) {
-            Map<Integer, WorldState> byDim = WORLD_STATES.get(domain);
+    /** This world is going away: its solved state and its nodes go with it. */
+    void releaseWorld(World world) {
+        for (SubsystemNetworkDomain domain : registry.domains()) {
+            Map<Integer, WorldState> byDim = worldStates.get(domain);
             if (byDim != null) {
                 byDim.remove(world.provider.getDimension());
             }
-            SubsystemNetworkRegistry.clearWorld(domain, world);
+            registry.clearWorld(domain, world);
         }
     }
 
-    private static WorldState getState(SubsystemNetworkDomain domain, World world) {
-        Map<Integer, WorldState> byDim = WORLD_STATES.computeIfAbsent(domain, key -> new HashMap<>());
+    private WorldState worldState(SubsystemNetworkDomain domain, World world) {
+        Map<Integer, WorldState> byDim = worldStates.computeIfAbsent(domain, key -> new HashMap<>());
         return byDim.computeIfAbsent(world.provider.getDimension(), key -> new WorldState());
     }
 
-    private static final class WorldState {
+    private final class WorldState {
         private boolean dirty = true;
         private final List<ComponentTopology> components = new ArrayList<>();
         private final Map<BlockPos, SubsystemNetworkState> stateByPos = new HashMap<>();
@@ -130,7 +159,7 @@ public final class SubsystemNetworkManager {
             Set<SubsystemNetworkState> consumedStates = new HashSet<>();
             stateByPos.clear();
 
-            Set<ISubsystemNetworkNode> nodes = SubsystemNetworkRegistry.snapshot(domain);
+            Set<ISubsystemNetworkNode> nodes = registry.snapshot(domain);
             Map<BlockPos, ISubsystemCable> cables = new HashMap<>();
             Map<BlockPos, ISubsystemSource> sources = new HashMap<>();
             Map<BlockPos, ISubsystemSink> sinks = new HashMap<>();

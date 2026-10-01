@@ -25,6 +25,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * repeating itself: a beam nobody has mentioned for {@link #STALE_TICKS} ticks is dropped. That
  * makes the worst case a beam drawn for a fraction of a second too long, instead of one burning
  * across the sky until the player relogs.</p>
+ *
+ * <h3>One per client world</h3>
+ * <p>Each client world carries its own, through {@link ClientWorldDrawings}; the next world starts
+ * with a new, empty one, so a beam from the last dimension is never drawn over the new one.</p>
  */
 public final class ClientBeamTracker {
 
@@ -36,59 +40,37 @@ public final class ClientBeamTracker {
     private static final int STALE_TICKS = 25;
 
     /** Keyed by the gun's packed position: a gun holds at most one beam. */
-    private static final Map<Long, ClientBeam> BEAMS = new ConcurrentHashMap<>();
+    private final Map<Long, ClientBeam> beams = new ConcurrentHashMap<>();
 
-    private ClientBeamTracker() {
+    public ClientBeamTracker() {
     }
 
     /** This gun's beam is burning along this PATH, as of now. */
-    public static void lit(long gun, List<Vec3d> path) {
+    public void lit(long gun, List<Vec3d> path) {
         if (path == null || path.size() < 2) {
             return;
         }
-        ClientBeam beam = BEAMS.get(gun);
+        ClientBeam beam = beams.get(gun);
         if (beam == null) {
-            BEAMS.put(gun, new ClientBeam(path));
+            beams.put(gun, new ClientBeam(path));
             return;
         }
         beam.refresh(path);
     }
 
     /** This gun's beam has gone out. */
-    public static void extinguished(long gun) {
-        BEAMS.remove(gun);
+    public void extinguished(long gun) {
+        beams.remove(gun);
     }
 
     /** Every beam the client currently believes is burning. Read by the renderer, and by nothing else. */
-    public static Collection<ClientBeam> burning() {
-        return BEAMS.values();
+    public Collection<ClientBeam> burning() {
+        return beams.values();
     }
 
     /** How many beams the client is drawing. The observable a client test can ask about. */
-    public static int count() {
-        return BEAMS.size();
-    }
-
-    /**
-     * How many of them have a CORNER in them — a beam something turned.
-     *
-     * <p>The second observable, and it exists because the first cannot see the thing that goes
-     * wrong here. A bent beam sent to a client as two ends is still one drawn beam, so a count of
-     * beams is green whether the corner arrived or not; what a player would see is a laser drawn
-     * straight through the mirror that turned it.</p>
-     */
-    public static int bentCount() {
-        int bent = 0;
-        for (ClientBeam beam : BEAMS.values()) {
-            if (beam.isBent()) {
-                bent++;
-            }
-        }
-        return bent;
-    }
-
-    public static void clear() {
-        BEAMS.clear();
+    public int count() {
+        return beams.size();
     }
 
     /**
@@ -103,8 +85,8 @@ public final class ClientBeamTracker {
     }
 
     /** Age every drawing one tick and drop the ones nobody has mentioned lately. */
-    public static void tick() {
-        BEAMS.values().removeIf(ClientBeam::ageAndCheckStale);
+    public void tick() {
+        beams.values().removeIf(ClientBeam::ageAndCheckStale);
     }
 
     /**

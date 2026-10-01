@@ -6,7 +6,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
 import net.minecraft.util.math.Vec3d;
 import dev.stannismod.stellurgy.api.projectile.ShotEndReason;
-import dev.stannismod.stellurgy.client.ClientShotTracker;
+import dev.stannismod.stellurgy.client.ClientWorldDrawings;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
@@ -68,7 +68,7 @@ public class PacketShotEnd extends BasePacket {
         ShotEndReason[] reasons = ShotEndReason.values();
         ShotEndReason ended = reason >= 0 && reason < reasons.length ? reasons[reason]
                 : ShotEndReason.EXPIRED;
-        ClientShotTracker.end(id, new Vec3d(x, y, z), ended);
+        ClientWorldDrawings.apply(drawings -> drawings.shots().end(id, new Vec3d(x, y, z), ended));
     }
 
     @Override

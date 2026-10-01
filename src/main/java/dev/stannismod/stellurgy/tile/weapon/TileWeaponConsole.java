@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.tile.weapon;
 
+import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -8,6 +9,7 @@ import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import net.minecraftforge.fml.relauncher.Side;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.sensor.TargetTrack;
@@ -15,7 +17,6 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemNetworkController;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkStatus;
 import dev.stannismod.stellurgy.weapon.TurretFireControl;
@@ -30,6 +31,9 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
 import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
 import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
@@ -52,10 +56,13 @@ import java.util.List;
  * commanded individually — which is exactly what the guns' own tests pin.</p>
  */
 public class TileWeaponConsole extends TileEntity implements ITickable, ISubsystemNetworkController,
-        ILinkableTile, IModularInventory, IButtonInventory {
+        ILinkableTile, IModularInventory, IButtonInventory, INetworkMachine {
 
     private static final int BUTTON_HOLD_FIRE = 0;
     private static final int BUTTON_CLEAR_TARGET = 1;
+
+    private static final byte NET_TOGGLE_HOLD_FIRE = 0;
+    private static final byte NET_CLEAR_TARGET = 1;
 
     private boolean registered;
 
@@ -73,8 +80,8 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
             return;
         }
         if (!registered) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(WeaponNetworkDomain.INSTANCE, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);
             registered = true;
         }
     }
@@ -363,11 +370,39 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
                 acquired.getDistance(), acquired.getQuality());
     }
 
+    /**
+     * A button runs on the CLIENT ({@code ModuleButton.actionPerform} is client-only), and the state it
+     * edits — the weapon network's — lives only on the server, so the press travels as a packet and is
+     * applied in {@link #useNetworkData}. The toggle is computed THERE, from the server's own flag, so a
+     * client whose readout is a tick stale still flips the real one.
+     */
     @Override
     public void onInventoryButtonPressed(int buttonId) {
         if (buttonId == BUTTON_HOLD_FIRE) {
-            setHoldFire(!isHoldFire());
+            PacketHandler.sendToServer(new PacketMachine(this, NET_TOGGLE_HOLD_FIRE));
         } else if (buttonId == BUTTON_CLEAR_TARGET) {
+            PacketHandler.sendToServer(new PacketMachine(this, NET_CLEAR_TARGET));
+        }
+    }
+
+    @Override
+    public void writeDataToNetwork(ByteBuf out, byte id) {
+    }
+
+    @Override
+    public void readDataFromNetwork(ByteBuf in, byte packetId, NBTTagCompound nbt) {
+    }
+
+    @Override
+    public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
+        // Who may press these buttons is the GUI's own rule; a packet is the same press, so it answers
+        // to the same rule rather than to a second one written here.
+        if (side.isClient() || !canInteractWithContainer(player)) {
+            return;
+        }
+        if (id == NET_TOGGLE_HOLD_FIRE) {
+            setHoldFire(!isHoldFire());
+        } else if (id == NET_CLEAR_TARGET) {
             clearTarget();
         }
     }
@@ -387,12 +422,12 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     @Override
     public void invalidate() {
         super.invalidate();
-        SubsystemNetworkRegistry.unregister(this);
         if (world != null && !world.isRemote) {
+            SubsystemNetworkManager.of(world).unregister(this);
             // The domain clears the target when a component loses its last console: a battery left
             // firing at a point nobody can retract is the one failure a player cannot fix by
             // breaking something.
-            SubsystemNetworkManager.markDirty(WeaponNetworkDomain.INSTANCE, world);
+            SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);
         }
         registered = false;
     }
@@ -400,7 +435,9 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     @Override
     public void onChunkUnload() {
         super.onChunkUnload();
-        SubsystemNetworkRegistry.unregister(this);
+        if (world != null && !world.isRemote) {
+            SubsystemNetworkManager.of(world).unregister(this);
+        }
         registered = false;
     }
 

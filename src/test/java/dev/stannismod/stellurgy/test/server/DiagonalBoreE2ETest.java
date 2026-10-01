@@ -6,11 +6,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import dev.stannismod.stellurgy.test.Reply;
+
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * An impact arriving at an ANGLE must not leave blocks it passed through untouched.
@@ -31,10 +31,9 @@ import static org.junit.Assert.assertTrue;
 public class DiagonalBoreE2ETest extends AbstractSharedServerTest {
 
     /**
-     * A site per case, not one shared site. Damage records are keyed by POSITION and survive a
-     * re-fill — nothing fires a break event for a probe's {@code setBlockState} — so two cases in one
-     * place would read each other's craters, and which one read which would depend on JUnit's method
-     * ordering.
+     * A site per case, not one shared site. Damage records are keyed by POSITION, so two cases in one
+     * place would depend on the rebuild clearing each other's craters, and which one read which would
+     * depend on JUnit's method ordering.
      */
     private static final int OBLIQUE_X = 11_600, STRAIGHT_X = 11_800;
     private static final int Y = 84, Z = 11_600;
@@ -49,30 +48,37 @@ public class DiagonalBoreE2ETest extends AbstractSharedServerTest {
     /** Below this the chain is too short for "unbroken" to mean anything. */
     private static final int MIN_BLOCKS_DAMAGED = 6;
 
+    /**
+     * red-witnessed: with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor made to skip every voxel entered
+     * through a Z face (a sampled path's missed diagonal step), this fails with "the bore has 6
+     * hole(s) ... (11600,84,11601) -> (11601,84,11602) (2 apart)"; the axis-aligned control stayed
+     * green on the same run. 2026-09-30.
+     */
     @Test
     public void anObliqueImpactLeavesNoUntouchedBlockInsideItsOwnBore() throws Exception {
-        exec("stellurgytest damage clear-impacts");
+        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
         int X = OBLIQUE_X;
         buildSolidTarget(X);
 
-        int stageCost = extractInt(exec("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z),
-                "stageCost");
-        int maxStage = extractInt(exec("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z),
-                "maxStage");
-        assertTrue("no stage cost inside the target, so nothing here could be damaged", stageCost > 0);
-        assertTrue("no stages inside the target", maxStage > 0);
+        Reply inside = ask("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z).requireOk("price the target");
+        int stageCost = inside.integer("stageCost");
+        int maxStage = inside.integer("maxStage");
+        requireArranged("no stage cost inside the target, so nothing here could be damaged: " + inside,
+                stageCost > 0);
+        requireArranged("no stages inside the target: " + inside, maxStage > 0);
 
         // Enough budget to work through a run of blocks, so the chain is long enough to have holes.
         int budget = 10 * maxStage * stageCost;
-        String report = exec("stellurgytest damage impact 0 " + (X - 2.5D) + " " + (Y + 0.5D) + " "
-                + (Z + 0.5D) + " " + DIR_X + " 0 " + DIR_Z + " " + budget + " KINETIC 91001");
-        assertTrue("the oblique impact struck nothing at all — the arrangement, not the engine, is what"
-                + " this run would be measuring:\n" + report,
-                !report.contains("\"outcome\":\"NOTHING_STRUCK\""));
+        Reply report = ask("stellurgytest damage impact 0 " + (X - 2.5D) + " " + (Y + 0.5D) + " "
+                + (Z + 0.5D) + " " + DIR_X + " 0 " + DIR_Z + " " + budget + " KINETIC 91001")
+                .requireOk("declare the oblique impact");
+        requireArranged("the oblique impact struck nothing at all — the arrangement, not the engine, is"
+                + " what this run would be measuring:\n" + report,
+                !"NOTHING_STRUCK".equals(report.text("outcome")));
 
         List<int[]> damaged = damagedBlocks(X);
-        assertTrue("only " + damaged.size() + " blocks were damaged; a chain that short cannot show a"
-                + " hole. report:\n" + report, damaged.size() >= MIN_BLOCKS_DAMAGED);
+        requireArranged("only " + damaged.size() + " blocks were damaged; a chain that short cannot show"
+                + " a hole. report:\n" + report, damaged.size() >= MIN_BLOCKS_DAMAGED);
 
         // Order them the way the round met them: by how far along its own direction each one sits.
         Collections.sort(damaged, new Comparator<int[]>() {
@@ -100,24 +106,29 @@ public class DiagonalBoreE2ETest extends AbstractSharedServerTest {
                 0, holes.size());
     }
 
+    /**
+     * red-witnessed: with {@code SweptVolume#visit} at {@code List<BlockPos> blocks = new ArrayList<BlockPos>(1);}'s ray visitor shifting every even-X voxel one
+     * block south, this fails with "a straight shot along X wandered off its row: (11800,84,11601)
+     * expected:&lt;11600&gt; but was:&lt;11601&gt;". 2026-09-30.
+     */
     @Test
     public void anAxisAlignedImpactIsUnaffected() throws Exception {
         // The control for the change, and the reason it is safe: where the ray is parallel to an axis
         // a sampled path and a traversed one are the same list of blocks. If this ever moves, the fix
         // changed something it had no business changing.
-        exec("stellurgytest damage clear-impacts");
+        ask("stellurgytest damage clear-impacts").requireOk("forget earlier impacts");
         int X = STRAIGHT_X;
         buildSolidTarget(X);
 
-        int stageCost = extractInt(exec("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z),
-                "stageCost");
-        int maxStage = extractInt(exec("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z),
-                "maxStage");
+        Reply inside = ask("stellurgytest damage stage 0 " + (X + 4) + " " + Y + " " + Z).requireOk("price the target");
+        int stageCost = inside.integer("stageCost");
+        int maxStage = inside.integer("maxStage");
         int wanted = 5;
-        String report = exec("stellurgytest damage impact 0 " + (X - 2.5D) + " " + (Y + 0.5D) + " "
-                + (Z + 0.5D) + " 1 0 0 " + (wanted * maxStage * stageCost) + " KINETIC 91002");
-        assertTrue("the straight impact struck nothing:\n" + report,
-                !report.contains("\"outcome\":\"NOTHING_STRUCK\""));
+        Reply report = ask("stellurgytest damage impact 0 " + (X - 2.5D) + " " + (Y + 0.5D) + " "
+                + (Z + 0.5D) + " 1 0 0 " + (wanted * maxStage * stageCost) + " KINETIC 91002")
+                .requireOk("declare the straight impact");
+        requireArranged("the straight impact struck nothing:\n" + report,
+                !"NOTHING_STRUCK".equals(report.text("outcome")));
 
         List<int[]> damaged = damagedBlocks(X);
         assertEquals("a straight shot must damage exactly the blocks its budget covers, in one row:"
@@ -147,15 +158,14 @@ public class DiagonalBoreE2ETest extends AbstractSharedServerTest {
 
     /** Every damage record inside the target, as {x,y,z}. */
     private List<int[]> damagedBlocks(int X) throws Exception {
-        String records = exec("stellurgytest damage records 0 " + (X - 4) + " " + (Y - 2) + " " + (Z - HALF)
-                + " " + (X + DEPTH + 4) + " " + (Y + 2) + " " + (Z + HALF));
-        assertTrue("the records probe failed: " + records, records.contains("\"ok\":true"));
+        Reply records = ask("stellurgytest damage records 0 " + (X - 4) + " " + (Y - 2) + " " + (Z - HALF)
+                + " " + (X + DEPTH + 4) + " " + (Y + 2) + " " + (Z + HALF)).requireOk("read the damage records");
         List<int[]> out = new ArrayList<>();
-        Matcher m = Pattern.compile("\\{\"x\":(-?\\d+),\"y\":(-?\\d+),\"z\":(-?\\d+)").matcher(records);
-        while (m.find()) {
-            out.add(new int[]{Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)),
-                    Integer.parseInt(m.group(3))});
+        for (String entry : records.objectArray("entries")) {
+            Reply one = Reply.of("a damage record", entry);
+            out.add(new int[]{one.integer("x"), one.integer("y"), one.integer("z")});
         }
+        assertEquals("the entry list and the count disagree: " + records, records.integer("count"), out.size());
         return out;
     }
 
@@ -164,28 +174,24 @@ public class DiagonalBoreE2ETest extends AbstractSharedServerTest {
      * damage records — cannot be read as this one's.
      */
     private void buildSolidTarget(int X) throws Exception {
-        assertTrue("chunk warmup failed", exec("stellurgytest chunk warmup 0 " + ((X - 8) >> 4) + " "
-                + ((Z - HALF - 4) >> 4) + " " + ((X + DEPTH + 8) >> 4) + " " + ((Z + HALF + 4) >> 4))
-                .contains("\"ok\":true"));
-        assertTrue("could not clear the approach", exec("stellurgytest fill 0 " + (X - 8) + " " + (Y - 2)
-                + " " + (Z - HALF - 2) + " " + (X - 1) + " " + (Y + 2) + " " + (Z + HALF + 2)
-                + " minecraft:air").contains("\"ok\":true"));
-        // Air first, then stone: filling straight over a previous crater would leave that crater's
-        // damage records attached to the fresh blocks standing in the same positions.
-        assertTrue("could not clear the target", exec("stellurgytest fill 0 " + X + " " + (Y - 2) + " "
-                + (Z - HALF) + " " + (X + DEPTH) + " " + (Y + 2) + " " + (Z + HALF)
-                + " minecraft:air").contains("\"ok\":true"));
-        assertTrue("could not build the target", exec("stellurgytest fill 0 " + X + " " + (Y - 2) + " "
-                + (Z - HALF) + " " + (X + DEPTH) + " " + (Y + 2) + " " + (Z + HALF)
-                + " minecraft:stone").contains("\"ok\":true"));
+        ask("stellurgytest chunk warmup 0 " + ((X - 8) >> 4) + " " + ((Z - HALF - 4) >> 4) + " "
+                + ((X + DEPTH + 8) >> 4) + " " + ((Z + HALF + 4) >> 4)).requireOk("warm the target's chunks");
+        ask("stellurgytest fill 0 " + (X - 8) + " " + (Y - 2) + " " + (Z - HALF - 2) + " " + (X - 1) + " "
+                + (Y + 2) + " " + (Z + HALF + 2) + " minecraft:air").requireOk("clear the approach");
+        // Air first, then stone. The probe's fill clears the damage map over its region as it goes
+        // (TestProbeCommand's fill, "this region is fresh"), so neither pass leaves an earlier
+        // crater's records on the fresh blocks.
+        ask("stellurgytest fill 0 " + X + " " + (Y - 2) + " " + (Z - HALF) + " " + (X + DEPTH) + " "
+                + (Y + 2) + " " + (Z + HALF) + " minecraft:air").requireOk("clear the target");
+        ask("stellurgytest fill 0 " + X + " " + (Y - 2) + " " + (Z - HALF) + " " + (X + DEPTH) + " "
+                + (Y + 2) + " " + (Z + HALF) + " minecraft:stone").requireOk("build the target");
     }
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
     }
 
-    private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+    private Reply ask(String command) throws Exception {
+        return Reply.of(command, exec(command));
     }
 }

@@ -28,7 +28,6 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 import dev.stannismod.stellurgy.weapon.GunAssembly;
 import dev.stannismod.stellurgy.weapon.TurretFireControl;
@@ -123,8 +122,8 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
             return;
         }
         if (!registered) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(WeaponNetworkDomain.INSTANCE, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);
             registered = true;
             assemblyDirty = true;
         }
@@ -834,9 +833,9 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
     public void invalidate() {
         super.invalidate();
         extinguishBeam();
-        SubsystemNetworkRegistry.unregister(this);
         if (world != null && !world.isRemote) {
-            SubsystemNetworkManager.markDirty(WeaponNetworkDomain.INSTANCE, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);
         }
         registered = false;
     }
@@ -845,7 +844,9 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
     public void onChunkUnload() {
         super.onChunkUnload();
         extinguishBeam();
-        SubsystemNetworkRegistry.unregister(this);
+        if (world != null && !world.isRemote) {
+            SubsystemNetworkManager.of(world).unregister(this);
+        }
         registered = false;
     }
 

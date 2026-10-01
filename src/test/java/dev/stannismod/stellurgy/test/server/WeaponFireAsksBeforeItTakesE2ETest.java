@@ -2,9 +2,14 @@ package dev.stannismod.stellurgy.test.server;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.List;
 
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.Weapons;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -28,6 +33,14 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
     private static final int DIM = 0;
     private static final int X = 9800, Y = 82, Z = 9800;
 
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+
+    /**
+     * red-witnessed: with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}
+     * ({@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}) disabled, this fails at "a guarded block was destroyed
+     * by weapon fire anyway" (2026-09-29).
+     */
     @Test
     public void aGuardedBlockSurvivesTheHitThatTakesTheUnguardedOneBesideIt() throws Exception {
         prepare();
@@ -35,91 +48,115 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
         // Two identical blocks, one of them spoken for.
         place(X, "minecraft:stone");
         place(X + 4, "minecraft:stone");
-        String guarded = exec("stellurgytest damage guard " + DIM + " " + X + " " + Y + " " + Z + " true");
-        assertTrue("the veto listener refused to take the position: " + guarded,
-                guarded.contains("\"ok\":true"));
+        Reply guarded = ask("stellurgytest damage guard " + DIM + " " + X + " " + Y + " " + Z + " true");
+        assertTrue("the veto listener refused to take the position: " + guarded, guarded.ok());
 
-        // The same energy into each, straight down the middle of the block.
-        shoot(X);
-        shoot(X + 4);
-        Thread.sleep(1_500L);
+        try {
+            // The same energy into each, straight down the middle of the block.
+            long fired = events.markInstrumented();
+            long subject = shoot(X);
+            long control = shoot(X + 4);
+            Weapons.awaitShotEnded(events, fired, subject, "the round at the guarded block never ended");
+            Weapons.awaitShotEnded(events, fired, control, "the round at the unguarded block never ended");
 
-        String control = exec("stellurgytest damage stage " + DIM + " " + (X + 4) + " " + Y + " " + Z);
-        assertTrue("the UNGUARDED block survived the shot, so this run says nothing about the"
-                + " guarded one: " + control, gone(control));
+            Reply controlStage = stage(X + 4);
+            assertTrue("the UNGUARDED block survived the shot, so this run says nothing about the"
+                    + " guarded one: " + controlStage, gone(controlStage));
 
-        String subject = exec("stellurgytest damage stage " + DIM + " " + X + " " + Y + " " + Z);
-        assertTrue("a guarded block was destroyed by weapon fire anyway: every claim, region and"
-                + " spawn protection on the server is bypassed by building a turret: " + subject,
-                !gone(subject));
-
-        exec("stellurgytest damage unguard-all");
+            // The round did reach the guarded block and was answered there: the guard keeps the hit
+            // and stops it one stage short of gone, which is the stage write this reads.
+            List<String> atSubject = Weapons.stagesSetAt(events, fired, DIM, X, Y, Z);
+            assertTrue("the round never reached the guarded block, so its standing proves nothing: "
+                    + atSubject, !atSubject.isEmpty());
+            Reply subjectStage = stage(X);
+            assertTrue("a guarded block was destroyed by weapon fire anyway: every claim, region and"
+                    + " spawn protection on the server is bypassed by building a turret: " + subjectStage,
+                    !gone(subjectStage));
+        } finally {
+            ask("stellurgytest damage unguard-all").requireOk("drop the guard");
+        }
     }
 
+    /**
+     * red-witnessed: with {@code endWhatWasStillInTheAir} no longer called from
+     * {@code ShotSubstrate.tick}'s switched-off branch ({@code ShotSubstrate#tick} at {@code endWhatWasStillInTheAir(world);}), this fails at
+     * "a round left in the air when the substrate was switched off is still in the registry"
+     * (2026-09-29).
+     *
+     * <p>red-witnessed: with {@code ShotSubstrate#endWhatWasStillInTheAir} at {@code registry.end(shot.getId(), ShotEndReason.SUBSTRATE_DISABLED, endedAt);} ending those rounds as EXPIRED, this fails
+     * at "the round ended, but for the wrong reason ... {...reason:EXPIRED} expected:&lt;[SUBSTRATE_DISABL]ED&gt;"
+     * (2026-09-30).</p>
+     */
     @Test
     public void switchingTheSubstrateOffEndsTheRoundsAlreadyInTheAir() throws Exception {
         prepare();
         try {
             // Straight up, with a long life: it will still be flying when the switch is thrown.
-            String fired = exec("stellurgytest shot fire " + DIM + " " + (X + 20) + " " + Y + " " + Z
-                    + " 0 4 0 2000 400");
-            long id = readLong(fired, "id");
-            assertTrue("the launch was refused, so there is nothing in the air to end: " + fired,
+            long fired = events.markInstrumented();
+            Reply launched = ask("stellurgytest shot fire " + DIM + " " + (X + 20) + " " + Y + " " + Z
+                    + " 0 4 0 2000 400").requireOk("fire a round");
+            long id = launched.longInteger("id");
+            assertTrue("the launch was refused, so there is nothing in the air to end: " + launched,
                     id >= 0L);
-            String inAir = exec("stellurgytest shot read " + DIM + " " + id);
-            assertTrue("the round was not in the air a tick after it was fired: " + inAir,
-                    inAir.contains("\"present\":true"));
+            Reply inAir = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the round");
+            assertTrue("the round was not in the air right after it was fired: " + inAir,
+                    inAir.bool("present"));
 
-            exec("stellurgytest config set enableWeapons false");
-            Thread.sleep(1_000L);
-
-            String after = exec("stellurgytest shot read " + DIM + " " + id);
-            assertTrue("a round left in the air when the substrate was switched off is still in the"
-                    + " registry: the switch suspends the mechanic instead of ending it, and the"
-                    + " round is written back into the save on every tick that follows: " + after,
-                    after.contains("\"present\":false"));
-            assertTrue("the round ended, but for the wrong reason - it should say the substrate was"
-                    + " switched off under it: " + after, after.contains("SUBSTRATE_DISABLED"));
+            ask("stellurgytest config set enableWeapons false").requireOk("switch the substrate off");
+            String ended = Weapons.awaitShotEnded(events, fired, id, "a round left in the air when the"
+                    + " substrate was switched off is still in the registry: the switch suspends the"
+                    + " mechanic instead of ending it, and the round is written back into the save on"
+                    + " every tick that follows");
+            assertEquals("the round ended, but for the wrong reason - it should say the substrate was"
+                    + " switched off under it: " + ended, "SUBSTRATE_DISABLED", Events.text(ended, "reason"));
+            Reply after = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the round");
+            assertTrue("the registry still holds a round it announced as ended: " + after,
+                    !after.bool("present"));
         } finally {
-            exec("stellurgytest config set enableWeapons true");
+            ask("stellurgytest config set enableWeapons true").requireOk("switch the substrate back on");
         }
     }
 
     // ---- driving
 
     private void prepare() throws Exception {
-        exec("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
-                + ((X + 32) >> 4) + " " + ((Z + 16) >> 4));
-        exec("stellurgytest fill " + DIM + " " + (X - 2) + " " + (Y - 2) + " " + (Z - 2) + " " + (X + 30)
-                + " " + (Y + 6) + " " + (Z + 2) + " minecraft:air");
+        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+                + ((X + 32) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
+        ask("stellurgytest fill " + DIM + " " + (X - 2) + " " + (Y - 2) + " " + (Z - 2) + " " + (X + 30)
+                + " " + (Y + 6) + " " + (Z + 2) + " minecraft:air").requireOk("clear the site");
         for (int cx = ((X - 16) >> 4); cx <= ((X + 32) >> 4); cx++) {
-            exec("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4));
+            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (Z >> 4)).requireOk("hold a chunk");
         }
     }
 
     private void place(int x, String block) throws Exception {
-        exec("stellurgytest fill " + DIM + " " + x + " " + Y + " " + Z + " " + x + " " + Y + " " + Z
-                + " " + block);
+        ask("stellurgytest fill " + DIM + " " + x + " " + Y + " " + Z + " " + x + " " + Y + " " + Z
+                + " " + block).requireOk("place " + block);
     }
 
     /** A round with enough energy to take a stone block out in one arrival, fired from close range. */
-    private void shoot(int targetX) throws Exception {
-        exec("stellurgytest shot fire " + DIM + " " + (targetX - 6) + " " + Y + " " + Z
-                + " 4 0 0 2000000 200");
+    private long shoot(int targetX) throws Exception {
+        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (targetX - 6) + " " + Y + " " + Z
+                + " 4 0 0 2000000 200").requireOk("fire at " + targetX);
+        long id = fired.longInteger("id");
+        assertTrue("the launch was refused: " + fired, id >= 0L);
+        return id;
+    }
+
+    private Reply stage(int x) throws Exception {
+        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z).requireOk("read the stage");
     }
 
     /** Has this position been emptied - destroyed outright, or recorded as destroyed? */
-    private static boolean gone(String stageJson) {
-        return stageJson.contains("\"wasDestroyed\":true")
-                || stageJson.contains("\"block\":\"minecraft:air\"");
-    }
-
-    private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    private static boolean gone(Reply stage) {
+        return stage.bool("wasDestroyed") || "minecraft:air".equals(stage.text("block"));
     }
 
     private String exec(String command) throws Exception {
         return String.join("\n", client().execute(command));
+    }
+
+    private Reply ask(String command) throws Exception {
+        return Reply.of(command, exec(command));
     }
 }

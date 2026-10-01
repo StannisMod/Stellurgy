@@ -3,8 +3,7 @@ package dev.stannismod.stellurgy.test.server;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import dev.stannismod.stellurgy.test.Reply;
 
 import static org.junit.Assert.assertTrue;
 
@@ -35,6 +34,16 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
     private static final int DIM = 0;
     private static final int Y = 70;
 
+    /**
+     * red-witnessed: with {@code Walk#visit} at {@code result.entryPoint = here;} (the walk recording its entry point)
+     * removed, this fails with "the report names no entry point, so a continuing shot has nowhere to
+     * resume: {...hasEntry:false...}". Only the entry verdict was individually witnessed; the spend,
+     * depth and staged-or-destroyed verdicts before and after it were not. 2026-09-30.
+     *
+     * <p>red-witnessed: with {@code ShipDamageService#toReport} at {@code return new DamageReport(walk.outcome, walk.stopReason, walk.budgetSpent, walk.budgetLeft,} reporting every walk's outcome as
+     * NOTHING_STRUCK, this fails at "an impact into a solid wall reported striking nothing:
+     * {...outcome:NOTHING_STRUCK...spent:3000...destroyed:3...}" (2026-09-30).</p>
+     */
     @Test
     public void anImpactIntoAWallSpendsIntoItAndReportsWhereItReached() throws Exception {
         int x = 1200, z = 1200;
@@ -45,17 +54,24 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
         // enough to matter but far too small to walk four blocks of stone.
         String result = impact(x - 2.5D, z + 0.5D, 1, 0, 0, 3000, "KINETIC", 9001);
         assertTrue("an impact into a solid wall reported striking nothing:\n" + result,
-                !result.contains("\"outcome\":\"NOTHING_STRUCK\""));
+                !"NOTHING_STRUCK".equals(Reply.of(result).text("outcome")));
         assertTrue("an impact into a wall spent none of its budget:\n" + result,
                 readLong(result, "spent") > 0);
         assertTrue("the report names no depth, so no weapon could tell a slug from a pellet:\n" + result,
                 readLong(result, "depth") > 0);
         assertTrue("the report names no entry point, so a continuing shot has nowhere to resume:\n"
-                + result, result.contains("\"hasEntry\":true"));
+                + result, Reply.of(result).bool("hasEntry"));
         assertTrue("nothing was staged and nothing destroyed, yet budget was spent:\n" + result,
                 readLong(result, "staged") + readLong(result, "destroyed") > 0);
     }
 
+    /**
+     * red-witnessed: with {@code Walk#exitedFarSide} at {@code return decide(DamageOutcome.EXITED, StopReason.EXITED_FAR_SIDE, lastSolidExit);}
+     * decided as {@code ABSORBED/BUDGET_EXHAUSTED} instead, this fails with "a budget that dwarfs a
+     * single pane did not report exiting: {...outcome:ABSORBED...left:399624...}". 2026-09-30, taken on
+     * the pre-fix form, where that decision was made inline in {@code Walk#visit}; the fix that same day
+     * moved it into its own method without changing it.
+     */
     @Test
     public void anImpactThatOutlastsTheWallExitsCarryingTheRest() throws Exception {
         int x = 1200, z = 1220;
@@ -65,17 +81,24 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
         // One pane of glass against a budget sized for a great deal more than one pane.
         String result = impact(x - 2.5D, z + 0.5D, 1, 0, 0, 400000, "KINETIC", 9002);
         assertTrue("a budget that dwarfs a single pane did not report exiting:\n" + result,
-                result.contains("\"outcome\":\"EXITED\""));
+                "EXITED".equals(Reply.of(result).text("outcome")));
         assertTrue("an exiting impact must say it left the far side:\n" + result,
-                result.contains("\"stopReason\":\"EXITED_FAR_SIDE\""));
+                "EXITED_FAR_SIDE".equals(Reply.of(result).text("stopReason")));
         assertTrue("an exiting impact carries no budget onward — the shot was silently swallowed:\n"
                 + result, readLong(result, "left") > 0);
         assertTrue("an exiting impact names no exit point, so a continuing shot cannot resume:\n"
-                + result, result.contains("\"hasExit\":true"));
+                + result, Reply.of(result).bool("hasExit"));
         assertTrue("the pane survived a budget that should have taken it:\n" + result,
                 readLong(result, "destroyed") > 0);
     }
 
+    /**
+     * red-witnessed: with {@code ShipDamageService#apply} at {@code if (isDuplicate(world, request.getImpactId()))}'s duplicate check disabled, this fails with
+     * "the same impact identity was applied a second time ... {...stopReason:EXITED_FAR_SIDE,spent:1000
+     * ...}"; with the same check widened to also refuse {@code impactId - 1}, the fresh-identity verdict
+     * fails with "a fresh impact identity was refused as a duplicate: {...DUPLICATE_IMPACT...}".
+     * 2026-09-30.
+     */
     @Test
     public void theSameImpactIdentityAppliedTwiceDamagesOnce() throws Exception {
         int x = 1200, z = 1240;
@@ -91,7 +114,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
         String second = impact(x - 2.5D, z + 0.5D, 1, 0, 0, 3000, "KINETIC", id);
         assertTrue("the same impact identity was applied a second time — a retry on the resolution "
                 + "path would therefore damage twice, and no diff would show it:\n" + second,
-                second.contains("\"stopReason\":\"DUPLICATE_IMPACT\""));
+                "DUPLICATE_IMPACT".equals(Reply.of(second).text("stopReason")));
         assertTrue("a refused duplicate spent budget:\n" + second, readLong(second, "spent") == 0);
         assertTrue("a refused duplicate did not hand the budget back:\n" + second,
                 readLong(second, "left") == 3000);
@@ -100,10 +123,15 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
         // otherwise the dedup would have turned into "one impact per position, ever".
         String third = impact(x - 2.5D, z + 0.5D, 1, 0, 0, 3000, "KINETIC", id + 1);
         assertTrue("a fresh impact identity was refused as a duplicate:\n" + third,
-                !third.contains("\"stopReason\":\"DUPLICATE_IMPACT\""));
+                !"DUPLICATE_IMPACT".equals(Reply.of(third).text("stopReason")));
         assertTrue("a fresh impact identity spent nothing:\n" + third, readLong(third, "spent") > 0);
     }
 
+    /**
+     * red-witnessed: with {@code StructureDamageEngine#spendInto} at {@code int stageCost = stageCost(world, pos, areaFactor, kind);}'s per-stage price overwritten to 1 in
+     * the spend (the probe's quoted price untouched), this fails with "the same budget went as far into
+     * iron as into glass (glass destroyed 8, iron destroyed 8)". 2026-09-30.
+     */
     @Test
     public void aTougherWallIsNotPenetratedFurtherThanAFlimsyOneAtEqualBudget() throws Exception {
         int thickness = 8;
@@ -154,6 +182,10 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
      * held by the price itself: the base term of the law is material-independent and the price rounds
      * up to at least one. So "almost no material" lands at "almost free", never at "free" — which is
      * what stops a body walking an arbitrarily long run of decoration for nothing.</p>
+     *
+     * <p>red-witnessed: with {@code StructureDamageEngine#occupancyOf} at {@code if (world == null || pos == null)}'s {@code occupancyOf} answering 1.0
+     * for every block, this fails with "a carpet costs what a solid block of the same wool costs
+     * (carpet=76 block=76)". The never-free verdict was not separately witnessed. 2026-09-30.</p>
      */
     @Test
     public void aBlockIsPricedByHowMuchOfItsVoxelItFillsAndNeverAtNothing() throws Exception {
@@ -191,7 +223,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
         String resp = exec("stellurgytest fill " + DIM + " " + x + " " + Y + " " + z + " "
                 + (x + thickness - 1) + " " + Y + " " + z + " " + block);
         assertTrue("failed to build the " + block + " wall at " + x + "," + Y + "," + z + ": " + resp,
-                resp.contains("\"ok\":true"));
+                Reply.of(resp).ok());
         assertTrue("the " + block + " wall placed no blocks, so every assertion below would be about "
                 + "an empty row of air: " + resp, readLong(resp, "placed") == thickness);
     }
@@ -203,9 +235,7 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
     }
 
     private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        return Reply.of(json).longInteger(key);
     }
 
     private static String exec(String command) throws Exception {

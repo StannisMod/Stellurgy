@@ -2,10 +2,15 @@ package dev.stannismod.stellurgy.test.server;
 
 import org.junit.Test;
 
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.Weapons;
 
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -20,22 +25,48 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>The second claim is the only body ordering the penetration law makes on its own: at the same
  * energy, the narrower round goes deeper. Not a depth — an ordering, because the depth is balance.</p>
+ *
+ * <p>What happens between ticks is read off the round's own history and the wall's: the energy it
+ * paid ({@code shot_energy_spent}), the stages it wrote ({@code block_stage_set}), and its ending
+ * ({@code shot_ended}), each stamped with the tick it happened on.</p>
  */
 public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
     private static final int Y = 70;
     private static final int Z = 870;
-    private static final long TIMEOUT_MS = 25_000L;
+
+    /**
+     * A lifetime far longer than any wait here: a round that sails through its wall must still be in
+     * the air when a wait on its ENDING gives up, so that wait fails on the right silence.
+     */
+    private static final int LONG_LIFETIME_TICKS = 1200;
 
     /** Slow on purpose: a round that crosses a block per tick cannot be caught in the middle of one. */
     private static final double BORE_SPEED = 0.45D;
 
-    private static final Pattern PRESENT = Pattern.compile("\"present\":(true|false)");
-    private static final Pattern ENERGY = Pattern.compile("\"energy\":(-?\\d+)");
-    private static final Pattern ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern STAGE = Pattern.compile("\"stage\":(-?\\d+)");
+    /** This class's reader of the server's ordered event log. */
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
+    /**
+     * The claim is about what is true BETWEEN ticks, so it is read off the round's own history rather
+     * than off samples of it: every tick in which the round paid for depth, and the tick it ended.
+     * Before penetration-over-time the whole bore resolved inside ONE step and the round ended there;
+     * that history has at most one paying tick, and it is the ending tick.
+     *
+     * <p>red-witnessed: with the still-inside branch of {@code ShotSubstrate.step}
+     * ({@code ShotSubstrate#step} at {@code else if (!contact.leftTheStructure)}) made to end the round at the contact tick, this fails at "the
+     * round paid for depth on fewer than two ticks before it ended (paying ticks [23], ended at 23)"
+     * (2026-09-29).</p>
+     *
+     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with both of {@code ShotSubstrate.step}'s
+     * come-to-rest returns ({@code ShotSubstrate.java:283} and {@code :320}) answering EXPIRED, this
+     * fails at "the round ended, but not by coming to rest in what it was drilling ... but
+     * was:&lt;[EXPIRED]&gt;"; with {@code StructureDamageEngine.java:367} charging a stage 1/2.7 of its
+     * price (the probe's quoted price unchanged, so the budget is still "3.5 blocks" by it), at "the
+     * round reached the far side of a wall it could not afford: {...stage:2...block:minecraft:stone...}".</p>
+     */
     @Test
     public void aRoundKeepsBoringAcrossTicksInsteadOfEndingAtTheSurface() throws Exception {
         int wallX = 1400;
@@ -46,36 +77,48 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
         // the price comes from the toughness table, which is balance and will move, and a hard-coded
         // budget silently becomes "sails clean through" the day it does.
         int budget = budgetForBlocks(wallX, 3.5D);
-        long id = fire(wallX - 3.5D, BORE_SPEED, budget, 0.25D);
+        long fired = events.markInstrumented();
+        long id = fire(wallX - 3.5D, BORE_SPEED, budget, 0.25D, LONG_LIFETIME_TICKS);
         assertTrue("the substrate refused the shot, so there is nothing to observe: id=" + id, id >= 0);
 
-        // The moment of contact: energy starts falling. The round must still EXIST at that moment —
-        // this is the whole difference from the behaviour this replaces.
-        String duringBore = awaitEnergyBelow(id, budget);
-        assertTrue("the round ended in the tick it met the wall, which is exactly the behaviour"
-                + " penetration-over-time replaces:\n" + duringBore, isPresent(duringBore));
-        long energyInside = energyOf(duringBore);
+        // A deadline for the link, not a verdict: 3.5 blocks of approach and 3.5 of wall at 0.45 a tick
+        // is under twenty ticks. A round that sailed through the wall flies on to its 1200-tick
+        // lifetime and fails here, which is the right failure for it.
+        String ended = events.awaitRecordWithField(fired, "shot_ended", "shot", id,
+                "the round never ended within the wall it cannot afford — it sailed through, or is"
+                        + " still in the air", 400);
+        assertEquals("the round ended, but not by coming to rest in what it was drilling: " + ended,
+                "STRUCTURE_IMPACT", Events.text(ended, "reason"));
+        long endTick = (long) Events.number(ended, "tick");
 
-        // ...and it is still spending, tick after tick, while it is in there.
-        String later = awaitEnergyBelow(id, energyInside);
-        assertTrue("the round stopped paying for its depth while still inside the wall — then it is"
-                + " not boring, it is parked:\n" + later, energyOf(later) < energyInside);
+        String spent = events.since(fired, "shot_energy_spent");
+        Events.assertInstrumentRan(spent, "shot_events", "the round paid for depth on these ticks");
+        java.util.SortedSet<Long> payingTicks = new java.util.TreeSet<>();
+        for (String record : Events.recordsWhere(spent, "shot", String.valueOf(id))) {
+            payingTicks.add((long) Events.number(record, "tick"));
+        }
+        assertTrue("the round paid for depth on fewer than two ticks before it ended (paying ticks "
+                + payingTicks + ", ended at " + endTick + "): then the bore resolved in one go and the"
+                + " round merely lingered, which is the behaviour penetration-over-time replaces | "
+                + spent, payingTicks.headSet(endTick).size() >= 2);
 
-        // It ends inside rather than sailing through: the wall is thicker than its budget.
-        assertTrue("a round with a fraction of the budget the wall costs came out the other side:\n"
-                + read(id), awaitGone(id));
-
-        // And it left a bore, not a crater: the front of the wall is gone or damaged, and the far
-        // side of it was never reached.
+        // And it left a bore, not a crater: the front of the wall is damaged, and the far side of it
+        // was never reached.
+        Reply front = stageAt(wallX);
         assertTrue("the wall's front block is untouched, so the round never actually spent anything"
-                + " into it: " + stageAt(wallX), stageOf(stageAt(wallX)) > 0 || destroyed(wallX));
-        assertTrue("the round reached the far side of a wall it could not afford: " + stageAt(wallX + 9),
-                stageOf(stageAt(wallX + 9)) == 0 && !destroyed(wallX + 9));
+                + " into it: " + front, front.integer("stage") > 0 || front.bool("wasDestroyed"));
+        Reply far = stageAt(wallX + 9);
+        assertTrue("the round reached the far side of a wall it could not afford: " + far,
+                far.integer("stage") == 0 && !far.bool("wasDestroyed"));
     }
 
     /**
      * The one body ordering the law makes by itself: energy buys depth against the material's
      * resistance ACROSS THE BODY'S FACE, so the same energy through a narrower round goes further.
+     *
+     * <p>red-witnessed: with {@code ContactResolver.areaOf} ({@code ContactResolver#areaOf} at {@code return r <= 0.0D ? ImpactRequest.REFERENCE_AREA : Math.PI * r * r;}) answering
+     * the reference area for every radius, this fails at "the narrow round must bore deeper than the wide
+     * one on the same energy (narrow=4 wide=4)" (2026-09-29).</p>
      */
     @Test
     public void aNarrowerRoundOutrunsAWiderOneOnTheSameEnergy() throws Exception {
@@ -86,30 +129,45 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
         buildWall(wideX, 10);
 
         int budget = budgetForBlocks(narrowX, 3.5D);
-        long narrow = fire(narrowX - 3.5D, BORE_SPEED, budget, 0.25D);
-        long wide = fire(wideX - 3.5D, BORE_SPEED, budget, 0.75D);
+        long fired = events.markInstrumented();
+        // Given a lifetime inside the wait: a round too poor to buy a stage across its face LODGES in
+        // it and lives out its lifetime there (measured on the wide round of this scenario,
+        // 2026-09-29), so its ending is the expiry — a record that must come before the deadline.
+        long narrow = fire(narrowX - 3.5D, BORE_SPEED, budget, 0.25D, Weapons.ROUND_LIFETIME_TICKS);
+        long wide = fire(wideX - 3.5D, BORE_SPEED, budget, 0.75D, Weapons.ROUND_LIFETIME_TICKS);
         assertTrue("both rounds must be admitted or the comparison is about one of them: " + narrow
                 + " / " + wide, narrow >= 0 && wide >= 0);
-
-        awaitGone(narrow);
-        awaitGone(wide);
+        Weapons.awaitShotEnded(events, fired, narrow, "the narrow round never ended inside its wall");
+        Weapons.awaitShotEnded(events, fired, wide, "the wide round never ended inside its wall");
 
         int narrowDepth = boreDepth(narrowX);
         int wideDepth = boreDepth(wideX);
-        assertTrue("the narrow round must bore at least as deep as the wide one on the same energy"
+        assertTrue("the narrow round did not get into the wall at all, so the comparison is between"
+                + " two zeroes", narrowDepth > 0);
+        assertTrue("the narrow round must bore deeper than the wide one on the same energy"
                 + " (narrow=" + narrowDepth + " wide=" + wideDepth + "): the material resists across"
                 + " the body's face, so a wider face buys less depth per unit of energy",
                 narrowDepth > wideDepth);
-        assertTrue("the narrow round did not get into the wall at all, so the comparison is between"
-                + " two zeroes", narrowDepth > 0);
     }
 
     /**
      * A round that cannot get through comes to REST inside, and the hole it is making GROWS while it
      * does. The second half is the one worth a server test: a bore that deepened all at once and then
      * sat there would satisfy every "it is still present" assertion in this class and still be the
-     * instant resolution penetration-over-time replaced. So the depth is read TWICE while the round
-     * is in the air, and the claim is that the second reading is deeper.
+     * instant resolution penetration-over-time replaced. So the wall's own stage writes are grouped by
+     * the tick they happened on, and the claim is that a LATER tick before the round's end reached
+     * deeper than the first one did.
+     *
+     * <p>red-witnessed: with the still-inside branch of {@code ShotSubstrate.step}
+     * ({@code ShotSubstrate#step} at {@code else if (!contact.leftTheStructure)}) made to end the round at the contact tick, this fails at "the bore
+     * reached 1 blocks on its first tick and never deeper on a later one ... (deepest by tick {102=1},
+     * ended at 102)" (2026-09-29).</p>
+     *
+     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with both come-to-rest returns
+     * ({@code ShotSubstrate.java:283} and {@code :320}) answering EXPIRED, this fails at "the round
+     * stopped, but not by coming to rest in what it was drilling ... but was:&lt;[EXPIRED]&gt;"; with
+     * {@code StructureDamageEngine.java:367} charging a stage 1/2.7 of its price, at "a round with a
+     * fraction of the wall's price came out the far side: {...stage:2...}".</p>
      */
     @Test
     public void aRoundThatCannotGetThroughRestsInsideAndItsCraterGrowsWhileItDoes() throws Exception {
@@ -119,43 +177,114 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
 
         // Enough to eat several blocks, nowhere near enough for ten: it must run out INSIDE.
         int budget = budgetForBlocks(wallX, 3.5D);
-        long id = fire(wallX - 3.5D, BORE_SPEED, budget, 0.25D);
+        long fired = events.markInstrumented();
+        long id = fire(wallX - 3.5D, BORE_SPEED, budget, 0.25D, LONG_LIFETIME_TICKS);
         assertTrue("the substrate refused the shot", id >= 0);
 
-        // First reading: taken the moment it has spent anything at all, so it is certainly inside.
-        String biting = awaitEnergyBelow(id, budget);
-        assertTrue("the round ended in the tick it met the wall", isPresent(biting));
-        int firstDepth = awaitDepthAtLeast(wallX, 1);
-        assertTrue("nothing was damaged after the round started paying: " + stageAt(wallX),
-                firstDepth >= 1);
+        String ended = Weapons.awaitShotEnded(events, fired, id,
+                "a round with a fraction of the wall's price never came to rest");
+        assertEquals("the round stopped, but not by coming to rest in what it was drilling: " + ended,
+                "STRUCTURE_IMPACT", Events.text(ended, "reason"));
+        long endTick = (long) Events.number(ended, "tick");
 
-        // Second reading: deeper, while the same round is still in the air. Polled rather than timed —
-        // this server ticks at its own rate and a sleep would be pinning the wall clock.
-        int secondDepth = awaitDepthAtLeast(wallX, firstDepth + 1);
-        assertTrue("the bore stopped at " + firstDepth + " blocks and never deepened while the round"
-                + " was still inside: then the crater was cut in one go and the round merely lingered"
-                + " — which is the behaviour penetration-over-time replaces", secondDepth > firstDepth);
-
-        assertTrue("a round with a fraction of the wall's price came out the far side", awaitGone(id));
-        assertEquals("the round stopped, but not by coming to rest in what it was drilling: " + read(id),
-                "STRUCTURE_IMPACT", endedOf(read(id)));
+        // The deepest block of the wall row staged on each tick, strictly before the round ended.
+        String staged = events.since(fired, "block_stage_set");
+        Events.assertInstrumentRan(staged, "damage_stage_events", "the wall's stage writes during the bore");
+        SortedMap<Long, Integer> deepestByTick = new TreeMap<>();
+        for (String record : Events.recordsWhere(staged, "dim", String.valueOf(DIM))) {
+            String[] at = String.valueOf(Events.text(record, "pos")).split(",");
+            int x = Integer.parseInt(at[0]);
+            long tick = (long) Events.number(record, "tick");
+            if (Integer.parseInt(at[1]) == Y && Integer.parseInt(at[2]) == Z && x >= wallX && x < wallX + 10
+                    && tick <= endTick) {
+                deepestByTick.merge(tick, x - wallX + 1, Math::max);
+            }
+        }
+        assertTrue("nothing was staged while the round was in the wall: " + staged, !deepestByTick.isEmpty());
+        int firstDepth = deepestByTick.get(deepestByTick.firstKey());
+        int laterDepth = 0;
+        for (int depth : deepestByTick.tailMap(deepestByTick.firstKey() + 1).values()) {
+            laterDepth = Math.max(laterDepth, depth);
+        }
+        assertTrue("the bore reached " + firstDepth + " blocks on its first tick and never deeper on a"
+                + " later one while the round was still inside (deepest by tick " + deepestByTick
+                + ", ended at " + endTick + "): then the crater was cut in one go and the round merely"
+                + " lingered — which is the behaviour penetration-over-time replaces",
+                laterDepth > firstDepth);
+        Reply far = stageAt(wallX + 9);
+        assertTrue("a round with a fraction of the wall's price came out the far side: " + far,
+                far.integer("stage") == 0 && !far.bool("wasDestroyed"));
     }
 
     /**
      * A round richer than the plate goes THROUGH it, and is worth less and slower on the far side —
      * and, the part that has no other way of being observed, its continuation is not refused as a
-     * duplicate of its own first impact. Two thin plates with a gap: one round, both damaged. A dedup
+     * duplicate of its own first impact. Two thin plates with a gap: one round, both staged. A dedup
      * memory keyed on the shot rather than on the impact would let the first plate be hit and silently
      * drop everything the same round did afterwards, and no single-plate test can tell.
+     *
+     * <p>red-witnessed: with the contact identity in {@code ShotSubstrate.step} ({@code ShotSubstrate#step} at {@code TravellingBody body = new TravellingBody(ShotRegistry.get(world).nextImpactId(),})
+     * taken from the SHOT rather than from the world's impact counter, this fails at "the SECOND plate was
+     * never staged by a round that flew past it with budget in hand" (2026-09-29).</p>
+     *
+     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with {@code ShotSubstrate.java:286}'s
+     * energy write skipped for a round that left the structure, this fails at "the round left the
+     * plates with everything it arrived with (6000 of 6000)"; with {@code ShotSubstrate.java:310}'s
+     * slowing skipped on the same branch, at "the round left the plates at its muzzle speed (2.0 of
+     * 2.0)".</p>
      */
+    /**
+     * A round too poor to buy even one stage crosses the block and comes out of the far side.
+     *
+     * <p>A stage is bought whole or not at all, so such a round pays nothing and loses nothing: it
+     * spends 1 / speed ticks inside the block and then leaves it. The leaving is what this pins. The
+     * damage walk reports how far a body got, and for one that came out of the far side that is where
+     * it LEFT — a walk that reported where it had entered the last solid slice told a round resuming
+     * inside a block that it had got nowhere, so the substrate advanced it by nothing, met the same
+     * block again, and the round stayed in it for good.</p>
+     *
+     * <p>The column is four blocks tall because a round fired level in the overworld falls as it
+     * crosses (under a block and a quarter over its ten ticks inside), and the verdict is on X alone,
+     * which gravity does not touch: past the column's far face, whatever ended the round afterwards.</p>
+     *
+     * <p>red-witnessed: with {@code Walk#exitedFarSide} at {@code result.distanceWalked = lastSolidExitDistance;} removed, so reporting the distance to
+     * where the last solid slice was ENTERED (its shape before this fix), this fails with "a round with
+     * half a stage's worth never came out of the far side of a one-block column (ended at x
+     * 1600.8047999999283, far face at 1601)" (2026-09-30).</p>
+     */
+    @Test
+    public void aRoundTooPoorForAStageComesOutOfTheFarSide() throws Exception {
+        int colX = 1600;
+        prepare(colX);
+        ask("stellurgytest fill " + DIM + " " + colX + " " + (Y - 2) + " " + Z + " " + colX + " " + (Y + 1) + " " + Z
+                + " minecraft:stone").requireOk("raise the column");
+        int stageCost = stageAt(colX).integer("stageCost");
+        requireArranged("the column has no price, so no budget can be chosen under it", stageCost > 1);
+
+        double speed = 0.2D;
+        int lifetime = 15;
+        long fired = events.markInstrumented();
+        long id = fire(colX - 1.0D, speed, stageCost / 2, 0.25D, lifetime);
+        assertTrue("the substrate refused the shot", id >= 0);
+        events.awaitRecordWithField(fired, "shot_ended", "shot", id,
+                "the round never ended within its own lifetime", lifetime + 40);
+
+        Reply end = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the ended round");
+        assertTrue("a round with half a stage's worth never came out of the far side of a one-block column"
+                + " (ended at x " + end.number("endX") + ", far face at " + (colX + 1) + "): " + end,
+                end.number("endX") > colX + 1);
+        Reply column = stageAt(colX);
+        assertEquals("a round that could not afford a stage damaged the block anyway: " + column, 0,
+                column.integer("stage"));
+    }
+
     @Test
     public void aRoundThroughAThinHullLeavesSlowerAndItsOwnContinuationIsNotRefused() throws Exception {
         int firstX = 1540;
         int secondX = firstX + 4;
         prepare(firstX);
-        assertTrue("could not clear the gap", exec("stellurgytest fill " + DIM + " " + firstX + " " + (Y - 1)
-                + " " + (Z - 1) + " " + (secondX + 2) + " " + (Y + 1) + " " + (Z + 1)
-                + " minecraft:air").contains("\"ok\":true"));
+        ask("stellurgytest fill " + DIM + " " + firstX + " " + (Y - 1) + " " + (Z - 1) + " " + (secondX + 2)
+                + " " + (Y + 1) + " " + (Z + 1) + " minecraft:air").requireOk("clear the gap");
         place("minecraft:stone", firstX);
         place("minecraft:stone", secondX);
 
@@ -163,33 +292,39 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
         // side, so it must not be a test about running out.
         int budget = budgetForBlocks(firstX, 6.0D);
         double muzzleSpeed = 2.0D;
-        long id = fire(firstX - 3.0D, muzzleSpeed, budget, 0.25D);
+        long fired = events.markInstrumented();
+        long id = fire(firstX - 3.0D, muzzleSpeed, budget, 0.25D, LONG_LIFETIME_TICKS);
         assertTrue("the substrate refused the shot", id >= 0);
 
-        String past = awaitPastX(id, secondX + 1.0D);
-        assertTrue("the round never got past the second plate while still in the air: " + past,
-                isPresent(past));
-        assertTrue("the round left the plate with everything it arrived with (" + energyOf(past)
-                + " of " + budget + "): going through has to cost something", energyOf(past) < budget);
-        assertTrue("the round left the plate at its muzzle speed (" + speedOf(past) + " of "
-                + muzzleSpeed + "): spending energy on depth costs a body its speed",
-                speedOf(past) < muzzleSpeed);
+        events.awaitRecordWithFields(fired, "block_stage_set",
+                "the first plate was never staged, so this round never went through anything",
+                Weapons.SUBJECT_TICKS, "dim", String.valueOf(DIM), "pos", Weapons.at(firstX, Y, Z));
+        events.awaitRecordWithFields(fired, "block_stage_set",
+                "the SECOND plate was never staged by a round that flew past it with budget in hand:"
+                        + " the round's own continuation was refused as a duplicate of its first"
+                        + " impact, which is the one failure a single-plate test cannot see",
+                Weapons.SUBJECT_TICKS, "dim", String.valueOf(DIM), "pos", Weapons.at(secondX, Y, Z));
 
-        assertTrue("the first plate is untouched, so this round never went through anything: "
-                + stageAt(firstX), stageOf(stageAt(firstX)) > 0 || destroyed(firstX));
-        assertTrue("the SECOND plate is untouched by a round that flew past it with budget in hand ("
-                + stageAt(secondX) + "): the round's own continuation was refused as a duplicate of"
-                + " its first impact, which is the one failure a single-plate test cannot see",
-                stageOf(stageAt(secondX)) > 0 || destroyed(secondX));
+        Reply read = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the round");
+        assertTrue("the round did not survive the second plate, so nothing is known about the far"
+                + " side: " + read, read.bool("present"));
+        Reply past = Reply.of("the round", read.object("shot"));
+        assertTrue("the round is not past the second plate after staging it: " + past,
+                past.number("x") > secondX + 1.0D);
+        assertTrue("the round left the plates with everything it arrived with (" + past.integer("energy")
+                + " of " + budget + "): going through has to cost something", past.integer("energy") < budget);
+        assertTrue("the round left the plates at its muzzle speed (" + past.number("speed") + " of "
+                + muzzleSpeed + "): spending energy on depth costs a body its speed",
+                past.number("speed") < muzzleSpeed);
     }
 
     // ---- driving
 
-    private long fire(double x, double speed, int energy, double radius) throws Exception {
-        String resp = exec("stellurgytest shot fire " + DIM + " " + x + " " + (Y + 0.5D) + " " + (Z + 0.5D)
-                + " " + speed + " 0 0 " + energy + " 1200 KINETIC " + radius + " 1.0");
-        Matcher m = ID.matcher(resp);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    /** The round's id, or the substrate's own {@code -1} when it refused to admit one. */
+    private long fire(double x, double speed, int energy, double radius, int lifetime) throws Exception {
+        return ask("stellurgytest shot fire " + DIM + " " + x + " " + (Y + 0.5D) + " " + (Z + 0.5D)
+                + " " + speed + " 0 0 " + energy + " " + lifetime + " KINETIC " + radius + " 1.0")
+                .requireOk("fire a round").longInteger("id");
     }
 
     private void buildWall(int fromX, int depth) throws Exception {
@@ -199,78 +334,22 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
     }
 
     private void prepare(int wallX) throws Exception {
-        assertTrue("chunk warmup failed", exec("stellurgytest chunk warmup " + DIM + " "
-                + ((wallX - 16) >> 4) + " " + ((Z - 16) >> 4) + " " + ((wallX + 24) >> 4) + " "
-                + ((Z + 16) >> 4)).contains("\"ok\":true"));
-        assertTrue("could not clear the site", exec("stellurgytest fill " + DIM + " " + (wallX - 8) + " "
-                + (Y - 2) + " " + (Z - 3) + " " + (wallX + 20) + " " + (Y + 4) + " " + (Z + 3)
-                + " minecraft:air").contains("\"ok\":true"));
+        ask("stellurgytest chunk warmup " + DIM + " " + ((wallX - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
+                + ((wallX + 24) >> 4) + " " + ((Z + 16) >> 4)).requireOk("chunk warmup");
+        ask("stellurgytest fill " + DIM + " " + (wallX - 8) + " " + (Y - 2) + " " + (Z - 3) + " "
+                + (wallX + 20) + " " + (Y + 4) + " " + (Z + 3) + " minecraft:air").requireOk("clear the site");
     }
 
     // ---- reading
-
-    /** Poll until the round's energy drops below {@code above}, or the budget runs out. */
-    private String awaitEnergyBelow(long id, long above) throws Exception {
-        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
-        String state = read(id);
-        while (System.currentTimeMillis() < deadline && isPresent(state) && energyOf(state) >= above) {
-            Thread.sleep(120L);
-            state = read(id);
-        }
-        return state;
-    }
-
-    private boolean awaitGone(long id) throws Exception {
-        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
-        while (System.currentTimeMillis() < deadline && isPresent(read(id))) {
-            Thread.sleep(150L);
-        }
-        return !isPresent(read(id));
-    }
-
-    /** Poll until the bore is at least this deep, or the budget of patience runs out. */
-    private int awaitDepthAtLeast(int wallX, int wanted) throws Exception {
-        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
-        int depth = boreDepth(wallX);
-        while (System.currentTimeMillis() < deadline && depth < wanted) {
-            Thread.sleep(120L);
-            depth = boreDepth(wallX);
-        }
-        return depth;
-    }
-
-    /** Poll until the round is past {@code x}, so what is read is a body on the FAR side. */
-    private String awaitPastX(long id, double x) throws Exception {
-        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
-        String state = read(id);
-        while (System.currentTimeMillis() < deadline && isPresent(state) && xOf(state) < x) {
-            Thread.sleep(100L);
-            state = read(id);
-        }
-        return state;
-    }
-
-    private static double xOf(String json) {
-        Matcher m = Pattern.compile("\"x\":(-?[\\d.eE+-]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : Double.NEGATIVE_INFINITY;
-    }
-
-    private static double speedOf(String json) {
-        Matcher m = Pattern.compile("\"speed\":(-?[\\d.eE+-]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : -1.0D;
-    }
-
-    private static String endedOf(String json) {
-        Matcher m = Pattern.compile("\"ended\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
-    }
 
     /** How many blocks deep into the wall took damage: the bore's own length. */
     private int boreDepth(int wallX) throws Exception {
         int depth = 0;
         for (int i = 0; i < 10; i++) {
-            String stage = stageAt(wallX + i);
-            if (stageOf(stage) > 0 || destroyed(wallX + i)) {
+            Reply stage = stageAt(wallX + i);
+            // the producer always writes `stage` and `wasDestroyed` on a `damage stage` reply, so
+            // refusing on a missing one is the right failure.
+            if (stage.integer("stage") > 0 || stage.bool("wasDestroyed")) {
                 depth = i + 1;
             }
         }
@@ -279,52 +358,27 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
 
     /** What boring {@code blocks} of this wall costs at the reference cross-section, priced by the game. */
     private int budgetForBlocks(int wallX, double blocks) throws Exception {
-        String stage = stageAt(wallX);
-        int cost = readInt(stage, "stageCost");
-        int stages = Math.max(1, readInt(stage, "maxStage"));
+        Reply stage = stageAt(wallX);
+        int cost = stage.integer("stageCost");
+        int stages = Math.max(1, stage.integer("maxStage"));
         assertTrue("the wall block has no stage cost, so nothing below is priced: " + stage, cost > 0);
         return (int) Math.round(cost * stages * blocks);
     }
 
-    private static int readInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : -1;
-    }
-
-    private String stageAt(int x) throws Exception {
-        return exec("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
-    }
-
-    private boolean destroyed(int x) throws Exception {
-        return stageAt(x).contains("\"wasDestroyed\":true");
-    }
-
-    private static int stageOf(String json) {
-        Matcher m = STAGE.matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : 0;
-    }
-
-    private String read(long id) throws Exception {
-        return exec("stellurgytest shot read " + DIM + " " + id);
-    }
-
-    private static boolean isPresent(String json) {
-        Matcher m = PRESENT.matcher(json);
-        return m.find() && "true".equals(m.group(1));
-    }
-
-    private static long energyOf(String json) {
-        Matcher m = ENERGY.matcher(json);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
+    private Reply stageAt(int x) throws Exception {
+        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
     }
 
     private void place(String block, int x) throws Exception {
-        String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block);
-        assertTrue("failed to place " + block + " at " + x + ": " + resp,
-                resp.contains("\"placed\":true"));
+        Reply placed = ask("stellurgytest place " + DIM + " " + x + " " + Y + " " + Z + " " + block);
+        assertTrue("failed to place " + block + " at " + x + ": " + placed, placed.bool("placed"));
     }
 
-    private static String exec(String command) throws Exception {
+    private String exec(String command) throws Exception {
         return String.join("\n", client().execute(command));
+    }
+
+    private Reply ask(String command) throws Exception {
+        return Reply.of(command, exec(command));
     }
 }

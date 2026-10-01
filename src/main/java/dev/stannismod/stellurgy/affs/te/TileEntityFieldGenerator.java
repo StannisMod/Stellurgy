@@ -41,7 +41,6 @@ import java.util.*;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 
 public class TileEntityFieldGenerator extends TileEntity implements ITickable, FieldSource, ISubsystemSink {
 
@@ -203,7 +202,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         priority = value;
         if (world != null && !world.isRemote) {
             markDirty();
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             queueClientSync(false);
         }
     }
@@ -214,8 +213,8 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         resolveFieldFrame();
         if (world != null && !world.isRemote) {
             ACTIVE_GENERATORS.add(this);
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             refreshEffectiveRadius();
             refreshFieldPowerState(true);
         }
@@ -711,8 +710,8 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public void invalidate() {
         if (world != null && !world.isRemote) {
             ACTIVE_GENERATORS.remove(this);
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.invalidate();
     }
@@ -721,8 +720,8 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
             ACTIVE_GENERATORS.remove(this);
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
     }

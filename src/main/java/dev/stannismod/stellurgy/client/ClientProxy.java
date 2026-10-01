@@ -409,6 +409,7 @@ public class ClientProxy extends CommonProxy {
         super.registerEventHandlers();
         MinecraftForge.EVENT_BUS.register(new RocketEventHandler());
         MinecraftForge.EVENT_BUS.register(new DelayedParticleRenderingEventHandler());
+        ClientWorldDrawings.register();
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.client.render.RenderShots());
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.client.render.RenderBeams());
         MinecraftForge.EVENT_BUS.register(ModuleContainerPan.class);

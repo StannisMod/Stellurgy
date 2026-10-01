@@ -20,50 +20,46 @@ import java.util.concurrent.ConcurrentHashMap;
  * question — that is what makes it safe for it to be approximate, and it is why the shot layer's
  * own comment that a client "never steps one" is still true: it steps a drawing, not a shot.</p>
  *
- * <h3>Held here rather than in the world</h3>
- * <p>A client shot has no block, no entity and no chunk, so there is nowhere in the world for it to
- * live. It is cleared when the player leaves a world, because a round from the last dimension drawn
- * over the new one is worse than no round at all.</p>
+ * <h3>Held by the client world</h3>
+ * <p>A client shot has no block, no entity and no chunk, so there is no block or entity for it to
+ * live on. It lives on the client WORLD instead, through {@link ClientWorldDrawings}: each client world
+ * carries its own tracker and the next world starts with a new, empty one, because a round from the
+ * last dimension drawn over the new one is worse than no round at all.</p>
  */
 public final class ClientShotTracker {
 
     /** How long a spent round's flash is kept before it stops being drawn. */
     private static final int IMPACT_FLASH_TICKS = 10;
 
-    private static final Map<Long, ClientShot> SHOTS = new ConcurrentHashMap<>();
-    private static final List<Impact> IMPACTS = Collections.synchronizedList(new ArrayList<Impact>());
+    private final Map<Long, ClientShot> shots = new ConcurrentHashMap<>();
+    private final List<Impact> impacts = Collections.synchronizedList(new ArrayList<Impact>());
 
-    private ClientShotTracker() {
+    ClientShotTracker() {
     }
 
-    public static void spawn(long id, Vec3d origin, Vec3d velocity, float radius, int lifetimeTicks,
-                             double gravityPerTickSquared) {
-        SHOTS.put(id, new ClientShot(origin, velocity, radius, lifetimeTicks, gravityPerTickSquared));
+    public void spawn(long id, Vec3d origin, Vec3d velocity, float radius, int lifetimeTicks,
+                      double gravityPerTickSquared) {
+        shots.put(id, new ClientShot(origin, velocity, radius, lifetimeTicks, gravityPerTickSquared));
     }
 
     /** A round the server says is over: stop drawing the flight, start drawing the flash. */
-    public static void end(long id, Vec3d point, ShotEndReason reason) {
-        SHOTS.remove(id);
-        IMPACTS.add(new Impact(point, reason));
+    public void end(long id, Vec3d point, ShotEndReason reason) {
+        shots.remove(id);
+        impacts.add(new Impact(point, reason));
     }
 
     /** Everything the client currently believes is up. Read by the renderer, and by nothing else. */
-    public static Collection<ClientShot> inFlight() {
-        return SHOTS.values();
+    public Collection<ClientShot> inFlight() {
+        return shots.values();
     }
 
-    public static List<Impact> impacts() {
-        return IMPACTS;
+    public List<Impact> impacts() {
+        return impacts;
     }
 
     /** How many rounds the client is drawing. The observable a client test can ask about. */
-    public static int count() {
-        return SHOTS.size();
-    }
-
-    public static void clear() {
-        SHOTS.clear();
-        IMPACTS.clear();
+    public int count() {
+        return shots.size();
     }
 
     /**
@@ -71,10 +67,10 @@ public final class ClientShotTracker {
      * told is dropped, because a server that never sent an end packet is a server whose end packet
      * did not reach this player.
      */
-    public static void tick() {
-        SHOTS.values().removeIf(ClientShot::stepAndCheckExpired);
-        synchronized (IMPACTS) {
-            IMPACTS.removeIf(Impact::ageAndCheckDone);
+    public void tick() {
+        shots.values().removeIf(ClientShot::stepAndCheckExpired);
+        synchronized (impacts) {
+            impacts.removeIf(Impact::ageAndCheckDone);
         }
     }
 

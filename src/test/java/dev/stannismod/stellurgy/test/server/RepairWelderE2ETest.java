@@ -2,8 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import dev.stannismod.stellurgy.test.Reply;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -32,6 +31,12 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
     private static final int PLENTY_OF_CHARGE = 100000;
     private static final int PLENTY_OF_MATERIAL = 64;
 
+    /**
+     * red-witnessed: with {@code ItemRepairWelder#weld} at {@code RepairCost.consume(player, cost, false);} (the real material withdrawal) removed,
+     * this fails with "the repair took no material — nothing may be created from nothing:
+     * {...materialBefore:64,materialAfter:64...}". The stage and charge verdicts were not separately
+     * witnessed. 2026-09-30.
+     */
     @Test
     public void oneUseTakesOneStageAndIsPaidForTwice() throws Exception {
         int x = X, y = Y, z = Z;
@@ -50,6 +55,12 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
                 extractInt(weld, "energyAfter") < extractInt(weld, "energyBefore"));
     }
 
+    /**
+     * red-witnessed: with a charge withdrawal inserted before {@code ItemRepairWelder#weld} at {@code return Outcome.NO_MATERIALS;}'s
+     * NO_MATERIALS return, this fails with "a refused repair spent charge: {...outcome:NO_MATERIALS,
+     * energyBefore:100000,energyAfter:98000...}". The later refusals' verdicts were not separately
+     * witnessed. 2026-09-30.
+     */
     @Test
     public void everyRefusalIsItsOwnAnswerAndCostsNothing() throws Exception {
         // Each case gets its own block: a refusal that quietly consumed something would otherwise be
@@ -102,18 +113,18 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
     }
 
     private void place(int x, int y, int z, String block) throws Exception {
-        assertTrue("chunk warmup failed", exec("stellurgytest chunk warmup 0 " + ((x - 2) >> 4) + " "
-                + ((z - 2) >> 4) + " " + ((x + 20) >> 4) + " " + ((z + 2) >> 4)).contains("\"ok\":true"));
-        assertTrue("could not clear the site", exec("stellurgytest fill 0 " + (x - 1) + " " + y + " " + (z - 1)
-                + " " + (x + 1) + " " + (y + 6) + " " + (z + 1) + " minecraft:air").contains("\"ok\":true"));
-        assertTrue("could not place " + block, exec("stellurgytest fill 0 " + x + " " + y + " " + z
-                + " " + x + " " + y + " " + z + " " + block).contains("\"ok\":true"));
+        Reply.of(exec("stellurgytest chunk warmup 0 " + ((x - 2) >> 4) + " " + ((z - 2) >> 4) + " "
+                + ((x + 20) >> 4) + " " + ((z + 2) >> 4))).requireOk("warm the site's chunks");
+        Reply.of(exec("stellurgytest fill 0 " + (x - 1) + " " + y + " " + (z - 1) + " " + (x + 1) + " "
+                + (y + 6) + " " + (z + 1) + " minecraft:air")).requireOk("clear the site");
+        Reply.of(exec("stellurgytest fill 0 " + x + " " + y + " " + z + " " + x + " " + y + " " + z + " "
+                + block)).requireOk("place " + block);
     }
 
     private String weld(int x, int y, int z, int charge, String material, int count) throws Exception {
         String reply = exec("stellurgytest damage weld 0 " + x + " " + y + " " + z + " " + charge
                 + " " + material + " " + count);
-        assertTrue("the weld probe failed: " + reply, reply.contains("\"ok\":true"));
+        Reply.of(reply).requireOk("weld the block");
         return reply;
     }
 
@@ -122,18 +133,14 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
     }
 
     private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return Long.parseLong(m.group(1));
+        return Reply.of(json).longInteger(key);
     }
 
     private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
+        return Reply.of(json).integer(key);
     }
 
     private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
+        return Reply.of(json).text(key);
     }
 }

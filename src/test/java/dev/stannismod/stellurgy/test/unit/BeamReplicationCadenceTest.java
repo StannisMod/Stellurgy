@@ -138,36 +138,57 @@ public class BeamReplicationCadenceTest {
                 + " period, which is the peak the period was chosen to avoid", phases.size() > 3);
     }
 
-    /** The tracker is the client's whole memory of what is burning; it starts and ends empty. */
+    /**
+     * The tracker is the client's whole memory of what is burning; it starts and ends empty.
+     *
+     * <p>red-witnessed: with {@code ClientBeamTracker#ClientBeamTracker} (an empty body) made to put one
+     * beam into a new tracker, this fails at "the client's beam tracker did not start
+     * empty expected:&lt;0&gt; but was:&lt;1&gt;" (2026-09-30).</p>
+     *
+     * <p>red-witnessed: with {@code ClientBeamTracker#lit} at {@code beams.put(gun, new ClientBeam(path));}
+     * deleted, this fails at "a beam the client was told about is not being drawn expected:&lt;1&gt; but
+     * was:&lt;0&gt;" (2026-09-30).</p>
+     *
+     * <p>red-witnessed: with {@code ClientBeamTracker#extinguished} at {@code beams.remove(gun);} deleted,
+     * this fails at "a beam the client was told had gone out is still being drawn expected:&lt;0&gt; but
+     * was:&lt;1&gt;" (2026-09-30).</p>
+     */
     @Test
     public void theClientDrawsNothingUntilItIsTold() {
-        ClientBeamTracker.clear();
-        assertEquals("the client's beam tracker did not start empty", 0, ClientBeamTracker.count());
-        ClientBeamTracker.lit(GUN.toLong(), line(MUZZLE, TARGET));
+        ClientBeamTracker beams = new ClientBeamTracker();
+        assertEquals("the client's beam tracker did not start empty", 0, beams.count());
+        beams.lit(GUN.toLong(), line(MUZZLE, TARGET));
         assertEquals("a beam the client was told about is not being drawn", 1,
-                ClientBeamTracker.count());
-        ClientBeamTracker.extinguished(GUN.toLong());
+                beams.count());
+        beams.extinguished(GUN.toLong());
         assertEquals("a beam the client was told had gone out is still being drawn", 0,
-                ClientBeamTracker.count());
+                beams.count());
     }
 
     /**
      * The backstop for every way a beam can end without anybody being able to say so — the gun blown
      * up, the chunk unloaded, the player out of range at the moment it stopped.
+     *
+     * <p>red-witnessed: with {@code ClientBeamTracker#lit} at {@code beams.put(gun, new ClientBeam(path));}
+     * deleted, this fails at "a beam went undrawn while it was still being mentioned expected:&lt;1&gt;
+     * but was:&lt;0&gt;" (2026-09-30).</p>
+     *
+     * <p>red-witnessed: with {@code ClientBeam#ageAndCheckStale} at
+     * {@code return ++sinceHeard > STALE_TICKS;} made to return false, this fails at "a beam nobody has
+     * mentioned since it lit is still being drawn … expected:&lt;0&gt; but was:&lt;1&gt;" (2026-09-30).</p>
      */
     @Test
     public void aBeamNobodyMentionsAgainStopsBeingDrawn() {
-        ClientBeamTracker.clear();
-        ClientBeamTracker.lit(GUN.toLong(), line(MUZZLE, TARGET));
+        ClientBeamTracker beams = new ClientBeamTracker();
+        beams.lit(GUN.toLong(), line(MUZZLE, TARGET));
         for (int tick = 0; tick < ClientBeamTracker.stalenessTicks(); tick++) {
-            ClientBeamTracker.tick();
+            beams.tick();
         }
         assertEquals("a beam went undrawn while it was still being mentioned", 1,
-                ClientBeamTracker.count());
-        ClientBeamTracker.tick();
+                beams.count());
+        beams.tick();
         assertEquals("a beam nobody has mentioned since it lit is still being drawn: a gun destroyed"
                 + " mid-burn would leave a beam burning across the sky until the player relogged", 0,
-                ClientBeamTracker.count());
-        ClientBeamTracker.clear();
+                beams.count());
     }
 }

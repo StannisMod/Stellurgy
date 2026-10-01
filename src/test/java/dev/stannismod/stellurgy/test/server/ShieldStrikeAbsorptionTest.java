@@ -5,8 +5,6 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 
@@ -82,6 +80,12 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + downResult, (!Reply.of(downResult).bool("intercepted")));
     }
 
+    /**
+     * red-witnessed: with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, Math.max(1, residual));}'s short-pay residual forced to 0, this
+     * fails with "an overmatching strike was reported fully absorbed — the shield cannot afford it:
+     * {...fullyAbsorbed:true,residual:0...}"; the charged-shield method stayed green on that run.
+     * 2026-09-30.
+     */
     @Test
     public void strikeGracefullyPenetratesAShieldItOutmatches() throws Exception {
         int gx = 1010, gz = 822;
@@ -117,6 +121,22 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 + " before=" + storedBefore + "):\n" + result, storedAfter < storedBefore / 4L);
     }
 
+    /**
+     * red-witnessed: with {@code ShieldStrikeService#absorb} at {@code if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())}'s reflection branch disabled, this fails
+     * with "a fully absorbed kinetic strike carrying a travelling body was not reflected ...
+     * {...reflected:false...}". The bodiless half and the equal-bill verdict were not separately
+     * witnessed. 2026-09-30.
+     *
+     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with {@code ShieldStrikeService#absorb} at {@code Vec3d newVelocity = generator.reflectBodyVelocity(hitPoint, strike.getBodyVelocity());}
+     * handing the body back its own velocity, this fails at "the reflected body still travels inward
+     * (newVz=-2.0, it arrived at -2.0)"; with {@code ShieldStrikeService#absorb} at {@code return ShieldStrikeResult.intercepted(hitPoint, spent, 0);}'s full pay answering a
+     * residual of 1, at "an abstract kinetic source with no travelling body was not fully absorbed ...
+     * {...fullyAbsorbed:false...residual:1...}"; with {@code ShieldStrikeService#absorb} at {@code if (strike.getKind() == ShieldStrikeKind.KINETIC && strike.hasBody())} reflecting
+     * every fully paid kinetic strike, a bodiless one along its own ray, at "a strike with no travelling
+     * body was reflected ... {...declaredBody:false...reflected:true...}". A first attempt at the last
+     * — dropping only the {@code hasBody()} test — stayed green: the shell mirrors a null velocity to
+     * null and the result then reads unreflected.</p>
+     */
     @Test
     public void aDeclaredBodyIsReflectedWhereAnIdenticalBodilessStrikeIsStopped() throws Exception {
         int gx = 1010, gz = 834;
@@ -136,12 +156,12 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         String withBody = strike(ex, gz, impactEnergy, "KINETIC", 0.0D, 0.0D, -inwardSpeed);
         assertTrue("a declared body was not reported as declared — the probe never handed one to the "
                 + "service, so nothing below tests reflection:\n" + withBody,
-                withBody.contains("\"declaredBody\":true"));
+                Reply.of(withBody).bool("declaredBody"));
         assertTrue("a shield that could pay did not fully absorb the strike:\n" + withBody,
-                withBody.contains("\"fullyAbsorbed\":true"));
+                Reply.of(withBody).bool("fullyAbsorbed"));
         assertTrue("a fully absorbed kinetic strike carrying a travelling body was not reflected — a "
                 + "shot that lives as a record must bounce like a thrown body does:\n" + withBody,
-                withBody.contains("\"reflected\":true"));
+                Reply.of(withBody).bool("reflected"));
 
         // It came in along -Z, so it must leave along +Z: the shell reverses the inward component.
         double newVz = readDouble(withBody, "newVz");
@@ -157,11 +177,11 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
 
         String bodiless = strike(ex, gz, impactEnergy, "KINETIC");
         assertTrue("a bodiless declared strike was reported as carrying a body:\n" + bodiless,
-                bodiless.contains("\"declaredBody\":false"));
+                !Reply.of(bodiless).bool("declaredBody"));
         assertTrue("an abstract kinetic source with no travelling body was not fully absorbed:\n" + bodiless,
-                bodiless.contains("\"fullyAbsorbed\":true"));
+                Reply.of(bodiless).bool("fullyAbsorbed"));
         assertTrue("a strike with no travelling body was reflected — there is nothing there to reflect:\n"
-                + bodiless, bodiless.contains("\"reflected\":false"));
+                + bodiless, !Reply.of(bodiless).bool("reflected"));
 
         // One impact, one pricing path: reflecting is not a surcharge. Same declared energy, same kind,
         // same shell => the same bill, whether or not a body came back out.
@@ -172,6 +192,11 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
                 bodyCost == bodilessCost);
     }
 
+    /**
+     * red-witnessed: with a line inserted before {@code ShieldStrikeService#absorb} at {@code double fractionStopped = (double) spent / (double) cost;} reflecting any
+     * body on a SHORT pay, this fails with "an overmatching strike was reported fully absorbed ...
+     * {...reflected:true,newVz:2.0...}". 2026-09-30.
+     */
     @Test
     public void aBodyThatOutmatchesTheShieldPenetratesInsteadOfBouncing() throws Exception {
         int gx = 1010, gz = 846;
@@ -192,12 +217,12 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
         // Without this the whole test passes on a strike that never carried a body at all — "did not
         // reflect" is the trivial answer to "there was nothing there".
         assertTrue("the body this test declares never reached the service:\n" + result,
-                result.contains("\"declaredBody\":true"));
+                Reply.of(result).bool("declaredBody"));
         assertTrue("an overmatching strike was reported fully absorbed — the shield cannot afford it:\n"
-                + result, result.contains("\"fullyAbsorbed\":false"));
+                + result, !Reply.of(result).bool("fullyAbsorbed"));
         assertTrue("a shield that could not pay still reflected the body: graceful penetration means the "
                 + "body carries on, not that it bounces for free:\n" + result,
-                result.contains("\"reflected\":false"));
+                !Reply.of(result).bool("reflected"));
         assertTrue("no residual impact passed a shield that could not fully pay:\n" + result,
                 readLong(result, "residual") > 0);
     }
@@ -246,14 +271,11 @@ public class ShieldStrikeAbsorptionTest extends AbstractSharedServerTest {
     }
 
     private static double readDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?[0-9][0-9.eE+-]*)").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return Double.parseDouble(m.group(1));
+        return Reply.of(json).number(key);
     }
 
     private static long readLong(String json, String key) {
-        assertTrue("no " + key + " field in: " + json, Reply.of(json).has(key));
-        return Reply.of(json).integer(key);
+        return Reply.of(json).longInteger(key);
     }
 
     private static String exec(String command) throws Exception {

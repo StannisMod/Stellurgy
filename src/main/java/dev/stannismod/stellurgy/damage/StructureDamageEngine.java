@@ -205,6 +205,8 @@ public final class StructureDamageEngine {
         private int consecutiveEmpty;
         private boolean previousWasSolid;
         private Vec3d lastSolidExit;
+        /** How far along the reach {@link #lastSolidExit} lies, in blocks. */
+        private double lastSolidExitDistance;
 
         private Walk(World world, Vec3d entry, Vec3d direction, WalkResult result, double reachBlocks,
                      double crossSectionArea, boolean resumesInside, ImpactKind kind) {
@@ -240,6 +242,7 @@ public final class StructureDamageEngine {
             if (previousWasSolid) {
                 // The body left the previous solid slice exactly where it entered this one.
                 lastSolidExit = here;
+                lastSolidExitDistance = layer.tEnter * reach;
                 previousWasSolid = false;
             }
 
@@ -258,7 +261,7 @@ public final class StructureDamageEngine {
             }
             if (!anySolid) {
                 if (entered && ++consecutiveEmpty >= GAP_TOLERANCE) {
-                    return decide(DamageOutcome.EXITED, StopReason.EXITED_FAR_SIDE, lastSolidExit);
+                    return exitedFarSide();
                 }
                 return false;
             }
@@ -346,11 +349,27 @@ public final class StructureDamageEngine {
             // same fact: still in the material with the path spent, or out the far side with path
             // to spare. A body that "exited" without leaving would be advanced past whatever stood
             // beyond it, which is not a thing it ever reached.
+            if (!previousWasSolid) {
+                exitedFarSide();
+                return result;
+            }
             result.outcome = DamageOutcome.EXITED;
-            result.stopReason = previousWasSolid
-                    ? StopReason.REACH_EXHAUSTED : StopReason.EXITED_FAR_SIDE;
-            result.exitPoint = previousWasSolid ? farEnd : lastSolidExit;
+            result.stopReason = StopReason.REACH_EXHAUSTED;
+            result.exitPoint = farEnd;
             return result;
+        }
+
+        /**
+         * Out the far side: the body got as far as where it LEFT the last solid slice, and that is the
+         * distance it reports — not where it entered that slice. A bore resuming inside a block enters
+         * its last slice at zero, so reporting the entry told a round that had just come out of a plate
+         * it had walked nowhere; the substrate then advanced it by nothing, found the same plate again
+         * and argued with it until the tick's crossings ran out, ending the tick in open air and
+         * dropping the hull it was lodged in.
+         */
+        private boolean exitedFarSide() {
+            result.distanceWalked = lastSolidExitDistance;
+            return decide(DamageOutcome.EXITED, StopReason.EXITED_FAR_SIDE, lastSolidExit);
         }
     }
 

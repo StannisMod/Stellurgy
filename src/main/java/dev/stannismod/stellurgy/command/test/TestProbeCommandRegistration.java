@@ -49,15 +49,17 @@ public final class TestProbeCommandRegistration {
         if (!isTestMode()) {
             return;
         }
-        event.registerServerCommand(new TestProbeCommand());
+        // What belongs to THIS server's life: on the bus from here, off it when the server stops.
+        ServerScoped scope = ServerScoped.start();
+        event.registerServerCommand(new TestProbeCommand(scope.hold(new WeaponFireVetoProbe())));
         // register the rocket-event recorder at server start so
         // counters are accurate from the first rocket lifecycle event.
         TestProbeCommand.RocketEventRecorder.ensureRegistered();
         // The ordered event log. Subscribed here and nowhere else, so a shipped game has no
         // subscriber, builds no record and pays nothing for what only a test wants to see.
         TestEventLog.ServerRecorder.ensureRegistered();
-        // Same shape, same reason: the damage recorder only a damage scenario ever reads.
-        TestProbeCommand.DamageOccurrenceRecorder.ensureRegistered();
+        // The listener every tile gets, writing what the damage service tells a unit into that log.
+        scope.hold(new TestProbeCommand.DamageOccurrenceRecorder());
         // Ships stay loaded for the life of a TEST server, and a scenario whose SUBJECT is an
         // unloaded ship turns it off for itself (`stellurgytest vs permaload false`).
         //

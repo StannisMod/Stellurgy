@@ -8,13 +8,13 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
-import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.client.ClientBeamTracker;
+import dev.stannismod.stellurgy.client.ClientWorldDrawings;
 
 /**
  * Draws the beams the client has been told are burning.
@@ -51,23 +51,19 @@ public class RenderBeams {
         if (mc.world == null || mc.isGamePaused()) {
             return;
         }
-        ClientBeamTracker.tick();
-    }
-
-    /** Leaving a world drops every drawing: a beam from the last dimension has no business here. */
-    @SubscribeEvent
-    public void onWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld() != null && event.getWorld().isRemote) {
-            ClientBeamTracker.clear();
-        }
+        ClientWorldDrawings.of(mc.world).beams().tick();
     }
 
     @SubscribeEvent
     public void onRenderWorldLast(RenderWorldLastEvent event) {
-        if (ClientBeamTracker.count() == 0) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.world == null) {
             return;
         }
-        Minecraft mc = Minecraft.getMinecraft();
+        ClientBeamTracker beams = ClientWorldDrawings.of(mc.world).beams();
+        if (beams.count() == 0) {
+            return;
+        }
         Entity view = mc.getRenderViewEntity();
         if (view == null) {
             return;
@@ -92,7 +88,7 @@ public class RenderBeams {
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
 
-        for (ClientBeamTracker.ClientBeam beam : ClientBeamTracker.burning()) {
+        for (ClientBeamTracker.ClientBeam beam : beams.burning()) {
             // A beam is a PATH: one leg for the ordinary one, more where a mirror turned it. Each
             // leg is a ribbon of its own because each faces the camera differently, and only the
             // LAST one ends in a spot — the corners are places the beam went on from, not places it

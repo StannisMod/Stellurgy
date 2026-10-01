@@ -10,7 +10,6 @@ import net.minecraft.util.math.BlockPos;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemCable;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 
 import javax.annotation.Nullable;
@@ -53,8 +52,8 @@ public class TileEntityShieldCable extends TileEntity implements ITickable, ISub
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] load cable at {} dim={}", pos, world.provider.getDimension());
             }
@@ -64,8 +63,8 @@ public class TileEntityShieldCable extends TileEntity implements ITickable, ISub
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] invalidate cable at {} dim={}", pos, world.provider.getDimension());
             }
@@ -76,8 +75,8 @@ public class TileEntityShieldCable extends TileEntity implements ITickable, ISub
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            SubsystemNetworkRegistry.unregister(this);
-            SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] chunk unload cable at {} dim={}", pos, world.provider.getDimension());
             }

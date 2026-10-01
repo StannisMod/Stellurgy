@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.tile.sensor;
 
+import io.netty.buffer.ByteBuf;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
@@ -14,6 +15,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.EnergyStorage;
+import net.minecraftforge.fml.relauncher.Side;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.sensor.SensorMode;
@@ -23,7 +25,6 @@ import dev.stannismod.stellurgy.sensor.TacticalScan;
 import dev.stannismod.stellurgy.subsystem.network.ISubsystemSink;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
-import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkRegistry;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 import dev.stannismod.stellurgy.weapon.TurretFireControl;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkDomain;
@@ -35,6 +36,9 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
+import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
+import dev.stannismod.stellurgy.libvulpes.util.INetworkMachine;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -65,9 +69,11 @@ import java.util.List;
  * planetary-defence radar and a warship's fire control are one block and one code path.</p>
  */
 public class TileFireControlSensor extends TileEntity implements ITickable, ISubsystemSink,
-        IModularInventory, IButtonInventory {
+        IModularInventory, IButtonInventory, INetworkMachine {
 
     private static final int BUTTON_MODE = 0;
+
+    private static final byte NET_TOGGLE_MODE = 0;
 
     /** Enough for a few seconds of illumination, so a momentary supply dip is not a lost lock. */
     private static final int MIN_ENERGY_BUFFER = 8_000;
@@ -129,15 +135,15 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
             // topped up. Anything it had already published expires on its own.
             contacts = Collections.emptyList();
             if (registered) {
-                SubsystemNetworkRegistry.unregister(this);
-                SubsystemNetworkManager.markDirty(WeaponNetworkDomain.INSTANCE, world);
+                SubsystemNetworkManager.of(world).unregister(this);
+                SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);
                 registered = false;
             }
             return;
         }
         if (!registered) {
-            SubsystemNetworkRegistry.register(this);
-            SubsystemNetworkManager.markDirty(WeaponNetworkDomain.INSTANCE, world);
+            SubsystemNetworkManager.of(world).register(this);
+            SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);
             registered = true;
         }
 
@@ -146,7 +152,9 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
             scanCooldown--;
             return;
         }
-        scanCooldown = Math.max(1, StellurgyConfiguration.getCurrentConfig().fireControlSensorScanIntervalTicks);
+        // The ticks WAITED before the next sweep, not the gap between sweeps: a sweep on tick t, then
+        // interval-1 ticks counted down, lands the next sweep on t + interval.
+        scanCooldown = Math.max(1, StellurgyConfiguration.getCurrentConfig().fireControlSensorScanIntervalTicks) - 1;
         sweep();
         publish();
         syncReadoutIfChanged();
@@ -403,9 +411,9 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
     @Override
     public void invalidate() {
         super.invalidate();
-        SubsystemNetworkRegistry.unregister(this);
         if (world != null && !world.isRemote) {
-            SubsystemNetworkManager.markDirty(WeaponNetworkDomain.INSTANCE, world);
+            SubsystemNetworkManager.of(world).unregister(this);
+            SubsystemNetworkManager.of(world).markDirty(WeaponNetworkDomain.INSTANCE, world);
         }
         registered = false;
     }
@@ -413,7 +421,9 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
     @Override
     public void onChunkUnload() {
         super.onChunkUnload();
-        SubsystemNetworkRegistry.unregister(this);
+        if (world != null && !world.isRemote) {
+            SubsystemNetworkManager.of(world).unregister(this);
+        }
         registered = false;
     }
 
@@ -483,9 +493,33 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
                 getBestQuality(), getBestDistance());
     }
 
+    /**
+     * The button runs on the CLIENT ({@code ModuleButton.actionPerform} is client-only) and the sweep
+     * that reads {@link #mode} runs on the server, so the press travels as a packet; the toggle is
+     * computed on the server from the server's own mode.
+     */
     @Override
     public void onInventoryButtonPressed(int buttonId) {
         if (buttonId == BUTTON_MODE) {
+            PacketHandler.sendToServer(new PacketMachine(this, NET_TOGGLE_MODE));
+        }
+    }
+
+    @Override
+    public void writeDataToNetwork(ByteBuf out, byte id) {
+    }
+
+    @Override
+    public void readDataFromNetwork(ByteBuf in, byte packetId, NBTTagCompound nbt) {
+    }
+
+    @Override
+    public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
+        // The GUI's own rule for who may use it; a packet is the same press.
+        if (side.isClient() || !canInteractWithContainer(player)) {
+            return;
+        }
+        if (id == NET_TOGGLE_MODE) {
             setMode(mode == SensorMode.ACTIVE ? SensorMode.PASSIVE : SensorMode.ACTIVE);
         }
     }

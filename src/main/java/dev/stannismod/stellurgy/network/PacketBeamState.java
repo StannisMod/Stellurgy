@@ -9,7 +9,7 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.List;
-import dev.stannismod.stellurgy.client.ClientBeamTracker;
+import dev.stannismod.stellurgy.client.ClientWorldDrawings;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 /**
@@ -104,9 +104,9 @@ public class PacketBeamState extends BasePacket {
     @Override
     public void executeClient(EntityPlayer player) {
         if (lit) {
-            ClientBeamTracker.lit(gun, path);
+            ClientWorldDrawings.apply(drawings -> drawings.beams().lit(gun, path));
         } else {
-            ClientBeamTracker.extinguished(gun);
+            ClientWorldDrawings.apply(drawings -> drawings.beams().extinguished(gun));
         }
     }
 

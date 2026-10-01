@@ -235,19 +235,6 @@ public final class ShotSubstrate {
                     bodyRadius(shot), crossing == 0 ? boringHull : null);
             StructureCrossing.Hit structure = first.structure;
             double fieldDistance = first.isField() ? first.distance : -1.0D;
-            double structureDistance = structure == null ? -1.0D : structure.distance;
-
-            if (ShotCrossingTrace.enabled()) {
-                // The two distances as this step saw them, before anything is decided from them. A
-                // round that crossed a wall unmarked and one whose impact was refused are the same
-                // picture from outside; they differ here, and only here.
-                ShotCrossingTrace.crossing(shot.getId(), shot.getAge(),
-                        crossing == 0 ? boringHull : null, position, segmentEnd, bodyRadius(shot),
-                        fieldDistance, structureDistance,
-                        structure == null ? null : structure.block.getX() + "," + structure.block.getY()
-                                + "," + structure.block.getZ() + " "
-                                + world.getBlockState(structure.block).getBlock().getRegistryName());
-            }
 
             boolean fieldFirst = first.isField();
             boolean structureFirst = first.isStructure();

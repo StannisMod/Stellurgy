@@ -8,13 +8,13 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.Vec3d;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
-import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 import dev.stannismod.stellurgy.client.ClientShotTracker;
+import dev.stannismod.stellurgy.client.ClientWorldDrawings;
 
 /**
  * Draws what the client has been told is in the air: a streak per round, a flash where one stopped.
@@ -40,23 +40,19 @@ public class RenderShots {
         if (mc.world == null || mc.isGamePaused()) {
             return;
         }
-        ClientShotTracker.tick();
-    }
-
-    /** Leaving a world drops every drawing: a round from the last dimension has no business here. */
-    @SubscribeEvent
-    public void onWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld() != null && event.getWorld().isRemote) {
-            ClientShotTracker.clear();
-        }
+        ClientWorldDrawings.of(mc.world).shots().tick();
     }
 
     @SubscribeEvent
     public void onRenderWorldLast(RenderWorldLastEvent event) {
-        if (ClientShotTracker.count() == 0 && ClientShotTracker.impacts().isEmpty()) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.world == null) {
             return;
         }
-        Minecraft mc = Minecraft.getMinecraft();
+        ClientShotTracker shots = ClientWorldDrawings.of(mc.world).shots();
+        if (shots.count() == 0 && shots.impacts().isEmpty()) {
+            return;
+        }
         Entity view = mc.getRenderViewEntity();
         if (view == null) {
             return;
@@ -80,7 +76,7 @@ public class RenderShots {
         BufferBuilder buffer = tessellator.getBuffer();
         buffer.begin(GL11.GL_LINES, DefaultVertexFormats.POSITION_COLOR);
 
-        for (ClientShotTracker.ClientShot shot : ClientShotTracker.inFlight()) {
+        for (ClientShotTracker.ClientShot shot : shots.inFlight()) {
             Vec3d previous = shot.getPrevious();
             Vec3d current = shot.getPosition();
             Vec3d head = previous.add(current.subtract(previous).scale(partial));
@@ -89,7 +85,7 @@ public class RenderShots {
             buffer.pos(tail.x - eyeX, tail.y - eyeY, tail.z - eyeZ).color(1.0F, 0.35F, 0.1F, 0.0F).endVertex();
         }
 
-        for (ClientShotTracker.Impact impact : ClientShotTracker.impacts()) {
+        for (ClientShotTracker.Impact impact : shots.impacts()) {
             Vec3d point = impact.getPoint();
             float intensity = impact.getIntensity();
             double size = 0.6D * intensity;

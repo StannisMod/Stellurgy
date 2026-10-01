@@ -2,9 +2,15 @@ package dev.stannismod.stellurgy.test.server;
 
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.List;
 
+import dev.stannismod.stellurgy.projectile.ContactResolver;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.Weapons;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -25,6 +31,11 @@ import static org.junit.Assert.assertTrue;
  *   <li><b>A graze skips off METAL.</b> And off metal only, so a player meets bouncing rounds where a
  *       player expects them and never off a plank wall.</li>
  * </ul>
+ *
+ * <p>Every "it did not dig" below is paired with the record that it ARRIVED: the contact seam's own
+ * decision at the block ({@code contact_ricochet_decided}, asked of every massive or massless body
+ * meeting a block that does not answer for itself). An untouched wall is otherwise also what a round
+ * that never got there leaves.</p>
  */
 public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest {
 
@@ -47,16 +58,20 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
 
     private static final int WALL_DEPTH = 10;
     private static final double BORE_SPEED = 0.45D;
+    /** The reference body every lane here fires; its face is what a beam's intensity is spread over. */
+    private static final double RADIUS = 0.25D;
 
-    private static final Pattern ID = Pattern.compile("\"id\":(-?\\d+)");
-    private static final Pattern STAGE = Pattern.compile("\"stage\":(-?\\d+)");
-    private static final Pattern STAGE_COST = Pattern.compile("\"stageCost\":(-?\\d+)");
-    private static final Pattern MAX_STAGE = Pattern.compile("\"maxStage\":(-?\\d+)");
+    private final Events events =
+            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
 
     /**
      * The same energy, the same body, the same wall — only the KIND differs, and the depths must not
      * be the same. Priced off the wall rather than asserted as a number: what is claimed is that
      * boiling material away costs more per joule than pushing through it, not by how much.
+     *
+     * <p>red-witnessed: with {@code StructureDamageEngine.stageCost} ({@code StructureDamageEngine#stageCost} at {@code double resistance = WeightEngine.INSTANCE.getResistance(world, pos, kind);})
+     * pricing every kind from the kinetic column, this fails at "a beam dug as deep as a slug carrying the
+     * same energy (beam=10 slug=10, budget=20000)" (2026-09-29).</p>
      */
     @Test
     public void aBeamBuysFarLessDepthThanASlugOfTheSameEnergy() throws Exception {
@@ -68,20 +83,19 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
         // Rich enough that the beam is over the intensity threshold and genuinely drilling: below it
         // this test would go green for the threshold's reasons and say nothing about the columns.
         int budget = budgetForBlocks(SLUG_Z, 20.0D);
-        assertTrue("the wall has no price, so no budget here means anything", budget > 0);
-
+        long fired = events.markInstrumented();
         long slug = fire(SLUG_Z, budget, "KINETIC");
         long beam = fire(BEAM_Z, budget, "BEAM");
-        assertTrue("both shots must be admitted or the comparison is about one of them",
-                slug >= 0 && beam >= 0);
-        awaitGone(slug);
-        awaitGone(beam);
+        Weapons.awaitShotEnded(events, fired, slug, "the slug never ended");
+        Weapons.awaitShotEnded(events, fired, beam, "the beam never ended");
 
         int slugDepth = boreDepth(SLUG_Z);
         int beamDepth = boreDepth(BEAM_Z);
         assertTrue("the slug did not get into the wall at all, so the comparison is between two"
-                + " zeroes. budget=" + budget + " wall=" + stageAt(X, SLUG_Z)
-                + " slug=" + exec("stellurgytest shot read " + DIM + " " + slug), slugDepth > 0);
+                + " zeroes. budget=" + budget + " wall=" + stageAt(X, SLUG_Z), slugDepth > 0);
+        assertTrue("the beam removed nothing at a budget chosen to be far over the intensity"
+                + " threshold, so this comparison is about the threshold and not the columns: budget="
+                + budget, beamDepth > 0);
         assertTrue("a beam dug as deep as a slug carrying the same energy (beam=" + beamDepth
                 + " slug=" + slugDepth + ", budget=" + budget + "): then the two channels are one"
                 + " column and a laser is simply a better gun", beamDepth < slugDepth);
@@ -93,8 +107,12 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
      * <p>This is the two-column claim at its sharpest, and it is also where the intensity threshold
      * turns out to live already: a stage is bought whole or not at all, so a beam that cannot afford
      * one buys nothing this tick and — carrying its energy onward rather than banking it — nothing on
-     * any later tick either. The faint laser that cuts a battleship if you hold it long enough cannot
-     * happen, and it cannot happen because of the PRICE, not because of a separate gate.</p>
+     * any later tick either.</p>
+     *
+     * <p>red-witnessed: with the kinetic column used for every kind ({@code StructureDamageEngine#stageCost} at {@code double resistance = WeightEngine.INSTANCE.getResistance(world, pos, kind);})
+     * AND the intensity gate disabled ({@code StructureDamageEngine#tooFaintToDrill} at {@code if (!WeightEngine.isThermalChannel(kind))}) — either alone leaves it
+     * green, because the faint beam is refused by both — this fails at "a beam removed material with a
+     * slug's price for it" (2026-09-29).</p>
      */
     @Test
     public void aBeamCarryingABlocksWorthOfEnergyDoesNotScratchIt() throws Exception {
@@ -103,26 +121,32 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
 
         // Exactly one block's worth at the mechanical column — a slug with this much destroys it.
         int budget = budgetForBlocks(FAINT_Z, 1.0D);
-        assertTrue("the wall has no price, so this budget means nothing", budget > 0);
+        long fired = events.markInstrumented();
         long id = fire(FAINT_Z, budget, "BEAM");
-        assertTrue("the substrate refused the beam", id >= 0);
-        awaitGone(id);
+        Weapons.awaitShotEnded(events, fired, id, "the beam never ended");
 
-        assertTrue("a beam removed material with a slug's price for it (" + stageAt(X, FAINT_Z) + "):"
-                + " then boiling a block away costs what pushing through it costs, the two channels"
-                + " are one column, and a laser is simply a better gun",
-                stageOf(stageAt(X, FAINT_Z)) == 0 && !destroyed(X, FAINT_Z));
+        assertArrived(fired, FAINT_Z, "BEAM");
+        Reply face = stageAt(X, FAINT_Z);
+        assertTrue("a beam removed material with a slug's price for it (" + face + "): then boiling a"
+                + " block away costs what pushing through it costs, the two channels are one column,"
+                + " and a laser is simply a better gun",
+                face.integer("stage") == 0 && !face.bool("wasDestroyed"));
     }
 
     /**
      * The intensity threshold, as the one thing the price does not do.
      *
      * <p>Two beams into identical walls, the same body, the same wall, differing only in how much
-     * energy is behind that face. The weaker one could afford several stages — the price alone would
-     * let it dig — and it removes nothing, because it is not INTENSE enough; the stronger one digs.
-     * What makes this worth a test rather than a tuning note is where the weak beam's energy goes: it
-     * is absorbed by the plate. Without the threshold that beam does not warm the hull, it passes
-     * clean through it carrying everything it arrived with.</p>
+     * energy is behind that face — sized from the CONFIGURED threshold and the body's own face, so
+     * one sits below it and one above it whatever the threshold is tuned to. Both can afford stages
+     * on price; the only thing separating them is intensity. What makes this worth a test rather
+     * than a tuning note is where the weak beam's energy goes: it is absorbed by the plate. Without
+     * the threshold that beam does not warm the hull, it passes clean through it carrying everything
+     * it arrived with.</p>
+     *
+     * <p>red-witnessed: with {@code StructureDamageEngine.tooFaintToDrill} ({@code StructureDamageEngine#tooFaintToDrill} at {@code if (!WeightEngine.isThermalChannel(kind))})
+     * answering false for every kind, this fails at "a beam below the intensity threshold removed material
+     * anyway" (2026-09-29).</p>
      */
     @Test
     public void aBeamBelowTheIntensityThresholdRemovesNothingWhileAStrongerOneDigs() throws Exception {
@@ -131,21 +155,34 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
         buildWall(FAINT_Z);
         buildWall(STRONG_Z);
 
-        // Straddling the shipped threshold at the reference cross-section: both could afford stages
-        // on price, so the only thing separating them is intensity.
-        long faint = fire(FAINT_Z, 8_000, "BEAM");
-        long strong = fire(STRONG_Z, 14_000, "BEAM");
-        assertTrue("both beams must be admitted", faint >= 0 && strong >= 0);
-        awaitGone(faint);
-        awaitGone(strong);
+        double threshold = ask("stellurgytest config get beamAblationIntensityThreshold")
+                .requireOk("read the ablation threshold").number("value");
+        assertTrue("the ablation threshold is switched off, so nothing here straddles it: " + threshold,
+                threshold > 0.0D);
+        int atThreshold = (int) Math.round(threshold * ContactResolver.areaOf(RADIUS));
+        int faintEnergy = (int) Math.round(atThreshold * 0.8D);
+        int strongEnergy = (int) Math.round(atThreshold * 1.4D);
+        int beamStage = stageAt(X, FAINT_Z).integer("stageCostBeam");
+        assertTrue("the faint beam cannot even afford a stage on price (" + faintEnergy + " vs a stage"
+                + " at " + beamStage + "), so its failing to dig would be the price's doing and not the"
+                + " threshold's", faintEnergy >= beamStage);
 
-        assertTrue("a beam below the intensity threshold removed material anyway ("
-                + stageAt(X, FAINT_Z) + "): then the threshold is not a gate and a faint beam either digs"
-                + " or, worse, passes clean through the plate with all it arrived with",
-                stageOf(stageAt(X, FAINT_Z)) == 0 && !destroyed(X, FAINT_Z));
-        assertTrue("the stronger beam removed nothing either (" + stageAt(X, STRONG_Z) + "): then this"
-                + " run compared two refusals and the threshold is not where it was thought to be",
-                stageOf(stageAt(X, STRONG_Z)) > 0 || destroyed(X, STRONG_Z));
+        long fired = events.markInstrumented();
+        long faint = fire(FAINT_Z, faintEnergy, "BEAM");
+        long strong = fire(STRONG_Z, strongEnergy, "BEAM");
+        Weapons.awaitShotEnded(events, fired, faint, "the faint beam never ended");
+        Weapons.awaitShotEnded(events, fired, strong, "the strong beam never ended");
+
+        assertArrived(fired, FAINT_Z, "BEAM");
+        Reply faintFace = stageAt(X, FAINT_Z);
+        assertTrue("a beam below the intensity threshold removed material anyway (" + faintFace + "):"
+                + " then the threshold is not a gate and a faint beam either digs or, worse, passes"
+                + " clean through the plate with all it arrived with",
+                faintFace.integer("stage") == 0 && !faintFace.bool("wasDestroyed"));
+        Reply strongFace = stageAt(X, STRONG_Z);
+        assertTrue("the stronger beam removed nothing either (" + strongFace + "): then this run"
+                + " compared two refusals and the threshold is not where it was thought to be",
+                strongFace.integer("stage") > 0 || strongFace.bool("wasDestroyed"));
     }
 
     /**
@@ -153,9 +190,11 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
      *
      * <p>The law is an energy per unit of volume removed, and a voxel is a cubic metre only when
      * something fills it. Panes and solid glass are the same material — the same row of the same
-     * table — so the only thing separating these two walls is that one of them is mostly air. A round
-     * that got no further through panes than through solid glass would be a round paying for material
-     * that is not there, which is what every hull built of full cubes hides.</p>
+     * table — so the only thing separating these two walls is that one of them is mostly air.</p>
+     *
+     * <p>red-witnessed: with {@code StructureDamageEngine#occupancyOf} at {@code if (world == null || pos == null)}'s {@code occupancyOf} answering 1.0
+     * for every block, this fails with "a wall of panes cost the same to bore as a wall of solid glass
+     * (panes=3 solid=3)". 2026-09-30.</p>
      */
     @Test
     public void aRoundGoesFurtherThroughWhatIsMostlyAir() throws Exception {
@@ -165,13 +204,11 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
         buildWallOf(THIN_Z, "minecraft:glass_pane");
 
         int budget = budgetForBlocks(SOLID_Z, 3.0D);
-        assertTrue("the glass has no price, so no budget here means anything", budget > 0);
-
+        long fired = events.markInstrumented();
         long throughSolid = fire(SOLID_Z, budget, "KINETIC");
         long throughPanes = fire(THIN_Z, budget, "KINETIC");
-        assertTrue("both rounds must be admitted", throughSolid >= 0 && throughPanes >= 0);
-        awaitGone(throughSolid);
-        awaitGone(throughPanes);
+        Weapons.awaitShotEnded(events, fired, throughSolid, "the round into solid glass never ended");
+        Weapons.awaitShotEnded(events, fired, throughPanes, "the round into the panes never ended");
 
         int solidDepth = boreDepth(SOLID_Z);
         int paneDepth = boreDepth(THIN_Z);
@@ -186,6 +223,19 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
     /**
      * A graze skips off steel and digs into wood. Two plates, one angle, one round: the material is
      * the only difference, which is what makes this about the narrowing rather than about the angle.
+     *
+     * <p>The evidence is the contact seam's own ricochet decision at each plate — not the plate being
+     * unmarked, which a round that missed it entirely would also leave.</p>
+     *
+     * <p>red-witnessed: with the metal test in {@code ContactResolver.ricochet} ({@code ContactResolver#ricochet} at {@code if (!WeightEngine.INSTANCE.isMetal(world, contact.getPos()))})
+     * disabled, this fails at "the same round at the same angle skipped off WOOD" (2026-09-29).</p>
+     *
+     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with {@code ContactResolver.ricochet}'s
+     * deflection ({@code ContactResolver.java:142}) answering null, this fails at "a round grazing a
+     * steel plate never skipped ... {...incidence:82.4...skipped:false}"; with the skip at
+     * {@code ContactResolver.java:106-110} also spending the round into the plate through the default
+     * law, at "the steel plate took damage from a round that skipped off it: [{...pos:1703,70,1090,
+     * from:0,to:4...}]".</p>
      */
     @Test
     public void aGrazingRoundSkipsOffSteelAndDigsIntoWood() throws Exception {
@@ -195,37 +245,37 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
         buildPlate(WOOD_Z, "minecraft:planks");
 
         int budget = budgetForBlocks(WOOD_Z, 4.0D);
-        assertTrue("the plate has no price, so no budget here means anything", budget > 0);
-
-        // The evidence is the round TURNING, not the plate being unmarked: a plate is unmarked by a
-        // round that missed it entirely, and that reading would pass against a substrate with no
-        // ricochet in it at all. It arrives descending, so a bounce off the top face is the moment
-        // its vertical velocity goes UP.
+        long fired = events.markInstrumented();
         long offSteel = grazeAt(STEEL_Z, budget);
-        assertTrue("the steel shot was refused", offSteel >= 0);
-        boolean steelTurned = awaitClimbing(offSteel);
-        assertTrue("a round grazing a steel plate never turned — it dug in, and metal is the one"
-                + " material a glancing hit is supposed to skip off: " + read(offSteel),
-                steelTurned);
-        assertTrue("the steel plate took damage from a round that skipped off it: "
-                + firstTouched(STEEL_Z), firstTouched(STEEL_Z) == null);
+        String steel = firstRicochetDecision(fired, STEEL_Z);
+        assertEquals("a round grazing a steel plate never skipped — it dug in, and metal is the one"
+                + " material a glancing hit is supposed to skip off: " + steel, "true",
+                Events.text(steel, "skipped"));
+        Weapons.awaitShotEnded(events, fired, offSteel, "the round off the steel never ended");
 
         long intoWood = grazeAt(WOOD_Z, budget);
-        assertTrue("the wood shot was refused", intoWood >= 0);
-        boolean woodTurned = awaitClimbing(intoWood);
-        assertTrue("the same round at the same angle skipped off WOOD: a plank wall must never bounce"
-                + " a shell, or ricochet stops being where a player expects it: " + read(intoWood),
-                !woodTurned);
-        assertTrue("the round neither turned nor marked the wooden plate anywhere along it — then it"
-                + " missed, and this run compared nothing", firstTouched(WOOD_Z) != null);
+        String wood = firstRicochetDecision(fired, WOOD_Z);
+        assertEquals("the same round at the same angle skipped off WOOD: a plank wall must never bounce"
+                + " a shell, or ricochet stops being where a player expects it: " + wood, "false",
+                Events.text(wood, "skipped"));
+        Weapons.awaitShotEnded(events, fired, intoWood, "the round into the wood never ended");
+        assertTrue("the round that dug into the wood marked no block of the plate — then it did not"
+                + " dig, and this run compared nothing", !stagesOnPlate(fired, WOOD_Z).isEmpty());
+        assertTrue("the steel plate took damage from a round that skipped off it: "
+                + stagesOnPlate(fired, STEEL_Z), stagesOnPlate(fired, STEEL_Z).isEmpty());
     }
 
     // ---- driving
 
     /** Straight down the X axis into the face of the wall: square-on, so nothing can ricochet. */
     private long fire(int lane, int energy, String kind) throws Exception {
-        return idOf(exec("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " "
-                + (lane + 0.5D) + " " + BORE_SPEED + " 0 0 " + energy + " 1200 " + kind + " 0.25 1.0"));
+        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (X - 3.0D) + " " + (Y + 0.5D) + " "
+                + (lane + 0.5D) + " " + BORE_SPEED + " 0 0 " + energy + " " + Weapons.ROUND_LIFETIME_TICKS
+                + " " + kind + " " + RADIUS
+                + " 1.0").requireOk("fire down lane " + lane);
+        long id = fired.longInteger("id");
+        assertTrue("the substrate refused the " + kind + " shot down lane " + lane + ": " + fired, id >= 0);
+        return id;
     }
 
     /**
@@ -233,8 +283,13 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
      * it. The plate is one block thick and the round comes in from above and beside.
      */
     private long grazeAt(int lane, int energy) throws Exception {
-        return idOf(exec("stellurgytest shot fire " + DIM + " " + (X - 1.0D) + " " + (Y + 1.6D) + " "
-                + (lane + 0.5D) + " 1.5 -0.2 0 " + energy + " 1200 KINETIC 0.25 1.0"));
+        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (X - 1.0D) + " " + (Y + 1.6D) + " "
+                + (lane + 0.5D) + " 1.5 -0.2 0 " + energy + " " + Weapons.ROUND_LIFETIME_TICKS
+                + " KINETIC " + RADIUS + " 1.0")
+                .requireOk("graze lane " + lane);
+        long id = fired.longInteger("id");
+        assertTrue("the substrate refused the graze down lane " + lane + ": " + fired, id >= 0);
+        return id;
     }
 
     private void buildWall(int lane) throws Exception {
@@ -242,46 +297,82 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
     }
 
     private void buildWallOf(int lane, String block) throws Exception {
-        assertTrue("could not build the wall", exec("stellurgytest fill " + DIM + " " + X + " " + Y + " "
-                + lane + " " + (X + WALL_DEPTH - 1) + " " + Y + " " + lane + " " + block)
-                .contains("\"ok\":true"));
+        ask("stellurgytest fill " + DIM + " " + X + " " + Y + " " + lane + " " + (X + WALL_DEPTH - 1) + " "
+                + Y + " " + lane + " " + block).requireOk("build the wall");
     }
 
     /** One block thick and long enough to be grazed along, with clear air above it. */
     private void buildPlate(int lane, String block) throws Exception {
-        assertTrue("could not build the plate", exec("stellurgytest fill " + DIM + " " + X + " " + Y + " "
-                + (lane - 1) + " " + (X + 8) + " " + Y + " " + (lane + 1) + " " + block)
-                .contains("\"ok\":true"));
+        ask("stellurgytest fill " + DIM + " " + X + " " + Y + " " + (lane - 1) + " " + (X + 8) + " " + Y
+                + " " + (lane + 1) + " " + block).requireOk("build the plate");
     }
 
     private void prepare(int lane) throws Exception {
         // Scenario isolation, and this class went without it for four scenarios: a round that punches
         // through its own wall keeps flying for the rest of its lifetime, and the next scenario builds
         // its arrangement while somebody else's round is still in the air.
-        exec("stellurgytest shot clear " + DIM);
+        ask("stellurgytest shot clear " + DIM).requireOk("clear the air");
         // HELD, not merely warmed. There is no player on this server, so a warmed chunk unloads again
         // on its own — and a swept segment SKIPS a voxel whose chunk is not loaded rather than calling
-        // it solid or empty, because nobody looked. A round then flies through a wall with its budget
-        // untouched, which is what this class spent an afternoon reading as a damage bug.
+        // it solid or empty, because nobody looked.
         for (int cx = (X - 16) >> 4; cx <= (X + 32) >> 4; cx++) {
-            exec("stellurgytest chunk forceload " + DIM + " " + cx + " " + (lane >> 4));
+            ask("stellurgytest chunk forceload " + DIM + " " + cx + " " + (lane >> 4)).requireOk("hold a chunk");
         }
-        assertTrue("chunk warmup failed", exec("stellurgytest chunk warmup " + DIM + " "
-                + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " " + ((X + 60) >> 4) + " "
-                + ((lane + 16) >> 4)).contains("\"ok\":true"));
+        ask("stellurgytest chunk warmup " + DIM + " " + ((X - 16) >> 4) + " " + ((lane - 16) >> 4) + " "
+                + ((X + 60) >> 4) + " " + ((lane + 16) >> 4)).requireOk("warm the lane's chunks");
         // Cleared far past the wall along the line of fire: a round that punches through must fly out
         // into empty air rather than into the next thing this class built.
-        assertTrue("could not clear the site", exec("stellurgytest fill " + DIM + " " + (X - 8) + " "
-                + (Y - 2) + " " + (lane - 3) + " " + (X + 60) + " " + (Y + 6) + " " + (lane + 3)
-                + " minecraft:air").contains("\"ok\":true"));
+        ask("stellurgytest fill " + DIM + " " + (X - 8) + " " + (Y - 2) + " " + (lane - 3) + " " + (X + 60)
+                + " " + (Y + 6) + " " + (lane + 3) + " minecraft:air").requireOk("clear the lane");
     }
 
     // ---- reading
 
+    /** The contact seam decided, at the lane's first wall block, about a body of this kind. */
+    private void assertArrived(long mark, int lane, String kind) throws Exception {
+        String decided = events.since(mark, "contact_ricochet_decided");
+        Events.assertInstrumentRan(decided, "contact_events", "the " + kind + " reached the wall");
+        assertTrue("the " + kind + " never met the wall's face, so its being unmarked proves nothing: "
+                + decided, !Events.recordsWhereAll(decided, "pos", Weapons.at(X, Y, lane), "kind", kind)
+                .isEmpty());
+    }
+
+    /** The first ricochet decision taken anywhere on the plate across {@code lane}. */
+    private String firstRicochetDecision(long mark, int lane) throws Exception {
+        String reply = events.awaitMatching(mark, "contact_ricochet_decided",
+                one -> !onPlate(one, lane).isEmpty(), "on the plate at lane " + lane,
+                "the round never met the plate at lane " + lane + ", so nothing was decided about a"
+                        + " graze", Weapons.SUBJECT_TICKS);
+        return onPlate(reply, lane).get(0);
+    }
+
+    private static List<String> onPlate(String reply, int lane) {
+        List<String> here = new java.util.ArrayList<>();
+        for (String record : Events.records(reply)) {
+            String[] at = String.valueOf(Events.text(record, "pos")).split(",");
+            int x = Integer.parseInt(at[0]), y = Integer.parseInt(at[1]), z = Integer.parseInt(at[2]);
+            if (x >= X && x <= X + 8 && y == Y && Math.abs(z - lane) <= 1) {
+                here.add(record);
+            }
+        }
+        return here;
+    }
+
+    /** Every stage write on the plate across {@code lane} since {@code mark}. */
+    private List<String> stagesOnPlate(long mark, int lane) throws Exception {
+        String staged = events.since(mark, "block_stage_set");
+        Events.assertInstrumentRan(staged, "damage_stage_events", "the plate at lane " + lane + " was staged");
+        return onPlate(staged, lane);
+    }
+
     private int boreDepth(int lane) throws Exception {
         int depth = 0;
         for (int i = 0; i < WALL_DEPTH; i++) {
-            if (stageOf(stageAt(X + i, lane)) > 0 || destroyed(X + i, lane)) {
+            Reply stage = stageAt(X + i, lane);
+            // the producer always writes `stage`, `wasDestroyed` and `block` on an ok `damage stage`
+            // reply (stageAt requires ok), so refusing on a missing one is the right failure.
+            if (stage.integer("stage") > 0 || stage.bool("wasDestroyed")
+                    || "minecraft:air".equals(stage.text("block"))) {
                 depth = i + 1;
             }
         }
@@ -289,88 +380,21 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
     }
 
     private int budgetForBlocks(int lane, double blocks) throws Exception {
-        String state = stageAt(X, lane);
-        Matcher cost = STAGE_COST.matcher(state);
-        Matcher stages = MAX_STAGE.matcher(state);
-        if (!cost.find() || !stages.find()) {
-            return 0;
-        }
-        return (int) (Integer.parseInt(cost.group(1))
-                * Math.max(1, Integer.parseInt(stages.group(1))) * blocks);
+        Reply stage = stageAt(X, lane);
+        int budget = (int) (stage.integer("stageCost") * Math.max(1, stage.integer("maxStage")) * blocks);
+        assertTrue("the wall has no price, so no budget here means anything: " + stage, budget > 0);
+        return budget;
     }
 
-    private String stageAt(int x, int lane) throws Exception {
-        return exec("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane);
-    }
-
-    private boolean destroyed(int x, int lane) throws Exception {
-        String state = stageAt(x, lane);
-        return state.contains("\"wasDestroyed\":true") || state.contains("\"block\":\"minecraft:air\"");
-    }
-
-    private static int stageOf(String json) {
-        Matcher m = STAGE.matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : 0;
-    }
-
-    private static long idOf(String json) {
-        Matcher m = ID.matcher(json);
-        return m.find() ? Long.parseLong(m.group(1)) : -1L;
-    }
-
-    /**
-     * Did this round ever start CLIMBING? It is fired descending, so an upward vertical velocity can
-     * only come from the plate turning it — which makes this the bounce itself rather than a proxy
-     * for one. Answers false when the round ends without ever having climbed.
-     */
-    private boolean awaitClimbing(long id) throws Exception {
-        long deadline = System.currentTimeMillis() + 25_000L;
-        while (System.currentTimeMillis() < deadline) {
-            String state = read(id);
-            if (!state.contains("\"present\":true")) {
-                return false;
-            }
-            if (vyOf(state) > 1.0E-6D) {
-                return true;
-            }
-            Thread.sleep(60L);
-        }
-        return false;
-    }
-
-    /** Anywhere along the plate, the first block that took something — or null if none did. */
-    private String firstTouched(int lane) throws Exception {
-        for (int x = X; x <= X + 8; x++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                String state = exec("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + (lane + dz));
-                boolean gone = state.contains("\"wasDestroyed\":true")
-                        || state.contains("\"block\":\"minecraft:air\"");
-                if (gone || stageOf(state) > 0) {
-                    return x + "," + (lane + dz) + " -> " + state;
-                }
-            }
-        }
-        return null;
-    }
-
-    private String read(long id) throws Exception {
-        return exec("stellurgytest shot read " + DIM + " " + id);
-    }
-
-    private static double vyOf(String json) {
-        Matcher m = Pattern.compile("\"vy\":(-?[\\d.eE+-]+)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : 0.0D;
-    }
-
-    private void awaitGone(long id) throws Exception {
-        long deadline = System.currentTimeMillis() + 25_000L;
-        while (System.currentTimeMillis() < deadline
-                && read(id).contains("\"present\":true")) {
-            Thread.sleep(120L);
-        }
+    private Reply stageAt(int x, int lane) throws Exception {
+        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane).requireOk("read a stage");
     }
 
     private static String exec(String command) throws Exception {
         return String.join("\n", client().execute(command));
+    }
+
+    private static Reply ask(String command) throws Exception {
+        return Reply.of(command, exec(command));
     }
 }

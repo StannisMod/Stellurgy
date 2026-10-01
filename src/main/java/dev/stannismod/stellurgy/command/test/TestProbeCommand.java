@@ -63,6 +63,17 @@ public class TestProbeCommand extends CommandBase {
     // only the first reads as "nothing moved it" for the second.
     private static final String[] WRITER_EVENTS = {"pos_jump", "vel_jump", "mount", "dismount"};
 
+    /**
+     * The break-refusing listener {@code damage guard} drives. It belongs to the same server this
+     * command does: both are made in {@link TestProbeCommandRegistration} when that server starts, and
+     * the listener leaves the bus when the server stops.
+     */
+    private final WeaponFireVetoProbe veto;
+
+    TestProbeCommand(WeaponFireVetoProbe veto) {
+        this.veto = veto;
+    }
+
     @Override
     @Nonnull
     public String getName() {
@@ -251,6 +262,9 @@ public class TestProbeCommand extends CommandBase {
                 case "config":
                     handleConfig(sender, tail(args));
                     break;
+                case "gamerule":
+                    handleGameRule(server, sender, tail(args));
+                    break;
                 case "star":
                     handleStar(sender, tail(args));
                     break;
@@ -294,12 +308,6 @@ public class TestProbeCommand extends CommandBase {
      *   <li>{@code list <dim>} — every shot in flight in that world;</li>
      *   <li>{@code read <dim> <id>} — one shot, or {@code present:false} once it has ended;</li>
      *   <li>{@code clear <dim>} — drop everything in flight there (scenario isolation);</li>
-     *   <li>{@code trace <dim> [id] [limit]} — what each step DECIDED: the shield distance and the
-     *       structure distance as the step saw them, so "the wall was never found" and "the impact
-     *       was refused" stop looking alike. Earliest entries first, and {@code matched} says how
-     *       many there were;</li>
-     *   <li>{@code traceclear <dim>} — a clean instrument for one scenario; the ring is shared and
-     *       outlives any single test;</li>
      *   <li>{@code crossing <dim> <x0> <y0> <z0> <x1> <y1> <z1>} — the control query: does production
      *       itself say this segment is blocked, and what does each voxel along it look like. Asks
      *       {@code StructureCrossing} rather than re-deriving an answer beside it.</li>
@@ -312,7 +320,7 @@ public class TestProbeCommand extends CommandBase {
      */
     private void handleShot(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length == 0) {
-            send(sender, "{\"error\":\"usage: /stellurgytest shot fire|list|read|clear|trace|traceclear|crossing ...\"}");
+            send(sender, "{\"error\":\"usage: /stellurgytest shot fire|list|read|clear|crossing ...\"}");
             return;
         }
         String sub = args[0].toLowerCase(java.util.Locale.ROOT);
@@ -386,19 +394,6 @@ public class TestProbeCommand extends CommandBase {
             int before = registry.count();
             registry.clear();
             send(sender, "{\"ok\":true,\"cleared\":" + before + "}");
-            return;
-        }
-        if ("trace".equals(sub)) {
-            long only = args.length >= 3 ? parseLongOr(args[2], -1L) : -1L;
-            int limit = args.length >= 4 ? parseIntOr(args[3], 24) : 24;
-            send(sender, "{\"ok\":true,\"trace\":"
-                    + dev.stannismod.stellurgy.projectile.ShotCrossingTrace.summaryJson(only, limit)
-                    + "}");
-            return;
-        }
-        if ("traceclear".equals(sub)) {
-            dev.stannismod.stellurgy.projectile.ShotCrossingTrace.reset();
-            send(sender, "{\"ok\":true,\"cleared\":true}");
             return;
         }
         if ("crossing".equals(sub) && args.length >= 8) {
@@ -825,6 +820,9 @@ public class TestProbeCommand extends CommandBase {
                 + ",\"age\":" + shot.getAge()
                 + ",\"lifetime\":" + shot.getLifetimeTicks()
                 + ",\"kind\":\"" + shot.getKind().name() + "\""
+                // The environment the round was admitted with, so a reader bounds its fall by the
+                // gravity the round actually carries rather than by a copy of the number.
+                + ",\"gravity\":" + shot.getEnvironment().getGravityPerTickSquared()
                 + inHull + "}";
     }
 
@@ -1364,12 +1362,12 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.util.math.BlockPos pos = new net.minecraft.util.math.BlockPos(
                     parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
             boolean guarded = Boolean.parseBoolean(args[5]);
-            int now = WeaponFireVetoProbe.guard(dim, pos, guarded);
+            int now = veto.guard(dim, pos, guarded);
             send(sender, "{\"ok\":true,\"guarded\":" + guarded + ",\"count\":" + now + "}");
             return;
         }
         if ("unguard-all".equalsIgnoreCase(args[0])) {
-            WeaponFireVetoProbe.clear();
+            veto.clear();
             send(sender, "{\"ok\":true,\"cleared\":true}");
             return;
         }
@@ -1378,18 +1376,6 @@ public class TestProbeCommand extends CommandBase {
             int before = dev.stannismod.stellurgy.damage.ShipDamageService.rememberedImpactCount();
             dev.stannismod.stellurgy.damage.ShipDamageService.clearRecentImpacts();
             send(sender, "{\"ok\":true,\"cleared\":" + before + "}");
-            return;
-        }
-        if ("occurrences".equalsIgnoreCase(args[0])) {
-            // occurrences [clear] — what the damage service TOLD the units. The recorder attaches to
-            // every tile on a harness server, so "nothing recorded" means nothing was delivered, not
-            // that nobody was listening.
-            DamageOccurrenceRecorder.ensureRegistered();
-            if (args.length >= 2 && "clear".equalsIgnoreCase(args[1])) {
-                send(sender, "{\"ok\":true,\"cleared\":" + DamageOccurrenceRecorder.clear() + "}");
-                return;
-            }
-            send(sender, DamageOccurrenceRecorder.json());
             return;
         }
         if (args.length >= 3 && "impact-memory".equalsIgnoreCase(args[0])) {
@@ -1453,7 +1439,7 @@ public class TestProbeCommand extends CommandBase {
             String materialId = args[6];
             int materialCount = args.length >= 8 ? parseIntOr(args[7], 0) : 0;
 
-            net.minecraft.entity.player.EntityPlayerMP welder = weldingPlayer(server, world, pos);
+            net.minecraft.entity.player.EntityPlayerMP welder = weldingPlayer(world, pos);
             welder.inventory.clear();
             net.minecraft.item.ItemStack tool = new net.minecraft.item.ItemStack(
                     dev.stannismod.stellurgy.api.StellurgyItems.itemRepairWelder);
@@ -1993,6 +1979,23 @@ public class TestProbeCommand extends CommandBase {
                 at.append('"').append(escapeJson(here.get(i))).append('"');
             }
             send(sender, at.append("]}").toString());
+            return;
+        }
+        // managed-by <dim> <x> <y> <z> — the REGISTERED ship whose subspace claim manages the block
+        // at that position, or none. The same question production asks when it decides that a block
+        // is part of a ship at all (a gun or a sensor looking for the hull it is bolted to), so a
+        // scenario that places a block into a ship's yard can read back whether it landed on THAT
+        // hull, rather than inferring it from how large the coordinate is.
+        if (args.length >= 5 && "managed-by".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            String owner = dev.stannismod.stellurgy.integration.vs.VSIntegration.registeredShipIdManagingBlock(
+                    world, new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0)));
+            send(sender, "{\"ok\":true,\"managed\":" + (owner != null)
+                    + ",\"shipId\":" + (owner == null ? "null" : "\"" + escapeJson(owner) + "\"") + "}");
             return;
         }
         // PREFER `to-world <dim> id <shipId> <subX> <subY> <subZ>`. The positional form asks which
@@ -3473,7 +3476,7 @@ public class TestProbeCommand extends CommandBase {
                 + "|seat-input <dim> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
                 + "|seat-input-by-id <dim> <shipId> <fwd> <vert> <strafe> <yaw> <pitch> <roll>"
                 + "|teleport-ship-by-id <dim> <shipId> <dstX> <dstY> <dstZ>"
-                + "|unpark-by-id <dim> <shipId>"
+                + "|unpark-by-id <dim> <shipId>|managed-by <dim> <x> <y> <z>"
                 + "|seat-mount <dim>|seat-occupy <dim> <x> <y> <z>|arrival-trace"
                 + "|player-ship-data|would-take-over|deck-capture [<dim> <id>]"
                 + "|subspace-census [<dim> <id>]\"}");
@@ -13457,7 +13460,33 @@ public class TestProbeCommand extends CommandBase {
                     "fireControlSensorActiveEnergyPerTick",
                     "fireControlSensorActiveLockQuality",
                     "fireControlSensorLockQualityToFire",
-                    "fireControlSensorAcquireHostilesOnly"));
+                    "fireControlSensorAcquireHostilesOnly",
+                    // Read by the armour scenarios so the beams they straddle the ablation threshold
+                    // with are sized from the configured threshold rather than from a copy of it.
+                    "beamAblationIntensityThreshold",
+                    // Read by the hull-carry scenario, whose round must bore slower than the tick
+                    // window it is read over and faster than the floor that would stop it.
+                    "shotPenetrationSpeedFloor"));
+
+    /**
+     * {@code gamerule get <name>} — the overworld's game rule as data, so a scenario that changes one
+     * can read what it held first and put it back. Vanilla's own {@code /gamerule <name>} answers with
+     * a chat line, which is a rendering and not a value. A rule the world does not define answers an
+     * error rather than vanilla's empty string, which is not a value either.
+     */
+    private void handleGameRule(MinecraftServer server, ICommandSender sender, String[] args) {
+        if (args.length < 2 || !"get".equalsIgnoreCase(args[0])) {
+            send(sender, jsonError("usage: /stellurgytest gamerule get <name>"));
+            return;
+        }
+        net.minecraft.world.GameRules rules = server.getWorld(0).getGameRules();
+        if (!rules.hasRule(args[1])) {
+            send(sender, jsonError("no such game rule: " + args[1]));
+            return;
+        }
+        send(sender, "{\"ok\":true,\"rule\":\"" + escapeJson(args[1]) + "\",\"value\":\""
+                + escapeJson(rules.getString(args[1])) + "\"}");
+    }
 
     private void handleConfig(ICommandSender sender, String[] args) {
         if (args.length == 0) {
@@ -20524,26 +20553,25 @@ public class TestProbeCommand extends CommandBase {
     /**
      * A player for the welding probe, its OWN and not the shared fake one: this player is handed a
      * cleared inventory on every call, which would rob whatever else the shared player is carrying.
-     * Connectionless like the shared one, so nothing may send it a packet — which is why the probe
-     * drives {@code ItemRepairWelder.weld} (silent) rather than {@code onItemUse} (speaks).
+     * Connectionless, so nothing may send it a packet — which is why the probe drives
+     * {@code ItemRepairWelder.weld} (silent) rather than {@code onItemUse} (speaks).
+     *
+     * <p><b>Owner and lifetime</b>: Forge's. {@code FakePlayerFactory} keeps one player per profile
+     * and drops it when the world it was made in unloads ({@code ForgeInternalHandler} on
+     * {@code WorldEvent.Unload}), so the profile names the dimension: each world has its own welder,
+     * made in that world and released with it, and none is ever moved between worlds or kept past
+     * the server it belongs to.</p>
      */
     private static net.minecraft.entity.player.EntityPlayerMP weldingPlayer(
-            MinecraftServer server, net.minecraft.world.WorldServer world, BlockPos near) {
-        if (weldTestPlayer == null) {
-            weldTestPlayer = new net.minecraft.entity.player.EntityPlayerMP(server, world,
-                    new com.mojang.authlib.GameProfile(
-                            java.util.UUID.nameUUIDFromBytes("ARWeldTestPlayer".getBytes()),
-                            "ARWeldTestPlayer"),
-                    new net.minecraft.server.management.PlayerInteractionManager(world));
-            weldTestPlayer.capabilities.disableDamage = true;
-        }
-        weldTestPlayer.setWorld(world);
-        weldTestPlayer.dimension = world.provider.getDimension();
-        weldTestPlayer.setLocationAndAngles(near.getX() + 0.5, near.getY() + 1.0, near.getZ() + 0.5, 0, 0);
-        return weldTestPlayer;
+            net.minecraft.world.WorldServer world, BlockPos near) {
+        String name = "StellurgyWeldTestPlayer";
+        net.minecraftforge.common.util.FakePlayer welder =
+                net.minecraftforge.common.util.FakePlayerFactory.get(world, new com.mojang.authlib.GameProfile(
+                        java.util.UUID.nameUUIDFromBytes((name + "/" + world.provider.getDimension()).getBytes(
+                                java.nio.charset.StandardCharsets.UTF_8)), name));
+        welder.setLocationAndAngles(near.getX() + 0.5, near.getY() + 1.0, near.getZ() + 0.5, 0, 0);
+        return welder;
     }
-
-    private static net.minecraft.entity.player.EntityPlayerMP weldTestPlayer;
 
     /** How many of {@code item} the player is carrying, counting every slot; 0 for a null item. */
     private static int countOf(net.minecraft.entity.player.EntityPlayerMP player,
@@ -23978,58 +24006,43 @@ public class TestProbeCommand extends CommandBase {
      * real unit means designing that unit's own consequence, which is its owner's decision — so
      * without this the interface would have no consumer and no test could tell whether it delivers.</p>
      *
-     * <p>Test mode only, and the list is a bounded, single-writer diagnostic that OUTLIVES a scenario
-     * on a shared server: {@code /stellurgytest damage occurrences clear} is how a scenario claims a clean
-     * one.</p>
+     * <p>Each delivered occurrence becomes ONE {@code damage_occurrence} record in the server event
+     * log ({@link TestEventLog}), so a scenario reads what its own blow delivered as a window from a
+     * mark, narrowed by position — there is nothing here to clear and nothing another scenario can
+     * leave behind. Payload: {@code dim} (the occurrence's world, {@code null} without one), {@code x}
+     * / {@code y} / {@code z}, {@code cause}, {@code kind}, {@code stageBefore}, {@code stageAfter},
+     * {@code maxStage}, {@code spent}, {@code destroyed}, {@code ship}, {@code hasWorld},
+     * {@code hasWhere}. The instrument {@code damage_occurrence_recorder} is declared on every attach,
+     * whether or not the tile is ever struck.</p>
+     *
+     * <p><b>Owner and lifetime</b>: one instance per SERVER, created and put on the bus by
+     * {@link TestProbeCommandRegistration} at that server's start and taken off it by
+     * {@link ServerScoped} when that server's overworld unloads. It holds no state of its own.</p>
      */
     public static final class DamageOccurrenceRecorder {
 
-        private static final int CAPACITY = 256;
-        private static final java.util.List<String> SEEN = new java.util.ArrayList<String>();
-        private static volatile boolean registered = false;
+        static final String INSTRUMENT = "damage_occurrence_recorder";
 
-        public static synchronized void ensureRegistered() {
-            if (registered) {
-                return;
-            }
-            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new DamageOccurrenceRecorder());
-            registered = true;
-        }
-
-        static synchronized void record(dev.stannismod.stellurgy.api.damage.DamageOccurrence o) {
-            if (SEEN.size() >= CAPACITY) {
-                SEEN.remove(0);
-            }
-            SEEN.add("{\"cause\":\"" + o.getCause() + "\",\"kind\":"
-                    + (o.getKind() == null ? "null" : "\"" + o.getKind() + "\"")
+        static void record(dev.stannismod.stellurgy.api.damage.DamageOccurrence o) {
+            TestEventLog.noteInstrumentEntered(INSTRUMENT);
+            net.minecraft.world.World world = o.getWorld();
+            net.minecraft.world.World clock = world != null ? world
+                    : net.minecraftforge.common.DimensionManager.getWorld(0);
+            TestEventLog.record("server", clock == null ? 0L : clock.getTotalWorldTime(),
+                    "damage_occurrence",
+                    "\"dim\":" + (world == null ? "null" : String.valueOf(world.provider.getDimension()))
                     + ",\"x\":" + o.getPos().getX() + ",\"y\":" + o.getPos().getY()
                     + ",\"z\":" + o.getPos().getZ()
+                    + ",\"cause\":\"" + o.getCause() + "\",\"kind\":"
+                    + (o.getKind() == null ? "null" : "\"" + o.getKind() + "\"")
                     + ",\"stageBefore\":" + o.getStageBefore()
                     + ",\"stageAfter\":" + o.getStageAfter()
                     + ",\"maxStage\":" + o.getMaxStage()
                     + ",\"spent\":" + o.getBudgetSpent()
                     + ",\"destroyed\":" + o.isDestroyed()
                     + ",\"ship\":" + (o.getShipId() == null ? "null" : "\"" + o.getShipId() + "\"")
-                    + ",\"hasWorld\":" + (o.getWorld() != null)
-                    + ",\"hasWhere\":" + (o.getWhere() != null) + "}");
-        }
-
-        static synchronized String json() {
-            StringBuilder sb = new StringBuilder("{\"ok\":true,\"count\":").append(SEEN.size())
-                    .append(",\"occurrences\":[");
-            for (int i = 0; i < SEEN.size(); i++) {
-                if (i > 0) {
-                    sb.append(',');
-                }
-                sb.append(SEEN.get(i));
-            }
-            return sb.append("]}").toString();
-        }
-
-        static synchronized int clear() {
-            int had = SEEN.size();
-            SEEN.clear();
-            return had;
+                    + ",\"hasWorld\":" + (world != null)
+                    + ",\"hasWhere\":" + (o.getWhere() != null));
         }
 
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
@@ -24038,6 +24051,7 @@ public class TestProbeCommand extends CommandBase {
             if (dev.stannismod.stellurgy.api.capability.CapabilityDamageAware.DAMAGE_AWARE == null) {
                 return;
             }
+            TestEventLog.noteInstrumentEntered(INSTRUMENT);
             event.addCapability(new net.minecraft.util.ResourceLocation("stellurgy",
                     "test_damage_recorder"), new RecorderProvider());
         }

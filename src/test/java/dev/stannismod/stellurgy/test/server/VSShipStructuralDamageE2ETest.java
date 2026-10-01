@@ -1,11 +1,16 @@
 package dev.stannismod.stellurgy.test.server;
 
-import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.ShipReadiness;
+import dev.stannismod.stellurgy.test.WarShip;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -24,117 +29,112 @@ import static org.junit.Assert.assertTrue;
  * subspace still coincide. Testing there would be the same empty test with more steps. So the ship is
  * rigid-teleported far away first, and the test asserts <b>as a control</b> that the two frames have
  * genuinely diverged before it draws any conclusion from what follows.</p>
+ *
+ * <p>The craft is built and addressed by identity ({@link WarShip}); it was addressed by position
+ * before, and the class carried an {@code Assume} on a {@code vs available} verb that no longer exists,
+ * so it had been SKIPPED on every run since that verb was removed.</p>
  */
 public class VSShipStructuralDamageE2ETest extends AbstractSharedServerTest {
 
-    private static final Pattern BUILDER_POS =
-            Pattern.compile("\"builderPos\":\\[(-?\\d+),(-?\\d+),(-?\\d+)]");
-
     /** Build site, well clear of the other ship scenarios on this shared server. */
-    private static final int SRC_X = 7200, SRC_Y = 80, SRC_Z = 7200;
+    private static final int SRC_X = 7200, SRC_Z = 7200;
     /** Where the ship is moved to. Far enough that no world-frame accident could reach the hull. */
     private static final int FAR_X = 7200, FAR_Y = 240, FAR_Z = 9600;
     /** Below this the two frames have not diverged enough for the control to mean anything. */
     private static final double MIN_FRAME_DIVERGENCE = 100.0D;
+    /** The fixture spans about twenty blocks; a mapped seat further than this from the hull is not on it. */
+    private static final double ON_THE_HULL = 64.0D;
 
+    private final Events events =
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+
+    /** A craft left behind goes on ticking in the world the next scenario runs in. */
+    @Before
+    public void disposeOfEarlierCraft() throws Exception {
+        System.out.println("[reset] craft cleared: " + ShipReadiness.clearCraftFrom(this::exec, 0));
+    }
+
+    /**
+     * red-witnessed: with {@code ShipDamageService#apply} at {@code String shipId = shipAt(world, point, request.getDirection());} resolving no ship (the world frame walked
+     * instead), this fails with "an impact at the ship's world position struck nothing — the world
+     * point was not mapped into the frame the ship's blocks live in: {...outcome:NOTHING_STRUCK...}";
+     * with {@code ShipDamageService#toWorld} at {@code if (shipId == null)} returning the report's points unmapped, it fails with
+     * "the entry point came back at (1.9200001E7,130.0,51200.0), 1.9192845083520055E7 blocks off the
+     * vertical line it was fired down through". The "subspace block damaged" verdict was not separately
+     * witnessed. 2026-09-30.
+     */
     @Test
     public void aBlockOfAMovedShipIsDamagedThroughItsWorldPosition() throws Exception {
-        Assume.assumeTrue("needs Valkyrien Skies on the server classpath", serverHasVs());
-        exec("stellurgytest vs permaload true");
-        exec("stellurgytest damage clear-impacts");
+        Reply.of(exec("stellurgytest damage clear-impacts")).requireOk("forget earlier impacts");
 
         // Build a ship and move it, so world and subspace no longer coincide.
-        clearArea(SRC_X, SRC_Z);
-        String coords = placeFixture(SRC_X, SRC_Y, SRC_Z, "with-pilot-seat");
-        String asm = exec("stellurgytest rocket assemble 0 " + coords);
-        assertTrue("with VS an AFC-bearing build must become a ship, not a rocket: " + asm,
-                asm.contains("\"rocketCount\":0"));
-        assertTrue("the ship never loaded", waitForLoadedShip(0) >= 1);
-
-        String info = exec("stellurgytest vs ship-info 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z);
-        assertTrue("ship not managed by VS: " + info, info.contains("\"managed\":true"));
-        String shipId = extractString(info, "id");
-        String tp = exec("stellurgytest vs teleport-ship 0 " + SRC_X + " " + SRC_Y + " " + SRC_Z
-                + " " + FAR_X + " " + FAR_Y + " " + FAR_Z);
-        assertTrue("the ship could not be moved, so the frames never diverged: " + tp,
-                tp.contains("\"ok\":true"));
-        exec("stellurgytest vs unpark 0 " + FAR_X + " " + FAR_Y + " " + FAR_Z);
+        WarShip ship = WarShip.build(events, this::exec, FixtureSite.openAir(0, SRC_X, SRC_Z), null,
+                "the craft whose block is shot");
+        ship.parkAt(FAR_X, FAR_Y, FAR_Z, ON_THE_HULL);
 
         // A block of this ship whose subspace address we know: its pilot seat.
-        String seat = exec("stellurgytest vs find-seat 0 id " + shipId);
-        assertTrue("could not locate the ship's seat, so there is no known block to aim at: " + seat,
-                seat.contains("\"seatFound\":true"));
-        int subX = extractInt(seat, "seatX"), subY = extractInt(seat, "seatY"), subZ = extractInt(seat, "seatZ");
-
-        String mapped = exec("stellurgytest vs to-world 0 " + FAR_X + " " + FAR_Y + " " + FAR_Z
-                + " " + subX + " " + subY + " " + subZ);
-        assertTrue("the seat's subspace address could not be mapped to a world point: " + mapped,
-                mapped.contains("\"ok\":true"));
-        double worldX = extractDouble(mapped, "worldX");
-        double worldY = extractDouble(mapped, "worldY");
-        double worldZ = extractDouble(mapped, "worldZ");
+        int[] sub = ship.seat();
+        double[] world = ship.toWorld(sub[0], sub[1], sub[2]);
 
         // ARRANGEMENT CONTROL. The mapped point must actually be on the ship as the world sees it;
         // if it is not, everything below measures a broken fixture rather than the damage engine.
-        String moved = exec("stellurgytest vs ship-info 0 " + FAR_X + " " + FAR_Y + " " + FAR_Z);
-        assertTrue("the moved ship is not managed at its new position: " + moved,
-                moved.contains("\"managed\":true"));
-        double shipX = extractDouble(moved, "posX"), shipY = extractDouble(moved, "posY"),
-                shipZ = extractDouble(moved, "posZ");
-        double offHull = Math.sqrt(sq(worldX - shipX) + sq(worldY - shipY) + sq(worldZ - shipZ));
-        assertTrue("the seat's mapped world point (" + worldX + "," + worldY + "," + worldZ + ") is "
-                + offHull + " blocks from the ship's own world position (" + shipX + "," + shipY + ","
-                + shipZ + "): the fixture, not the engine, is what this run would be measuring."
-                + " subspace seat=" + subX + "," + subY + "," + subZ + " mapped=" + mapped,
-                offHull < 64.0D);
+        Reply moved = ship.info();
+        double offHull = Math.sqrt(sq(world[0] - moved.number("posX")) + sq(world[1] - moved.number("posY"))
+                + sq(world[2] - moved.number("posZ")));
+        requireArranged("the seat's mapped world point is " + offHull + " blocks from the ship's own"
+                + " world position: the fixture, not the engine, is what this run would be measuring. "
+                + moved, offHull < ON_THE_HULL);
 
-        // THE CONTROL. Everything below is only evidence if the two frames actually differ: at the
-        // build site they coincide, and an impact declared in world coordinates would land on the
-        // right block by accident, with the conversion deleted.
-        double divergence = Math.sqrt(sq(worldX - subX) + sq(worldY - subY) + sq(worldZ - subZ));
-        assertTrue("world and subspace frames are only " + divergence + " blocks apart (world "
-                + worldX + "," + worldY + "," + worldZ + " vs subspace " + subX + "," + subY + ","
-                + subZ + "): this arrangement cannot tell a correct conversion from no conversion",
+        // THE CONTROL. Everything below is only evidence if the two frames actually differ.
+        double divergence = Math.sqrt(sq(world[0] - sub[0]) + sq(world[1] - sub[1]) + sq(world[2] - sub[2]));
+        requireArranged("world and subspace frames are only " + divergence + " blocks apart: this"
+                + " arrangement cannot tell a correct conversion from no conversion",
                 divergence > MIN_FRAME_DIVERGENCE);
 
         // The subject block, read at its SUBSPACE address — where a ship's blocks actually are.
-        String before = stage(subX, subY, subZ);
-        assertTrue("the seat's subspace address holds no block, so nothing below is about the ship: "
-                + before, !before.contains("\"block\":\"minecraft:air\""));
-        assertTrue("the subject block is damaged before the impact: " + before,
-                readLong(before, "stage") == 0);
+        Reply before = stage(sub[0], sub[1], sub[2]);
+        requireArranged("the seat's subspace address holds no block, so nothing below is about the ship: "
+                + before, !"minecraft:air".equals(before.text("block")));
+        requireArranged("the subject block is damaged before the impact: " + before,
+                before.integer("stage") == 0);
 
         // Fire straight down through the seat's WORLD position with a budget that will not be spent
         // in one block, and give it an identity of its own.
-        String result = exec("stellurgytest damage impact 0 " + worldX + " " + (worldY + 3.0D) + " " + worldZ
-                + " 0 -1 0 200000 KINETIC 77001");
+        Reply result = Reply.of(exec("stellurgytest damage impact 0 " + world[0] + " " + (world[1] + 3.0D) + " "
+                + world[2] + " 0 -1 0 200000 KINETIC 77001")).requireOk("declare the impact");
         assertTrue("the impact point resolved to no ship at all (candidates offered: "
-                + readLong(result, "candidateShips") + "), so the engine walked the world frame where "
-                + "this ship has no blocks:\n" + result, result.contains("\"onShip\":true"));
-        assertTrue("an impact at the ship's world position struck nothing — the world point was not "
-                + "mapped into the frame the ship's blocks live in:\n" + result,
-                !result.contains("\"outcome\":\"NOTHING_STRUCK\""));
-        assertTrue("the impact spent nothing on the ship:\n" + result, readLong(result, "spent") > 0);
+                + result.integer("candidateShips") + "), so the engine walked the world frame where"
+                + " this ship has no blocks:\n" + result, result.bool("onShip"));
+        assertTrue("an impact at the ship's world position struck nothing — the world point was not"
+                + " mapped into the frame the ship's blocks live in:\n" + result,
+                !"NOTHING_STRUCK".equals(result.text("outcome")));
+        assertTrue("the impact spent nothing on the ship:\n" + result, result.integer("spent") > 0);
 
         // The damage landed on the SHIP's own block, at its subspace address.
-        String after = stage(subX, subY, subZ);
-        boolean staged = readLong(after, "stage") > 0;
-        boolean destroyed = after.contains("\"wasDestroyed\":true")
-                || after.contains("\"block\":\"minecraft:air\"");
-        assertTrue("the impact reported damage but the ship's own block is untouched at its subspace "
-                + "address (before=" + before + " after=" + after + "):\n" + result, staged || destroyed);
+        Reply after = stage(sub[0], sub[1], sub[2]);
+        assertTrue("the impact reported damage but the ship's own block is untouched at its subspace"
+                + " address (before=" + before + " after=" + after + "):\n" + result,
+                after.integer("stage") > 0 || after.bool("wasDestroyed") || "minecraft:air".equals(after.text("block")));
 
         // And the report comes back in WORLD coordinates: a shot that resumes on a subspace point
-        // would carry on inside a shipyard nobody can see.
-        assertTrue("the report names no entry point:\n" + result, result.contains("\"hasEntry\":true"));
-        double entryY = extractDouble(result, "entryY");
-        assertTrue("the entry point came back at " + entryY + ", nowhere near the world position it "
-                + "was fired at (" + worldY + "): the report was not mapped back out of the ship frame",
-                Math.abs(entryY - worldY) < 8.0D);
+        // would carry on inside a shipyard nobody can see. The impact was fired straight DOWN through
+        // the seat's world point, so its entry lies on that vertical line — horizontally within a
+        // block of it by construction — and no higher than the three blocks above the seat it was
+        // fired from. A subspace entry would sit at the yard's address, the divergence away.
+        assertTrue("the report names no entry point:\n" + result, result.bool("hasEntry"));
+        double entryX = result.number("entryX"), entryY = result.number("entryY"), entryZ = result.number("entryZ");
+        double sideways = Math.sqrt(sq(entryX - world[0]) + sq(entryZ - world[2]));
+        assertTrue("the entry point came back at (" + entryX + "," + entryY + "," + entryZ + "), "
+                + sideways + " blocks off the vertical line it was fired down through (" + world[0] + ","
+                + world[2] + "): the report was not mapped back out of the ship frame:\n" + result,
+                sideways < 1.0D);
+        assertTrue("the entry point came back at y=" + entryY + ", outside the three blocks above the"
+                + " seat it was fired from (" + world[1] + "): the report was not mapped back out of the"
+                + " ship frame:\n" + result, entryY <= world[1] + 3.0D + 1.0E-6D && entryY >= world[1] - 1.0D);
     }
 
-    private String stage(int x, int y, int z) throws Exception {
-        return exec("stellurgytest damage stage 0 " + x + " " + y + " " + z);
+    private Reply stage(int x, int y, int z) throws Exception {
+        return Reply.of(exec("stellurgytest damage stage 0 " + x + " " + y + " " + z)).requireOk("read a stage");
     }
 
     private static double sq(double v) {
@@ -143,61 +143,5 @@ public class VSShipStructuralDamageE2ETest extends AbstractSharedServerTest {
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", client().execute(cmd));
-    }
-
-    private boolean serverHasVs() throws Exception {
-        return exec("stellurgytest vs available").contains("\"available\":true");
-    }
-
-    private int waitForLoadedShip(int dim) throws Exception {
-        for (int i = 0; i < 40; i++) {
-            if (extractInt(exec("stellurgytest vs ship-count-all " + dim), "count") >= 1) {
-                exec("stellurgytest vs load-ships " + dim);
-                int loaded = extractInt(exec("stellurgytest vs ship-count " + dim), "count");
-                if (loaded >= 1) {
-                    return loaded;
-                }
-            }
-            Thread.sleep(250);
-        }
-        return 0;
-    }
-
-    private void clearArea(int baseX, int baseZ) throws Exception {
-        int cx1 = (baseX - 4) >> 4, cz1 = (baseZ - 4) >> 4;
-        int cx2 = (baseX + 20) >> 4, cz2 = (baseZ + 20) >> 4;
-        assertTrue("chunk warmup failed",
-                exec("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2).contains("\"ok\":true"));
-        assertTrue("pre-clear failed", exec("stellurgytest fill 0 " + (baseX - 4) + " " + (SRC_Y - 2) + " " + (baseZ - 4)
-                + " " + (baseX + 20) + " " + (SRC_Y + 12) + " " + (baseZ + 20) + " minecraft:air").contains("\"ok\":true"));
-    }
-
-    private String placeFixture(int baseX, int baseY, int baseZ, String variant) throws Exception {
-        String fixture = exec("stellurgytest fixture rocket 0 " + baseX + " " + baseY + " " + baseZ + " " + variant);
-        assertTrue("fixture (" + variant + ") failed: " + fixture, fixture.contains("\"ok\":true"));
-        Matcher bp = BUILDER_POS.matcher(fixture);
-        assertTrue("fixture (" + variant + ") missing builderPos: " + fixture, bp.find());
-        return bp.group(1) + " " + bp.group(2) + " " + bp.group(3);
-    }
-
-    private static long readLong(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        assertTrue("no " + key + " field in: " + json, m.find());
-        return Long.parseLong(m.group(1));
-    }
-
-    private static int extractInt(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+)").matcher(json);
-        return m.find() ? Integer.parseInt(m.group(1)) : Integer.MIN_VALUE;
-    }
-
-    private static double extractDouble(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":(-?\\d+(?:\\.\\d+)?)").matcher(json);
-        return m.find() ? Double.parseDouble(m.group(1)) : 0.0;
-    }
-
-    private static String extractString(String json, String key) {
-        Matcher m = Pattern.compile("\"" + key + "\":\"([^\"]*)\"").matcher(json);
-        return m.find() ? m.group(1) : null;
     }
 }

@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import org.junit.Test;
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.sensor.SignatureModel;
 
 import static org.junit.Assert.assertEquals;
@@ -92,6 +93,17 @@ public class SignatureModelTest {
     /**
      * The reason the active mode exists: a cold, quiet thing that passive listening cannot hold is
      * held perfectly well the moment you illuminate it — at the price of illuminating.
+     *
+     * <p>red-witnessed: with {@code SignatureModel#activeQuality} at {@code return clamp01(plateau);}'s plateau cut to a fifth, this fails with
+     * "and illuminating must lift it over the lock floor (0.25), or going active buys the shooter
+     * nothing: 0.19". 2026-09-30.</p>
+     *
+     * <p>red-witnessed: with {@code SignatureModel#passiveQuality} at {@code return clamp01(temperatureRatio * rangeRatio * rangeRatio);} dividing by the temperature ratio instead of
+     * multiplying (a cold body read as loud), this fails at "a cold target at range must be below the
+     * lock floor (0.25) by listening alone ...: 1.0" (2026-09-30). Two gentler inversions stayed green,
+     * and they say how far below the floor the healthy value sits: the passive quality here is 0.0124
+     * ((280/500)^4 * (32/90)^2), so ten times it (0.124) and a range fall-off made linear (0.035) are
+     * both still under 0.25.</p>
      */
     @Test
     public void illuminatingHoldsAColdTargetThatListeningCannot() {
@@ -100,10 +112,15 @@ public class SignatureModelTest {
         double listening = SignatureModel.passiveQuality(coldTarget, range);
         double illuminating = SignatureModel.activeQuality(range, 128.0D, 0.95D);
 
-        assertTrue("a cold target at range must be nearly unresolvable by listening alone, or going"
-                + " dark buys a target nothing: " + listening, listening < 0.1D);
-        assertTrue("and illuminating must hold it, or going active buys the shooter nothing: "
-                + illuminating, illuminating > 0.5D);
+        // "Cannot hold" and "holds" are production's own line, not one invented here: the quality a
+        // contact must reach before a gun fires at it (the configured default, read from the class).
+        double lockFloor = StellurgyConfiguration.getCurrentConfig().fireControlSensorLockQualityToFire;
+        assertTrue("the lock floor is switched off, so nothing here straddles it: " + lockFloor,
+                lockFloor > 0.0D && lockFloor < 1.0D);
+        assertTrue("a cold target at range must be below the lock floor (" + lockFloor + ") by listening"
+                + " alone, or going dark buys a target nothing: " + listening, listening < lockFloor);
+        assertTrue("and illuminating must lift it over the lock floor (" + lockFloor + "), or going"
+                + " active buys the shooter nothing: " + illuminating, illuminating >= lockFloor);
     }
 
     /** Nothing is invisible: silence moves the line at which a thing is noticed, it does not erase it. */
