@@ -144,7 +144,7 @@ public class CellSeamTest {
      * however far across the zone it had flown — which for Earth's zone is an error of millions of
      * blocks and always in the direction of "you have not left yet".</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `CellSeam.distanceFromZoneBody:115` reading the in-cell
+     * <p>red-witnessed: 2026-09-29, with {@code CellSeam#distanceFromZoneBody} at {@code double dx = (double) coord.sectorX() * width + coord.localX()} reading the in-cell
      * offset alone (the {@code sector * width} term dropped), this fails with "expected:&lt;5547882.0&gt;
      * but was:&lt;0.0&gt;" — a craft three cells out read as standing on the body.</p>
      */
@@ -172,7 +172,7 @@ public class CellSeamTest {
      * re-decides its frame every tick and pays a full cut-and-paste each time — the same failure the
      * cube's two margins exist for, one level down, and the same ratio: ten to one.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `CellSeam.hasEnteredZone:143` entering at the sphere itself
+     * <p>red-witnessed: 2026-09-29, with {@code CellSeam#hasEnteredZone} at {@code && distanceBlocks < zoneRadiusBlocks * (1d - SPHERE_REENTRY_FRACTION)} entering at the sphere itself
      * (the {@code 1 - SPHERE_REENTRY_FRACTION} factor dropped), this fails with "but a whisker inside
      * is not — that is the gap"; every other test in the class stays green on that inversion.</p>
      */
@@ -210,9 +210,9 @@ public class CellSeamTest {
      * it was never in; one that answered "entered" for the {@code -1} that
      * {@link CellSeam#distanceFromZoneBody} returns for a galactic coordinate would take it into one.</p>
      *
-     * <p>red-witnessed: 2026-09-29, twice. With `CellSeam.hasLeftZone:129` stripped of its
+     * <p>red-witnessed: 2026-09-29, twice. With {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} stripped of its
      * {@code zoneRadiusBlocks > 0} guard, this fails (then with a bare {@code AssertionError}; the
-     * assertions carry messages since). With `CellSeam.hasEnteredZone:142` stripped of the same
+     * assertions carry messages since). With {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} stripped of the same
      * guard, it fails with "with no sphere there is nothing to enter, even for the -1 a galactic
      * coordinate's distance is" — the assertion that read {@code (0, 0)} before could not see that
      * guard at all, since {@code 0 < 0} is false without it.</p>
@@ -243,7 +243,7 @@ public class CellSeamTest {
      * {@code CellCrossingController.carryDestination} decides where the craft goes. Asked of the
      * cube, it would be the +X neighbour — a cube face nowhere near the sphere it crossed.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `CellCrossingController.carryDestination:206` asking the cube
+     * <p>red-witnessed: 2026-09-29, with {@code CellCrossingController#carryDestination} at {@code if (bySphere != null)} asking the cube
      * BEFORE the sphere, this fails with "where both fire the carry must be aimed by the sphere
      * (20_0_0), not at the cube's neighbour: got 2_0_0". (The version before that date asserted
      * {@code past < 2R/2 + CARRY_MARGIN} on a cube of the test's own making, which production never

@@ -149,7 +149,7 @@ public class UniverseRegistryTest {
      * different answer; without that the test would pass against a registry that persisted nothing
      * and simply re-derived the same value.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with `UniverseRegistry.durableName:659` no longer returning the
+     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#durableName} at {@code return recorded.name} no longer returning the
      * recorded name, this fails with "a recorded name must survive the save and win over a fresh
      * derivation expected:&lt;…(21,0,9)…&gt; but was:&lt;…(-22,0,5)…&gt;". And the fixture's distance,
      * measured: with the orbit put back to the literal {@code 120} (12 000 km in today's unit) and
@@ -589,7 +589,7 @@ public class UniverseRegistryTest {
      * per-system, and attribution answers happily with the wrong anchor. The name has to know which
      * system it was recorded for.
      *
-     * <p>red-witnessed: 2026-09-30, with BOTH `UniverseRegistry.durableName:640` (the owning-star
+     * <p>red-witnessed: 2026-09-30, with BOTH {@code UniverseRegistry#durableName} at {@code if (recorded.starId != starId)} (the owning-star
      * check) and `:648` (the box check) answering {@code false}, this fails with "a recycled id must
      * not inherit the deleted body's cell". With `:640` alone inverted it stays GREEN: the two stars
      * sit in different super-cells, so the stale name is also outside the new star's box and `:648`
@@ -630,7 +630,7 @@ public class UniverseRegistryTest {
     /**
      * Deleting a dimension drops its recorded name outright — the direct half of the same defect.
      *
-     * <p>red-witnessed: 2026-09-30, with `UniverseRegistry.forgetName:680` reading the name instead
+     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#forgetName} at {@code if (namesByDim.remove(dimId) == null)} reading the name instead
      * of removing it, this fails with "...and the name is gone".</p>
      */
     @Test
@@ -654,7 +654,7 @@ public class UniverseRegistryTest {
      * body stays listed and jumpable and can never be arrived at. Moving a star's anchor does exactly
      * that to every name recorded under the old layout, and nothing said so.
      *
-     * <p>red-witnessed: 2026-09-30, with `UniverseRegistry.durableName:648` (the box check) answering
+     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#durableName} at {@code else if (!SystemContent.withinBoxOf(recorded.name, anchor, minSpacingCells))} (the box check) answering
      * {@code false}, this fails with "a name outside its own system's box may not be served".</p>
      */
     @Test
@@ -690,7 +690,7 @@ public class UniverseRegistryTest {
     /**
      * A name that is still inside its box is served unchanged — the control for the clause above.
      *
-     * <p>red-witnessed: 2026-09-30, with `UniverseRegistry.durableName:659` no longer returning the
+     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#durableName} at {@code return recorded.name} no longer returning the
      * recorded name, this fails with "a name that still names a cell of its own system is not
      * disturbed expected:&lt;…(27,0,8)…&gt; but was:&lt;…(28,0,8)…&gt;" — a re-derivation after the
      * one-cell move answers a different cell, so the control is sensitive.</p>
@@ -721,7 +721,7 @@ public class UniverseRegistryTest {
      * frame moves" would pass against a lookup that returned an arbitrary function of the tick for
      * everything.
      *
-     * <p>red-witnessed: 2026-09-30, with `UniverseRegistry.originAt:746` never taking a body's frame,
+     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#originAt} at {@code if (b.definesFrame())} never taking a body's frame,
      * this fails with "a cell with a primary in it moves with that primary". And the fixture's
      * distance, measured: with the orbit put back to the literal {@code 150} (15 000 km in today's
      * unit) and production untouched, it fails with that same message — the quarter orbit rounds to
@@ -757,7 +757,7 @@ public class UniverseRegistryTest {
      * standing in a void cell — the system read aggregates POIs of BODY cells only, and answers empty
      * for a cell no anchor attributes.
      *
-     * <p>red-witnessed: 2026-09-30, with `UniverseRegistry.skyBodiesAt:570` iterating nothing instead
+     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#skyBodiesAt} at {@code for (SystemBody here : bodiesAt(cell))} iterating nothing instead
      * of the observer's own cell, this fails with "...and whatever is keyed at your own cell".</p>
      */
     @Test

@@ -266,7 +266,7 @@ public final class PlanetRealizer {
             DimensionProperties parentProps =
                     DimensionManager.getInstance().getDimensionProperties(parentBody.dimId());
             if (parentProps != null) {
-                int localOrbit = (int) Math.round(body.frame().law().distUnits());
+                long localOrbit = Math.round(body.frame().law().distUnits());
                 props.orbitalDist = Math.max(DimensionProperties.MIN_DISTANCE, localOrbit);
                 props.setParentPlanet(parentProps);
             } else {

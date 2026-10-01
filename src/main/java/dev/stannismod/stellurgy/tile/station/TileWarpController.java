@@ -32,6 +32,7 @@ import dev.stannismod.stellurgy.item.ItemPlanetIdentificationChip;
 import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.util.IDataInventory;
 import dev.stannismod.stellurgy.world.util.MultiData;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
@@ -113,19 +114,43 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
             while (properties.isMoon())
                 properties = properties.getParentProperties();
 
-            //TODO: actual trig
             if (properties.getStar().getId() == destProperties.getStar().getId()) {
-                double x1 = properties.orbitalDist * MathHelper.cos((float) properties.orbitTheta);
-                double y1 = properties.orbitalDist * MathHelper.sin((float) properties.orbitTheta);
-                double x2 = destProperties.orbitalDist * MathHelper.cos((float) destProperties.orbitTheta);
-                double y2 = destProperties.orbitalDist * MathHelper.sin((float) destProperties.orbitTheta);
-
-                return Math.max((int) Math.sqrt(Math.pow((x1 - x2), 2) + Math.pow((y1 - y2), 2)), 1);
-
-                //return Math.abs(properties.orbitalDist - destProperties.orbitalDist);
+                return intraSystemCost(properties, destProperties);
             }
         }
         return Integer.MAX_VALUE;
+    }
+
+    /**
+     * Warp fuel per AU of separation between two planets of one system, measured across their
+     * orbital plane: one fuel per hundredth of an AU. That is what a warp cost while a distance unit
+     * was a hundredth of an AU and the cost was the separation in raw units; the unit then became a
+     * length of 100 km, and read raw it priced Earth to Mars at hundreds of thousands of fuel against
+     * a tank that holds {@link SpaceStationObject#getMaxFuelAmount()} — 10 000.
+     */
+    private static final int WARP_FUEL_PER_AU = 100;
+
+    /**
+     * The distance gauge's reading per AU, in hundredths of the bar: one AU fills half of it. That is
+     * the raw unit halved, as it was drawn while a distance unit was a hundredth of an AU.
+     */
+    private static final int DISTANCE_GAUGE_PER_AU = 50;
+    /**
+     * The gauge's reading per moon-view unit, for a moon: the raw unit halved as it was drawn while
+     * Luna stood at 150, so Luna reads 75 as she did then (see
+     * {@link AstronomicalBodyHelper#MOON_VIEW_UNITS_AT_LUNA}).
+     */
+    private static final double DISTANCE_GAUGE_PER_MOON_VIEW_UNIT = 0.5d;
+
+    /** The fuel a warp between two planets of one system costs: their separation, never below 1. */
+    private static int intraSystemCost(DimensionProperties from, DimensionProperties to) {
+        double auPerUnit = 1d / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+        double x1 = from.orbitalDist * auPerUnit * MathHelper.cos((float) from.orbitTheta);
+        double y1 = from.orbitalDist * auPerUnit * MathHelper.sin((float) from.orbitTheta);
+        double x2 = to.orbitalDist * auPerUnit * MathHelper.cos((float) to.orbitTheta);
+        double y2 = to.orbitalDist * auPerUnit * MathHelper.sin((float) to.orbitTheta);
+        double separationAu = Math.sqrt(Math.pow((x1 - x2), 2) + Math.pow((y1 - y2), 2));
+        return Math.max((int) (separationAu * WARP_FUEL_PER_AU), 1);
     }
 
     public int getTravelCostToDimension(int destinationID) {
@@ -149,16 +174,8 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
             while (properties.isMoon())
                 properties = properties.getParentProperties();
 
-            //TODO: actual trig
             if (properties.getStar().getId() == destProperties.getStar().getId()) {
-                double x1 = properties.orbitalDist * MathHelper.cos((float) properties.orbitTheta);
-                double y1 = properties.orbitalDist * MathHelper.sin((float) properties.orbitTheta);
-                double x2 = destProperties.orbitalDist * MathHelper.cos((float) destProperties.orbitTheta);
-                double y2 = destProperties.orbitalDist * MathHelper.sin((float) destProperties.orbitTheta);
-
-                return Math.max((int) Math.sqrt(Math.pow((x1 - x2), 2) + Math.pow((y1 - y2), 2)), 1);
-
-                //return Math.abs(properties.orbitalDist - destProperties.orbitalDist);
+                return intraSystemCost(properties, destProperties);
             }
         }
         return Integer.MAX_VALUE;
@@ -642,8 +659,11 @@ public class TileWarpController extends TileEntity implements ITickable, IModula
             return 0;
         if (id == 0)
             return dimCache.getAtmosphereDensity() / 2;
+        else if (id == 1 && dimCache.isMoon())
+            return (int) (AstronomicalBodyHelper.moonViewUnits(dimCache.orbitalDist) * DISTANCE_GAUGE_PER_MOON_VIEW_UNIT);
         else if (id == 1)
-            return dimCache.orbitalDist / 2;
+            return (int) (dimCache.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU
+                    * DISTANCE_GAUGE_PER_AU);
         else if (id == 2)
             return (int) (dimCache.gravitationalMultiplier * 50);
         else if (id == 3) {

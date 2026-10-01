@@ -83,7 +83,7 @@ public class ParkedCraftKeepsStationTest {
      * primary's position at the tick, and a constant address therefore tracks the primary for
      * free.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `SystemBody.definesFrame:324` no longer counting a PLANET,
+     * <p>red-witnessed: 2026-09-29, with {@code SystemBody#definesFrame} at {@code return kind == SystemBodyKind.STAR || kind == SystemBodyKind.PLANET} no longer counting a PLANET,
      * this fails with "…it was 25913.0 blocks out and is now 6.524345703726182E7 (drift
      * 6.521754403726182E7), while the planet itself moved 6.524203927239168E7" — the planet left and
      * the address stayed.</p>
@@ -144,7 +144,7 @@ public class ParkedCraftKeepsStationTest {
      * Earth's zone cell measured 1 849 294 blocks on 2026-09-29 (this test prints it), so the craft
      * is inside the moon's cell with room to spare.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `SystemBody.definesFrame:326` no longer counting a MOON — the
+     * <p>red-witnessed: 2026-09-29, with {@code SystemBody#definesFrame} at {@code || kind == SystemBodyKind.ROGUE_PLANET || kind == SystemBodyKind.MOON} no longer counting a MOON — the
      * fix this acceptance is named for — this fails with "…it was 7066.0 blocks out and is now
      * 294995.9100682584 (drift 287929.9100682584), against a shell of 7066": the pre-fix number,
      * verbatim. <b>The version of this test before that date stayed GREEN on the same inversion</b>

@@ -33,6 +33,28 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
                 list.contains("Star ID: 0") && list.contains("Sol"));
     }
 
+    /**
+     * Earth belongs to the Sol that is REGISTERED as star 0 — the same object the star list, the star
+     * commands and every "same system" comparison use — not merely to a star that carries id 0.
+     *
+     * <p>A copy with the right id passes every id check and fails every identity one: a station at
+     * Earth was quoted the interstellar price for a planet of its own star, and an edit to star 0 does
+     * not reach the star Earth is lit by.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, on the code as it stood before the fix — {@code DimensionManager#createAndLoadDimensions}
+     * at {@code DimensionManager.overworldProperties.setStar(sol)} written as
+     * {@code sol.addPlanet(DimensionManager.overworldProperties)}, which lists Earth without binding it:
+     * "Earth's star must be the registered star 0 itself, not a copy with its id: {… "starIsRegistered":false …}".</p>
+     */
+    @Test
+    public void earthBelongsToTheRegisteredSolNotToACopyOfIt() throws Exception {
+        Reply earth = Reply.of(exec("stellurgytest planet info 0"));
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "Earth is bound to star 0: " + earth, earth.integer("starId") == 0);
+        assertTrue("Earth's star must be the registered star 0 itself, not a copy with its id: " + earth,
+                earth.bool("starIsRegistered"));
+    }
+
     @Test
     public void starGetTempEchoesSolBaselineTemperature() throws Exception {
         String resp = exec("ar star get temp 0");

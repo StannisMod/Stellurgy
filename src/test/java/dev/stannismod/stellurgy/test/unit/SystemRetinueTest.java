@@ -247,7 +247,7 @@ public class SystemRetinueTest {
         for (GalacticCoord anchor : anchors(g, SEED, CRAMPED_SPACING, 2)) {
             StellarBody star = g.systemAt(SEED, anchor).get().star().get();
             int count = ClusteredGalaxyGenerator.retinueSize(SEED, anchor);
-            Set<Integer> drawn = new HashSet<>();
+            Set<Long> drawn = new HashSet<>();
             for (int i = 0; i < count; i++) {
                 drawn.add(PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, count, star));
             }
@@ -360,7 +360,7 @@ public class SystemRetinueTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with `ClusteredGalaxyGenerator.claimSeat:703` placing orbits at
+     * red-witnessed: 2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at
      * twice the blocks per distance unit, this fails with "a companion stands at the separation its
      * own elements state expected:&lt;4.31384E7&gt; but was:&lt;8.627679969687484E7&gt;".
      */
@@ -480,8 +480,8 @@ public class SystemRetinueTest {
         for (GalacticCoord anchor : anchors(g, SEED, minSpacing, 3)) {
             List<SystemBody> bodies = g.bodiesFor(SEED, anchor);
             int belts = 0;
-            int outermostMajor = 0;
-            int outermostBelt = 0;
+            long outermostMajor = 0;
+            long outermostBelt = 0;
             for (SystemBody b : bodies) {
                 if (b.kind() == SystemBodyKind.ASTEROID_BELT) {
                     belts++;

@@ -18,6 +18,7 @@ import dev.stannismod.stellurgy.entity.EntityUIPlanet;
 import dev.stannismod.stellurgy.entity.EntityUIStar;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
@@ -111,7 +112,7 @@ public class TileHolographicPlanetSelector extends TileEntity implements ITickab
                     for (EntityUIPlanet entity : entities) {
                         DimensionProperties properties = entity.getProperties();
                         if (entity != centeredEntity)
-                            entity.setPositionPolar(this.pos.getX() + .5, this.pos.getY() + 1, this.pos.getZ() + .5, getInterpHologramSize() * (.1 + properties.orbitalDist / 100f), properties.orbitTheta);
+                            entity.setPositionPolar(this.pos.getX() + .5, this.pos.getY() + 1, this.pos.getZ() + .5, getInterpHologramSize() * projectionRadius(properties), properties.orbitTheta);
                         entity.setScale(getInterpHologramSize());
                     }
 
@@ -126,10 +127,10 @@ public class TileHolographicPlanetSelector extends TileEntity implements ITickab
                             float phase = 0;
                             for (EntityUIStar entity : starEntities) {
                                 double deltaX, deltaY;
-                                deltaX = entity.getStarProperties().getOrbitalDistance()
-                                        * Math.cos(entity.getStarProperties().getBaseTheta()) * 0.05;
-                                deltaY = entity.getStarProperties().getOrbitalDistance()
-                                        * Math.sin(entity.getStarProperties().getBaseTheta()) * 0.05;
+                                deltaX = companionOffset(entity.getStarProperties())
+                                        * Math.cos(entity.getStarProperties().getBaseTheta());
+                                deltaY = companionOffset(entity.getStarProperties())
+                                        * Math.sin(entity.getStarProperties().getBaseTheta());
 
                                 entity.setPosition(this.pos.getX() + .5 + getInterpHologramSize() * deltaX, this.pos.getY() + 1, this.pos.getZ() + .5 + getInterpHologramSize() * deltaY);
                                 entity.setScale(getInterpHologramSize() * entity.getStarProperties().getSize());
@@ -288,8 +289,8 @@ public class TileHolographicPlanetSelector extends TileEntity implements ITickab
                     for (StellarBody body : starList) {
 
                         double deltaX, deltaY;
-                        deltaX = body.getOrbitalDistance() * Math.cos(body.getBaseTheta()) * 0.05;
-                        deltaY = body.getOrbitalDistance() * Math.sin(body.getBaseTheta()) * 0.05;
+                        deltaX = companionOffset(body) * Math.cos(body.getBaseTheta());
+                        deltaY = companionOffset(body) * Math.sin(body.getBaseTheta());
                         EntityUIStar entity = new EntityUIStar(world, body, count++, this, this.pos.getX() + .5 + deltaX, this.pos.getY() + 1, this.pos.getZ() + .5 + deltaY);
 
                         this.getWorld().spawnEntity(entity);
@@ -347,6 +348,36 @@ public class TileHolographicPlanetSelector extends TileEntity implements ITickab
             //numThrusters.setText("Number Of Thrusters: 0");
             targetGrav.setText(String.format("%s %f", LibVulpes.proxy.getLocalizedString("msg.planetholo.size"), getHologramSize()));
         }
+    }
+
+    /**
+     * A companion star's offset from its primary in the hologram, before the hologram's own scale: 5
+     * per AU, which is what 0.05 per distance unit drew while a unit was a hundredth of an AU.
+     */
+    private static double companionOffset(StellarBody companion) {
+        return companion.getOrbitalDistance() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU * 5d;
+    }
+
+    /** The hologram block every projected body stands out from the centre, whatever its distance. */
+    private static final double PROJECTION_INNER_RADIUS = .1d;
+    /**
+     * Moon-view units per hologram block, for a moon about its centred planet: 100, as a moon's raw
+     * distance was projected while Luna stood at 150, so Luna stands 1.6 blocks out as she did then
+     * (see {@link AstronomicalBodyHelper#MOON_VIEW_UNITS_AT_LUNA}). Through the planet law a moon
+     * stood at its planet's edge.
+     */
+    private static final double MOON_VIEW_UNITS_PER_HOLOGRAM_BLOCK = 100d;
+
+    /**
+     * How far from the centre a body is projected, before the hologram's own scale: a planet one
+     * block per AU of its distance from its star, a moon by its distance from its planet.
+     */
+    private static double projectionRadius(DimensionProperties body) {
+        if (body.isMoon()) {
+            return PROJECTION_INNER_RADIUS
+                    + AstronomicalBodyHelper.moonViewUnits(body.orbitalDist) / MOON_VIEW_UNITS_PER_HOLOGRAM_BLOCK;
+        }
+        return PROJECTION_INNER_RADIUS + body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
     }
 
     private float getHologramSize() {

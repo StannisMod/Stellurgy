@@ -264,12 +264,12 @@ public final class SystemContent {
         // it wrote would put the moon inside its parent. That became possible only when bodies got a
         // real radius — an Earth is 25 513 blocks across, so an authored orbit of 100 units (20 000
         // blocks) is under the surface. The pack's intent is kept where it is expressible.
-        int authored = moon.getOrbitalDist();
+        long authored = moon.getOrbitalDist();
         double parentRadiusBlocks = Math.max(0.05d, parent.getRadius())
                 * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
         long floorUnits = Math.round(parentRadiusBlocks * MOON_MIN_PARENT_RADII
                 / (double) ORBIT_UNIT_BLOCKS);
-        int orbit = (int) Math.max(authored, Math.max(1L, Math.min(Integer.MAX_VALUE, floorUnits)));
+        long orbit = Math.max(authored, Math.max(1L, floorUnits));
         // THE PERIOD OF THE ORBIT THE MOON IS PUT ON, which is the floored one. This used to be
         // derived from the AUTHORED distance and handed to an ephemeris built with the floored one,
         // so a lifted moon turned at the angular rate of an orbit it is not on — a radius and a

@@ -151,28 +151,28 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      *
      * <p>red-witnessed: 2026-09-29, four inversions, one production line each, each restored, with the
      * method run healthy in the same arrangement first (and twice since).
-     * (1) `CellSeam.hasLeftZone:129-130` answering {@code false}: fails at the carry decision, "production
+     * (1) {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false}: fails at the carry decision, "production
      * does not agree the craft has left the moon's sphere … {"started":false,"wouldCarry":false …}".
      * (2) the same method firing for any body with a sphere: fails in the ARRANGEMENT, reproducibly,
      * "the throttle could not be released — the craft's ledger row is now … @19_0_0.1_0_0 +132365,0,0"
      * — the computer's own tick right after the jump's paste carried out a craft at half the radius
      * before the control could be asked. That is why the craft now ARRIVES at a tenth of the radius
      * and is moved to the control's spot afterwards ({@code ARRIVE_AT}).
-     * (2b) The CONTROL, witnessed in this class since: with `SpaceSubsystem.zoneMembershipIn:500`
+     * (2b) The CONTROL, witnessed in this class since: with {@code SpaceSubsystem#zoneMembershipIn} at {@code double zoneRadius = sphereRadiusOf(reg, zoneBody, zoneCell, tick)}
      * reading a quarter of the sphere, it fails with "a craft 132365.0 blocks from a moon whose sphere
      * is 264731 must be left where it is: {"started":true,"wouldCarry":true,"toCell":"19_0_0.1_0_0" …}".
-     * (3) `SpaceSubsystem.addressIn:551-553` handing back the lattice address: fails with "the ledger no
+     * (3) {@code SpaceSubsystem#addressIn} at {@code GalacticCoord cell = latticeAddress.cellCentre()} handing back the lattice address: fails with "the ledger no
      * longer names the cell the carry announced — the craft was carried again after it arrived …
      * @19_0_0.1_0_0.0_0_0 +-46699,0,1650": misplaced some 311 000 blocks back inside the sphere, it was
      * carried straight back in.
-     * (4) `SpaceSubsystem.latticeOf:652` ignoring the recorded width: fails at the naming verdict,
+     * (4) {@code SpaceSubsystem#latticeOf} at {@code long named = reg == null ? GalacticCoord.WIDTH_UNKNOWN} ignoring the recorded width: fails at the naming verdict,
      * "expected:&lt;19_0_0.[1]_0_0&gt; but was:&lt;19_0_0.[0]_0_0&gt;" — named by EARTH's cell.
-     * (5) `CellSeam.hasEnteredZone:143` entering at the sphere itself (no inward margin): fails at the
+     * (5) {@code CellSeam#hasEnteredZone} at {@code && distanceBlocks < zoneRadiusBlocks * (1d - SPHERE_REENTRY_FRACTION)} entering at the sphere itself (no inward margin): fails at the
      * hysteresis band, "a craft back inside the moon's sphere but not past the inward threshold (the
      * hysteresis), 264598 blocks from a moon whose sphere is 264731 must be left where it is:
      * {"started":true,"wouldCarry":true,"toCell":"19_0_0.1_0_0.0_0_0" …}" — carried straight back in.
      * The inward scenario stays green on it.
-     * (6) The POSITIVE half of that band check: with `CellSeam.hasEnteredZone:142` answering
+     * (6) The POSITIVE half of that band check: with {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} answering
      * {@code false}, the band still reads "stays" and the method fails one step later, where the
      * craft is taken deeper: "production does not agree the craft has entered the moon's sphere …
      * {"started":false,"wouldCarry":false …}".</p>
@@ -233,21 +233,21 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * <p>The other code path of the same seam: outward re-addresses against the GRANDPARENT, inward
      * against a child the controller has just found, so the one cannot vouch for the other.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `CellSeam.hasEnteredZone:142-143` answering {@code false}:
+     * <p>red-witnessed: 2026-09-29, with {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false}:
      * fails at the carry decision, "production does not agree the craft has entered the moon's sphere
      * (… 132365 blocks out against a radius of 264731): {"started":false,"wouldCarry":false,
      * "fromCell":"19_0_0.1_0_0" …}", while the outward scenario stays green on that same inversion.
      * The naming and continuity verdicts are shared with the outward scenario through
-     * {@code addressIn}, whose inversion is recorded there. And with `CellSeam.hasLeftZone:130` leaving
+     * {@code addressIn}, whose inversion is recorded there. And with {@code CellSeam#hasLeftZone} at {@code && distanceBlocks > zoneRadiusBlocks * (1d + SPHERE_CARRY_FRACTION)} leaving
      * at the sphere itself (no outward margin), it fails at the hysteresis band: "a craft back outside
      * the moon's sphere but not past the outward threshold (the hysteresis), 264745 blocks from a moon
      * whose sphere is 264731 must be left where it is: {"started":true,"wouldCarry":true …}" —
      * carried straight back out. The outward scenario stays green on it. And the CONTROL between the
-     * spheres: with `SpaceSubsystem.zoneMembershipIn:490` measuring the moon's sphere against the STAR
+     * spheres: with {@code SpaceSubsystem#zoneMembershipIn} at {@code double childRadius = ZoneScale.realizedRadiusBlocks(child, zoneBody, tick)} measuring the moon's sphere against the STAR
      * (the 638 428-block sphere, the shape of a defect this code has shipped once), it fails with "a
      * craft 397096.1095767623 blocks from a moon whose sphere is 264731 must be left where it is:
      * {"started":true,"wouldCarry":true …}". And the POSITIVE half of the band check: with
-     * `CellSeam.hasLeftZone:129` answering {@code false}, the band still reads "stays" and the method
+     * {@code CellSeam#hasLeftZone} at {@code return zoneRadiusBlocks > 0d} answering {@code false}, the band still reads "stays" and the method
      * fails one step later, where the craft is taken further out: "production does not agree the
      * craft has left the moon's sphere … {"started":false,"wouldCarry":false …}".</p>
      */

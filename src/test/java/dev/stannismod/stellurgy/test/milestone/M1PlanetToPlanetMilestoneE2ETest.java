@@ -340,17 +340,21 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * be taken into its zone and keep station there, approach, descend onto it, and leave it.
      *
      * <p>red-witnessed, the MOON links (2026-09-30, one inversion per run, each red at its own line with
-     * the earlier legs green): {@code CrystalSeeding.java:94}'s zone skip reverted to cell equality —
-     * leg T, "…and must NOT carry the home world's moon … starter … [0,2]"; {@code CrystalSeeding.java:61}'s
-     * home record disabled — leg T, "a first crystal must carry the home world … crystalDims:[]";
-     * {@code TelescopeScan.java:257}'s body loop skipping a {@code MOON} — leg T, "the observatory's
+     * the earlier legs green): {@code CrystalSeeding#starterFor} at
+     * {@code if (home != null && isInZoneOf(coord, home))} — the zone skip — reverted to cell equality —
+     * leg T, "…and must NOT carry the home world's moon … starter … [0,2]"; {@code CrystalSeeding#starterFor}
+     * at {@code memory.record(new CrystalEntry(home, nameOf(0), SystemBodyKind.PLANET,} — the home record —
+     * disabled — leg T, "a first crystal must carry the home world … crystalDims:[]";
+     * {@code TelescopeScan#characterise} at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}
+     * — the body loop — skipping a {@code MOON} — leg T, "the observatory's
      * local radar, run at home, must write the home world's moon … crystal names [0]";
      * {@code SpaceSubsystem.arrivalStandoff} back on the flat 1 024 ring — leg 7b, "a jump must
-     * stand the ship OFF its destination … range=1024 shell=7066"; {@code CellSeam.hasEnteredZone:142}
+     * stand the ship OFF its destination … range=1024 shell=7066"; {@code CellSeam#hasEnteredZone} at {@code return zoneRadiusBlocks > 0d}
      * answering {@code false} — leg 7b, "…no `carry_requested` a granted carry into the moon's zone";
-     * {@code UniverseRegistry.originAt:753} placing a moon-zone cell on the PLANET's origin — leg 7b,
+     * {@code UniverseRegistry#originAt} at {@code return originAt(zone, tick).plus(name.sectorX() * width, name.sectorY() * width,} placing a moon-zone cell on the PLANET's origin — leg 7b,
      * "must keep station with it … range 15235 -> 76112 (drift 60877.0) while the moon travelled
-     * 60878"; {@code TileAdvancedFlightComputer.java:834} reading the cell ({@code bodiesAt}) instead of
+     * 60878"; {@code TileAdvancedFlightComputer#descendTargetsIn} at
+     * {@code for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))} reading the cell ({@code bodiesAt}) instead of
      * the sky — leg 8, "…must be taken DOWN off the space cell … rangeAtArrival=14132 rangeNow=43".
      * NOT witnessed at their own lines: leg 7b's client-follows-into-the-zone wait and seat check, the
      * console listing the moon (leg 6's pick), and the ledger still naming the moon's zone after the
@@ -358,7 +362,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      *
      * <p>red-witnessed: one inversion per rung, each red at its own rung with the earlier ones green.
      * THE BUILD (2026-09-28) — the assembler's {@code VSIntegration.assembleTier2Ship} call
-     * ({@code TileRocketAssemblingMachine:814}) skipped: the rung's helper link fails first, "the BUILD
+     * ({@code TileRocketAssemblingMachine#assembleRocket} at {@code VSIntegration.assembleTier2Ship(world, shipStructure,}) skipped: the rung's helper link fails first, "the BUILD
      * pass must add a ship to the registry — no `ship_spawned` was recorded within 3600 ticks"; the
      * rung's own ship count restates that link. THE CRYSTAL'S ADDRESSES —
      * {@code TileNavigationComputer.shipCrystal} reading an empty stack: "putting a memory crystal into
@@ -370,7 +374,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * computer and be ANSWERED … no `nav_arm_decided`". THE JUMP KEY —
      * {@code TileAdvancedFlightComputer.onJumpKey} returning at once: "the jump key, pressed by a
      * seated pilot of a ARMED ship, must be ANSWERED … no `jump_press_decided`". THE LATCH
-     * (2026-09-24) — {@code TileAdvancedFlightComputer:642}'s {@code entryLatched = false} removed: leg
+     * (2026-09-24) — {@code TileAdvancedFlightComputer#update} at {@code entryLatched = false} removed: leg
      * 9 fails with "no `entry_latch_released` carrying ship = …" after the pilot has flown down through
      * the line. Leg 9's stay-put verdict after it and its {@code STARTED} control have no witness at
      * their own lines: without the latch the ship bounces on arrival and leg 8 fails first, and

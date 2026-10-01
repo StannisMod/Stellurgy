@@ -11,7 +11,7 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>VS is <b>vendored into Stellurgy</b> — its source is compiled into Stellurgy's own jar and its
  * libraries are ordinary runtime dependencies, so VS is a mandatory part of Stellurgy and is always on the
- * runtime classpath (the 3.0.0 "own the physics stack" decision). {@code isAvailable()} must
+ * runtime classpath (the 0.1.0 "own the physics stack" decision). {@code isAvailable()} must
  * therefore report <b>present</b>, and {@link VSIntegration#init()} must resolve the VS API without
  * throwing.</p>
  *

@@ -207,7 +207,7 @@ public class VoidContentTest {
      * A starless system is its world and the moons it kept — each moon named inside the rogue's own
      * zone — and nothing else.
      *
-     * <p>red-witnessed: 2026-09-29, with `ClusteredGalaxyGenerator.rogueBodiesFor:520` naming a rogue's
+     * <p>red-witnessed: 2026-09-29, with {@code ClusteredGalaxyGenerator#rogueBodiesFor} at {@code SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,} naming a rogue's
      * moon by the rogue's own cell (the shape before moons had cells of their own), this fails with
      * "a rogue's moon is named in the rogue's own zone expected:&lt;81453062671_-27624664390_8507222761&gt;
      * but was:&lt;null&gt;". The anchor is chosen to KEEP a moon, and the method asserts one was

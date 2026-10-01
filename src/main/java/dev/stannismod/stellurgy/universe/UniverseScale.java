@@ -87,11 +87,8 @@ public final class UniverseScale {
      * <p>Diffuse, nameless matter — a comet cloud — is not bound by it and may reach past a
      * neighbour's, exactly as real ones nearly touch: attribution reads names, not matter.</p>
      */
-    // Half the floor is 5 000 AU; an orbital distance holds about 1 436 AU at 100 km a unit, so the
-    // reach is cut there, by name (see AstronomicalBodyHelper.MAX_REPRESENTABLE_ORBIT_UNITS).
-    public static final int MAX_NAMED_ORBIT_UNITS =
-            (int) Math.min(AstronomicalBodyHelper.MAX_REPRESENTABLE_ORBIT_UNITS,
-                    Math.round(SEPARATION_FLOOR_AU / 2d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU));
+    public static final long MAX_NAMED_ORBIT_UNITS =
+            Math.round(SEPARATION_FLOOR_AU / 2d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
 
     /** The same reach, in cells: the margin a system's seat keeps clear of its cube's faces. */
     public static final long SEAT_MARGIN_CELLS = cellsForOrbitUnits(MAX_NAMED_ORBIT_UNITS);

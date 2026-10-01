@@ -77,7 +77,21 @@ public final class ReferenceFrames {
         if (!(a > 0d)) {
             return 0d;
         }
-        return a * Math.pow(m / bigM, LAPLACE_EXPONENT);
+        return soiRadius(a, m, bigM);
+    }
+
+    /**
+     * The Laplace sphere of influence of a body of mass {@code massEarths} orbiting a primary of
+     * {@code primaryMassEarths} at {@code orbitalRadius}, in the unit {@code orbitalRadius} is given in
+     * — the law {@link #soiRadiusBlocks} evaluates, for a caller that holds the quantities rather than
+     * two {@code SystemBody}s. Zero where there is no sphere (no mass, or a body not lighter than its
+     * primary).
+     */
+    public static double soiRadius(double orbitalRadius, double massEarths, double primaryMassEarths) {
+        if (!(massEarths > 0d) || !(primaryMassEarths > massEarths) || !(orbitalRadius > 0d)) {
+            return 0d;
+        }
+        return orbitalRadius * Math.pow(massEarths / primaryMassEarths, LAPLACE_EXPONENT);
     }
 
     /**

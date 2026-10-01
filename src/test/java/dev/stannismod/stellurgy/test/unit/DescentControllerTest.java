@@ -463,12 +463,12 @@ public class DescentControllerTest {
      * where Luna is a long way from its parent — so a reading that took the two as sharing a frame,
      * or that compared cell names, gets the wrong answer rather than an unlucky one.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `DescentController.nearestDescentTarget:155` measuring to
+     * <p>red-witnessed: 2026-09-29, with {@code DescentController#nearestDescentTarget} at {@code double distance = craftAt.distanceTo(body.absoluteAt(tick))} measuring to
      * each body's position at tick 0 instead of at the tick asked, this fails with "a craft a third of
      * a descent radius from a moon must find the MOON … was not:&lt;null&gt;". That inversion breaks
      * the reading of a body's LIVE position. The other half of the defect this test is named for —
      * a candidate list drawn from the craft's own cell — lives in the caller,
-     * `TileAdvancedFlightComputer.descendTargetsIn:834`, and NO test pins that call:
+     * {@code TileAdvancedFlightComputer#descendTargetsIn} at {@code for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))}, and NO test pins that call:
      * {@code SystemContentTest} witnesses {@code skyBodiesAt} itself, not which read the caller makes.</p>
      */
     @Test
@@ -515,7 +515,7 @@ public class DescentControllerTest {
      * the registry's, which no pilot can see.</p>
      *
      * <p>red-witnessed: 2026-09-30 (re-run after the radius was widened off the threshold and both
-     * candidates were asserted in range), with `DescentController.nearestDescentTarget:156` keeping
+     * candidates were asserted in range), with {@code DescentController#nearestDescentTarget} at {@code if (!shouldTriggerDescent(true, distance, radiusBlocks) || distance >= nearestDistance)} keeping
      * the FIRST in-range candidate instead of the nearer one, this fails with "beside the moon, the
      * moon expected same:&lt;SystemBody[MOON …]&gt; was not:&lt;SystemBody[PLANET …]&gt;".</p>
      */

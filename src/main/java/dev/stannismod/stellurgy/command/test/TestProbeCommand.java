@@ -7316,6 +7316,12 @@ public class TestProbeCommand extends CommandBase {
             info.put("dim", dim);
             info.put("name", props.getName());
             info.put("starId", props.getStarId());
+            // Whether the star OBJECT this body holds is the one registered under its starId. The id
+            // alone cannot say: a body bound to a private copy of its star reports the right id while
+            // every identity comparison (a warp's "same system", a star's own planet list) and every
+            // edit to the registered star passes it by.
+            info.put("starIsRegistered", props.getStar() != null
+                    && props.getStar() == DimensionManager.getInstance().getStar(props.getStarId()));
             info.put("parent", props.getParentPlanet());
             info.put("atmosphereDensity", props.getAtmosphereDensity());
             info.put("gravity", props.getGravitationalMultiplier());
@@ -7326,6 +7332,10 @@ public class TestProbeCommand extends CommandBase {
             info.put("mass", props.getMass());
             info.put("radius", props.getRadius());
             info.put("orbitalDistance", props.orbitalDist);
+            // The body's LIVE angle on its orbit, in radians — the field the orbit tick advances and
+            // every in-plane geometry (a warp's price, a map's placement) is computed from. Read at
+            // the moment of this reply; it moves every tick.
+            info.put("orbitTheta", props.orbitTheta);
             info.put("rotationalPeriod", props.rotationalPeriod);
             info.put("hasRings", props.hasRings);
             info.put("hasOxygen", props.hasOxygen);
@@ -12887,6 +12897,9 @@ public class TestProbeCommand extends CommandBase {
                     // draw a sky with a star and whatever was authored, and only this field says which
                     // of the two you are looking at.
                     + ",\"maxRetinue\":" + star.getMaxRetinueBodies()
+                    // In EARTH masses — the unit a body's mass is in, and so the one a sphere of
+                    // influence (a mass ratio) is computed in.
+                    + ",\"massEarths\":" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.starMassEarths(star)
                     + ",\"dimsNamingThisStar\":" + named
                     + ",\"planetDims\":" + dims
                     + ",\"name\":\"" + escapeJson(String.valueOf(star.getName())) + "\"}");
@@ -13668,6 +13681,10 @@ public class TestProbeCommand extends CommandBase {
                     DimensionProperties props = (DimensionProperties) cached;
                     info.put("selectedDim", props.getId());
                     info.put("selectedName", props.getName());
+                    // What the selector's distance gauge reads for the selection — the tile's own
+                    // IProgressBar total for the distance bar (id 1), in hundredths of the bar.
+                    info.put("distanceGauge",
+                            ((dev.stannismod.stellurgy.tile.multiblock.TilePlanetSelector) tile).getTotalProgress(1));
                 }
                 send(sender, jsonMap(info));
             } catch (ReflectiveOperationException e) {
@@ -19114,6 +19131,9 @@ public class TestProbeCommand extends CommandBase {
      * twin of the client bot's entity report (id + class + position), for comparing the two
      * sides entity by entity.
      *
+     * {@code /stellurgytest entity interact <dim> <entityId>} — right-clicks the entity with an empty
+     * main hand as a fake player, through {@code Entity#processInitialInteract}.
+     *
      * {@code /stellurgytest entity registry} — round-trips every modded entity through the
      * resolution a receiving client performs, and reports the ones that come back as a
      * DIFFERENT entity (see {@link #handleEntityRegistry}).
@@ -19180,6 +19200,31 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"isDead\":" + entity.isDead
                     + ",\"motionY\":" + entity.motionY
                     + ",\"posY\":" + entity.posY + "}");
+            return;
+        }
+        if (args.length >= 3 && "interact".equalsIgnoreCase(args[0])) {
+            // entity interact <dim> <entityId> — a right-click on the entity with an empty main hand,
+            // by a fake player: the call vanilla makes for a player's right-click on an entity
+            // (Entity#processInitialInteract). For ARRANGING a state an entity's interaction leads to
+            // on a server with no real player; the reply says whether the entity consumed the click.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (entity == null) {
+                send(sender, "{\"error\":\"no such entity\",\"entityId\":" + id + "}");
+                return;
+            }
+            net.minecraftforge.common.util.FakePlayer player =
+                    net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(world);
+            boolean consumed = entity.processInitialInteract(player, net.minecraft.util.EnumHand.MAIN_HAND);
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"entityClass\":\"" + escapeJson(entity.getClass().getName()) + "\""
+                    + ",\"consumed\":" + consumed + "}");
             return;
         }
         if (args.length >= 6 && "near".equalsIgnoreCase(args[0])) {

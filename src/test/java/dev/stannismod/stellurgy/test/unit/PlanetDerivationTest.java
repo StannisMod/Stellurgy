@@ -132,7 +132,7 @@ public class PlanetDerivationTest {
     private static List<BodyProfile> system(long seed, GalacticCoord anchor, StellarBody s, int count) {
         List<BodyProfile> out = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            int orbit = PlanetDerivation.orbitalDistanceOf(seed, anchor, i, count, s);
+            long orbit = PlanetDerivation.orbitalDistanceOf(seed, anchor, i, count, s);
             // One cell per body, as the placement guarantees; the exact cell is the generator's business,
             // so a distinct synthetic one is enough to key the per-body draws.
             out.add(PlanetDerivation.derive(seed, anchor, cell(anchor.sectorX() + i + 1, 0, 0), 0, s,
@@ -237,7 +237,7 @@ public class PlanetDerivationTest {
         for (long x = -12; x <= 12; x++) {
             GalacticCoord anchor = cell(x, 3, -1);
             for (int i = 0; i < 6; i++) {
-                int orbit = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, 6, s);
+                long orbit = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, 6, s);
                 BodyProfile a = PlanetDerivation.derive(SEED, anchor, cell(x, 3, i), 0, s, false, orbit);
                 BodyProfile b = PlanetDerivation.derive(SEED, anchor, cell(x, 3, i), 0, s, false, orbit);
                 assertEquals("type must be stable", a.typeName(), b.typeName());
@@ -402,9 +402,9 @@ public class PlanetDerivationTest {
     @Test
     public void aColdSystemsWarmZoneSitsCloserInThanAHotOnes() {
         // The reference distance is what makes "the warm zone" mean the same thing around every star.
-        int coolDwarf = PlanetDerivation.referenceDistance(star(40, 0.6f));
-        int sunlike = PlanetDerivation.referenceDistance(sol());
-        int blueGiant = PlanetDerivation.referenceDistance(star(220, 2.6f));
+        long coolDwarf = PlanetDerivation.referenceDistance(star(40, 0.6f));
+        long sunlike = PlanetDerivation.referenceDistance(sol());
+        long blueGiant = PlanetDerivation.referenceDistance(star(220, 2.6f));
         assertTrue("a cool dwarf's warm zone must be inside a sunlike star's", coolDwarf < sunlike);
         assertTrue("a hot star's warm zone must be outside a sunlike star's", blueGiant > sunlike);
     }
@@ -489,7 +489,7 @@ public class PlanetDerivationTest {
     /**
      * A very close orbit is tidally locked and one a thousand AU out is not.
      *
-     * <p>red-witnessed: 2026-09-29, with `PlanetDerivation.tidallyLockedAt:281` answering locked for
+     * <p>red-witnessed: 2026-09-29, with {@code PlanetDerivation#tidallyLockedAt} at {@code return orbitalDistance <= lockDistance} answering locked for
      * every orbit, this fails with "a distant orbit must not be locked". That is what the distant leg
      * can see and all it can see: a unit slip in the lock radius (blocks for distance units, or the
      * old "1 AU = 100") leaves it green, because 1 000 AU is outside the radius either way.</p>
@@ -538,18 +538,18 @@ public class PlanetDerivationTest {
         StellarBody s = sol();
         GalacticCoord anchor = cell(2, 2, 2);
         int count = 9;
-        int previous = 0;
-        List<Integer> orbits = new ArrayList<>();
+        long previous = 0;
+        List<Long> orbits = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            int d = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, count, s);
+            long d = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, count, s);
             assertTrue("body " + i + " must orbit outside body " + (i - 1) + " (" + previous + " -> "
                     + d + ")", d > previous);
             previous = d;
             orbits.add(d);
         }
         // Geometric spacing: the outer gaps must dwarf the inner ones, which uniform spacing never does.
-        int innerGap = orbits.get(1) - orbits.get(0);
-        int outerGap = orbits.get(count - 1) - orbits.get(count - 2);
+        long innerGap = orbits.get(1) - orbits.get(0);
+        long outerGap = orbits.get(count - 1) - orbits.get(count - 2);
         assertTrue("spacing must widen outward (" + innerGap + " vs " + outerGap + ")",
                 outerGap > innerGap * 3);
     }
@@ -566,8 +566,8 @@ public class PlanetDerivationTest {
         GalacticCoord anchor = cell(4, -2, 7);
 
         for (int i = 0; i < 6; i++) {
-            int cool = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, 6, dwarf);
-            int hot = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, 6, giant);
+            long cool = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, 6, dwarf);
+            long hot = PlanetDerivation.orbitalDistanceOf(SEED, anchor, i, 6, giant);
             assertTrue("a hot star's zone must be wider than a cool one's at every rank ("
                     + cool + " vs " + hot + ")", hot > cool);
         }

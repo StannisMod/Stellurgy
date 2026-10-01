@@ -880,7 +880,11 @@ public class DimensionManager implements IGalaxy {
 
                 //Add the overworld
                 DimensionManager.getInstance().registerDimNoUpdate(DimensionManager.overworldProperties, false);
-                sol.addPlanet(DimensionManager.overworldProperties);
+                // BIND, not only list: Earth was seeded with a placeholder Sol (see seedEarthDefaults),
+                // and addPlanet alone would list Earth under this Sol while Earth kept pointing at the
+                // placeholder — every identity check ("same system") and every edit to star 0 then
+                // passed Earth by. setStar lists it too.
+                DimensionManager.overworldProperties.setStar(sol);
 
                 if (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId == Constants.INVALID_PLANET)
                     dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId = DimensionManager.getInstance().getNextFreeDim(savedDimOffset);
@@ -912,14 +916,10 @@ public class DimensionManager implements IGalaxy {
                     dimensionProperties.setGravityAuthored(true);
                     dimensionProperties.setBulk(0.0123d, 0.2727d);
                     dimensionProperties.setName("Luna");
-                    // 384 400 km, in the moon-unit the layout measures a moon's orbit in (200 chart
-                    // blocks each, 250 m per block): 1 537 600 blocks / 200 = 7 688 units. The 150
-                    // this replaces meant 7 500 km — 51 times too small, close enough to Earth's own
-                    // 6 378 km radius that the two bodies' neighbourhoods overlapped, which is why
-                    // "which body is this craft's frame" had no answer worth giving.
-                    //
-                    // The field is an int and always was, so the real value was expressible from the
-                    // start; nothing about the model stood in the way of it.
+                    // 384 400 km, the Moon's real distance. An earlier 150 meant 7 500 km — 51 times
+                    // too small, close enough to Earth's own 6 378 km radius that the two bodies'
+                    // neighbourhoods overlapped, which is why "which body is this craft's frame" had
+                    // no answer worth giving.
                     dimensionProperties.orbitalDist =
                             dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS;
                     dimensionProperties.addBiome(StellurgyBiomes.moonBiome);
@@ -994,8 +994,8 @@ public class DimensionManager implements IGalaxy {
             }
         }
         // The save's previous version string is written on every save and read by nobody. A
-        // commented-out legacy-upgrade call used to be the reason it was kept in a field; 3.0.0
-        // does not load pre-3.0.0 saves at all, so that call has no version to migrate from and the
+        // commented-out legacy-upgrade call used to be the reason it was kept in a field; 0.1.0
+        // does not load pre-0.1.0 saves at all, so that call has no version to migrate from and the
         // field is gone. The stamp itself stays: a save that says which build wrote it is worth
         // having whether or not this code ever reads it back.
 

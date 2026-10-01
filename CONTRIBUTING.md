@@ -46,7 +46,7 @@ timeout --signal=KILL 360 ./gradlew testServer --no-daemon > logs/testServer.log
 | Branch | Contents |
 | --- | --- |
 | `1.12` | Mainline — the 2.x release line |
-| `feature/*` | 3.0.0 development: tier-2 ships, the space subsystem, the universe registry |
+| `feature/*` | 0.1.0 development: tier-2 ships, the space subsystem, the universe registry |
 
 ## Pull requests
 

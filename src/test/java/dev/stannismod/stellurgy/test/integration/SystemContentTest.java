@@ -104,7 +104,7 @@ public class SystemContentTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with `SystemContent.orbitLawOf:230` building the authored law at
+     * red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the authored law at
      * {@code ORBIT_UNIT_BLOCKS / 1000} (zero in long arithmetic — an orbit with no length), this fails
      * with "a planet sits in its OWN cell, not in the star's anchor cell".
      */
@@ -164,7 +164,7 @@ public class SystemContentTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with `SystemContent.orbitLawOf:230` building the AUTHORED law at
+     * red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the AUTHORED law at
      * {@code ORBIT_UNIT_BLOCKS / 1000} while the procedural one is untouched, this fails with "one
      * orbit unit must be one distance in both families expected:&lt;0.0&gt; but
      * was:&lt;400.00000338384956&gt;" — 400 blocks per unit, the procedural family's measured scale.
@@ -235,7 +235,7 @@ public class SystemContentTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with `SystemContent.orbitLawOf:230` building the law at
+     * red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at
      * {@code ORBIT_UNIT_BLOCKS / 1000} (zero), this fails with "the planet's coord is its own zone
      * cell, NOT the system's anchor cell".
      */
@@ -282,7 +282,7 @@ public class SystemContentTest {
      * cell apart, each against a cell boundary, so their addresses flipped under the slightest motion
      * and two bodies could share one.
      *
-     * <p>red-witnessed: 2026-09-30, with `SystemContent.orbitLawOf:230` building the law at
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at
      * {@code ORBIT_UNIT_BLOCKS / 1000} (zero), this fails with "...and puts the whole orbital radius
      * along +Z".</p>
      */
@@ -312,7 +312,7 @@ public class SystemContentTest {
      * bodies are made. Advertised as landable, it sent a ship's descent into a dimension with no
      * terrain to find.
      *
-     * <p>red-witnessed: 2026-09-30, with `SystemContent.kindOf:367` answering the walkable kind
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#kindOf} at {@code return body.hasSurface() ? ifWalkable : SystemBodyKind.GAS_GIANT} answering the walkable kind
      * whatever the surface, this fails with "a surface-less body is not somewhere a ship can land".</p>
      */
     @Test
@@ -356,7 +356,7 @@ public class SystemContentTest {
      * a navigation computer leads its aim by — is pinned by
      * {@link #aMoonIsAimedAtWhereItIsNotAtItsParentsCellCentre}.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with `SystemBody.addressAt:256-257` answering the galactic cell of
+     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of
      * the body's LIVE position instead of its name — the defect this test used to assert as the
      * model — this fails with "half an orbit later the body is still addressed by the same cell
      * expected:&lt;19_0_0&gt; but was:&lt;-19_0_0&gt;".</p>
@@ -396,7 +396,7 @@ public class SystemContentTest {
      * different name. Without this, "the name never changes" would be passed by a derivation that
      * returned the same cell for every body in the universe.
      *
-     * <p>red-witnessed: 2026-09-30, with `SystemContent.orbitLawOf:230` building the law at
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at
      * {@code ORBIT_UNIT_BLOCKS / 1000} (zero — every orbit collapses onto the anchor), this fails with
      * "two bodies authored on opposite sides of one star are not one address".</p>
      */
@@ -426,7 +426,7 @@ public class SystemContentTest {
      * derivation itself. A name that is merely re-derived consistently is only as stable as its
      * inputs, and those inputs are known to move.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with `SystemContent.nameOf:304` returning the derivation without
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#nameOf} at {@code return names == null ? derived} returning the derivation without
      * consulting the store, this fails with "the store's name is the body's name, whatever the
      * derivation would have said".</p>
      */
@@ -463,7 +463,7 @@ public class SystemContentTest {
      * and aiming at the body are now the same act, which is what "a moon is a destination in its own
      * right" means — and the two answers coinciding is the assertion, not a coincidence to shrug at.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with `SystemBody.addressAt:256-257` answering the galactic cell of
+     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of
      * the body's live position instead of its name, this fails with "a moon's cell rides the moon,
      * so aiming at the cell IS aiming at the body".</p>
      */
@@ -527,8 +527,9 @@ public class SystemContentTest {
      * Nothing pins that call yet: the computer is not ticking on the server tier by the time a craft
      * could be flown near a moon, so it needs a client e2e with a pilot aboard.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `UniverseRegistry.skyBodiesAt:568` answering the cell read
-     * ({@code bodiesAt}) — the defect as it shipped — this fails with "but the SKY read must hold the
+     * <p>red-witnessed: 2026-09-29, with {@code UniverseRegistry#skyBodiesAt} at
+     * {@code List<SystemBody> out = systemBodiesAt(cell)} answering the cell read ({@code bodiesAt})
+     * instead — the defect as it shipped — this fails with "but the SKY read must hold the
      * moon, or a scan built on it can never find one" (re-run after the message was narrowed).</p>
      */
     @Test
@@ -587,7 +588,7 @@ public class SystemContentTest {
      * through. A nav computer no longer has to lead its aim at a moon, because the address it aims
      * at moves with the body.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with `SystemBody.addressAt:256-257` answering the galactic cell of
+     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of
      * the body's live position instead of its name, this fails with "...and it is the same name at
      * every tick expected:&lt;33_0_18.1_0_1&gt; but was:&lt;33_0_18&gt;".</p>
      */
@@ -641,7 +642,7 @@ public class SystemContentTest {
      * fixture below is that Jupiter, and the two readings are 11× apart, so a run cannot satisfy this
      * test by accident.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with `SystemContent.moonLawOf:280` taking the period from the
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#moonLawOf} at {@code orbit, (float) parent.getOrbitalMass())} taking the period from the
      * AUTHORED distance instead of the lifted one, this fails with "one mass-derived period must bring
      * it back (was 1372907.1155518861, orbit radius 714400.0)". The fixture, printed: the moon is
      * lifted to 1 786 units, 714 400 blocks.</p>
@@ -729,7 +730,7 @@ public class SystemContentTest {
      * lands in the neighbouring cube and resolves to NO system: an address the console will happily
      * offer, with nothing at it, that a ship can fly to and never descend from.</p>
      *
-     * <p>red-witnessed: 2026-09-30, with `UniverseRegistry.anchorForCell:259` skipping the
+     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#anchorForCell} at {@code GalacticCoord stored = storedAnchorNear(cell)} skipping the
      * neighbourhood lookup ({@code storedAnchorNear}), this fails with "its own cell must attribute
      * back to its system".</p>
      */

@@ -62,7 +62,7 @@ public class ZoneScaleTest {
      * <p>Pan is the tightest case in the system; it is asserted alongside the others rather than
      * alone, because a lattice sized for Pan and wrong for Luna would pass a single-case test.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `ZoneScale.cellsAcrossZone:102` leaving a zone with children
+     * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} leaving a zone with children
      * undivided (one cell), this fails with "Mars's innermost moon orbits 9376 km out and shares its
      * planet's cell: lattice cell = 4609334 blocks, index = 0 …".</p>
      */
@@ -91,7 +91,7 @@ public class ZoneScaleTest {
      * before the fix: Earth's zone cell was 7 235 blocks against Luna's 7 059-block shell, so the
      * craft was outside Luna's cell by construction and no amount of flying could get it in.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `ZoneScale.cellsAcrossZone:102` put back to the flat 1024 it
+     * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} put back to the flat 1024 it
      * shipped as (for any zone with a child), this fails with "Mars has a descent shell of 13786
      * blocks against a zone cell of 4502 (half 2251) …".</p>
      */
@@ -128,7 +128,7 @@ public class ZoneScaleTest {
      * arithmetic and this is a claim about the code.</p>
      *
      * <p>red-witnessed: 2026-09-29, with the same inversion as the descent-shell test —
-     * `ZoneScale.cellsAcrossZone:102` returning the flat 1024 — this fails with "Mars's innermost moon
+     * {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} returning the flat 1024 — this fails with "Mars's innermost moon
      * has a sphere of influence 7843 blocks in radius against a cell of 4502 (half 2251) …".</p>
      */
     @Test
@@ -162,7 +162,7 @@ public class ZoneScaleTest {
      * the cell and the sphere are the same region. Nothing needs naming apart inside it, so nothing
      * asks for the lattice to be divided.</p>
      *
-     * <p>red-witnessed: 2026-09-29, twice. With `ZoneScale.cellsAcrossZone:100` answering 2 for a
+     * <p>red-witnessed: 2026-09-29, twice. With {@code ZoneScale#cellsAcrossZone} at {@code return 1} answering 2 for a
      * childless body, this fails with "a childless body's zone is not divided expected:&lt;1&gt; but
      * was:&lt;2&gt;". With `ZoneScale.cellBlocks` sizing a one-cell zone from the realization cap
      * instead of the sphere, it fails with "...so its one cell spans exactly its sphere
@@ -208,7 +208,7 @@ public class ZoneScaleTest {
     /**
      * The count is a power of two, so a body on a cell boundary does not depend on a rounding mode.
      *
-     * <p>red-witnessed: 2026-09-29, with `ZoneScale.cellsAcrossZone:103` returning the raw
+     * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#cellsAcrossZone} at {@code int count = 1} returning the raw
      * {@code needed} count instead of rounding it up to a power of two, this fails with "Mars has a
      * lattice of 62 cells, which is not a power of two".</p>
      */
@@ -228,7 +228,7 @@ public class ZoneScaleTest {
      * cell handed back here would be indistinguishable from a real lattice at every call site — the
      * naming would succeed and produce an address for a zone nobody owns.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `ZoneScale.cellBlocks:127` answering 1 instead of 0 for a
+     * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#cellBlocks} at {@code return 0L} answering 1 instead of 0 for a
      * body with no zone, this fails with "a body with no sphere of influence has no lattice
      * expected:&lt;0&gt; but was:&lt;1&gt;".</p>
      */
@@ -327,7 +327,7 @@ public class ZoneScaleTest {
      * cell centre at the instant it crossed a sphere — up to half a cell, which in Earth's zone is
      * 924 647 blocks of teleport nobody asked for. This is the assertion that separates the two.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `ZoneScale.addressOnLattice:236` dropping the in-cell
+     * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#addressOnLattice} at {@code return GalacticCoord.inZone(zoneKey, cellBlocks, ix, iy, iz,} dropping the in-cell
      * remainder (locals 0), this fails with "the address must denote where the craft actually is
      * expected:&lt;4315080&gt; but was:&lt;3698640&gt;".</p>
      */
@@ -375,7 +375,7 @@ public class ZoneScaleTest {
      * {@code ZoneCrossingAimsAtTheRightCellTest#aCraftLeavingAMoonsSphereIsNamedByTheMoonsOwnCell},
      * whose red-witness inverts {@code SpaceSubsystem.latticeOf}.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `ZoneScale.addressOnLattice:233` made to ignore the width it
+     * <p>red-witnessed: 2026-09-29, with {@code ZoneScale#addressOnLattice} at {@code long ix = cellIndex(offset.dx(), cellBlocks)} made to ignore the width it
      * is handed and use the undivided one (7 397 280), this fails with *"a craft standing exactly
      * where the moon stands is named by cell 0_0_0.0_0_0 while the moon itself is named by
      * 0_0_0.1_0_0"* — the defect verbatim.</p>

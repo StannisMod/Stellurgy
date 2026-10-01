@@ -70,9 +70,9 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * bodies — it could not descend to it and its sky did not draw it.</p>
      *
      * <p>red-witnessed: 2026-09-29, TWICE, one inversion per assertion, each leaving the other two
-     * scenarios green. With `SpaceSubsystem.latticeOf:652` made to ignore the recorded width, the
+     * scenarios green. With {@code SpaceSubsystem#latticeOf} at {@code long named = reg == null ? GalacticCoord.WIDTH_UNKNOWN} made to ignore the recorded width, the
      * naming verdict fails *"expected:&lt;1849294&gt; but was:&lt;7397176&gt;"*. With
-     * `SpaceSubsystem.addressIn:551-553` made to hand back the lattice address unchanged, the
+     * {@code SpaceSubsystem#addressIn} at {@code GalacticCoord cell = latticeAddress.cellCentre()} made to hand back the lattice address unchanged, the
      * continuity verdict fails *"re-addressing must not displace the craft expected:&lt;0.0&gt; but
      * was:&lt;321993.763009472&gt;"*.</p>
      */
@@ -122,8 +122,8 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * against the GRANDPARENT, inward against a child the loop has just found. The two shared the
      * lattice defect and would have to share its fix.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `CellSeam.hasEnteredZone:141` made to answer {@code false}
-     * always, this fails with *"a craft inside a child's sphere must be taken into that child's
+     * <p>red-witnessed: 2026-09-29, with {@code CellSeam#hasEnteredZone} at
+     * {@code return zoneRadiusBlocks > 0d} made to answer {@code false} always, this fails with *"a craft inside a child's sphere must be taken into that child's
      * zone"* while the outward and hysteresis scenarios stay green — so the red is this path's and
      * not the seam's in general. Re-run 2026-09-30 (`:142`) after the arrangement began asserting
      * the craft's distance from the moon: same verdict, the arrangement held.</p>
@@ -163,8 +163,8 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * <p>The CONTROL for both tests above: without it, a re-address that fired on every tick would
      * satisfy them exactly as well as one that fires when a boundary is crossed.</p>
      *
-     * <p>red-witnessed: 2026-09-29, with `CellSeam.hasLeftZone:128` made to fire for any body with a
-     * sphere — the exact "re-addresses on every tick" defect this control exists to exclude — it
+     * <p>red-witnessed: 2026-09-29, with {@code CellSeam#hasLeftZone} at
+     * {@code return zoneRadiusBlocks > 0d} made to fire for any body with a sphere — the exact "re-addresses on every tick" defect this control exists to exclude — it
      * fails with *"must be left where it is expected null, but was: GalacticCoord[zone=19_0_0@1849294,
      * sector=(1,0,0) …]"*, and the other two scenarios stay green ON that same inversion, which is
      * precisely why a control is needed: they cannot tell the difference. Re-run the same day after
@@ -172,7 +172,8 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * the arrangement began asserting the craft's distance: same verdict, the arrangement held.</p>
      *
      * <p><b>The positive half, and the inversion that shows why it is here</b>: with
-     * `SystemBody.definesFrame:326` no longer counting a MOON, {@code zoneMembershipIn} cannot resolve
+     * {@code SystemBody#definesFrame} at {@code || kind == SystemBodyKind.ROGUE_PLANET || kind == SystemBodyKind.MOON}
+     * no longer counting a MOON, {@code zoneMembershipIn} cannot resolve
      * the moon's zone and answers {@code null} for that reason alone — which the null verdict below
      * would have read as the hysteresis, green. The positive half fails instead: "arrangement: this
      * zone must resolve — a craft past its sphere is re-addressed" (2026-09-29).</p>

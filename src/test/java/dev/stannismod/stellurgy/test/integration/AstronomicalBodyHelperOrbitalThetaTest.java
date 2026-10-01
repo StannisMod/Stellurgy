@@ -59,7 +59,7 @@ public class AstronomicalBodyHelperOrbitalThetaTest {
     }
 
     /**
-     * red-witnessed: 2026-09-30, with `AstronomicalBodyHelper.getOrbitalThetaAt:316` dropping the
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalThetaAt} at {@code return ((worldTick % periodTicks) / periodTicks) * (2d * Math.PI)} dropping the
      * modulo by the period, this fails at the one-orbit wrap with "expected:&lt;0.0&gt; but
      * was:&lt;6.283185307179586&gt;".
      */

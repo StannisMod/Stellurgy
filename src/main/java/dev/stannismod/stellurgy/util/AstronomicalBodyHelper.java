@@ -71,13 +71,6 @@ public class AstronomicalBodyHelper {
     public static final int DISTANCE_UNITS_PER_AU =
             (int) Math.round(METRES_PER_AU / METRES_PER_DISTANCE_UNIT);
 
-    /**
-     * The widest orbital distance the field can HOLD, in distance units: an orbital distance is an
-     * {@code int}, so at 100 km a unit this is about 1 436 AU. A bound on what can be represented,
-     * not on what is reasonable — a derivation that asks for more is cut here, and says it is cut by
-     * using this name rather than a bare {@code Integer.MAX_VALUE}.
-     */
-    public static final int MAX_REPRESENTABLE_ORBIT_UNITS = Integer.MAX_VALUE;
     /** Metres in one Julian light year. */
     public static final double METRES_PER_LIGHT_YEAR = 9.460_730_472_580_8e15d;
     /**
@@ -92,6 +85,15 @@ public class AstronomicalBodyHelper {
     /** Chart blocks in one light year. */
     public static final long BLOCKS_PER_LIGHT_YEAR =
             Math.round(METRES_PER_LIGHT_YEAR / METRES_PER_CHART_BLOCK);
+    /**
+     * Free-flight (legacy solar) map units per AU, for EVERY body laid out on that map — a planet
+     * about its star and a companion about its primary alike, because both carry their orbit in one
+     * field and one unit. 100 per distance unit while a unit was a hundredth of an AU.
+     *
+     * <p>A companion was laid out at 100 per AU beside planets at this, so a binary's second star
+     * stood inside its primary's planets; two private constants were the whole of it.</p>
+     */
+    public static final double SPACE_MAP_UNITS_PER_AU = 10_000d;
     /**
      * Chart blocks per unit of {@code orbitalDistance} — the ONE law that turns an orbit into a
      * place, for authored and procedural systems alike.
@@ -233,6 +235,35 @@ public class AstronomicalBodyHelper {
     /** Days in one lunar month at {@link #MOON_REFERENCE_UNITS} from a mass-1 parent — the Moon's own
      *  sidereal period, and a measured fact rather than a tuned one. */
     public static final double DAYS_PER_LUNAR_MONTH = 27.32d;
+
+    /**
+     * Where the moon-level VIEWS stand our Moon: 150, in the scale each of them was tuned against.
+     *
+     * <p>Every view that shows a moon against its planet — how large it is drawn in the sky, where a
+     * map or a hologram puts it, what a gauge reads for it, how long a burn to it lasts — was tuned
+     * while Luna carried an orbital distance of 150. That number was wrong as a DISTANCE (7 500 km,
+     * in the 50 km unit of the time, against a real 384 400), and it was also the number every one
+     * of those views looked right at. Correcting the distance moved them all at once, to places no
+     * view had been tuned for.</p>
+     *
+     * <p>So the picture and the distance are kept apart (ruling of 2026-09-30): a view reads a moon's
+     * distance as a RATIO to {@link #MOON_REFERENCE_UNITS} and stands Luna at this number, so Luna
+     * looks exactly as she did and every other moon scales in proportion to its own distance. The
+     * number is a view scale, never a length. Nothing physical — a period, a position in the chart,
+     * a sphere of influence — may read it; those read the distance itself. The views that do read it
+     * are the callers of {@link #moonViewUnits}.</p>
+     */
+    public static final int MOON_VIEW_UNITS_AT_LUNA = 150;
+
+    /**
+     * A moon's distance from its planet on the moon-view scale of {@link #MOON_VIEW_UNITS_AT_LUNA}:
+     * 150 for a moon at Luna's distance, 75 for one at half of it.
+     *
+     * @param orbitalDistance the moon's distance from its planet, in distance units
+     */
+    public static double moonViewUnits(long orbitalDistance) {
+        return MOON_VIEW_UNITS_AT_LUNA * (orbitalDistance / (double) MOON_REFERENCE_UNITS);
+    }
     /** Ticks in one day — the platform's rate, NOT a planet's rotational period (that is per-dim). */
     public static final int TICKS_PER_DAY = 24000;
     /**
@@ -243,14 +274,51 @@ public class AstronomicalBodyHelper {
     public static final int TICKS_PER_YEAR = DAYS_PER_YEAR * TICKS_PER_DAY;
 
     /**
-     * Returns the size multiplier for a body at the input distance, relative to either 1AU or the moon's orbital distance, depending on parent body
+     * The size multiplier for a body seen from {@code orbitalDistance} away, relative to one AU: 1 at
+     * one AU, 2 at half an AU. A moon and its planet, seen from each other, are sized by
+     * {@link #getMoonSizeMultiplier} instead.
      *
-     * @param orbitalDistance the distance from the parent body
+     * @param orbitalDistance the distance, in distance units ({@link #DISTANCE_UNITS_PER_AU} to the AU)
      * @return the float multiplier for size
      */
     public static float getBodySizeMultiplier(float orbitalDistance) {
-        //Returns size multiplier relative to Earth standard (1AU = 100 Distance)
         return (float) DISTANCE_UNITS_PER_AU / orbitalDistance;
+    }
+
+    /**
+     * The moon-view distance at which the sky draws a moon, or a planet seen from its moon, at its
+     * base size. It is the numerator {@link #getBodySizeMultiplier} had while a distance unit was a
+     * hundredth of an AU and a moon's distance was read through it.
+     */
+    private static final float MOON_VIEW_UNITS_AT_BASE_SKY_SIZE = 100f;
+
+    /**
+     * The size multiplier the sky draws a moon by from its planet, and the planet by from its moon:
+     * {@code 100 / moonViewUnits}, so two thirds for Luna, as before her distance was corrected, and
+     * inversely with any other moon's distance. See {@link #MOON_VIEW_UNITS_AT_LUNA}.
+     *
+     * @param moonOrbitalDistance the moon's distance from its planet, in distance units
+     */
+    public static float getMoonSizeMultiplier(long moonOrbitalDistance) {
+        return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance);
+    }
+
+    /** The height at which {@link #getSizeMultiplierAtHeight} draws a body at its base size. */
+    private static final float REFERENCE_VIEW_HEIGHT = 100f;
+
+    /**
+     * The size multiplier the low-orbit views draw a body by, from a HEIGHT rather than an orbital
+     * distance: a station's altitude, the fixed height a station sky puts its sun at, or the player's
+     * height above the horizon. {@code 100 / height}.
+     *
+     * <p>Those views used to call {@link #getBodySizeMultiplier}, whose numerator was
+     * {@link #DISTANCE_UNITS_PER_AU} and happened to be 100 while a distance unit was a hundredth of
+     * an AU. A height was never in that unit. When the unit became a length of 100 km the numerator
+     * became 1 495 979, and every body these views draw grew 14 960 times with nothing about the
+     * height having changed.</p>
+     */
+    public static float getSizeMultiplierAtHeight(float height) {
+        return REFERENCE_VIEW_HEIGHT / height;
     }
 
     /**
@@ -267,7 +335,7 @@ public class AstronomicalBodyHelper {
      * @param starMassSolar   the mass of the star in question, in solar masses
      * @return the orbital period in MC Days (24000 ticks)
      */
-    public static double getOrbitalPeriod(int orbitalDistance, float starMassSolar) {
+    public static double getOrbitalPeriod(long orbitalDistance, float starMassSolar) {
         //One MC Year is 48 MC days (16 IRL Hours), one month is 8 MC Days
         return DAYS_PER_YEAR
                 * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d);
@@ -302,7 +370,7 @@ public class AstronomicalBodyHelper {
      * @param starMassSolar   the mass of the star in question, in solar masses
      * @return the current angle around the star in radians
      */
-    public static double getOrbitalTheta(int orbitalDistance, float starMassSolar) {
+    public static double getOrbitalTheta(long orbitalDistance, float starMassSolar) {
         return getOrbitalThetaAt(orbitalDistance, starMassSolar, Stellurgy.proxy.getWorldTimeUniversal(0));
     }
 
@@ -314,7 +382,7 @@ public class AstronomicalBodyHelper {
      *
      * @return the angle around the star in RADIANS
      */
-    public static double getOrbitalThetaAt(int orbitalDistance, float starMassSolar, long worldTick) {
+    public static double getOrbitalThetaAt(long orbitalDistance, float starMassSolar, long worldTick) {
         double periodTicks = (double) TICKS_PER_DAY * getOrbitalPeriod(orbitalDistance, starMassSolar);
         if (!(periodTicks > 0d) || Double.isInfinite(periodTicks)) {
             // A degenerate orbit (zero distance, or a star with no mass recorded) does not move.
@@ -331,7 +399,7 @@ public class AstronomicalBodyHelper {
      * @param parentMassEarths the mass of the parent planet, in Earth masses
      * @return the current angle around the planet in radians
      */
-    public static double getMoonOrbitalTheta(int orbitalDistance, float parentMassEarths) {
+    public static double getMoonOrbitalTheta(long orbitalDistance, float parentMassEarths) {
         return getMoonOrbitalThetaAt(orbitalDistance, parentMassEarths,
                 Stellurgy.proxy.getWorldTimeUniversal(0));
     }
@@ -342,7 +410,7 @@ public class AstronomicalBodyHelper {
      *
      * @return the angle around the parent planet in RADIANS
      */
-    public static double getMoonOrbitalThetaAt(int orbitalDistance, float parentMassEarths,
+    public static double getMoonOrbitalThetaAt(long orbitalDistance, float parentMassEarths,
                                                long worldTick) {
         //Because the function is still in AU and solar mass, some correctional factors to convert to those units
         double periodTicks = (double) TICKS_PER_DAY
@@ -363,7 +431,7 @@ public class AstronomicalBodyHelper {
      * @param baseOrbitalTheta    the base orbital theta of the planet in question
      * @return the current angle around the planet normalized 0 - 360, for GL calls
      */
-    public static float getParentPlanetThetaFromMoon(int rotationalPeriod, int orbitalDistance, float parentMassEarths, double currentOrbitalTheta, double baseOrbitalTheta) {
+    public static float getParentPlanetThetaFromMoon(int rotationalPeriod, long orbitalDistance, float parentMassEarths, double currentOrbitalTheta, double baseOrbitalTheta) {
         //Convert from radians to degrees for easier math
         float degreeOrbitalTheta = (float) (currentOrbitalTheta * 180 / Math.PI);
         //Computer the number of rotations per revolution and use that for how fast the planet would seem to orbit from the moon
@@ -381,7 +449,7 @@ public class AstronomicalBodyHelper {
      * @param atmPressure     the pressure of the planet's atmosphere
      * @return the temperature of the planet in Kelvin
      */
-    public static int getAverageTemperature(StellarBody star, int orbitalDistance, int atmPressure) {
+    public static int getAverageTemperature(StellarBody star, long orbitalDistance, int atmPressure) {
         return getAverageTemperature(star, orbitalDistance, atmPressure, EARTH_ALBEDO);
     }
 
@@ -397,7 +465,7 @@ public class AstronomicalBodyHelper {
      *
      * @param albedo the fraction of incident light the surface reflects, 0..1
      */
-    public static int getAverageTemperature(StellarBody star, int orbitalDistance, int atmPressure,
+    public static int getAverageTemperature(StellarBody star, long orbitalDistance, int atmPressure,
                                             double albedo) {
         double flux = getStellarBrightness(star, orbitalDistance);
         double absorbed = flux * (1d - Math.min(Math.max(albedo, 0d), 1d));
@@ -417,7 +485,7 @@ public class AstronomicalBodyHelper {
      */
     private static final double MIN_BRIGHTNESS = 1.0e-9d;
 
-    public static double getStellarBrightness(StellarBody star, int orbitalDistance) {
+    public static double getStellarBrightness(StellarBody star, long orbitalDistance) {
         if (star == null || orbitalDistance <= 0) {
             return MIN_BRIGHTNESS;
         }

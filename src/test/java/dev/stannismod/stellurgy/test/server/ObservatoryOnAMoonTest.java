@@ -151,7 +151,7 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
     /**
      * <p>red-witnessed: with {@code TileObservatory.scanOrigin}'s {@code .map(galacticCell)} removed:
      * "an observatory on the moon must survey from its system's galactic cell … expected 19_0_0 but
-     * was 19_0_0.1_0_0"; with {@code TelescopeScan.java:257}'s body loop skipping a {@code MOON}: "the
+     * was 19_0_0.1_0_0"; with {@code TelescopeScan#characterise} at {@code for (SystemBody body : registry.systemBodiesAt(anchor))}'s body loop skipping a {@code MOON}: "the
      * moon's local radar must name the moon it stands on"; and skipping a {@code PLANET}: "and the
      * world that moon orbits … crystalDims:[2]" — one inversion per run, 2026-09-30. (An earlier
      * version of this class also measured what the origin inversion does past the assertion: the
