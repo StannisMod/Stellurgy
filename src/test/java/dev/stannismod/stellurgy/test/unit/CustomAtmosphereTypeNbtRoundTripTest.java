@@ -31,10 +31,13 @@ import static org.junit.Assert.assertSame;
  * case) — not just against the stock {@code AIR} / {@code VACUUM} /
  * etc. listed in the {@code AtmosphereType} static init block.</p>
  *
- * <p>Pyramid layer: testUnit. No world / server needed; the registry is
- * a process-wide singleton.</p>
+ * <p>Pyramid layer: testUnit. No world / server needed. Each test registers
+ * into a register of its own: the game's is filled once at load and read for
+ * the rest of the JVM, so an entry left in it would reach every later test.</p>
  */
 public class CustomAtmosphereTypeNbtRoundTripTest {
+
+    private final AtmosphereRegister register = new AtmosphereRegister();
 
     @BeforeClass
     public static void bootstrap() {
@@ -56,9 +59,9 @@ public class CustomAtmosphereTypeNbtRoundTripTest {
         // same harness.
         String name = "task32CustomTestAtmosphere";
         AtmosphereType custom = new AtmosphereType(false, true, name);
-        AtmosphereRegister.getInstance().registerAtmosphere(custom);
+        register.registerAtmosphere(custom);
 
-        IAtmosphere resolved = AtmosphereRegister.getInstance().getAtmosphere(name);
+        IAtmosphere resolved = register.getAtmosphere(name);
         assertNotNull("getAtmosphere on a registered unlocalized-name must "
                         + "resolve (not fall back to AIR) — companion mods "
                         + "depend on this for tile-state read-back",
@@ -86,7 +89,7 @@ public class CustomAtmosphereTypeNbtRoundTripTest {
     public void customAtmosphereSurvivesNbtNameRoundTripThroughRegistry() {
         String name = "task32CustomTestAtmosphereForNbt";
         AtmosphereType custom = new AtmosphereType(true, false, false, name);
-        AtmosphereRegister.getInstance().registerAtmosphere(custom);
+        register.registerAtmosphere(custom);
 
         // Mirror TileAtmosphereDetector.writeToNBT.
         NBTTagCompound nbt = new NBTTagCompound();
@@ -94,8 +97,7 @@ public class CustomAtmosphereTypeNbtRoundTripTest {
 
         // Mirror TileAtmosphereDetector.readFromNBT.
         String readbackName = nbt.getString("atmName");
-        IAtmosphere readback = AtmosphereRegister.getInstance()
-                .getAtmosphere(readbackName);
+        IAtmosphere readback = register.getAtmosphere(readbackName);
         assertSame("custom AtmosphereType must round-trip through the NBT "
                         + "unlocalized-name + registry-lookup loop intact — "
                         + "this is the save-compat contract for any tile "

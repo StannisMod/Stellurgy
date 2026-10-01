@@ -63,7 +63,7 @@ public abstract class MixinNetHandlerDeckMovementBound {
         if (!stellurgyBoundHaveFrom || subject == null || subject.world == null) {
             return;
         }
-        if (!DeckMovementBound.accepts(subject, stellurgyBoundFromX, stellurgyBoundFromY, stellurgyBoundFromZ,
+        if (!dev.stannismod.stellurgy.Stellurgy.serverState().deckMovement.accepts(subject,stellurgyBoundFromX, stellurgyBoundFromY, stellurgyBoundFromZ,
                 subject.posX, subject.posY, subject.posZ)) {
             // Refused: put him back where the server had him and tell his client so. Position only —
             // a refused MOVEMENT says nothing about where he was looking.

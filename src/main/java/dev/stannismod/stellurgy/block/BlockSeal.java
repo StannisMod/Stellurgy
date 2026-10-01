@@ -53,7 +53,7 @@ public class BlockSeal extends Block {
     public void breakBlock(World worldIn, BlockPos pos, IBlockState state) {
         super.breakBlock(worldIn, pos, state);
 
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
         if (atmhandler == null)
             return;
 
@@ -66,7 +66,7 @@ public class BlockSeal extends Block {
     }
 
     public void removeSeal(@Nonnull World worldIn, @Nonnull BlockPos pos) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
         if (atmhandler == null)
             return;
 
@@ -77,7 +77,7 @@ public class BlockSeal extends Block {
     }
 
     public void clearBlob(@Nonnull World worldIn, @Nonnull BlockPos pos, @Nullable IBlockState state) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
         if (atmhandler == null)
             return;
 
@@ -116,7 +116,7 @@ public class BlockSeal extends Block {
     }
 
     private boolean checkCompleteness(@Nonnull World worldIn, @Nonnull BlockPos pos) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
         if (atmhandler == null)
             return false;
 

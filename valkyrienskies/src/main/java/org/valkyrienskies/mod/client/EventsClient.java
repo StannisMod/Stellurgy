@@ -23,7 +23,6 @@ import net.minecraftforge.fml.common.gameevent.TickEvent.RenderTickEvent;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;
 import org.lwjgl.opengl.GL11;
-import org.valkyrienskies.mod.client.render.GibsModelRegistry;
 import org.valkyrienskies.mod.common.config.VSConfig;
 import org.valkyrienskies.mod.common.entity.EntityShipMovementData;
 import org.valkyrienskies.mod.common.ships.QueryableShipData;
@@ -44,9 +43,11 @@ import java.util.WeakHashMap;
 
 public class EventsClient {
 
-    private static double oldXOff;
-    private static double oldYOff;
-    private static double oldZOff;
+    // The buffer offset the first block-highlight handler replaced, put back by the last one in the
+    // same frame.
+    private double oldXOff;
+    private double oldYOff;
+    private double oldZOff;
 
     @SubscribeEvent
     public void onClientTick(ClientTickEvent event) {
@@ -154,22 +155,9 @@ public class EventsClient {
         GL11.glPopMatrix();
     }
 
-    /**
-     * Register textures for all the models registered in the GibsModelRegistry.
-     */
-    @SubscribeEvent
-    public void onTextureStitchEvent(TextureStitchEvent.Pre event) {
-        GibsModelRegistry.registerTextures(event);
-    }
-
-    @SubscribeEvent
-    public void onModelBake(ModelBakeEvent event) {
-        GibsModelRegistry.onModelBakeEvent(event);
-    }
-
     // Used to store the lastTickPos variables of entities, that way we can restore them to their original values after
     // the rendering code has finished.
-    private static final WeakHashMap<Entity, Vector3dc> lastPositionsMap = new WeakHashMap<>();
+    private final WeakHashMap<Entity, Vector3dc> lastPositionsMap = new WeakHashMap<>();
 
     @SubscribeEvent
     public void onRenderTickEvent(RenderTickEvent event) {

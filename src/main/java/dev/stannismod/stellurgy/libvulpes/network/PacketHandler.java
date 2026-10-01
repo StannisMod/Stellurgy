@@ -38,7 +38,11 @@ public class PacketHandler {
 	private static Class<?> defaultChannelPipeline;
 	private static int discriminatorNumber = 0;
 	private static Codec codec = new Codec();
-	public static EnumMap<Side, FMLEmbeddedChannel> channels; //= NetworkRegistry.INSTANCE.newChannel("libVulpes", codec);
+	/* The channel pair, made once when this class loads (by INSTANCE below) and never replaced: its
+	 * lifetime is the side's. Each send sets the channel's target attributes immediately before it
+	 * writes — the same idiom as Forge's SimpleNetworkWrapper — so the last target a send named stays
+	 * referenced until the next send; it is never read by anything but that next write. */
+	public static EnumMap<Side, FMLEmbeddedChannel> channels;
 	
 	public static PacketHandler INSTANCE = new PacketHandler();
 	

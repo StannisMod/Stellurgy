@@ -150,7 +150,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      *  (climb, cruise, strafe, or just cancelling gravity in a hover), which the
      *  classic {@code areEnginesRunning} (motionY&gt;0) missed &rarr; intermittent sound. */
     private static final DataParameter<Float> FF_ENGINE_POWER = EntityDataManager.createKey(EntityRocket.class, DataSerializers.FLOAT);
-    private static long ERROR_DISPLAY_TIME = 100;
+    private static final long ERROR_DISPLAY_TIME = 100;
     //Offset for buttons linking to the tileEntityGrid
     private final int tilebuttonOffset = 3;
     public StorageChunk storage;
@@ -528,7 +528,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     @Override
     public String getTextOverlay() {
 
-        ERROR_DISPLAY_TIME = 100;
         if (this.world.getTotalWorldTime() < this.lastErrorTime + ERROR_DISPLAY_TIME)
             return errorStr;
 
@@ -1452,8 +1451,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULAR.ordinal(), player.world, this.getEntityId(), -1, 0);
 
         //Only handle the bypass on the server
-        if (!world.isRemote)
-            RocketInventoryHelper.addPlayerToInventoryBypass(player);
+        if (!world.isRemote && player instanceof EntityPlayerMP)
+            Stellurgy.serverState().rocketInventory.addPlayerToInventoryBypass((EntityPlayerMP) player);
     }
 
     @Override
@@ -1593,7 +1592,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         if (world.isRemote && areEnginesRunning()) {
             for (Vector3F<Float> vec : stats.getEngineLocations()) {
 
-                AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+                AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
                 IAtmosphere atmosphere = null;
 
                 if (handler != null)
@@ -3005,7 +3004,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             for (Entity e : passengers) {
                 dev.stannismod.stellurgy.atmosphere.RocketTransferGrace.stamp(
                         e, worldserver.getTotalWorldTime());
-                PlanetEventHandler.addDelayedTransition(new TransitionEntity(
+                Stellurgy.serverState().planetEvents.addDelayedTransition(new TransitionEntity(
                         worldserver.getTotalWorldTime() + ++timeOffset,
                         e,
                         dimensionIn,
@@ -3463,7 +3462,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         } else if (id > BUTTON_ID_OFFSET) {
             TileEntity tile = storage.getGUITiles().get(id - BUTTON_ID_OFFSET - tilebuttonOffset);
 
-            RocketGuiNavigation.rememberIfRocketGuiReturnTile(player, this, tile);
+            if (!world.isRemote)
+                Stellurgy.serverState().rocketGuiReturns.rememberIfRocketGuiReturnTile(player, this, tile);
             //Welcome to super hack time with packets
             //Due to the fact the client uses the player's current world to open the gui, we have to move the client between worlds for a bit
             PacketHandler.sendToPlayer(new PacketEntity(this, (byte) PacketType.CHANGEWORLD.ordinal()), player);
@@ -3834,10 +3834,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
         boolean ret = !this.isDead && this.getDistance(entity) < 64;
-        if (!ret)
-            RocketInventoryHelper.removePlayerFromInventoryBypass(entity);
-
-        RocketInventoryHelper.updateTime(entity, world.getWorldTime());
+        if (!ret && entity instanceof EntityPlayerMP)
+            Stellurgy.serverState().rocketInventory.removePlayerFromInventoryBypass((EntityPlayerMP) entity);
 
         return ret;
     }

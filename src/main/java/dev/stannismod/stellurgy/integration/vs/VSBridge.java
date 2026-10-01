@@ -1646,15 +1646,18 @@ final class VSBridge {
             // fell to its bare epsilon while the deck stepped half a block. What that looked like
             // from outside was "the smoothing policy churns the capture", and three different
             // policies were written and measured against a fault that was never in any of them.
-            reportSuppressed("shipVelocityAtPointFor", t);
+            reportSuppressed(world, "shipVelocityAtPointFor", t);
             return null;
         }
     }
 
-    /** Causes already reported by {@link #reportSuppressed}, so a per-tick failure says its piece
-     *  once instead of drowning the log it is trying to be visible in. */
-    private static final java.util.Set<String> REPORTED_SUPPRESSED =
-            java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+    /** Causes a world has already reported through {@link #reportSuppressed}, so a per-tick failure
+     *  says its piece once per world instead of drowning the log it is trying to be visible in.
+     *  Held by that world ({@link dev.stannismod.stellurgy.world.WorldRuntime}). */
+    private static final class SuppressedReports {
+        final java.util.Set<String> causes =
+                java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+    }
 
     /**
      * Say, once, that this port answered with nothing because something threw.
@@ -1696,22 +1699,23 @@ final class VSBridge {
                     vLin.z() + (w.x() * ry - w.y() * rx)
             };
         } catch (Throwable t) {
-            reportSuppressed("declaredVelocityAtPointFor", t);
+            reportSuppressed(world, "declaredVelocityAtPointFor", t);
             return null;
         }
     }
 
-    private static void reportSuppressed(String operation, Throwable t) {
+    private static void reportSuppressed(World world, String operation, Throwable t) {
         StackTraceElement[] trace = t.getStackTrace();
         String site = trace.length > 0 ? trace[0].toString() : "no frames";
         String key = operation + "|" + t.getClass().getName() + "|" + site;
-        if (!REPORTED_SUPPRESSED.add(key)) {
+        if (!dev.stannismod.stellurgy.world.WorldRuntime.of(world, SuppressedReports.class,
+                SuppressedReports::new).causes.add(key)) {
             return;
         }
         dev.stannismod.stellurgy.Stellurgy.logger.warn(
                 "[VS-PORT] " + operation + " answered NOTHING because " + t.getClass().getSimpleName()
                         + " was thrown at " + site + " — a caller that reads this as \"not moving\""
-                        + " is acting on a wrong answer. Reported once per cause.", t);
+                        + " is acting on a wrong answer. Reported once per cause per world.", t);
     }
 
     /**

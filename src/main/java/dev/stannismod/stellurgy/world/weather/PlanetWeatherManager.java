@@ -30,10 +30,8 @@ import java.util.Set;
  *       packets.</li>
  * </ul>
  *
- * <p>Stateless across server restarts beyond the on-disk saved-data. The only
- * in-memory caches are {@code legacyMigrationDone} (to avoid scanning legacy
- * saved-data more than once per dim) and {@code unwrappedWarnedDims} (so the
- * weather-update warning fires at most once per dimension per run).</p>
+ * <p>Holds no state of its own: everything lives on the server's
+ * {@link PlanetWeatherSavedData}, including its two once-per-dimension latches.</p>
  */
 public final class PlanetWeatherManager {
 
@@ -52,9 +50,6 @@ public final class PlanetWeatherManager {
     private static final int STATE_END_RAINING = 2;
     private static final int STATE_RAIN_STRENGTH = 7;
     private static final int STATE_THUNDER_STRENGTH = 8;
-
-    private static final Set<Integer> legacyMigrationDone = new HashSet<>();
-    private static final Set<Integer> unwrappedWarnedDims = new HashSet<>();
 
     private PlanetWeatherManager() {
     }
@@ -233,7 +228,7 @@ public final class PlanetWeatherManager {
      * server start; silently no-ops if the legacy file is absent.
      */
     private static void migrateLegacyIfNeeded(WorldServer world, PlanetWeatherSavedData target, int dim) {
-        if (!legacyMigrationDone.add(dim)) return;
+        if (!target.firstLegacyMigration(dim)) return;
 
         try {
             // The old saved-data lived on the secondary world's perWorldStorage
@@ -328,8 +323,11 @@ public final class PlanetWeatherManager {
      * is running against an unwrapped WorldInfo (i.e. our wrapper failed to
      * install). Distinct from the wrap-success log so it can be filtered.
      */
-    public static void warnUnwrappedOnce(int dim) {
-        if (unwrappedWarnedDims.add(dim)) {
+    public static void warnUnwrappedOnce(WorldServer world) {
+        int dim = world.provider.getDimension();
+        PlanetWeatherSavedData saved = getSavedData(world);
+        // No store yet means the overworld is not up; say so every time rather than never.
+        if (saved == null || saved.firstUnwrappedWarning(dim)) {
             LOGGER.warn("Custom planet weather is enabled, but WorldInfo is not wrapped for "
                     + "dimension {}. Falling back to vanilla shared weather.", dim);
         }

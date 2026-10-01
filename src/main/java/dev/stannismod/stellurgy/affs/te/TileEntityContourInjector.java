@@ -119,7 +119,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.register(this);
+            ShieldNetworkRegistry.of(world).register(this);
             ShieldNetworkManager.markDirty(world);
         }
     }
@@ -127,7 +127,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
         }
         super.invalidate();
@@ -136,7 +136,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
         }
         super.onChunkUnload();

@@ -433,7 +433,7 @@ public final class SpaceEventHandler {
         // rather than by a crossing that just created the ship; that is NOT the same as having no
         // identity, and reseat resolves the name to a uuid rather than scanning by position.
         return CrewTransfer.reseat(world, anchor, Collections.singletonList(rider),
-                pending.aboard.shipId, null);
+                pending.aboard.shipId, null).seated;
     }
 
     // --- the divergence hook ---------------------------------------------------------------------

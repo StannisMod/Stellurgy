@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.command.test;
 
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
 import dev.stannismod.stellurgy.satellite.SatelliteSpyTelescope;
 import dev.stannismod.stellurgy.satellite.SatelliteWeatherController;
@@ -61,7 +62,7 @@ public class TestProbeCommand extends CommandBase {
      */
     // A body can be moved by being PLACED or by being handed a velocity, and a report that counts
     // only the first reads as "nothing moved it" for the second.
-    private static final String[] WRITER_EVENTS = {"pos_jump", "vel_jump", "mount", "dismount"};
+    private final String[] writerEvents = {"pos_jump", "vel_jump", "mount", "dismount"};
 
     @Override
     @Nonnull
@@ -1729,28 +1730,34 @@ public class TestProbeCommand extends CommandBase {
         // side; the mixins that record these live in the test source set and a released jar carries
         // none of them.
         if (args.length >= 1 && "arrival-trace".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.space.SpaceSubsystem census = liveStack();
+            if (census == null) {
+                send(sender, "{\"error\":\"production ledger not live\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.space.VSShipCrosser crosser = census.crosser;
             send(sender, "{\"ok\":true"
                     + ",\"recording\":" + TestEventLog.isRecording()
                     + ",\"mixins\":" + TestEventLog.areMixinsInstalled()
-                    + ",\"count\":" + TestEventLog.count(WRITER_EVENTS)
-                    + ",\"events\":\"" + TestEventLog.dump(WRITER_EVENTS) + "\""
-                    // Why the last re-seat did NOT seat everyone, in the re-seat's own words: whether a
+                    + ",\"count\":" + TestEventLog.count(writerEvents)
+                    + ",\"events\":\"" + TestEventLog.dump(writerEvents) + "\""
+                    // Why the crosser's last re-seat did NOT seat everyone, in the re-seat's own words: whether a
                     // ship claims the arrival point, how many seat tiles the scan reached, and per seat
                     // the three things the match discriminates on. Empty means the last re-seat seated
                     // everyone - it is cleared on success, so "" is a real answer, not a missing one.
                     // The arrival re-seat has no other voice: it gives up SILENTLY (only the DEPARTURE
                     // boarding leg logs on exhaustion), so without this a failed arrival re-seat leaves
                     // nothing behind at all.
-                    + ",\"reseatBlock\":\"" + dev.stannismod.stellurgy.space.CrewTransfer.lastReseatBlock() + "\""
+                    + ",\"reseatBlock\":\"" + crosser.lastReseatBlock() + "\""
                     // What the last arrival CUT was about to take. The re-seat block says where the
                     // placement stopped; this says whether the hull it is placing people on is even
                     // the one that jumped. The cut runs once, long before a stalled arrival speaks,
                     // so it has no other witness.
-                    + ",\"arrivalCut\":\"" + dev.stannismod.stellurgy.space.VSShipCrosser.lastArrivalCut() + "\""
+                    + ",\"arrivalCut\":\"" + crosser.lastArrivalCut() + "\""
                     // ...and what was already parked in the lane the last DEPARTURE took. A lane
                     // holding two ships is visible at the arrival; which of them got there first is
                     // only visible here.
-                    + ",\"departLane\":\"" + dev.stannismod.stellurgy.space.VSShipCrosser.lastDepartLane() + "\""
+                    + ",\"departLane\":\"" + crosser.lastDepartLane() + "\""
                     + "}");
             return;
         }
@@ -2191,17 +2198,17 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             if ("off".equals(mode)) {
-                dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.disable();
+                Stellurgy.serverState().shipLocalMove.disable();
             } else if (!"status".equals(mode)) {
-                dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.enable(subject, requested);
+                Stellurgy.serverState().shipLocalMove.enable(subject, requested);
             }
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("mode", dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getMode().name());
-            m.put("enabled", dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.isEnabled());
+            m.put("mode", Stellurgy.serverState().shipLocalMove.getMode().name());
+            m.put("enabled", Stellurgy.serverState().shipLocalMove.isEnabled());
             m.put("targetEntityId",
-                    dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getTargetEntityId());
-            m.put("fires", dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getFires());
-            double[] sf = dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getShipFramePos();
+                    Stellurgy.serverState().shipLocalMove.getTargetEntityId());
+            m.put("fires", Stellurgy.serverState().shipLocalMove.getFires());
+            double[] sf = Stellurgy.serverState().shipLocalMove.getShipFramePos();
             if (sf != null) {
                 m.put("frameX", sf[0]);
                 m.put("frameY", sf[1]);
@@ -2276,7 +2283,7 @@ public class TestProbeCommand extends CommandBase {
             boolean standArmed = standMode != null
                     && standMode != dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.OFF;
             if (standArmed) {
-                dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl
+                Stellurgy.serverState().shipLocalMove
                         .enable(stand.getEntityId(), standMode);
             }
             world.spawnEntity(stand);
@@ -2294,34 +2301,6 @@ public class TestProbeCommand extends CommandBase {
         // living entity's movement in a ship frame. Pins the gate that keeps a body standing on world
         // terrain near a ship (its box overlaps the ship's world AABB) from being dropped through the
         // floor into the ship's empty subspace.
-        // spawn-diag [reset] — READ-ONLY snapshot (or reset) of the VS spawn diagnostics
-        // (VSIntegration.spawn* statics, written by MixinWorldServerShipManager). Localises where a
-        // queued+named tier-2 ship dies: spawnNewShipsRuns=0 -> never processed;
-        // runs>0 & maxShips=0 -> processed but addShip skipped/threw; maxShips>=1 -> registered then destroyed.
-        if (args.length >= 1 && "spawn-diag".equalsIgnoreCase(args[0])) {
-            if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                SpawnDiag.reset();
-                send(sender, "{\"ok\":true,\"reset\":true}");
-                return;
-            }
-            send(sender, "{\"ok\":true,\"spawnNewShipsRuns\":"
-                    + SpawnDiag.spawnNewShipsRuns
-                    + ",\"spawnNewShipsReturns\":"
-                    + SpawnDiag.spawnNewShipsReturns
-                    + ",\"lastSpawnQueueSize\":"
-                    + SpawnDiag.lastSpawnQueueSize
-                    + ",\"maxShips\":"
-                    + SpawnDiag.spawnDiagMaxShips
-                    + ",\"lastFoundSetSize\":"
-                    + SpawnDiag.lastFoundSetSize
-                    + ",\"lastCleanHouse\":"
-                    + SpawnDiag.lastCleanHouse
-                    + ",\"lastBlacklistSize\":"
-                    + SpawnDiag.lastBlacklistSize
-                    + ",\"floodShape\":\""
-                    + SpawnDiag.lastFloodShape + "\"}");
-            return;
-        }
         if (args.length >= 3 && "would-take-over".equalsIgnoreCase(args[0])) {
             net.minecraft.server.MinecraftServer server = sender.getServer();
             net.minecraft.world.WorldServer world = server == null ? null
@@ -2531,7 +2510,7 @@ public class TestProbeCommand extends CommandBase {
             boolean armed = armMode != null
                     && armMode != dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.OFF;
             if (armed) {
-                dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl
+                Stellurgy.serverState().shipLocalMove
                         .enable(item.getEntityId(), armMode);
             }
             world.spawnEntity(item);
@@ -2564,7 +2543,7 @@ public class TestProbeCommand extends CommandBase {
         if ("observe".equals(word)) return dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.OBSERVE;
         if ("takeover".equals(word)) return dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.CANCEL;
         if ("shipframe".equals(word)) return dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.Mode.SHIP_FRAME;
-        if ("status".equals(word)) return dev.stannismod.stellurgy.integration.vs.ShipLocalMoveControl.getMode();
+        if ("status".equals(word)) return Stellurgy.serverState().shipLocalMove.getMode();
         return null;
     }
 
@@ -2734,12 +2713,12 @@ public class TestProbeCommand extends CommandBase {
     // --- Transit e2e state (persists across probe calls so a test can tick the state machine; server
     //     main thread only). The production transit manager (SpaceSubsystem) no-ops in test mode, so the
     //     transit e2e drives its OWN manager here, exactly as the space-manager probe drives its own pool.
-    private static dev.stannismod.stellurgy.space.SpaceManager transitMgr;
-    private static dev.stannismod.stellurgy.space.ShipTransitManager transitTm;
+    private dev.stannismod.stellurgy.space.SpaceManager transitMgr;
+    private dev.stannismod.stellurgy.space.ShipTransitManager transitTm;
     /** The transit fixture's whole stack, built by the production factory. */
-    private static dev.stannismod.stellurgy.space.SpaceSubsystem transitStack;
-    private static dev.stannismod.stellurgy.space.GalacticCoord transitOrigin;
-    private static dev.stannismod.stellurgy.space.GalacticCoord transitTarget;
+    private dev.stannismod.stellurgy.space.SpaceSubsystem transitStack;
+    private dev.stannismod.stellurgy.space.GalacticCoord transitOrigin;
+    private dev.stannismod.stellurgy.space.GalacticCoord transitTarget;
 
     /**
      * The DURABLE ship id of the craft the current transit fixture built, or {@code null} when this
@@ -2758,9 +2737,9 @@ public class TestProbeCommand extends CommandBase {
      * outliving the scenario that set it, and a setup that left the previous value in place would hand
      * its jump a stranger's name.</p>
      */
-    private static java.util.UUID transitDurableId;
+    private java.util.UUID transitDurableId;
     /** The last exported transit records (the persist e2e simulates a restart by rebuilding from these). */
-    private static java.util.List<dev.stannismod.stellurgy.space.TransitRecord> transitExport;
+    private java.util.List<dev.stannismod.stellurgy.space.TransitRecord> transitExport;
 
     // --- Entry e2e state. The manager and the ledger used to be remembered here too, as the SERVER's
     //     own pair, "so the fixture's verbs need not look them up again" — and what that bought was a
@@ -2768,7 +2747,28 @@ public class TestProbeCommand extends CommandBase {
     //     resolves them from `liveStack()` now; what remains below is the only entry state a fixture
     //     genuinely OWNS, because the scenario created it and nothing else can give it back.
     /** The scratch slot worlds `entry-setup` appended to the pool; unloaded by `entry-clear`. */
-    private static int[] entrySlotDims;
+    private int[] entrySlotDims;
+
+    /**
+     * What `space gen-install` replaced on the save's universe registry — its generator and its world
+     * seed — held until `space gen-reset` puts them back. {@code null}: nothing is installed.
+     */
+    private dev.stannismod.stellurgy.universe.IGalaxyGenerator parkedGenerator;
+    private long parkedWorldSeed;
+
+    /**
+     * Per block `seal-detector add-block-ban` touched: whether it was on the seal handler's ban list
+     * and on its allow list before the first add, which `remove-block-ban` puts back.
+     */
+    private final java.util.Map<net.minecraft.block.Block, boolean[]> parkedSealLists = new java.util.HashMap<>();
+
+    /** The `weight` verbs' own engine and what was added to it; rebuilt after every addition. */
+    private final java.util.Map<String, Double> probeWeightOverrides = new java.util.LinkedHashMap<>();
+    private final java.util.Map<String, Double> probeWeightRegex = new java.util.LinkedHashMap<>();
+    private dev.stannismod.stellurgy.util.WeightEngine probeWeights;
+    /** The config's two weight scales before `weight` first changed them; `weight reset` puts them back. */
+    private Double parkedMaterialScale;
+    private Double parkedFuelScale;
 
     /**
      * The chunk tickets `chunk hold` is holding. Probe-local fixture state, written and read only by
@@ -2777,11 +2777,11 @@ public class TestProbeCommand extends CommandBase {
      * worlds, and the second must be held before the arrival, not after it. `chunk release` drops
      * them all, which is what keeps "cumulative" from meaning "forgotten".
      */
-    private static final java.util.List<net.minecraftforge.common.ForgeChunkManager.Ticket>
+    private final java.util.List<net.minecraftforge.common.ForgeChunkManager.Ticket>
             heldChunks = new java.util.ArrayList<>();
 
     /** Drop every held ticket. Idempotent — an {@code @After} may call it blind. */
-    private static void releaseHeldChunks() {
+    private void releaseHeldChunks() {
         for (net.minecraftforge.common.ForgeChunkManager.Ticket t : heldChunks) {
             net.minecraftforge.common.ForgeChunkManager.releaseTicket(t);
         }
@@ -3116,7 +3116,8 @@ public class TestProbeCommand extends CommandBase {
         long now = world.getTotalWorldTime();
         dev.stannismod.stellurgy.space.GalacticCoord origin = scope.scanOrigin();
         dev.stannismod.stellurgy.universe.RegionScan.Tuning tuning =
-                dev.stannismod.stellurgy.universe.RegionScan.Tuning.fromConfig();
+                dev.stannismod.stellurgy.universe.RegionScan.Tuning.fromConfig(
+                        dev.stannismod.stellurgy.universe.UniverseRegistry.get(world).generator());
         StringBuilder out = new StringBuilder();
         out.append(",\"side\":\"server\",\"now\":").append(now)
                 .append(",\"origin\":").append(origin == null ? "null" : "\"" + origin.cellKey() + "\"")
@@ -3157,7 +3158,7 @@ public class TestProbeCommand extends CommandBase {
                     // The reach in BOTH forms, and the stride that relates them: a survey that
                     // resolves nothing must be able to say whether it is looking at the wrong scale.
                     .append(",\"distance\":").append(scan.distanceCells())
-                    .append(",\"distanceLy\":").append(scan.distanceLightYears())
+                    .append(",\"distanceLy\":").append(scan.distanceLightYears(tuning.laws()))
                     .append(",\"stride\":").append(scan.strideCells())
                     .append(",\"start\":").append(scan.startTick())
                     .append(",\"stepDeadline\":").append(scan.stepDeadline())
@@ -3725,58 +3726,6 @@ public class TestProbeCommand extends CommandBase {
     }
 
     /**
-     * The real proxy, parked while {@code space aim-clock} has a mirror installed. Non-null means a
-     * mirror IS installed, which is what {@code aim-clock off} restores and what the status field
-     * reports, so a test can never mistake "restored" for "was never installed".
-     */
-    private static dev.stannismod.stellurgy.common.CommonProxy parkedProxy;
-
-    /**
-     * A proxy that answers {@code getWorldTimeUniversal} the way {@code ClientProxy} does — with the
-     * total time of the world the driver is currently IN, ignoring the dimension it was asked about.
-     *
-     * <p>This exists because the divergence it produces cannot otherwise be exhibited by this test
-     * harness: the harness always runs a dedicated server, where the real proxy honours the argument
-     * and is therefore correct. The DRIVER of the defect is not "being in single-player" — it is an
-     * accessor answering with a clock that is not the overworld's — and that is what this
-     * reproduces, faithfully rather than by an invented number: every dimension but the overworld
-     * carries its own clock, so the value here is a real per-dimension clock, not a synthetic skew.</p>
-     */
-    private static final class MirroredDimClockProxy
-            extends dev.stannismod.stellurgy.common.CommonProxy {
-        private final int mirrored;
-        private final long lagTicks;
-
-        /** Answer with {@code mirrored}'s own clock. */
-        MirroredDimClockProxy(int mirrored) {
-            this.mirrored = mirrored;
-            this.lagTicks = 0L;
-        }
-
-        /** Answer with the SPACE clock minus a fixed lag - a per-dimension clock's effect, sized. */
-        MirroredDimClockProxy(long lagTicks) {
-            this.mirrored = Integer.MIN_VALUE;
-            this.lagTicks = lagTicks;
-        }
-
-        @Override
-        public long getWorldTimeUniversal(int id) {
-            // The argument is DELIBERATELY ignored - that is the behaviour being reproduced.
-            if (mirrored == Integer.MIN_VALUE) {
-                // The lag is sized AGAINST THE SPACE CLOCK, because the split between the two is the
-                // quantity a caller reasons about: it computes the miss a stale aim should produce,
-                // and it is asserted before any aim is read. Anchoring the lag on a world's counter
-                // instead would make the split whatever the gap between that world and the subsystem
-                // happened to be - a number the test never chose and cannot check.
-                return dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock() - lagTicks;
-            }
-            net.minecraft.world.WorldServer world =
-                    net.minecraftforge.common.DimensionManager.getWorld(mirrored);
-            return world == null ? 0L : world.getTotalWorldTime();
-        }
-    }
-
-    /**
      * {@code space nebulae <sx> <sy> <sz>} — the CLOUD half of a cell's sky, as the server would send
      * it: how many are seated in reach, how many survive the render filter, and each one's bearing,
      * apparent size, appearance and thickness.
@@ -3798,7 +3747,7 @@ public class TestProbeCommand extends CommandBase {
                         parseLongOr(args[1], 0L), parseLongOr(args[2], 0L), parseLongOr(args[3], 0L),
                         0L, 0L, 0L);
         dev.stannismod.stellurgy.universe.IGalaxyGenerator gen =
-                dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator();
+                reg.generator();
         long seed = reg.worldSeed();
         java.util.List<dev.stannismod.stellurgy.network.PacketSystemBodiesSync.RenderNebula> drawn =
                 dev.stannismod.stellurgy.space.SkyNebulaeProducer.around(gen, seed, cell);
@@ -3842,7 +3791,7 @@ public class TestProbeCommand extends CommandBase {
         int steps = Math.max(1, Math.min(4096, parseIntOr(args[1], 64)));
         long stride = Math.max(1L, parseLongOr(args[2], 1L));
         dev.stannismod.stellurgy.universe.IGalaxyGenerator gen =
-                dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator();
+                reg.generator();
         long seed = reg.worldSeed();
         for (int i = 0; i < steps; i++) {
             dev.stannismod.stellurgy.space.GalacticCoord cell =
@@ -3916,7 +3865,7 @@ public class TestProbeCommand extends CommandBase {
                 dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
                         parseLongOr(args[4], 0L), parseLongOr(args[5], 0L), parseLongOr(args[6], 0L),
                         0L, 0L, 0L);
-        double column = dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator()
+        double column = reg.generator()
                 .columnDensityBetween(reg.worldSeed(), from, to);
         double magnitudes = reg.extinctionBetween(from, to);
         send(sender, "{\"ok\":true,\"from\":\"" + from.cellKey() + "\",\"to\":\"" + to.cellKey()
@@ -4152,7 +4101,7 @@ public class TestProbeCommand extends CommandBase {
                     // fault, and therefore the only way to wait for the WORLD AUTOSAVE rather than for
                     // a save some command asked for.
                     + ",\"saveFaultArmed\":"
-                    + dev.stannismod.stellurgy.space.SpaceSubsystem.isSaveFaultArmed() + "}");
+                    + (spaceStack != null && spaceStack.isSaveFaultArmed()) + "}");
             return;
         }
         // occupy <sx> <sy> <sz>: hold cell (sx,sy,sz) live in the PRODUCTION space manager (an
@@ -4441,7 +4390,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"production ledger not live\"}");
                 return;
             }
-            dev.stannismod.stellurgy.space.SpaceSubsystem.armSaveFaultOnce();
+            liveStack().armSaveFaultOnce();
             send(sender, "{\"ok\":true,\"armed\":true}");
             return;
         }
@@ -6103,67 +6052,6 @@ public class TestProbeCommand extends CommandBase {
                     + dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock() + "}");
             return;
         }
-        // aim-clock mirror <dim> | aim-clock off: install or remove a proxy that answers
-        // getWorldTimeUniversal with <dim>'s OWN total time, ignoring the dimension it was asked
-        // about — the behaviour a client-side proxy has, and the driver of the arrival-distance
-        // defect. Only a JVM whose server is the client's own produces it naturally, and this
-        // harness has no such tier, so a test that wants to exercise it installs it here and removes
-        // it in a finally.
-        //
-        // The mirrored value is a REAL per-dimension clock, not an invented skew: every dimension
-        // but the overworld advances only while it ticks, which is exactly why the two disagree in
-        // play. Installing REFUSES when <dim> is not loaded — a mirror that silently fell back to
-        // the overworld would make the whole arrangement a no-op and read as "fixed".
-        //
-        // Reports every clock it can see on BOTH legs, because the interesting quantity is the SPLIT
-        // between them: a test that asserts an aim without asserting the split it created cannot
-        // tell a fixed build from an arrangement that never diverged.
-        if (args.length >= 2 && "aim-clock".equalsIgnoreCase(args[0])) {
-            String mode = args[1];
-            boolean installed;
-            int mirrored = Integer.MIN_VALUE;
-            if ("off".equalsIgnoreCase(mode)) {
-                if (parkedProxy != null) {
-                    dev.stannismod.stellurgy.Stellurgy.proxy = parkedProxy;
-                    parkedProxy = null;
-                }
-                installed = false;
-            } else if ("lag".equalsIgnoreCase(mode) && args.length >= 3) {
-                // The same defect, SIZED: the accessor answers a fixed number of ticks behind the
-                // space clock. What a per-dimension clock does in play is lag by however long its
-                // world was not ticking; naming the lag is what lets a test compute the miss it
-                // should see rather than only observe that one happened.
-                long lag = parseLongOr(args[2], 0L);
-                if (parkedProxy == null) {
-                    parkedProxy = dev.stannismod.stellurgy.Stellurgy.proxy;
-                }
-                dev.stannismod.stellurgy.Stellurgy.proxy = new MirroredDimClockProxy(lag);
-                installed = true;
-            } else if ("mirror".equalsIgnoreCase(mode) && args.length >= 3) {
-                mirrored = parseIntOr(args[2], Integer.MIN_VALUE);
-                if (net.minecraftforge.common.DimensionManager.getWorld(mirrored) == null) {
-                    send(sender, "{\"error\":\"mirror dim not loaded\",\"dim\":" + mirrored + "}");
-                    return;
-                }
-                if (parkedProxy == null) {
-                    parkedProxy = dev.stannismod.stellurgy.Stellurgy.proxy;
-                }
-                dev.stannismod.stellurgy.Stellurgy.proxy = new MirroredDimClockProxy(mirrored);
-                installed = true;
-            } else {
-                send(sender, "{\"error\":\"usage: space aim-clock mirror <dim> | space aim-clock off\"}");
-                return;
-            }
-            net.minecraft.world.WorldServer overworld = server.getWorld(0);
-            send(sender, "{\"ok\":true,\"installed\":" + installed
-                    + ",\"mirrored\":" + mirrored
-                    + ",\"spaceClock\":"
-                    + dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock()
-                    + ",\"overworld\":" + (overworld == null ? -1L : overworld.getTotalWorldTime())
-                    + ",\"proxyClock\":"
-                    + dev.stannismod.stellurgy.Stellurgy.proxy.getWorldTimeUniversal(0) + "}");
-            return;
-        }
         // cell-info <sx> <sy> <sz>  OR  cell-info <cellKey>
         //
         // The KEY form is not a convenience: a sector triple no longer names every cell, because a
@@ -6239,8 +6127,9 @@ public class TestProbeCommand extends CommandBase {
         // gen-install <density> <minSpacing> [seed]: install a procedural galaxy generator and bind a
         // seed. A world with no <galaxyGen> in its planetDefs runs the authored-anchors-only default, so
         // without this there are no procedural systems to realize at all and every test about them would
-        // be a test about an empty universe. `gen-reset` puts the default back; a shared-server class
-        // MUST call it, because the generator is a JVM global.
+        // be a test about an empty universe. `gen-reset` puts back the generator and the seed the save
+        // had before the first install; a shared-server class MUST call it, because the generator and
+        // the seed are the server's.
         //
         // The GALAXY lattice keeps its shipped parameters. A caller near the origin is inside the home
         // galaxy's core, where the profile is at its densest, so <density> alone says how full the sky
@@ -6257,7 +6146,11 @@ public class TestProbeCommand extends CommandBase {
             long seed = args.length >= 4 ? parseLongOr(args[3], 0L) : reg.worldSeed();
             dev.stannismod.stellurgy.universe.GalaxyGenConfig genDefaults =
                     dev.stannismod.stellurgy.universe.GalaxyGenConfig.defaults();
-            dev.stannismod.stellurgy.universe.UniverseRegistry.attachGenerator(
+            if (parkedGenerator == null) {
+                parkedGenerator = reg.generator();
+                parkedWorldSeed = reg.worldSeed();
+            }
+            reg.attachGenerator(
                     new dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator(
                             new dev.stannismod.stellurgy.universe.GalaxyGenConfig(minSpacing, density,
                                     genDefaults.galaxySpacing, genDefaults.galaxyDensity, null, null)));
@@ -6266,8 +6159,15 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if (args.length >= 1 && "gen-reset".equalsIgnoreCase(args[0])) {
-            dev.stannismod.stellurgy.universe.UniverseRegistry.detachGenerator();
-            send(sender, "{\"ok\":true}");
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            boolean restored = parkedGenerator != null && reg != null;
+            if (restored) {
+                reg.attachGenerator(parkedGenerator);
+                reg.bindWorldSeed(parkedWorldSeed);
+                parkedGenerator = null;
+            }
+            send(sender, "{\"ok\":true,\"restored\":" + restored + "}");
             return;
         }
         // find-procedural <radiusInSuperCells>: the first body a ship could land on that has NO dimension
@@ -6287,7 +6187,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             long r = parseIntOr(args[1], 8);
-            long s = Math.max(1L, dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator()
+            long s = Math.max(1L, reg.generator()
                     .minSpacingCells());
             for (long x = -r; x <= r; x++) {
                 for (long y = -r; y <= r; y++) {
@@ -6339,7 +6239,7 @@ public class TestProbeCommand extends CommandBase {
             }
             boolean giantOnly = args.length >= 3 && "giant".equalsIgnoreCase(args[2]);
             long r = parseIntOr(args[1], 8);
-            long s = Math.max(1L, dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator()
+            long s = Math.max(1L, reg.generator()
                     .minSpacingCells());
             for (long x = -r; x <= r; x++) {
                 for (long y = -r; y <= r; y++) {
@@ -6437,7 +6337,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             dev.stannismod.stellurgy.universe.BodyProfile p =
-                    dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator()
+                    reg.generator()
                             .derivation().derive(reg.worldSeed(),
                             anchor.get(), target.name(), variant, star.get(),
                             target.kind() == dev.stannismod.stellurgy.universe.SystemBodyKind.MOON,
@@ -7713,7 +7613,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
                 return;
             }
-            int eventCountBefore = RocketEventRecorder.orbitReachedCount;
+            int eventCountBefore = rocketEvents.orbitReachedCount;
             try {
                 rocket.onOrbitReached();
             } catch (RuntimeException e) {
@@ -7725,7 +7625,7 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"ok\":true,\"entityId\":" + entityId
                     + ",\"isInOrbit\":" + rocket.isInOrbit()
                     + ",\"orbitReachedEventDelta\":"
-                    + (RocketEventRecorder.orbitReachedCount - eventCountBefore) + "}");
+                    + (rocketEvents.orbitReachedCount - eventCountBefore) + "}");
             return;
         }
         if ("dismantle".equalsIgnoreCase(args[0]) && args.length >= 2) {
@@ -7737,7 +7637,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
                 return;
             }
-            int eventCountBefore = RocketEventRecorder.dismantleCount;
+            int eventCountBefore = rocketEvents.dismantleCount;
             try {
                 rocket.deconstructRocket();
             } catch (RuntimeException e) {
@@ -7748,36 +7648,35 @@ public class TestProbeCommand extends CommandBase {
             }
             send(sender, "{\"ok\":true,\"entityId\":" + entityId
                     + ",\"dismantleEventDelta\":"
-                    + (RocketEventRecorder.dismantleCount - eventCountBefore) + "}");
+                    + (rocketEvents.dismantleCount - eventCountBefore) + "}");
             return;
         }
         if ("event-counts".equalsIgnoreCase(args[0])) {
-            // /stellurgytest rocket event-counts — dump global counters for the
-            // 4 RocketEvent types. The recorder is registered once
-            // statically (see RocketEventRecorder.ensureRegistered).
-            RocketEventRecorder.ensureRegistered();
-            send(sender, "{\"launch\":" + RocketEventRecorder.launchCount
-                    + ",\"preLaunch\":" + RocketEventRecorder.preLaunchCount
-                    + ",\"orbitReached\":" + RocketEventRecorder.orbitReachedCount
-                    + ",\"dismantle\":" + RocketEventRecorder.dismantleCount + "}");
+            // /stellurgytest rocket event-counts — dump this server's counters for the
+            // 4 RocketEvent types. The recorder is registered with the command.
+            rocketEvents.ensureRegistered();
+            send(sender, "{\"launch\":" + rocketEvents.launchCount
+                    + ",\"preLaunch\":" + rocketEvents.preLaunchCount
+                    + ",\"orbitReached\":" + rocketEvents.orbitReachedCount
+                    + ",\"dismantle\":" + rocketEvents.dismantleCount + "}");
             return;
         }
         if ("event-payloads".equalsIgnoreCase(args[0])) {
             // Gap #6 — dump last-observed entity id + dim per event type.
-            RocketEventRecorder.ensureRegistered();
+            rocketEvents.ensureRegistered();
             StringBuilder out = new StringBuilder("{");
-            out.append("\"launchEntityId\":").append(RocketEventRecorder.lastLaunchEntityId)
-                    .append(",\"launchDim\":").append(RocketEventRecorder.lastLaunchDim);
-            out.append(",\"preLaunchEntityId\":").append(RocketEventRecorder.lastPreLaunchEntityId)
-                    .append(",\"preLaunchDim\":").append(RocketEventRecorder.lastPreLaunchDim);
-            out.append(",\"orbitReachedEntityId\":").append(RocketEventRecorder.lastOrbitReachedEntityId)
-                    .append(",\"orbitReachedDim\":").append(RocketEventRecorder.lastOrbitReachedDim);
-            out.append(",\"dismantleEntityId\":").append(RocketEventRecorder.lastDismantleEntityId)
-                    .append(",\"dismantleDim\":").append(RocketEventRecorder.lastDismantleDim);
-            out.append(",\"landedEntityId\":").append(RocketEventRecorder.lastLandedEntityId)
-                    .append(",\"landedDim\":").append(RocketEventRecorder.lastLandedDim);
-            out.append(",\"deOrbitingEntityId\":").append(RocketEventRecorder.lastDeOrbitingEntityId)
-                    .append(",\"deOrbitingDim\":").append(RocketEventRecorder.lastDeOrbitingDim);
+            out.append("\"launchEntityId\":").append(rocketEvents.lastLaunchEntityId)
+                    .append(",\"launchDim\":").append(rocketEvents.lastLaunchDim);
+            out.append(",\"preLaunchEntityId\":").append(rocketEvents.lastPreLaunchEntityId)
+                    .append(",\"preLaunchDim\":").append(rocketEvents.lastPreLaunchDim);
+            out.append(",\"orbitReachedEntityId\":").append(rocketEvents.lastOrbitReachedEntityId)
+                    .append(",\"orbitReachedDim\":").append(rocketEvents.lastOrbitReachedDim);
+            out.append(",\"dismantleEntityId\":").append(rocketEvents.lastDismantleEntityId)
+                    .append(",\"dismantleDim\":").append(rocketEvents.lastDismantleDim);
+            out.append(",\"landedEntityId\":").append(rocketEvents.lastLandedEntityId)
+                    .append(",\"landedDim\":").append(rocketEvents.lastLandedDim);
+            out.append(",\"deOrbitingEntityId\":").append(rocketEvents.lastDeOrbitingEntityId)
+                    .append(",\"deOrbitingDim\":").append(rocketEvents.lastDeOrbitingDim);
             out.append('}');
             send(sender, out.toString());
             return;
@@ -7787,25 +7686,25 @@ public class TestProbeCommand extends CommandBase {
             // Subsequent prepareLaunch() calls fire the event, which is
             // then cancelled, preventing LAUNCH_COUNTER from being set
             // to 200. Tests MUST disarm in @After.
-            ensurePreLaunchCancellerRegistered();
-            preLaunchObservedCount = 0;
-            preLaunchCancelledCount = 0;
-            cancelNextPreLaunch = true;
+            preLaunchCanceller.ensureRegistered();
+            preLaunchCanceller.observed = 0;
+            preLaunchCanceller.cancelled = 0;
+            preLaunchCanceller.cancelNext = true;
             send(sender, "{\"ok\":true,\"armed\":true}");
             return;
         }
         if ("disarm-prelaunch-cancel".equalsIgnoreCase(args[0])) {
-            cancelNextPreLaunch = false;
+            preLaunchCanceller.cancelNext = false;
             send(sender, "{\"ok\":true,\"armed\":false"
-                    + ",\"observedSinceArm\":" + preLaunchObservedCount
-                    + ",\"cancelledSinceArm\":" + preLaunchCancelledCount + "}");
+                    + ",\"observedSinceArm\":" + preLaunchCanceller.observed
+                    + ",\"cancelledSinceArm\":" + preLaunchCanceller.cancelled + "}");
             return;
         }
         if ("prelaunch-cancel-counts".equalsIgnoreCase(args[0])) {
-            ensurePreLaunchCancellerRegistered();
-            send(sender, "{\"ok\":true,\"armed\":" + cancelNextPreLaunch
-                    + ",\"observed\":" + preLaunchObservedCount
-                    + ",\"cancelled\":" + preLaunchCancelledCount + "}");
+            preLaunchCanceller.ensureRegistered();
+            send(sender, "{\"ok\":true,\"armed\":" + preLaunchCanceller.cancelNext
+                    + ",\"observed\":" + preLaunchCanceller.observed
+                    + ",\"cancelled\":" + preLaunchCanceller.cancelled + "}");
             return;
         }
         if ("info".equalsIgnoreCase(args[0]) && args.length >= 2) {
@@ -8458,13 +8357,13 @@ public class TestProbeCommand extends CommandBase {
         }
         if ("event-counts-full".equalsIgnoreCase(args[0])) {
             // extended counter dump including landed + deOrbiting.
-            RocketEventRecorder.ensureRegistered();
-            send(sender, "{\"launch\":" + RocketEventRecorder.launchCount
-                    + ",\"preLaunch\":" + RocketEventRecorder.preLaunchCount
-                    + ",\"orbitReached\":" + RocketEventRecorder.orbitReachedCount
-                    + ",\"dismantle\":" + RocketEventRecorder.dismantleCount
-                    + ",\"landed\":" + RocketEventRecorder.landedCount
-                    + ",\"deOrbiting\":" + RocketEventRecorder.deOrbitingCount + "}");
+            rocketEvents.ensureRegistered();
+            send(sender, "{\"launch\":" + rocketEvents.launchCount
+                    + ",\"preLaunch\":" + rocketEvents.preLaunchCount
+                    + ",\"orbitReached\":" + rocketEvents.orbitReachedCount
+                    + ",\"dismantle\":" + rocketEvents.dismantleCount
+                    + ",\"landed\":" + rocketEvents.landedCount
+                    + ",\"deOrbiting\":" + rocketEvents.deOrbitingCount + "}");
             return;
         }
         if ("set-flight-mode".equalsIgnoreCase(args[0]) && args.length >= 3) {
@@ -8976,26 +8875,48 @@ public class TestProbeCommand extends CommandBase {
      * <p>Tests MUST {@code disarm-prelaunch-cancel} in {@code @After} —
      * leaving the flag armed would silently break every subsequent rocket
      * test in the shared harness.</p>
+     *
+     * <p>This command's, so this server's: it leaves the bus with the server's overworld.</p>
      */
-    private static volatile boolean cancelNextPreLaunch = false;
-    private static volatile boolean preLaunchCancellerRegistered = false;
-    private static volatile int preLaunchObservedCount = 0;
-    private static volatile int preLaunchCancelledCount = 0;
+    private final PreLaunchCanceller preLaunchCanceller = new PreLaunchCanceller();
 
-    private static synchronized void ensurePreLaunchCancellerRegistered() {
-        if (preLaunchCancellerRegistered) return;
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new Object() {
-            @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
-            public void onPreLaunch(
-                    dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent event) {
-                preLaunchObservedCount++;
-                if (cancelNextPreLaunch) {
-                    event.setCanceled(true);
-                    preLaunchCancelledCount++;
-                }
+    private static final class PreLaunchCanceller extends ServerScopedListener {
+        volatile boolean cancelNext;
+        volatile int observed;
+        volatile int cancelled;
+
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public void onPreLaunch(
+                dev.stannismod.stellurgy.api.RocketEvent.RocketPreLaunchEvent event) {
+            observed++;
+            if (cancelNext) {
+                event.setCanceled(true);
+                cancelled++;
             }
-        });
-        preLaunchCancellerRegistered = true;
+        }
+    }
+
+    /**
+     * A test-only bus listener with the lifetime of the server whose command built it: registered at
+     * most once, and unregistered when that server's overworld unloads, which it does when the server
+     * stops — so a listener of one server never counts or cancels anything of the next.
+     */
+    private abstract static class ServerScopedListener {
+        private boolean registered;
+
+        final synchronized void ensureRegistered() {
+            if (!registered) {
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
+                registered = true;
+            }
+        }
+
+        @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
+        public final void onOverworldUnload(net.minecraftforge.event.world.WorldEvent.Unload event) {
+            if (!event.getWorld().isRemote && event.getWorld().provider.getDimension() == 0) {
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.unregister(this);
+            }
+        }
     }
 
     private void handleRocketAssemble(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -10832,10 +10753,12 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.item.ItemStack carrier = new net.minecraft.item.ItemStack(primaryItem, 1, 30);
             dev.stannismod.stellurgy.api.satellite.SatelliteProperties existing =
                     dev.stannismod.stellurgy.api.SatelliteRegistry.getSatelliteProperty(carrier);
+            boolean registeredCarrier = false;
             if (existing == null || !bogusType.equals(existing.getSatelliteType())) {
                 dev.stannismod.stellurgy.api.satellite.SatelliteProperties sp =
                         new dev.stannismod.stellurgy.api.satellite.SatelliteProperties(100, 1000, bogusType, 100, 1.0f);
                 dev.stannismod.stellurgy.api.SatelliteRegistry.registerSatelliteProperty(carrier, sp);
+                registeredCarrier = true;
             }
             // Load the four critical slots (mirror press-build) with the bogus
             // MAIN carrier in the core/primary slot 0.
@@ -10859,6 +10782,8 @@ public class TestProbeCommand extends CommandBase {
             } catch (Throwable t) {
                 outcome = t.getClass().getSimpleName();
                 if (t.getStackTrace().length > 0) topFrame = t.getStackTrace()[0].toString();
+            } finally {
+                if (registeredCarrier) unregisterSatelliteProperty(carrier);
             }
             send(sender, "{\"ok\":true,\"bogusType\":\"" + escapeJson(bogusType) + "\""
                     + ",\"getNewSatelliteNull\":true"
@@ -10904,10 +10829,12 @@ public class TestProbeCommand extends CommandBase {
             net.minecraft.item.ItemStack carrier = new net.minecraft.item.ItemStack(primaryItem, 1, 30);
             dev.stannismod.stellurgy.api.satellite.SatelliteProperties existing =
                     dev.stannismod.stellurgy.api.SatelliteRegistry.getSatelliteProperty(carrier);
+            boolean registeredCarrier = false;
             if (existing == null || !bogusType.equals(existing.getSatelliteType())) {
                 dev.stannismod.stellurgy.api.satellite.SatelliteProperties sp =
                         new dev.stannismod.stellurgy.api.satellite.SatelliteProperties(100, 1000, bogusType, 100, 1.0f);
                 dev.stannismod.stellurgy.api.SatelliteRegistry.registerSatelliteProperty(carrier, sp);
+                registeredCarrier = true;
             }
             // Chassis (slot 11) first — slots 0-6 read through the chassis's embedded
             // inventory — then the bogus MAIN carrier into core slot 0.
@@ -10923,6 +10850,8 @@ public class TestProbeCommand extends CommandBase {
             } catch (Throwable t) {
                 outcome = t.getClass().getSimpleName();
                 if (t.getStackTrace().length > 0) topFrame = t.getStackTrace()[0].toString();
+            } finally {
+                if (registeredCarrier) unregisterSatelliteProperty(carrier);
             }
             send(sender, "{\"ok\":true,\"bogusType\":\"" + escapeJson(bogusType) + "\""
                     + ",\"getNewSatelliteNull\":true"
@@ -11480,8 +11409,7 @@ public class TestProbeCommand extends CommandBase {
             // already-linked tiles simply unify onto id1.
             int shared;
             if (id1 == -1 && id2 == -1) {
-                shared = dev.stannismod.stellurgy.wirelessdata.NetworkRegistry
-                        .dataNetwork(world).getNewNetworkID();
+                shared = Stellurgy.serverState().wirelessNetworks(world).getNewNetworkID();
             } else if (id1 == -1) {
                 shared = id2;
             } else if (id2 == -1) {
@@ -11561,8 +11489,7 @@ public class TestProbeCommand extends CommandBase {
                 // Mirror the GUI mode toggle: re-register on the wireless data
                 // network as source or sink under the new mode, if it exists.
                 dev.stannismod.stellurgy.wirelessdata.DataNetwork network =
-                        dev.stannismod.stellurgy.wirelessdata.NetworkRegistry
-                                .dataNetwork(world).getNetwork(netId);
+                        Stellurgy.serverState().wirelessNetworks(world).getNetwork(netId);
                 if (network != null) {
                     network.removeFromAll(tile);
                     if (extract) {
@@ -11631,8 +11558,7 @@ public class TestProbeCommand extends CommandBase {
                         (dev.stannismod.stellurgy.tile.TileWirelessTransceiver) tile;
                 int netId = t.getWirelessNetworkId();
                 dev.stannismod.stellurgy.wirelessdata.DataNetwork network =
-                        dev.stannismod.stellurgy.wirelessdata.NetworkRegistry
-                                .dataNetwork(world).getNetwork(netId);
+                        Stellurgy.serverState().wirelessNetworks(world).getNetwork(netId);
                 boolean networkExists = network != null;
                 BlockPos selfPos = tile.getPos();
                 boolean isSource = networkExists && wirelessEndpointMatches(network, "sources", selfPos);
@@ -11700,7 +11626,7 @@ public class TestProbeCommand extends CommandBase {
             int x = parseIntOr(args[2], 0);
             int y = parseIntOr(args[3], 0);
             int z = parseIntOr(args[4], 0);
-            AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(dim);
+            AtmosphereHandler handler = atmosphereOfLoaded(dim);
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("dim", dim);
             info.put("pos", new int[]{x, y, z});
@@ -11855,8 +11781,7 @@ public class TestProbeCommand extends CommandBase {
                         + escapeJson(e.getMessage()) + "\"}");
                 return;
             }
-            AtmosphereHandler atmh =
-                    AtmosphereHandler.getOxygenHandler(dim);
+            AtmosphereHandler atmh = atmosphereOfLoaded(dim);
             boolean detected;
             if (atmh == null) {
                 detected = mode == AtmosphereType.AIR;
@@ -11993,7 +11918,7 @@ public class TestProbeCommand extends CommandBase {
                 send(sender, "{\"error\":\"player not found\",\"name\":\"" + escapeJson(name) + "\"}");
                 return;
             }
-            AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(player.world.provider.getDimension());
+            AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(player.world);
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("name", name);
             info.put("dim", player.world.provider.getDimension());
@@ -12690,7 +12615,7 @@ public class TestProbeCommand extends CommandBase {
      * <p>Tests MUST restore the original value in {@code @After}, otherwise
      * subsequent tests on the shared harness inherit the flipped state.</p>
      */
-    private static final java.util.Set<String> CONFIG_WHITELIST =
+    private final java.util.Set<String> configWhitelist =
             new java.util.LinkedHashSet<>(java.util.Arrays.asList(
                     "allowTerraformNonStellurgy",
                     "terraformRequiresFluid",
@@ -12737,15 +12662,15 @@ public class TestProbeCommand extends CommandBase {
     private void handleConfig(ICommandSender sender, String[] args) {
         if (args.length == 0) {
             send(sender, "{\"error\":\"missing subcommand — try get <key> | set <key> <value>\","
-                    + "\"whitelist\":" + jsonStringArray(CONFIG_WHITELIST) + "}");
+                    + "\"whitelist\":" + jsonStringArray(configWhitelist) + "}");
             return;
         }
         if ("get".equalsIgnoreCase(args[0]) && args.length >= 2) {
             String key = args[1];
-            if (!CONFIG_WHITELIST.contains(key)) {
+            if (!configWhitelist.contains(key)) {
                 send(sender, "{\"error\":\"key not in whitelist\",\"key\":\""
                         + escapeJson(key) + "\",\"whitelist\":"
-                        + jsonStringArray(CONFIG_WHITELIST) + "}");
+                        + jsonStringArray(configWhitelist) + "}");
                 return;
             }
             try {
@@ -12763,10 +12688,10 @@ public class TestProbeCommand extends CommandBase {
         if ("set".equalsIgnoreCase(args[0]) && args.length >= 3) {
             String key = args[1];
             String rawValue = args[2];
-            if (!CONFIG_WHITELIST.contains(key)) {
+            if (!configWhitelist.contains(key)) {
                 send(sender, "{\"error\":\"key not in whitelist\",\"key\":\""
                         + escapeJson(key) + "\",\"whitelist\":"
-                        + jsonStringArray(CONFIG_WHITELIST) + "}");
+                        + jsonStringArray(configWhitelist) + "}");
                 return;
             }
             try {
@@ -17419,7 +17344,7 @@ public class TestProbeCommand extends CommandBase {
      * and in nothing else, and two copies of a reply this wide would drift in exactly the way
      * a reader cannot see: a field present in one and stale in the other.</p>
      */
-    private static void sendTransitReport(net.minecraft.command.ICommandSender sender) {
+    private void sendTransitReport(net.minecraft.command.ICommandSender sender) {
         int crossing = transitStack != null && transitDurableId != null
                 && transitStack.cellCrossings.isCarrying(transitDurableId) ? 1 : 0;
         int inTransit = transitTm.inTransitCount();
@@ -17490,6 +17415,12 @@ public class TestProbeCommand extends CommandBase {
 
     private static dev.stannismod.stellurgy.space.SpaceSubsystem liveStack() {
         return dev.stannismod.stellurgy.Stellurgy.spaceSubsystem();
+    }
+
+    /** The atmosphere handler of dimension {@code dim}'s world, or {@code null} when it is not loaded or has none. */
+    private static AtmosphereHandler atmosphereOfLoaded(int dim) {
+        WorldServer world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+        return world == null ? null : AtmosphereHandler.getOxygenHandler(world);
     }
 
     /**
@@ -18214,6 +18145,23 @@ public class TestProbeCommand extends CommandBase {
         return builder.toString();
     }
 
+    /**
+     * Take back a satellite property this probe registered for one repro. The item-property registry
+     * is the game's for the life of the JVM and has no removal API, so an orphan left here would be
+     * seen by every later build. The registry keys by stack identity, so the same stack removes it.
+     */
+    @SuppressWarnings("unchecked")
+    private static void unregisterSatelliteProperty(net.minecraft.item.ItemStack key) {
+        try {
+            java.lang.reflect.Field f = dev.stannismod.stellurgy.api.SatelliteRegistry.class
+                    .getDeclaredField("itemPropertiesRegistry");
+            f.setAccessible(true);
+            ((java.util.Map<net.minecraft.item.ItemStack, ?>) f.get(null)).remove(key);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("cannot take back the probe's satellite property", e);
+        }
+    }
+
     private static String escapeJson(String s) {
         return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
@@ -18277,20 +18225,40 @@ public class TestProbeCommand extends CommandBase {
      *   set-regex <pattern> <weight>  — register a regex rule
      *   material-scale <value>        — set StellurgyConfiguration.weightMaterialScale
      *   fuel-scale <value>            — set StellurgyConfiguration.fuelMassScale
+     *
+     * <p>The tables are the PROBE's own engine, built from the shipped defaults plus what {@code set}
+     * and {@code set-regex} added — never the game's, whose file is written back at server stop. The
+     * two scales are the running config's; {@code reset} puts back what they were before the first
+     * change.</p>
      */
     private void handleWeight(ICommandSender sender, String[] args) {
-        dev.stannismod.stellurgy.util.WeightEngine we = dev.stannismod.stellurgy.util.WeightEngine.INSTANCE;
         if (args.length == 0) {
             send(sender, "{\"error\":\"unknown weight subcommand — try reset|item|fluid|set|set-regex|material-scale|fuel-scale\"}");
             return;
         }
+        dev.stannismod.stellurgy.api.StellurgyConfiguration config =
+                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig();
+        if (probeWeights == null) {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            probeWeights = dev.stannismod.stellurgy.util.WeightEngine.fromJson("{\"individual\":"
+                    + gson.toJson(probeWeightOverrides) + ",\"byRegex\":" + gson.toJson(probeWeightRegex) + "}");
+        }
+        dev.stannismod.stellurgy.util.WeightEngine we = probeWeights;
         Map<String, Object> info = new LinkedHashMap<>();
         String verb = args[0].toLowerCase();
         switch (verb) {
             case "reset":
-                we.resetTables();
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().weightMaterialScale = 1.0;
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
+                probeWeightOverrides.clear();
+                probeWeightRegex.clear();
+                probeWeights = null;
+                if (parkedMaterialScale != null) {
+                    config.weightMaterialScale = parkedMaterialScale;
+                    parkedMaterialScale = null;
+                }
+                if (parkedFuelScale != null) {
+                    config.fuelMassScale = parkedFuelScale;
+                    parkedFuelScale = null;
+                }
                 info.put("reset", true);
                 info.put("materialCount", we.materialCount());
                 break;
@@ -18320,22 +18288,29 @@ public class TestProbeCommand extends CommandBase {
                 break;
             }
             case "set":
-                we.setIndividual(args[1], Double.parseDouble(args[2]));
+                probeWeightOverrides.put(args[1], Double.parseDouble(args[2]));
+                probeWeights = null;
                 info.put("set", args[1]);
                 info.put("value", Double.parseDouble(args[2]));
                 break;
             case "set-regex":
-                we.setRegex(args[1], Double.parseDouble(args[2]));
+                probeWeightRegex.put(args[1], Double.parseDouble(args[2]));
+                probeWeights = null;
                 info.put("regex", args[1]);
                 info.put("value", Double.parseDouble(args[2]));
                 break;
             case "material-scale":
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().weightMaterialScale = Double.parseDouble(args[1]);
-                we.clearResolveCache();
+                if (parkedMaterialScale == null) {
+                    parkedMaterialScale = config.weightMaterialScale;
+                }
+                config.weightMaterialScale = Double.parseDouble(args[1]);
                 info.put("materialScale", Double.parseDouble(args[1]));
                 break;
             case "fuel-scale":
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().fuelMassScale = Double.parseDouble(args[1]);
+                if (parkedFuelScale == null) {
+                    parkedFuelScale = config.fuelMassScale;
+                }
+                config.fuelMassScale = Double.parseDouble(args[1]);
                 info.put("fuelScale", Double.parseDouble(args[1]));
                 break;
             default:
@@ -18839,9 +18814,7 @@ public class TestProbeCommand extends CommandBase {
             }
             dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent vent =
                     (dev.stannismod.stellurgy.tile.atmosphere.TileOxygenVent) tile;
-            AtmosphereHandler handler =
-                    AtmosphereHandler
-                            .getOxygenHandler(dim);
+            AtmosphereHandler handler = atmosphereOfLoaded(dim);
             if (handler == null) {
                 send(sender, "{\"error\":\"no atmosphere handler for dim\"}");
                 return;
@@ -18957,9 +18930,7 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
 
-        AtmosphereHandler handler =
-                AtmosphereHandler
-                        .getOxygenHandler(dim);
+        AtmosphereHandler handler = atmosphereOfLoaded(dim);
         // Blob lookup throws NPE if the vent hasn't yet had performFunction
         // called once (which is what registers the blob). Guard for that.
         int blobSize;
@@ -19983,10 +19954,10 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             int ticks = parseIntOr(args[1], 0);
-            if (!fakeTickerRegistered) {
-                net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new FakePlayerTicker());
-                fakeTickerRegistered = true;
+            if (fakeTicker == null) {
+                fakeTicker = new FakePlayerTicker();
             }
+            fakeTicker.ensureRegistered();
             fakeLivingTicksRemaining = ticks;
             send(sender, "{\"ok\":true,\"ticks\":" + ticks + "}");
             return;
@@ -20005,15 +19976,13 @@ public class TestProbeCommand extends CommandBase {
             String action = args[1].toLowerCase(java.util.Locale.ROOT);
             switch (action) {
                 case "add":
-                    dev.stannismod.stellurgy.util.RocketInventoryHelper
-                            .addPlayerToInventoryBypass(player);
+                    Stellurgy.serverState().rocketInventory.addPlayerToInventoryBypass(player);
                     send(sender, "{\"ok\":true,\"action\":\"add\",\"player\":\""
                             + escapeJson(player.getName()) + "\""
                             + ",\"inBypass\":true}");
                     return;
                 case "remove":
-                    dev.stannismod.stellurgy.util.RocketInventoryHelper
-                            .removePlayerFromInventoryBypass(player);
+                    Stellurgy.serverState().rocketInventory.removePlayerFromInventoryBypass(player);
                     send(sender, "{\"ok\":true,\"action\":\"remove\",\"player\":\""
                             + escapeJson(player.getName()) + "\""
                             + ",\"inBypass\":"
@@ -20262,9 +20231,7 @@ public class TestProbeCommand extends CommandBase {
                         .append("}");
             }
             String atmos = "?";
-            AtmosphereHandler ah =
-                    AtmosphereHandler.getOxygenHandler(
-                            player.world.provider.getDimension());
+            AtmosphereHandler ah = AtmosphereHandler.getOxygenHandler(player.world);
             if (ah != null) {
                 atmos = ah.getAtmosphereType(player).getUnlocalizedName();
             }
@@ -20382,9 +20349,7 @@ public class TestProbeCommand extends CommandBase {
             // the isDaytime() check with this event).
             boolean sleepingTimeOk = net.minecraftforge.event.ForgeEventFactory
                     .fireSleepingTimeCheck(player, bedPos);
-            AtmosphereHandler sleepAtm =
-                    AtmosphereHandler.getOxygenHandler(
-                            sleepWorld.provider.getDimension());
+            AtmosphereHandler sleepAtm = AtmosphereHandler.getOxygenHandler(sleepWorld);
             String bedAtmos = sleepAtm == null ? "none"
                     : sleepAtm.getAtmosphereType(bedPos).getUnlocalizedName();
             boolean bedBreathable = sleepAtm != null
@@ -21529,7 +21494,7 @@ public class TestProbeCommand extends CommandBase {
     // path that eventually calls EntityPlayerMP.sendMessage(ITextComponent)
     // is observed — there's no production-side instrumentation to
     // forget to add.
-    private static final java.util.concurrent.ConcurrentLinkedDeque<String> chatLog =
+    private final java.util.concurrent.ConcurrentLinkedDeque<String> chatLog =
             new java.util.concurrent.ConcurrentLinkedDeque<>();
     private static final String CHAT_TAP_HANDLER_NAME = "ar-test-chat-tap";
     private static final int CHAT_LOG_MAX = 64;
@@ -21554,7 +21519,7 @@ public class TestProbeCommand extends CommandBase {
         }
     }
 
-    private static void installChatTap(net.minecraft.entity.player.EntityPlayerMP player) {
+    private void installChatTap(net.minecraft.entity.player.EntityPlayerMP player) {
         // Idempotency is keyed on the live channel's pipeline rather than
         // a per-UUID flag because the FG6 client harness may reconnect
         // mid-suite (new channel, same UUID); a UUID-set would then leave
@@ -21605,47 +21570,47 @@ public class TestProbeCommand extends CommandBase {
     // name compiles but throws NoSuchMethodError at run time. Resolve
     // the method reflectively, caching the lookup, and fall back to
     // direct field access if neither name is available.
-    private static volatile java.lang.reflect.Method SPACKETCHAT_GET_COMPONENT;
-    private static volatile boolean SPACKETCHAT_LOOKUP_DONE;
-    private static volatile java.lang.reflect.Field SPACKETCHAT_COMPONENT_FIELD;
+    private volatile java.lang.reflect.Method spacketChatGetComponent;
+    private volatile boolean spacketChatLookupDone;
+    private volatile java.lang.reflect.Field spacketChatComponentField;
 
-    private static net.minecraft.util.text.ITextComponent readSPacketChatComponent(
+    private net.minecraft.util.text.ITextComponent readSPacketChatComponent(
             net.minecraft.network.play.server.SPacketChat pkt) {
-        if (!SPACKETCHAT_LOOKUP_DONE) {
-            synchronized (TestProbeCommand.class) {
-                if (!SPACKETCHAT_LOOKUP_DONE) {
+        if (!spacketChatLookupDone) {
+            synchronized (this) {
+                if (!spacketChatLookupDone) {
                     for (String name : new String[]{"getChatComponent", "func_148915_a"}) {
                         try {
                             java.lang.reflect.Method m =
                                     net.minecraft.network.play.server.SPacketChat.class.getMethod(name);
                             if (net.minecraft.util.text.ITextComponent.class.isAssignableFrom(m.getReturnType())) {
                                 m.setAccessible(true);
-                                SPACKETCHAT_GET_COMPONENT = m;
+                                spacketChatGetComponent = m;
                                 break;
                             }
                         } catch (NoSuchMethodException ignored) { /* try next */ }
                     }
-                    if (SPACKETCHAT_GET_COMPONENT == null) {
+                    if (spacketChatGetComponent == null) {
                         for (String fname : new String[]{"chatComponent", "field_148919_a"}) {
                             try {
                                 java.lang.reflect.Field f =
                                         net.minecraft.network.play.server.SPacketChat.class.getDeclaredField(fname);
                                 f.setAccessible(true);
-                                SPACKETCHAT_COMPONENT_FIELD = f;
+                                spacketChatComponentField = f;
                                 break;
                             } catch (NoSuchFieldException ignored) { /* try next */ }
                         }
                     }
-                    SPACKETCHAT_LOOKUP_DONE = true;
+                    spacketChatLookupDone = true;
                 }
             }
         }
         try {
-            if (SPACKETCHAT_GET_COMPONENT != null) {
-                return (net.minecraft.util.text.ITextComponent) SPACKETCHAT_GET_COMPONENT.invoke(pkt);
+            if (spacketChatGetComponent != null) {
+                return (net.minecraft.util.text.ITextComponent) spacketChatGetComponent.invoke(pkt);
             }
-            if (SPACKETCHAT_COMPONENT_FIELD != null) {
-                return (net.minecraft.util.text.ITextComponent) SPACKETCHAT_COMPONENT_FIELD.get(pkt);
+            if (spacketChatComponentField != null) {
+                return (net.minecraft.util.text.ITextComponent) spacketChatComponentField.get(pkt);
             }
         } catch (ReflectiveOperationException ignored) { /* fall through */ }
         return null;
@@ -21786,18 +21751,23 @@ public class TestProbeCommand extends CommandBase {
                         + escapeJson(blockId) + "\"}");
                 return;
             }
-            dev.stannismod.stellurgy.util.SealableBlockHandler.INSTANCE
-                    .addUnsealableBlock(block);
+            dev.stannismod.stellurgy.util.SealableBlockHandler handler =
+                    dev.stannismod.stellurgy.util.SealableBlockHandler.INSTANCE;
+            if (!parkedSealLists.containsKey(block)) {
+                parkedSealLists.put(block, new boolean[]{handler.isBlockBanned(block),
+                        handler.getOverriddenSealableBlocks().contains(block)});
+            }
+            handler.addUnsealableBlock(block);
             send(sender, "{\"ok\":true,\"id\":\"" + escapeJson(blockId)
                     + "\",\"action\":\"added-to-blockBanList\"}");
             return;
         }
         if (args.length >= 2 && "remove-block-ban".equalsIgnoreCase(args[0])) {
             // /stellurgytest seal-detector remove-block-ban <block-id> — undo of
-            // add-block-ban. Reaches the package-private blockBanList via
-            // reflection because SealableBlockHandler has no public removal
-            // API for the block ban list (addSealableBlock would also flip
-            // into the allow list, which is not the right undo here).
+            // add-block-ban: puts the block back on exactly the lists it was on
+            // before the first add. Leaving the ban list reaches the private
+            // blockBanList via reflection, because production has no removal from
+            // it and is not given one for a probe.
             String blockId = args[1];
             net.minecraft.block.Block block =
                     resolveBlock(blockId);
@@ -21806,17 +21776,28 @@ public class TestProbeCommand extends CommandBase {
                         + escapeJson(blockId) + "\"}");
                 return;
             }
-            try {
-                java.lang.reflect.Field f = dev.stannismod.stellurgy.util.SealableBlockHandler
-                        .class.getDeclaredField("blockBanList");
-                f.setAccessible(true);
-                @SuppressWarnings("unchecked")
-                java.util.List<net.minecraft.block.Block> list =
-                        (java.util.List<net.minecraft.block.Block>) f.get(
-                                dev.stannismod.stellurgy.util.SealableBlockHandler.INSTANCE);
-                boolean removed = list.remove(block);
+            boolean[] before = parkedSealLists.remove(block);
+            if (before == null) {
                 send(sender, "{\"ok\":true,\"id\":\"" + escapeJson(blockId)
-                        + "\",\"removed\":" + removed + "}");
+                        + "\",\"removed\":false}");
+                return;
+            }
+            dev.stannismod.stellurgy.util.SealableBlockHandler handler =
+                    dev.stannismod.stellurgy.util.SealableBlockHandler.INSTANCE;
+            try {
+                if (before[1]) {
+                    handler.addSealableBlock(block); // also leaves the ban list
+                } else if (!before[0]) {
+                    java.lang.reflect.Field f = dev.stannismod.stellurgy.util.SealableBlockHandler
+                            .class.getDeclaredField("blockBanList");
+                    f.setAccessible(true);
+                    @SuppressWarnings("unchecked")
+                    java.util.List<net.minecraft.block.Block> list =
+                            (java.util.List<net.minecraft.block.Block>) f.get(handler);
+                    list.remove(block);
+                }
+                send(sender, "{\"ok\":true,\"id\":\"" + escapeJson(blockId)
+                        + "\",\"removed\":" + !before[0] + "}");
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"reflection failed\",\"msg\":\""
                         + escapeJson(e.getMessage()) + "\"}");
@@ -22612,12 +22593,12 @@ public class TestProbeCommand extends CommandBase {
         }
         String sub = args[0].toLowerCase();
         if ("tick-counter".equals(sub)) {
-            // PlanetEventHandler.time is the simplest wiring smoke: it
+            // The planet handler's tick count is the simplest wiring smoke: it
             // increments on every ServerTickEvent.END phase. If the
             // subscription was lost, the value freezes at zero or wherever
             // the last successful tick left it.
             Map<String, Object> out = new LinkedHashMap<>();
-            out.put("time", dev.stannismod.stellurgy.event.PlanetEventHandler.time);
+            out.put("time", Stellurgy.serverState().planetEvents.ticks());
             // World total time as a cross-check: if the world is also frozen
             // (e.g. server paused), our counter wouldn't advance for a
             // legitimate reason — surface both so the test author can
@@ -22635,12 +22616,12 @@ public class TestProbeCommand extends CommandBase {
             // less fragile: verify the well-known static field initial-state
             // contracts that only run if the @Mod init phase completed.
             Map<String, Object> out = new LinkedHashMap<>();
-            // PlanetEventHandler.time is 0 before any ServerTickEvent fires
-            // and >0 after at least one. Either way the field MUST be
+            // The planet handler's tick count is 0 before any ServerTickEvent fires
+            // and >0 after at least one. Either way it MUST be
             // readable (regression would be a ClassNotFoundException or a
             // static initializer crash).
             try {
-                long t = dev.stannismod.stellurgy.event.PlanetEventHandler.time;
+                long t = Stellurgy.serverState().planetEvents.ticks();
                 out.put("planetEventHandler", "loaded");
                 out.put("planetEventHandlerTime", t);
             } catch (Throwable e) {
@@ -22690,9 +22671,7 @@ public class TestProbeCommand extends CommandBase {
             out.put("loaded", world != null);
             out.put("worldInfoClass", world == null ? "null"
                     : world.getWorldInfo().getClass().getName());
-            out.put("hasAtmosphereHandler",
-                    AtmosphereHandler
-                            .hasAtmosphereHandler(dim));
+            out.put("hasAtmosphereHandler", atmosphereOfLoaded(dim) != null);
             out.put("isStellurgyPlanet",
                     dev.stannismod.stellurgy.dimension.DimensionManager
                             .getInstance().isDimensionCreated(dim));
@@ -22705,21 +22684,9 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if ("transitions".equals(sub)) {
-            // PlanetEventHandler.transitionMap is package-private static;
-            // reach it via reflection just for read-back. The size of the
-            // queue is the only piece test code legitimately needs.
-            try {
-                java.lang.reflect.Field f =
-                        dev.stannismod.stellurgy.event.PlanetEventHandler
-                                .class.getDeclaredField("transitionMap");
-                f.setAccessible(true);
-                @SuppressWarnings("unchecked")
-                java.util.List<?> list = (java.util.List<?>) f.get(null);
-                send(sender, "{\"ok\":true,\"size\":" + list.size() + "}");
-            } catch (ReflectiveOperationException e) {
-                send(sender, "{\"error\":\"could not read transitionMap\",\"msg\":\""
-                        + escapeJson(e.getMessage()) + "\"}");
-            }
+            // The size of the queue is the only piece test code legitimately needs.
+            send(sender, "{\"ok\":true,\"size\":"
+                    + Stellurgy.serverState().planetEvents.pendingTransitions() + "}");
             return;
         }
         send(sender, "{\"error\":\"unknown event subcommand — try tick-counter | handlers | dim-side-effects <dim> | transitions\"}");
@@ -22737,8 +22704,8 @@ public class TestProbeCommand extends CommandBase {
     // to keep them hot. Stellurgy already registers a
     // LoadingCallback in WorldEvents (mod-side, persistent), so
     // requesting tickets here piggy-backs on that registration.
-    private static final java.util.Map<String, net.minecraftforge.common.ForgeChunkManager.Ticket>
-            CHUNK_TICKETS = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<String, net.minecraftforge.common.ForgeChunkManager.Ticket>
+            chunkTickets = new java.util.concurrent.ConcurrentHashMap<>();
 
     private static String ticketKey(int dim, int cx, int cz) {
         return dim + ":" + cx + ":" + cz;
@@ -22770,7 +22737,7 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             String key = ticketKey(dim, cx, cz);
-            net.minecraftforge.common.ForgeChunkManager.Ticket existing = CHUNK_TICKETS.get(key);
+            net.minecraftforge.common.ForgeChunkManager.Ticket existing = chunkTickets.get(key);
             if (existing != null) {
                 send(sender, "{\"ok\":true,\"already\":true,\"dim\":" + dim
                         + ",\"cx\":" + cx + ",\"cz\":" + cz + "}");
@@ -22786,7 +22753,7 @@ public class TestProbeCommand extends CommandBase {
             }
             net.minecraftforge.common.ForgeChunkManager.forceChunk(ticket,
                     new net.minecraft.util.math.ChunkPos(cx, cz));
-            CHUNK_TICKETS.put(key, ticket);
+            chunkTickets.put(key, ticket);
             send(sender, "{\"ok\":true,\"dim\":" + dim
                     + ",\"cx\":" + cx + ",\"cz\":" + cz + "}");
             return;
@@ -22841,7 +22808,7 @@ public class TestProbeCommand extends CommandBase {
             int cx = parseIntOr(args[2], Integer.MIN_VALUE);
             int cz = parseIntOr(args[3], Integer.MIN_VALUE);
             String key = ticketKey(dim, cx, cz);
-            net.minecraftforge.common.ForgeChunkManager.Ticket t = CHUNK_TICKETS.remove(key);
+            net.minecraftforge.common.ForgeChunkManager.Ticket t = chunkTickets.remove(key);
             if (t != null) {
                 net.minecraftforge.common.ForgeChunkManager.releaseTicket(t);
                 send(sender, "{\"ok\":true,\"released\":\"" + key + "\"}");
@@ -22851,19 +22818,19 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if ("release-all".equals(sub)) {
-            int n = CHUNK_TICKETS.size();
-            for (net.minecraftforge.common.ForgeChunkManager.Ticket t : CHUNK_TICKETS.values()) {
+            int n = chunkTickets.size();
+            for (net.minecraftforge.common.ForgeChunkManager.Ticket t : chunkTickets.values()) {
                 try { net.minecraftforge.common.ForgeChunkManager.releaseTicket(t); }
                 catch (RuntimeException ignored) {}
             }
-            CHUNK_TICKETS.clear();
+            chunkTickets.clear();
             send(sender, "{\"ok\":true,\"released\":" + n + "}");
             return;
         }
         if ("list".equals(sub)) {
             StringBuilder sb = new StringBuilder("{\"tickets\":[");
             boolean first = true;
-            for (String k : CHUNK_TICKETS.keySet()) {
+            for (String k : chunkTickets.keySet()) {
                 if (!first) sb.append(',');
                 first = false;
                 sb.append("\"").append(k).append("\"");
@@ -23171,28 +23138,20 @@ public class TestProbeCommand extends CommandBase {
                 .getResource(slashed + ".class") != null;
     }
 
-    /**
-     * global event-bus listener that counts RocketEvent fires.
-     * Registered lazily on first /stellurgytest rocket event-counts query.
-     * Static counters are visible to all probe handlers and to the
-     * launch/orbit-reached/dismantle probes which include
-     * "*EventDelta" fields in their responses for inline cause-effect
-     * verification.
-     */
     /** Headless-tier test player (see `/stellurgytest player ensure-fake`).
      *  A BARE EntityPlayerMP, deliberately NOT a Forge FakePlayer:
      *  PlayerAdvancements.grantCriterion hard-refuses FakePlayer instances
      *  (Forge policy), and advancement grants are part of what the server
      *  tier pins. It is never spawned into a world (a connectionless player
      *  in the EntityTracker NPEs), so the FakePlayer no-ops aren't needed. */
-    private static net.minecraft.entity.player.EntityPlayerMP fakePlayer;
-    private static volatile int fakeLivingTicksRemaining = 0;
-    private static boolean fakeTickerRegistered = false;
+    private net.minecraft.entity.player.EntityPlayerMP fakePlayer;
+    private volatile int fakeLivingTicksRemaining = 0;
+    private FakePlayerTicker fakeTicker;
 
     /** Posts one LivingUpdateEvent per server tick for the fake player while
      *  `tick-living` has remaining budget — the un-spawned test player never
      *  ticks, so this supplies the once-per-tick cadence a real player has. */
-    public static final class FakePlayerTicker {
+    public final class FakePlayerTicker extends ServerScopedListener {
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onServerTick(net.minecraftforge.fml.common.gameevent.TickEvent.ServerTickEvent event) {
             if (event.phase != net.minecraftforge.fml.common.gameevent.TickEvent.Phase.END) return;
@@ -23204,38 +23163,38 @@ public class TestProbeCommand extends CommandBase {
         }
     }
 
-    public static final class RocketEventRecorder {
-        public static volatile int launchCount = 0;
-        public static volatile int preLaunchCount = 0;
-        public static volatile int orbitReachedCount = 0;
-        public static volatile int dismantleCount = 0;
-        public static volatile int landedCount = 0;
-        public static volatile int deOrbitingCount = 0;
+    /**
+     * Event-bus listener that counts RocketEvent fires, for this command's server: registered when
+     * the server registers this command. Its counters are read by the count verbs and by the
+     * launch/orbit-reached/dismantle probes, which include "*EventDelta" fields in their responses
+     * for inline cause-effect verification.
+     */
+    final RocketEventRecorder rocketEvents = new RocketEventRecorder();
+
+    public static final class RocketEventRecorder extends ServerScopedListener {
+        public volatile int launchCount = 0;
+        public volatile int preLaunchCount = 0;
+        public volatile int orbitReachedCount = 0;
+        public volatile int dismantleCount = 0;
+        public volatile int landedCount = 0;
+        public volatile int deOrbitingCount = 0;
 
         // Gap #6 payload pins — last-observed entity id + dim for each
         // event type, so tests can verify subscribers receive the right
         // payload (not just that the event fired). Defaults to -1 so a
         // missed event is distinguishable from "fired with entityId=0".
-        public static volatile int lastLaunchEntityId = -1;
-        public static volatile int lastLaunchDim = Integer.MIN_VALUE;
-        public static volatile int lastPreLaunchEntityId = -1;
-        public static volatile int lastPreLaunchDim = Integer.MIN_VALUE;
-        public static volatile int lastOrbitReachedEntityId = -1;
-        public static volatile int lastOrbitReachedDim = Integer.MIN_VALUE;
-        public static volatile int lastDismantleEntityId = -1;
-        public static volatile int lastDismantleDim = Integer.MIN_VALUE;
-        public static volatile int lastLandedEntityId = -1;
-        public static volatile int lastLandedDim = Integer.MIN_VALUE;
-        public static volatile int lastDeOrbitingEntityId = -1;
-        public static volatile int lastDeOrbitingDim = Integer.MIN_VALUE;
-
-        private static volatile boolean registered = false;
-
-        public static synchronized void ensureRegistered() {
-            if (registered) return;
-            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new RocketEventRecorder());
-            registered = true;
-        }
+        public volatile int lastLaunchEntityId = -1;
+        public volatile int lastLaunchDim = Integer.MIN_VALUE;
+        public volatile int lastPreLaunchEntityId = -1;
+        public volatile int lastPreLaunchDim = Integer.MIN_VALUE;
+        public volatile int lastOrbitReachedEntityId = -1;
+        public volatile int lastOrbitReachedDim = Integer.MIN_VALUE;
+        public volatile int lastDismantleEntityId = -1;
+        public volatile int lastDismantleDim = Integer.MIN_VALUE;
+        public volatile int lastLandedEntityId = -1;
+        public volatile int lastLandedDim = Integer.MIN_VALUE;
+        public volatile int lastDeOrbitingEntityId = -1;
+        public volatile int lastDeOrbitingDim = Integer.MIN_VALUE;
 
         @net.minecraftforge.fml.common.eventhandler.SubscribeEvent
         public void onLaunch(

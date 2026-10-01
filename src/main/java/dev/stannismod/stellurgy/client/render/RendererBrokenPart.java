@@ -8,12 +8,20 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.Vec3i;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import dev.stannismod.stellurgy.client.ClientProxy;
 import dev.stannismod.stellurgy.tile.TileBrokenPart;
 import dev.stannismod.stellurgy.util.IBrokenPartBlock;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class RendererBrokenPart extends TileEntitySpecialRenderer<TileBrokenPart> {
+
+    private final Map<ResourceLocation, WavefrontObject> models = new HashMap<>();
+
+    private WavefrontObject model(ResourceLocation location) {
+        return models.computeIfAbsent(location, WavefrontObject::required);
+    }
 
     @Override
     public void render(TileBrokenPart tile, double x, double y, double z, float t, int destroyStage, float a) {
@@ -55,8 +63,7 @@ public class RendererBrokenPart extends TileEntitySpecialRenderer<TileBrokenPart
                 this.bindTexture(new ResourceLocation(res.getResourceDomain(), pathToTexture));
             }
 
-            WavefrontObject model = ClientProxy.getModel(new ResourceLocation(res.getResourceDomain(), "models/block/models/" + name + ".obj"));
-            model.renderAll();
+            model(new ResourceLocation(res.getResourceDomain(), "models/block/models/" + name + ".obj")).renderAll();
 
             if (destroyStage >= 0) {
                 GlStateManager.matrixMode(5890);

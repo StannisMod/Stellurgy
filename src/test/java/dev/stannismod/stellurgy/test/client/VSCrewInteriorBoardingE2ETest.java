@@ -952,7 +952,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // never be on a shared world.
         Events events = events();
         long spawnMark = events.markInstrumented();
-        exec("stellurgytest vs spawn-diag reset");
+        exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory reset");
         String assemble = assembleFixture(site, variant);
         assertTrue("a with-pilot-seat build must route to a ship: " + assemble,
                 (Reply.of(assemble).integer("rocketCount") == 0));
@@ -968,7 +968,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                     "the tier-2 assembly must become a VS ship in the queryable registry");
         } catch (AssertionError neverSpawned) {
             throw new AssertionError(neverSpawned.getMessage()
-                    + " | spawn-diag: " + exec("stellurgytest vs spawn-diag").replace('\n', ' ')
+                    + " | spawn-diag: " + exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot").replace('\n', ' ')
                     + " | assemble said: " + assemble.replace('\n', ' '), neverSpawned);
         }
 

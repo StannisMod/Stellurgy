@@ -161,6 +161,9 @@ import dev.stannismod.stellurgy.world.biome.*;
 public class Stellurgy {
 
     private static final String PLANET = "Planet";
+    /** The machine recipe tables. Filled by the mod in preInit / recipe registration / postInit and
+     *  read for the life of the side; rewritten only by the operator's /reloadrecipes, a partial
+     *  re-initialisation of the mod and the sanctioned exception to statics being written once. */
     public static final RecipeHandler machineRecipes = new RecipeHandler();
     public static final Logger logger = LogManager.getLogger(Constants.modId);
     private static final CreativeTabs tabAdvRocketry = new CreativeTabs("stellurgy") {
@@ -260,6 +263,9 @@ public class Stellurgy {
      *  — FML fires those events once per launch and the recipes are built once from what they left
      *  here. Final: the map is filled, never replaced. */
     private static final HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
+    /** The mod's config file. Written once by preInit; its contents are edited at run time only by the
+     *  operator's /addtorch and /addsealant, a partial re-initialisation of the mod and the sanctioned
+     *  exception to statics being written once. */
     private static Configuration config;
 
     /**
@@ -489,6 +495,7 @@ public class Stellurgy {
         MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.world.WorldRuntime.Attach.class);
 
         //Init API
+        dev.stannismod.stellurgy.atmosphere.AtmosphereType.registerBuiltIns();
         instance.installSealHandler(SealableBlockHandler.INSTANCE);
         SealableBlockHandler.INSTANCE.loadDefaultData();
 
@@ -1443,7 +1450,7 @@ public class Stellurgy {
         MinecraftForge.EVENT_BUS.register(hyperspaceVoid);
         playerRelease = new dev.stannismod.stellurgy.player.PlayerRelease(
                 spaceEvents, hyperspaceVoid);
-        MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.util.DelayedActionBar());
+        MinecraftForge.EVENT_BUS.register(ServerStateEvents.class);
 
         PacketHandler.init();
 
@@ -1483,7 +1490,8 @@ public class Stellurgy {
         // Layer-1 universe registry: worlds are loaded (seed + map storage reachable) and the star
         // catalogue is built (createAndLoadDimensions ran at serverAboutToStart), so place every system.
         dev.stannismod.stellurgy.universe.UniverseRegistry.populate(
-                net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance());
+                net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance(),
+                serverDimensions());
         // Layer-2: restore the persisted ship ledger (settled positions survive a restart) now that the
         // overworld MapStorage is reachable, before any player logs in.
         dev.stannismod.stellurgy.space.SpaceSubsystem.onServerStarted(spaceSubsystem);
@@ -1583,6 +1591,7 @@ public class Stellurgy {
             try {
                 if (oreLoader.loadFile(file)) {
                     List<SingleEntry<HashedBlockPosition, OreGenProperties>> mapping = oreLoader.loadPropertyFile();
+                    dev.stannismod.stellurgy.util.OreGenTable oreTable = serverState().oreTable;
 
                     for (Entry<HashedBlockPosition, OreGenProperties> entry : mapping) {
                         int pressure = entry.getKey().x;
@@ -1590,12 +1599,12 @@ public class Stellurgy {
 
                         if (pressure == -1) {
                             if (temp != -1) {
-                                OreGenProperties.setOresForTemperature(Temps.values()[temp], entry.getValue());
+                                oreTable.setOresForTemperature(Temps.values()[temp], entry.getValue());
                             }
                         } else if (temp == -1) {
-                            OreGenProperties.setOresForPressure(AtmosphereTypes.values()[pressure], entry.getValue());
+                            oreTable.setOresForPressure(AtmosphereTypes.values()[pressure], entry.getValue());
                         } else {
-                            OreGenProperties.setOresForPressureAndTemp(AtmosphereTypes.values()[pressure], Temps.values()[temp], entry.getValue());
+                            oreTable.setOresForPressureAndTemp(AtmosphereTypes.values()[pressure], Temps.values()[temp], entry.getValue());
                         }
                     }
                 }
@@ -1620,15 +1629,11 @@ public class Stellurgy {
 
     @EventHandler
     public void serverStopped(FMLServerStoppedEvent event) {
-        dev.stannismod.stellurgy.wirelessdata.NetworkRegistry.clear();
-        dev.stannismod.stellurgy.space.SpaceSubsystem.onServerStopped();
-        dev.stannismod.stellurgy.event.PlanetEventHandler.onServerStopped();
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
         spaceSubsystem = null;
         detachServerServices();
-        dev.stannismod.stellurgy.universe.UniverseRegistry.onServerStopped();
-        AtmosphereHandler.clear();
         ((BlockSeal) StellurgyBlocks.blockPipeSealer).clearMap();
+        dev.stannismod.stellurgy.universe.SystemContent.reset();
         WeightEngine.INSTANCE.save();
         endServerLifetime();
     }
@@ -1663,7 +1668,8 @@ public class Stellurgy {
             // An ALPHA world model is told to the player, on the world it applies to, every time he
             // arrives. Not once and not in a changelog: what it warns about is that this world may have
             // no way forward, and that is worth knowing before he invests another evening in it.
-            dev.stannismod.stellurgy.universe.UniverseRegistry.activeSchema().ifPresent(schema -> {
+            java.util.Optional.ofNullable(dev.stannismod.stellurgy.universe.UniverseRegistry.get(player.getServer()))
+                    .flatMap(dev.stannismod.stellurgy.universe.UniverseRegistry::activeSchema).ifPresent(schema -> {
                 if (!schema.isStable()) {
                     player.sendMessage(new net.minecraft.util.text.TextComponentTranslation(
                             "msg.stellurgy.universe.alpha", schema.label())

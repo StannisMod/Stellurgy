@@ -6,6 +6,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.junit.Test;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
+import dev.stannismod.stellurgy.api.SatelliteRegistryArrangement;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties.Property;
@@ -107,18 +108,19 @@ public class SatellitePropertiesTest {
      *
      * We use a controlled local test subclass to avoid coupling to production
      * Stellurgy types that are registered only in {@code Stellurgy.init}. The
-     * registry is a process-wide HashMap; using a unique test type id keeps the
-     * test from polluting later registrations.
+     * registry is the game's for the whole JVM, so the entry is removed again
+     * when the test ends.
      */
     @Test
     public void satelliteTypeFactoryCreatesExpectedClass() {
         String key = "ar.test.factory." + System.nanoTime();
-        SatelliteRegistry.registerSatellite(key, TestSatellite.class);
-
-        SatelliteBase instance = SatelliteRegistry.getNewSatellite(key);
-        assertNotNull("factory must produce an instance for a registered key", instance);
-        assertSame("factory must return exactly the registered class",
-                TestSatellite.class, instance.getClass());
+        try (SatelliteRegistryArrangement ignored =
+                     SatelliteRegistryArrangement.registerSatellite(key, TestSatellite.class)) {
+            SatelliteBase instance = SatelliteRegistry.getNewSatellite(key);
+            assertNotNull("factory must produce an instance for a registered key", instance);
+            assertSame("factory must return exactly the registered class",
+                    TestSatellite.class, instance.getClass());
+        }
 
         // Reverse lookup is order-dependent in a multi-key registry (the
         // production registry is shared; tests may have already registered the
@@ -164,17 +166,17 @@ public class SatellitePropertiesTest {
         String energy = "ar.test.energy." + stamp;
         String weather = "ar.test.weather." + stamp;
 
-        SatelliteRegistry.registerSatellite(sensor, TestSatellite.class);
-        SatelliteRegistry.registerSatellite(mission, TestSatellite.class);
-        SatelliteRegistry.registerSatellite(energy, TestSatellite.class);
-        SatelliteRegistry.registerSatellite(weather, TestSatellite.class);
-
-        // Each registered key must be reachable through getNewSatellite (the
-        // exact lookup used by production on world load / packet handling).
-        assertNotNull(SatelliteRegistry.getNewSatellite(sensor));
-        assertNotNull(SatelliteRegistry.getNewSatellite(mission));
-        assertNotNull(SatelliteRegistry.getNewSatellite(energy));
-        assertNotNull(SatelliteRegistry.getNewSatellite(weather));
+        try (SatelliteRegistryArrangement a = SatelliteRegistryArrangement.registerSatellite(sensor, TestSatellite.class);
+             SatelliteRegistryArrangement b = SatelliteRegistryArrangement.registerSatellite(mission, TestSatellite.class);
+             SatelliteRegistryArrangement c = SatelliteRegistryArrangement.registerSatellite(energy, TestSatellite.class);
+             SatelliteRegistryArrangement d = SatelliteRegistryArrangement.registerSatellite(weather, TestSatellite.class)) {
+            // Each registered key must be reachable through getNewSatellite (the
+            // exact lookup used by production on world load / packet handling).
+            assertNotNull(SatelliteRegistry.getNewSatellite(sensor));
+            assertNotNull(SatelliteRegistry.getNewSatellite(mission));
+            assertNotNull(SatelliteRegistry.getNewSatellite(energy));
+            assertNotNull(SatelliteRegistry.getNewSatellite(weather));
+        }
     }
 
     /**

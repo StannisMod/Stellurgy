@@ -26,8 +26,6 @@ public class VSWorldPhysicsLoop implements Runnable {
     private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(VSWorldPhysicsLoop.class);
     // The number of physics ticks to be considered in the average tick time.
     private static final long TICK_TIME_QUEUE = 100;
-    // Used to give each VS thread a unique name
-    private static int worldPhysicsLoopId = 0;
     private final World hostWorld;
     private final Queue<Long> latestPhysicsTickTimes;
     // The ships we will be ticking physics for every tick, and sending those
@@ -40,8 +38,8 @@ public class VSWorldPhysicsLoop implements Runnable {
     private final String name;
 
     public VSWorldPhysicsLoop(World host) {
-        name = "VS World Physics Task " + worldPhysicsLoopId;
-        worldPhysicsLoopId++;
+        // Named for the world it runs, which is what a thread dump reader needs to know.
+        name = "VS World Physics Task dim " + host.provider.getDimension();
         this.hostWorld = host;
         this.threadRunning = true;
         this.latestPhysicsTickTimes = new ConcurrentLinkedQueue<>();
@@ -151,7 +149,7 @@ public class VSWorldPhysicsLoop implements Runnable {
         // the game tick, so a tick-only sender would freeze every client's view of ships that are
         // still moving. Sending here only when nothing has gone out for longer than a healthy tick
         // keeps delivery a superset of the old behaviour while leaving the cadence to the tick.
-        if (EventsCommon.poseSendIsOverdue(hostWorld.provider.getDimension())) {
+        if (EventsCommon.poseSendIsOverdue(hostWorld)) {
             EventsCommon.sendShipTransformUpdates(hostWorld,
                     ((IHasShipManager) hostWorld).getManager());
         }

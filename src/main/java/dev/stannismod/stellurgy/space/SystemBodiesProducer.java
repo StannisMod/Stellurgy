@@ -52,9 +52,12 @@ public final class SystemBodiesProducer {
     /** Rebroadcast cadence in server ticks (~1 s at 20 tps): tracks the ship's within-cell motion. tunable. */
     private static final int BROADCAST_INTERVAL_TICKS = 20;
 
-    private static int tickCounter;
+    // One producer per space subsystem (SpaceSubsystem#skyProducer): the broadcast cadence and the
+    // derived nebula cache are that server's, and go with it.
+    private int tickCounter;
+    final SkyNebulaeProducer.Cache nebulae = new SkyNebulaeProducer.Cache();
 
-    private SystemBodiesProducer() {
+    SystemBodiesProducer() {
     }
 
     /** The per-cell body source — the seam that lets {@link #buildByDim} be unit-tested without a server. */
@@ -267,7 +270,7 @@ public final class SystemBodiesProducer {
      * Throttled rebroadcast tick: every {@link #BROADCAST_INTERVAL_TICKS}, push each player the bodies
      * of his own dimension, so the boundary/bodies track both his ship's motion and the system's.
      */
-    public static void onBroadcastTick(MinecraftServer server) {
+    void onBroadcastTick(MinecraftServer server) {
         if (++tickCounter < BROADCAST_INTERVAL_TICKS) {
             return;
         }
@@ -284,12 +287,6 @@ public final class SystemBodiesProducer {
         } catch (Throwable t) {
             Stellurgy.logger.warn("[SPACE] system-bodies broadcast failed", t);
         }
-    }
-
-    /** Reset the broadcast cadence and the sky's derived caches (server stop). */
-    public static void reset() {
-        tickCounter = 0;
-        SkyNebulaeProducer.reset();
     }
 
     /**

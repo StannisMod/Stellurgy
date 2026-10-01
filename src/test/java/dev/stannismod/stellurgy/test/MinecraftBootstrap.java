@@ -71,6 +71,9 @@ public final class MinecraftBootstrap {
                 dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy = new dev.stannismod.stellurgy.libvulpes.common.CommonProxy();
             }
 
+            // 2c. The built-in atmospheres, which the mod's pre-init registers.
+            dev.stannismod.stellurgy.atmosphere.AtmosphereType.registerBuiltIns();
+
             // 3. The mod object and one server lifetime on it.
             if (Stellurgy.instance == null) {
                 Stellurgy.instance = new Stellurgy();

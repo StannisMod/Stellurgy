@@ -24,9 +24,6 @@ import java.util.Set;
  */
 public final class TerrainResolution {
 
-    /** Dimensions already warned about, so a per-chunk or per-lookup resolve cannot spam the log. */
-    private static final Set<Integer> warnedDims = Collections.synchronizedSet(new HashSet<Integer>());
-
     /** The terrain source actually in force — never the authored value if that value was unusable. */
     public final TerrainSource source;
     /**
@@ -50,20 +47,21 @@ public final class TerrainResolution {
             WorldType foreign = (name == null || name.isEmpty()) ? null : WorldType.parseWorldType(name);
             if (foreign != null)
                 return new TerrainResolution(TerrainSource.MOD_WORLDTYPE, foreign);
-            warnOnce(dim, "requests MOD_WORLDTYPE '" + name
+            warnOnce(dim, props, "requests MOD_WORLDTYPE '" + name
                     + "' which is not registered; falling back to NATIVE terrain");
         } else if (requested == TerrainSource.TEMPLATE) {
             String template = props.getTerrainTemplate();
             if (template != null && !template.isEmpty())
                 return new TerrainResolution(TerrainSource.TEMPLATE, Stellurgy.planetWorldType);
-            warnOnce(dim, "requests TEMPLATE terrain with no template path; falling back to NATIVE");
+            warnOnce(dim, props, "requests TEMPLATE terrain with no template path; falling back to NATIVE");
         }
 
         return new TerrainResolution(TerrainSource.NATIVE, Stellurgy.planetWorldType);
     }
 
-    private static void warnOnce(int dim, String message) {
-        if (warnedDims.add(dim))
+    /** Once per planet, so a per-chunk or per-lookup resolve cannot spam the log. */
+    private static void warnOnce(int dim, DimensionProperties props, String message) {
+        if (props.firstTerrainFallbackWarning())
             Stellurgy.logger.warn("Planet dimension " + dim + " " + message);
     }
 }

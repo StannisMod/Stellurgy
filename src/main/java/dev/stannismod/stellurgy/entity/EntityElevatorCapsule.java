@@ -194,7 +194,7 @@ public class EntityElevatorCapsule extends Entity implements INetworkEntity {
 
             int timeOffset = 1;
             for (Entity e : passengers) {
-                PlanetEventHandler.addDelayedTransition(new TransitionEntity(worldserver.getTotalWorldTime() + ++timeOffset, e, dimensionIn, new BlockPos(posX, y, posZ), entity));
+                dev.stannismod.stellurgy.Stellurgy.serverState().planetEvents.addDelayedTransition(new TransitionEntity(worldserver.getTotalWorldTime() + ++timeOffset, e, dimensionIn, new BlockPos(posX, y, posZ), entity));
             }
             return entity;
         }

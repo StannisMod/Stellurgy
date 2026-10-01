@@ -85,7 +85,6 @@
     "MixinHullSweepInputs",
     "MixinShipVelocityAtPoint",
     "MixinBoundarySkyDiag",
-    "MixinClientProxyDiag",
     "MixinHyperspaceTunnelDiag",
     "MixinKeyBindingsMotionSample",
     "MixinKeyBindingsSeatGate",
@@ -105,6 +104,7 @@
     "MixinSpaceClockSyncEvents",
     "MixinKeyBindingsEvents",
     "MixinClientProxyEvents",
+    "MixinTestClientMuteEvents",
     "MixinMinecraftSideTrace"
   ]
 }

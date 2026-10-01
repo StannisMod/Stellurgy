@@ -54,9 +54,10 @@ public class RenderAsteroidSky extends IRenderHandler {
     private final float[] shadowColorTmp = new float[3];
 
     // Helpers for ring/black-hole math
-    private static float xrotangle = 0;             // for ring rotation (kept exactly as before)
-    private static final float[] skycolor = {0,0,0}; // for black hole rendering (same usage as before)
-    private static double currentplanetphi = 0;     // ring/disk angle (same)
+    // Computed earlier in a frame and read later in the same frame, by this sky alone.
+    private float xrotangle = 0;
+    private final float[] skycolor = {0,0,0};
+    private double currentplanetphi = 0;
 
     // === ctor ===
     public RenderAsteroidSky() {
@@ -701,12 +702,12 @@ public class RenderAsteroidSky extends IRenderHandler {
         float[] skyColor = properties.skyColor;
         float[] ringColor = properties.ringColor;
 
-        // Keep external call identical
         RenderPlanetarySky.renderPlanetPubHelper(
                 buffer, icon, 0, 0, -20,
                 size * 0.2f, alphaMultiplier, shadowAngle,
                 hasAtmosphere, skyColor, ringColor, gasGiant, hasRing, properties.ringAngle,
-                hasDecorators, shadowColorMultiplier, alphaMultiplier2
+                hasDecorators, shadowColorMultiplier, alphaMultiplier2,
+                currentplanetphi, xrotangle
         );
     }
 

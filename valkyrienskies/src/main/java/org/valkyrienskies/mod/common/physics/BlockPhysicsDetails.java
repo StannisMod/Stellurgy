@@ -14,9 +14,10 @@ import org.valkyrienskies.mod.common.block.IBlockTorqueProvider;
 import org.valkyrienskies.mod.common.config.VSConfig;
 import org.valkyrienskies.mod.common.ships.ship_world.PhysicsObject;
 
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 
 public class BlockPhysicsDetails {
 
@@ -25,41 +26,49 @@ public class BlockPhysicsDetails {
     private final static double DEFAULT_MASS = 500D;
 
     /**
-     * Blocks mapped to their mass.
+     * Blocks mapped to their mass: the built-in masses plus the configured overrides. Written whole
+     * by {@link #syncWithConfig}, never edited in place, so the physics thread reads either the old
+     * table or the new one. {@code null} until the mod's init has built it.
      */
-    private static final HashMap<Block, Double> blockToMass = new HashMap<>();
+    private static volatile Map<Block, Double> blockToMass;
     /**
-     * Material.mapped to their mass.
+     * Material mapped to their mass. Built from vanilla's material constants and literals only, which
+     * nothing a server, a config or a registry remap can change, so it is the same table in every
+     * lifetime whenever this class happens to load.
      */
-    private static final HashMap<Material, Double> materialMass = new HashMap<>();
-    /**
-     * Blocks that should not be infused with physics.
-     */
-    public static final ArrayList<Block> blocksToNotPhysicsInfuse = new ArrayList<>();
-
-    static {
-        generateBlockMasses();
-        generateMaterialMasses();
-        generateBlocksToNotPhysicsInfuse();
-
-        VSConfig.registerSyncEvent(BlockPhysicsDetails::onSync);
-        onSync();
-    }
+    private static final Map<Material, Double> materialMass = materialMasses();
 
     /**
-     * Re-applies the configured mass overrides on every config sync. Writing the static map during
-     * play is the config reload's partial re-initialisation of the mod, the sanctioned exception to
-     * statics being written once.
+     * Rebuild the block-mass table from the built-in masses and the configured overrides, and swap
+     * it in whole. The mod runs this at init, once every block is registered so a modded override
+     * resolves; a config reload runs it again, which is the config reload's partial
+     * re-initialisation of the mod, the sanctioned exception to statics being written once.
      */
-    private static void onSync() {
+    public static void syncWithConfig() {
+        Map<Block, Double> rebuilt = new HashMap<>();
+        rebuilt.put(Blocks.AIR, 0.0);
+        rebuilt.put(Blocks.FIRE, 0.0);
+        rebuilt.put(Blocks.FLOWING_WATER, 0.0);
+        rebuilt.put(Blocks.FLOWING_LAVA, 0.0);
+        rebuilt.put(Blocks.WATER, 0.0);
+        rebuilt.put(Blocks.LAVA, 0.0);
+        rebuilt.put(Blocks.BEDROCK, 50000.0);
         Arrays.stream(VSConfig.blockMass)
             .map(str -> str.split("="))
             .filter(arr -> arr.length == 2)
             .forEach(arr ->
-                blockToMass.put(Block.getBlockFromName(arr[0]), Double.parseDouble(arr[1])));
+                rebuilt.put(Block.getBlockFromName(arr[0]), Double.parseDouble(arr[1])));
+        blockToMass = Collections.unmodifiableMap(rebuilt);
     }
 
-    private static void generateMaterialMasses() {
+    /** Whether ship assembly leaves {@code block} out of the ship rather than infusing it. */
+    public static boolean isNotPhysicsInfused(Block block) {
+        return block == Blocks.AIR || block == Blocks.WATER || block == Blocks.FLOWING_WATER
+                || block == Blocks.LAVA || block == Blocks.FLOWING_LAVA;
+    }
+
+    private static Map<Material, Double> materialMasses() {
+        Map<Material, Double> materialMass = new HashMap<>();
         materialMass.put(Material.AIR, 0.0);
         materialMass.put(Material.ANVIL, 8000.0);
         materialMass.put(Material.BARRIER, 0.0);
@@ -96,24 +105,7 @@ public class BlockPhysicsDetails {
         materialMass.put(Material.WATER, 1000.0);
         materialMass.put(Material.WEB, 100.0);
         materialMass.put(Material.WOOD, 500.0);
-    }
-
-    private static void generateBlockMasses() {
-        blockToMass.put(Blocks.AIR, 0.0);
-        blockToMass.put(Blocks.FIRE, 0.0);
-        blockToMass.put(Blocks.FLOWING_WATER, 0.0);
-        blockToMass.put(Blocks.FLOWING_LAVA, 0.0);
-        blockToMass.put(Blocks.WATER, 0.0);
-        blockToMass.put(Blocks.LAVA, 0.0);
-        blockToMass.put(Blocks.BEDROCK, 50000.0);
-    }
-
-    private static void generateBlocksToNotPhysicsInfuse() {
-        blocksToNotPhysicsInfuse.add(Blocks.AIR);
-        blocksToNotPhysicsInfuse.add(Blocks.WATER);
-        blocksToNotPhysicsInfuse.add(Blocks.FLOWING_WATER);
-        blocksToNotPhysicsInfuse.add(Blocks.LAVA);
-        blocksToNotPhysicsInfuse.add(Blocks.FLOWING_LAVA);
+        return Collections.unmodifiableMap(materialMass);
     }
 
     /**
@@ -128,10 +120,15 @@ public class BlockPhysicsDetails {
     }
 
     private static double getMassOfBlock(Block block) {
+        Map<Block, Double> masses = blockToMass;
+        if (masses == null) {
+            throw new IllegalStateException("block masses read before the mod's init built them");
+        }
+        Double mass = masses.get(block);
         if (block instanceof BlockLiquid) {
             return 0D;
-        } else if (blockToMass.get(block) != null) {
-            return blockToMass.get(block);
+        } else if (mass != null) {
+            return mass;
         } else {
             return getMassOfMaterial(block.blockMaterial);
         }

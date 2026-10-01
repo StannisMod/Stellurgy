@@ -22,6 +22,7 @@ import dev.stannismod.stellurgy.universe.StellarMagnitude;
 import dev.stannismod.stellurgy.universe.SystemBody;
 import dev.stannismod.stellurgy.universe.SystemBodyKind;
 import dev.stannismod.stellurgy.universe.TelescopeScan;
+import dev.stannismod.stellurgy.universe.UniverseLawsV0;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
 import dev.stannismod.stellurgy.universe.UniverseScale;
 
@@ -45,6 +46,9 @@ import static org.junit.Assert.assertTrue;
  * characterisation stage. They do not pin the sweep order, the tick formula or the storage shape.</p>
  */
 public class TelescopeConeSurveyTest {
+
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
 
     private static final GalacticCoord HOME = GalacticCoord.ofSectorLocal(0, 0, 0, 0, 0, 0);
     private static final long SEED = 0xC0FFEEL;
@@ -94,8 +98,6 @@ public class TelescopeConeSurveyTest {
     @After
     public void resetSeams() {
         StellurgyConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes = previousMargin;
-        UniverseRegistry.detachGenerator();
-        UniverseRegistry.setStarLookup(null);
     }
 
     private static GalacticCoord cell(long x, long y, long z) {
@@ -265,11 +267,11 @@ public class TelescopeConeSurveyTest {
     // ── what a look registers ─────────────────────────────────────────────────
 
     /** A registry holding one star of a stated bulk, seated {@code lightYears} away along +X. */
-    private static UniverseRegistry oneStarAt(double lightYears, float sizeSuns, int temperature) {
-        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
-        UniverseRegistry.setStarLookup(id -> starOf(id, sizeSuns, temperature));
+    private UniverseRegistry oneStarAt(double lightYears, float sizeSuns, int temperature) {
+        testUniverse.attachGenerator(new EmptyGalaxyGenerator());
+        testUniverse.setStarLookup(id -> starOf(id, sizeSuns, temperature));
 
-        UniverseRegistry registry = new UniverseRegistry();
+        UniverseRegistry registry = testUniverse.newRegistry();
         GalacticCoord seat = cell(UniverseScale.cellsForLightYears(lightYears), 0, 0);
         registry.place(seat, 7);
         registry.addPoi(SystemBody.fixedAt(seat, SystemBodyKind.STAR, Constants.INVALID_PLANET, 7));
@@ -337,9 +339,9 @@ public class TelescopeConeSurveyTest {
         // Physics the mechanic inherits rather than a rule someone wrote: an unbound world emits
         // nothing, so no aperture registers one. Finding a rogue planet is a thing you do by GOING
         // there, and that is what makes the void worth flying into rather than surveying from home.
-        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
-        UniverseRegistry.setStarLookup(id -> null);
-        UniverseRegistry registry = new UniverseRegistry();
+        testUniverse.attachGenerator(new EmptyGalaxyGenerator());
+        testUniverse.setStarLookup(id -> null);
+        UniverseRegistry registry = testUniverse.newRegistry();
         GalacticCoord seat = cell(UniverseScale.cellsForLightYears(20d), 0, 0);
         registry.place(seat, 3);
         registry.addPoi(SystemBody.fixedAt(seat, SystemBodyKind.ROGUE_PLANET, 301, 3));
@@ -505,9 +507,9 @@ public class TelescopeConeSurveyTest {
         // the second — and the only way to state that is to count.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
         SplitCountingGenerator counting = new SplitCountingGenerator(config);
-        UniverseRegistry.attachGenerator(counting);
-        UniverseRegistry.setStarLookup(id -> starOf(id, 1f, 100));
-        UniverseRegistry registry = new UniverseRegistry();
+        testUniverse.attachGenerator(counting);
+        testUniverse.setStarLookup(id -> starOf(id, 1f, 100));
+        UniverseRegistry registry = testUniverse.newRegistry();
         registry.bindWorldSeed(SEED);
 
         int found = 0;
@@ -557,9 +559,9 @@ public class TelescopeConeSurveyTest {
         // aperture must hold under 200 000 looks, register a number of systems a crystal can carry,
         // and cost well under a second of CPU spread over its steps.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(config));
-        UniverseRegistry.setStarLookup(id -> starOf(id, 1f, 100));
-        UniverseRegistry registry = new UniverseRegistry();
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(config));
+        testUniverse.setStarLookup(id -> starOf(id, 1f, 100));
+        UniverseRegistry registry = testUniverse.newRegistry();
         registry.bindWorldSeed(SEED);
 
         RegionScan.Tuning shipped = new RegionScan.Tuning(
@@ -568,7 +570,7 @@ public class TelescopeConeSurveyTest {
                 StellurgyConfiguration.DEFAULT_TELESCOPE_SCAN_MAX_CELLS,
                 StellurgyConfiguration.DEFAULT_TELESCOPE_SCAN_BASE_TICKS,
                 StellurgyConfiguration.DEFAULT_TELESCOPE_SCAN_CELLS_PER_STEP,
-                config.minSpacing);
+                config.minSpacing, registry.generator().laws());
 
         RegionScan scan = RegionScan.directed(HOME, 1, 0, 0, shipped.maxRangeSteps(), 0L, shipped);
         int looks = scan.totalCells();
@@ -615,7 +617,7 @@ public class TelescopeConeSurveyTest {
         // looks than the ceiling affords gets a shallower pointing, not an instrument that will not
         // point — he sees the near sky and can point again.
         RegionScan.Tuning greedy = new RegionScan.Tuning(25d, archetypes(), Math.toRadians(5d),
-                5_000, 20, 100, STEP);
+                5_000, 20, 100, STEP, UniverseLawsV0.INSTANCE);
         assertTrue("arrangement: this aperture must reach absurdly far",
                 greedy.maxRangeLightYears() > ABSURD_REACH_LY);
 
@@ -633,7 +635,7 @@ public class TelescopeConeSurveyTest {
         // The honest zero. An empty universe has nothing to see, so a survey of it is instantly
         // complete rather than long and fruitless — and the reach says so rather than inventing one.
         RegionScan.Tuning empty = new RegionScan.Tuning(20d, new ArrayList<>(), Math.toRadians(1d),
-                1_000, 20, 10, STEP);
+                1_000, 20, 10, STEP, UniverseLawsV0.INSTANCE);
         assertEquals("an aperture pointed at a sky with no star types reaches nothing", 0d,
                 empty.maxRangeLightYears(), 0d);
         assertEquals("which is still a pointing, of one territory", 1, empty.maxRangeSteps());

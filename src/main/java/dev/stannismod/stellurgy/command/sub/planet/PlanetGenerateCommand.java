@@ -87,7 +87,7 @@ public class PlanetGenerateCommand extends StellurgyCommand {
         int index = star.getNumPlanets();
         GalacticCoord anchor = GalacticCoord.ofSectorLocal(starId, 0L, 0L, 0L, 0L, 0L);
         dev.stannismod.stellurgy.universe.IBodyDerivation derivation =
-                dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator().derivation();
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(server).generator().derivation();
         long seed = server.getWorld(0).getSeed();
         long orbit;
         BodyProfile profile;

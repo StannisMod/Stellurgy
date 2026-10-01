@@ -42,9 +42,6 @@ public final class SpaceSubsystem {
     /** Periodic GC sweep interval, in server ticks (~30 s at 20 tps). Internal cadence, not a config knob. */
     private static final int GC_TICK_INTERVAL = 600;
 
-    /** Armed by {@link #armSaveFaultOnce()}; consumed by the next save point that reaches it. */
-    private static boolean saveFaultArmed;
-
     // ---- this subsystem's own state: five services that live and die together -----------------
 
     // Final and public: this is a state object, and the code that drives it — the Forge handlers
@@ -55,14 +52,20 @@ public final class SpaceSubsystem {
     public final SpaceManager manager;
     public final ShipLedger ledger;
     public final ShipTransitManager transit;
+    /** The transit's hyperspace crosser; held here too for its census of the last cut, lane and re-seat. */
+    public final VSShipCrosser crosser = new VSShipCrosser();
     public final ShipEntryController entry;
     public final DescentController descent;
     public final CellCrossingController cellCrossings;
     public final AssemblyCrewRebind crewRebind = new AssemblyCrewRebind();
     public final SlotBindings slotBindings = new SlotBindings();
+    /** The sky producers' broadcast cadence and derived-content cache, for this server. */
+    public final SystemBodiesProducer skyProducer = new SystemBodiesProducer();
     private int gcTickCounter;
     /** Set by the pool-pressure eviction listener; consumed on the next server tick to run an extra GC. */
     private boolean pressureGcRequested;
+    /** Armed by {@link #armSaveFaultOnce()}; consumed by the next save point that reaches it. */
+    private boolean saveFaultArmed;
 
     /**
      * Wire a subsystem. <b>This is the ONE construction site</b>, and every {@code null} argument
@@ -107,7 +110,7 @@ public final class SpaceSubsystem {
         // world every subsystem parks in, so a per-subsystem allocator hands out lanes another one is
         // already using.
         this.transit = new ShipTransitManager(this.manager, dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.lanes(),
-                new VSShipCrosser(), this.ledger, useClock);
+                this.crosser, this.ledger, useClock);
         this.transit.setOfflineProgress(new OfflineProgress(
                 OfflineProgress.parseMode(cfg == null ? null : cfg.spaceTransitOfflineProgress),
                 SpaceSubsystem::isPlayerOnline));
@@ -739,7 +742,7 @@ public final class SpaceSubsystem {
      * total, which is the whole point of it and also why nothing can be made to break from outside.
      * Fired and disarmed by the first save that reaches it.
      */
-    public static void armSaveFaultOnce() {
+    public void armSaveFaultOnce() {
         saveFaultArmed = true;
     }
 
@@ -748,7 +751,7 @@ public final class SpaceSubsystem {
      * save point actually reached the fault — which matters because the save that can take the server
      * down is the world autosave, not one a command asked for.
      */
-    public static boolean isSaveFaultArmed() {
+    public boolean isSaveFaultArmed() {
         return saveFaultArmed;
     }
 
@@ -756,26 +759,11 @@ public final class SpaceSubsystem {
      * The armed fault, thrown from the middle of a save point's gather — where a mistake in that gather
      * would land, which is the one failure the handler undertakes to survive.
      */
-    static void failSavePointIfArmed() {
+    void failSavePointIfArmed() {
         if (saveFaultArmed) {
             saveFaultArmed = false;
             throw new IllegalStateException("armed ship-ledger save fault");
         }
-    }
-
-    /**
-     * Server-stop teardown of everything space keeps OUTSIDE the subsystem object. The subsystem
-     * itself is released by its owner ({@link Stellurgy}) — it is one object with one
-     * lifetime, and the server that is stopping is the one it belonged to. The space clock, the
-     * hyperspace world and the slot pool are released with the server's state.
-     */
-    public static void onServerStopped() {
-        saveFaultArmed = false;
-        SystemBodiesProducer.reset();
-        dev.stannismod.stellurgy.universe.SystemContent.reset();
-        // The diagnostics describe the stack that has just gone; carrying them into the next server
-        // is how "the last re-seat was blocked at X" ends up describing a jump from another session.
-        SpaceDiagnostics.reset();
     }
 
     /** Parse the {@code spaceCellGcPolicy} config string, defaulting to {@code BOTH} on an unknown value. */

@@ -13,7 +13,8 @@ public class AtmosphereRegister {
     private Map<String, IAtmosphere> atmosphereRegistration;
     private List<Fluid> harvestableAtmosphere;
     private List<IAtmosphere> atmosphereList;
-    private AtmosphereRegister() {
+    /** An empty register. The game's is {@link #getInstance()}; another is a caller's own, sharing nothing with it. */
+    public AtmosphereRegister() {
         atmosphereRegistration = new HashMap<>();
         atmosphereList = new LinkedList<>();
         harvestableAtmosphere = new LinkedList<>();

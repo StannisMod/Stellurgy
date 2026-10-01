@@ -96,7 +96,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
     public ActionResult<ItemStack> onItemRightClick(@Nonnull World worldIn, @Nonnull EntityPlayer playerIn, @Nonnull EnumHand hand) {
         ItemStack stack = playerIn.getHeldItem(hand);
         if (!worldIn.isRemote) {
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
             // Server side: no client report exists here, and the dimension is the authority anyway.
             List<ITextComponent> str = getAtmosphereReadout(stack,
                     atmhandler == null ? null : (AtmosphereType) atmhandler.getAtmosphereType(playerIn),

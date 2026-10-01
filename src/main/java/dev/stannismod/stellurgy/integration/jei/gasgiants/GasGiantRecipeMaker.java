@@ -75,7 +75,8 @@ public class GasGiantRecipeMaker {
                         planetName,
                         starName,
                         props.getPlanetIcon(),
-                        fluids
+                        fluids,
+                        helpers.getGuiHelper().getSlotDrawable()
                 ));
             }
         }

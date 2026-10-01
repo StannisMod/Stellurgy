@@ -11,6 +11,7 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties.Temps;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.OreGenProperties;
 import dev.stannismod.stellurgy.util.OreGenProperties.OreEntry;
+import dev.stannismod.stellurgy.util.OreGenTable;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -21,12 +22,11 @@ import static org.junit.Assert.assertTrue;
 /**
  *
  * {@link OreGenProperties} is the per-planet ore registry feeding
- * {@code ChunkProviderPlanet}. Its static [pressure][temperature] map is
- * mutated by mod init code, so tests must clear the cell they use to
- * avoid cross-test bleed. The class is otherwise a thin data carrier —
- * verify that:
+ * {@code ChunkProviderPlanet}, looked up through the server's
+ * [pressure][temperature] {@link OreGenTable}. Each test builds its own
+ * table, so nothing it writes reaches the server's. Verify that:
  *
- *   - the static {@code setOresForPressureAndTemp} key matches the
+ *   - the {@code setOresForPressureAndTemp} key matches the
  *     {@code getOresForPressure} lookup polarity (a swapped lookup
  *     silently routes ores to the wrong planet type);
  *   - {@code setOresForTemperature} truly sets all pressure rows for the
@@ -44,57 +44,55 @@ public class OreGenPropertiesTest {
         MinecraftBootstrap.ensure();
     }
 
+    private OreGenTable table;
+
     @Before
-    public void clearAllRows() {
-        for (AtmosphereTypes a : AtmosphereTypes.values()) {
-            for (Temps t : Temps.values()) {
-                OreGenProperties.setOresForPressureAndTemp(a, t, null);
-            }
-        }
+    public void freshTable() {
+        table = new OreGenTable();
     }
 
     @Test
     public void freshLookupReturnsNull() {
         assertNull("freshly cleared map cell should report null",
-                OreGenProperties.getOresForPressure(ATM, TEMP));
+                table.getOresForPressure(ATM, TEMP));
     }
 
     @Test
     public void setAndGetMatchOnSameKey() {
         OreGenProperties props = new OreGenProperties();
-        OreGenProperties.setOresForPressureAndTemp(ATM, TEMP, props);
+        table.setOresForPressureAndTemp(ATM, TEMP, props);
         assertSame("getOresForPressure must return the OreGenProperties just set",
-                props, OreGenProperties.getOresForPressure(ATM, TEMP));
+                props, table.getOresForPressure(ATM, TEMP));
     }
 
     @Test
     public void setOresForTemperatureSetsEveryPressureRow() {
         OreGenProperties props = new OreGenProperties();
-        OreGenProperties.setOresForTemperature(TEMP, props);
+        table.setOresForTemperature(TEMP, props);
         for (AtmosphereTypes a : AtmosphereTypes.values()) {
             assertSame("setOresForTemperature failed to fan out to pressure " + a,
-                    props, OreGenProperties.getOresForPressure(a, TEMP));
+                    props, table.getOresForPressure(a, TEMP));
         }
         // …but didn't leak into other temperatures.
         for (Temps other : Temps.values()) {
             if (other == TEMP) continue;
             assertNull("setOresForTemperature leaked into other temperature " + other,
-                    OreGenProperties.getOresForPressure(ATM, other));
+                    table.getOresForPressure(ATM, other));
         }
     }
 
     @Test
     public void setOresForPressureSetsEveryTemperatureRow() {
         OreGenProperties props = new OreGenProperties();
-        OreGenProperties.setOresForPressure(ATM, props);
+        table.setOresForPressure(ATM, props);
         for (Temps t : Temps.values()) {
             assertSame("setOresForPressure failed to fan out to temp " + t,
-                    props, OreGenProperties.getOresForPressure(ATM, t));
+                    props, table.getOresForPressure(ATM, t));
         }
         for (AtmosphereTypes other : AtmosphereTypes.values()) {
             if (other == ATM) continue;
             assertNull("setOresForPressure leaked into other atm " + other,
-                    OreGenProperties.getOresForPressure(other, TEMP));
+                    table.getOresForPressure(other, TEMP));
         }
     }
 
@@ -134,17 +132,17 @@ public class OreGenPropertiesTest {
         // multiple cells; this is a regression net for that.
         OreGenProperties hot = new OreGenProperties();
         OreGenProperties cold = new OreGenProperties();
-        OreGenProperties.setOresForPressureAndTemp(ATM, Temps.HOT, hot);
-        OreGenProperties.setOresForPressureAndTemp(ATM, Temps.COLD, cold);
-        assertSame(hot, OreGenProperties.getOresForPressure(ATM, Temps.HOT));
-        assertSame(cold, OreGenProperties.getOresForPressure(ATM, Temps.COLD));
-        // Refuse to use Temps.NORMAL — it's set by the before-each clear.
-        assertNull(OreGenProperties.getOresForPressure(ATM, Temps.NORMAL));
+        table.setOresForPressureAndTemp(ATM, Temps.HOT, hot);
+        table.setOresForPressureAndTemp(ATM, Temps.COLD, cold);
+        assertSame(hot, table.getOresForPressure(ATM, Temps.HOT));
+        assertSame(cold, table.getOresForPressure(ATM, Temps.COLD));
+        // Temps.NORMAL was never set on this test's fresh table.
+        assertNull(table.getOresForPressure(ATM, Temps.NORMAL));
     }
 
     @Test
     public void dimensionPropertiesEnumsAreNotEmpty() {
-        // Sanity: the [pressure][temperature] static map sizes itself by
+        // Sanity: the [pressure][temperature] table sizes itself by
         // these enum counts. Pin >0 so an accidental enum gutting blows up
         // here rather than at chunk-gen time.
         assertTrue("AtmosphereTypes enum must have at least 1 value",

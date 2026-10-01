@@ -53,7 +53,7 @@ public class BuildRocketTest extends BaseTest {
         buildRocket(world, player);
 
         try {
-            IngameTestOrchestrator.scheduleEvent(world, 150, BuildRocketTest.class.getDeclaredMethod("Phase2", World.class, EntityPlayer.class), this);
+            dev.stannismod.stellurgy.Stellurgy.serverState().ingameTests.scheduleEvent(world, 150, BuildRocketTest.class.getDeclaredMethod("Phase2", World.class, EntityPlayer.class), this);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -68,7 +68,7 @@ public class BuildRocketTest extends BaseTest {
         rocket.prepareLaunch();
 
         try {
-            IngameTestOrchestrator.scheduleEvent(world, 1500, BuildRocketTest.class.getDeclaredMethod("Phase3", World.class, EntityPlayer.class), this);
+            dev.stannismod.stellurgy.Stellurgy.serverState().ingameTests.scheduleEvent(world, 1500, BuildRocketTest.class.getDeclaredMethod("Phase3", World.class, EntityPlayer.class), this);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -85,7 +85,7 @@ public class BuildRocketTest extends BaseTest {
         ((EntityRocket) player.getRidingEntity()).prepareLaunch();
 
         try {
-            IngameTestOrchestrator.scheduleEvent(world, 1600, BuildRocketTest.class.getDeclaredMethod("Phase4", World.class, EntityPlayer.class), this);
+            dev.stannismod.stellurgy.Stellurgy.serverState().ingameTests.scheduleEvent(world, 1600, BuildRocketTest.class.getDeclaredMethod("Phase4", World.class, EntityPlayer.class), this);
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -49,6 +49,9 @@ import static org.junit.Assert.fail;
  */
 public class UniverseRegistryTest {
 
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
+
     /**
      * One and a half AU, in the field's own units — the orbit every body fixture below is placed at.
      *
@@ -74,13 +77,6 @@ public class UniverseRegistryTest {
         return s;
     }
 
-    /** Restore the JVM-global seams after any test that swapped them. */
-    @After
-    public void resetSeams() {
-        UniverseRegistry.detachGenerator();
-        UniverseRegistry.setStarLookup(null);
-    }
-
     @Test
     public void storageKeyIsStable() {
         // The .dat filename in the save; renaming silently orphans the whole placement store.
@@ -89,7 +85,7 @@ public class UniverseRegistryTest {
 
     @Test
     public void placeRoundTripsBothDirectionsInMemory() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         GalacticCoord cell = GalacticCoord.ofSectorLocal(3, -4, 5, 0, 0, 0);
         reg.place(cell, 7);
 
@@ -100,7 +96,7 @@ public class UniverseRegistryTest {
 
     @Test
     public void keysByCellNotExactPosition() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         // Place with a local-carrying coord; two positions in the same cell must resolve identically.
         GalacticCoord placed = GalacticCoord.ofSectorLocal(10, 20, 30, 100_000, -200_000, 300_000);
         reg.place(placed, 42);
@@ -122,14 +118,14 @@ public class UniverseRegistryTest {
 
     @Test
     public void overrideStoreRoundTripsThroughNbt() {
-        UniverseRegistry source = new UniverseRegistry();
+        UniverseRegistry source = testUniverse.newRegistry();
         source.place(GalacticCoord.ofSectorLocal(1, 1, 1, 0, 0, 0), 5);
         source.place(GalacticCoord.ofSectorLocal(-9, 0, 42, 0, 0, 0), 8);
 
         NBTTagCompound tag = new NBTTagCompound();
         source.writeToNBT(tag);
 
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
 
         assertEquals(Optional.of(GalacticCoord.ofSectorLocal(1, 1, 1, 0, 0, 0)), round.coordForSystem(5));
@@ -170,9 +166,9 @@ public class UniverseRegistryTest {
         body.baseOrbitTheta = 0.4;
         body.orbitalPhi = 0;
         body.setStar(host);
-        UniverseRegistry.setStarLookup(id -> id == 4321 ? host : null);
+        testUniverse.setStarLookup(id -> id == 4321 ? host : null);
 
-        UniverseRegistry source = new UniverseRegistry();
+        UniverseRegistry source = testUniverse.newRegistry();
         source.place(GalacticCoord.ORIGIN, 4321);
         Optional<GalacticCoord> namedAtFirstDerivation = source.coordForPlanet(body);
         assertTrue("the fixture must derive a name at all", namedAtFirstDerivation.isPresent());
@@ -184,7 +180,7 @@ public class UniverseRegistryTest {
         // change to this arithmetic. A recorded name must not notice.
         body.baseOrbitTheta = 2.9;
 
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
         round.place(GalacticCoord.ORIGIN, 4321);
 
@@ -195,7 +191,7 @@ public class UniverseRegistryTest {
 
         // The negative leg: a registry that loaded nothing derives from the CHANGED orbit instead,
         // which is what proves the assertion above is about persistence and not about determinism.
-        UniverseRegistry fresh = new UniverseRegistry();
+        UniverseRegistry fresh = testUniverse.newRegistry();
         fresh.place(GalacticCoord.ORIGIN, 4321);
         assertFalse("a fresh registry must derive the CHANGED orbit's name, or this test proves nothing",
                 namedAtFirstDerivation.equals(fresh.coordForPlanet(body)));
@@ -203,11 +199,11 @@ public class UniverseRegistryTest {
 
     @Test
     public void emptyRegistryRoundTripsToEmpty() {
-        UniverseRegistry source = new UniverseRegistry();
+        UniverseRegistry source = testUniverse.newRegistry();
         NBTTagCompound tag = new NBTTagCompound();
         source.writeToNBT(tag);
 
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
         assertFalse(round.coordForSystem(0).isPresent());
         assertFalse(round.starIdForCoord(GalacticCoord.ORIGIN).isPresent());
@@ -217,7 +213,7 @@ public class UniverseRegistryTest {
     public void reverseLookupViaStarProxyDimension() {
         // The dim->coord seam: a star's proxy dimension id (STAR_ID_OFFSET + starId) resolves to the
         // system's coordinate without touching the catalogue.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         GalacticCoord cell = GalacticCoord.ofSectorLocal(2, 2, 2, 0, 0, 0);
         reg.place(cell, 3);
 
@@ -229,7 +225,7 @@ public class UniverseRegistryTest {
 
     @Test
     public void removeDropsThePlacement() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         GalacticCoord cell = GalacticCoord.ofSectorLocal(6, 6, 6, 0, 0, 0);
         reg.place(cell, 11);
         assertTrue(reg.hasOverrideAt(cell));
@@ -242,7 +238,7 @@ public class UniverseRegistryTest {
 
     @Test
     public void rePlaceMovesTheSystemAndFreesTheOldCell() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         GalacticCoord first = GalacticCoord.ofSectorLocal(1, 0, 0, 0, 0, 0);
         GalacticCoord second = GalacticCoord.ofSectorLocal(2, 0, 0, 0, 0, 0);
         reg.place(first, 4);
@@ -256,7 +252,7 @@ public class UniverseRegistryTest {
 
     @Test
     public void collidingPlacementDisplacesTheOccupant() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         GalacticCoord cell = GalacticCoord.ofSectorLocal(7, 7, 7, 0, 0, 0);
         reg.place(cell, 1);
         reg.place(cell, 2); // one-system-per-cell: star 2 takes the cell, star 1 is displaced
@@ -280,11 +276,11 @@ public class UniverseRegistryTest {
     @Test
     public void systemForCoordPrefersStoredOverGenerator() {
         StellarBody stored = star(42);
-        UniverseRegistry.setStarLookup(id -> id == 42 ? stored : null);
+        testUniverse.setStarLookup(id -> id == 42 ? stored : null);
         // A generator that would claim EVERY cell — the stored placement must still win at its cell.
-        UniverseRegistry.attachGenerator(new AllClaimingGenerator(star(777)));
+        testUniverse.attachGenerator(new AllClaimingGenerator(star(777)));
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         GalacticCoord placedCell = GalacticCoord.ofSectorLocal(5, 5, 5, 0, 0, 0);
         reg.place(placedCell, 42);
 
@@ -311,11 +307,11 @@ public class UniverseRegistryTest {
         // Member semantics end-to-end through the registry: a system is a neighbourhood of cells round
         // its anchor, so a planet's own zone cell (and the void between bodies) resolves to the owning
         // system; the zone read returns exactly that cell's body.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.bindWorldSeed(0xBEEF);
         GalaxyGenConfig cfg = new GalaxyGenConfig(16, 0.9d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                 GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null);
-        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(cfg));
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(cfg));
 
         // Find an occupied super-cell and a non-star body of its system.
         GalacticCoord anchor = null;
@@ -363,11 +359,11 @@ public class UniverseRegistryTest {
 
     @Test
     public void pinOnTouchSnapshotsAProceduralSystemAgainstSeedChange() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.bindWorldSeed(1234L);
         GalaxyGenConfig cfg = new GalaxyGenConfig(8, 0.9d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                 GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null);
-        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(cfg));
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(cfg));
 
         GalacticCoord anchor = null;
         for (long sup = 0; sup < 8 && anchor == null; sup++) {
@@ -395,7 +391,7 @@ public class UniverseRegistryTest {
         // …and the pin round-trips through NBT (reads from the save, not the generator or catalogue).
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
         round.bindWorldSeed(999_999L);
         assertTrue(round.systemForCoord(anchor).isPresent());
@@ -405,7 +401,7 @@ public class UniverseRegistryTest {
 
     @Test
     public void systemForCoordIsEmptyOnVoidCellWithDefaultGenerator() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         assertFalse(reg.systemForCoord(GalacticCoord.ofSectorLocal(3, 3, 3, 0, 0, 0)).isPresent());
     }
 
@@ -417,7 +413,7 @@ public class UniverseRegistryTest {
         assertEquals(9, sys.systemId());
         assertSame(body, sys.star().get());
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         assertFalse("an unregistered system has no coord", reg.coordForStar(body).isPresent());
         reg.place(GalacticCoord.ofSectorLocal(8, 8, 8, 0, 0, 0), 9);
         assertTrue(reg.coordForStar(body).isPresent());
@@ -425,7 +421,7 @@ public class UniverseRegistryTest {
 
     @Test
     public void anchorsDrainOnceThenPersistedStoreWins() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         Map<Integer, GalacticAnchor> anchors = new HashMap<>();
         anchors.put(1, GalacticAnchor.inHome(GalacticCoord.ofSectorLocal(1, 0, 0, 0, 0, 0)));
         anchors.put(2, GalacticAnchor.inHome(GalacticCoord.ofSectorLocal(2, 0, 0, 0, 0, 0)));
@@ -448,12 +444,12 @@ public class UniverseRegistryTest {
 
     @Test
     public void anchorsSeededLatchPersistsThroughNbt() {
-        UniverseRegistry source = new UniverseRegistry();
+        UniverseRegistry source = testUniverse.newRegistry();
         source.applyAnchors(new HashMap<>(), false); // seeds the latch even with no anchors
 
         NBTTagCompound tag = new NBTTagCompound();
         source.writeToNBT(tag);
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
 
         // The latch survived, so a fresh anchor drain is ignored (persisted store wins across restarts).
@@ -466,7 +462,7 @@ public class UniverseRegistryTest {
 
     @Test
     public void fallbackCoordsAreTotalAndCollisionFree() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         // Sol (id 0) is pre-placed at the origin by an anchor; a fallback for another star must not evict it.
         reg.place(GalacticCoord.ORIGIN, 0);
 
@@ -497,20 +493,20 @@ public class UniverseRegistryTest {
 
     @Test
     public void worldSeedIsTransientAndNotPersisted() {
-        UniverseRegistry source = new UniverseRegistry();
+        UniverseRegistry source = testUniverse.newRegistry();
         source.bindWorldSeed(123456789L);
         assertEquals(123456789L, source.worldSeed());
 
         NBTTagCompound tag = new NBTTagCompound();
         source.writeToNBT(tag);
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
         assertEquals("the seed is re-derived on load, never persisted", 0L, round.worldSeed());
     }
 
     @Test
     public void poiStoreRoundTripsThroughNbt() {
-        UniverseRegistry source = new UniverseRegistry();
+        UniverseRegistry source = testUniverse.newRegistry();
         GalacticCoord sys = GalacticCoord.ofSectorLocal(3, 3, 3, 0, 0, 0);
         source.addPoi(SystemBody.fixedAt(GalacticCoord.ofSectorLocal(3, 3, 3, 50_000, 0, 0),
                 SystemBodyKind.STATION_SLOT, Constants.INVALID_PLANET, 7));
@@ -520,7 +516,7 @@ public class UniverseRegistryTest {
 
         NBTTagCompound tag = new NBTTagCompound();
         source.writeToNBT(tag);
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
 
         List<SystemBody> pois = round.poisAt(sys);
@@ -531,15 +527,15 @@ public class UniverseRegistryTest {
 
     @Test
     public void bodiesAtIsEmptyOnVoidCellWithDefaultGenerator() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         assertTrue(reg.bodiesAt(GalacticCoord.ofSectorLocal(9, 9, 9, 0, 0, 0)).isEmpty());
     }
 
     @Test
     public void bodiesAtMergesProceduralBodiesAndPois() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.bindWorldSeed(0xABCDEFL);
-        UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(new GalaxyGenConfig(1, 0.9d,
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new GalaxyGenConfig(1, 0.9d,
                 GalaxyGenConfig.DEFAULT_GALAXY_SPACING, GalaxyGenConfig.DEFAULT_GALAXY_DENSITY,
                 null, null)));
 
@@ -601,9 +597,9 @@ public class UniverseRegistryTest {
         sol.setSize(1f);
         StellarBody other = star(6002);
         other.setSize(1f);
-        UniverseRegistry.setStarLookup(id -> id == 6001 ? sol : (id == 6002 ? other : null));
+        testUniverse.setStarLookup(id -> id == 6001 ? sol : (id == 6002 ? other : null));
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 6001);
         reg.place(GalacticCoord.ofSectorLocal(ANOTHER_SUPER_CELL, 0, 0, 0, 0, 0), 6002);
 
@@ -637,8 +633,8 @@ public class UniverseRegistryTest {
     public void forgettingADimensionDropsItsRecordedName() {
         StellarBody sol = star(6003);
         sol.setSize(1f);
-        UniverseRegistry.setStarLookup(id -> id == 6003 ? sol : null);
-        UniverseRegistry reg = new UniverseRegistry();
+        testUniverse.setStarLookup(id -> id == 6003 ? sol : null);
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 6003);
         reg.coordForPlanet(bodyOfStar(sol, 6101, AU_AND_A_HALF, 0.3));
 
@@ -661,10 +657,10 @@ public class UniverseRegistryTest {
     public void aRecordedNameThatLeftItsSystemsBoxIsReDerivedRatherThanServed() {
         StellarBody host = star(6004);
         host.setSize(1f);
-        UniverseRegistry.setStarLookup(id -> id == 6004 ? host : null);
+        testUniverse.setStarLookup(id -> id == 6004 ? host : null);
         DimensionProperties body = bodyOfStar(host, 6102, AU_AND_A_HALF, 0.3);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 6004);
         Optional<GalacticCoord> underOldAnchor = reg.coordForPlanet(body);
         assertTrue(underOldAnchor.isPresent());
@@ -699,10 +695,10 @@ public class UniverseRegistryTest {
     public void aRecordedNameInsideItsBoxSurvivesASmallAnchorMove() {
         StellarBody host = star(6005);
         host.setSize(1f);
-        UniverseRegistry.setStarLookup(id -> id == 6005 ? host : null);
+        testUniverse.setStarLookup(id -> id == 6005 ? host : null);
         DimensionProperties body = bodyOfStar(host, 6103, AU_AND_A_HALF, 0.3);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 6005);
         Optional<GalacticCoord> first = reg.coordForPlanet(body);
         assertTrue(first.isPresent());
@@ -731,10 +727,10 @@ public class UniverseRegistryTest {
     public void aBodyCellRidesItsPrimaryWhileAVoidCellStandsStill() {
         StellarBody host = star(6006);
         host.setSize(1f);
-        UniverseRegistry.setStarLookup(id -> id == 6006 ? host : null);
+        testUniverse.setStarLookup(id -> id == 6006 ? host : null);
         DimensionProperties body = bodyOfStar(host, 6104, AU_AND_A_HALF, 0.3);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 6006);
         Optional<GalacticCoord> name = reg.coordForPlanet(body);
         assertTrue(name.isPresent());
@@ -764,10 +760,10 @@ public class UniverseRegistryTest {
     public void theSkyFeedUnionsTheSystemWithTheObserversOwnCell() {
         StellarBody host = star(6007);
         host.setSize(1f);
-        UniverseRegistry.setStarLookup(id -> id == 6007 ? host : null);
+        testUniverse.setStarLookup(id -> id == 6007 ? host : null);
         DimensionProperties body = bodyOfStar(host, 6105, AU_AND_A_HALF, 0.3);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 6007);
         reg.coordForPlanet(body); // record the name
 
@@ -804,7 +800,7 @@ public class UniverseRegistryTest {
     /** Interstellar void — a cell no anchor attributes — is fed the union's EMPTY case. */
     @Test
     public void interstellarVoidIsFedNothing() {
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 6008);
         GalacticCoord farAway = GalacticCoord.ofSectorLocal(ANOTHER_SUPER_CELL, 0, 0, 0, 0, 0);
         assertFalse("the fixture's cell must belong to no system",
@@ -828,7 +824,7 @@ public class UniverseRegistryTest {
     public void aFreshWorldTakesTheCurrentModelAndRecordsIt() {
         // Nothing to reconcile against: a new world is generated under whatever this build ships, and
         // that fact is written down so the NEXT load has something to check.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         assertEquals("a world with no history carries no stamp", UniverseRegistry.UNSTAMPED,
                 reg.schemaVersion());
 
@@ -844,12 +840,12 @@ public class UniverseRegistryTest {
 
     @Test
     public void theModelAWorldWasGeneratedUnderSurvivesASave() {
-        UniverseRegistry source = new UniverseRegistry();
+        UniverseRegistry source = testUniverse.newRegistry();
         source.reconcileSchema(packConfig());
 
         NBTTagCompound tag = new NBTTagCompound();
         source.writeToNBT(tag);
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
 
         assertEquals("the schema version must outlive the session", source.schemaVersion(),
@@ -862,12 +858,12 @@ public class UniverseRegistryTest {
     public void theSameConfigurationOpensTheWorldUnchanged() {
         // The ordinary case, and the one that must never cost the player anything: same pack, same
         // build, second boot.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
 
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
-        UniverseRegistry reopened = new UniverseRegistry();
+        UniverseRegistry reopened = testUniverse.newRegistry();
         reopened.readFromNBT(tag);
 
         UniverseSchema schema = reopened.reconcileSchema(packConfig());
@@ -879,11 +875,11 @@ public class UniverseRegistryTest {
     public void aRetunedConfigurationIsRefusedRatherThanSubstituted() {
         // The defect this whole stamp exists for: a pack edit silently re-deriving every system a
         // player has not visited. It must stop the load, not warn into a log nobody reads.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
-        UniverseRegistry reopened = new UniverseRegistry();
+        UniverseRegistry reopened = testUniverse.newRegistry();
         reopened.readFromNBT(tag);
 
         try {
@@ -903,12 +899,12 @@ public class UniverseRegistryTest {
         // A save from a newer jar. There is no honest way to open it: this build cannot reproduce the
         // universe it describes, and deriving a different one under the same save is the silent
         // corruption the refusal exists to prevent.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
         tag.setInteger("schemaVersion", 9999);
         tag.setString("galaxyConfigFingerprint", packConfig().fingerprint());
-        UniverseRegistry fromTheFuture = new UniverseRegistry();
+        UniverseRegistry fromTheFuture = testUniverse.newRegistry();
         fromTheFuture.readFromNBT(tag);
 
         try {
@@ -924,7 +920,7 @@ public class UniverseRegistryTest {
     public void anUpgradeAcceptsTheNewConfigurationDeliberately() {
         // The door out of the refusal above: the player asks for it, and afterwards the world opens
         // under what the pack now says.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
 
         reg.adoptSchema(retunedConfig());
@@ -940,7 +936,7 @@ public class UniverseRegistryTest {
     public void theLawsAWorldWasGeneratedUnderAreRecordedTheSameWay() {
         // The metric and the expansion are stamped, not versioned by implementation: a changed metric
         // means every address denotes a different distance, which no existing world can be RUN under.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
 
         assertEquals("a fresh world records the laws it was generated under",
@@ -948,7 +944,7 @@ public class UniverseRegistryTest {
 
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
-        UniverseRegistry round = new UniverseRegistry();
+        UniverseRegistry round = testUniverse.newRegistry();
         round.readFromNBT(tag);
         assertEquals("and they outlive the session", reg.lawsFingerprint(), round.lawsFingerprint());
     }
@@ -973,7 +969,7 @@ public class UniverseRegistryTest {
         assertEquals("arrangement: NBT must indeed default an absent integer to zero",
                 0, bare.getInteger("schemaVersion"));
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.readFromNBT(bare);
 
         assertEquals("a save with no stamp must read as UNSTAMPED, not as the alpha",
@@ -986,13 +982,13 @@ public class UniverseRegistryTest {
     public void anAlphaWorldIsRecognisedAsStampedAfterAReload() {
         // The other half of the same trap: a world genuinely generated under version 0 must come back
         // as version 0, not as "never stamped".
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
         assertEquals("arrangement: the fresh world takes the alpha", 0, reg.schemaVersion());
 
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
-        UniverseRegistry reopened = new UniverseRegistry();
+        UniverseRegistry reopened = testUniverse.newRegistry();
         reopened.readFromNBT(tag);
 
         assertEquals("an alpha world must reload as the alpha", 0, reopened.schemaVersion());
@@ -1085,12 +1081,12 @@ public class UniverseRegistryTest {
         // worlds simply do not use. So a mismatch here is not a player's situation at all — it says this
         // jar's schema 1 is not the schema 1 that made the world, and nobody downstream can accept that
         // away.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
         tag.setString("universeLawsFingerprint", "0000deadbeef0000");
-        UniverseRegistry otherLaws = new UniverseRegistry();
+        UniverseRegistry otherLaws = testUniverse.newRegistry();
         otherLaws.readFromNBT(tag);
 
         try {
@@ -1111,13 +1107,13 @@ public class UniverseRegistryTest {
         // The one door that must NOT open. A configuration is the pack author's to change and an
         // operator may accept it; a released version's laws moving is a broken build, and accepting it
         // would silently re-measure everything the world already holds.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
         reg.armUpgrade();
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
         tag.setString("universeLawsFingerprint", "0000deadbeef0000");
-        UniverseRegistry brokenBuild = new UniverseRegistry();
+        UniverseRegistry brokenBuild = testUniverse.newRegistry();
         brokenBuild.readFromNBT(tag);
 
         try {
@@ -1133,13 +1129,13 @@ public class UniverseRegistryTest {
         // The remedy has to outlive the session that authorised it: a changed <galaxyGen> stops the
         // load, so the permission is given while the world still opens and spent at the boot after.
         // Once — a second edit is a second decision.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
         reg.armUpgrade();
 
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
-        UniverseRegistry nextBoot = new UniverseRegistry();
+        UniverseRegistry nextBoot = testUniverse.newRegistry();
         nextBoot.readFromNBT(tag);
         assertTrue("the permission must survive the restart it exists to cross",
                 nextBoot.isUpgradeArmed());
@@ -1164,7 +1160,7 @@ public class UniverseRegistryTest {
     public void anArmedWorldWhoseConfigurationDidNotChangeKeepsItsPermission() {
         // Arming is not a countdown: a world that boots unchanged has spent nothing, and the operator
         // who armed it can still make the edit he armed it for.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(packConfig());
         reg.armUpgrade();
 
@@ -1177,7 +1173,7 @@ public class UniverseRegistryTest {
     public void anAuthoredOnlyUniverseHasAModelOfItsOwn() {
         // No <galaxyGen> is a legitimate world, not a missing configuration — and it is a DIFFERENT
         // world from one that declares a generator, so the two must not share a fingerprint.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.reconcileSchema(null);
 
         assertEquals("an authored-anchors-only world is stamped like any other",

@@ -89,7 +89,6 @@ public class LibVulpes {
 	public static final String REGISTRY_DOMAIN = "libvulpes";
 
 	public static org.apache.logging.log4j.Logger logger = LogManager.getLogger("libVulpes");
-	public static int time = 0;
 	private static HashMap<Class, String> userModifiableRecipes = new HashMap<>();
 
 	//Classload
@@ -501,11 +500,6 @@ public class LibVulpes {
 			}
 		}
 
-	}
-
-	@SubscribeEvent
-	public void tick(TickEvent.ServerTickEvent event) {
-		time++;
 	}
 }
 

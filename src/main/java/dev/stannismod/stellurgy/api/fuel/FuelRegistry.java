@@ -101,7 +101,9 @@ public class FuelRegistry {
         WARP(5),        //Used in interstellar missions
         IMPULSE(6);    //Used in interplanetary missions
 
-        //Stores a fuel entry for each type of fuel
+        //Stores a fuel entry for each type of fuel. Effectively final for the life of the side: filled
+        //by the mod's postInit config load (and add-ons through FuelRegistry in the init phases),
+        //only read afterwards.
         final HashSet<FuelEntry> fuels;
         public final int id;
 

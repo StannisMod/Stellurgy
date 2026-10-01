@@ -28,8 +28,9 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * which the sided proxy hands server logic the client implementation. This harness has no such tier:
  * every test here runs against a real DEDICATED server, whose proxy honours the dimension argument
  * and is therefore already correct. So what is reproduced is the DRIVER rather than the condition —
- * an accessor answering with a clock that is not the space clock — installed by
- * {@code stellurgytest space aim-clock lag}. The final word on the single-player symptom stays a playtest.
+ * the clock that accessor answers with standing apart from the space clock — by moving the
+ * overworld's clock ({@code stellurgytest space set-world-clock}), which is what that accessor reads
+ * here. The final word on the single-player symptom stays a playtest.
  *
  * <h2>The two legs, and why the first one is not optional</h2>
  * Leg&nbsp;B alone ("the aim did not move") is satisfied by an aim that never moves for any reason —
@@ -95,6 +96,8 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
                 Reply.of(aimed).ok());
 
         long clockBefore = jsonLong(exec("stellurgytest space frame 0 0 0"), "clock");
+        // How far leg B moved the overworld's clock back, so the finally can move it forward again.
+        long overworldShift = 0L;
         try {
             // ---- LEG A: the positive control. Move the SPACE clock; the aim must follow it. ----
             exec("stellurgytest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
@@ -114,17 +117,23 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
                     controlMove > 1_000.0);
 
             // ---- LEG B: the contract. Move a clock that is NOT the space clock. Nothing may follow. ----
-            String lagged = exec("stellurgytest space aim-clock lag " + SPLIT_TICKS);
-            assertTrue("the lagging proxy must install: " + lagged, Reply.of(lagged).ok());
+            // The clock the defective aim read was proxy.getWorldTimeUniversal(0), which on this
+            // tier's dedicated server IS the overworld's total time: putting the overworld SPLIT_TICKS
+            // behind the space clock reproduces the driver without replacing anything.
+            long overworldNow = jsonLong(moved, "overworld");
+            long spaceNow = jsonLong(moved, "spaceClock");
+            String lagged = exec("stellurgytest space set-world-clock " + (spaceNow - SPLIT_TICKS));
+            assertTrue("the overworld clock must move: " + lagged, Reply.of(lagged).ok());
+            overworldShift = jsonLong(lagged, "overworld") - overworldNow;
 
             // Measure the INPUT before asserting the outcome: a green bought by an arrangement that
             // silently failed to diverge is the failure mode this line exists to make impossible.
             long spaceClock = jsonLong(lagged, "spaceClock");
-            long proxyClock = jsonLong(lagged, "proxyClock");
+            long worldClock = jsonLong(lagged, "overworld");
             requireArranged("the two clocks must actually be " + SPLIT_TICKS + " ticks apart"
                             + " before anything is concluded from the aim. spaceClock=" + spaceClock
-                            + " proxyClock=" + proxyClock + " split=" + (spaceClock - proxyClock),
-                    spaceClock - proxyClock == SPLIT_TICKS);
+                            + " overworld=" + worldClock + " split=" + (spaceClock - worldClock),
+                    spaceClock - worldClock == SPLIT_TICKS);
 
             exec("stellurgytest nav refresh 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
             String afterLag = exec("stellurgytest nav status 0 " + NAV_X + " " + NAV_Y + " " + NAV_Z);
@@ -134,7 +143,7 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
             double allowed = Math.max(ALLOWED_DRIFT_FLOOR_BLOCKS,
                     controlMove * ALLOWED_DRIFT_FRACTION_OF_CONTROL);
             assertTrue("THE CONTRACT: an aim is evaluated on the SPACE clock, so a clock"
-                            + " that is not the space clock may not move it. A proxy answering "
+                            + " that is not the space clock may not move it. An overworld clock "
                             + SPLIT_TICKS + " ticks behind moved the aim " + drift + " blocks —"
                             + " that is " + (drift / controlMove * 100d) + "% of the " + controlMove
                             + " blocks the RIGHT clock moves it, and at most "
@@ -143,10 +152,13 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
                             + " not a dead instrument. status=" + afterLag,
                     drift <= allowed);
         } finally {
-            // This server is shared with every other test in the fork: a left-behind proxy or an
-            // aged clock is exactly the state that fails somebody else three classes later.
-            exec("stellurgytest space aim-clock off");
-            exec("stellurgytest space set-clock " + clockBefore);
+            // This server is shared with every other test in the fork: a shifted world clock or an
+            // aged space clock is exactly the state that fails somebody else three classes later.
+            String restored = exec("stellurgytest space set-clock " + clockBefore);
+            if (overworldShift != 0L) {
+                exec("stellurgytest space set-world-clock "
+                        + (jsonLong(restored, "overworld") - overworldShift));
+            }
         }
     }
 

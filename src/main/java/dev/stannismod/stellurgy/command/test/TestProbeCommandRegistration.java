@@ -49,10 +49,11 @@ public final class TestProbeCommandRegistration {
         if (!isTestMode()) {
             return;
         }
-        event.registerServerCommand(new TestProbeCommand());
+        TestProbeCommand command = new TestProbeCommand();
+        event.registerServerCommand(command);
         // register the rocket-event recorder at server start so
         // counters are accurate from the first rocket lifecycle event.
-        TestProbeCommand.RocketEventRecorder.ensureRegistered();
+        command.rocketEvents.ensureRegistered();
         // The ordered event log. Subscribed here and nowhere else, so a shipped game has no
         // subscriber, builds no record and pays nothing for what only a test wants to see.
         TestEventLog.ServerRecorder.ensureRegistered();

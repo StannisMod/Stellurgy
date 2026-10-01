@@ -221,7 +221,10 @@ public class RecipesMachine {
 
 	public HashMap<Class<? extends TileMultiblockMachine>, List<IRecipe>> recipeList;
 
-	private static RecipesMachine instance = new RecipesMachine();
+	/** The game's recipe tables. Never replaced; {@link #recipeList} is filled by the mod in its init
+	 *  phases and read for the life of the side, rewritten only by the operator's /reloadrecipes, a
+	 *  partial re-initialisation of the mod and the sanctioned exception to statics being written once. */
+	private static final RecipesMachine instance = new RecipesMachine();
 
 	public RecipesMachine() {
 		recipeList = new HashMap<>();

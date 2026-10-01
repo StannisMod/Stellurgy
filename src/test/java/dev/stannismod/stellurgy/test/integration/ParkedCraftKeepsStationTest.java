@@ -39,6 +39,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class ParkedCraftKeepsStationTest {
 
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
+
     /**
      * How far the body must travel while the craft is abandoned, in blocks.
      *
@@ -220,7 +223,7 @@ public class ParkedCraftKeepsStationTest {
      * behind is the moon's own orbital speed, and a fixture moon on an invented orbit would answer
      * about itself rather than about the system every player meets first.</p>
      */
-    private static UniverseRegistry registryWithEarthAndLuna() {
+    private UniverseRegistry registryWithEarthAndLuna() {
         StellarBody star = new StellarBody();
         star.setId(STAR_ID);
         star.setName("Sol");
@@ -252,15 +255,10 @@ public class ParkedCraftKeepsStationTest {
 
         // The registry that NAMES these bodies and says which frame each cell rides — the same
         // resolution production does, rather than a list of bodies whose frames the test picks.
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, STAR_ID);
-        UniverseRegistry.setStarLookup(id -> id == STAR_ID ? star : null);
+        testUniverse.setStarLookup(id -> id == STAR_ID ? star : null);
         return reg;
-    }
-
-    @After
-    public void unwireTheStarLookup() {
-        UniverseRegistry.setStarLookup(null);
     }
 
     /**

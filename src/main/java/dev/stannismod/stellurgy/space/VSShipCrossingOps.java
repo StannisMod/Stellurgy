@@ -66,6 +66,9 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
      */
     private final java.util.Set<java.util.UUID> crewAlreadySeated = new java.util.HashSet<>();
 
+    /** Why this seam's last re-seat did not seat its whole crew, or {@code ""} when it did. */
+    private String lastReseatBlock = "";
+
     @Override
     public List<CrewTransfer.Crew> captureCrew(int dimId, BlockPos afcPos, double[] shipWorldPos,
                                                java.util.UUID shipId) {
@@ -172,10 +175,14 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
         // keep a pilot standing in a world his ship has left — a far worse trade than a lost item.
         boolean bodiesPlaced = releaseStowed(world, anchor, shipId, vsShipUuid);
         boolean crewSeated = shipId != null && crewAlreadySeated.contains(shipId);
-        if (!crewSeated && CrewTransfer.reseat(world, anchor, crew, shipId, vsShipUuid)) {
-            crewSeated = true;
-            if (shipId != null) {
-                crewAlreadySeated.add(shipId);
+        if (!crewSeated) {
+            CrewTransfer.Reseat reseat = CrewTransfer.reseat(world, anchor, crew, shipId, vsShipUuid);
+            lastReseatBlock = reseat.block;
+            if (reseat.seated) {
+                crewSeated = true;
+                if (shipId != null) {
+                    crewAlreadySeated.add(shipId);
+                }
             }
         }
         if (bodiesPlaced && crewSeated) {
@@ -385,7 +392,7 @@ public final class VSShipCrossingOps implements ShipCrossingService.Ops {
 
     @Override
     public String settleDiagnostics() {
-        return CrewTransfer.lastReseatBlock();
+        return lastReseatBlock;
     }
 
     @Override

@@ -40,13 +40,13 @@ public class UniverseStatusCommand extends StellurgyCommand {
         if (registry == null) {
             throw new CommandException("commands.stellurgy.universe.unavailable");
         }
-        GalaxyGenConfig pack = UniverseRegistry.packGalaxyConfig();
+        GalaxyGenConfig pack = dev.stannismod.stellurgy.Stellurgy.serverDimensions().getPackGalaxyConfig();
         String packFingerprint = UniverseRegistry.fingerprintOf(pack);
 
         sender.sendMessage(new TextComponentTranslation(
                 "commands.stellurgy.universe.status.schema",
                 registry.schemaVersion(), UniverseSchemas.CURRENT));
-        UniverseRegistry.activeSchema().ifPresent(schema -> sender.sendMessage(
+        registry.activeSchema().ifPresent(schema -> sender.sendMessage(
                 new TextComponentTranslation(schema.isStable()
                         ? "commands.stellurgy.universe.status.stable"
                         : "commands.stellurgy.universe.status.alpha", schema.label())));

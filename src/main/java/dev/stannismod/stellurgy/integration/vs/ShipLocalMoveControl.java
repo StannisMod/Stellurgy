@@ -20,30 +20,29 @@ import net.minecraft.entity.Entity;
  *   <li>{@link Mode#SHIP_FRAME} - fire, resolve movement in the ship's frame, cancel. The real path.</li>
  * </ul>
  *
- * <p><b>Inert by default</b>, then only for the one entity id it was given, and only server-side.
- * All state is {@code volatile}: written from a command thread, read on the server tick.</p>
+ * <p><b>Inert by default</b>, then only for the one entity id it was given. One per server
+ * ({@code ServerState#shipLocalMove}), so an experiment left armed ends with its server. All state is
+ * {@code volatile}: written from a command thread, read on the server tick.</p>
  */
 public final class ShipLocalMoveControl {
-
-    private ShipLocalMoveControl() {}
 
     /** What the {@code Entity.move} hook does for the target entity. */
     public enum Mode { OFF, OBSERVE, CANCEL, SHIP_FRAME }
 
-    private static volatile Mode mode = Mode.OFF;
+    private volatile Mode mode = Mode.OFF;
     /** The one entity whose move is intercepted; -1 means none. */
-    private static volatile int targetEntityId = -1;
+    private volatile int targetEntityId = -1;
     /** How many times the hook has fired since the last {@link #enable}. */
-    private static volatile int fires = 0;
+    private volatile int fires = 0;
     /**
      * The entity's position in its ship's frame. In {@link Mode#SHIP_FRAME} this is the
      * AUTHORITATIVE position: the world position is derived from it through the ship transform every
      * tick, which is what makes the entity ride the ship instead of being left behind by it.
      */
-    private static volatile double[] shipFramePos = null;
+    private volatile double[] shipFramePos = null;
 
     /** Arm the hook for {@code entityId} in {@code newMode}. */
-    public static void enable(int entityId, Mode newMode) {
+    public void enable(int entityId, Mode newMode) {
         targetEntityId = entityId;
         fires = 0;
         shipFramePos = null;
@@ -51,49 +50,46 @@ public final class ShipLocalMoveControl {
     }
 
     /** Disarm; the hook becomes a no-op again. */
-    public static void disable() {
+    public void disable() {
         mode = Mode.OFF;
         targetEntityId = -1;
         shipFramePos = null;
     }
 
-    /**
-     * Whether the hook should act for {@code entity}. Server-side only: the client keeps predicting
-     * with vanilla rules, so a mistake here cannot strand a player, only desync him for a tick.
-     */
-    public static boolean shouldTakeOver(Entity entity) {
-        if (mode == Mode.OFF || entity == null || entity.world == null || entity.world.isRemote) {
+    /** Whether the hook should act for {@code entity}, a server entity. */
+    public boolean shouldTakeOver(Entity entity) {
+        if (mode == Mode.OFF || entity == null) {
             return false;
         }
         return entity.getEntityId() == targetEntityId;
     }
 
-    public static Mode getMode() {
+    public Mode getMode() {
         return mode;
     }
 
-    public static void markFired() {
+    public void markFired() {
         fires++;
     }
 
-    public static boolean isEnabled() {
+    public boolean isEnabled() {
         return mode != Mode.OFF;
     }
 
-    public static int getTargetEntityId() {
+    public int getTargetEntityId() {
         return targetEntityId;
     }
 
-    public static int getFires() {
+    public int getFires() {
         return fires;
     }
 
     /** The authoritative ship-frame position, or null before the first resolved tick. */
-    public static double[] getShipFramePos() {
+    public double[] getShipFramePos() {
         return shipFramePos;
     }
 
-    public static void setShipFramePos(double x, double y, double z) {
+    public void setShipFramePos(double x, double y, double z) {
         shipFramePos = new double[]{x, y, z};
     }
 }

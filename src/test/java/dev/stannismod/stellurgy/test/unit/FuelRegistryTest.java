@@ -2,7 +2,10 @@ package dev.stannismod.stellurgy.test.unit;
 
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.Fluid;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
+import dev.stannismod.stellurgy.api.fuel.FuelRegistrations;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
 
@@ -15,11 +18,22 @@ import static org.junit.Assert.assertTrue;
  * FuelRegistry.
  *
  * Pure logic — uses raw {@link Fluid} instances (no FluidRegistry / item registry
- * required). The registry holds entries inside enum constants, so each test must
- * choose a unique fuel instance to avoid leaking state between tests in the same
- * JVM (the registry is a process-wide singleton via {@code FuelType.fuels}).
+ * required). The registry holds entries inside enum constants, which every test in
+ * the JVM shares, so each test takes back what it registered when it ends.
  */
 public class FuelRegistryTest {
+
+    private FuelRegistrations registrations;
+
+    @Before
+    public void rememberFuels() {
+        registrations = FuelRegistrations.remember();
+    }
+
+    @After
+    public void restoreFuels() {
+        registrations.close();
+    }
 
     private static final ResourceLocation STILL = new ResourceLocation("stellurgy", "test_still");
     private static final ResourceLocation FLOW = new ResourceLocation("stellurgy", "test_flow");

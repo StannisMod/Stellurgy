@@ -20,7 +20,6 @@ import dev.stannismod.stellurgy.api.satellite.IDataHandler;
 import dev.stannismod.stellurgy.block.BlockTransceiver;
 import dev.stannismod.stellurgy.wirelessdata.DataNetwork;
 import dev.stannismod.stellurgy.wirelessdata.HandlerDataNetwork;
-import dev.stannismod.stellurgy.wirelessdata.NetworkRegistry;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.inventory.modules.ModuleNumericTextboxWithTooltip;
 import dev.stannismod.stellurgy.inventory.modules.ModuleWirelessBufferBar;
@@ -153,7 +152,7 @@ public class TileWirelessTransceiver extends TileEntity implements INetworkMachi
     }
 
     private HandlerDataNetwork nets() {
-        return NetworkRegistry.dataNetwork(world);
+        return dev.stannismod.stellurgy.Stellurgy.serverState().wirelessNetworks(world);
     }
 
     private int getEffectiveTransferInterval() {

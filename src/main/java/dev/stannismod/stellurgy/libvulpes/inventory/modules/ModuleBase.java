@@ -47,8 +47,15 @@ public abstract class ModuleBase {
 		visible = true;
 	}
 
+	/**
+	 * The running server's tick count. A client container reaches here only through vanilla's drag
+	 * handling in {@code slotClick}, has no listeners to send to, and runs no server when connected
+	 * remotely: it is answered 0, which is what the counter this replaced always read there.
+	 */
 	protected long getCurrentTime() {
-		return LibVulpes.time;
+		net.minecraft.server.MinecraftServer server =
+				net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance();
+		return server == null ? 0 : server.getTickCounter();
 	}
 	
 	public int getSizeX() {

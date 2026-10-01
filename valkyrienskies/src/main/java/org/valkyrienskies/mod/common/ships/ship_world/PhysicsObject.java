@@ -50,7 +50,7 @@ public class PhysicsObject implements IPhysicsEntity {
     // The number of ticks we wait before enabling physics. I use 20 because I'm very paranoid of ships falling through the ground.
     private static final int DISABLE_PHYSICS_FOR_X_INITIAL_TICKS = 20;
     // Before we start dragging entities with the ship, Wait this number of ticks after a ship has been teleported using "/vs tp-ship-to" commands.
-    public static int TICKS_SINCE_TELEPORT_TO_START_DRAGGING = 50;
+    public static final int TICKS_SINCE_TELEPORT_TO_START_DRAGGING = 50;
     // region Fields
     private final List<EntityPlayerMP> watchingPlayers;
     private final Set<IPhysicsBlockController> physicsControllers;

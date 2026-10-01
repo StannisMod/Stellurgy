@@ -83,10 +83,13 @@ public class SatelliteRegistryFallbackTest {
      *  unit-tier-friendly stand-in (no Bootstrap dependency). */
     @Test
     public void knownSatelliteTypeProducesNonNullInstance() {
-        SatelliteRegistry.registerSatellite(KNOWN_TYPE_KEY, TestStandInSatellite.class);
-        SatelliteBase result = SatelliteRegistry.getNewSatellite(KNOWN_TYPE_KEY);
-        assertNotNull("registered type must resolve via SatelliteRegistry — "
-                        + "if this fails the registry dispatch itself is broken",
-                result);
+        try (dev.stannismod.stellurgy.api.SatelliteRegistryArrangement ignored =
+                     dev.stannismod.stellurgy.api.SatelliteRegistryArrangement.registerSatellite(
+                             KNOWN_TYPE_KEY, TestStandInSatellite.class)) {
+            SatelliteBase result = SatelliteRegistry.getNewSatellite(KNOWN_TYPE_KEY);
+            assertNotNull("registered type must resolve via SatelliteRegistry — "
+                            + "if this fails the registry dispatch itself is broken",
+                    result);
+        }
     }
 }

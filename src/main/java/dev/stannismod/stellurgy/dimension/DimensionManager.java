@@ -86,6 +86,19 @@ public class DimensionManager implements IGalaxy {
     private int moonId = Constants.INVALID_PLANET;
     /** The planet types this save's worlds are typed from: its planet file's, or the code-shipped set. */
     private dev.stannismod.stellurgy.universe.PlanetTypes planetTypes = dev.stannismod.stellurgy.universe.PlanetTypes.stock();
+    /**
+     * The planet file's authored galactic anchors, read while dimensions load — before the universe
+     * registry is reachable, since worlds are not loaded yet — and drained into it once by
+     * {@code UniverseRegistry.populate}. {@link #stagedAnchorsReset}: the file was re-read on request.
+     */
+    private Map<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor> stagedAnchors = new HashMap<>();
+    private boolean stagedAnchorsReset;
+    /**
+     * The pack's {@code <galaxyGen>} configuration for this server, or {@code null} when it declares
+     * none. Kept for the whole session, not drained: the upgrade command stamps with it, and the
+     * planet file is written back with it.
+     */
+    private dev.stannismod.stellurgy.universe.GalaxyGenConfig packGalaxyConfig;
     private Random random;
     private boolean hasBeenInitialized = false;
     private HashMap<Integer, DimensionProperties> dimensionList;
@@ -153,6 +166,25 @@ public class DimensionManager implements IGalaxy {
     /** The planet types this save's worlds are typed from. */
     public dev.stannismod.stellurgy.universe.PlanetTypes getPlanetTypes() {
         return planetTypes;
+    }
+
+    /** The pack's {@code <galaxyGen>} configuration for this server, or {@code null} if it declares none. */
+    public dev.stannismod.stellurgy.universe.GalaxyGenConfig getPackGalaxyConfig() {
+        return packGalaxyConfig;
+    }
+
+    /** The authored anchors the planet load staged, handed over once: the next call answers empty. */
+    public Map<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor> drainStagedAnchors() {
+        Map<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor> drained = stagedAnchors;
+        stagedAnchors = new HashMap<>();
+        return drained;
+    }
+
+    /** Whether the staged anchors come from a planet file re-read on request; cleared by reading it. */
+    public boolean drainStagedAnchorsReset() {
+        boolean reset = stagedAnchorsReset;
+        stagedAnchorsReset = false;
+        return reset;
     }
 
     /** The Moon's dimension, or {@link Constants#INVALID_PLANET} when none was made. */
@@ -720,7 +752,7 @@ public class DimensionManager implements IGalaxy {
         SpaceObjectManager.getSpaceManager().writeToNBT(nbtTag);
         nbt.setTag("spaceObjects", nbtTag);
 
-        String xmlOutput = XMLPlanetLoader.writeXML(this);
+        String xmlOutput = XMLPlanetLoader.writeXML(this, packGalaxyConfig);
 
         try {
             File planetXMLOutput = new File(net.minecraftforge.common.DimensionManager.getCurrentSaveRootDirectory(), filePath + worldXML);
@@ -1113,7 +1145,10 @@ public class DimensionManager implements IGalaxy {
 
             // Buffer authored galactic anchor coords for the Layer-1 universe registry. Worlds are not
             // loaded yet (this runs at serverAboutToStart), so they are drained once worlds are up.
-            dev.stannismod.stellurgy.universe.UniverseRegistry.stageAnchors(dimCouplingList.anchorCoords, resetFromXml);
+            stagedAnchors = dimCouplingList.anchorCoords == null
+                    ? new java.util.HashMap<Integer, dev.stannismod.stellurgy.universe.GalacticAnchor>()
+                    : new java.util.HashMap<>(dimCouplingList.anchorCoords);
+            stagedAnchorsReset = resetFromXml;
         }
 
         // Hand the pack's <galaxyGen> knobs to the universe layer. The generator built from them is
@@ -1130,9 +1165,7 @@ public class DimensionManager implements IGalaxy {
         // model. Where the save carries no stamp, reconcileSchema adopts the current schema at the
         // one install point, loudly and with a stamp written; that is the same outcome without the
         // window.
-        dev.stannismod.stellurgy.universe.GalaxyGenConfig galaxyGenConfig =
-                (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig : null;
-        dev.stannismod.stellurgy.universe.UniverseRegistry.stageGalaxyConfig(galaxyGenConfig);
+        packGalaxyConfig = (dimCouplingList != null) ? dimCouplingList.galaxyGenConfig : null;
         // C129: registration authority on load was planetDefs.xml only (the loop
         // above), while per-dim persisted state lives in temp.dat (loadedPlanets).
         // A dim present in temp.dat but absent from a hand-edited / restored /

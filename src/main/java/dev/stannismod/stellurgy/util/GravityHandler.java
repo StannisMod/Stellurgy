@@ -61,39 +61,17 @@ public class GravityHandler implements IGravityManager {
      * The mixin's entry point, kept STATIC so the per-tick call site does not change shape, and
      * routed through the installed service so the per-entity overrides can live on it.
      *
-     * <p><b>The absent-service branch is not a handled case and is not dressed as one.</b> No
-     * production caller reaches it: this runs inside {@code Entity.onUpdate}, and the handler is
-     * installed during {@code FMLInitializationEvent}, before any world exists to tick an entity
-     * in. It is written only because the accessor is nullable, it says so ONCE rather than every
-     * tick for every entity, and if it ever fires the consequence is exactly "vanilla gravity, no
-     * Stellurgy override" — which is worth reading in a log and is not worth crashing every entity in the
-     * world over.</p>
+     * <p>This runs inside {@code Entity.onUpdate}, and the handler is installed during
+     * {@code FMLInitializationEvent}, before any world exists to tick an entity in — so a missing
+     * service is a broken mod, and it throws.</p>
      */
     public static void applyGravity(Entity entity) {
         IGravityManager service = StellurgyAPI.gravityManager();
         if (!(service instanceof GravityHandler)) {
-            reportNoService(service);
-            return;
+            throw new IllegalStateException("no gravity service is installed while entities are ticking"
+                    + " (the API answered " + service + ")");
         }
         ((GravityHandler) service).apply(entity);
-    }
-
-    /**
-     * Latch for the report above. A mutable static, and it is declared with its justification as
-     * this project requires: OWNER the process, LIFETIME the launch, because it answers "has this
-     * impossible thing been said yet" and the answer is not per-server or per-world. It holds no
-     * collaborator and nothing branches on it but the log line itself.
-     */
-    private static volatile boolean noServiceReported = false;
-
-    private static void reportNoService(IGravityManager found) {
-        if (noServiceReported) {
-            return;
-        }
-        noServiceReported = true;
-        Stellurgy.logger.error("[GRAVITY] no gravity service is installed while entities are "
-                + "ticking (the API answered {}), so no Stellurgy gravity override is being applied at all."
-                + " This is not supposed to be reachable; said once.", found);
     }
 
     private void apply(Entity entity) {

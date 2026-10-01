@@ -98,13 +98,13 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      * craft its hyperspace anchor resolves by POSITION, the craft its durable id names, and what the
      * computer standing at that anchor calls itself. The cut happens once, hundreds of ticks before
      * an arrival that stalls reports anything, so nothing downstream can reconstruct it — and the
-     * question "did this jump deliver the hull it meant" has no other witness. Deliberately not
-     * test-gated: a harness child JVM has no test mode.
+     * question "did this jump deliver the hull it meant" has no other witness. This crosser's, so it
+     * goes with the server whose subsystem holds it.
      */
-    private static volatile String lastArrivalCut = "";
+    private volatile String lastArrivalCut = "";
 
     /** @see #lastArrivalCut */
-    public static String lastArrivalCut() {
+    public String lastArrivalCut() {
         return lastArrivalCut;
     }
 
@@ -113,17 +113,19 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
      * that a lane holds two ships; it cannot say which of them arrived first, and therefore cannot
      * say whether a lane was handed out occupied or became occupied later.
      */
-    private static volatile String lastDepartLane = "";
+    private volatile String lastDepartLane = "";
 
     /** @see #lastDepartLane */
-    public static String lastDepartLane() {
+    public String lastDepartLane() {
         return lastDepartLane;
     }
 
-    /** Owned by {@link SpaceDiagnostics#reset()} — see there for why a diagnostic needs an owner. */
-    static void resetDiagnostics() {
-        lastArrivalCut = "";
-        lastDepartLane = "";
+    /** Why this crosser's last crew placement did not seat everyone, or {@code ""} when it did. */
+    private volatile String lastReseatBlock = "";
+
+    /** @see #lastReseatBlock */
+    public String lastReseatBlock() {
+        return lastReseatBlock;
     }
 
     /**
@@ -640,7 +642,9 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         // distinction is the whole failure this path used to be able to produce - a destination holding
         // a second ship had its arrival scan the stranger's yard, find no seat, and give up while the
         // crew's own seat sat tens of thousands of blocks away in the same world.
-        if (CrewTransfer.reseat(dst, arrivalAnchor, stash, toUuid(shipId), vsShipUuid)) {
+        CrewTransfer.Reseat reseat = CrewTransfer.reseat(dst, arrivalAnchor, stash, toUuid(shipId), vsShipUuid);
+        lastReseatBlock = reseat.block;
+        if (reseat.seated) {
             crewStash.remove(shipId);
             return bodiesPlaced;
         }
@@ -761,7 +765,9 @@ public final class VSShipCrosser implements ShipTransitManager.Crosser {
         //
         // Named by identity, and hyperspace is where that matters most: every ship in flight is parked
         // in the same world, so "the ship at this anchor" has neighbours by construction.
-        return CrewTransfer.reseat(dst, anchor, stash, toUuid(shipId), vsShipUuid) && bodiesPlaced;
+        CrewTransfer.Reseat reseat = CrewTransfer.reseat(dst, anchor, stash, toUuid(shipId), vsShipUuid);
+        lastReseatBlock = reseat.block;
+        return reseat.seated && bodiesPlaced;
     }
 
     @Override

@@ -99,22 +99,22 @@ public class StellurgyJeiPlugin implements IModPlugin {
     public static final String orbitalLaserDrillUUID = "stellurgy.orbitalLaserDrill";
     public static final String asteroidsUUID = "stellurgy.asteroids";
     public static final String gasGiantsUUID = GasGiantCategory.UID;
-    /**
-     * JEI's own helper facade, as handed to {@link #register}. OWNER: the CLIENT — JEI loads its
-     * plugins once per client and this object is JEI's, for as long as JEI is there; nothing here
-     * releases it because nothing here may.
-     *
-     * <p>Static rather than an instance field because the recipe-refresh entry points on this class
-     * are static: they are called from outside a JEI callback, where the plugin instance JEI built
-     * is not in reach.</p>
-     */
-    private static IJeiHelpers jeiHelpers;
+    // JEI builds this plugin and hands it its helpers and runtime through the callbacks below, again
+    // whenever JEI restarts, so both are the plugin's own state and are replaced, never accumulated.
+    private IJeiHelpers jeiHelpers;
 
-    private static IJeiRuntime jeiRuntime;
+    private IJeiRuntime jeiRuntime;
+
+    /** Whether this plugin has put its refresh tick on the bus; JEI may call the callbacks again. */
+    private boolean refreshTickRegistered;
 
     @Override
     public void onRuntimeAvailable(IJeiRuntime runtime) {
         jeiRuntime = runtime;
+        if (!refreshTickRegistered) {
+            refreshTickRegistered = true;
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new JeiClientTickHandler(this));
+        }
     }
 
     /**
@@ -125,7 +125,7 @@ public class StellurgyJeiPlugin implements IModPlugin {
      *         and the caller tries again later
      */
     @SuppressWarnings("unchecked")
-    public static boolean refreshGasGiantRecipes() {
+    boolean refreshGasGiantRecipes() {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null || mc.world == null || jeiRuntime == null) return false;
 

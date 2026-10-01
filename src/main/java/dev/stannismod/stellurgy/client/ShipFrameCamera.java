@@ -84,10 +84,13 @@ public final class ShipFrameCamera {
      *  the model upright mid-jump; the window only has to outlast a jump, not a walk-off. */
     private static final int SUPPORT_MEMORY_TICKS = 20;
 
-    /** Per-body memory of the last ship measured to carry it, with the tick it was measured on.
+    /** Per-body memory of the last ship measured to carry it, as a part of the client world the
+     *  bodies are in ({@link dev.stannismod.stellurgy.world.WorldRuntime}), so it goes with that world.
      *  Weak keys: an entity that despawns must not be held alive by this. */
-    private static final java.util.Map<EntityLivingBase, SupportMemo> SUPPORT_MEMO =
-            new java.util.WeakHashMap<EntityLivingBase, SupportMemo>();
+    private static final class SupportMemos {
+        final java.util.Map<EntityLivingBase, SupportMemo> byBody =
+                new java.util.WeakHashMap<EntityLivingBase, SupportMemo>();
+    }
 
     private static final class SupportMemo {
         String shipId;
@@ -110,11 +113,13 @@ public final class ShipFrameCamera {
         }
         EntityLivingBase body = (EntityLivingBase) view;
         long tick = view.world.getTotalWorldTime();
-        SupportMemo memo = SUPPORT_MEMO.get(body);
+        java.util.Map<EntityLivingBase, SupportMemo> memos = dev.stannismod.stellurgy.world.WorldRuntime
+                .of(view.world, SupportMemos.class, SupportMemos::new).byBody;
+        SupportMemo memo = memos.get(body);
         if (memo == null) {
             memo = new SupportMemo();
             memo.supportedTick = Long.MIN_VALUE;
-            SUPPORT_MEMO.put(body, memo);
+            memos.put(body, memo);
         }
         if (memo.probedTick != tick) {
             memo.probedTick = tick;

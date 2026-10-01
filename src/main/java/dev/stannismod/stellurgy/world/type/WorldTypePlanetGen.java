@@ -3,13 +3,9 @@ package dev.stannismod.stellurgy.world.type;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldType;
 import net.minecraft.world.biome.BiomeProvider;
-import net.minecraft.world.gen.ChunkGeneratorSettings;
 import net.minecraft.world.gen.IChunkGenerator;
-import net.minecraft.world.gen.layer.GenLayer;
-import net.minecraft.world.gen.layer.GenLayerZoom;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.world.ChunkProviderPlanet;
-import dev.stannismod.stellurgy.world.GenLayerBiomePlanet;
 
 public class WorldTypePlanetGen extends WorldType {
 
@@ -31,24 +27,6 @@ public class WorldTypePlanetGen extends WorldType {
     @Override
     public boolean canBeCreated() {
         return false;
-    }
-
-    /**
-     * Creates the GenLayerBiome used for generating the world
-     *
-     * @param worldSeed   The world seed
-     * @param parentLayer The parent layer to feed into any layer you return
-     * @return A GenLayer that will return ints representing the Biomes to be generated, see GenLayerBiome
-     */
-    @Override
-    public GenLayer getBiomeLayer(long worldSeed, GenLayer parentLayer, ChunkGeneratorSettings chunkProviderSettings) {
-        //return super.getBiomeLayer(worldSeed, parentLayer);
-        GenLayer ret = new GenLayerBiomePlanet(200L, parentLayer, this);
-
-        ret = GenLayerZoom.magnify(1000L, ret, 2);
-        //REKT with random ocean
-        //ret = new GenLayerEdge(1000L, ret, Mode.SPECIAL);
-        return ret;
     }
 
 }

@@ -42,6 +42,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class NebulaConcealmentTest {
 
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
+
     private static final long STEP = GalaxyGenConfig.DEFAULT_MIN_SPACING;
 
     /** Where the observer stands, and where the system it is looking at is seated. */
@@ -82,9 +85,9 @@ public class NebulaConcealmentTest {
     }
 
     /** A registry holding one system with a named planet, seated at {@link #TARGET}. */
-    private static UniverseRegistry oneSystem() {
-        UniverseRegistry.setStarLookup(NebulaConcealmentTest::star);
-        UniverseRegistry registry = new UniverseRegistry();
+    private UniverseRegistry oneSystem() {
+        testUniverse.setStarLookup(NebulaConcealmentTest::star);
+        UniverseRegistry registry = testUniverse.newRegistry();
         registry.place(TARGET, 4);
         registry.addPoi(SystemBody.fixedAt(TARGET, SystemBodyKind.STAR, Constants.INVALID_PLANET, 4));
         registry.addPoi(SystemBody.fixedAt(TARGET, SystemBodyKind.PLANET, 401, 4));
@@ -118,15 +121,13 @@ public class NebulaConcealmentTest {
     public void restoreSeams() {
         dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig()
                 .telescopeObscuredAtMagnitudes = previousThreshold;
-        UniverseRegistry.detachGenerator();
-        UniverseRegistry.setStarLookup(null);
     }
 
     @Test
     public void aClearSightLineNamesTheBodies() {
         // The control. Without it "the dusty case names nothing" would be a statement about a
         // fixture that never named anything.
-        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
+        testUniverse.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry registry = oneSystem();
         CrystalMemory crystal = new CrystalMemory();
 
@@ -139,7 +140,7 @@ public class NebulaConcealmentTest {
     public void aLookThroughThickDustLearnsTheADDRESSAndNotTheBODIES() {
         // THE mechanic. The operator is left knowing there is something out there and having to go
         // and see what — which is the reason to fly rather than survey.
-        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold() * 2d));
+        testUniverse.attachGenerator(dustyBy(columnAtThreshold() * 2d));
         UniverseRegistry registry = oneSystem();
         CrystalMemory crystal = new CrystalMemory();
 
@@ -157,7 +158,7 @@ public class NebulaConcealmentTest {
     public void thinDustDoesNotHideAnything() {
         // The other side of the threshold, so "obscured" is a property of how much dust there is and
         // not of there being any.
-        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold() * 0.5d));
+        testUniverse.attachGenerator(dustyBy(columnAtThreshold() * 0.5d));
         UniverseRegistry registry = oneSystem();
         CrystalMemory crystal = new CrystalMemory();
 
@@ -171,7 +172,7 @@ public class NebulaConcealmentTest {
     public void theThresholdIsReadInMagnitudes() {
         // The unit is the contract: the config states extinction, and the calibration from this
         // model's density to magnitudes lives in one place.
-        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold()));
+        testUniverse.attachGenerator(dustyBy(columnAtThreshold()));
         UniverseRegistry registry = oneSystem();
 
         double magnitudes = registry.extinctionBetween(HOME, TARGET);
@@ -187,7 +188,7 @@ public class NebulaConcealmentTest {
     public void turningTheThresholdOffRestoresTheClearSky() {
         // A config flag has to REMOVE its mechanic, not soften it. Zero is the off switch, because
         // "obscured at zero magnitudes" would otherwise mean everything is always hidden.
-        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold() * 100d));
+        testUniverse.attachGenerator(dustyBy(columnAtThreshold() * 100d));
         UniverseRegistry registry = oneSystem();
         dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig()
                 .telescopeObscuredAtMagnitudes = 0d;
@@ -204,7 +205,7 @@ public class NebulaConcealmentTest {
     public void aLookWithNoStatedObserverIsNeverObscured() {
         // A caller that cannot say where it is standing cannot claim a sight line either. This is
         // what keeps every pre-existing call site behaving exactly as it did.
-        UniverseRegistry.attachGenerator(dustyBy(columnAtThreshold() * 100d));
+        testUniverse.attachGenerator(dustyBy(columnAtThreshold() * 100d));
         UniverseRegistry registry = oneSystem();
         CrystalMemory crystal = new CrystalMemory();
 
@@ -217,7 +218,7 @@ public class NebulaConcealmentTest {
     public void extinctionIsZeroInAUniverseWithNoClouds() {
         // The negative leg for the physics itself: no clusters, no gas, no dimming — and no
         // fabricated column from a generator that has none.
-        UniverseRegistry.attachGenerator(new EmptyGalaxyGenerator());
+        testUniverse.attachGenerator(new EmptyGalaxyGenerator());
         UniverseRegistry registry = oneSystem();
 
         assertEquals("clear space dims nothing", 0d, registry.extinctionBetween(HOME, TARGET),

@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.command.test.CrossingDiag;
+import dev.stannismod.stellurgy.test.trace.CrossingMemory;
 import dev.stannismod.stellurgy.command.test.TestEventLog;
 import dev.stannismod.stellurgy.space.CrewTransfer;
 import dev.stannismod.stellurgy.space.HyperspaceTiles;
@@ -41,7 +41,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  *
  * <p>Both placements are retried every tick until the re-assembled ship offers a seat, so a per-tick
  * record would drown the chain. A refusal is recorded the first time and whenever the placement's own
- * account of what it is waiting on ({@link CrewTransfer#lastReseatBlock()}) differs from the last one
+ * account of what it is waiting on ({@link VSShipCrosser#lastReseatBlock()}) differs from the last one
  * recorded — that is the diagnosis a stalled arrival needs, and it is one line per change rather than
  * one per tick.</p>
  */
@@ -86,7 +86,7 @@ public abstract class MixinVSShipCrosserEvents {
                                 CallbackInfoReturnable<Boolean> cir) {
         TestTrace.instrumentHere(INSTRUMENT);
         stellurgyTest$placement("boarding", "crew_boarded_parked_hull", "crew_boarding_blocked",
-                parkedDim, shipId, cir.getReturnValueZ());
+                parkedDim, shipId, cir.getReturnValueZ(), ((VSShipCrosser) (Object) this).lastReseatBlock());
     }
 
     /** The arrival-side placement: the crew put back on the hull that has just landed. */
@@ -95,19 +95,18 @@ public abstract class MixinVSShipCrosserEvents {
                                  UUID vsShipUuid, CallbackInfoReturnable<Boolean> cir) {
         TestTrace.instrumentHere(INSTRUMENT);
         stellurgyTest$placement("reseat", "crew_reseated", "crew_reseat_blocked",
-                targetSlotDim, shipId, cir.getReturnValueZ());
+                targetSlotDim, shipId, cir.getReturnValueZ(), ((VSShipCrosser) (Object) this).lastReseatBlock());
     }
 
     private static void stellurgyTest$placement(String leg, String doneType, String blockedType,
-                                         int dim, String shipId, boolean done) {
+                                         int dim, String shipId, boolean done, String block) {
         String key = leg + ":" + shipId;
         if (done) {
-            CrossingDiag.clear(key);
+            CrossingMemory.here().clear(key);
             stellurgyTest$record(doneType, "\"ship\":\"" + shipId + "\",\"dim\":" + dim);
             return;
         }
-        String block = CrewTransfer.lastReseatBlock();
-        if (CrossingDiag.noteBlocked(key, block)) {
+        if (CrossingMemory.here().noteBlocked(key, block)) {
             stellurgyTest$record(blockedType, "\"ship\":\"" + shipId + "\",\"dim\":" + dim
                     + ",\"block\":\"" + TestTrace.json(block) + "\"");
         }

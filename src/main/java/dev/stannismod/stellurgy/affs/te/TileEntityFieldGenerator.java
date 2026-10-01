@@ -178,7 +178,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         resolveFieldFrame();
         if (world != null && !world.isRemote) {
             emittersOf(world).active.add(this);
-            ShieldNetworkRegistry.register(this);
+            ShieldNetworkRegistry.of(world).register(this);
             ShieldNetworkManager.markDirty(world);
             refreshFieldPowerState(true);
         }
@@ -629,7 +629,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public void invalidate() {
         if (world != null && !world.isRemote) {
             emittersOf(world).active.remove(this);
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
         }
         super.invalidate();
@@ -639,7 +639,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
             emittersOf(world).active.remove(this);
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
         }
         super.onChunkUnload();

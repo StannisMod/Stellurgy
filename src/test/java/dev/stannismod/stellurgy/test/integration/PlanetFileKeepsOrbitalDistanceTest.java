@@ -79,7 +79,7 @@ public class PlanetFileKeepsOrbitalDistanceTest {
         File file = folder.newFile("planetDefs.xml");
         try (Writer out = new OutputStreamWriter(Files.newOutputStream(file.toPath()),
                 StandardCharsets.UTF_8)) {
-            out.write(XMLPlanetLoader.writeXML(galaxyOf(star)));
+            out.write(XMLPlanetLoader.writeXML(galaxyOf(star), null));
         }
 
         XMLPlanetLoader.DimensionPropertyCoupling read = new XMLPlanetLoader().loadPlanetsOrThrow(file);

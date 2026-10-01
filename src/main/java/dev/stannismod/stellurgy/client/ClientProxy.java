@@ -39,8 +39,6 @@ import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.api.stations.ISpaceObject;
-import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
-import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.block.BlockCrystal;
 import dev.stannismod.stellurgy.block.CrystalColorizer;
 import dev.stannismod.stellurgy.client.model.ModelRocket;
@@ -72,8 +70,6 @@ import net.minecraftforge.fml.common.Loader;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.LinkedList;
 import java.util.List;
@@ -87,21 +83,6 @@ import dev.stannismod.stellurgy.tile.multiblock.machine.*;
 
 @Mod.EventBusSubscriber(value = Side.CLIENT)
 public class ClientProxy extends CommonProxy {
-
-    private static final Map<ResourceLocation, WavefrontObject> models = new HashMap<>();
-
-    public static WavefrontObject getModel(ResourceLocation location) {
-        WavefrontObject model = models.getOrDefault(location, null);
-        if (model == null) {
-            try {
-                model = new WavefrontObject(location);
-                models.put(location, model);
-            } catch (ModelFormatException e) {
-                e.printStackTrace();
-            }
-        }
-        return model;
-    }
 
     @Override
     public void registerRenderers() {
@@ -269,6 +250,7 @@ public class ClientProxy extends CommonProxy {
         PilotInput.register();
         OBJLoader.INSTANCE.addDomain("stellurgy");
         registerRenderers();
+        dev.stannismod.stellurgy.client.render.armor.RenderJetPack.loadModel();
         // Hand the aboard-movement resolution this side's look/input answers. Here, and not from a
         // static initialiser of the class that answers them: the port must exist before the first
         // aboard tick, and a port that appears when something happens to class-load its implementor
@@ -293,6 +275,7 @@ public class ClientProxy extends CommonProxy {
         if (!Boolean.getBoolean("forge.test.client")) {
             return;
         }
+        MinecraftForge.EVENT_BUS.register(new TestClientMute());
         try {
             Class<?> bridge = Class.forName("com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstrap");
             bridge.getMethod("bootstrap").invoke(null);
@@ -302,10 +285,6 @@ public class ClientProxy extends CommonProxy {
             throw new RuntimeException("Failed to bootstrap forge test client bridge", e);
         }
     }
-
-    /** Latches once the test client has been muted (or once we've confirmed this is not a test
-     *  client), so the per-tick check stops doing any work after the first successful pass. */
-    private static boolean testClientSoundHandled = false;
 
 
     /**
@@ -409,33 +388,6 @@ public class ClientProxy extends CommonProxy {
         }
     }
 
-    /**
-     * Silence a harness-spawned test client. Automated client e2e ({@code RealClientHarness})
-     * boots a REAL client with REAL audio on the dev box, marked by {@code -Dforge.test.client=true}
-     * (the same flag {@link #bootstrapTestClientBridge()} keys on); this mutes the master sound
-     * level so those runs are quiet. Runs on the first client tick where the sound handler is up —
-     * done on a tick rather than in {@code preinit} because {@code GameSettings.setSoundLevel}
-     * pushes to the sound handler, which is not yet constructed that early. Inert in normal
-     * gameplay and in a manual {@code runClient} playtest (flag absent &rarr; latches without muting),
-     * so a human playtester still hears sound.
-     */
-    @SubscribeEvent
-    public static void muteTestClientSound(TickEvent.ClientTickEvent event) {
-        if (testClientSoundHandled || event.phase != TickEvent.Phase.END) {
-            return;
-        }
-        if (!Boolean.getBoolean("forge.test.client")) {
-            testClientSoundHandled = true; // not a harness client — never mute, stop checking
-            return;
-        }
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.getSoundHandler() == null) {
-            return; // sound not initialised yet — try again next tick
-        }
-        mc.gameSettings.setSoundLevel(SoundCategory.MASTER, 0.0F);
-        testClientSoundHandled = true;
-    }
-
     private void registerFluidModel(IFluidBlock fluidBlock) {
         Item item = Item.getItemFromBlock((Block) fluidBlock);
 
@@ -471,12 +423,6 @@ public class ClientProxy extends CommonProxy {
         // The client ticks its ships from the client tick event, not the world one, so the
         // re-seat that follows them needs its own handler on this side.
         MinecraftForge.EVENT_BUS.register(new ClientDeckFollowsItsShip());
-
-        if (Loader.isModLoaded("jei")) {
-            FMLCommonHandler.instance().bus().register(
-                    new dev.stannismod.stellurgy.integration.jei.JeiClientTickHandler()
-            );
-        }
     }
 
     @Override

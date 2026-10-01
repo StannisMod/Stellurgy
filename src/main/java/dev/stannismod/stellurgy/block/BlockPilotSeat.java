@@ -97,7 +97,7 @@ public class BlockPilotSeat extends BlockSeat {
             if (!assembled && player instanceof net.minecraft.entity.player.EntityPlayerMP) {
                 // Delayed past the mount packet's tracker flush: sent immediately, the notice is
                 // overwritten by vanilla's "press X to dismount" hint before the player reads it.
-                dev.stannismod.stellurgy.util.DelayedActionBar.send(
+                dev.stannismod.stellurgy.Stellurgy.serverState().actionBar.send(
                         (net.minecraft.entity.player.EntityPlayerMP) player,
                         new TextComponentTranslation("msg.pilotseat.notassembled"), 10);
             }
@@ -121,7 +121,7 @@ public class BlockPilotSeat extends BlockSeat {
      */
     @Override
     public void breakBlock(World world, BlockPos pos, IBlockState state) {
-        if (!world.isRemote && !StorageChunk.isRelocationInProgress()) {
+        if (!world.isRemote && !StorageChunk.isRelocationInProgress(world)) {
             TileEntity te = world.getTileEntity(pos); // still present: removed after breakBlock
             if (te instanceof TilePilotSeat) {
                 TileAdvancedFlightComputer afc = ((TilePilotSeat) te).getFlightComputer();

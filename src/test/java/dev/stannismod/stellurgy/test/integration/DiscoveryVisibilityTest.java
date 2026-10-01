@@ -32,6 +32,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class DiscoveryVisibilityTest {
 
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
@@ -39,11 +42,6 @@ public class DiscoveryVisibilityTest {
 
     @Rule
     public TemporaryFolder tempFolder = new TemporaryFolder();
-
-    @After
-    public void resetStarLookup() {
-        UniverseRegistry.setStarLookup(null);
-    }
 
     // ---- E-1 per-planet: <isKnown> XML flag + the global read ----------------
 
@@ -92,9 +90,9 @@ public class DiscoveryVisibilityTest {
         star.setName("KnownSys");
         planet(730, 100, 0.0).setStar(star);          // setStar back-adds the planet to the star
         planet(731, 200, Math.PI / 2).setStar(star);
-        UniverseRegistry.setStarLookup(id -> id == 4400 ? star : null);
+        testUniverse.setStarLookup(id -> id == 4400 ? star : null);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         GalacticCoord coord = GalacticCoord.ofSectorLocal(1, 2, 3, 0, 0, 0);
         reg.place(coord, 4400);
 

@@ -37,6 +37,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class SystemContentTest {
 
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
+
     /** The two dimension ids this scenario's fixture authors. Not thresholds: the arrangement's
      *  own numbers, read back from the body it produced. */
     private static final int AUTHORED_DIM_A = 700;
@@ -69,12 +72,6 @@ public class SystemContentTest {
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
-    }
-
-    @After
-    public void resetSeams() {
-        UniverseRegistry.setStarLookup(null);
-        UniverseRegistry.detachGenerator();
     }
 
     /**
@@ -246,7 +243,7 @@ public class SystemContentTest {
         DimensionProperties p = planet(710, 120, 0.0);
         p.setStar(star);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         GalacticCoord anchor = GalacticCoord.ofSectorLocal(5, 5, 5, 0, 0, 0);
         reg.place(anchor, 4243);
 
@@ -258,7 +255,7 @@ public class SystemContentTest {
                 + " substitute the star's", reg.coordForPlanet(p).isPresent());
 
         // With content resolvable, the planet resolves to its OWN cell, which is where its body sits.
-        UniverseRegistry.setStarLookup(id -> id == 4243 ? star : null);
+        testUniverse.setStarLookup(id -> id == 4243 ? star : null);
         Optional<GalacticCoord> resolved = reg.coordForPlanet(p);
         assertTrue(resolved.isPresent());
         assertFalse("the planet's coord is its own zone cell, NOT the system's anchor cell",
@@ -480,9 +477,9 @@ public class SystemContentTest {
         parent.setStar(star);
         moon.setParentPlanet(parent);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 4247);
-        UniverseRegistry.setStarLookup(id -> id == 4247 ? star : null);
+        testUniverse.setStarLookup(id -> id == 4247 ? star : null);
 
         Optional<GalacticCoord> parentCell = reg.coordForPlanet(parent);
         Optional<GalacticCoord> cell = reg.coordForPlanet(moon);
@@ -545,9 +542,9 @@ public class SystemContentTest {
         parent.setStar(star);
         moon.setParentPlanet(parent);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 4261);
-        UniverseRegistry.setStarLookup(id -> id == 4261 ? star : null);
+        testUniverse.setStarLookup(id -> id == 4261 ? star : null);
 
         GalacticCoord parentCell = reg.coordForPlanet(parent).orElse(null);
         assertNotNull("arrangement: the planet must have a cell", parentCell);
@@ -741,9 +738,9 @@ public class SystemContentTest {
         // Half a turn round: straight down the anchor's NEGATIVE X axis.
         planet(760, 300, Math.PI).setStar(star);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, 4248);
-        UniverseRegistry.setStarLookup(id -> id == 4248 ? star : null);
+        testUniverse.setStarLookup(id -> id == 4248 ? star : null);
 
         GalacticCoord bodyCell = cellOf(reg.systemBodiesAt(GalacticCoord.ORIGIN), 760);
         assertNotNull(bodyCell);

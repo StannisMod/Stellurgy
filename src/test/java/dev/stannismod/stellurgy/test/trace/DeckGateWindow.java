@@ -61,10 +61,13 @@ import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
  * </ul>
  *
  * <p>And beside them, on the SAME record because two reads a tick apart attribute one to whatever
- * the other was: the four process-wide statics {@code ShipFrameTravel} holds
- * ({@code pendingSeed}, {@code CAPTURE_EPOCH}, {@code clientLookSource}, {@code walkTraceTicks}).
- * None of them names an owner or a release, so "what the gate was answering FROM" is as much a part
- * of this window as what it answered.</p>
+ * the other was: the three process-wide statics {@code ShipFrameTravel} holds
+ * ({@code CAPTURE_EPOCH}, {@code clientLookSource}, {@code walkTraceTicks}), and the pending deck
+ * seeds of the body's world — this body's own ({@code pendingSeed}) and how many that world holds in
+ * all ({@code pendingSeedsInWorld}). The seeds used to be one process-wide slot, which is why a seed
+ * still naming a PREDECESSOR's player was the hypothesis this window was built for; they are now a
+ * part of the world they place bodies in, so a predecessor's seed shows up, if at all, as a count
+ * larger than this body accounts for.</p>
  *
  * <h2>The CLIENT's resolver only — and this class used to claim both</h2>
  *
@@ -227,7 +230,7 @@ public final class DeckGateWindow implements TraceWindow {
                 + ",\"bodyZ\":" + TestTrace.fmt(entity.posZ)
                 + "," + explained(entity)
                 + "," + shipsOn(entity)
-                + "," + statics());
+                + "," + statics(entity));
     }
 
     /**
@@ -315,7 +318,6 @@ public final class DeckGateWindow implements TraceWindow {
 
     // ---- the resolver's process-wide statics, read (not re-derived) ------------------------------
 
-    private static final Field PENDING_SEED = declared("pendingSeed");
     private static final Field CAPTURE_EPOCH = declared("CAPTURE_EPOCH");
     private static final Field CLIENT_LOOK_SOURCE = declared("clientLookSource");
     private static final Field WALK_TRACE_TICKS = declared("walkTraceTicks");
@@ -331,14 +333,15 @@ public final class DeckGateWindow implements TraceWindow {
     }
 
     /**
-     * The four statics, as they stand at this decision. A field that could not be resolved is named
-     * in {@code staticsRead} rather than left out — a missing key and a null value are the same
-     * character on the wire, and the whole point of reading these is to tell "there is no stale
-     * seed" from "nobody looked".
+     * The three statics and the world's pending seeds, as they stand at this decision. A field that
+     * could not be resolved is named in {@code staticsRead} rather than left out — a missing key and
+     * a null value are the same character on the wire, and the whole point of reading these is to
+     * tell "there is no stale seed" from "nobody looked".
      */
-    private static String statics() {
+    private static String statics(EntityLivingBase entity) {
         StringBuilder missing = new StringBuilder();
-        Object seed = read(PENDING_SEED, "pendingSeed", missing);
+        Map<?, ?> seeds = pendingSeedsOf(entity, missing);
+        Object seed = seeds == null ? null : seeds.get(entity);
         Object epoch = read(CAPTURE_EPOCH, "CAPTURE_EPOCH", missing);
         Object look = read(CLIENT_LOOK_SOURCE, "clientLookSource", missing);
         Object walk = read(WALK_TRACE_TICKS, "walkTraceTicks", missing);
@@ -347,7 +350,41 @@ public final class DeckGateWindow implements TraceWindow {
                         String.valueOf(epoch)) + "\"")
                 + ",\"clientLookSource\":" + (look != null)
                 + ",\"walkTraceTicks\":" + (walk == null ? "null" : String.valueOf(walk))
+                + ",\"pendingSeedsInWorld\":" + (seeds == null ? "null" : String.valueOf(seeds.size()))
                 + ",\"pendingSeed\":" + (seed == null ? "null" : seedOf(seed));
+    }
+
+    /**
+     * The pending-seed index of {@code entity}'s world, read without creating it: a world nobody
+     * seeded has no such part, and that reads as an empty index, not as a failure. Reflective because
+     * both the part and the runtime's part map are private to production.
+     */
+    private static Map<?, ?> pendingSeedsOf(EntityLivingBase entity, StringBuilder missing) {
+        try {
+            Field capField = dev.stannismod.stellurgy.world.WorldRuntime.class.getDeclaredField("capability");
+            capField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            net.minecraftforge.common.capabilities.Capability<Object> cap =
+                    (net.minecraftforge.common.capabilities.Capability<Object>) capField.get(null);
+            Object runtime = cap == null ? null : entity.world.getCapability(cap, null);
+            if (runtime == null) {
+                missing.append(missing.length() == 0 ? "" : "+").append("noWorldRuntime");
+                return null;
+            }
+            Field partsField = runtime.getClass().getDeclaredField("parts");
+            partsField.setAccessible(true);
+            Class<?> partType = Class.forName(ShipFrameTravel.class.getName() + "$PendingSeeds");
+            Object part = ((Map<?, ?>) partsField.get(runtime)).get(partType);
+            if (part == null) {
+                return java.util.Collections.emptyMap();
+            }
+            Field byBody = partType.getDeclaredField("byBody");
+            byBody.setAccessible(true);
+            return (Map<?, ?>) byBody.get(part);
+        } catch (Throwable t) {
+            missing.append(missing.length() == 0 ? "" : "+").append("threw:pendingSeeds");
+            return null;
+        }
     }
 
     private static Object read(Field f, String name, StringBuilder missing) {
@@ -386,8 +423,7 @@ public final class DeckGateWindow implements TraceWindow {
                 out.append("\"").append(TestTrace.json(e.getName())).append('#')
                         .append(e.getEntityId()).append('"');
             } else {
-                // A cleared WeakReference is NOT the same as an empty slot: the seed is still
-                // installed and still occupies the one slot the resolver has.
+                // A cleared WeakReference is NOT the same as no seed: the seed is still installed.
                 out.append("\"collected\"");
             }
         } catch (Throwable t) {

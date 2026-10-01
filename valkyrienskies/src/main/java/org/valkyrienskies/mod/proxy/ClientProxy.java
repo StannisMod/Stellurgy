@@ -3,7 +3,6 @@ package org.valkyrienskies.mod.proxy;
 import net.minecraft.block.Block;
 import org.valkyrienskies.mod.client.EventsClient;
 import org.valkyrienskies.mod.client.VSKeyHandler;
-import org.valkyrienskies.mod.client.render.GibsModelRegistry;
 import org.valkyrienskies.mod.common.ValkyrienSkiesMod;
 
 import net.minecraft.client.Minecraft;
@@ -33,14 +32,6 @@ public class ClientProxy extends CommonProxy {
         // Register events
         MinecraftForge.EVENT_BUS.register(new EventsClient());
         MinecraftForge.EVENT_BUS.register(keyEvents);
-
-        // Register VS Minecraft resource reload listener.
-        IReloadableResourceManager mcResourceManager = (IReloadableResourceManager) Minecraft
-            .getMinecraft()
-            .getResourceManager();
-
-        // When Minecraft reloads resources tell GibsModelRegistry to delete all its caches.
-        mcResourceManager.registerReloadListener(GibsModelRegistry::onResourceManagerReload);
 
         registerAnimations();
     }

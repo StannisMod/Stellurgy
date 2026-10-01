@@ -58,24 +58,24 @@ public final class CrewTransfer {
      *  rider-carry box of the ship-move probes. */
     private static final double RIDER_RANGE = 8.0;
 
-    /** Why the last {@link #reseat} call could not put its whole crew back aboard, or {@code ""}
-     *  when the last one succeeded. The re-seat is one half of an asynchronous settle whose only
-     *  failure report is "gave up after N attempts"; that report is unactionable without knowing
-     *  WHICH step failed, so each retry records its own block here and the crossing prints it when
-     *  it complains. Both postures write here — a seated rider's block names the seat lookup's step,
-     *  a standing one's names the deck placement's — because a crew of one standing member used to
-     *  produce a description of a seat search it never ran. Deliberately not test-gated: a harness
-     *  child JVM has no test mode. */
-    private static volatile String lastReseatBlock = "";
+    /**
+     * What one {@link #reseat} call did: whether the whole crew is back aboard and, when it is not,
+     * why. The re-seat is one half of an asynchronous settle whose only failure report is "gave up
+     * after N attempts"; that report is unactionable without knowing WHICH step failed, so each retry
+     * answers with its own block and the crossing that asked prints it when it complains. Both
+     * postures write it — a seated rider's block names the seat lookup's step, a standing one's names
+     * the deck placement's — because a crew of one standing member used to produce a description of
+     * a seat search it never ran.
+     */
+    public static final class Reseat {
+        public final boolean seated;
+        /** {@code ""} when {@link #seated}. */
+        public final String block;
 
-    /** @see #lastReseatBlock */
-    public static String lastReseatBlock() {
-        return lastReseatBlock;
-    }
-
-    /** Owned by {@link SpaceDiagnostics#reset()} — see there for why a diagnostic needs an owner. */
-    static void resetDiagnostics() {
-        lastReseatBlock = "";
+        Reseat(boolean seated, String block) {
+            this.seated = seated;
+            this.block = block;
+        }
     }
 
     /**
@@ -194,7 +194,7 @@ public final class CrewTransfer {
                 continue;
             }
             if (now.posture == ShipAboardTag.Posture.STANDING) {
-                dev.stannismod.stellurgy.integration.vs.DeckHold.pinInPlace(now.player);
+                dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.pinInPlace(now.player);
             }
             out.add(now);
         }
@@ -271,7 +271,7 @@ public final class CrewTransfer {
             }
             standing.add(Crew.standing((EntityPlayerMP) p, offset[0], offset[1], offset[2]));
             if (detach) {
-                dev.stannismod.stellurgy.integration.vs.DeckHold.pinInPlace((EntityPlayerMP) p);
+                dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.pinInPlace((EntityPlayerMP) p);
             }
         }
         return standing;
@@ -281,8 +281,8 @@ public final class CrewTransfer {
      * Re-seat the captured crew on the re-assembled ship anchored (any ship block) at
      * {@code anchor} in {@code dstWorld}: for each rider, find the seat whose AFC-link offset
      * matches its record, transfer the rider into {@code dstWorld} (production player-list path),
-     * and mount it on a freshly-bound dummy. Returns {@code false} if any rider's seat could not
-     * be resolved yet (the caller retries next tick — re-assembly is asynchronous; already-seated
+     * and mount it on a freshly-bound dummy. Answers not {@link Reseat#seated} if any rider's seat
+     * could not be resolved yet (the caller retries next tick — re-assembly is asynchronous; already-seated
      * riders are not double-mounted thanks to the bound-dummy reuse in the mount recipe).
      *
      * <p>{@code expectedShipId} is the DESTINATION ship's durable id (the flight computer's
@@ -292,10 +292,10 @@ public final class CrewTransfer {
      * other with matching seat offsets can CROSS-SEAT a rider onto the wrong craft. {@code null}
      * skips the filter (caller has no id — e.g. a ship whose computer never minted one).</p>
      */
-    public static boolean reseat(WorldServer dstWorld, BlockPos anchor, List<Crew> crew,
+    public static Reseat reseat(WorldServer dstWorld, BlockPos anchor, List<Crew> crew,
             java.util.UUID expectedShipId, java.util.UUID vsShipUuid) {
         if (crew.isEmpty()) {
-            return true;
+            return new Reseat(true, "");
         }
         // A caller with no substrate uuid but a DURABLE name has not run out of identity — the name
         // is indexed beside the uuid on the ship's own record, so the substrate id is one hash probe
@@ -379,7 +379,7 @@ public final class CrewTransfer {
                     EntityDummy resident = dev.stannismod.stellurgy.block.BlockPilotSeat
                             .boundDummyAt(dstWorld, seat.getPos());
                     if (resident != null && !resident.getPassengers().isEmpty()) {
-                        dev.stannismod.stellurgy.util.DelayedActionBar.send(player,
+                        dev.stannismod.stellurgy.Stellurgy.serverState().actionBar.send(player,
                                 new net.minecraft.util.text.TextComponentTranslation(
                                         "msg.pilotseat.taken",
                                         resident.getPassengers().get(0).getName()), 20);
@@ -389,13 +389,12 @@ public final class CrewTransfer {
             }
             player.startRiding(dummy, true);
         }
-        lastReseatBlock = allSeated ? "" : joinBlocks(
+        return new Reseat(allSeated, allSeated ? "" : joinBlocks(
                 seatLookupBlocked
                         ? describeReseatBlock(dstWorld, anchor, seats, crew, expectedShipId,
                                 vsShipUuid)
                         : null,
-                deckBlocks);
-        return allSeated;
+                deckBlocks));
     }
 
     /** The blocks of one failed re-seat as one line: the seat lookup's, when a SEATED rider was the
@@ -491,7 +490,7 @@ public final class CrewTransfer {
         player.fallDistance = 0.0f;
         // The ship is named by the identity it crossed with, not by whatever is loaded here now: the
         // hold outlives the moment, and the ship it waits for is precisely the one that arrived.
-        dev.stannismod.stellurgy.integration.vs.DeckHold.holdOnDeck(player,
+        dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.holdOnDeck(player,
                 vsShipUuid == null
                         ? VSIntegration.shipIdManagingBlock(dstWorld, afc.pos) : vsShipUuid.toString(),
                 sub[0], sub[1], sub[2]);

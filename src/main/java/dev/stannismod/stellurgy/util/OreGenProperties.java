@@ -1,50 +1,16 @@
 package dev.stannismod.stellurgy.util;
 
 import net.minecraft.block.state.IBlockState;
-import dev.stannismod.stellurgy.dimension.DimensionProperties;
-import dev.stannismod.stellurgy.dimension.DimensionProperties.AtmosphereTypes;
-import dev.stannismod.stellurgy.dimension.DimensionProperties.Temps;
 
 import java.util.LinkedList;
 import java.util.List;
 
 public class OreGenProperties {
 
-    /**
-     * Array of properties for [pressure][temperature]
-     *
-     * @see DimensionProperties.AtmosphereTypes
-     * @see DimensionProperties.Temps
-     */
-    private static OreGenProperties[][] oreGenPropertyMap = new OreGenProperties[DimensionProperties.AtmosphereTypes.values().length][DimensionProperties.Temps.values().length];
     private List<OreEntry> oreEntries;
 
     public OreGenProperties() {
         oreEntries = new LinkedList<>();
-    }
-
-    /**
-     * Sets any planet with temperature temp to use these properties regardless of pressure
-     *
-     * @param temp       Temperature to set
-     * @param properties
-     */
-    public static void setOresForTemperature(Temps temp, OreGenProperties properties) {
-        for (int i = 0; i < AtmosphereTypes.values().length; i++)
-            oreGenPropertyMap[i][temp.ordinal()] = properties;
-    }
-
-    public static void setOresForPressure(AtmosphereTypes atmType, OreGenProperties properties) {
-        for (int i = 0; i < Temps.values().length; i++)
-            oreGenPropertyMap[atmType.ordinal()][i] = properties;
-    }
-
-    public static void setOresForPressureAndTemp(AtmosphereTypes atmType, Temps temp, OreGenProperties properties) {
-        oreGenPropertyMap[atmType.ordinal()][temp.ordinal()] = properties;
-    }
-
-    public static OreGenProperties getOresForPressure(AtmosphereTypes atmType, Temps temp) {
-        return oreGenPropertyMap[atmType.ordinal()][temp.ordinal()];
     }
 
     public void addEntry(IBlockState state, int minHeight, int maxHeight, int clumpSize, int chancePerChunk) {
@@ -59,7 +25,7 @@ public class OreGenProperties {
      * A COPY of this table with the metallic entries scaled by {@code factor} — the parent star's metal
      * content applied to the palette its planet's climate earned.
      *
-     * <p>A copy and never a mutation: a table from {@link #getOresForPressure} is shared by every world
+     * <p>A copy and never a mutation: a table from {@link OreGenTable} is shared by every world
      * in that climate cell, so scaling it in place would give one planet's star the ore of all of them.
      * Non-metallic entries (coal, redstone, lapis, diamond, emerald, quartz — and anything the ore
      * dictionary does not call an ore at all) pass through untouched: a metal-poor disk yields the same

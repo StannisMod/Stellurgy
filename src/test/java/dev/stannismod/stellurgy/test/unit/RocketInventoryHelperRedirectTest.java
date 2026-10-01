@@ -3,16 +3,14 @@ package dev.stannismod.stellurgy.test.unit;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.inventory.Container;
-import org.junit.AfterClass;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import sun.misc.Unsafe;
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.RocketInventoryHelper;
 
 import java.lang.reflect.Field;
-import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
@@ -44,10 +42,10 @@ import static org.junit.Assert.assertTrue;
  * <h2>How EntityPlayer is faked</h2>
  *
  * <p>{@link Unsafe#allocateInstance} returns a zero-initialised
- * {@link EntityPlayer} reference. The bypass map only does identity
- * comparison via {@code WeakReference.get() == player} — no
- * {@code EntityPlayer} method is invoked on the value, so the
- * uninitialised instance is safe as a marker object. The same trick is
+ * {@link EntityPlayer} reference. The bypass set only compares entities,
+ * which is by entity id — so each fake is given its own — and invokes no
+ * other {@code EntityPlayer} method, so the uninitialised instance is safe
+ * as a marker object. The set is the bootstrap server's. The same trick is
  * used by other MC unit tests in this tree (see
  * {@code MinecraftBootstrap} usage above).</p>
  */
@@ -63,27 +61,21 @@ public class RocketInventoryHelperRedirectTest {
         UNSAFE = (Unsafe) theUnsafe.get(null);
     }
 
-    @AfterClass
-    public static void clearBypassMap() throws Exception {
-        // Sanitise the static bypass map between test classes so this
-        // file's reflection-based inserts don't leak into other unit
-        // tests that share the JVM.
-        Field f = RocketInventoryHelper.class
-                .getDeclaredField("inventoryCheckPlayerBypassMap");
-        f.setAccessible(true);
-        ((HashSet<?>) f.get(null)).clear();
+    // Entities compare by entity id, and an Unsafe-allocated one has id 0; each fake gets its own id
+    // so that two of them are two players. Counting down from -1 keeps clear of every real entity id.
+    private static final AtomicInteger NEXT_FAKE_ID = new AtomicInteger(-1);
+
+    private static RocketInventoryHelper bypass() {
+        return Stellurgy.serverState().rocketInventory;
     }
 
-    @Before
-    public void resetBypassMap() throws Exception {
-        clearBypassMap();
-    }
-
-    private static EntityPlayer fakePlayer() throws InstantiationException {
+    private static EntityPlayerMP fakePlayer() throws InstantiationException {
         // EntityPlayer is abstract; allocate a concrete EntityPlayerMP via
         // Unsafe (skips the ctor, so no NetworkManager / GameProfile /
         // PlayerInteractionManager required).
-        return (EntityPlayer) UNSAFE.allocateInstance(EntityPlayerMP.class);
+        EntityPlayerMP player = (EntityPlayerMP) UNSAFE.allocateInstance(EntityPlayerMP.class);
+        player.setEntityId(NEXT_FAKE_ID.getAndDecrement());
+        return player;
     }
 
     private static Container recordingContainer(AtomicInteger calls, boolean retval) {
@@ -98,8 +90,8 @@ public class RocketInventoryHelperRedirectTest {
 
     @Test
     public void bypassPlayerSkipsCanInteractWithRegardlessOfDistance() throws Exception {
-        EntityPlayer player = fakePlayer();
-        RocketInventoryHelper.addPlayerToInventoryBypass(player);
+        EntityPlayerMP player = fakePlayer();
+        bypass().addPlayerToInventoryBypass(player);
         AtomicInteger calls = new AtomicInteger();
         // If the redirect helper consults the container, our recording
         // stub flips calls > 0. Pinning calls==0 proves the bypass branch
@@ -135,10 +127,10 @@ public class RocketInventoryHelperRedirectTest {
 
     @Test
     public void removingPlayerFromBypassRestoresVanillaSemantics() throws Exception {
-        EntityPlayer player = fakePlayer();
-        RocketInventoryHelper.addPlayerToInventoryBypass(player);
+        EntityPlayerMP player = fakePlayer();
+        bypass().addPlayerToInventoryBypass(player);
         assertTrue(RocketInventoryHelper.canPlayerBypassInvChecks(player));
-        RocketInventoryHelper.removePlayerFromInventoryBypass(player);
+        bypass().removePlayerFromInventoryBypass(player);
         assertFalse(RocketInventoryHelper.canPlayerBypassInvChecks(player));
 
         // After removal, the helper must defer to container.canInteractWith
@@ -152,9 +144,9 @@ public class RocketInventoryHelperRedirectTest {
 
     @Test
     public void bypassIsScopedToTheSpecificPlayerInstance() throws Exception {
-        EntityPlayer p1 = fakePlayer();
-        EntityPlayer p2 = fakePlayer();
-        RocketInventoryHelper.addPlayerToInventoryBypass(p1);
+        EntityPlayerMP p1 = fakePlayer();
+        EntityPlayerMP p2 = fakePlayer();
+        bypass().addPlayerToInventoryBypass(p1);
 
         assertTrue("p1 is in bypass", RocketInventoryHelper.canPlayerBypassInvChecks(p1));
         assertFalse("p2 must NOT inherit p1's bypass",

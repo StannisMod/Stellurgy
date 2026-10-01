@@ -39,9 +39,9 @@ public abstract class MixinSpaceSubsystemSaveFaultEvents {
     private static final String INSTRUMENT = "space_save_fault_events";
 
     @Inject(method = "failSavePointIfArmed", at = @At("HEAD"))
-    private static void stellurgyTest$saveFaultReached(CallbackInfo ci) {
+    private void stellurgyTest$saveFaultReached(CallbackInfo ci) {
         TestTrace.instrumentHere(INSTRUMENT);
-        if (!SpaceSubsystem.isSaveFaultArmed()) {
+        if (!((SpaceSubsystem) (Object) this).isSaveFaultArmed()) {
             return; // an ordinary save point passes through here and throws nothing
         }
         TestTrace.recordServer("save_fault_fired", "\"armed\":true");

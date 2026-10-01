@@ -5,23 +5,28 @@ import net.minecraft.client.model.ModelBiped;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 
 public class RenderJetPack extends ModelBiped {
-    static WavefrontObject model;
-    static ResourceLocation texture = new ResourceLocation("stellurgy:textures/models/jetpack.png");
+    /**
+     * Effectively final, client lifetime: written once by {@link #loadModel()}, which only the client
+     * proxy calls, at pre-init. Not an instance field because the armour item builds a new
+     * {@code RenderJetPack} for every frame it is drawn, and no object of ours outlives that call.
+     */
+    private static WavefrontObject model;
+    private static final ResourceLocation texture = new ResourceLocation("stellurgy:textures/models/jetpack.png");
 
     ModelBiped biped;
 
+    /** Load the jetpack model. Called once, by the client proxy at pre-init; a second call throws. */
+    public static void loadModel() {
+        if (model != null) {
+            throw new IllegalStateException("the jetpack model is loaded once per client");
+        }
+        model = WavefrontObject.required(new ResourceLocation("stellurgy:models/jetPack.obj"));
+    }
 
     public RenderJetPack(ModelBiped _default) {
-        if (model == null)
-            try {
-                model = new WavefrontObject(new ResourceLocation("stellurgy:models/jetPack.obj"));
-            } catch (ModelFormatException e) {
-                e.printStackTrace();
-            }
         biped = _default;
     }
 

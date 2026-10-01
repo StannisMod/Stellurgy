@@ -658,7 +658,11 @@ public class XMLPlanetLoader {
             + "  Comments you add to this file do not survive a world save; this one is regenerated.\n"
             + "  Full reference: docs/README_PLANETDEFS.md\n";
 
-    public static String writeXML(IGalaxy galaxy) {
+    /**
+     * @param galaxyGen the {@code <galaxyGen>} configuration in force, written back so a re-read
+     *                  round-trips it; {@code null} for a universe of authored anchors only
+     */
+    public static String writeXML(IGalaxy galaxy, dev.stannismod.stellurgy.universe.GalaxyGenConfig galaxyGen) {
 
         Document doc;
         DocumentBuilder docBuilder;
@@ -729,10 +733,9 @@ public class XMLPlanetLoader {
             galaxyElement.appendChild(nodeStar);
         }
 
-        // Emit the active procedural generator's config so a re-read (resetFromXml) round-trips it.
-        IGalaxyGenerator activeGenerator = UniverseRegistry.getGenerator();
+        // Emit the procedural generator's config so a re-read (resetFromXml) round-trips it.
         java.util.Optional<dev.stannismod.stellurgy.universe.GalaxyGenConfig> tuning =
-                activeGenerator.tuning();
+                java.util.Optional.ofNullable(galaxyGen);
         if (tuning.isPresent()) {
             galaxyElement.appendChild(writeGalaxyGen(doc, tuning.get()));
             // The planet-type table travels with the generator, and only with it: an authored-anchors-only

@@ -1,7 +1,5 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.navigation.JumpGate;
@@ -102,16 +100,6 @@ public class JumpGateTest {
         }
     }
 
-    @Before
-    public void clearRegistrations() {
-        JumpGate.reset();
-    }
-
-    @After
-    public void restoreRegistrations() {
-        JumpGate.reset();
-    }
-
     @Test
     public void aShipWithComputerPositionAndTargetMayJump() {
         JumpGate.Verdict verdict = JumpGate.check(new FakeShip());
@@ -193,46 +181,10 @@ public class JumpGateTest {
     }
 
     @Test
-    public void anAdvisoryWarnsWithoutBlocking() {
-        JumpGate.register(JumpGate.Stage.SUPPLY, new JumpGate.Predicate() {
-            @Override
-            public JumpGate.Objection check(JumpGate.ShipContext ship) {
-                return new JumpGate.Objection(JumpGate.Severity.ADVISORY, "msg.test.notenoughfuel");
-            }
-        });
-
-        JumpGate.Verdict verdict = JumpGate.check(new FakeShip());
-
-        assertTrue("an ill-advised jump is still the pilot's to make", verdict.allowed());
-        assertTrue("but he must be told and must confirm", verdict.needsConfirmation());
-        assertEquals("msg.test.notenoughfuel", verdict.firstMessage());
-    }
-
-    @Test
-    public void aRegisteredHardObjectionRefusesTheJump() {
-        JumpGate.register(JumpGate.Stage.POWER, new JumpGate.Predicate() {
-            @Override
-            public JumpGate.Objection check(JumpGate.ShipContext ship) {
-                return new JumpGate.Objection(JumpGate.Severity.HARD, "msg.test.nocharge");
-            }
-        });
-
-        JumpGate.Verdict verdict = JumpGate.check(new FakeShip());
-
-        assertFalse("a subsystem that registers a hard objection can stop the jump", verdict.allowed());
-        assertEquals("msg.test.nocharge", verdict.firstMessage());
-    }
-
-    @Test
     public void navigationObjectionsAreReportedBeforeLaterStages() {
         FakeShip ship = new FakeShip();
         ship.navComputer = false;
-        JumpGate.register(JumpGate.Stage.POWER, new JumpGate.Predicate() {
-            @Override
-            public JumpGate.Objection check(JumpGate.ShipContext s) {
-                return new JumpGate.Objection(JumpGate.Severity.HARD, "msg.test.nocharge");
-            }
-        });
+        ship.capacitorCharge = ship.burstCost - 1L;
 
         JumpGate.Verdict verdict = JumpGate.check(ship);
 

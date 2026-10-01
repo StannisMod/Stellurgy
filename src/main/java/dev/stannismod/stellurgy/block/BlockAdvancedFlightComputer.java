@@ -33,7 +33,7 @@ public class BlockAdvancedFlightComputer extends BlockTile {
 
     @Override
     public void breakBlock(World world, BlockPos pos, IBlockState state) {
-        if (!world.isRemote && !StorageChunk.isRelocationInProgress()
+        if (!world.isRemote && !StorageChunk.isRelocationInProgress(world)
                 && world instanceof WorldServer) {
             // The computer keeps no back-link to its seat, so find the seated crew the same way the
             // pilot messaging does: every mount dummy whose bound seat's stored offset resolves to

@@ -15,7 +15,7 @@ public class PilotControlsMessage implements IMessage {
     /** Number of keys whose press edge is detected: up, down, forward, backward, left, right, stop. */
     public static final int EDGE_KEYS = 7;
 
-    private static UUID defaultUUID = new UUID(0, 0);
+    private static final UUID defaultUUID = new UUID(0, 0);
     public boolean airshipUp_KeyDown;
     public boolean airshipDown_KeyDown;
     public boolean airshipForward_KeyDown;

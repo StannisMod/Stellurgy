@@ -77,17 +77,31 @@ import java.util.*;
 public class PlanetEventHandler {
 
     private static final ItemStack component = new ItemStack(StellurgyItems.itemUpgrade, 1, 4);
-    /**
-     * Server ticks this handler has seen. OWNER: the SERVER; LIFETIME: one server, released by
-     * {@link #onServerStopped()}.
-     *
-     * <p>It exists to be READ from outside — it is the cheapest evidence that the
-     * {@code ServerTickEvent} subscription is alive, since a lost subscription leaves it frozen
-     * where the last tick put it. That is only true of a counter that STARTS somewhere known: until
-     * the release below, a second world in the same launch inherited the first world's total, so
-     * "frozen at N" and "counting from N" were the same reading.</p>
-     */
-    public static long time = 0;
+    /** What this handler keeps for one server ({@code ServerState#planetEvents}), and dies with it. */
+    public static final class ServerPart {
+        /**
+         * Server ticks this handler has seen. It exists to be READ from outside — it is the cheapest
+         * evidence that the {@code ServerTickEvent} subscription is alive, since a lost subscription
+         * leaves it frozen where the last tick put it. Starting at zero with each server is what
+         * keeps "frozen at N" and "counting from N" distinct readings.
+         */
+        private long ticks;
+
+        /** Entity moves this server owes at a future world time; they hold live entities of its worlds. */
+        private final List<TransitionEntity> transitions = new LinkedList<>();
+
+        public long ticks() {
+            return ticks;
+        }
+
+        public int pendingTransitions() {
+            return transitions.size();
+        }
+
+        public void addDelayedTransition(TransitionEntity entity) {
+            transitions.add(entity);
+        }
+    }
 
     /**
      * The warp-transition flash a client WORLD is showing. Owned by that world ({@link WorldRuntime})
@@ -97,27 +111,6 @@ public class PlanetEventHandler {
     private static final class WarpFlash {
         long endTime;
         long duration;
-    }
-
-    /** Entity moves this server owes at a future world time. OWNER: the SERVER; LIFETIME: one
-     *  server. Holds live {@code Entity} references, so it is emptied by the release below rather
-     *  than carried into the next world. */
-    private static final List<TransitionEntity> transitionMap = new LinkedList<>();
-
-    public static void addDelayedTransition(TransitionEntity entity) {
-        transitionMap.add(entity);
-    }
-
-    /**
-     * Released here, by the owner: both of these belonged to the server that has just stopped.
-     *
-     * <p>The queue is emptied rather than left to be overwritten — its entries hold entities of a
-     * world that no longer exists, and a transition scheduled against the old world's total time
-     * would fire against the new one's.</p>
-     */
-    public static void onServerStopped() {
-        time = 0;
-        transitionMap.clear();
     }
 
     /** Flash {@code world}'s fog white for {@code durationTicks} of its clock — the move-to-warp effect. */
@@ -289,10 +282,9 @@ public class PlanetEventHandler {
     public void sleepEvent(@Nonnull PlayerSleepInBedEvent event) {
 
         if (event.getEntity().world.provider instanceof WorldProviderPlanet) {
-            WorldProvider provider = event.getEntity().world.provider;
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(event.getEntity().world);
 
-            if (!StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace && AtmosphereHandler.hasAtmosphereHandler(provider.getDimension()) && atmhandler != null &&
+            if (!StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace && atmhandler != null &&
                     !atmhandler.getAtmosphereType(event.getPos()).isBreathable()) {
                 event.setResult(SleepResult.OTHER_PROBLEM);
             }
@@ -313,10 +305,9 @@ public class PlanetEventHandler {
 
     @SubscribeEvent
     public void blockPlacedEvent(@Nonnull PlaceEvent event) {
-        WorldProvider provider = event.getWorld().provider;
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(event.getWorld());
 
-        if (!event.getWorld().isRemote && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
+        if (!event.getWorld().isRemote && atmhandler != null &&
                 !atmhandler.getAtmosphereType(event.getPos()).allowsCombustion()) {
 
             if (event.getPlacedBlock().getBlock() == Blocks.TORCH) {
@@ -332,10 +323,9 @@ public class PlanetEventHandler {
     @SubscribeEvent
     public void blockRightClicked(@Nonnull RightClickBlock event) {
         EnumFacing direction = event.getFace();
-        WorldProvider provider = event.getWorld().provider;
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(event.getWorld());
 
-        if (!event.getWorld().isRemote && direction != null && event.getEntityPlayer() != null && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
+        if (!event.getWorld().isRemote && direction != null && event.getEntityPlayer() != null && atmhandler != null &&
                 !atmhandler.getAtmosphereType(event.getPos().offset(direction)).allowsCombustion()) {
 
             if (!event.getEntityPlayer().getHeldItem(event.getHand()).isEmpty()) {
@@ -355,10 +345,11 @@ public class PlanetEventHandler {
         //Tick satellites
         if (event.phase == TickEvent.Phase.END) {
             DimensionManager.getInstance().tickDimensions();
-            time++;
+            ServerPart part = dev.stannismod.stellurgy.Stellurgy.serverState().planetEvents;
+            part.ticks++;
 
-            if (!transitionMap.isEmpty()) {
-                Iterator<TransitionEntity> itr = transitionMap.iterator();
+            if (!part.transitions.isEmpty()) {
+                Iterator<TransitionEntity> itr = part.transitions.iterator();
 
                 while (itr.hasNext()) {
                     TransitionEntity ent = itr.next();
@@ -427,7 +418,7 @@ public class PlanetEventHandler {
         if (!event.getWorld().isRemote) {
             World world = event.getWorld();
             int dim = world.provider.getDimension();
-            AtmosphereHandler.registerWorld(dim);
+            AtmosphereHandler.registerWorld(world);
             // Import a TEMPLATE planet's region files before its chunks are first generated (no-op otherwise).
             TemplateImporter.importIfNeeded(world, DimensionManager.getInstance().getDimensionProperties(dim));
         } else if (StellurgyConfiguration.getCurrentConfig().skyOverride)
@@ -437,7 +428,7 @@ public class PlanetEventHandler {
     @SubscribeEvent
     public void worldUnloadEvent(WorldEvent.Unload event) {
         if (!event.getWorld().isRemote)
-            AtmosphereHandler.unregisterWorld(event.getWorld().provider.getDimension());
+            AtmosphereHandler.unregisterWorld(event.getWorld());
     }
 
     //Handle fog density and color

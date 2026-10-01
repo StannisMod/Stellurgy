@@ -479,7 +479,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "route as a human drives it, and its completion signal has to be the ship "
                         + "itself: a tier-2 craft spawns no rocket entity, so the rocket list would "
                         + "report a healthy nothing. ships=" + ships
-                        + " spawnDiag=" + exec("stellurgytest vs spawn-diag")
+                        + " spawnDiag=" + exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.SpawnMemory snapshot")
                         + " builderEnergy=" + energyAt(builderPos),
                 ships >= 1);
         System.out.println("[M1] leg 2 (client-driven assembly) " + elapsed(tLeg) + " ships=" + ships);

@@ -74,8 +74,6 @@ public final class ShipFrameTravel {
     // What an observer needs travels as PARAMETERS of the seams below, at the moment the value
     // exists, on the body it belongs to.
 
-    /** Throttle for the [FF-TRACE/WALK] line (test mode only). */
-    private static int walkTraceTicks = 0;
 
 
     /**
@@ -462,7 +460,9 @@ public final class ShipFrameTravel {
         // that is not the same question. Testing support first keeps the two answers honest: a
         // declaration for a ship with no deck under these feet is not a capture anyone wants, so it
         // falls through to the sweep rather than forcing a hold onto geometry that cannot carry it.
-        String declared = DeckHold.heldShipId(entity);
+        // A hold has no client half: a client body declares nothing.
+        String declared = entity.world.isRemote ? null
+                : dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.heldShipId(entity);
         if (declared != null && shipSupportObstacleCountFor(entity, declared) > 0) {
             return declared;
         }
@@ -677,8 +677,16 @@ public final class ShipFrameTravel {
         }
     }
 
-    /** The (single) pending seed. Client main thread only. */
-    private static PendingSeed pendingSeed = null;
+    /** The pending seeds of the bodies in one client world, as that world's part
+     *  ({@link dev.stannismod.stellurgy.world.WorldRuntime}): a seed places a body in that world and
+     *  goes with it. Weak keys, so a seed never keeps a body alive. Client main thread only. */
+    private static final class PendingSeeds {
+        final Map<Entity, PendingSeed> byBody = new java.util.WeakHashMap<Entity, PendingSeed>();
+    }
+
+    private static Map<Entity, PendingSeed> pendingSeedsIn(World world) {
+        return dev.stannismod.stellurgy.world.WorldRuntime.of(world, PendingSeeds.class, PendingSeeds::new).byBody;
+    }
 
     /** What a pending seed should do this tick. Pure - pinned by unit tests. */
     public enum PendingSeedDecision { WAIT, EXPIRE, ALREADY_SEEDED, KEEP_PREEXISTING, APPLY }
@@ -750,39 +758,45 @@ public final class ShipFrameTravel {
         if (st != null && st.seedAnchored && shipId.equals(st.shipId)) {
             return; // the seed already took; a re-send must not teleport the body again
         }
-        PendingSeed slot = pendingSeed;
-        if (slot != null && slot.body.get() == entity && slot.shipId.equals(shipId)
-                && slot.restore == restore) {
+        Map<Entity, PendingSeed> seeds = pendingSeedsIn(entity.world);
+        PendingSeed slot = seeds.get(entity);
+        if (slot != null && slot.shipId.equals(shipId) && slot.restore == restore) {
             slot.ticksLeft = PENDING_SEED_TTL_TICKS;
         } else {
-            pendingSeed = new PendingSeed(entity, shipId, subX, subY, subZ, restore);
+            seeds.put(entity, new PendingSeed(entity, shipId, subX, subY, subZ, restore));
         }
-        tryApplyPendingSeed(); // zero-tick fast path when nothing blocks
+        tryApplyPendingSeed(entity); // zero-tick fast path when nothing blocks
     }
 
-    /** Per-client-tick driver for the pending seed; a no-op when no seed is pending. */
+    /** Per-client-tick driver for {@code player}'s pending seed; a no-op when none is pending. */
     public static void clientTickPendingSeed(Entity player) {
-        PendingSeed slot = pendingSeed;
+        if (player == null || player.world == null) {
+            return;
+        }
+        Map<Entity, PendingSeed> seeds = pendingSeedsIn(player.world);
+        PendingSeed slot = seeds.get(player);
         if (slot == null) {
             return;
         }
-        Entity body = slot.body.get();
-        if (body == null || body.isDead || body != player) {
-            pendingSeed = null; // the seed's target is gone (a relog recreates the player object)
+        if (player.isDead) {
+            seeds.remove(player);
             return;
         }
         slot.ticksLeft--;
-        tryApplyPendingSeed();
+        tryApplyPendingSeed(player);
     }
 
-    private static void tryApplyPendingSeed() {
-        PendingSeed slot = pendingSeed;
+    private static void tryApplyPendingSeed(Entity body) {
+        if (body.world == null) {
+            return;
+        }
+        Map<Entity, PendingSeed> seeds = pendingSeedsIn(body.world);
+        PendingSeed slot = seeds.get(body);
         if (slot == null) {
             return;
         }
-        Entity body = slot.body.get();
-        if (body == null || body.isDead || body.world == null) {
-            pendingSeed = null;
+        if (body.isDead) {
+            seeds.remove(body);
             return;
         }
         ShipFrameState st = STATE.get(body);
@@ -797,13 +811,9 @@ public final class ShipFrameTravel {
             case WAIT:
                 return;
             case EXPIRE:
-                pendingSeed = null;
-                return;
             case ALREADY_SEEDED:
-                pendingSeed = null;
-                return;
             case KEEP_PREEXISTING:
-                pendingSeed = null;
+                seeds.remove(body);
                 return;
             case APPLY:
             default:
@@ -819,7 +829,7 @@ public final class ShipFrameTravel {
                             + " world=(" + world[0] + "," + world[1] + "," + world[2] + ")");
                 }
                 applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
-                pendingSeed = null;
+                seeds.remove(body);
         }
     }
 
@@ -1632,7 +1642,7 @@ public final class ShipFrameTravel {
         float deckYaw = deckYawDeg(entity, shipId);
         noteWalkInputs(entity, strafe, forward, deckYaw, motion[0], motion[1], motion[2]);
         if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()
-                && (walkTraceTicks++ % 10) == 0
+                && (world.getTotalWorldTime() % 10) == 0
                 && (strafe != 0f || forward != 0f
                         || Math.abs(motion[0]) > 0.05 || Math.abs(motion[2]) > 0.05)) {
             dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/WALK]"

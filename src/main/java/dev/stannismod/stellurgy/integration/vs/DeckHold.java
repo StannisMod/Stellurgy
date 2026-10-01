@@ -27,8 +27,8 @@ import org.apache.logging.log4j.Logger;
  *       below reuses.</li>
  *   <li>a crew member <b>on his feet across a crossing</b> — his ship is cut out from under him at
  *       the departure and re-assembled asynchronously at the far end, so for both windows he is a
- *       body in a world with no ship under it. {@link #pinInPlace} covers the near side (there is
- *       nothing left to resolve against) and {@link #holdOnDeck} the far one (the crossing already
+ *       body in a world with no ship under it. {@link Holds#pinInPlace} covers the near side (there is
+ *       nothing left to resolve against) and {@link Holds#holdOnDeck} the far one (the crossing already
  *       knows which ship and which point).</li>
  * </ul>
  *
@@ -122,71 +122,86 @@ public final class DeckHold {
     }
 
     /**
-     * The live holds, keyed by player UUID — and STATIC, because the callers that arm one are not
-     * events on this handler. A crossing decides mid-tick that a body has to be held; it holds no
-     * reference to the single instance Forge's event bus owns, and handing one around would be a
-     * second way to reach the same map. One instance is registered ({@code Stellurgy}), so
-     * the tick that services these entries is the tick that would have serviced an instance field.
+     * The live holds of one server, keyed by player UUID ({@code ServerState#deckHolds}). Each entry
+     * is dropped when its player logs out, and all of them go with the server.
      */
-    private static final Map<UUID, Hold> HOLDS = new HashMap<>();
+    public static final class Holds {
+        private final Map<UUID, Hold> byPlayer = new HashMap<>();
 
-    /**
-     * Pin {@code player} exactly where he is, with no ship to resolve against — the shape a crew
-     * member on his feet needs while his ship is being CUT out from under him.
-     *
-     * <p>It deliberately carries no ship id. The ship this body belongs to is, for the length of
-     * this window, in no world at all: it has been cut here and not yet re-assembled there. A hold
-     * that named it would spend the window pumping a ship load in the world it just left, and find
-     * nothing every time. What the body needs meanwhile is only to stop falling, which is exactly
-     * what an unresolved hold does. The far side re-arms it with {@link #holdOnDeck} once there is
-     * a ship to be held against.</p>
-     */
-    public static void pinInPlace(EntityPlayerMP player) {
-        if (player != null) {
-            HOLDS.put(player.getUniqueID(), new Hold(null, 0.0, 0.0, 0.0));
+        /**
+         * Pin {@code player} exactly where he is, with no ship to resolve against — the shape a crew
+         * member on his feet needs while his ship is being CUT out from under him.
+         *
+         * <p>It deliberately carries no ship id. The ship this body belongs to is, for the length of
+         * this window, in no world at all: it has been cut here and not yet re-assembled there. A
+         * hold that named it would spend the window pumping a ship load in the world it just left,
+         * and find nothing every time. What the body needs meanwhile is only to stop falling, which
+         * is exactly what an unresolved hold does. The far side re-arms it with {@link #holdOnDeck}
+         * once there is a ship to be held against.</p>
+         */
+        public void pinInPlace(EntityPlayerMP player) {
+            if (player != null) {
+                byPlayer.put(player.getUniqueID(), new Hold(null, 0.0, 0.0, 0.0));
+            }
+        }
+
+        /**
+         * Hold {@code player} on a KNOWN ship's deck point: pin him to the current world image of the
+         * SUBSPACE point {@code (subX,subY,subZ)} on ship {@code vsShipId}, and keep asking his client
+         * to capture it until it does.
+         *
+         * <p>This is the far side of a crossing. The caller has already resolved which ship arrived
+         * and where on it the body belongs, so no lookup is needed — and re-arming an existing hold is
+         * harmless: the window restarts and the pin lands on the same point.</p>
+         */
+        public void holdOnDeck(EntityPlayerMP player, String vsShipId,
+                               double subX, double subY, double subZ) {
+            if (player != null && vsShipId != null) {
+                byPlayer.put(player.getUniqueID(), Hold.on(vsShipId, subX, subY, subZ));
+            }
+        }
+
+        /** Is a deck currently holding this player? */
+        public boolean isHeld(net.minecraft.entity.player.EntityPlayer player) {
+            return player != null && byPlayer.containsKey(player.getUniqueID());
+        }
+
+        /**
+         * The ship a live hold is holding {@code entity} FOR, or {@code null} when nothing holds it
+         * (or the hold has not yet found its ship).
+         *
+         * <p>This is a DECLARATION, and it is the reason the class exposes it: an arrival, a relog or
+         * a displaced pilot has already established which craft this body belongs to and put it on
+         * that craft's deck point. Anything that would otherwise GUESS the ship from where the body is
+         * standing must ask here first — where two hulls overlap, a spatial guess and a declaration
+         * can differ, and the declaration is the one that knows.</p>
+         *
+         * <p>The named twin of {@link #isHeld}, which answers whether a body is held and never for
+         * which craft. A hold has no client half.</p>
+         */
+        public String heldShipId(net.minecraft.entity.Entity entity) {
+            if (entity == null) {
+                return null;
+            }
+            Hold hold = byPlayer.get(entity.getUniqueID());
+            return hold == null ? null : hold.shipId;
+        }
+
+        /**
+         * Let go of the deck this player is being held to, answering whether he was held.
+         *
+         * <p>A hold is what keeps a body moving with the hull under it, so a player returned to the
+         * plain world while one stands is a player the next tick will drag after a ship he is no
+         * longer on. Called by {@link dev.stannismod.stellurgy.player.PlayerRelease}.</p>
+         */
+        public boolean releaseHold(net.minecraft.entity.player.EntityPlayer player) {
+            return byPlayer.remove(player.getUniqueID()) != null;
         }
     }
 
-    /**
-     * Hold {@code player} on a KNOWN ship's deck point: pin him to the current world image of the
-     * SUBSPACE point {@code (subX,subY,subZ)} on ship {@code vsShipId}, and keep asking his client
-     * to capture it until it does.
-     *
-     * <p>This is the far side of a crossing. The caller has already resolved which ship arrived and
-     * where on it the body belongs, so no lookup is needed — and re-arming an existing hold is
-     * harmless: the window restarts and the pin lands on the same point.</p>
-     */
-    public static void holdOnDeck(EntityPlayerMP player, String vsShipId,
-                                  double subX, double subY, double subZ) {
-        if (player != null && vsShipId != null) {
-            HOLDS.put(player.getUniqueID(), Hold.on(vsShipId, subX, subY, subZ));
-        }
-    }
-
-    /** Whether a hold is currently pinning {@code player}. */
-    public static boolean isHeld(EntityPlayerMP player) {
-        return player != null && HOLDS.containsKey(player.getUniqueID());
-    }
-
-    /**
-     * The ship a live hold is holding {@code entity} FOR, or {@code null} when nothing holds it (or
-     * the hold has not yet found its ship).
-     *
-     * <p>This is a DECLARATION, and it is the reason the class exposes it: an arrival, a relog or a
-     * displaced pilot has already established which craft this body belongs to and put it on that
-     * craft's deck point. Anything that would otherwise GUESS the ship from where the body is
-     * standing must ask here first — where two hulls overlap, a spatial guess and a declaration can
-     * differ, and the declaration is the one that knows.</p>
-     *
-     * <p>The named twin of {@link #isHeld}, which answers whether a body is held and never for
-     * which craft. Both are read on the server; a hold has no client half.</p>
-     */
-    public static String heldShipId(net.minecraft.entity.Entity entity) {
-        if (entity == null) {
-            return null;
-        }
-        Hold hold = HOLDS.get(entity.getUniqueID());
-        return hold == null ? null : hold.shipId;
+    /** The running server's holds; every handler below reaches them through here, on the server. */
+    private static Map<UUID, Hold> holds() {
+        return dev.stannismod.stellurgy.Stellurgy.serverState().deckHolds.byPlayer;
     }
 
     @SubscribeEvent
@@ -202,7 +217,7 @@ public final class DeckHold {
         if (aboard != null
                 && aboard.posture == dev.stannismod.stellurgy.space.ShipAboardTag.Posture.STANDING) {
             Hold hold = new Hold(aboard.shipId, aboard.standDx, aboard.standDy, aboard.standDz);
-            HOLDS.put(event.player.getUniqueID(), hold);
+            holds().put(event.player.getUniqueID(), hold);
             armDurable((EntityPlayerMP) event.player, hold);
         }
         // AFTER the anchor hold: a displaced pilot's hold below must win over the (older) anchor.
@@ -265,7 +280,7 @@ public final class DeckHold {
             }
             // The same hold a standing relog gets: pin against gravity, ask his client to
             // capture the deck point. Wins over any (older) record hold registered above.
-            HOLDS.put(player.getUniqueID(), Hold.on(shipId, subX, subY, subZ));
+            holds().put(player.getUniqueID(), Hold.on(shipId, subX, subY, subZ));
         } else {
             // Not on a managed ship (e.g. the craft was disassembled meanwhile): stand him at
             // the seat block itself, plain world frame.
@@ -273,7 +288,7 @@ public final class DeckHold {
                     seatPos.getX() + 0.5, seatPos.getY() + 1.0, seatPos.getZ() + 0.5);
         }
         // Delayed past the join flood — sent immediately it is overwritten before he reads it.
-        dev.stannismod.stellurgy.util.DelayedActionBar.send(player,
+        dev.stannismod.stellurgy.Stellurgy.serverState().actionBar.send(player,
                 new net.minecraft.util.text.TextComponentTranslation(
                         "msg.pilotseat.taken", occupant.getName()), 20);
     }
@@ -302,29 +317,9 @@ public final class DeckHold {
 
     @SubscribeEvent
     public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (event.player != null) {
-            HOLDS.remove(event.player.getUniqueID());
+        if (event.player != null && !event.player.world.isRemote) {
+            holds().remove(event.player.getUniqueID());
         }
-    }
-
-    /**
-     * Let go of the deck this player is being held to, answering whether he was held.
-     *
-     * <p>A hold is what keeps a body moving with the hull under it, so a player returned to the
-     * plain world while one stands is a player the next tick will drag after a ship he is no longer
-     * on. Called by {@link dev.stannismod.stellurgy.player.PlayerRelease}.</p>
-     *
-     * <p>Static because the store is: {@code HOLDS} has been a private static map since long before
-     * this method, so a caller that had to find the right INSTANCE would be asking for a precision
-     * the state does not have.</p>
-     */
-    public static boolean releaseHold(net.minecraft.entity.player.EntityPlayer player) {
-        return HOLDS.remove(player.getUniqueID()) != null;
-    }
-
-    /** Is a deck currently holding this player? */
-    public static boolean isHeld(net.minecraft.entity.player.EntityPlayer player) {
-        return HOLDS.containsKey(player.getUniqueID());
     }
 
     @SubscribeEvent
@@ -334,7 +329,7 @@ public final class DeckHold {
             return;
         }
         EntityPlayerMP player = (EntityPlayerMP) event.player;
-        Hold hold = HOLDS.get(player.getUniqueID());
+        Hold hold = holds().get(player.getUniqueID());
         if (hold == null) {
             return;
         }
@@ -352,13 +347,13 @@ public final class DeckHold {
         // Everything downstream — the deck frame, the carry, the camera — was then the wrong ship's.
         if (hold.seedSent && hold.shipId != null
                 && hold.shipId.equals(ShipFrameTravel.capturedShipId(player))) {
-            HOLDS.remove(player.getUniqueID());
+            holds().remove(player.getUniqueID());
             return;
         }
         // An excluded state - riding, elytra, creative flight, water/ladder, levitation - owns its
         // own movement and ends any capture; the seed would refuse anyway.
         if (ShipFrameTravel.isExcludedFromCapture(player)) {
-            HOLDS.remove(player.getUniqueID());
+            holds().remove(player.getUniqueID());
             return;
         }
         if (--hold.ticksLeft <= 0) {
@@ -455,7 +450,7 @@ public final class DeckHold {
      * is the one about to fall and "my ship vanished under me" is otherwise the whole report.</p>
      */
     private static void giveUp(EntityPlayerMP player, Hold hold) {
-        HOLDS.remove(player.getUniqueID());
+        holds().remove(player.getUniqueID());
         LOGGER.error("[SPACE] gave up holding {} on a deck after {} ticks: {}. He is handed to "
                         + "vanilla movement where he stands, which on a tilted or inverted deck is a "
                         + "fall. Treat this as a bug report.",
@@ -469,7 +464,7 @@ public final class DeckHold {
                                         + " seed" : "for nothing yet") + ")"
                                 : "the hold was a bare pin with no ship, and the crossing that should"
                                         + " have replaced it never boarded him");
-        dev.stannismod.stellurgy.util.DelayedActionBar.send(player,
+        dev.stannismod.stellurgy.Stellurgy.serverState().actionBar.send(player,
                 new net.minecraft.util.text.TextComponentTranslation("msg.deckhold.lost"), 20);
     }
 
@@ -533,10 +528,10 @@ public final class DeckHold {
 
     /** Every unresolved hold in {@code world} whose durable name is {@code shipId}, resolved now. */
     private static void resolveHoldsNaming(net.minecraft.world.World world, String shipId) {
-        if (world == null || world.isRemote || shipId == null || HOLDS.isEmpty()) {
+        if (world == null || world.isRemote || shipId == null || holds().isEmpty()) {
             return;
         }
-        for (Map.Entry<UUID, Hold> entry : HOLDS.entrySet()) {
+        for (Map.Entry<UUID, Hold> entry : holds().entrySet()) {
             Hold hold = entry.getValue();
             if (hold.resolved() || hold.durableShipId == null
                     || !shipId.equals(hold.durableShipId.toString())) {
@@ -569,10 +564,10 @@ public final class DeckHold {
      */
     @SubscribeEvent
     public void onShipGone(dev.stannismod.stellurgy.api.event.ShipEvent.ShipGoneEvent event) {
-        if (event.world == null || event.world.isRemote || HOLDS.isEmpty()) {
+        if (event.world == null || event.world.isRemote || holds().isEmpty()) {
             return;
         }
-        for (Iterator<Map.Entry<UUID, Hold>> it = HOLDS.entrySet().iterator(); it.hasNext();) {
+        for (Iterator<Map.Entry<UUID, Hold>> it = holds().entrySet().iterator(); it.hasNext();) {
             Map.Entry<UUID, Hold> entry = it.next();
             Hold hold = entry.getValue();
             // Either identity may be the one this hold knows: a hold that never resolved is still
@@ -600,7 +595,7 @@ public final class DeckHold {
         LOGGER.error("[SPACE] the ship {} a deck hold was keeping {} on has been DESTROYED; he is "
                         + "handed to vanilla movement where he stands. Treat this as a bug report if "
                         + "nothing in this world was supposed to destroy it.", ship, player.getName());
-        dev.stannismod.stellurgy.util.DelayedActionBar.send(player,
+        dev.stannismod.stellurgy.Stellurgy.serverState().actionBar.send(player,
                 new net.minecraft.util.text.TextComponentTranslation("msg.deckhold.shipgone"), 20);
     }
 

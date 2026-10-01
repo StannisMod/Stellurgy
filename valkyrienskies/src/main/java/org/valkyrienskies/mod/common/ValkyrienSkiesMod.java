@@ -165,6 +165,8 @@ public class ValkyrienSkiesMod {
 		log.info("Valkyrien Skies Initialization: We are running on {} threads; 4 or more is recommended!", Runtime.getRuntime().availableProcessors());
 		proxy.init(event);
 		isSpongePresent = Loader.isModLoaded("spongeforge");
+		// Every block is registered by now, so the config's block names resolve.
+		VSConfig.rederive();
 	}
 
 	public void postInit(FMLPostInitializationEvent event) {

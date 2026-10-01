@@ -340,7 +340,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             // Once per load: the stride is the installed generator's, and that is fixed for a world.
             if (stepLightYears <= 0d) {
                 stepLightYears = dev.stannismod.stellurgy.universe.UniverseScale
-                        .lightYearsForCells(RegionScan.Tuning.fromConfig().strideCells());
+                        .lightYearsForCells(scanTuning().strideCells());
                 markDirty();
             }
             completeRegionScanIfDue();
@@ -849,7 +849,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         // Re-aiming mid-sweep is allowed and costs only the cell in flight: every cell already
         // resolved is already written to the crystal, so there is nothing else to lose.
         RegionScan aimed = buildScan(() -> RegionScan.directed(origin, dirX, dirY, dirZ, distanceSteps,
-                world.getTotalWorldTime(), RegionScan.Tuning.fromConfig()));
+                world.getTotalWorldTime(), scanTuning()));
         if (aimed == null) {
             return false;
         }
@@ -897,6 +897,12 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
      * <p>Passive and active are one mode at a time: an observatory staring into deep space genuinely
      * cannot watch what is close, and a second set of scanners is the expensive cure.</p>
      */
+    /** The survey tuning for the sky of this server's save. Server side only. */
+    private RegionScan.Tuning scanTuning() {
+        return RegionScan.Tuning.fromConfig(
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(world).generator());
+    }
+
     public boolean beginPassiveSweep() {
         if (world == null || world.isRemote) {
             return false;
@@ -907,7 +913,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         }
         int radius = Math.max(0, StellurgyConfiguration.getCurrentConfig().telescopePassiveRadiusSteps);
         RegionScan sweep = buildScan(() -> RegionScan.local(origin, radius,
-                world.getTotalWorldTime(), RegionScan.Tuning.fromConfig()));
+                world.getTotalWorldTime(), scanTuning()));
         if (sweep == null) {
             return false;
         }
@@ -1298,7 +1304,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
                 if (id == PICK_DIRECTION) {
                     scanDirection = (scanDirectionIndex() + 1) % SCAN_DIRECTIONS.length;
                 } else {
-                    int reach = RegionScan.Tuning.fromConfig().maxRangeSteps();
+                    int reach = scanTuning().maxRangeSteps();
                     scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger("d")));
                 }
                 markDirty();

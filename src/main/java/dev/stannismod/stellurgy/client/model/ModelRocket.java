@@ -22,7 +22,7 @@ import java.util.function.Function;
 
 public class ModelRocket implements IModel {
 
-    public static ModelResourceLocation resource = new ModelResourceLocation("stellurgy:rocket.obj");
+    public static final ModelResourceLocation resource =new ModelResourceLocation("stellurgy:rocket.obj");
 
     @Override
     @Nonnull
@@ -64,7 +64,7 @@ public class ModelRocket implements IModel {
 
     private final static class State implements IModelState {
 
-        static State myState = new State();
+        static final State myState = new State();
 
         @Override
         public Optional<TRSRTransformation> apply(

@@ -95,7 +95,7 @@ public final class SpaceSubsystemEvents {
         live.crewRebind.tick(FMLCommonHandler.instance().getMinecraftServerInstance());
         // Rebroadcast the per-slot render bodies (throttled) so the slot-world sky (BoundarySky)
         // tracks each settled ship's direction to the bodies of its cell.
-        SystemBodiesProducer.onBroadcastTick(FMLCommonHandler.instance().getMinecraftServerInstance());
+        live.skyProducer.onBroadcastTick(FMLCommonHandler.instance().getMinecraftServerInstance());
         if (live.tickGc()) {
             mgr.gc();
         }
@@ -196,7 +196,7 @@ public final class SpaceSubsystemEvents {
             java.util.Map<java.util.UUID, ShipLedger.Entry> live = stack.ledger.snapshot();
             java.util.List<TransitRecord> inFlight = stack.transit.exportTransits();
             java.util.Map<String, Long> visits = stack.manager.exportVisits();
-            SpaceSubsystem.failSavePointIfArmed();
+            stack.failSavePointIfArmed();
             java.util.List<java.util.UUID> dropped = data.replaceAll(live, inFlight, visits);
             if (!dropped.isEmpty()) {
                 Stellurgy.logger.error("[SPACE] refusing to persist a ship ledger that would "

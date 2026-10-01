@@ -31,6 +31,10 @@ import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 public class AtmosphereHandler {
     public static final DamageSource vacuumDamage = new DamageSource("Vacuum").setDamageBypassesArmor().setDamageIsAbsolute();
@@ -38,10 +42,23 @@ public class AtmosphereHandler {
     public static final DamageSource heatDamage = new DamageSource("Heat").setDamageBypassesArmor().setDamageIsAbsolute();
     public static final DamageSource oxygenToxicityDamage = new DamageSource("OxygenToxicity").setDamageBypassesArmor().setDamageIsAbsolute();
     private static final int MAX_BLOB_RADIUS = ((StellurgyConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1) ? 256 : StellurgyConfiguration.getCurrentConfig().oxygenVentSize;
-    private static HashMap<Integer, AtmosphereHandler> dimensionOxygen = new HashMap<>();
-    private static HashMap<EntityPlayer, IAtmosphere> prevAtmosphere = new HashMap<>();
+    /**
+     * What a WORLD keeps for this subsystem ({@link WorldRuntime}): its handler, if it has one, and the
+     * depth of structure writes in flight into it. Both die with the world object.
+     */
+    private static final class WorldAtmosphere {
+        AtmosphereHandler handler;
+        int structurePasteDepth;
+    }
+
+    private static WorldAtmosphere of(World world) {
+        return WorldRuntime.of(world, WorldAtmosphere.class, WorldAtmosphere::new);
+    }
+
     private HashMap<IBlobHandler, AreaBlob> blobs;
     private int dimId;
+    /** The atmosphere this handler last told each player's client about. Weak: a player is not kept by it. */
+    private final Map<EntityPlayer, IAtmosphere> prevAtmosphere = new WeakHashMap<>();
 
     private AtmosphereHandler(int dimId) {
         this.dimId = dimId;
@@ -49,11 +66,12 @@ public class AtmosphereHandler {
     }
 
     /**
-     * Registers the Atmosphere handler for the dimension given
+     * Registers the Atmosphere handler for the server world given
      *
-     * @param dimId the dimension id to register the dimension for
+     * @param world the world to register the handler for
      */
-    public static void registerWorld(int dimId) {
+    public static void registerWorld(World world) {
+        int dimId = world.provider.getDimension();
 
         //If O2 is allowed and
         DimensionProperties dimProp = DimensionManager.getInstance().getDimensionProperties(dimId);
@@ -61,23 +79,24 @@ public class AtmosphereHandler {
 
             //dunno how, but double registering could happen.
             //don't let old registered handler survive in the background forever
-            if (dimensionOxygen.containsKey(dimId)) {
-                unregisterWorld(dimId);
-            }
+            unregisterWorld(world);
 
             AtmosphereHandler handler = new AtmosphereHandler(dimId);
-            dimensionOxygen.put(dimId, handler);
+            of(world).handler = handler;
             MinecraftForge.EVENT_BUS.register(handler);
         }
     }
 
     /**
-     * Unregisters the Atmosphere handler for the dimension given
+     * Unregisters the Atmosphere handler of the world given; called when that world unloads, which
+     * every server world does when its server stops.
      *
-     * @param dimId the dimension id to register the dimension for
+     * @param world the world to unregister the handler of
      */
-    public static void unregisterWorld(int dimId) {
-        AtmosphereHandler handler = dimensionOxygen.remove(dimId);
+    public static void unregisterWorld(World world) {
+        WorldAtmosphere atmosphere = of(world);
+        AtmosphereHandler handler = atmosphere.handler;
+        atmosphere.handler = null;
 
         if (handler != null) {
             handler.blobs.clear();
@@ -87,32 +106,16 @@ public class AtmosphereHandler {
     }
 
     /**
-     * Proper Clearing on ServerStopped
+     * @return true if the world has an AtmosphereHandler Object associated with it; a client world
+     *         never does
      */
-    public static void clear() {
-        for (AtmosphereHandler handler : new LinkedList<>(dimensionOxygen.values())) {
-            if (handler != null) {
-                handler.blobs.clear();
-
-                MinecraftForge.EVENT_BUS.unregister(handler);
-            }
-        }
-        dimensionOxygen.clear();
-        prevAtmosphere.clear();
+    public static boolean hasAtmosphereHandler(World world) {
+        return of(world).handler != null;
     }
 
     /**
-     * @return true if the dimension has an AtmosphereHandler Object associated with it
-     */
-    public static boolean hasAtmosphereHandler(int dimId) {
-        return dimensionOxygen.containsKey(dimId);
-    }
-
-    /** Nesting depth of multi-block structure writes in flight on the server thread. */
-    private static int structurePasteDepth = 0;
-
-    /**
-     * Open a multi-block structure write: until the matching {@link #endStructurePaste()}, the
+     * Open a multi-block structure write into {@code world}: until the matching
+     * {@link #endStructurePaste(World)}, the
      * environmental block CONVERSIONS below (burn, vaporize) are held off.
      *
      * <p>They ask whether a block is exposed to the local atmosphere, and answer it from the world
@@ -128,22 +131,24 @@ public class AtmosphereHandler {
      * in the world lives by.</p>
      *
      * <p>Server thread only, like every other path through this class; nesting is counted so an
-     * inner paste cannot re-arm the conversions while an outer one is still running.</p>
+     * inner paste cannot re-arm the conversions while an outer one is still running. Counted per
+     * world, so a write into one world holds off nothing in another.</p>
      */
-    public static void beginStructurePaste() {
-        structurePasteDepth++;
+    public static void beginStructurePaste(World world) {
+        of(world).structurePasteDepth++;
     }
 
-    /** Close a write opened by {@link #beginStructurePaste()}. Always call from a finally. */
-    public static void endStructurePaste() {
-        if (structurePasteDepth > 0) {
-            structurePasteDepth--;
+    /** Close a write opened by {@link #beginStructurePaste(World)}. Always call from a finally. */
+    public static void endStructurePaste(World world) {
+        WorldAtmosphere atmosphere = of(world);
+        if (atmosphere.structurePasteDepth > 0) {
+            atmosphere.structurePasteDepth--;
         }
     }
 
-    /** Whether a multi-block structure write is in flight. @see #beginStructurePaste() */
-    public static boolean isStructurePasteInFlight() {
-        return structurePasteDepth > 0;
+    /** Whether a multi-block structure write into {@code world} is in flight. @see #beginStructurePaste(World) */
+    public static boolean isStructurePasteInFlight(World world) {
+        return of(world).structurePasteDepth > 0;
     }
 
     //Called from setBlock in World.class
@@ -154,7 +159,7 @@ public class AtmosphereHandler {
         if (StellurgyConfiguration.getCurrentConfig().enableOxygen && !world.isRemote && world.getChunkFromBlockCoords(new BlockPos(bpos)).isLoaded()) {
             HashedBlockPosition pos = new HashedBlockPosition(bpos);
 
-            AtmosphereHandler handler = getOxygenHandler(world.provider.getDimension());
+            AtmosphereHandler handler = getOxygenHandler(world);
 
             //Bonus chests cause world gen to begin before loading the world
             //Because atmosphere handlers are created at world load time
@@ -164,7 +169,7 @@ public class AtmosphereHandler {
 
             //Block handling for what should and shouldn't exist or what should be on fire
             //Things should be on fire
-            if (!isStructurePasteInFlight() && handler.getAtmosphereType(bpos) == AtmosphereType.SUPERHEATED) {
+            if (!isStructurePasteInFlight(world) && handler.getAtmosphereType(bpos) == AtmosphereType.SUPERHEATED) {
                 if (world.getBlockState(bpos).getBlock().isLeaves(world.getBlockState(bpos), world, bpos)) {
                     world.setBlockToAir(bpos);
                 } else if (world.getBlockState(bpos).getMaterial() == Material.CACTUS) {
@@ -211,7 +216,7 @@ public class AtmosphereHandler {
              */
 
             //Gasses should automatically vaporize and dissipate
-            if (!isStructurePasteInFlight() && handler.getAtmosphereType(bpos) == AtmosphereType.VACUUM) {
+            if (!isStructurePasteInFlight(world) && handler.getAtmosphereType(bpos) == AtmosphereType.VACUUM) {
                 if (world.getBlockState(bpos).getMaterial() == Material.WATER && world.getBlockState(bpos).getBlock() instanceof IFluidBlock) {
                     IFluidBlock fluidblock = (IFluidBlock) world.getBlockState(bpos).getBlock();
                     if (fluidblock.getFluid().isGaseous())
@@ -253,13 +258,13 @@ public class AtmosphereHandler {
     }
 
     /**
-     * @param dimNumber dimension number for which to get the oxygenhandler
-     * @return the oxygen handler for the planet or null if none exists
+     * @param world the world for which to get the oxygenhandler
+     * @return the oxygen handler for the planet or null if none exists; a client world has none
      */
     @Nullable
-    public static AtmosphereHandler getOxygenHandler(int dimNumber) {
+    public static AtmosphereHandler getOxygenHandler(World world) {
         //Get your oxyclean!
-        return dimensionOxygen.get(dimNumber);
+        return of(world).handler;
     }
 
     @SubscribeEvent
@@ -337,11 +342,14 @@ public class AtmosphereHandler {
      * measured against a gate that was told to stand down. The remembered atmosphere is a client
      * notification cache: dropping it costs one redundant packet and is not worth reporting.</p>
      *
-     * <p>Static because both stores are, and called by
-     * {@link dev.stannismod.stellurgy.player.PlayerRelease}.</p>
+     * <p>Called by {@link dev.stannismod.stellurgy.player.PlayerRelease}; the remembered atmosphere
+     * is the handler's of the world he is in.</p>
      */
     public static boolean releasePlayer(EntityPlayer player) {
-        prevAtmosphere.remove(player);
+        AtmosphereHandler handler = getOxygenHandler(player.world);
+        if (handler != null) {
+            handler.prevAtmosphere.remove(player);
+        }
         return RocketTransferGrace.clear(player, player.world.getTotalWorldTime());
     }
 

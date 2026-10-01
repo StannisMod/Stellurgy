@@ -111,8 +111,9 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
      * From {@code TestClientSoundMutedE2ETest}: a harness-spawned test client must run SILENT.
      *
      * <p>Automated client e2e boots a real client with real audio on the dev box;
-     * {@code ClientProxy.muteTestClientSound} zeroes the master sound level on the first client tick
-     * where the sound handler is up, gated on the {@code -Dforge.test.client=true} marker that every
+     * {@code TestClientMute.muteTestClientSound} zeroes the master sound level on the first client tick
+     * where the sound handler is up; the proxy registers that listener only on the
+     * {@code -Dforge.test.client=true} marker that every
      * {@code RealClientHarness} client carries (and a manual {@code runClient} does not).</p>
      *
      * <p>This observes the REAL client state as an EVENT: {@code test_client_muted} is recorded by a
@@ -137,7 +138,7 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
         // it is asserted, rather than being smuggled into the wait as a filter.
         String mutes = clientEvents().await(0L, "test_client_muted",
                 "a harness-spawned client must mute its master sound level on the first client tick"
-                        + " with the sound handler up (instrument: client_proxy_events)",
+                        + " with the sound handler up (instrument: test_client_mute_events)",
                 MUTE_BUDGET_TICKS);
         String muted = Events.lastRecord(mutes);
 

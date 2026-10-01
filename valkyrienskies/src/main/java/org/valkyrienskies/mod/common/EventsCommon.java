@@ -52,13 +52,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.WeakHashMap;
+
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 @EventBusSubscriber(modid = ValkyrienSkiesMod.HOST_MOD_ID)
 public class EventsCommon {
 
     @Deprecated
-    private static final Map<EntityPlayer, double[]> lastPositions = new HashMap<>();
+    /** Where each player in one server world was at its last player tick — the spot the border
+     *  check sends a player back to — as that world's part ({@link WorldRuntime}). Weak keys, so a
+     *  player who left the world is not held by it. Server thread only. */
+    private static final class LastPlayerPositions {
+        final Map<EntityPlayer, double[]> byPlayer = new WeakHashMap<>();
+    }
+
+    private static Map<EntityPlayer, double[]> lastPositionsIn(World world) {
+        return WorldRuntime.of(world, LastPlayerPositions.class, LastPlayerPositions::new).byPlayer;
+    }
     private static final Logger logger = LogManager.getLogger(EventsCommon.class);
 
     @SubscribeEvent
@@ -105,10 +116,18 @@ public class EventsCommon {
     }
 
     /**
-     * When each dimension last had a pose packet sent, by whichever side sent it. Read by the
-     * physics thread's watchdog to decide whether the game tick has gone quiet.
+     * When a world last had a pose packet sent, by whichever thread sent it, as that world's part
+     * ({@link WorldRuntime}). Read by the physics thread's watchdog to decide whether the game tick
+     * has gone quiet. {@code 0} until the first send, which reads as overdue.
      */
-    private static final Map<Integer, Long> LAST_POSE_SEND_NANOS = new ConcurrentHashMap<>();
+    private static final class PoseSendClock {
+        volatile long lastSendNanos;
+        volatile boolean sent;
+    }
+
+    private static PoseSendClock poseSendClockOf(World world) {
+        return WorldRuntime.of(world, PoseSendClock.class, PoseSendClock::new);
+    }
 
     /**
      * How long a dimension may go without a pose packet before the physics thread sends one itself.
@@ -121,9 +140,9 @@ public class EventsCommon {
      * True when nothing has put this dimension's poses on the wire for longer than the watchdog —
      * i.e. the game tick has stopped running while physics has not. Called from the PHYSICS thread.
      */
-    public static boolean poseSendIsOverdue(int dimensionId) {
-        final Long last = LAST_POSE_SEND_NANOS.get(dimensionId);
-        return last == null || System.nanoTime() - last > POSE_WATCHDOG_NANOS;
+    public static boolean poseSendIsOverdue(World world) {
+        final PoseSendClock clock = poseSendClockOf(world);
+        return !clock.sent || System.nanoTime() - clock.lastSendNanos > POSE_WATCHDOG_NANOS;
     }
 
     /**
@@ -156,7 +175,9 @@ public class EventsCommon {
      * computed before.</p>
      */
     public static void sendShipTransformUpdates(World world, IPhysObjectWorld physObjectWorld) {
-        LAST_POSE_SEND_NANOS.put(world.provider.getDimension(), System.nanoTime());
+        final PoseSendClock clock = poseSendClockOf(world);
+        clock.lastSendNanos = System.nanoTime();
+        clock.sent = true;
         try {
             // ONE MESSAGE PER PLAYER, carrying the craft THAT player watches. The poses used to go
             // to the whole dimension, which means a client is told about craft it cannot see and
@@ -233,7 +254,8 @@ public class EventsCommon {
         if (!event.player.world.isRemote) {
             EntityPlayerMP p = (EntityPlayerMP) event.player;
 
-            double[] pos = lastPositions.computeIfAbsent(p, k -> new double[3]);
+            // A player new to this world starts from where it stands, not from the origin.
+            double[] pos = lastPositionsIn(p.world).computeIfAbsent(p, k -> new double[]{p.posX, p.posY, p.posZ});
             try {
                 if (pos[0] != p.posX || pos[2] != p.posZ) { // Player has moved
                     if (Math.abs(p.posX) > 27000000
@@ -268,8 +290,6 @@ public class EventsCommon {
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onWorldUnload(WorldEvent.Unload event) {
-        // Fixes memory leak; @DaPorkChop please don't leave static maps lying around D:
-        lastPositions.clear();
         IHasShipManager shipManager = (IHasShipManager) event.getWorld();
         shipManager.getManager().onWorldUnload();
     }
@@ -295,7 +315,7 @@ public class EventsCommon {
         // something that is not part of this game.
         if (!event.player.world.isRemote) {
             EntityPlayerMP player = (EntityPlayerMP) event.player;
-            lastPositions.put(player, new double[]{0D, 256D, 0D});
+            lastPositionsIn(player.world).put(player, new double[]{0D, 256D, 0D});
 
             if (MEMED.contains(player.getName())) {
                 WorldServer server = (WorldServer) event.player.world;
@@ -316,7 +336,7 @@ public class EventsCommon {
     @SubscribeEvent
     public static void onLeave(PlayerLoggedOutEvent event) {
         if (!event.player.world.isRemote) {
-            lastPositions.remove(event.player);
+            lastPositionsIn(event.player.world).remove(event.player);
         }
     }
 

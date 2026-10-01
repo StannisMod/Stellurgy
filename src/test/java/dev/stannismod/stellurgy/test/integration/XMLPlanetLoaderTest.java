@@ -279,7 +279,7 @@ public class XMLPlanetLoaderTest {
         dev.stannismod.stellurgy.api.dimension.solar.IGalaxy galaxy =
                 new SingleStarGalaxyFixture(star);
 
-        String xml = XMLPlanetLoader.writeXML(galaxy);
+        String xml = XMLPlanetLoader.writeXML(galaxy, null);
         assertTrue("writeXML must include the star name", xml.contains("WriteRtStar"));
         assertTrue("writeXML must include the planet name", xml.contains("WriteRtPlanet"));
 
@@ -491,7 +491,7 @@ public class XMLPlanetLoaderTest {
 
         star.addPlanet(planet);
 
-        String xml = XMLPlanetLoader.writeXML(new SingleStarGalaxyFixture(star));
+        String xml = XMLPlanetLoader.writeXML(new SingleStarGalaxyFixture(star), null);
         assertTrue("writeXML must emit the <oreGen> block", xml.contains("oreGen"));
         assertTrue("writeXML must reference the ore block by registry name",
                 xml.contains("minecraft:iron_ore"));
@@ -598,24 +598,19 @@ public class XMLPlanetLoaderTest {
                         + "  <galaxyType name=\"Blob\" profile=\"SPHEROID\" thickness=\"0.9\" arms=\"0\""
                         + " weight=\"11\"/>\n"
                         + "</galaxyGen>\n")).galaxyGenConfig;
-        try {
-            UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(parsed));
-            String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance());
-            File f = tempFolder.newFile();
-            Files.write(f.toPath(), written.getBytes(StandardCharsets.UTF_8));
-            XMLPlanetLoader loader = new XMLPlanetLoader();
-            assertTrue(loader.loadFile(f));
-            GalaxyGenConfig round = loader.readAllPlanets().galaxyGenConfig;
+        String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance(), parsed);
+        File f = tempFolder.newFile();
+        Files.write(f.toPath(), written.getBytes(StandardCharsets.UTF_8));
+        XMLPlanetLoader loader = new XMLPlanetLoader();
+        assertTrue(loader.loadFile(f));
+        GalaxyGenConfig round = loader.readAllPlanets().galaxyGenConfig;
 
-            assertNotNull(round);
-            assertEquals(2, round.galaxyTypes.size());
-            assertEquals("Thin", round.galaxyTypes.get(0).name);
-            assertEquals(0.005d, round.galaxyTypes.get(0).scaleHeightRatio, 1e-9);
-            assertEquals(GalaxyGenConfig.GalaxyProfile.SPHEROID, round.galaxyTypes.get(1).profile);
-            assertEquals(11, round.galaxyTypes.get(1).weight);
-        } finally {
-            UniverseRegistry.detachGenerator();
-        }
+        assertNotNull(round);
+        assertEquals(2, round.galaxyTypes.size());
+        assertEquals("Thin", round.galaxyTypes.get(0).name);
+        assertEquals(0.005d, round.galaxyTypes.get(0).scaleHeightRatio, 1e-9);
+        assertEquals(GalaxyGenConfig.GalaxyProfile.SPHEROID, round.galaxyTypes.get(1).profile);
+        assertEquals(11, round.galaxyTypes.get(1).weight);
     }
 
     @Test
@@ -648,7 +643,7 @@ public class XMLPlanetLoaderTest {
         // system is already in the void, or the universe is already rerolled under a live save. The
         // WRITER emits it, because this file is rewritten on every save and a shipped template would
         // be replaced by the first one.
-        String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance());
+        String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance(), null);
         assertTrue("the written catalogue must say an anchor is galaxy-local: " + written,
                 written.contains("GALAXY-LOCAL"));
         assertTrue("and that the home galaxy always exists",
@@ -678,26 +673,21 @@ public class XMLPlanetLoaderTest {
                         + "  <starType temp=\"60\" minSize=\"0.6\" maxSize=\"1.0\" weight=\"9\"/>\n"
                         + "</galaxyGen>\n")).galaxyGenConfig;
 
-        try {
-            UniverseRegistry.attachGenerator(new ClusteredGalaxyGenerator(parsed));
-            String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance());
+        String written = XMLPlanetLoader.writeXML(DimensionManager.getInstance(), parsed);
 
-            File f = tempFolder.newFile();
-            Files.write(f.toPath(), written.getBytes(StandardCharsets.UTF_8));
-            XMLPlanetLoader loader = new XMLPlanetLoader();
-            assertTrue(loader.loadFile(f));
-            GalaxyGenConfig round = loader.readAllPlanets().galaxyGenConfig;
+        File f = tempFolder.newFile();
+        Files.write(f.toPath(), written.getBytes(StandardCharsets.UTF_8));
+        XMLPlanetLoader loader = new XMLPlanetLoader();
+        assertTrue(loader.loadFile(f));
+        GalaxyGenConfig round = loader.readAllPlanets().galaxyGenConfig;
 
-            assertNotNull("the written galaxy must round-trip its <galaxyGen>", round);
-            assertEquals(0.25d, round.density, 1e-9);
-            assertEquals(5, round.minSpacing);
-            assertEquals(1200000L, round.galaxySpacing);
-            assertEquals(0.45d, round.galaxyDensity, 1e-9);
-            assertEquals(60, round.starTypes.get(0).temperature);
-            assertEquals(9, round.starTypes.get(0).weight);
-        } finally {
-            UniverseRegistry.detachGenerator(); // restore the authored-only default
-        }
+        assertNotNull("the written galaxy must round-trip its <galaxyGen>", round);
+        assertEquals(0.25d, round.density, 1e-9);
+        assertEquals(5, round.minSpacing);
+        assertEquals(1200000L, round.galaxySpacing);
+        assertEquals(0.45d, round.galaxyDensity, 1e-9);
+        assertEquals(60, round.starTypes.get(0).temperature);
+        assertEquals(9, round.starTypes.get(0).weight);
     }
 
     // ---- terrainSource -------------------------------------------------------
@@ -742,7 +732,7 @@ public class XMLPlanetLoaderTest {
         planet.setStar(star);
         star.addPlanet(planet);
 
-        String xml = XMLPlanetLoader.writeXML(new SingleStarGalaxyFixture(star));
+        String xml = XMLPlanetLoader.writeXML(new SingleStarGalaxyFixture(star), null);
         assertTrue("writeXML must emit terrainSource", xml.contains("terrainSource"));
         assertTrue("writeXML must emit the template name", xml.contains("packplanet"));
 
@@ -771,7 +761,7 @@ public class XMLPlanetLoaderTest {
         planet.setStar(star);
         star.addPlanet(planet);
 
-        String xml = XMLPlanetLoader.writeXML(new SingleStarGalaxyFixture(star));
+        String xml = XMLPlanetLoader.writeXML(new SingleStarGalaxyFixture(star), null);
         assertFalse("NATIVE planet XML must not contain a terrainSource element", xml.contains("terrainSource"));
         assertFalse(xml.contains("terrainWorldType"));
         assertFalse(xml.contains("terrainTemplate"));

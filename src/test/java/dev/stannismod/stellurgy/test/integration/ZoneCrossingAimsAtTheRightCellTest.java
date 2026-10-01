@@ -41,14 +41,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class ZoneCrossingAimsAtTheRightCellTest {
 
+    /** The universe this test arranges; one per test, so nothing reaches the next. */
+    private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
-    }
-
-    @After
-    public void unwireTheStarLookup() {
-        UniverseRegistry.setStarLookup(null);
     }
 
     private static final int STAR_ID = 4262;
@@ -316,7 +314,7 @@ public class ZoneCrossingAimsAtTheRightCellTest {
      * when it built these bodies, and a fixture that handed the bodies over without going through
      * the registry would be supplying the very answer under test.</p>
      */
-    private static Fixture arrangeEarthAndLuna() {
+    private Fixture arrangeEarthAndLuna() {
         StellarBody star = new StellarBody();
         star.setId(STAR_ID);
         star.setName("Sol");
@@ -342,9 +340,9 @@ public class ZoneCrossingAimsAtTheRightCellTest {
         earth.setStar(star);
         luna.setParentPlanet(earth);
 
-        UniverseRegistry reg = new UniverseRegistry();
+        UniverseRegistry reg = testUniverse.newRegistry();
         reg.place(GalacticCoord.ORIGIN, STAR_ID);
-        UniverseRegistry.setStarLookup(id -> id == STAR_ID ? star : null);
+        testUniverse.setStarLookup(id -> id == STAR_ID ? star : null);
 
         List<SystemBody> bodies = reg.systemBodiesAt(GalacticCoord.ORIGIN);
         SystemBody earthBody = bodyOf(bodies, EARTH_DIM);

@@ -8,6 +8,10 @@ import java.lang.reflect.Method;
 
 public class StellurgyAdvancements {
 
+    /* The triggers live as long as the side, exactly as vanilla's own in CriteriaTriggers: each is
+     * registered there once and its per-player listener map is vanilla's to fill and empty, which
+     * PlayerAdvancements does as each player's advancements are loaded and disposed. */
+
     public static final CustomTrigger MOON_LANDING = new CustomTrigger("moonlanding");
     public static final CustomTrigger ONE_SMALL_STEP = new CustomTrigger("onesmallstep");
     public static final CustomTrigger BEER = new CustomTrigger("beer");

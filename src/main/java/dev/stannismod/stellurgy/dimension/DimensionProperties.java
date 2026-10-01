@@ -254,6 +254,17 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     /** Lazily-built, never persisted: this world's own scaled copy of the shared climate ore table. */
     private transient OreGenProperties scaledOreCache;
     private transient double scaledOreCacheFor = Double.NaN;
+    /** Whether {@link TerrainResolution} has already said this planet's authored terrain is unusable. */
+    private transient boolean terrainFallbackWarned;
+
+    /** {@code true} the first time it is asked: the terrain fallback is reported once per planet. */
+    boolean firstTerrainFallbackWarning() {
+        if (terrainFallbackWarned) {
+            return false;
+        }
+        terrainFallbackWarned = true;
+        return true;
+    }
 
     /** Sentinel for {@link #mass} / {@link #radius}: nobody has stated one. */
     public static final double BULK_UNSET = 0d;
@@ -489,12 +500,12 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public OreGenProperties getOreGenProperties(World world) {
         if (oreProperties != null)
             return oreProperties;
-        OreGenProperties climate = OreGenProperties.getOresForPressure(
+        OreGenProperties climate = dev.stannismod.stellurgy.Stellurgy.serverState().oreTable.getOresForPressure(
                 AtmosphereTypes.getAtmosphereTypeFromValue(originalAtmosphereDensity),
                 Temps.getTempFromValue(getAverageTemp()));
         if (climate == null || metallicity == 1d)
             return climate;
-        // The climate table is a SHARED static object — one instance per (pressure, temperature) cell,
+        // The climate table is a SHARED object — one instance per (pressure, temperature) cell,
         // handed to every world that lands in it — so a per-planet scaling must never mutate it. This
         // world gets its own copy instead, cached because ore generation asks per chunk.
         if (scaledOreCache == null || scaledOreCacheFor != metallicity) {
@@ -827,13 +838,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         if (!customIcon.isEmpty()) {
             try {
-                String resource_location = "stellurgy:textures/planets/" + customIcon.toLowerCase() + ".png";
-                if (TextureResources.planetResources.containsKey(resource_location))
-                    return TextureResources.planetResources.get(resource_location);
-
-                ResourceLocation new_resource = new ResourceLocation(resource_location);
-                TextureResources.planetResources.put(resource_location, new_resource);
-                return new_resource;
+                return new ResourceLocation("stellurgy:textures/planets/" + customIcon.toLowerCase() + ".png");
             } catch (IllegalArgumentException e) {
                 return PlanetIcons.UNKNOWN.resource;
             }
@@ -878,13 +883,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         if (!customIcon.isEmpty()) {
             try {
-                String resource_location = "stellurgy:textures/planets/" + customIcon.toLowerCase() + "leo.jpg";
-                if (TextureResources.planetResources.containsKey(resource_location))
-                    return TextureResources.planetResources.get(resource_location);
-
-                ResourceLocation new_resource = new ResourceLocation(resource_location);
-                TextureResources.planetResources.put(resource_location, new_resource);
-                return new_resource;
+                return new ResourceLocation("stellurgy:textures/planets/" + customIcon.toLowerCase() + "leo.jpg");
 
             } catch (IllegalArgumentException e) {
                 return PlanetIcons.UNKNOWN.resource;

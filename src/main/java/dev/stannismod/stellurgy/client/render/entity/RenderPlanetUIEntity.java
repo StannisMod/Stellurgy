@@ -11,26 +11,19 @@ import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraftforge.fml.client.registry.IRenderFactory;
 import org.lwjgl.opengl.GL11;
-import dev.stannismod.stellurgy.backwardCompat.ModelFormatException;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
-import dev.stannismod.stellurgy.client.render.SharedModels;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.entity.EntityUIPlanet;
 import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RenderPlanetUIEntity extends Render<EntityUIPlanet> implements IRenderFactory<EntityUIPlanet> {
 
-    public static ResourceLocation planetUIBG = new ResourceLocation("stellurgy:textures/gui/planetUIOverlay.png");
-    public static ResourceLocation planetUIFG = new ResourceLocation("stellurgy:textures/gui/planetUIOverlayFG.png");
-    private static WavefrontObject sphere;
-
-    static {
-        try {
-            sphere = new WavefrontObject(new ResourceLocation("stellurgy:models/atmosphere.obj"));
-        } catch (ModelFormatException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    public static final ResourceLocation planetUIBG = new ResourceLocation("stellurgy:textures/gui/planetUIOverlay.png");
+    public static final ResourceLocation planetUIFG = new ResourceLocation("stellurgy:textures/gui/planetUIOverlayFG.png");
+    private final WavefrontObject sphere =
+            WavefrontObject.required(new ResourceLocation("stellurgy:models/atmosphere.obj"));
+    private final WavefrontObject orbitRing =
+            WavefrontObject.required(new ResourceLocation("stellurgy:models/warpcore.obj"));
 
     public RenderPlanetUIEntity(RenderManager renderManager) {
         super(renderManager);
@@ -161,12 +154,12 @@ public class RenderPlanetUIEntity extends Render<EntityUIPlanet> implements IRen
             GL11.glTranslated(0, -1.25, 0);
             GL11.glPushMatrix();
             GL11.glRotated(speedRotate * System.currentTimeMillis() % 360, 0f, 1f, 0f);
-            SharedModels.orbitRing().renderOnly("Rotate1");
+            orbitRing.renderOnly("Rotate1");
             GL11.glPopMatrix();
 
             GL11.glPushMatrix();
             GL11.glRotated(180 + speedRotate * System.currentTimeMillis() % 360, 0f, 1f, 0f);
-            SharedModels.orbitRing().renderOnly("Rotate1");
+            orbitRing.renderOnly("Rotate1");
             GL11.glPopMatrix();
             GlStateManager.enableTexture2D();
         }

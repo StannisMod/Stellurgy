@@ -51,7 +51,7 @@ public class PacketBackToRocketGui extends BasePacket {
 
     @Override
     public void executeServer(EntityPlayerMP player) {
-        RocketGuiNavigation.openRocketGuiFromReturnContext(
+        dev.stannismod.stellurgy.Stellurgy.serverState().rocketGuiReturns.openRocketGuiFromReturnContext(
                 player,
                 sourceTileDimensionId,
                 new BlockPos(sourceTileX, sourceTileY, sourceTileZ)
