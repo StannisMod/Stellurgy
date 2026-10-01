@@ -59,10 +59,11 @@ public final class ReferenceFrames {
      * craft to the wrong body.</p>
      *
      * <p>The orbital radius is taken as the body's ACTUAL distance from its primary at {@code tick},
-     * not from a stored orbital-distance field: those fields are stated in two different units on
-     * the two levels (a planet's in orbit units about its star, a moon's in moon units about its
-     * planet), and a sphere of influence computed from the wrong one is wrong by the ratio of the
-     * two. A displacement in blocks is the same quantity at every level.</p>
+     * not from a stored orbital-distance field: that field is a MEAN distance in 100 km units, while
+     * the boundary a craft crosses is the one that exists at the tick it crosses, and a displacement
+     * in blocks is that quantity at every level. (The field was once stated in two different units on
+     * the two levels — a planet's about its star, a moon's about its planet — which was the original
+     * reason for reading positions; one unit since 2026-09-05.)</p>
      */
     public static double soiRadiusBlocks(SystemBody body, SystemBody primary, long tick) {
         if (body == null || primary == null) {
