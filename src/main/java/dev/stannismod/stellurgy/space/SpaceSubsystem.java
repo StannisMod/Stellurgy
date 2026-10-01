@@ -430,22 +430,15 @@ public final class SpaceSubsystem {
     }
 
     /**
-     * Where the cell NAMED {@code name} is, absolutely, at {@code tick} — the production
-     * {@link dev.stannismod.stellurgy.space.CellFrames} lookup, resolved against the live universe
-     * registry. Falls back to the static reading ({@code sector * CELL}) with no registry, which is
-     * what a void cell really does anyway.
-     *
-     * <p>Public and static for the same reason {@link #launchBodyAddress(int)} is: a probe-built
-     * stack wires the production resolver rather than a second one that could disagree with it.</p>
-     */
-    /**
      * Where a craft BELONGS at {@code tick}, given the address it currently holds — the production
      * reading of the reference-frame clause, decided by SPHERES.
      *
      * <p>{@code null} means "leave it alone", and it is the answer for three different situations
-     * that must not be told apart by the caller: the craft is in the galactic lattice (no sphere to
-     * decide by), it is between the two thresholds (the hysteresis), or the universe cannot be
-     * asked. All three mean the cube goes on deciding, which is what it always did.</p>
+     * that must not be told apart by the caller: the craft is in no sphere's reach (a galactic cell
+     * with no zone body, or one whose body's children are all far off), it is between the two
+     * thresholds (the hysteresis), or the universe cannot be asked. All three mean the cube goes on
+     * deciding, which is what it always did. A craft in a galactic cell is asked only the inward
+     * question — its outward boundary is that cell's cube.</p>
      *
      * <p>Order matters: a child is tested BEFORE the parent's own boundary. A craft deep inside a
      * moon's sphere is also inside its planet's, and the innermost containing sphere is the one that
@@ -471,10 +464,18 @@ public final class SpaceSubsystem {
     public static GalacticCoord zoneMembershipIn(
             dev.stannismod.stellurgy.universe.UniverseRegistry reg,
             GalacticCoord craftCoord, long tick) {
-        if (craftCoord == null || craftCoord.zone() == null || craftCoord.cellBlocks() <= 0L) {
+        if (craftCoord == null || craftCoord.cellBlocks() <= 0L) {
             return null;
         }
-        GalacticCoord zoneCell = GalacticCoord.fromCellKey(craftCoord.zone());
+        // A craft in a GALACTIC cell is in the zone of whatever body stands in that cell — a planet's
+        // own cell IS that planet's zone, seen from the galactic lattice. Only the INWARD question is
+        // asked for it: its outward boundary is the cube, which the caller already applies. Without
+        // this a craft that entered space from a planet — whose address is the planet's galactic cell
+        // — could never be taken into a moon's zone however close it flew; only one that arrived in
+        // a zoned cell by jump could.
+        boolean galactic = craftCoord.zone() == null;
+        GalacticCoord zoneCell = galactic ? craftCoord.cellCentre()
+                : GalacticCoord.fromCellKey(craftCoord.zone());
         if (reg == null || zoneCell == null) {
             return null;
         }
@@ -501,6 +502,10 @@ public final class SpaceSubsystem {
             }
             return addressIn(reg, ZoneScale.addressOnLattice(child.name().cellKey(),
                     latticeOf(reg, child, zoneBody, tick), craftAt.minus(childAt)), craftAt, tick);
+        }
+
+        if (galactic) {
+            return null; // in no child's sphere; the cube decides the rest, as for any galactic cell
         }
 
         // OUTWARD — past this zone's own sphere, so the parent's lattice takes it.
@@ -605,6 +610,15 @@ public final class SpaceSubsystem {
      * pass would have produced too. The zero handed to {@code cellBlocks} here therefore states a
      * fact the registry was asked for, rather than a parameter nobody filled in.</p>
      */
+    private static long latticeOf(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
+                                  dev.stannismod.stellurgy.universe.SystemBody zoneBody,
+                                  dev.stannismod.stellurgy.universe.SystemBody primary,
+                                  long tick) {
+        long named = reg == null ? GalacticCoord.WIDTH_UNKNOWN
+                : reg.zoneLatticeBlocks(zoneBody.name());
+        return named > 0L ? named : ZoneScale.cellBlocks(zoneBody, primary, 0L, tick);
+    }
+
     /**
      * The width of the lattice INSIDE the zone whose own cell is {@code zoneCell}, at {@code tick} —
      * the same answer {@link #zoneMembershipIn} addresses a craft on, reached by a caller that holds
@@ -652,15 +666,6 @@ public final class SpaceSubsystem {
         return ZoneScale.realizedRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);
     }
 
-    private static long latticeOf(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
-                                  dev.stannismod.stellurgy.universe.SystemBody zoneBody,
-                                  dev.stannismod.stellurgy.universe.SystemBody primary,
-                                  long tick) {
-        long named = reg == null ? GalacticCoord.WIDTH_UNKNOWN
-                : reg.zoneLatticeBlocks(zoneBody.name());
-        return named > 0L ? named : ZoneScale.cellBlocks(zoneBody, primary, 0L, tick);
-    }
-
     /** The body whose frame {@code cell} rides, or {@code null} when the cell is void. */
     private static dev.stannismod.stellurgy.universe.SystemBody frameBodyAt(
             dev.stannismod.stellurgy.universe.UniverseRegistry reg, GalacticCoord cell) {
@@ -689,6 +694,15 @@ public final class SpaceSubsystem {
         return null;
     }
 
+    /**
+     * Where the cell NAMED {@code name} is, absolutely, at {@code tick} — the production
+     * {@link dev.stannismod.stellurgy.space.CellFrames} lookup, resolved against the live universe
+     * registry. Falls back to the static reading ({@code sector * CELL}) with no registry, which is
+     * what a void cell really does anyway.
+     *
+     * <p>Public and static for the same reason {@link #launchBodyAddress(int)} is: a probe-built
+     * stack wires the production resolver rather than a second one that could disagree with it.</p>
+     */
     public static AbsolutePos cellFrameOriginAt(GalacticCoord name, long tick) {
         MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
         dev.stannismod.stellurgy.universe.UniverseRegistry reg =

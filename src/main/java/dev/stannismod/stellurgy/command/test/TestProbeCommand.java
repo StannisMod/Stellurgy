@@ -5632,10 +5632,28 @@ public class TestProbeCommand extends CommandBase {
                         + ",\"cellKey\":\"" + args[1] + "\"}");
                 return;
             }
+            // fromGalacticCell: where the zone's body stands, at this tick, in the frame of the GALACTIC
+            // cell its system's planet is named by — i.e. as a pose in that cell's slot world, whose
+            // origin is that cell's frame origin. A craft that entered space from the planet holds
+            // that cell, so this is where it must be put to stand beside the moon. Read through the
+            // registry's own frames, the same ones the crossing reads.
+            dev.stannismod.stellurgy.space.GalacticCoord galacticOfZone =
+                    sphereCell.galacticCell().cellCentre();
+            String fromGalactic = "null";
+            for (dev.stannismod.stellurgy.universe.SystemBody b : sphereReg.bodiesAt(sphereCell)) {
+                if (b.definesFrame()) {
+                    dev.stannismod.stellurgy.space.BlockDelta d = b.absoluteAt(sphereTick)
+                            .minus(sphereReg.originAt(galacticOfZone, sphereTick));
+                    fromGalactic = "[" + d.dx() + "," + d.dy() + "," + d.dz() + "]";
+                    break;
+                }
+            }
             send(sender, "{\"ok\":true,\"found\":true,\"cellKey\":\"" + sphereCell.cellKey() + "\""
                     + ",\"radius\":" + radius.getAsLong()
                     + ",\"latticeBlocks\":" + dev.stannismod.stellurgy.space.SpaceSubsystem
                             .latticeWidthOfZone(sphereReg, sphereCell, sphereTick)
+                    + ",\"galacticCell\":\"" + galacticOfZone.cellKey() + "\""
+                    + ",\"fromGalacticCell\":" + fromGalactic
                     + ",\"tick\":" + sphereTick + "}");
             return;
         }

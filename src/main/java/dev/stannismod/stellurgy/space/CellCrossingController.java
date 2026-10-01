@@ -87,8 +87,9 @@ public final class CellCrossingController {
      * <p>Answers the address the craft should now hold, or {@code null} to leave it where it is.
      * Inside a ZONE that is decided by spheres: a craft past its zone's sphere belongs in the
      * parent's lattice, one inside a child's belongs in that child's zone, and between the two
-     * thresholds it stays. In the GALACTIC lattice there is no sphere and the answer is always
-     * {@code null}, leaving the cube to decide as it always has.</p>
+     * thresholds it stays. A GALACTIC cell has no sphere of its own: its outward boundary stays the
+     * cube, and only the inward question is asked — a craft in a planet's own cell that flies into a
+     * moon's sphere belongs in that moon's zone.</p>
      *
      * <p><b>The whole address and not merely the cell</b>, because a craft is not at a cell's
      * centre: an answer that dropped the in-cell remainder would teleport it by up to half a cell

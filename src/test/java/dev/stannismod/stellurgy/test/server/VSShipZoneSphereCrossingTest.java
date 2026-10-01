@@ -293,6 +293,163 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
                 GalacticCoord.fromCellKey(back.cell()).zone());
     }
 
+    /**
+     * How far the carried craft's new offset may sit from where the moon was READ to be, in blocks,
+     * as a fraction of the sphere — the moon's own motion between that read and the carry decision,
+     * nothing more.
+     *
+     * <p>In the planet's galactic cell the craft's pose is measured from the PLANET, and the moon
+     * moves against it: 294 236 blocks over 20 000 ticks relative to Earth (measured in
+     * {@code ParkedCraftKeepsStationTest}), about 15 blocks a tick. A handful of probe round trips lie
+     * between reading the moon's position and the controller deciding, so the craft's offset from the
+     * moon is known to tens of blocks, not to one. A hundredth of the sphere (~2 600 blocks for Luna)
+     * covers well over a hundred ticks of that motion and still sits two orders below what it must
+     * separate: a craft named on its in-cell offset from the wrong origin is displaced by the moon's
+     * whole distance from its lattice slot (321 993 blocks) or by up to half a cell.</p>
+     */
+    private static final double MOON_MOTION_SLACK_OF_RADIUS = 0.01d;
+
+    /**
+     * IN, from the PLANET'S OWN cell: a craft fresh from the planet — addressed in the planet's
+     * galactic cell, as every craft that enters space is — is moved inside the moon's sphere and
+     * carried into the moon's zone at the position it had.
+     *
+     * <p>The two scenarios above start from a ZONED address, which only a jump hands out. This is the
+     * address a pilot holds when he flies to the moon by hand, and it is decided by a different branch:
+     * a galactic cell has no sphere of its own, so only the inward question is asked of it.</p>
+     *
+     * <p>Positions here are measured from the PLANET, not the moon (the planet's cell rides the
+     * planet), so the moon's position in this cell is read from production
+     * ({@code space zone-sphere} → {@code fromGalacticCell}) immediately before each move.</p>
+     *
+     * <p>red-witnessed: 2026-10-01, after a healthy run of the class (3/3), with
+     * {@code SpaceSubsystem#zoneMembershipIn} at {@code if (craftCoord == null || craftCoord.cellBlocks() <= 0L)}
+     * put back to refusing any craft whose {@code zone()} is null, this fails at the carry decision:
+     * "production does not agree a craft in the planet's own cell has entered the moon's sphere
+     * (132366.0131491464 blocks out against 264731): {"started":false,"wouldCarry":false,
+     * "fromCell":"19_0_0" …}". <b>The CONTROL's null is not witnessable here</b>: with
+     * {@code SpaceSubsystem#zoneMembershipIn} at {@code return null; // in no child's sphere} made to
+     * re-address every craft in the planet's cell, the craft's own computer carries it in the moment
+     * after the entry paste (the class note) and the method fails in its ARRANGEMENT — "the throttle
+     * could not be released — the craft's ledger row is now … @19_0_0.-7_0_-2" — before the control
+     * is asked. That null is witnessed on the same inversion by
+     * {@code ZoneCrossingAimsAtTheRightCellTest#aCraftInThePlanetsOwnCellOutsideEveryMoonsSphereIsLeftAlone}.</p>
+     */
+    @Test
+    public void aCraftFreshFromThePlanetFlownIntoItsMoonsSphereIsCarriedIntoTheMoonsZone()
+            throws Exception {
+        Moon luna = arrangeACraftBesideTheMoon();
+        EntryStatus launched = EntryStatus.forShip(this::exec, luna.durableId).requireFound(
+                "the craft entered space, so the ledger must hold its row");
+        assertEquals("arrangement: a craft fresh from the planet must be named by the planet's own "
+                + "cell: " + launched, luna.planetKey, launched.cellKey);
+        assertEquals("arrangement: ...which is a GALACTIC cell, or this is not the branch under test: "
+                + launched, null, GalacticCoord.fromCellKey(launched.cellKey).zone());
+        int slot = launched.slotDim;
+        String vsId = ShipIdentity.physicsIdOf(this::exec, slot, luna.durableId);
+        stopTheCraft(slot, vsId, luna.durableId);
+
+        // CONTROL: beside the moon, outside its sphere, the controller leaves the craft alone. Without
+        // this, a carry armed for every craft in a planet's cell satisfies every assertion below.
+        double[] besideMoon = moonInPlanetCell(luna);
+        teleportInCell(slot, vsId, besideMoon[0] + luna.radius * BESIDE_AT, besideMoon[1],
+                besideMoon[2]);
+        double beside = distanceFromMoon(luna, slot, vsId);
+        assertTrue("arrangement: the craft must stand OUTSIDE the moon's sphere (" + beside
+                + " against " + luna.radius + ")", beside > luna.radius);
+        assertStays(slot, luna.durableId, "a craft in the planet's own cell " + beside
+                + " blocks from a moon whose sphere is " + luna.radius);
+
+        double[] moonAtMove = moonInPlanetCell(luna);
+        teleportInCell(slot, vsId, moonAtMove[0] + luna.radius * INSIDE_AT, moonAtMove[1],
+                moonAtMove[2]);
+        double[] moonAtCarry = moonInPlanetCell(luna);
+        double inside = distanceFromMoon(slot, vsId, moonAtCarry);
+        assertTrue("arrangement: the craft must stand inside the moon's entry threshold (" + inside
+                        + " against " + luna.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION) + ")",
+                inside < luna.radius * (1d - CellSeam.SPHERE_REENTRY_FRACTION));
+
+        // Marked BEFORE the carry: a mark taken afterwards can miss the record it is about.
+        long carryMark = events.mark();
+        Reply carry = Reply.of(exec("stellurgytest space seam-carry " + slot + " id "
+                + luna.durableId));
+        assertTrue("production does not agree a craft in the planet's own cell has entered the "
+                + "moon's sphere (" + inside + " blocks out against " + luna.radius + "): " + carry,
+                carry.bool("wouldCarry"));
+        assertTrue("the carry did not start — the reason is in the reply: " + carry,
+                carry.bool("started"));
+        String record = Events.recordsWhere(events.awaitField(carryMark, "ship_entered_cell", "ship",
+                luna.durableId, "the carry started (" + carry + "), so the craft must settle where it "
+                        + "was aimed", SETTLE_TICKS), "ship", luna.durableId).get(0);
+        assertEquals("the carry left from the planet's own cell: " + record, luna.planetKey,
+                Events.text(record, "origin"));
+        String destination = Events.text(record, "destination");
+        assertEquals("a craft in the planet's cell that flew into a moon's sphere belongs to that "
+                + "MOON, and is named in its own zone: " + record, luna.moonKey,
+                GalacticCoord.fromCellKey(destination).zone());
+        EntryStatus arrived = EntryStatus.forShip(this::exec, luna.durableId).requireFound(
+                "the carry was announced, so the ledger must hold this craft's row");
+        assertEquals("the ledger no longer names the cell the carry announced — the craft was carried "
+                + "again after it arrived: " + arrived, destination, arrived.cellKey);
+
+        // RENAMED, NOT MOVED: in the moon's zone the offset is measured from the MOON, so it must be
+        // the pose the carry was decided on less where the moon stood.
+        double[] decidedOn = {carry.arrayNumber("pose", 0), carry.arrayNumber("pose", 1),
+                carry.arrayNumber("pose", 2)};
+        double slack = luna.radius * MOON_MOTION_SLACK_OF_RADIUS;
+        assertEquals("the carry displaced the craft along X — it must only be renamed: " + arrived,
+                decidedOn[0] - moonAtCarry[0], arrived.lx, slack);
+        assertEquals("...along Y: " + arrived, decidedOn[1] - moonAtCarry[1], arrived.ly, slack);
+        assertEquals("...along Z: " + arrived, decidedOn[2] - moonAtCarry[2], arrived.lz, slack);
+        ShipInfo hull = ShipInfo.byId(this::exec, arrived.slotDim,
+                ShipIdentity.physicsIdOf(this::exec, arrived.slotDim, luna.durableId));
+        assertEquals("the arrived ship is not where its own ledger row puts it, along X: "
+                + hull.raw() + " vs " + arrived, arrived.lx, hull.x, SETTLE_SLACK);
+        assertEquals("...along Y: " + hull.raw() + " vs " + arrived, arrived.ly, hull.y, SETTLE_SLACK);
+        assertEquals("...along Z: " + hull.raw() + " vs " + arrived, arrived.lz, hull.z, SETTLE_SLACK);
+    }
+
+    /**
+     * Where the moon stands right now as a pose in the PLANET's galactic cell — production's reading
+     * ({@code space zone-sphere} → {@code fromGalacticCell}), asserted to be about that cell.
+     */
+    private double[] moonInPlanetCell(Moon moon) throws Exception {
+        Reply sphere = Reply.of(exec("stellurgytest space zone-sphere " + moon.moonKey));
+        assertTrue("arrangement: production reads no sphere for the moon " + moon.moonKey + ": "
+                + sphere, sphere.bool("found"));
+        assertEquals("arrangement: the moon's position must be read in the planet's own cell: "
+                + sphere, moon.planetKey, sphere.text("galacticCell"));
+        return new double[] {sphere.arrayNumber("fromGalacticCell", 0),
+                sphere.arrayNumber("fromGalacticCell", 1), sphere.arrayNumber("fromGalacticCell", 2)};
+    }
+
+    /** Put the craft at a pose in its cell's slot world and prove it is there. */
+    private void teleportInCell(int slot, String vsId, double x, double y, double z) throws Exception {
+        assertTrue("arrangement: the craft must stay inside its cell, or the cube decides before any "
+                        + "sphere: (" + x + "," + y + "," + z + ")",
+                Math.abs(x) < GalacticCoord.HALF_CELL - CellSeam.REENTRY_DEPTH
+                        && Math.abs(y) < GalacticCoord.HALF_CELL - CellSeam.REENTRY_DEPTH
+                        && Math.abs(z) < GalacticCoord.HALF_CELL - CellSeam.REENTRY_DEPTH);
+        assertTrue("the move within the cell failed", Reply.of(exec("stellurgytest vs "
+                + "teleport-ship-by-id " + slot + " " + vsId + " " + (long) x + " " + (long) y + " "
+                + (long) z)).ok());
+        exec("stellurgytest vs unpark-by-id " + slot + " " + vsId);
+        ShipInfo moved = ShipInfo.byId(this::exec, slot, vsId);
+        assertEquals("arrangement: the craft is not where it was moved to: " + moved.raw(),
+                (long) x, moved.x, CONTINUITY_SLACK);
+    }
+
+    /** The craft's distance from the moon, both read now. */
+    private double distanceFromMoon(Moon moon, int slot, String vsId) throws Exception {
+        return distanceFromMoon(slot, vsId, moonInPlanetCell(moon));
+    }
+
+    private double distanceFromMoon(int slot, String vsId, double[] moonAt) throws Exception {
+        ShipInfo at = ShipInfo.byId(this::exec, slot, vsId);
+        double dx = at.x - moonAt[0], dy = at.y - moonAt[1], dz = at.z - moonAt[2];
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
     // ---- the arrangement both scenarios share -----------------------------------------------------
 
     /** The moon a scenario flies to, and the craft it built to fly there. */

@@ -177,18 +177,6 @@ public final class ZoneScale {
     }
 
     /**
-     * The cell of {@code zoneBody}'s lattice that a point {@code offset} from that body falls in — as
-     * a NAME, in the zone whose key is {@code zoneBody}'s own cell.
-     *
-     * <p>{@code null} when {@code zoneBody} defines no zone, and the caller must say what it does
-     * about that rather than being handed a plausible cell: a stand-in here is a body named inside a
-     * lattice that does not exist, which is indistinguishable from a real address at every point
-     * downstream.</p>
-     *
-     * @param primary the body {@code zoneBody} orbits — its sphere of influence is measured against it
-     * @param tick    the moment the zone's extent, and hence its lattice, is evaluated at
-     */
-    /**
      * The full ADDRESS a craft {@code offset} from {@code zoneBody} has inside that body's zone —
      * the cell it falls in AND where it stands inside that cell.
      *
@@ -238,6 +226,21 @@ public final class ZoneScale {
                 offset.dz() - iz * cellBlocks);
     }
 
+    /**
+     * The cell of {@code zoneBody}'s lattice that a point {@code offset} from that body falls in — as
+     * a NAME, in the zone whose key is {@code zoneBody}'s own cell.
+     *
+     * <p>{@code null} when {@code zoneBody} defines no zone, and the caller must say what it does
+     * about that rather than being handed a plausible cell: a stand-in here is a body named inside a
+     * lattice that does not exist, which is indistinguishable from a real address at every point
+     * downstream.</p>
+     *
+     * @param primary                   the body {@code zoneBody} orbits — its sphere of influence is
+     *                                  measured against it
+     * @param tightestChildOffsetBlocks see {@link #cellsAcrossZone}
+     * @param tick                      the moment the zone's extent, and hence its lattice, is
+     *                                  evaluated at
+     */
     public static GalacticCoord cellWithin(SystemBody zoneBody, SystemBody primary, BlockDelta offset,
                                            long tightestChildOffsetBlocks, long tick) {
         if (zoneBody == null || offset == null) {

@@ -203,6 +203,79 @@ public class ZoneCrossingAimsAtTheRightCellTest {
                 SpaceSubsystem.zoneMembershipIn(home.reg, craft, TICK));
     }
 
+    /**
+     * <b>A craft in the PLANET'S OWN galactic cell that flies into a moon's sphere lands in that
+     * moon's zone, at the position it had.</b>
+     *
+     * <p>This is the address every craft holds when it enters space from a planet, so it is the
+     * player's own path to a moon by hand. The two scenarios above start from a ZONED address,
+     * which only a jump or an earlier crossing hands out; they cannot see this one.</p>
+     *
+     * <p>red-witnessed: 2026-10-01, with {@code SpaceSubsystem#zoneMembershipIn} at
+     * {@code if (craftCoord == null || craftCoord.cellBlocks() <= 0L)} put back to refusing any
+     * craft whose {@code zone()} is null (the guard as it was), this fails with "a craft in a planet's
+     * own cell that is inside a moon's sphere must be taken into the moon's zone, not left riding the
+     * planet", while the three zoned scenarios stay green on the same inversion.</p>
+     */
+    @Test
+    public void aCraftInThePlanetsOwnCellEnteringAMoonsSphereLandsInTheMoonsZone() {
+        Fixture home = arrangeEarthAndLuna();
+        long lunaSphere = dev.stannismod.stellurgy.space.ZoneScale
+                .realizedRadiusBlocks(home.luna, home.earth, TICK);
+        assertTrue("arrangement: the moon must have a sphere to enter", lunaSphere > 0L);
+
+        GalacticCoord craft = inEarthsGalacticCellNearLuna(home, (long) (lunaSphere * 0.5d));
+        assertNull("arrangement: the craft must hold a GALACTIC address, as one fresh from the "
+                + "planet does: " + craft, craft.zone());
+        // Plain arithmetic, not `hasEnteredZone`, for the reason given on the zoned inward scenario.
+        double fromLuna = absoluteOf(home.reg, craft).distanceTo(home.luna.absoluteAt(TICK));
+        assertTrue("arrangement: the craft must be inside the moon's entry threshold (" + fromLuna
+                        + " blocks, sphere " + lunaSphere + ")",
+                fromLuna < lunaSphere * (1d - CellSeam.SPHERE_REENTRY_FRACTION));
+
+        GalacticCoord named = SpaceSubsystem.zoneMembershipIn(home.reg, craft, TICK);
+        assertNotNull("a craft in a planet's own cell that is inside a moon's sphere must be taken "
+                + "into the moon's zone, not left riding the planet", named);
+        assertEquals("...whose lattice is the moon's own", home.luna.name().cellKey(), named.zone());
+        assertEquals("re-addressing out of the galactic cell must not displace the craft", 0d,
+                absoluteOf(home.reg, named).distanceTo(absoluteOf(home.reg, craft)), CONTINUITY_SLACK);
+    }
+
+    /**
+     * A craft in the planet's own galactic cell that is in NO moon's sphere is left alone — the
+     * planet's cell has no sphere of its own to carry it out of, so its boundary stays the cube.
+     *
+     * <p>The CONTROL for the scenario above: a re-address that fired for every craft in a planet's
+     * cell would satisfy it exactly as well. The positive half is in this method (STEP 7), on the
+     * same registry, so a null here cannot be "the universe could not be asked".</p>
+     *
+     * <p>red-witnessed: 2026-10-01, both halves. With {@code SpaceSubsystem#zoneMembershipIn} at
+     * {@code return null; // in no child's sphere} made to address every such craft in the planet's
+     * zone lattice instead, the null verdict fails with "expected null, but was:
+     * &lt;GalacticCoord[zone=19_0_0@1849294, sector=(1,0,0), local=(397096,0,0)]&gt;" while the
+     * entering scenario above stays green — which is why this control exists. With the old
+     * {@code zone() == null} guard back, the positive half fails instead: "arrangement: this cell
+     * must resolve".</p>
+     */
+    @Test
+    public void aCraftInThePlanetsOwnCellOutsideEveryMoonsSphereIsLeftAlone() {
+        Fixture home = arrangeEarthAndLuna();
+        long lunaSphere = dev.stannismod.stellurgy.space.ZoneScale
+                .realizedRadiusBlocks(home.luna, home.earth, TICK);
+        assertTrue("arrangement: the moon must have a sphere", lunaSphere > 0L);
+        assertNotNull("arrangement: this cell must resolve — a craft inside the moon's sphere is "
+                        + "re-addressed",
+                SpaceSubsystem.zoneMembershipIn(home.reg,
+                        inEarthsGalacticCellNearLuna(home, lunaSphere / 2L), TICK));
+
+        GalacticCoord craft = inEarthsGalacticCellNearLuna(home, lunaSphere * 3L / 2L);
+        double fromLuna = absoluteOf(home.reg, craft).distanceTo(home.luna.absoluteAt(TICK));
+        assertTrue("arrangement: the craft must be outside the moon's sphere (" + fromLuna
+                + " blocks, sphere " + lunaSphere + ")", fromLuna > lunaSphere);
+        assertNull("a craft in a planet's own cell and in no moon's sphere must be left where it is",
+                SpaceSubsystem.zoneMembershipIn(home.reg, craft, TICK));
+    }
+
     // ---- fixture ------------------------------------------------------------------------------
 
     /** The tick everything is evaluated at. Not zero: a fixture that only works at rest hides a frame. */
@@ -321,6 +394,25 @@ public class ZoneCrossingAimsAtTheRightCellTest {
                 home.earth.name().cellKey(), width,
                 dev.stannismod.stellurgy.space.BlockDelta.of(fromEarth.dx() + offsetBlocks,
                         fromEarth.dy(), fromEarth.dz()));
+    }
+
+    /**
+     * A craft {@code offsetBlocks} out along +X from the MOON, addressed in EARTH'S OWN GALACTIC
+     * cell — the address a craft fresh from the planet's surface holds. The offset is taken from the
+     * cell's own frame origin, read through the registry, so the arrangement and the subject resolve
+     * positions the same way and nothing here assumes where in its cell the planet stands.
+     */
+    private static GalacticCoord inEarthsGalacticCellNearLuna(Fixture home, long offsetBlocks) {
+        GalacticCoord cell = home.earth.name().cellCentre();
+        assertNull("arrangement: the planet must be named in the galactic lattice", cell.zone());
+        dev.stannismod.stellurgy.space.BlockDelta fromOrigin =
+                home.luna.absoluteAt(TICK).minus(home.reg.originAt(cell, TICK));
+        long dx = fromOrigin.dx() + offsetBlocks;
+        assertTrue("arrangement: the craft must stand inside the planet's cell, or the cube would "
+                        + "decide before any sphere: " + dx,
+                Math.abs(dx) < GalacticCoord.HALF_CELL && Math.abs(fromOrigin.dy()) < GalacticCoord.HALF_CELL
+                        && Math.abs(fromOrigin.dz()) < GalacticCoord.HALF_CELL);
+        return cell.withLocal(dx, fromOrigin.dy(), fromOrigin.dz());
     }
 
     /** Where an address actually is, resolved through the registry's own frames. */

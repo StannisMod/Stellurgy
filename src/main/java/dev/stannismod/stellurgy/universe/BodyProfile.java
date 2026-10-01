@@ -71,7 +71,7 @@ public final class BodyProfile {
         return preset;
     }
 
-    /** Orbital radius in Stellurgy distance units (100 = 1 AU). */
+    /** Orbital radius in Stellurgy distance units (100 km each). */
     public long orbitalDistance() {
         return orbitalDistance;
     }
