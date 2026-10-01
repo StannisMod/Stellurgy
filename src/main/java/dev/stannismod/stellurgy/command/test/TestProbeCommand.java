@@ -445,14 +445,17 @@ public class TestProbeCommand extends CommandBase {
             // emitters <dim> — list every LOADED emitter in the dimension with its subspace block pos,
             // its world centre, and its frame state. On a VS ship the world centre is the hull-mapped
             // centre (far from the subspace pos), which is exactly what a ship-frame e2e verifies: the
-            // shell tracks the flying ship. Uses the static registry, so it finds a ship's emitter once
-            // the ship (and its chunk) is loaded, without the test knowing the subspace coordinates.
+            // shell tracks the flying ship. Reads the world's own emitter registry, so it finds a ship's
+            // emitter once the ship (and its chunk) is loaded, without the test knowing the subspace
+            // coordinates. An unloaded dimension has no world and therefore no emitters.
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             java.util.List<Map<String, Object>> emitters = new java.util.ArrayList<>();
-            for (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator e
-                    : dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator.getActiveGenerators()) {
-                if (e == null || e.isInvalid() || e.getWorld() == null
-                        || e.getWorld().provider.getDimension() != dim) {
+            net.minecraft.world.WorldServer emitterWorld = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            java.util.Set<dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator> loaded = emitterWorld == null
+                    ? java.util.Collections.<dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator>emptySet()
+                    : dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator.getActiveGenerators(emitterWorld);
+            for (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator e : loaded) {
+                if (e == null || e.isInvalid()) {
                     continue;
                 }
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -5342,7 +5345,7 @@ public class TestProbeCommand extends CommandBase {
             gate.append(",\"orbitHeight\":").append(gateProps != null ? gateProps.getOrbitHeight()
                     : dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().orbit);
             gate.append(",\"physicsCeiling\":").append(
-                    dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum());
+                    dev.stannismod.stellurgy.integration.vs.VSIntegration.shipYPositionMaximum(gateWorld));
             if (gatePose == null) {
                 // The pose is what the trigger reads; without it the check cannot fire at all, and
                 // that is a different answer from "it fired and said no".

@@ -1,8 +1,6 @@
 package dev.stannismod.stellurgy.space;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import net.minecraft.world.DimensionType;
@@ -85,50 +83,21 @@ public final class SpaceSlotPool {
         return id;
     }
 
-    /**
-     * What a slot is bound to: the STORE it reads and writes, and — when the binding names a real
-     * cell — the coordinate that cell is.
-     *
-     * <p><b>Both, in one record, because they are one fact and they used to be half a fact.</b> This
-     * pool identified a binding by its key alone, and a key cannot carry a zoned lattice's width: a
-     * moon's cell {@code 19_0_0.213_0_0} recovered from its own name comes back
-     * {@code WIDTH_UNKNOWN}. Every reader that needed arithmetic then rebuilt a coordinate from the
-     * key and got a width-less one — which is how a settled ship's ledger row lost its width one
-     * tick after arriving and took the dedicated server down on the next.</p>
-     *
-     * <p><b>And the width cannot be re-derived, not merely inconveniently.</b> A zone's cell size is
-     * {@code ZoneScale.cellBlocks(body, primary, tick)} — a function of the sphere of influence AT A
-     * TICK. Re-attaching it later attaches the width of a DIFFERENT moment, which
-     * {@link GalacticCoord#inLattice} names for what it is: a way to say something false. The
-     * coordinate must travel whole or not at all.</p>
-     *
-     * <p>{@code coord} is {@code null} for a SCRATCH binding — a store named by a caller that has no
-     * cell in mind ({@code "deep"}, a probe's {@code "A"}). That is an absence a reader can act on,
-     * not a stand-in it cannot tell from a real address.</p>
-     */
-    private static final class BoundCell {
-        /** The store folder's name. Never null: a binding always names a store. */
-        final String store;
-        /** The cell this binding IS, or {@code null} when the store names no cell. */
-        final GalacticCoord coord;
-
-        BoundCell(String store, GalacticCoord coord) {
-            this.store = store;
-            this.coord = coord;
-        }
-    }
-
-    /** dimId &rarr; what that slot is bound to ({@code null} = unbound). */
-    private static final Map<Integer, BoundCell> DIM_TO_CELL = new ConcurrentHashMap<>();
-
     /** Registered slot dimension ids. */
     private static final List<Integer> SLOT_DIMS = new CopyOnWriteArrayList<>();
+
+    /**
+     * The running server's bindings. A slot world exists only on a running server, so there is
+     * always a subsystem to ask; a call with none is a call between servers, and it fails here.
+     */
+    private static SlotBindings bindings() {
+        return Stellurgy.spaceSubsystem().slotBindings;
+    }
 
     /** The STORE bound to slot {@code dimId}, or {@code null} if unbound. Read by the provider, which
      *  wants a folder name and nothing else. */
     public static String cellKeyFor(int dimId) {
-        BoundCell bound = DIM_TO_CELL.get(dimId);
-        return bound == null ? null : bound.store;
+        return bindings().storeFor(dimId);
     }
 
     /**
@@ -137,20 +106,15 @@ public final class SpaceSlotPool {
      *
      * <p>This is what a caller doing arithmetic asks for. Rebuilding a coordinate from
      * {@link #cellKeyFor} instead loses a zoned lattice's width by construction, and that width
-     * cannot be put back (see {@link BoundCell}).</p>
+     * cannot be put back (see {@link SlotBindings}).</p>
      */
     public static GalacticCoord cellCoordFor(int dimId) {
-        BoundCell bound = DIM_TO_CELL.get(dimId);
-        return bound == null ? null : bound.coord;
+        return bindings().cellFor(dimId);
     }
 
     /** Bind slot {@code dimId} to {@code cell} (takes effect on the next {@link #load}). */
     public static void setCell(int dimId, GalacticCoord cell) {
-        if (cell == null) {
-            DIM_TO_CELL.remove(dimId);
-        } else {
-            DIM_TO_CELL.put(dimId, new BoundCell(cell.cellKey(), cell));
-        }
+        bindings().bindCell(dimId, cell);
     }
 
     /**
@@ -161,11 +125,7 @@ public final class SpaceSlotPool {
      * to parse. Every caller today is a test probe staging a world.</p>
      */
     public static void setScratchStore(int dimId, String storeName) {
-        if (storeName == null) {
-            DIM_TO_CELL.remove(dimId);
-        } else {
-            DIM_TO_CELL.put(dimId, new BoundCell(storeName, null));
-        }
+        bindings().bindScratch(dimId, storeName);
     }
 
     /** Registered slot dimension ids (snapshot). */

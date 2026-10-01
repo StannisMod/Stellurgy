@@ -143,7 +143,7 @@ public class BoundarySky extends IRenderHandler {
 
         // One billboard per synced body.
         if (bodies != null && !bodies.isEmpty()) {
-            boolean labels = SkyLabels.enabled();
+            boolean labels = SkyLabels.enabled(world);
             for (PacketSystemBodiesSync.RenderBody body : bodies) {
                 drawBody(buffer, body, labels);
             }

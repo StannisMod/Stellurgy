@@ -31,7 +31,6 @@ import java.util.List;
 
 public class TileStationGravityController extends TileEntity implements IModularInventory, ITickable, INetworkMachine, ISliderBar, IButtonInventory, IComparatorOverride {
 
-    private static int minGravity = 10;
     private int progress;
     private RedstoneState state = RedstoneState.OFF;
     private ModuleText moduleGrav, maxGravBuildSpeed, targetGrav;
@@ -45,12 +44,15 @@ public class TileStationGravityController extends TileEntity implements IModular
         targetGrav = new ModuleText(6, 35, LibVulpes.proxy.getLocalizedString("msg.stationgravctrl.tgtalt"), 0x202020);
 
         redstoneControl = new ModuleRedstoneOutputButton(174, 4, -1, "", this);
-
-        minGravity = StellurgyConfiguration.getCurrentConfig().allowZeroGSpacestations ? 0 : 10;
     }
 
+    /**
+     * Read at every use, never cached: on a client the config in force is the server's copy, which
+     * arrives after login and replaces the client's own, so a value captured when some tile was built
+     * would be whichever side's config that construction happened to see.
+     */
     public static int getMinGravity() {
-        return minGravity;
+        return StellurgyConfiguration.getCurrentConfig().allowZeroGSpacestations ? 0 : 10;
     }
 
     @Override
@@ -199,7 +201,7 @@ public class TileStationGravityController extends TileEntity implements IModular
                 ((SpaceStationObject) spaceObject).targetGravity = Math.abs(15 - world.getStrongPower(pos)) * 6 + 10;
             }
 
-            progress = ((SpaceStationObject) spaceObject).targetGravity - minGravity;
+            progress = ((SpaceStationObject) spaceObject).targetGravity - getMinGravity();
 
             int targetMultiplier = StellurgyConfiguration.getCurrentConfig().allowZeroGSpacestations
                     ? ((SpaceStationObject) spaceObject).targetGravity
@@ -293,7 +295,7 @@ public class TileStationGravityController extends TileEntity implements IModular
 
         this.progress = progress;
         if (SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(this.pos) != null) {
-            ((SpaceStationObject) (SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(this.pos))).targetGravity = progress + minGravity;
+            ((SpaceStationObject) (SpaceObjectManager.getSpaceManager().getSpaceStationFromBlockCoords(this.pos))).targetGravity = progress + getMinGravity();
         }
     }
 
@@ -304,7 +306,7 @@ public class TileStationGravityController extends TileEntity implements IModular
 
     @Override
     public int getTotalProgress(int id) {
-        return 100 - minGravity;
+        return 100 - getMinGravity();
     }
 
     @Override

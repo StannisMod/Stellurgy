@@ -829,7 +829,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                     }
                     for (net.minecraft.entity.Entity passenger : mount.getPassengers()) {
                         if (passenger instanceof net.minecraft.entity.player.EntityPlayerMP) {
-                            dev.stannismod.stellurgy.space.AssemblyCrewRebind.enqueue(
+                            dev.stannismod.stellurgy.Stellurgy.spaceSubsystem().crewRebind.enqueue(
                                     (net.minecraft.world.WorldServer) world,
                                     (net.minecraft.entity.player.EntityPlayerMP) passenger,
                                     mount.getEntityId(), shipAnchor,
@@ -1528,37 +1528,38 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
 
 
     protected enum ErrorCodes {
-        SUCCESS(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.success")),
-        NOFUEL(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.nofuel")),
-        NOSEAT(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.noseat")),
-        NOENGINES(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.noengines")),
-        NOGUIDANCE(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.noguidance")),
-        UNSCANNED(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.unscanned")),
-        SUCCESS_STATION(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.success_station")),
-        EMPTY(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.empty")),
-        FINISHED(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.finished")),
-        INCOMPLETESTRCUTURE(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.incompletestructure")),
-        NOSATELLITEHATCH(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.nosatellitehatch")),
-        NOSATELLITECHIP(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.nosatellitechip")),
-        OUTPUTBLOCKED(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.outputblocked")),
-        INVALIDBLOCK(LibVulpes.proxy.getLocalizedString("msg.rocketbuild.invalidblock")),
-        COMBINEDTHRUST(LibVulpes.proxy.getLocalizedString("msg.rocketbuild.combinedthrust")),
-        ALREADY_ASSEMBLED(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.alreadyassembled")),
-        UNSCANNED_STATION(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.unscanned_station")),
-        FAIL_CUT(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.fail_cut")),
-        NOINTAKE(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.nointake")),
-        NOTANK(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.notank")),
-        MULTIPLEFLIGHTCOMPUTERS(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.multipleflightcomputers")),
-        MULTIPLEPILOTSEATS(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.multiplepilotseats"));
+        SUCCESS("msg.rocketbuilder.success"),
+        NOFUEL("msg.rocketbuilder.nofuel"),
+        NOSEAT("msg.rocketbuilder.noseat"),
+        NOENGINES("msg.rocketbuilder.noengines"),
+        NOGUIDANCE("msg.rocketbuilder.noguidance"),
+        UNSCANNED("msg.rocketbuilder.unscanned"),
+        SUCCESS_STATION("msg.rocketbuilder.success_station"),
+        EMPTY("msg.rocketbuilder.empty"),
+        FINISHED("msg.rocketbuilder.finished"),
+        INCOMPLETESTRCUTURE("msg.rocketbuilder.incompletestructure"),
+        NOSATELLITEHATCH("msg.rocketbuilder.nosatellitehatch"),
+        NOSATELLITECHIP("msg.rocketbuilder.nosatellitechip"),
+        OUTPUTBLOCKED("msg.rocketbuilder.outputblocked"),
+        INVALIDBLOCK("msg.rocketbuild.invalidblock"),
+        COMBINEDTHRUST("msg.rocketbuild.combinedthrust"),
+        ALREADY_ASSEMBLED("msg.rocketbuilder.alreadyassembled"),
+        UNSCANNED_STATION("msg.rocketbuilder.unscanned_station"),
+        FAIL_CUT("msg.rocketbuilder.fail_cut"),
+        NOINTAKE("msg.rocketbuilder.nointake"),
+        NOTANK("msg.rocketbuilder.notank"),
+        MULTIPLEFLIGHTCOMPUTERS("msg.rocketbuilder.multipleflightcomputers"),
+        MULTIPLEPILOTSEATS("msg.rocketbuilder.multiplepilotseats");
 
-        String code;
+        private final String translationKey;
 
-        ErrorCodes(String code) {
-            this.code = code;
+        ErrorCodes(String translationKey) {
+            this.translationKey = translationKey;
         }
 
+        /** Translated at every call, so a language change shows on the next status line. */
         public String getErrorCode() {
-            return code;
+            return LibVulpes.proxy.getLocalizedString(translationKey);
         }
     }
 

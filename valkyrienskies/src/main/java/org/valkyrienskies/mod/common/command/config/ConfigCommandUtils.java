@@ -27,6 +27,9 @@ class ConfigCommandUtils {
      * Sets a field from a string. It only supports fields where {@link
      * ConfigCommandUtils#isSupportedType(Class)} for {@link Field#getType()}
      *
+     * <p>Writes config statics while the game runs, on purpose: an operator's config command is a
+     * partial re-initialisation of the mod, the sanctioned exception to statics being written once.</p>
+     *
      * @param string The string to set the field's value to
      * @param field  The field to set
      * @param object The object upon which to set the field

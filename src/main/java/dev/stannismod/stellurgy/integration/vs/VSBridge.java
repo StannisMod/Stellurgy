@@ -272,33 +272,24 @@ final class VSBridge {
     }
 
     /**
-     * The physics mod's hard ceiling for a ship's world-frame altitude ("Ship Y Position
-     * Maximum"): VS clamps every ship's pose to this Y each physics step, so no ship can climb
-     * above it under any thrust, whatever Stellurgy believes about orbit heights.
+     * The physics mod's hard ceiling for a ship's world-frame altitude in {@code world}: VS clamps
+     * every ship's pose there to this Y each physics step, so no ship can climb above it under any
+     * thrust, whatever Stellurgy believes about orbit heights.
      */
-    static double shipYPositionMaximum() {
-        return org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit;
+    static double shipYPositionMaximum(World world) {
+        return org.valkyrienskies.mod.common.physics.ShipAltitudeBand.of(world).upper();
     }
 
     /**
-     * Widen the physics mod's ship altitude range so it covers AT LEAST {@code [floor, ceiling]}.
-     * The clamp is a pair of global statics applied per physics step; the space cells realize ship
-     * poses megablocks from the stock values, and a ship's own thrust can never carry it past
-     * either clamp - so the range must cover the whole pose band BEFORE the first ship arrives,
-     * deterministically, not be ratcheted up teleport-by-teleport. Never narrows a range the user
-     * configured wider; the widening is per-session (the VS config file is not written back).
+     * Widen {@code world}'s ship altitude band so it covers AT LEAST {@code [floor, ceiling]}. The
+     * space cells realize ship poses megablocks from the stock values, and a ship's own thrust can
+     * never carry it past either clamp - so the band must cover the whole pose range BEFORE the first
+     * ship arrives, deterministically, not be ratcheted up teleport-by-teleport. Never narrows a band
+     * the operator configured wider, and never touches the configuration: the widening belongs to the
+     * world and ends with it.
      */
-    static void widenShipAltitudeRange(double floor, double ceiling, Logger logger) {
-        if (org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit < ceiling) {
-            logger.info("Raising the physics ship altitude ceiling {} -> {} to cover the space cells.",
-                    org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit, ceiling);
-            org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit = ceiling;
-        }
-        if (org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit > floor) {
-            logger.info("Lowering the physics ship altitude floor {} -> {} to cover the space cells.",
-                    org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit, floor);
-            org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit = floor;
-        }
+    static void coverShipAltitudeBand(World world, double floor, double ceiling) {
+        org.valkyrienskies.mod.common.physics.ShipAltitudeBand.of(world).cover(floor, ceiling);
     }
 
     /**
@@ -970,8 +961,8 @@ final class VSBridge {
      * delta, and mirror the transform into the loaded physics object when there is one. The subspace
      * shipyard blocks do not move; only the world-frame pose does (entities are NOT capped by the 256
      * build height — vanilla's only hard Y line is the void-kill below −64). VS's per-tick world-Y
-     * clamps ({@code VSConfig.shipUpperLimit}/{@code shipLowerLimit}) are widened when the destination
-     * lies outside them, or the physics tick would immediately drag the ship back. The ship should be
+     * clamp (the destination world's {@code ShipAltitudeBand}) is widened when the destination
+     * lies outside it, or the physics tick would immediately drag the ship back. The ship should be
      * PARKED across the write ({@link #parkShipAt}) so the physics thread is not concurrently
      * rewriting the transform; unpark after. Returns false when no ship is near the source.
      */
@@ -995,16 +986,14 @@ final class VSBridge {
         if (ship == null) {
             return false;
         }
-        // Safety net only: production space cells get their whole pose band covered ONCE at
-        // subsystem registration (raiseShipCeilingTo), so for them this never fires. It remains
-        // for destinations outside any pre-raised range (probe teleports to arbitrary Y, and
-        // deployments where the subsystem never registered) - without it the next physics step
+        // Safety net only: every server world gets the space cells' whole pose band covered as it
+        // loads, so for production destinations this never fires. It remains for destinations
+        // outside that band (probe teleports to arbitrary Y) - without it the next physics step
         // would clamp the ship straight back out of the teleport.
-        if (dstY + 100d > org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit) {
-            org.valkyrienskies.mod.common.config.VSConfig.shipUpperLimit = dstY + 1_000d;
-        }
-        if (dstY - 100d < org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit) {
-            org.valkyrienskies.mod.common.config.VSConfig.shipLowerLimit = dstY - 1_000d;
+        org.valkyrienskies.mod.common.physics.ShipAltitudeBand band =
+                org.valkyrienskies.mod.common.physics.ShipAltitudeBand.of(world);
+        if (dstY + 100d > band.upper() || dstY - 100d < band.lower()) {
+            band.cover(dstY - 1_000d, dstY + 1_000d);
         }
         ShipTransform old = ship.getShipTransform();
         // Rotation-preserving variant of VS's own teleport recipe (its /vs teleport command resets the

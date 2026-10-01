@@ -342,22 +342,20 @@ public final class VSIntegration {
     // at every one of these sites — not by asking the world who happens to be around.
 
     /**
-     * The physics mod's hard ceiling for ship altitude (world Y), or
-     * {@code Double.POSITIVE_INFINITY} when the physics mod is absent (nothing clamps, so nothing
-     * caps a trigger line). Any gate that fires on "the ship climbed past altitude H" must derive
-     * its H BELOW this value: the clamp is applied every physics step, so a trigger line at or
-     * above it is physically unreachable and the gate silently never fires.
+     * The physics mod's hard ceiling for ship altitude (world Y) in {@code world}. Any gate that fires
+     * on "the ship climbed past altitude H" must derive its H BELOW this value: the clamp is applied
+     * every physics step, so a trigger line at or above it is physically unreachable and the gate
+     * silently never fires.
      */
-    public static double shipYPositionMaximum() {
-        return VSBridge.shipYPositionMaximum();
+    public static double shipYPositionMaximum(net.minecraft.world.World world) {
+        return VSBridge.shipYPositionMaximum(world);
     }
 
     /**
-     * Widen the physics mod's ship altitude range so it covers at least {@code [floor, ceiling]}
-     * (no-op when the physics mod is absent, and each end moves only if the current value is
-     * narrower). Called once at space-subsystem registration so every slot cell's pose band is
-     * flyable from the first tick - see {@link VSBridge#widenShipAltitudeRange} for why this must be
-     * deterministic rather than teleport-ratcheted.
+     * Widen {@code world}'s ship altitude band so it covers at least {@code [floor, ceiling]} (each
+     * end moves only if the current value is narrower) - see
+     * {@link VSBridge#coverShipAltitudeBand} for why this must be deterministic rather than
+     * teleport-ratcheted.
      *
      * <p>Both ends, not just the top: the cell's pose band is centred on the world origin, so half
      * of it is at negative Y. A ceiling-only call leaves the substrate's stock floor sitting under
@@ -365,8 +363,8 @@ public final class VSIntegration {
      * physics step, which is the shape a reader cannot tell from a ship that simply stopped
      * descending.</p>
      */
-    public static void widenShipAltitudeRange(double floor, double ceiling) {
-        VSBridge.widenShipAltitudeRange(floor, ceiling, LOGGER);
+    public static void coverShipAltitudeBand(net.minecraft.world.World world, double floor, double ceiling) {
+        VSBridge.coverShipAltitudeBand(world, floor, ceiling);
     }
 
     /**

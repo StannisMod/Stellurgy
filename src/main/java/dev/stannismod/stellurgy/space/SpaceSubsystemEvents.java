@@ -43,6 +43,23 @@ public final class SpaceSubsystemEvents {
         SystemBodiesProducer.sendToPlayer((net.minecraft.entity.player.EntityPlayerMP) event.player);
     }
 
+    /**
+     * Cover the space cells' pose band in every server world as it loads. The cells realize ship
+     * poses across the whole [-HALF_CELL, HALF_CELL) band on every axis while the physics mod's stock
+     * altitude clamp sits at 1000, and a ship's own thrust can never carry it past that clamp - so
+     * the band is declared deterministically before the first ship arrives, not ratcheted up
+     * arrival-by-arrival, which left each ship a ~1000-block corridor above wherever it entered.
+     * Every world, planets included: a planet's ascent and descent gates are derived from its
+     * ceiling. Declared on the world, so it ends with the world.
+     */
+    @SubscribeEvent
+    public void onWorldLoad(net.minecraftforge.event.world.WorldEvent.Load event) {
+        if (!event.getWorld().isRemote) {
+            dev.stannismod.stellurgy.integration.vs.VSIntegration.coverShipAltitudeBand(event.getWorld(),
+                    SpaceSubsystem.requiredShipFloor(), SpaceSubsystem.requiredShipCeiling());
+        }
+    }
+
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
@@ -74,6 +91,8 @@ public final class SpaceSubsystemEvents {
         live.descent.tick();
         // Advance in-flight CELL-SEAM carries (a ship that flew out of its cell into the next one).
         live.cellCrossings.tick();
+        // Retry the pilots waiting to be re-seated on a ship still being assembled.
+        live.crewRebind.tick(FMLCommonHandler.instance().getMinecraftServerInstance());
         // Rebroadcast the per-slot render bodies (throttled) so the slot-world sky (BoundarySky)
         // tracks each settled ship's direction to the bodies of its cell.
         SystemBodiesProducer.onBroadcastTick(FMLCommonHandler.instance().getMinecraftServerInstance());

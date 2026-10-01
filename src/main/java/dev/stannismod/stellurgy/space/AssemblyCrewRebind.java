@@ -9,8 +9,6 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.WorldServer;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -24,8 +22,10 @@ import org.apache.logging.log4j.Logger;
  * out (after which the pilot is left on his stale mount and the failure is logged - never held in
  * limbo, and never silently dropped).
  *
- * <p>Same drain shape as the login-restore seating queue in {@link SpaceEventHandler}; kept
- * separate because this path is core assembly glue and must work with the space subsystem down.</p>
+ * <p>The queue is server state: it belongs to the {@link SpaceSubsystem} of the running server,
+ * which builds one at server start and drops it at stop, and {@link SpaceSubsystemEvents} drives it.
+ * A pending rebind names a player, a dimension and an entity id of ONE server, so it must not
+ * outlive that server into the next world a single-player client opens.</p>
  */
 public final class AssemblyCrewRebind {
 
@@ -43,7 +43,7 @@ public final class AssemblyCrewRebind {
      *  churn once cancelled a rebind whose pilot never stood up, stranding him. */
     private static final int NOT_ON_MOUNT_DEBOUNCE = 3;
 
-    private static final List<Pending> PENDING = new ArrayList<>();
+    private final List<Pending> queue = new ArrayList<>();
 
     /**
      * Seam: this queue took an entry, or let one go, and why.
@@ -101,24 +101,19 @@ public final class AssemblyCrewRebind {
      * whose seat is re-identified by the given AFC-link offset on the ship with durable id
      * {@code shipId}. Server main thread only.
      */
-    public static void enqueue(WorldServer world, EntityPlayerMP player, int staleDummyId,
+    public void enqueue(WorldServer world, EntityPlayerMP player, int staleDummyId,
             BlockPos anchor, int afcDx, int afcDy, int afcDz, UUID shipId) {
         noteRebindQueue("queued", player.getUniqueID(), staleDummyId, anchor, 0);
-        PENDING.add(new Pending(world.provider.getDimension(), player.getUniqueID(),
+        queue.add(new Pending(world.provider.getDimension(), player.getUniqueID(),
                 staleDummyId, anchor, afcDx, afcDy, afcDz, shipId));
     }
 
-    @SubscribeEvent
-    public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || PENDING.isEmpty()) {
+    /** One retry pass over every queued pilot. Server main thread, once per server tick. */
+    void tick(MinecraftServer server) {
+        if (queue.isEmpty()) {
             return;
         }
-        MinecraftServer server = net.minecraftforge.fml.common.FMLCommonHandler.instance()
-                .getMinecraftServerInstance();
-        if (server == null) {
-            return;
-        }
-        Iterator<Pending> it = PENDING.iterator();
+        Iterator<Pending> it = queue.iterator();
         while (it.hasNext()) {
             Pending pending = it.next();
             EntityPlayerMP player = server.getPlayerList().getPlayerByUUID(pending.playerId);

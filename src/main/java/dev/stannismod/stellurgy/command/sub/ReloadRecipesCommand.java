@@ -34,6 +34,8 @@ public class ReloadRecipesCommand extends StellurgyCommand {
             throw wrongUsage(sender);
         }
         try {
+            // Rewrites static state while the game runs, on purpose: an operator reload is a partial
+            // re-initialisation of the mod, the sanctioned exception to statics being written once.
             Stellurgy.machineRecipes.clearAllMachineRecipes();
             Stellurgy.machineRecipes.registerAllMachineRecipes();
             // NB: do NOT call createAutoGennedRecipes here. It registers

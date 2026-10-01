@@ -193,7 +193,11 @@ public class VSConfig extends VSConfigTemplate {
     }
 
     /**
-     * Synchronizes the data in this class and the data in the forge configuration
+     * Synchronizes the data in this class and the data in the forge configuration.
+     *
+     * <p>Rewrites every static of this class while the game runs, on purpose: a config reload is a
+     * partial re-initialisation of the mod, the sanctioned exception to statics being written once.
+     * The listeners it notifies ({@link #registerSyncEvent}) re-derive their own state the same way.</p>
      */
     public static void sync() {
         ConfigManager.sync(ValkyrienSkiesMod.MOD_ID, Type.INSTANCE);

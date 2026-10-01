@@ -439,6 +439,9 @@ public class Stellurgy {
 
         version = event.getModMetadata().version;
 
+        dev.stannismod.stellurgy.world.WorldRuntime.register();
+        MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.world.WorldRuntime.Attach.class);
+
         //Init API
         DimensionManager.planetWorldProvider = WorldProviderPlanet.class;
         instance.installSealHandler(SealableBlockHandler.INSTANCE);
@@ -1388,9 +1391,6 @@ public class Stellurgy {
         dev.stannismod.stellurgy.space.SpaceEventHandler spaceEvents =
                 new dev.stannismod.stellurgy.space.SpaceEventHandler();
         MinecraftForge.EVENT_BUS.register(spaceEvents);
-        // Carries a pre-assembly boarding across the asynchronous ship assembly (core assembly
-        // glue - registered unconditionally, works with the space subsystem down).
-        MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.space.AssemblyCrewRebind());
         // Hyperspace is a void with ships in it and nothing else: leaving your ship out there is
         // fatal. Idle on every tick that has no hyperspace world and no player in it.
         dev.stannismod.stellurgy.space.HyperspaceVoid hyperspaceVoid =

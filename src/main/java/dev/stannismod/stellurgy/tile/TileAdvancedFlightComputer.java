@@ -1081,7 +1081,7 @@ public class TileAdvancedFlightComputer extends TileEntity implements IModularIn
         return dev.stannismod.stellurgy.space.ShipEntryController.effectiveEntryCeiling(
                 props != null ? props.getOrbitHeight()
                         : dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().orbit,
-                VSIntegration.shipYPositionMaximum());
+                VSIntegration.shipYPositionMaximum(world));
     }
 
     /**

@@ -22,7 +22,8 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent.ElementType;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent;
+import net.minecraft.world.World;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
@@ -52,12 +53,26 @@ public class RocketEventHandler extends Gui {
     public static GuiBox oxygenBar = new GuiBox(8, -57, 80, 48);
     public static GuiBox hydrogenBar = new GuiBox(8, -74, 80, 48);
     public static GuiBox atmBar = new GuiBox(8, 27, 200, 48);
-    private static String displayString = "";
-    private static long lastDisplayTime = -1000;
+
+    /**
+     * The HUD state a client WORLD owns: the overlay message, stamped with that world's clock, and
+     * the window after arriving in it during which the suffocation warning stays quiet. Owned by the
+     * world ({@link WorldRuntime}) because every value here is meaningful only against its clock —
+     * kept across a world change, a stamp from an old world is compared with a younger one and the
+     * message stays up until the new clock catches up.
+     */
+    private static final class HudState {
+        String message = "";
+        long messageUntil = -1000;
+        boolean arrived;
+        long suppressWarningUntil = Long.MIN_VALUE;
+    }
+
+    private static HudState hudOf(World world) {
+        return WorldRuntime.of(world, HudState.class, HudState::new);
+    }
 
     private ResourceLocation background = TextureResources.rocketHud;
-    private static long suppressSuffocationWarningUntil = Long.MIN_VALUE;
-    private static int lastSuffocationWarningDim = Integer.MIN_VALUE;
 
 
     /** [-1,1] clamp for HUD bar/dot geometry; NaN-safe. */
@@ -143,16 +158,12 @@ public class RocketEventHandler extends Gui {
         drawRect(ccx + fcx - 2, ccy + fcy - 2, ccx + fcx + 3, ccy + fcy + 3, 0xFFFFE060);
     }
 
+    /** Show {@code msg} until the current client world's clock passes {@code endTime}. */
     @SideOnly(Side.CLIENT)
     public static void setOverlay(long endTime, String msg) {
-        displayString = msg;
-        lastDisplayTime = endTime;
-    }
-
-    @SubscribeEvent
-    public void playerTeleportEvent(PlayerEvent.PlayerChangedDimensionEvent event) {
-        //Fix O2, space elevator popup displaying after teleporting
-        lastDisplayTime = -1000;
+        HudState hud = hudOf(Minecraft.getMinecraft().world);
+        hud.message = msg;
+        hud.messageUntil = endTime;
     }
 
     /**
@@ -418,11 +429,14 @@ public class RocketEventHandler extends Gui {
 
 
             long worldTime = mc.world.getTotalWorldTime();
+            HudState hud = hudOf(mc.world);
 
-            if (mc.player.dimension != lastSuffocationWarningDim) {
-                lastSuffocationWarningDim = mc.player.dimension;
+            // First frame in this world (a dimension change, a respawn or a new connection each build
+            // one): drop a warning carried in from the last world and hold the next for 40 ticks.
+            if (!hud.arrived) {
+                hud.arrived = true;
                 ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
-                suppressSuffocationWarningUntil = worldTime + 40;
+                hud.suppressWarningUntil = worldTime + 40;
             }
 
             // In event of world change make sure the warning isn't displayed
@@ -431,7 +445,7 @@ public class RocketEventHandler extends Gui {
             }
 
             // Tell the player he's suffocating if needed
-            if (worldTime >= suppressSuffocationWarningUntil &&
+            if (worldTime >= hud.suppressWarningUntil &&
                     worldTime - ClientAtmosphere.lastSuffocationTime() < numTicksToDisplay) {
                 FontRenderer fontRenderer = mc.fontRenderer;
                 String str = "";
@@ -454,12 +468,12 @@ public class RocketEventHandler extends Gui {
             }
 
             //Draw arbitrary string
-            if (mc.world.getTotalWorldTime() <= lastDisplayTime) {
+            if (worldTime <= hud.messageUntil) {
                 FontRenderer fontRenderer = mc.fontRenderer;
                 GL11.glPushMatrix();
                 GL11.glScalef(2, 2, 2);
                 int loc = 0;
-                for (String str : displayString.split("\n")) {
+                for (String str : hud.message.split("\n")) {
 
                     int screenX = event.getResolution().getScaledWidth() / 4 - fontRenderer.getStringWidth(str) / 2;
                     int screenY = event.getResolution().getScaledHeight() / 12 + loc * (event.getResolution().getScaledHeight()) / 12;

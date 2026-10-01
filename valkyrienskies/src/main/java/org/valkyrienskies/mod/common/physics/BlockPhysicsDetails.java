@@ -46,6 +46,11 @@ public class BlockPhysicsDetails {
         onSync();
     }
 
+    /**
+     * Re-applies the configured mass overrides on every config sync. Writing the static map during
+     * play is the config reload's partial re-initialisation of the mod, the sanctioned exception to
+     * statics being written once.
+     */
     private static void onSync() {
         Arrays.stream(VSConfig.blockMass)
             .map(str -> str.split("="))

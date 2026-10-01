@@ -58,6 +58,8 @@ public final class SpaceSubsystem {
     public final ShipEntryController entry;
     public final DescentController descent;
     public final CellCrossingController cellCrossings;
+    public final AssemblyCrewRebind crewRebind = new AssemblyCrewRebind();
+    public final SlotBindings slotBindings = new SlotBindings();
     private int gcTickCounter;
     /** Set by the pool-pressure eviction listener; consumed on the next server tick to run an extra GC. */
     private boolean pressureGcRequested;
@@ -254,14 +256,6 @@ public final class SpaceSubsystem {
             // registration, which is an internal, expected no-op and was always kept quiet.
             return existing;
         }
-        // The cells realize ship poses across the whole [-HALF_CELL, HALF_CELL) band on every axis
-        // while the physics mod's stock altitude clamp sits at 1000 and a ship's own thrust can
-        // never carry it past that clamp. Widen the range ONCE here, deterministically, so the full
-        // vertical range of every cell is flyable from the first tick - not ratcheted up
-        // arrival-by-arrival, which left each ship a mere ~1000-block corridor above wherever it
-        // happened to enter. BOTH ends: the band is centred, so half of it is below the world
-        // origin and a floor left at its stock value is a clamp waiting under every descent.
-        VSIntegration.widenShipAltitudeRange(requiredShipFloor(), requiredShipCeiling());
         // Register the physical slot dimensions once per JVM; a single-player world re-open reuses the
         // already-registered dims (DimensionManager registration is JVM-global and re-registering throws).
         if (SpaceSlotPool.slotDims().isEmpty()) {

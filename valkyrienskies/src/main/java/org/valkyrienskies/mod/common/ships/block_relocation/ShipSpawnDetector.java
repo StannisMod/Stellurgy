@@ -23,7 +23,9 @@ public class ShipSpawnDetector extends SpatialDetector {
     }
 
     /**
-     * This is called by {@link VSConfig#sync}
+     * This is called by {@link VSConfig#sync}. Rebuilding the static set during play is the config
+     * reload's partial re-initialisation of the mod, the sanctioned exception to statics being
+     * written once.
      */
     private static void syncWithConfig() {
         blacklist.clear();
