@@ -59,12 +59,11 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict. CONTROL — {@code AtmosphereAssertions:37} holding
+     * <p>red-witnessed: one inversion per verdict. CONTROL — {@code AtmosphereAssertions#holdsAt} at {@code return !breathable(air, published);} holding
      * "not breathable" everywhere: "breathable air must not satisfy \"not breathable\" (after a forced
      * sample): … expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. UNBREATHABLE — the same
      * line never holding: "air nobody can breathe must satisfy it (after a forced sample): …
-     * expected:&lt;true&gt; but was:&lt;false&gt;", 2026-09-30. OFF AGAIN — {@code
-     * TileAtmosphereDetector:70} ({@code statementHolds}) latching true for a statement once it has
+     * expected:&lt;true&gt; but was:&lt;false&gt;", 2026-09-30. OFF AGAIN — {@code TileAtmosphereDetector#statementHolds} at {@code AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());} ({@code statementHolds}) latching true for a statement once it has
      * held: "and refilling the room must switch it off again (after a forced sample): …
      * expected:&lt;false&gt; but was:&lt;true&gt;", 2026-09-30. The sealed-zone premises are
      * arrangements and are not witnessed.</p>
@@ -92,7 +91,7 @@ public class AtmosphereDetectorWatchesAStatementTest extends AbstractSharedServe
     }
 
     /**
-     * <p>red-witnessed: with {@code AtmosphereAssertions:47} calling any zone air toxic: "clean air
+     * <p>red-witnessed: with {@code AtmosphereAssertions#holdsAt} at {@code return air != null && air.isToxic();} calling any zone air toxic: "clean air
      * must not read as poisonous (after a forced sample): … expected:&lt;false&gt; but
      * was:&lt;true&gt;", 2026-09-30. POISONOUS — the same line never holding: "a room can be
      * breathable and poisonous at once, and the detector must be able to wire the second (after a

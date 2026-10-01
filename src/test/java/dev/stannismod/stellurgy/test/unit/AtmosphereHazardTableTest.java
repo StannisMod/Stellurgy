@@ -60,9 +60,11 @@ public class AtmosphereHazardTableTest {
     // ─── the fourteen cells, as hazard sets ────────────────────────────────────────────────────
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a row given to an air atmosphere in
-     * the table at {@code AtmosphereHazards:146}. AIR: "air is what raises nothing". PRESSURIZED AIR:
-     * "and so is pressurised air".</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a row for an air atmosphere added
+     * to {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);}, after
+     * that line. AIR: "air is what raises nothing". PRESSURIZED AIR: "and so is pressurised air".
+     * (Taken while the table was a static block; its rows are unchanged.)</p>
      */
     @Test
     public void breathableAirDoesNothingToAnybody() {
@@ -71,22 +73,38 @@ public class AtmosphereHazardTableTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows in
-     * {@code AtmosphereHazards:133-145}. VACUUM ({@code :133}, given suffocation instead):
-     * "expected:&lt;[DECOMPRESSION]&gt; but was:&lt;[SUFFOCATION]&gt;". NOO2 ({@code :134}, a pressure
-     * row added): "expected:&lt;[SUFFOCATION]&gt; but was:&lt;[SUFFOCATION, PRESSURE]&gt;". LOWOXYGEN
-     * ({@code :135}, a pressure row added): the same text. HIGHOXYGEN ({@code :136}, a pressure row
-     * added): "expected:&lt;[OXYGEN_TOXICITY]&gt; but was:&lt;[OXYGEN_TOXICITY, PRESSURE]&gt;".
-     * HIGHPRESSURE ({@code :137}, given oxygen toxicity instead): "expected:&lt;[PRESSURE]&gt; but
-     * was:&lt;[OXYGEN_TOXICITY]&gt;". SUPERHIGHPRESSURE ({@code :138}, a heat row added):
-     * "expected:&lt;[PRESSURE]&gt; but was:&lt;[PRESSURE, HEAT]&gt;". VERYHOT ({@code :139}, given
-     * oxygen toxicity instead): "expected:&lt;[HEAT]&gt; but was:&lt;[OXYGEN_TOXICITY]&gt;".
-     * SUPERHEATED ({@code :140}, a pressure row added): "expected:&lt;[HEAT]&gt; but was:&lt;[PRESSURE,
-     * HEAT]&gt;". HIGHPRESSURENOO2 ({@code :141}, a heat row added): "expected:&lt;[SUFFOCATION,
-     * PRESSURE]&gt; but was:&lt;[SUFFOCATION, PRESSURE, HEAT]&gt;". SUPERHIGHPRESSURENOO2
-     * ({@code :142}, a heat row added): the same text. VERYHOTNOO2 ({@code :144}, a pressure row
-     * added): "expected:&lt;[SUFFOCATION, HEAT]&gt; but was:&lt;[SUFFOCATION, PRESSURE, HEAT]&gt;".
-     * SUPERHEATEDNOO2 ({@code :145}, a pressure row added): the same text.</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows
+     * (taken while the table was a static block; its rows are unchanged). VACUUM —
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VACUUM, DECOMPRESSION);}
+     * given suffocation instead: "expected:&lt;[DECOMPRESSION]&gt; but was:&lt;[SUFFOCATION]&gt;".
+     * NOO2 — {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.NOO2, SUFFOCATION);}
+     * with a pressure row added: "expected:&lt;[SUFFOCATION]&gt; but was:&lt;[SUFFOCATION,
+     * PRESSURE]&gt;". LOWOXYGEN — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.LOWOXYGEN, THIN_AIR);} with a pressure row added: the same text.
+     * HIGHOXYGEN — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);} with a pressure row added:
+     * "expected:&lt;[OXYGEN_TOXICITY]&gt; but was:&lt;[OXYGEN_TOXICITY, PRESSURE]&gt;". HIGHPRESSURE —
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.HIGHPRESSURE, PRESSURE);}
+     * given oxygen toxicity instead: "expected:&lt;[PRESSURE]&gt; but was:&lt;[OXYGEN_TOXICITY]&gt;".
+     * SUPERHIGHPRESSURE — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);} with a heat
+     * row added: "expected:&lt;[PRESSURE]&gt; but was:&lt;[PRESSURE, HEAT]&gt;". VERYHOT —
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VERYHOT, HEAT);} given
+     * oxygen toxicity instead: "expected:&lt;[HEAT]&gt; but was:&lt;[OXYGEN_TOXICITY]&gt;".
+     * SUPERHEATED — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.SUPERHEATED, SEARING_HEAT);} with a pressure row added:
+     * "expected:&lt;[HEAT]&gt; but was:&lt;[PRESSURE, HEAT]&gt;". HIGHPRESSURENOO2 —
+     * {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);} with a heat
+     * row added: "expected:&lt;[SUFFOCATION, PRESSURE]&gt; but was:&lt;[SUFFOCATION, PRESSURE,
+     * HEAT]&gt;". SUPERHIGHPRESSURENOO2 — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,} with a heat row
+     * added: the same text. VERYHOTNOO2 — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);} with a pressure row
+     * added: "expected:&lt;[SUFFOCATION, HEAT]&gt; but was:&lt;[SUFFOCATION, PRESSURE, HEAT]&gt;".
+     * SUPERHEATEDNOO2 — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);} with a
+     * pressure row added: the same text.</p>
      */
     @Test
     public void eachNamedAtmosphereRaisesWhatItAlwaysDid() {
@@ -113,15 +131,25 @@ public class AtmosphereHazardTableTest {
     // ─── what a suit must cover, and what it spends ────────────────────────────────────────────
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows in
-     * {@code AtmosphereHazards:133-145}. LOWOXYGEN ({@code :135}, a pressure row added): "thin air is a
-     * breathing problem". NOO2 ({@code :134}, a pressure row added): "so is airless air". HIGHOXYGEN
-     * ({@code :136}, a pressure row added): "so is too much oxygen". VACUUM ({@code :133}, given
-     * suffocation instead): "a vacuum is not". HIGHPRESSURE ({@code :137}, given oxygen toxicity
-     * instead): "nor is depth". VERYHOT ({@code :139}, given oxygen toxicity instead): "nor is heat".
-     * HIGHPRESSURENOO2 ({@code :141}, its pressure row dropped): "suffocating AND crushed still needs
-     * the whole suit". SUPERHEATEDNOO2 ({@code :145}, its heat row dropped): "suffocating AND cooking
-     * too".</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each a change to that atmosphere's rows
+     * (taken while the table was a static block; its rows are unchanged). LOWOXYGEN —
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.LOWOXYGEN, THIN_AIR);} with
+     * a pressure row added: "thin air is a breathing problem". NOO2 —
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.NOO2, SUFFOCATION);} with a
+     * pressure row added: "so is airless air". HIGHOXYGEN — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);} with a pressure row added: "so is too
+     * much oxygen". VACUUM — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.VACUUM, DECOMPRESSION);} given suffocation instead: "a vacuum is
+     * not". HIGHPRESSURE — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.HIGHPRESSURE, PRESSURE);} given oxygen toxicity instead: "nor is
+     * depth". VERYHOT — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.VERYHOT, HEAT);} given oxygen toxicity instead: "nor is heat".
+     * HIGHPRESSURENOO2 — {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);} with its
+     * pressure row dropped: "suffocating AND crushed still needs the whole suit". SUPERHEATEDNOO2 —
+     * {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);} with its
+     * heat row dropped: "suffocating AND cooking too".</p>
      */
     @Test
     public void aSealedFaceIsEnoughOnlyWhereTheHarmIsWhatYouBreathe() {
@@ -143,14 +171,18 @@ public class AtmosphereHazardTableTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. Six assertions carry no message and went
-     * red as a bare AssertionError at their own line. VACUUM - {@code AtmosphereHazards:53} the
-     * decompression row no longer supplying oxygen: "nothing outside to work with". NOO2 -
-     * {@code :59} the suffocation row no longer supplying it. HIGHPRESSURENOO2 - {@code :69} the
-     * dense-suffocation row no longer supplying it. SUPERHEATEDNOO2 - {@code :145} suffocating
-     * through the thin-air row instead. LOWOXYGEN - {@code :75} the thin-air row supplying oxygen:
-     * "thin air can be concentrated". HIGHOXYGEN - {@code :81} the toxicity row supplying it.
-     * HIGHPRESSURE - {@code :87} the pressure row supplying it. VERYHOT - {@code :111} the heat row
-     * supplying it.</p>
+     * red as a bare AssertionError at their own line. VACUUM - the {@code AtmosphereHazards#DECOMPRESSION} at {@code 4, 4, 1, false, false, true, true, "msg.noOxygen"}
+     * row no longer supplying oxygen: "nothing outside to work with". NOO2 - the
+     * {@code AtmosphereHazards#SUFFOCATION} at {@code 4, 4, 1, false, false, true, true, "msg.noOxygen"} row no longer supplying it. HIGHPRESSURENOO2 - the
+     * {@code AtmosphereHazards#SUFFOCATION_WHERE_DENSE} at {@code 4, 4, 2, false, false, true, true, "msg.noOxygen"} row no longer supplying it. SUPERHEATEDNOO2 -
+     * {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);}
+     * suffocating through the thin-air row instead. LOWOXYGEN - the {@code AtmosphereHazards#THIN_AIR} at {@code 2, 2, HazardEffect.NONE, false, false, true, false, "msg.noOxygen"}
+     * row supplying oxygen: "thin air can be concentrated". HIGHOXYGEN - the
+     * {@code AtmosphereHazards#OXYGEN_TOXICITY} at {@code HazardEffect.NONE, HazardEffect.NONE, HazardEffect.NONE, false, false, true, false} row supplying it. HIGHPRESSURE - the
+     * {@code AtmosphereHazards#PRESSURE} at {@code null, null, 2, 2, HazardEffect.NONE, false, false, false, false, "msg.tooDense"} row supplying it. VERYHOT - the {@code AtmosphereHazards#HEAT} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false, false, "msg.tooHot"}
+     * row supplying it. (Rows are named by field: a row is a field initializer, which the symbol form
+     * cannot address yet.)</p>
      */
     @Test
     public void aSuitSpendsItsTankOnlyWhereThereIsNoOxidiserToConcentrate() {
@@ -168,17 +200,22 @@ public class AtmosphereHazardTableTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. VACUUM - {@code AtmosphereHazards:53}
-     * the row's key changed: "expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[vacuum]&gt;". LOWOXYGEN -
-     * {@code :75}: "expected:&lt;msg.[noOxyge]n&gt; but was:&lt;msg.[thi]n&gt;". HIGHOXYGEN - {@code :82}:
-     * "expected:&lt;msg.[highOxygen]&gt; but was:&lt;msg.[x]&gt;". HIGHPRESSURE - {@code :87}:
-     * "expected:&lt;msg.[tooDense]&gt; but was:&lt;msg.[y]&gt;". SUPERHIGHPRESSURE - {@code :97}:
-     * "expected:&lt;msg.[muchTooDense]&gt; but was:&lt;msg.[z]&gt;". VERYHOT - {@code :139} given oxygen
-     * toxicity instead: "expected:&lt;msg.[tooHot]&gt; but was:&lt;msg.[highOxygen]&gt;".
-     * SUPERHEATEDNOO2 - {@code HazardExposure:103} taking the LEAST severe hazard's message:
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. VACUUM - the
+     * {@code AtmosphereHazards#DECOMPRESSION} at {@code 4, 4, 1, false, false, true, true, "msg.noOxygen"} row's key changed: "expected:&lt;msg.[noOxygen]&gt; but
+     * was:&lt;msg.[vacuum]&gt;". LOWOXYGEN - the {@code AtmosphereHazards#THIN_AIR} at {@code 2, 2, HazardEffect.NONE, false, false, true, false, "msg.noOxygen"} row's key:
+     * "expected:&lt;msg.[noOxyge]n&gt; but was:&lt;msg.[thi]n&gt;". HIGHOXYGEN - the
+     * {@code AtmosphereHazards#OXYGEN_TOXICITY} at {@code "msg.highOxygen"} row's key: "expected:&lt;msg.[highOxygen]&gt; but
+     * was:&lt;msg.[x]&gt;". HIGHPRESSURE - the {@code AtmosphereHazards#PRESSURE} at {@code null, null, 2, 2, HazardEffect.NONE, false, false, false, false, "msg.tooDense"} row's key:
+     * "expected:&lt;msg.[tooDense]&gt; but was:&lt;msg.[y]&gt;". SUPERHIGHPRESSURE - the
+     * {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_BREATHABLE} at {@code 3, 3, HazardEffect.NONE, false, false, true, false, "msg.muchTooDense"} row's key:
+     * "expected:&lt;msg.[muchTooDense]&gt; but was:&lt;msg.[z]&gt;". VERYHOT -
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VERYHOT, HEAT);} given
+     * oxygen toxicity instead: "expected:&lt;msg.[tooHot]&gt; but was:&lt;msg.[highOxygen]&gt;".
+     * SUPERHEATEDNOO2 - {@code HazardExposure#messageKey} at {@code if (worst == null || row.hazard().ordinal() < worst.hazard().ordinal())} taking the LEAST severe hazard's message:
      * "expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[tooHot]&gt;". HIGHPRESSURENOO2 -
-     * {@code AtmosphereHazards:69} the dense-suffocation row's key changed:
-     * "expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[w]&gt;".</p>
+     * the {@code AtmosphereHazards#SUFFOCATION_WHERE_DENSE} at {@code 4, 4, 2, false, false, true, true, "msg.noOxygen"} row's key changed:
+     * "expected:&lt;msg.[noOxygen]&gt; but was:&lt;msg.[w]&gt;". (Taken while the table was a static
+     * block; its rows are unchanged.)</p>
      */
     @Test
     public void theWarningNamesTheMostUrgentThingWrong() {
@@ -199,16 +236,18 @@ public class AtmosphereHazardTableTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30; the assertions without a message went red
-     * as a bare AssertionError at their own line. NOO2 FIRES ON 10 - {@code AtmosphereHazards:57}
-     * period 20: "suffocating outright acts twice as often as merely running short
-     * expected:&lt;true&gt; but was:&lt;false&gt;". LOWOXYGEN NOT ON 10 - {@code :73} period 10.
-     * LOWOXYGEN ON 20 - {@code :73} period 40. HIGHOXYGEN NOT ON 20 - {@code :79} period 20: "oxygen
-     * toxicity is the slowest of them expected:&lt;false&gt; but was:&lt;true&gt;". HIGHOXYGEN ON 40 -
-     * {@code :79} period 80. VERYHOT DAMAGE - {@code :110} damage 2: "the two heat rungs differ by their
-     * damage and nothing else expected:&lt;1&gt; but was:&lt;2&gt;". SUPERHEATED DAMAGE - {@code :120}
-     * damage 3: "expected:&lt;4&gt; but was:&lt;3&gt;". NOO2 SLOWNESS - {@code :59} slowness 3: "and
-     * the two suffocation rungs by how hard they hit expected:&lt;4&gt; but was:&lt;3&gt;". LOWOXYGEN
-     * SLOWNESS - {@code :75} slowness 3: "expected:&lt;2&gt; but was:&lt;3&gt;".</p>
+     * as a bare AssertionError at their own line. Each is a change to one row, named by its field.
+     * NOO2 FIRES ON 10 - {@code AtmosphereHazards#SUFFOCATION} at {@code AtmosphereHazard.SUFFOCATION, 10} period 20: "suffocating outright acts
+     * twice as often as merely running short expected:&lt;true&gt; but was:&lt;false&gt;". LOWOXYGEN
+     * NOT ON 10 - {@code AtmosphereHazards#THIN_AIR} at {@code AtmosphereHazard.SUFFOCATION, 20} period 10. LOWOXYGEN ON 20 - the same row, period
+     * 40. HIGHOXYGEN NOT ON 20 - {@code AtmosphereHazards#OXYGEN_TOXICITY} at {@code AtmosphereHazard.OXYGEN_TOXICITY, 40} period 20: "oxygen toxicity
+     * is the slowest of them expected:&lt;false&gt; but was:&lt;true&gt;". HIGHOXYGEN ON 40 - the same
+     * row, period 80. VERYHOT DAMAGE - {@code AtmosphereHazards#HEAT} at {@code AtmosphereHandler.heatDamage, () -> 1} damage 2: "the two heat rungs
+     * differ by their damage and nothing else expected:&lt;1&gt; but was:&lt;2&gt;". SUPERHEATED
+     * DAMAGE - {@code AtmosphereHazards#SEARING_HEAT} at {@code AtmosphereHandler.heatDamage, () -> 4} damage 3: "expected:&lt;4&gt; but was:&lt;3&gt;".
+     * NOO2 SLOWNESS - {@code AtmosphereHazards#SUFFOCATION} at {@code 4, 4, 1, false, false, true, true, "msg.noOxygen"} slowness 3: "and the two suffocation rungs
+     * by how hard they hit expected:&lt;4&gt; but was:&lt;3&gt;". LOWOXYGEN SLOWNESS -
+     * {@code AtmosphereHazards#THIN_AIR} at {@code 2, 2, HazardEffect.NONE, false, false, true, false, "msg.noOxygen"} slowness 3: "expected:&lt;2&gt; but was:&lt;3&gt;".</p>
      */
     @Test
     public void theRungsKeepTheirPeriodsAndTheirSeverities() {
@@ -239,11 +278,12 @@ public class AtmosphereHazardTableTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30; the assertions without a message went red
-     * as a bare AssertionError at their own line. VERYHOT - {@code AtmosphereHazards:111} the heat row
-     * not igniting: "a hot breathable room sets you alight". SUPERHEATED - {@code :121} the searing row
-     * not igniting. VERYHOTNOO2 - {@code :116} the airless heat row igniting: "and the same heat with
-     * no oxygen does not — deliberately preserved". SUPERHEATEDNOO2 - {@code :126} the airless
-     * searing row igniting.</p>
+     * as a bare AssertionError at their own line. VERYHOT - the {@code AtmosphereHazards#HEAT} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false, false, "msg.tooHot"} row not
+     * igniting: "a hot breathable room sets you alight". SUPERHEATED - the
+     * {@code AtmosphereHazards#SEARING_HEAT} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, true, false, false, "msg.tooHot"} row not igniting. VERYHOTNOO2 - the
+     * {@code AtmosphereHazards#HEAT_WHERE_AIRLESS} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, false, false, false, "msg.tooHot"} row igniting: "and the same heat with no oxygen does
+     * not — deliberately preserved". SUPERHEATEDNOO2 - the
+     * {@code AtmosphereHazards#SEARING_HEAT_WHERE_AIRLESS} at {@code 3, HazardEffect.NONE, HazardEffect.NONE, false, false, false, false, "msg.tooHot"} row igniting.</p>
      */
     @Test
     public void hotAirIgnitesYouOnlyWhereYouCouldHaveBreathedIt() {
@@ -257,9 +297,11 @@ public class AtmosphereHazardTableTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BREATHABLE DEEP - {@code AtmosphereHazards:96}
-     * damage 2: "crushing breathable air draws blood expected:&lt;1&gt; but was:&lt;2&gt;". AIRLESS
-     * DEEP - {@code :101} given a damage source and an amount of 1: "crushing airless air does not —
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. BREATHABLE DEEP - the
+     * {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_BREATHABLE} at {@code AtmosphereHandler.oxygenToxicityDamage, () -> 1} row given damage 2: "crushing
+     * breathable air draws blood expected:&lt;1&gt; but was:&lt;2&gt;". AIRLESS DEEP - the
+     * {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_AIRLESS} at {@code null, null, 3, 3, HazardEffect.NONE, true, false, false, false, "msg.muchTooDense"} row given a damage source and an amount
+     * of 1: "crushing airless air does not —
      * deliberately preserved expected:&lt;0&gt; but was:&lt;1&gt;".</p>
      */
     @Test
@@ -271,9 +313,11 @@ public class AtmosphereHazardTableTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. AIRLESS DEEP - {@code AtmosphereHazards:101}
-     * narcosis off: "the airless deep takes your jump — deliberately preserved". BREATHABLE DEEP -
-     * {@code :97} narcosis on: "and the breathable deep does not".</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. AIRLESS DEEP - the
+     * {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_AIRLESS} at {@code null, null, 3, 3, HazardEffect.NONE, true, false, false, false, "msg.muchTooDense"} row with narcosis off: "the airless deep
+     * takes your jump — deliberately preserved". BREATHABLE DEEP - the
+     * {@code AtmosphereHazards#CRUSHING_PRESSURE_WHERE_BREATHABLE} at {@code 3, 3, HazardEffect.NONE, false, false, true, false, "msg.muchTooDense"} row with narcosis on: "and the
+     * breathable deep does not".</p>
      */
     @Test
     public void narcosisBelongsToTheAirlessDepthsAlone() {
@@ -284,13 +328,18 @@ public class AtmosphereHazardTableTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HIGHPRESSURENOO2 -
-     * {@code AtmosphereHazards:69} nausea 1: "depth makes suffocation more nauseating — deliberately
-     * preserved expected:&lt;2&gt; but was:&lt;1&gt;". SUPERHIGHPRESSURENOO2 - {@code :142} suffocating
-     * through the plain row: "expected:&lt;2&gt; but was:&lt;1&gt;". VERYHOTNOO2 - {@code :144}
-     * suffocating through the dense row: "while heat does not expected:&lt;1&gt; but was:&lt;2&gt;".
-     * NOO2 - {@code :134} suffocating through the dense row: "expected:&lt;1&gt; but
-     * was:&lt;2&gt;".</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HIGHPRESSURENOO2 - the
+     * {@code AtmosphereHazards#SUFFOCATION_WHERE_DENSE} at {@code 4, 4, 2, false, false, true, true, "msg.noOxygen"} row with nausea 1: "depth makes suffocation more
+     * nauseating — deliberately preserved expected:&lt;2&gt; but was:&lt;1&gt;".
+     * SUPERHIGHPRESSURENOO2 - {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,} suffocating through
+     * the plain row: "expected:&lt;2&gt; but was:&lt;1&gt;". VERYHOTNOO2 -
+     * {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);} suffocating through
+     * the dense row: "while heat does not expected:&lt;1&gt; but was:&lt;2&gt;". NOO2 -
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.NOO2, SUFFOCATION);}
+     * suffocating through the dense row: "expected:&lt;1&gt; but was:&lt;2&gt;". (Taken while the table
+     * was a static block; its rows are unchanged.)</p>
      */
     @Test
     public void suffocatingUnderPressureIsQueasierThanSuffocatingAnywhereElse() {
@@ -303,8 +352,10 @@ public class AtmosphereHazardTableTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AtmosphereHazards:133} giving the vacuum suffocation instead of
-     * decompression: "nothing in the game can inflict [DECOMPRESSION]", 2026-09-30.</p>
+     * <p>red-witnessed: with {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.VACUUM, DECOMPRESSION);} giving the vacuum suffocation instead of
+     * decompression: "nothing in the game can inflict [DECOMPRESSION]", 2026-09-30 (taken while the
+     * table was a static block; the row is unchanged).</p>
      */
     @Test
     public void everyHazardTheModelDeclaresIsRaisedBySomething() {

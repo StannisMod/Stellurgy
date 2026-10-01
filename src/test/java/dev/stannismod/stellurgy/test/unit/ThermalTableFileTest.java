@@ -30,7 +30,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class ThermalTableFileTest {
 
-    /** Where {@link ThermalMaterials#INSTANCE} reads and writes its table, relative to the run. */
+    /** Where the install's table lives, relative to the run; read through {@link ThermalMaterials#load}. */
     private static final Path TABLE = Paths.get("config", "advRocketry", "thermalMaterials.json");
 
     private byte[] found;
@@ -47,27 +47,27 @@ public class ThermalTableFileTest {
         } else {
             Files.deleteIfExists(TABLE);
         }
-        ThermalMaterials.INSTANCE.load();
     }
 
     /**
      * <p>The shipped row is read the way the game gets it on a fresh install - a load with no file -
      * so the expected values come from production's own table and none of them is typed here.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. RESOLVES — {@code ThermalMaterials:378}
-     * no longer putting a missing shipped row into the table: "a material the file predates must
-     * still resolve". FILE WINS — the shipped row put over the file's own: "a row the file holds
-     * keeps the file's density expected:&lt;7875&gt; but was:&lt;7874&gt;". WRITTEN — the
-     * {@code save()} after the merge removed: "the added material must be written into the file
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each in {@code ThermalMaterials#read}.
+     * RESOLVES — at {@code parsed.put(shipped.getKey(), shipped.getValue());} removed, so a missing
+     * shipped row never enters the table: "a material the file predates must still resolve". FILE
+     * WINS — at {@code if (!parsed.containsKey(shipped.getKey()))} made always to hold, so the shipped
+     * row goes over the file's own: "a row the file holds keeps the file's density
+     * expected:&lt;7875&gt; but was:&lt;7874&gt;". WRITTEN — at {@code save(file, parsed);} removed: "the added material must be written into the file
      * … {"materials":{"iron":…}}". The two premises at its head are arrangements and are not
      * witnessed.</p>
      */
     @Test
     public void aTableWrittenBeforeAMaterialShippedStillKnowsIt() throws Exception {
         Files.deleteIfExists(TABLE);
-        ThermalMaterials.INSTANCE.load();
-        ThermalMaterial shippedWood = ThermalMaterials.INSTANCE.byName("wood");
-        ThermalMaterial shippedIron = ThermalMaterials.INSTANCE.byName("iron");
+        ThermalMaterials fresh = ThermalMaterials.load(TABLE.toString());
+        ThermalMaterial shippedWood = fresh.byName("wood");
+        ThermalMaterial shippedIron = fresh.byName("iron");
         assertNotNull("premise: a fresh install must ship wood", shippedWood);
         assertNotNull("premise: and iron", shippedIron);
 
@@ -79,9 +79,9 @@ public class ThermalTableFileTest {
         Files.write(TABLE, ("{\"materials\":{\"iron\":{\"density\":" + editedDensity
                 + ",\"specificHeat\":" + editedHeat + ",\"ceilingKelvin\":" + editedCeiling + "}}}")
                 .getBytes(StandardCharsets.UTF_8));
-        ThermalMaterials.INSTANCE.load();
+        ThermalMaterials older = ThermalMaterials.load(TABLE.toString());
 
-        ThermalMaterial wood = ThermalMaterials.INSTANCE.byName("wood");
+        ThermalMaterial wood = older.byName("wood");
         assertNotNull("a material the file predates must still resolve", wood);
         assertEquals("and with its shipped density", shippedWood.densityKgPerCubicMetre(),
                 wood.densityKgPerCubicMetre());
@@ -89,7 +89,7 @@ public class ThermalTableFileTest {
                 wood.specificHeatJoulesPerKgKelvin());
         assertEquals("shipped ceiling", shippedWood.ceilingKelvin(), wood.ceilingKelvin());
 
-        ThermalMaterial iron = ThermalMaterials.INSTANCE.byName("iron");
+        ThermalMaterial iron = older.byName("iron");
         assertEquals("a row the file holds keeps the file's density", editedDensity,
                 iron.densityKgPerCubicMetre());
         assertEquals("the file's specific heat", editedHeat, iron.specificHeatJoulesPerKgKelvin());

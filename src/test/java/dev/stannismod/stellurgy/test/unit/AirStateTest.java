@@ -78,7 +78,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:192} dividing by a fiftieth of an atmosphere:
+     * <p>red-witnessed: with {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));} dividing by a fiftieth of an atmosphere:
      * "expected:&lt;100&gt; but was:&lt;50&gt;", 2026-09-30.</p>
      */
     @Test
@@ -89,11 +89,11 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OXYGEN FALLS - {@code AirState:129}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OXYGEN FALLS - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}
      * removing half of what was drawn: "oxygen must fall by exactly what was breathed
      * expected:&lt;200000000&gt; but was:&lt;205000000&gt;". SAME AMOUNT AS CO2 -
-     * {@code AirState:204} adding twice the carbon dioxide: "the same amount must appear as CO2
-     * expected:&lt;10000000&gt; but was:&lt;20000000&gt;". PRESSURE UNCHANGED - {@code AirState:204}
+     * {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);} adding twice the carbon dioxide: "the same amount must appear as CO2
+     * expected:&lt;10000000&gt; but was:&lt;20000000&gt;". PRESSURE UNCHANGED - {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);}
      * followed by taking the converted amount out of the nitrogen too: "respiration rearranges air, it
      * does not consume it expected:&lt;1000000000&gt; but was:&lt;990000000&gt;".</p>
      */
@@ -111,10 +111,10 @@ public class AirStateTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. ONLY WHAT IS PRESENT -
-     * {@code AirState:127} no longer clamping a draw to what is there: "only the oxygen present may be
-     * converted expected:&lt;5000000&gt; but was:&lt;50000000&gt;". NONE LEFT - {@code AirState:129}
+     * {@code AirState#draw} at {@code long taken = Math.min(Math.max(0L, amount), partialPressure(gas));} no longer clamping a draw to what is there: "only the oxygen present may be
+     * converted expected:&lt;5000000&gt; but was:&lt;50000000&gt;". NONE LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}
      * removing half of what was drawn: "expected:&lt;0&gt; but was:&lt;2500000&gt;". AS CO2 -
-     * {@code AirState:204} adding twice the carbon dioxide: "expected:&lt;5000000&gt; but
+     * {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);} adding twice the carbon dioxide: "expected:&lt;5000000&gt; but
      * was:&lt;10000000&gt;".</p>
      */
     @Test
@@ -130,12 +130,12 @@ public class AirStateTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. ALL BACK AS OXYGEN -
-     * {@code AirState:218} returning half of it: "all of it must come back as oxygen
-     * expected:&lt;210000000&gt; but was:&lt;195000000&gt;". NO CO2 LEFT - {@code AirState:204}
+     * {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning half of it: "all of it must come back as oxygen
+     * expected:&lt;210000000&gt; but was:&lt;195000000&gt;". NO CO2 LEFT - {@code AirState#respire} at {@code set(GasRegistry.CARBON_DIOXIDE, getCarbonDioxide() + converted);}
      * making twice the carbon dioxide while breathing, so regeneration leaves half behind:
-     * "expected:&lt;0&gt; but was:&lt;30000000&gt;". THE CARBON - {@code AirState:219} reporting half
+     * "expected:&lt;0&gt; but was:&lt;30000000&gt;". THE CARBON - {@code AirState#regenerate} at {@code return converted;} reporting half
      * of what was converted: "the carbon that left the air is what the machine must now handle
-     * expected:&lt;30000000&gt; but was:&lt;15000000&gt;". PRESSURE UNCHANGED - {@code AirState:218}
+     * expected:&lt;30000000&gt; but was:&lt;15000000&gt;". PRESSURE UNCHANGED - {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);}
      * followed by taking the converted amount out of the nitrogen too: "pressure is unchanged: the
      * solid carbon never held any expected:&lt;1000000000&gt; but was:&lt;970000000&gt;".</p>
      */
@@ -155,10 +155,10 @@ public class AirStateTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. ONLY WHAT IS PRESENT -
-     * {@code AirState:127} no longer clamping a draw to what is there: "only the CO2 present may be
-     * processed expected:&lt;10000000&gt; but was:&lt;50000000&gt;". NONE LEFT - {@code AirState:129}
+     * {@code AirState#draw} at {@code long taken = Math.min(Math.max(0L, amount), partialPressure(gas));} no longer clamping a draw to what is there: "only the CO2 present may be
+     * processed expected:&lt;10000000&gt; but was:&lt;50000000&gt;". NONE LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);}
      * removing half of what was drawn: "expected:&lt;0&gt; but was:&lt;5000000&gt;". AS OXYGEN -
-     * {@code AirState:218} returning half of it: "expected:&lt;210000000&gt; but
+     * {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} returning half of it: "expected:&lt;210000000&gt; but
      * was:&lt;205000000&gt;".</p>
      */
     @Test
@@ -173,7 +173,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:218} putting no oxygen back: "and regeneration must be able
+     * <p>red-witnessed: with {@code AirState#regenerate} at {@code set(GasRegistry.OXYGEN, getOxygen() + converted);} putting no oxygen back: "and regeneration must be able
      * to undo that, not merely stop it", 2026-09-30. The premise before it is an arrangement and is not
      * witnessed.</p>
      */
@@ -190,7 +190,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:545} doubling the lower edge of the band: an
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (oxidiser < config.lifeSupportMinPartialO2)} doubling the lower edge of the band: an
      * AssertionError with no message at the assertion, 2026-09-30.</p>
      */
     @Test
@@ -199,7 +199,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:545} moving the lower edge of the band down by 10: "expected
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (oxidiser < config.lifeSupportMinPartialO2)} moving the lower edge of the band down by 10: "expected
      * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
     @Test
@@ -209,7 +209,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:546} calling air with no oxygen at all merely low on it:
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code return oxidiser <= 0L ? Atmosphere.NOO2 : Atmosphere.LOWOXYGEN;} calling air with no oxygen at all merely low on it:
      * "expected same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
     @Test
@@ -219,11 +219,11 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HIGH OXYGEN - {@code AirState:547}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HIGH OXYGEN - {@code AirState#deriveAtmosphere} at {@code if (oxidiser > config.lifeSupportMaxPartialO2)}
      * moving the upper edge of the band up by 10: "expected same:&lt;Atmosphere@...&gt; was
-     * not:&lt;Atmosphere@...&gt;". STILL FEEDS FIRE - {@code Atmosphere:45} declaring the label
-     * non-flammable: "an oxygen-rich room being flammable is the hazard, not a bug". NOT BREATHABLE -
-     * {@code Atmosphere:45} declaring the label breathable: an AssertionError with no message. The last
+     * not:&lt;Atmosphere@...&gt;". STILL FEEDS FIRE - the {@code Atmosphere#HIGHOXYGEN} at {@code new Atmosphere(true, false, true, "highO2")}
+     * constant declaring the label non-flammable: "an oxygen-rich room being flammable is the hazard,
+     * not a bug". NOT BREATHABLE - the same constant declaring the label breathable: an AssertionError with no message. The last
      * two read the label's hand-assigned flags, not the air.</p>
      */
     @Test
@@ -244,7 +244,7 @@ public class AirStateTest {
     // that a particular number is dangerous, which is config.
 
     /**
-     * <p>red-witnessed: with {@code AirState:535} comparing strictly above the rung: "a breathable room
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (config.shipHeatCrewVeryHotKelvin > 0 && kelvin >= config.shipHeatCrewVeryHotKelvin)} comparing strictly above the rung: "a breathable room
      * can still be a room that cooks you expected same:&lt;Atmosphere@...&gt; was
      * not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
@@ -255,7 +255,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:535} starting the rung one kelvin early: "the rung is a
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (config.shipHeatCrewVeryHotKelvin > 0 && kelvin >= config.shipHeatCrewVeryHotKelvin)} starting the rung one kelvin early: "the rung is a
      * threshold, not a slope: below it the gases decide alone expected same:&lt;Atmosphere@...&gt; was
      * not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
@@ -266,7 +266,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:533} comparing strictly above the harsher rung: "expected
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code && kelvin >= config.shipHeatCrewSuperheatedKelvin)} comparing strictly above the harsher rung: "expected
      * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
     @Test
@@ -275,7 +275,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:534} answering the breathable variant for unbreathable air:
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code return breathableGas ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;} answering the breathable variant for unbreathable air:
      * "the NoO2 variants exist precisely so neither hazard hides the other expected
      * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
@@ -288,7 +288,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:531} asking about heat only while the oxygen is under its
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (config.shipHeat)} asking about heat only while the oxygen is under its
      * ceiling: "a room that is burning its crew is not made safe by its gas mix expected
      * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
@@ -301,10 +301,10 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with BOTH {@code AirState:511} no longer calling an empty zone a vacuum AND
-     * {@code AirState:252} no longer reporting an empty zone at ambient: "there is no body left in the
+     * <p>red-witnessed: with BOTH {@code AirState#deriveAtmosphere} at {@code if (getTotalPressure() <= VACUUM_CEILING)} no longer calling an empty zone a vacuum AND
+     * {@code AirState#getTemperatureKelvin} at {@code if (getTotalPressure() <= 0L)} no longer reporting an empty zone at ambient: "there is no body left in the
      * room to be hot expected same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.
-     * With {@code AirState:511} alone it also goes red, but on the no-oxygen reading
+     * With {@code AirState#deriveAtmosphere} at {@code if (getTotalPressure() <= VACUUM_CEILING)} alone it also goes red, but on the no-oxygen reading
      * {@code aZoneWithNoGasInItIsVacuumWhateverItsComposition} already pins, not on heat.</p>
      */
     @Test
@@ -316,7 +316,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:535} no longer treating a zero threshold as no rung: "an
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (config.shipHeatCrewVeryHotKelvin > 0 && kelvin >= config.shipHeatCrewVeryHotKelvin)} no longer treating a zero threshold as no rung: "an
      * unloaded or switched-off threshold must not make every room lethal expected
      * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
@@ -331,7 +331,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:531} running the heat rungs whatever the flag says: "the
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (config.shipHeat)} running the heat rungs whatever the flag says: "the
      * flag that removes the mechanic removes its hazard too expected same:&lt;Atmosphere@...&gt; was
      * not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
@@ -345,7 +345,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:511} no longer calling an empty zone a vacuum: "expected
+     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (getTotalPressure() <= VACUUM_CEILING)} no longer calling an empty zone a vacuum: "expected
      * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
     @Test
@@ -354,7 +354,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with the guard at {@code AirState:541} disabled: "no usable band means no
+     * <p>red-witnessed: with the guard at {@code AirState#deriveAtmosphere} at {@code if (config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2)} disabled: "no usable band means no
      * governor, not a hazard expected same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;",
      * 2026-09-30.</p>
      */
@@ -369,7 +369,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:405} measuring to twice the ceiling: "headroom is the
+     * <p>red-witnessed: with {@code AirState#oxygenHeadroom} at {@code return Math.max(0L, config.lifeSupportMaxPartialO2 - getOxygen());} measuring to twice the ceiling: "headroom is the
      * distance to the ceiling, not to infinity expected:&lt;90000000&gt; but was:&lt;390000000&gt;",
      * 2026-09-30.</p>
      */
@@ -382,7 +382,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState:405} no longer flooring the headroom at zero: "a combiner
+     * <p>red-witnessed: with {@code AirState#oxygenHeadroom} at {@code return Math.max(0L, config.lifeSupportMaxPartialO2 - getOxygen());} no longer flooring the headroom at zero: "a combiner
      * must be unable to make a fire hazard worse expected:&lt;0&gt; but was:&lt;-50000000&gt;",
      * 2026-09-30.</p>
      */
@@ -394,7 +394,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with the guard at {@code AirState:403} disabled: "with no band there is no
+     * <p>red-witnessed: with the guard at {@code AirState#oxygenHeadroom} at {@code if (config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2)} disabled: "with no band there is no
      * governor, in both directions expected:&lt;9223372036854775807&gt; but was:&lt;0&gt;",
      * 2026-09-30.</p>
      */
@@ -409,13 +409,13 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CO2 TAKEN - {@code AirState:234} drawing
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CO2 TAKEN - {@code AirState#drawCarbonDioxide} at {@code long taken = draw(GasRegistry.CARBON_DIOXIDE, amount);} drawing
      * half of what was asked: "expected:&lt;50000000&gt; but was:&lt;25000000&gt;". N2 TAKEN -
-     * {@code AirState:228} drawing half of what was asked: "expected:&lt;40000000&gt; but
-     * was:&lt;20000000&gt;". OXYGEN UNTOUCHED - {@code AirState:228} drawing the same amount of oxygen
+     * {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing half of what was asked: "expected:&lt;40000000&gt; but
+     * was:&lt;20000000&gt;". OXYGEN UNTOUCHED - {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing the same amount of oxygen
      * too: "splitting must not touch the oxygen the crew are breathing expected:&lt;210000000&gt; but
-     * was:&lt;170000000&gt;". CO2 LEFT - {@code AirState:129} removing half of what was drawn:
-     * "expected:&lt;40000000&gt; but was:&lt;65000000&gt;". N2 LEFT - {@code AirState:228} drawing half
+     * was:&lt;170000000&gt;". CO2 LEFT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was drawn:
+     * "expected:&lt;40000000&gt; but was:&lt;65000000&gt;". N2 LEFT - {@code AirState#drawNitrogen} at {@code long taken = draw(GasRegistry.NITROGEN, amount);} drawing half
      * and reporting twice that: "expected:&lt;750000000&gt; but was:&lt;770000000&gt;".</p>
      */
     @Test
@@ -439,9 +439,9 @@ public class AirStateTest {
     // be good enough FOR — the two ends of the solar system at once, and an honest zero underneath.
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. 21% - {@code AirState:163} making
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. 21% - {@code AirState#earthLike} at {@code return new AirState(790_000 * PER_PPM, 210_000 * PER_PPM, 0L);} making
      * sea-level air 20% oxygen: "sea-level air is 21% oxygen expected:&lt;0.21&gt; but
-     * was:&lt;0.20202020202020202&gt;". ONE ATMOSPHERE - {@code AirState:192} dividing by a fiftieth of
+     * was:&lt;0.20202020202020202&gt;". ONE ATMOSPHERE - {@code AirState#getPressureCentiAtm} at {@code return (int) Math.min(Integer.MAX_VALUE, getTotalPressure() / (ONE_ATM / 100L));} dividing by a fiftieth of
      * an atmosphere: "and one whole atmosphere of it expected:&lt;100&gt; but was:&lt;50&gt;".</p>
      */
     @Test
@@ -458,9 +458,9 @@ public class AirStateTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. THE FRACTION SURVIVES -
-     * {@code AirState:102} storing whole parts per million only: "the oxygen fraction survives being
+     * {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} storing whole parts per million only: "the oxygen fraction survives being
      * stored expected:&lt;0.0013&gt; but was:&lt;0.0011824324324324325&gt;". THINNER READS THINNER -
-     * {@code AirState:102} rounding every amount to 150 units: "a trace 1% thinner must read as
+     * {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} rounding every amount to 150 units: "a trace 1% thinner must read as
      * thinner, not as the same integer: 7650 vs 7650".</p>
      */
     @Test
@@ -484,11 +484,11 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOT SATURATED - {@code AirState:102}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOT SATURATED - {@code AirState#set} at {@code long clamped = Math.max(0L, amount);}
      * capping every amount at a thousand atmospheres: "five thousand atmospheres is a number, not a
      * saturated ceiling expected:&lt;5000000000000&gt; but was:&lt;1000000000000&gt;". THE TRACE -
-     * {@code AirState:102} dropping anything under ten units: "and three parts per billion of ammonia
-     * is still there beside it expected:&lt;3&gt; but was:&lt;0&gt;". THE TOTAL - {@code AirState:185}
+     * {@code AirState#set} at {@code long clamped = Math.max(0L, amount);} dropping anything under ten units: "and three parts per billion of ammonia
+     * is still there beside it expected:&lt;3&gt; but was:&lt;0&gt;". THE TOTAL - {@code AirState#getTotalPressure} at {@code total += amount;}
      * summing through an int: "expected:&lt;5000000000003&gt; but was:&lt;658067459&gt;".</p>
      */
     @Test
@@ -509,8 +509,8 @@ public class AirStateTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. NOTHING LEFT -
-     * {@code AirState:129} removing half of what was drawn: "nothing is left of it expected:&lt;0&gt;
-     * but was:&lt;500&gt;". NOT IN THE COMPOSITION - {@code AirState:103} keeping an entry that reached
+     * {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was drawn: "nothing is left of it expected:&lt;0&gt;
+     * but was:&lt;500&gt;". NOT IN THE COMPOSITION - {@code AirState#set} at {@code if (clamped == 0L)} keeping an entry that reached
      * zero: "and it is not in the composition either: {... carbondioxide [WASTE]]=0}".</p>
      *
      * <p>Not asserted: that the gone gas is not counted in the pressure, because the pressure is the
@@ -533,7 +533,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each at {@code AirState:560} writing one
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each at {@code AirState#writeToNBT} at {@code gases.setLong(entry.getKey().name(), entry.getValue());} writing one
      * gas at half its amount. NITROGEN: "expected:&lt;700000000&gt; but was:&lt;350000000&gt;". OXYGEN:
      * "expected:&lt;180000000&gt; but was:&lt;90000000&gt;". CARBON DIOXIDE: "expected:&lt;40000000&gt;
      * but was:&lt;20000000&gt;".</p>

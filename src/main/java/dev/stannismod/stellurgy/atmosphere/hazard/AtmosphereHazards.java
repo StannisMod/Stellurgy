@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.atmosphere.hazard;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -127,27 +128,30 @@ public final class AtmosphereHazards {
 
     // ─── which rows each atmosphere raises ─────────────────────────────────────────────────────
 
-    private static final Map<Atmosphere, HazardExposure> BY_ATMOSPHERE = new HashMap<>();
+    private static final Map<Atmosphere, HazardExposure> BY_ATMOSPHERE = byAtmosphere();
 
-    static {
-        put(Atmosphere.VACUUM, DECOMPRESSION);
-        put(Atmosphere.NOO2, SUFFOCATION);
-        put(Atmosphere.LOWOXYGEN, THIN_AIR);
-        put(Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);
-        put(Atmosphere.HIGHPRESSURE, PRESSURE);
-        put(Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);
-        put(Atmosphere.VERYHOT, HEAT);
-        put(Atmosphere.SUPERHEATED, SEARING_HEAT);
-        put(Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);
-        put(Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,
+    private static Map<Atmosphere, HazardExposure> byAtmosphere() {
+        Map<Atmosphere, HazardExposure> table = new HashMap<>();
+        put(table, Atmosphere.VACUUM, DECOMPRESSION);
+        put(table, Atmosphere.NOO2, SUFFOCATION);
+        put(table, Atmosphere.LOWOXYGEN, THIN_AIR);
+        put(table, Atmosphere.HIGHOXYGEN, OXYGEN_TOXICITY);
+        put(table, Atmosphere.HIGHPRESSURE, PRESSURE);
+        put(table, Atmosphere.SUPERHIGHPRESSURE, CRUSHING_PRESSURE_WHERE_BREATHABLE);
+        put(table, Atmosphere.VERYHOT, HEAT);
+        put(table, Atmosphere.SUPERHEATED, SEARING_HEAT);
+        put(table, Atmosphere.HIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE, PRESSURE);
+        put(table, Atmosphere.SUPERHIGHPRESSURENOO2, SUFFOCATION_WHERE_DENSE,
                 CRUSHING_PRESSURE_WHERE_AIRLESS);
-        put(Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);
-        put(Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);
+        put(table, Atmosphere.VERYHOTNOO2, SUFFOCATION, HEAT_WHERE_AIRLESS);
+        put(table, Atmosphere.SUPERHEATEDNOO2, SUFFOCATION, SEARING_HEAT_WHERE_AIRLESS);
         // AIR and PRESSURIZEDAIR raise nothing, which is what makes them air.
+        return Collections.unmodifiableMap(table);
     }
 
-    private static void put(Atmosphere atmosphere, HazardEffect... rows) {
-        BY_ATMOSPHERE.put(atmosphere, new HazardExposure(Arrays.asList(rows)));
+    private static void put(Map<Atmosphere, HazardExposure> table, Atmosphere atmosphere,
+                            HazardEffect... rows) {
+        table.put(atmosphere, new HazardExposure(Arrays.asList(rows)));
     }
 
     /** What this air is doing to the people in it. Never null: unknown air does nothing. */

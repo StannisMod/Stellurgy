@@ -43,12 +43,11 @@ public class CombustionFollowsTheOxidiserTest extends AbstractSharedServerTest {
      * The same room twice: too thin to burn, then ordinary air. The label says "combustible" in both,
      * and the game must follow the air.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. THIN REFUSES — {@code
-     * AtmosphereHandler:367} answering the label's flag instead of the air's: "nothing may light in
-     * air this thin … \"combustible\":true". LABEL — {@code Atmosphere:44} building {@code lowO2}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. THIN REFUSES — {@code AtmosphereHandler#allowsCombustionAt} at {@code return air.allowsCombustion();} answering the label's flag instead of the air's: "nothing may light in
+     * air this thin … \"combustible\":true". LABEL — the {@code Atmosphere#LOWOXYGEN} at {@code new Atmosphere(true, false, true, "lowO2")} constant building {@code lowO2}
      * non-combustible: "the label's own flag is unchanged, and it is WRONG … \"labelCombustible\":false".
-     * ORDINARY BURNS — {@code AirState:426} refusing combustion everywhere: "ordinary air burns: …
-     * \"combustible\":false". BREATHABLE — {@code AirState:440} refusing breathability everywhere:
+     * ORDINARY BURNS — {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} refusing combustion everywhere: "ordinary air burns: …
+     * \"combustible\":false". BREATHABLE — {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} refusing breathability everywhere:
      * "and is breathable: … \"breathableAir\":false". The premises (the composition arrived, it is
      * not breathable, the label is {@code lowO2}, the room was refilled) are arrangements and are
      * not witnessed.</p>

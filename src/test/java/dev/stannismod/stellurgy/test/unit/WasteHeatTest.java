@@ -54,8 +54,8 @@ public class WasteHeatTest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. SOMETHING TO PICK UP -
-     * {@code WasteHeat:45} making nothing: "a machine that spent energy must offer a loop something to
-     * pick up". THE CONFIGURED SHARE - {@code WasteHeat:45} dividing by 2000 instead of 1000: "and it
+     * {@code WasteHeat#spend} at {@code long made = (long) energySpent * fraction / 1000L;} making nothing: "a machine that spent energy must offer a loop something to
+     * pick up". THE CONFIGURED SHARE - {@code WasteHeat#spend} at {@code long made = (long) energySpent * fraction / 1000L;} dividing by 2000 instead of 1000: "and it
      * is the configured share of what was actually spent expected:&lt;3000&gt; but
      * was:&lt;1500&gt;".</p>
      */
@@ -73,7 +73,7 @@ public class WasteHeatTest {
     /**
      * Half the work, half the heat — the same relation the power cost already has.
      *
-     * <p>red-witnessed: with {@code WasteHeat:45} adding a flat 100 units to every spend: "a tenth of
+     * <p>red-witnessed: with {@code WasteHeat#spend} at {@code long made = (long) energySpent * fraction / 1000L;} adding a flat 100 units to every spend: "a tenth of
      * the work is a tenth of the heat expected:&lt;310.0&gt; but was:&lt;400.0&gt;", 2026-09-30.</p>
      */
     @Test
@@ -89,13 +89,13 @@ public class WasteHeatTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. WHAT IT ASKED FOR - {@code WasteHeat:57}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. WHAT IT ASKED FOR - {@code WasteHeat#takeHeat} at {@code int taken = Math.max(0, Math.min(amount, pending));}
      * handing over one unit more than asked: "a loop gets what it asked for expected:&lt;1500&gt; but
-     * was:&lt;1501&gt;". NO LONGER HELD - {@code WasteHeat:58} removing only half of what was taken:
+     * was:&lt;1501&gt;". NO LONGER HELD - {@code WasteHeat#takeHeat} at {@code pending -= taken;} removing only half of what was taken:
      * "and the machine no longer holds it expected:&lt;1500&gt; but was:&lt;2250&gt;". NOT TWICE -
-     * {@code WasteHeat:57} handing over one unit more than is pending: "a second taker cannot have the
+     * {@code WasteHeat#takeHeat} at {@code int taken = Math.max(0, Math.min(amount, pending));} handing over one unit more than is pending: "a second taker cannot have the
      * same heat twice expected:&lt;1500&gt; but was:&lt;1501&gt;". EMPTY AFTERWARDS -
-     * {@code WasteHeat:58} always leaving one unit behind: "and the buffer is empty afterwards
+     * {@code WasteHeat#takeHeat} at {@code pending -= taken;} always leaving one unit behind: "and the buffer is empty afterwards
      * expected:&lt;0&gt; but was:&lt;1&gt;".</p>
      */
     @Test
@@ -121,10 +121,10 @@ public class WasteHeatTest {
      * the same unclaimed production must add nothing to what the first thousand left. The depth is
      * production's to choose, so no number of ticks' worth is written here.</p>
      *
-     * <p>red-witnessed: with {@code WasteHeat:47} no longer capping the buffer: "a second thousand ticks
+     * <p>red-witnessed: with {@code WasteHeat#spend} at {@code pending = (int) Math.max(0L, Math.min(cap, pending + made));} no longer capping the buffer: "a second thousand ticks
      * of unclaimed production must add nothing to the first: 300000 then 600000
      * expected:&lt;300000&gt; but was:&lt;600000&gt;", 2026-09-30. A deeper buffer is not a red:
-     * with {@code WasteHeat:28} at 21 ticks this stays green. The premise is an arrangement and is not
+     * with {@code WasteHeat#BUFFER_TICKS} at {@code 20} at 21 ticks this stays green. The premise is an arrangement and is not
      * witnessed.</p>
      */
     @Test
@@ -149,7 +149,7 @@ public class WasteHeatTest {
     /**
      * The subsystem's off switch reaches its supply side too, or the gate does not fully disable.
      *
-     * <p>red-witnessed: with {@code WasteHeat:40} no longer asking whether the thermal system is on: "a
+     * <p>red-witnessed: with {@code WasteHeat#spend} at {@code if (energySpent <= 0 || !HeatNetwork.enabled())} no longer asking whether the thermal system is on: "a
      * disabled mechanic produces nothing for anyone to collect expected:&lt;0&gt; but
      * was:&lt;300000&gt;", 2026-09-30.</p>
      */

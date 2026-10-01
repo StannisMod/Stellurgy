@@ -32,21 +32,28 @@ public final class Gas {
     private final Set<GasRole> roles;
     private final long hazardThreshold;
     private final double molarMass;
+    private final double boilingKelvin;
 
     /**
+     * @param boilingKelvin      the normal boiling point — or sublimation point, for a gas with no
+     *                           liquid phase at one atmosphere — in kelvin: where its vapour pressure
+     *                           reaches one atmosphere. A measured constant of the substance.
      * @param hazardThresholdPpm the limit in parts per million of an atmosphere, which is the unit
      *                           real exposure limits are quoted in, converted here to the
      *                           composition's own finer unit. Authoring in ppm is what keeps the rows
      *                           in the registry readable as the numbers they were taken from.
      */
-    Gas(String name, String fluidName, double molarMass, int hazardThresholdPpm, GasRole... roles) {
+    Gas(String name, String fluidName, double molarMass, double boilingKelvin, int hazardThresholdPpm,
+        GasRole... roles) {
         this.name = name;
         this.fluidName = fluidName;
         this.molarMass = molarMass;
+        this.boilingKelvin = boilingKelvin;
         this.hazardThreshold = Math.max(0, hazardThresholdPpm) * AirState.PER_PPM;
-        this.roles = roles.length == 0
-                ? Collections.<GasRole>emptySet()
-                : Collections.unmodifiableSet(EnumSet.copyOf(java.util.Arrays.asList(roles)));
+        if (roles.length == 0) {
+            throw new IllegalArgumentException("a gas with no role has no reason to be modelled: " + name);
+        }
+        this.roles = Collections.unmodifiableSet(EnumSet.copyOf(java.util.Arrays.asList(roles)));
     }
 
     /** The registry name. Stable: it is written into save data and cited by config. */
@@ -74,9 +81,14 @@ public final class Gas {
         return hazardThreshold;
     }
 
-    /** Grams per mole. Not read yet; it is what a thermal-escape derivation will ask for. */
+    /** Grams per mole: how hard this gas is to lose to space, next to a body's gravity and heat. */
     public double molarMass() {
         return molarMass;
+    }
+
+    /** Below this a body's surface is a cold trap for the gas: it lies there as liquid or ice. */
+    public double boilingKelvin() {
+        return boilingKelvin;
     }
 
     /**

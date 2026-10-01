@@ -35,10 +35,10 @@ public class ShieldConsoleReportsCollapseTest extends AbstractSharedServerTest {
     private int y;
 
     /**
-     * <p>red-witnessed: with {@code TileEntityShieldConsole:143} latching {@code networkConnected}
+     * <p>red-witnessed: with {@code TileEntityShieldConsole#applyNetworkState} at {@code networkConnected = shieldState.isConnected();} latching {@code networkConnected}
      * once it has been true: "a console whose network lost its last source must stop reporting it as
      * live: … \"networkConnected\":true", 2026-09-30, re-run under the battery arrangement.
-     * STATUS — {@code TileEntityShieldConsole:144} keeping its previous
+     * STATUS — {@code TileEntityShieldConsole#applyNetworkState} at {@code networkStatus = shieldState.getStatus();} keeping its previous
      * status once the network is no longer connected: "and must report the disconnected status
      * rather than the previous one (2): … \"networkStatus\":2 … expected:&lt;1&gt; but
      * was:&lt;2&gt;", 2026-09-30. The two premises at its head are arrangements and are not

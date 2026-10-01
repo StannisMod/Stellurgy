@@ -3,10 +3,8 @@ package dev.stannismod.stellurgy.subsystem.network;
 import net.minecraft.world.World;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -15,11 +13,9 @@ import java.util.Set;
  * <p>
  * Keyed by domain so the graphs stay apart; a node names its own domain, so registering one into
  * the wrong graph is not expressible. Synchronized because tiles are created and invalidated off
- * the tick that reads them.
+ * the tick that reads them. The table itself is the running server's ({@link SubsystemNetworks}).
  */
 public final class SubsystemNetworkRegistry {
-
-    private static final Map<SubsystemNetworkDomain, Set<ISubsystemNetworkNode>> NODES = new HashMap<>();
 
     private SubsystemNetworkRegistry() {
     }
@@ -51,7 +47,7 @@ public final class SubsystemNetworkRegistry {
 
     /** Every domain that has ever registered a node — what the manager ticks. */
     public static synchronized Set<SubsystemNetworkDomain> domains() {
-        return new LinkedHashSet<>(NODES.keySet());
+        return new LinkedHashSet<>(SubsystemNetworks.current().nodes.keySet());
     }
 
     public static synchronized void clearWorld(SubsystemNetworkDomain domain, World world) {
@@ -69,7 +65,7 @@ public final class SubsystemNetworkRegistry {
     }
 
     private static Set<ISubsystemNetworkNode> nodesOf(SubsystemNetworkDomain domain) {
-        return NODES.computeIfAbsent(domain, key -> new HashSet<>());
+        return SubsystemNetworks.current().nodes.computeIfAbsent(domain, key -> new HashSet<>());
     }
 
     private static void log(SubsystemNetworkDomain domain, String action, ISubsystemNetworkNode node) {

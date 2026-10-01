@@ -23,6 +23,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -52,64 +54,75 @@ import java.util.Map;
  * is the extension point: a pack that wants GT's exact numbers, or an addon that adds a material,
  * writes a row rather than patching code.</p>
  */
-public enum ThermalMaterials {
-    INSTANCE("config/advRocketry/thermalMaterials.json");
+public final class ThermalMaterials {
 
     /** The ore-dictionary prefixes a material can hide behind, longest first so "block" wins. */
-    private static final String[] PREFIXES = {
-        "block", "ingot", "plate", "stick", "gear", "dust", "nugget", "gem", "ore",
-    };
+    private static final List<String> PREFIXES = Collections.unmodifiableList(Arrays.asList(
+            "block", "ingot", "plate", "stick", "gear", "dust", "nugget", "gem", "ore"));
 
     /**
      * What one item of each ore-dictionary shape is worth in millilitres, against a block of a cubic
      * metre. These are the unit conventions the tech ecosystem already runs on (nine ingots to a
      * block, nine nuggets to an ingot), not a balance decision of ours.
      */
-    private static final Map<String, Long> PREFIX_VOLUMES = new LinkedHashMap<>();
-
-    static {
-        PREFIX_VOLUMES.put("block", 1_000_000L);
-        PREFIX_VOLUMES.put("ingot", 1_000_000L / 9);
-        PREFIX_VOLUMES.put("plate", 1_000_000L / 9);
-        PREFIX_VOLUMES.put("dust", 1_000_000L / 9);
-        PREFIX_VOLUMES.put("gem", 1_000_000L / 9);
-        PREFIX_VOLUMES.put("ore", 1_000_000L / 9);
-        PREFIX_VOLUMES.put("gear", 4_000_000L / 9);
-        PREFIX_VOLUMES.put("stick", 1_000_000L / 18);
-        PREFIX_VOLUMES.put("nugget", 1_000_000L / 81);
-    }
+    private static final Map<String, Long> PREFIX_VOLUMES = prefixVolumes();
 
     /**
      * What each vanilla {@link Material} is made of, as far as heat is concerned. Coarse on purpose -
      * this is the fallback, and it only has to be RIGHT rather than precise: a stone slab is stone,
      * an anvil is iron, and anything the game does not describe this way stays unknown.
      */
-    private static final Map<Material, String> VANILLA_MATERIAL_NAMES = new LinkedHashMap<>();
+    private static final Map<Material, String> VANILLA_MATERIAL_NAMES = vanillaMaterialNames();
 
-    static {
-        VANILLA_MATERIAL_NAMES.put(Material.ROCK, "stone");
-        VANILLA_MATERIAL_NAMES.put(Material.IRON, "iron");
-        VANILLA_MATERIAL_NAMES.put(Material.ANVIL, "iron");
-        VANILLA_MATERIAL_NAMES.put(Material.WOOD, "wood");
-        VANILLA_MATERIAL_NAMES.put(Material.GLASS, "glass");
-        VANILLA_MATERIAL_NAMES.put(Material.ICE, "ice");
-        VANILLA_MATERIAL_NAMES.put(Material.PACKED_ICE, "ice");
-        VANILLA_MATERIAL_NAMES.put(Material.SNOW, "snow");
-        VANILLA_MATERIAL_NAMES.put(Material.CRAFTED_SNOW, "snow");
-        VANILLA_MATERIAL_NAMES.put(Material.SAND, "sand");
-        VANILLA_MATERIAL_NAMES.put(Material.GROUND, "dirt");
-        VANILLA_MATERIAL_NAMES.put(Material.GRASS, "dirt");
-        VANILLA_MATERIAL_NAMES.put(Material.CLAY, "clay");
-        VANILLA_MATERIAL_NAMES.put(Material.CLOTH, "wool");
-        VANILLA_MATERIAL_NAMES.put(Material.CARPET, "wool");
+    /**
+     * The table this install runs on: {@code config/advRocketry/thermalMaterials.json}, read once, when
+     * this class loads, on whichever side loads it.
+     *
+     * <p><b>A constant, not state.</b> Nothing reloads the file while the game runs — an edit takes
+     * effect on the next launch — and the object is immutable, so every reader on either side sees the
+     * one table the install was started with. A caller that needs a different table (a test writing
+     * its own file) builds one with {@link #load(String)} and holds it itself.</p>
+     */
+    public static final ThermalMaterials INSTANCE = load("config/advRocketry/thermalMaterials.json");
+
+    private final Map<String, ThermalMaterial> materials;
+
+    private ThermalMaterials(Map<String, ThermalMaterial> materials) {
+        this.materials = Collections.unmodifiableMap(new LinkedHashMap<>(materials));
     }
 
-    private final String file;
-    private Map<String, ThermalMaterial> materials = new LinkedHashMap<>();
+    private static Map<String, Long> prefixVolumes() {
+        Map<String, Long> volumes = new LinkedHashMap<>();
+        volumes.put("block", 1_000_000L);
+        volumes.put("ingot", 1_000_000L / 9);
+        volumes.put("plate", 1_000_000L / 9);
+        volumes.put("dust", 1_000_000L / 9);
+        volumes.put("gem", 1_000_000L / 9);
+        volumes.put("ore", 1_000_000L / 9);
+        volumes.put("gear", 4_000_000L / 9);
+        volumes.put("stick", 1_000_000L / 18);
+        volumes.put("nugget", 1_000_000L / 81);
+        return Collections.unmodifiableMap(volumes);
+    }
 
-    ThermalMaterials(String file) {
-        this.file = file;
-        load();
+    private static Map<Material, String> vanillaMaterialNames() {
+        Map<Material, String> names = new LinkedHashMap<>();
+        names.put(Material.ROCK, "stone");
+        names.put(Material.IRON, "iron");
+        names.put(Material.ANVIL, "iron");
+        names.put(Material.WOOD, "wood");
+        names.put(Material.GLASS, "glass");
+        names.put(Material.ICE, "ice");
+        names.put(Material.PACKED_ICE, "ice");
+        names.put(Material.SNOW, "snow");
+        names.put(Material.CRAFTED_SNOW, "snow");
+        names.put(Material.SAND, "sand");
+        names.put(Material.GROUND, "dirt");
+        names.put(Material.GRASS, "dirt");
+        names.put(Material.CLAY, "clay");
+        names.put(Material.CLOTH, "wool");
+        names.put(Material.CARPET, "wool");
+        return Collections.unmodifiableMap(names);
     }
 
     /**
@@ -234,12 +247,11 @@ public enum ThermalMaterials {
      * <p>This is the melting rung's question, and it is the same arithmetic a slug's charge is, which
      * is exactly what C12 HEAT-18 means by one table with two consumers.</p>
      */
-    public static long blockCapacity(World world, BlockPos pos) {
+    public long blockCapacity(World world, BlockPos pos) {
         if (world == null || pos == null) {
             return 0L;
         }
-        ThermalMaterial material = INSTANCE.of(
-                new ItemStack(world.getBlockState(pos).getBlock()));
+        ThermalMaterial material = of(new ItemStack(world.getBlockState(pos).getBlock()));
         return slugCapacity(material, volumeMillilitres(world, pos));
     }
 
@@ -338,12 +350,21 @@ public enum ThermalMaterials {
 
     // ─── the table on disk ─────────────────────────────────────────────────────
 
-    public void load() {
+    /**
+     * The table in {@code file}: every row the file holds, plus every shipped row it lacks, written
+     * back when rows were added. An absent file is created with the shipped table; an unreadable or
+     * empty one is read as the shipped table.
+     */
+    public static ThermalMaterials load(String file) {
+        return new ThermalMaterials(read(file));
+    }
+
+    private static Map<String, ThermalMaterial> read(String file) {
         File f = new File(file);
         if (!f.exists()) {
-            materials = defaults();
-            save();
-            return;
+            Map<String, ThermalMaterial> shipped = defaults();
+            save(file, shipped);
+            return shipped;
         }
         try (Reader r = new FileReader(file)) {
             Gson gson = new GsonBuilder().disableHtmlEscaping().create();
@@ -365,8 +386,7 @@ public enum ThermalMaterials {
                 }
             }
             if (parsed.isEmpty()) {
-                materials = defaults();
-                return;
+                return defaults();
             }
             // A row the player wrote wins; a row the file has never heard of comes from the shipped
             // table. Without this merge a file written by an older version shadows every material
@@ -379,22 +399,20 @@ public enum ThermalMaterials {
                     added.add(shipped.getKey());
                 }
             }
-            materials = parsed;
             if (!added.isEmpty()) {
-                // Looked up here rather than held in a field: an enum's static fields are initialised
-                // after its constants, so a field would still be null while INSTANCE's constructor runs.
                 LogManager.getLogger(Constants.modId).info(
                         "{} predates the shipped materials {}; added them with their shipped values",
                         file, added);
-                save();
+                save(file, parsed);
             }
+            return parsed;
         } catch (Exception e) {
             e.printStackTrace();
-            materials = defaults();
+            return defaults();
         }
     }
 
-    public void save() {
+    private static void save(String file, Map<String, ThermalMaterial> materials) {
         File parent = new File(file).getParentFile();
         if (parent != null) {
             parent.mkdirs();

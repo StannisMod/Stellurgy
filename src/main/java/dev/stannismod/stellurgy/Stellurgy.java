@@ -301,6 +301,19 @@ public class Stellurgy {
     }
 
     /**
+     * This server's subsystem networks — shields, ventilation, heat — or {@code null} when no server is
+     * running. The SERVER's state, held here: attached in {@link #serverAboutToStart}, before any world
+     * loads, because a tile registers itself as its chunk loads; released in {@link #serverStopped}.
+     * Written by those two handlers and nothing else.
+     */
+    private dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks subsystemNetworks;
+
+    /** The running server's subsystem networks, or {@code null} when there is none. */
+    public static dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks subsystemNetworks() {
+        return instance == null ? null : instance.subsystemNetworks;
+    }
+
+    /**
      * Returns a player to the plain world — see {@link dev.stannismod.stellurgy.player.PlayerRelease}.
      *
      * <p><b>Lifetime: the MOD's, and stated because it differs from {@code spaceSubsystem} above.</b>
@@ -1510,6 +1523,8 @@ public class Stellurgy {
 
     @EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
+        subsystemNetworks = dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks
+                .forStartingServer(subsystemNetworks);
         // Populate dimension properties before worlds get loaded
         DimensionManager.getInstance().createAndLoadDimensions(resetFromXml);
     }
@@ -1640,6 +1655,7 @@ public class Stellurgy {
         dev.stannismod.stellurgy.event.PlanetEventHandler.onServerStopped();
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
         spaceSubsystem = null;
+        subsystemNetworks = null;
         detachServerServices();
         dev.stannismod.stellurgy.universe.UniverseRegistry.onServerStopped();
         AtmosphereHandler.clear();

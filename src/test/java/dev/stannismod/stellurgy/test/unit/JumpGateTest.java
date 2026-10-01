@@ -211,9 +211,9 @@ public class JumpGateTest {
     // ─── The thermal rung: a drive that is too hot will not fire ────────────────────────────────
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. REFUSED - {@code JumpGate:368} letting
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. REFUSED - {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} letting
      * a drive exactly at the threshold through: "past the threshold the window cannot open at all".
-     * NAMED - {@code JumpGate:369} raising the no-drive message instead:
+     * NAMED - {@code JumpGate#check} at {@code : new Objection(Severity.HARD, MSG_DRIVE_OVERHEATED);} raising the no-drive message instead:
      * "expected:&lt;msg.jumpgate.[driveoverheated]&gt; but was:&lt;msg.jumpgate.[nodrive]&gt;".</p>
      */
     @Test
@@ -230,7 +230,7 @@ public class JumpGateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code JumpGate:368} refusing from one kelvin below the threshold: "the
+     * <p>red-witnessed: with {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} refusing from one kelvin below the threshold: "the
      * rung is a refusal at a threshold, never a penalty on the way to it", 2026-09-30.</p>
      */
     @Test
@@ -243,7 +243,7 @@ public class JumpGateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code JumpGate:368} also refusing a drive whose reading is not above
+     * <p>red-witnessed: with {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} also refusing a drive whose reading is not above
      * zero: "an unmeasured drive raises no objection", 2026-09-30.</p>
      */
     @Test
@@ -258,7 +258,7 @@ public class JumpGateTest {
     }
 
     /**
-     * <p>red-witnessed: with the thermal predicate at {@code JumpGate:368} latching once it has
+     * <p>red-witnessed: with the thermal predicate at {@code JumpGate#check} at {@code return ship.driveCoolantKelvin() < refusalKelvin ? null} latching once it has
      * refused: "the gate is read-only, so cooling the ship is the whole of the fix", 2026-09-30. The
      * precondition before it is an arrangement and is not witnessed.</p>
      */
@@ -275,7 +275,7 @@ public class JumpGateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code JumpGate:365} treating only a negative threshold as none: "no
+     * <p>red-witnessed: with {@code JumpGate#check} at {@code if (ship.drivePower() <= 0L || refusalKelvin <= 0)} treating only a negative threshold as none: "no
      * threshold means no clause, not a clause every ship trips", 2026-09-30.</p>
      */
     @Test
@@ -289,8 +289,8 @@ public class JumpGateTest {
     }
 
     /**
-     * <p>red-witnessed: with BOTH {@code JumpGate:353} registering the thermal clause ahead of the
-     * no-drive one AND {@code JumpGate:365} no longer skipping a ship without a drive:
+     * <p>red-witnessed: with BOTH {@code JumpGate#reset} at {@code REGISTERED.get(Stage.DRIVE).add(new Predicate()} registering the thermal clause ahead of the
+     * no-drive one AND {@code JumpGate#check} at {@code if (ship.drivePower() <= 0L || refusalKelvin <= 0)} no longer skipping a ship without a drive:
      * "expected:&lt;msg.jumpgate.[nodrive]&gt; but was:&lt;msg.jumpgate.[driveoverheated]&gt;",
      * 2026-09-30. Two defences guard this, and each alone keeps it green: the order alone and the skip
      * alone were each inverted by themselves and nothing went red.</p>

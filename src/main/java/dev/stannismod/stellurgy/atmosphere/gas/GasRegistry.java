@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.atmosphere.gas;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -11,8 +12,8 @@ import java.util.Map;
  * <p>
  * <b>A gas is here because something reads it</b> — as a resource, or as the driver of a hazard.
  * Nothing is listed for completeness: argon and the noble traces are real and are deliberately absent,
- * because storage nobody consults is a list rather than a model. Adding one later is a row here plus a
- * threshold, never a class.
+ * because storage nobody consults is a list rather than a model. Adding one later is a row here, named
+ * in {@code ALL}, plus a threshold — never a class.
  * <p>
  * The eleven below are what the solar system actually needs: the air of Earth, Mars and Venus, the
  * nitrogen-methane of Titan, the hydrogen-helium of the giants with their ammonia and hydrogen
@@ -21,69 +22,71 @@ import java.util.Map;
  * <b>Thresholds are authored in parts per million of an atmosphere</b> — so the numbers below read as
  * ppm and can be compared with the real exposure limits they came from. The composition itself is
  * stored a thousand times finer, and the conversion happens once, in the constructor.
+ * <p>
+ * The boiling points are the measured normal boiling points at one atmosphere (sublimation for carbon
+ * dioxide, which has no liquid phase there).
  */
 public final class GasRegistry {
 
-    private static final Map<String, Gas> BY_NAME = new HashMap<>();
-    private static final List<Gas> ALL = new ArrayList<>();
-
     /** The diluent. Inert on purpose: it is what makes an oxygen FRACTION mean something. */
-    public static final Gas NITROGEN = register(new Gas("nitrogen", "nitrogen", 28.0D, 0, GasRole.INERT));
+    public static final Gas NITROGEN = new Gas("nitrogen", "nitrogen", 28.0D, 77.4D, 0, GasRole.INERT);
 
     /** The oxidiser. Breathing and fire both want it, at different concentrations. */
-    public static final Gas OXYGEN = register(new Gas("oxygen", "oxygen", 32.0D, 0, GasRole.OXIDISER));
+    public static final Gas OXYGEN = new Gas("oxygen", "oxygen", 32.0D, 90.2D, 0, GasRole.OXIDISER);
 
     /** What a crew makes. Harmful in its own right well before it displaces the oxygen. */
     public static final Gas CARBON_DIOXIDE =
-            register(new Gas("carbondioxide", "carbon_dioxide", 44.0D, 50_000, GasRole.WASTE));
+            new Gas("carbondioxide", "carbon_dioxide", 44.0D, 194.7D, 50_000, GasRole.WASTE);
 
     /** Vapour. Its job in the model is that it turns a corrosive gas into an acid. */
-    public static final Gas WATER = register(new Gas("water", "water", 18.0D, 0, GasRole.SOLVENT));
+    public static final Gas WATER = new Gas("water", "water", 18.0D, 373.1D, 0, GasRole.SOLVENT);
 
     /** The giants are mostly this, and it burns with an oxidiser you brought. */
-    public static final Gas HYDROGEN = register(new Gas("hydrogen", "hydrogen", 2.0D, 0, GasRole.FUEL));
+    public static final Gas HYDROGEN = new Gas("hydrogen", "hydrogen", 2.0D, 20.3D, 0, GasRole.FUEL);
 
     /** Inert, light, and the reason a big cold world keeps what a small warm one loses. */
-    public static final Gas HELIUM = register(new Gas("helium", "helium", 4.0D, 0, GasRole.INERT));
+    public static final Gas HELIUM = new Gas("helium", "helium", 4.0D, 4.2D, 0, GasRole.INERT);
 
     /** Titan's other half, and a cloud deck on every giant. */
-    public static final Gas METHANE = register(new Gas("methane", "methane", 16.0D, 0, GasRole.FUEL));
+    public static final Gas METHANE = new Gas("methane", "methane", 16.0D, 111.7D, 0, GasRole.FUEL);
 
     /** A giant's upper cloud, poisonous at a few hundred ppm. */
     public static final Gas AMMONIA =
-            register(new Gas("ammonia", "ammonia", 17.0D, 300, GasRole.TOXIC, GasRole.FUEL));
+            new Gas("ammonia", "ammonia", 17.0D, 239.8D, 300, GasRole.TOXIC, GasRole.FUEL);
 
     /** Uranus's clouds and every volcanic world: poison, and acid once it is wet. */
-    public static final Gas HYDROGEN_SULFIDE =
-            register(new Gas("hydrogensulfide", "hydrogen_sulfide", 34.0D, 100,
-                    GasRole.TOXIC, GasRole.CORROSIVE));
+    public static final Gas HYDROGEN_SULFIDE = new Gas("hydrogensulfide", "hydrogen_sulfide", 34.0D, 212.8D,
+            100, GasRole.TOXIC, GasRole.CORROSIVE);
 
     /** Venus and Io. The same pair of roles, and the reason a hull there is consumable. */
-    public static final Gas SULFUR_DIOXIDE =
-            register(new Gas("sulfurdioxide", "sulfur_dioxide", 64.0D, 100,
-                    GasRole.TOXIC, GasRole.CORROSIVE));
+    public static final Gas SULFUR_DIOXIDE = new Gas("sulfurdioxide", "sulfur_dioxide", 64.0D, 263.1D,
+            100, GasRole.TOXIC, GasRole.CORROSIVE);
 
     /** Thin cold worlds carry it, and it burns — which is why it is not merely a poison. */
-    public static final Gas CARBON_MONOXIDE =
-            register(new Gas("carbonmonoxide", "carbon_monoxide", 28.0D, 100,
-                    GasRole.TOXIC, GasRole.FUEL));
+    public static final Gas CARBON_MONOXIDE = new Gas("carbonmonoxide", "carbon_monoxide", 28.0D, 81.6D,
+            100, GasRole.TOXIC, GasRole.FUEL);
+
+    /** Every row above, in declaration order. */
+    private static final List<Gas> ALL = Collections.unmodifiableList(Arrays.asList(
+            NITROGEN, OXYGEN, CARBON_DIOXIDE, WATER, HYDROGEN, HELIUM, METHANE, AMMONIA,
+            HYDROGEN_SULFIDE, SULFUR_DIOXIDE, CARBON_MONOXIDE));
+
+    private static final Map<String, Gas> BY_NAME = byName(ALL);
 
     private GasRegistry() {
     }
 
-    private static Gas register(Gas gas) {
-        if (gas.roles().isEmpty()) {
-            throw new IllegalArgumentException("a gas with no role has no reason to be modelled: "
-                    + gas.name());
+    private static Map<String, Gas> byName(List<Gas> gases) {
+        Map<String, Gas> index = new HashMap<>();
+        for (Gas gas : gases) {
+            index.put(gas.name(), gas);
         }
-        BY_NAME.put(gas.name(), gas);
-        ALL.add(gas);
-        return gas;
+        return Collections.unmodifiableMap(index);
     }
 
     /** Every modelled substance, in declaration order. */
     public static List<Gas> all() {
-        return Collections.unmodifiableList(ALL);
+        return ALL;
     }
 
     /**

@@ -41,10 +41,10 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
     /**
      * Regeneration arrives from three blocks away, over ducts the plant never has to know about.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CLEARS — {@code TileOxygenVent:483}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. CLEARS — {@code TileOxygenVent#receive} at {@code long converted = air.regenerate(LifeSupportNetwork.partialPressure(amount, volume));}
      * regenerating nothing: "the plant must clear the room's CO2 through the ducts (removed 0)". ONE
      * FOR ONE — the same method drawing back half the oxygen it returned: "and every unit of CO2 it
-     * took must come back to the room as oxygen". DUST IN THE PLANT — {@code TileLifeSupportPlant:116}
+     * took must come back to the room as oxygen". DUST IN THE PLANT — {@code TileLifeSupportPlant#extract} at {@code emitDust();}
      * no longer turning the carbon into dust: "`slots` holds no element whose `item` is
      * stellurgy:carbondust — it holds 0". The three network premises are arrangements and are not
      * witnessed.</p>
@@ -110,7 +110,7 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * vent's half is first required to BE a network — a sink with its duct — before "no source on its
      * side" says anything about the cable.</p>
      *
-     * <p>red-witnessed: with {@code SubsystemNetworkManager:134} letting other domains' cables into
+     * <p>red-witnessed: with {@code WorldState#rebuild} at {@code Set<ISubsystemNetworkNode> nodes = SubsystemNetworkRegistry.snapshot(domain);} letting other domains' cables into
      * the life-support graph: "the vent's ventilation network must end at the shield cable, with no
      * source on its side: … \"sources\":1", 2026-09-30. The sink premise is an arrangement and is not
      * witnessed.</p>
@@ -143,10 +143,9 @@ public class VentilationNetworkTest extends AbstractSharedServerTest {
      * than either of them alone could absorb: under a real deficit the high-priority room must be
      * served and the normal one must not, rather than both getting half.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SERVED — {@code
-     * SubsystemNetworkManager:384} negating each sink's priority: "the prioritised room must be
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SERVED — {@code ComponentTopology#solve} at {@code requested, sink.sink.getPriority()} negating each sink's priority: "the prioritised room must be
      * served (before=149526317 after=149526317)". NOT A SHARE — a pass before the priority tiers
-     * ({@code SubsystemNetworkManager:407}) that opens every sink to a small fixed share: "and under a
+     * ({@code ComponentTopology#solve} at {@code int maxFlow = 0;}) that opens every sink to a small fixed share: "and under a
      * deficit the normal-priority room must get nothing, not a share: … \"airCO2\":133579125".</p>
      */
     @Test

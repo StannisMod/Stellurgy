@@ -44,7 +44,7 @@ public class SpaceArmorProtectionContractTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor:249} dropping protection from heat: "suit must
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: "suit must
      * protect against HEAT", 2026-09-30.</p>
      */
     @Test
@@ -64,7 +64,7 @@ public class SpaceArmorProtectionContractTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor:249} answering yes unconditionally: "air that does
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: "air that does
      * nothing is not a threat", 2026-09-30.</p>
      */
     @Test

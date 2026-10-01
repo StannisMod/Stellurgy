@@ -55,21 +55,20 @@ public class Atmosphere {
     public static final Atmosphere SUPERHEATEDNOO2 = new Atmosphere(true, false, false, "SuperheatedNoOxygen");
 
 
-    private boolean allowsCombustion;
-    private boolean isBreathable;
-    private boolean canTick;
-    private String name;
+    private final boolean allowsCombustion;
+    private final boolean isBreathable;
+    private final boolean canTick;
+    private final String name;
 
     public Atmosphere(boolean canTick, boolean isBreathable, String name) {
-        this.allowsCombustion = isBreathable;
-        this.isBreathable = isBreathable;
-        this.canTick = canTick;
-        this.name = name;
+        this(canTick, isBreathable, isBreathable, name);
     }
 
     public Atmosphere(boolean canTick, boolean isBreathable, boolean allowsCombustion, String name) {
-        this(canTick, isBreathable, name);
         this.allowsCombustion = allowsCombustion;
+        this.isBreathable = isBreathable;
+        this.canTick = canTick;
+        this.name = name;
     }
 
     /**

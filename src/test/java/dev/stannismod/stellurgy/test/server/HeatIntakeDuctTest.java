@@ -48,11 +48,11 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * A powered chiller breathing a room cools it, and its hot loop gains what the room lost plus the
      * work that moved it.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. COLDER — {@code HeatNetwork:535}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. COLDER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);}
      * crediting the heat without taking it out of the air: "the room must actually get colder …
-     * (before=400000 after=400000)". REPORTED — {@code HeatNetwork:541} not recording the delivery
+     * (before=400000 after=400000)". REPORTED — {@code HeatNetwork#runAirCooledPumps} at {@code state.addPumpedIn(delivered);} not recording the delivery
      * as pumped in: "what the loop received must be reported as arriving from a pump: …
-     * expected:&lt;6240&gt; but was:&lt;0&gt;". PLUS THE WORK — {@code HeatNetwork:536} delivering
+     * expected:&lt;6240&gt; but was:&lt;0&gt;". PLUS THE WORK — {@code HeatNetwork#runAirCooledPumps} at {@code delivered += taken + workPaid;} delivering
      * the air's heat without the work: "the hot loop must receive what left the room PLUS the work
      * (air=6000 work=240 gained=6000)". The two premises at its head and the three before REPORTED
      * are arrangements and are not witnessed.</p>
@@ -105,10 +105,8 @@ public class HeatIntakeDuctTest extends AbstractSharedServerTest {
      * The control. The same rig with no electricity in the chiller must leave the room exactly where
      * it was — a duct is a mouth, not a hole, and heat does not walk out of a room on its own.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MOVES NOTHING — {@code
-     * TileHeatChiller:92} and {@code :104} both answering as if powered: "an unpowered chiller must
-     * move nothing at all: … expected:&lt;352630&gt; but was:&lt;328945&gt;". WITH POWER — {@code
-     * HeatNetwork:535} crediting the heat without taking it out of the air: "the same rig with power
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. MOVES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: "an unpowered chiller must
+     * move nothing at all: … expected:&lt;352630&gt; but was:&lt;328945&gt;". WITH POWER — {@code HeatNetwork#runAirCooledPumps} at {@code long taken = air.removeHeat(moved, volume);} crediting the heat without taking it out of the air: "the same rig with power
      * must cool the room, or nothing above was measured: … \"airTempMilliK\":400000".</p>
      *
      * <p>What the loop receives is not asserted here: it is paid only what the room gave up plus paid

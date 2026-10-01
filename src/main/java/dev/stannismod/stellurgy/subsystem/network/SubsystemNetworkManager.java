@@ -41,8 +41,6 @@ public final class SubsystemNetworkManager {
 
     private static final int INF = 1_000_000_000;
 
-    private static final Map<SubsystemNetworkDomain, Map<Integer, WorldState>> WORLD_STATES = new HashMap<>();
-
     private SubsystemNetworkManager() {
     }
 
@@ -54,12 +52,15 @@ public final class SubsystemNetworkManager {
         getState(domain, world).dirty = true;
     }
 
-    /** The network the block at this position belongs to, or null if it is in none. */
+    /**
+     * The network the block at this position belongs to, or null if it is in none. A client world is
+     * in none by construction: networks are solved on the server and never exist on the client side.
+     */
     public static SubsystemNetworkState getState(SubsystemNetworkDomain domain, World world, BlockPos pos) {
-        if (domain == null || world == null || pos == null) {
+        if (domain == null || world == null || pos == null || world.isRemote) {
             return null;
         }
-        Map<Integer, WorldState> byDim = WORLD_STATES.get(domain);
+        Map<Integer, WorldState> byDim = SubsystemNetworks.current().worldStates.get(domain);
         if (byDim == null) {
             return null;
         }
@@ -107,7 +108,7 @@ public final class SubsystemNetworkManager {
             return;
         }
         for (SubsystemNetworkDomain domain : SubsystemNetworkRegistry.domains()) {
-            Map<Integer, WorldState> byDim = WORLD_STATES.get(domain);
+            Map<Integer, WorldState> byDim = SubsystemNetworks.current().worldStates.get(domain);
             if (byDim != null) {
                 byDim.remove(world.provider.getDimension());
             }
@@ -116,11 +117,13 @@ public final class SubsystemNetworkManager {
     }
 
     private static WorldState getState(SubsystemNetworkDomain domain, World world) {
-        Map<Integer, WorldState> byDim = WORLD_STATES.computeIfAbsent(domain, key -> new HashMap<>());
+        Map<Integer, WorldState> byDim =
+                SubsystemNetworks.current().worldStates.computeIfAbsent(domain, key -> new HashMap<>());
         return byDim.computeIfAbsent(world.provider.getDimension(), key -> new WorldState());
     }
 
-    private static final class WorldState {
+    /** One world's solved topology for one domain. */
+    static final class WorldState {
         private boolean dirty = true;
         private final List<ComponentTopology> components = new ArrayList<>();
         private final Map<BlockPos, SubsystemNetworkState> stateByPos = new HashMap<>();

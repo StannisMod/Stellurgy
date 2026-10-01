@@ -255,7 +255,7 @@ public class AstronomicalBodyHelperTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AstronomicalBodyHelper:380} holding the curve at one atmosphere
+     * <p>red-witnessed: with {@code AstronomicalBodyHelper#getAverageTemperature} at {@code atmospheres = Math.min(ceiling, atmospheres);} holding the curve at one atmosphere
      * instead of at the ceiling: "Venus's own pressure is inside the fit and must still warm it: 287
      * -&gt; 287", 2026-09-30.</p>
      */
@@ -271,7 +271,7 @@ public class AstronomicalBodyHelperTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AstronomicalBodyHelper:380} holding at a thousand times the
+     * <p>red-witnessed: with {@code AstronomicalBodyHelper#getAverageTemperature} at {@code atmospheres = Math.min(ceiling, atmospheres);} holding at a thousand times the
      * ceiling: "a world twenty thousand atmospheres thick may not be given a temperature the
      * correlation was never shown: 910 against 3484 expected:&lt;910&gt; but was:&lt;3484&gt;",
      * 2026-09-30.</p>
@@ -291,7 +291,7 @@ public class AstronomicalBodyHelperTest {
     /**
      * Switching the bound off restores the old unbounded extrapolation, and says so.
      *
-     * <p>red-witnessed: with {@code AstronomicalBodyHelper:379} holding on a ceiling of zero too:
+     * <p>red-witnessed: with {@code AstronomicalBodyHelper#getAverageTemperature} at {@code if (ceiling > 0)} holding on a ceiling of zero too:
      * "with the bound off the curve must keep climbing: 255 -&gt; 255", 2026-09-30.</p>
      */
     @Test

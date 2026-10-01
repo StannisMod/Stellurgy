@@ -206,7 +206,7 @@ public class XMLPlanetLoaderTest {
     // ---- Clamping ------------------------------------------------------------
 
     /**
-     * <p>red-witnessed: with {@code XMLPlanetLoader:1223} dropping the upper clamp: "atmosphere density
+     * <p>red-witnessed: with {@code XMLPlanetLoader#readPlanetFromNode} at {@code properties.setAtmosphereDensityDirect(Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()), DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE));} dropping the upper clamp: "atmosphere density
      * must clamp to MAX_ATM_PRESSURE expected:&lt;2147483&gt; but was:&lt;2147484&gt;",
      * 2026-09-30.</p>
      */

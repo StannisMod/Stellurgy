@@ -66,12 +66,11 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * the same loop's capacity after, so a leak onto the cold loop reds the cold reading on its own,
      * whatever the hot one does.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NONE OF THE MASS — {@code
-     * HeatNetwork:343} and {@code :352} both opened, so the chiller's mass joins every loop it
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. NONE OF THE MASS — {@code HeatNetwork#boltedMass} at {@code if (drawsFromThisLoop(pump, pumpPos, memberPositions))} and {@code HeatNetwork#boltedMass} at {@code if (hotAnchor == null || !memberPositions.contains(hotAnchor))} both opened, so the chiller's mass joins every loop it
      * touches: "the loop the chiller merely draws FROM carries none of the machine's mass: …
-     * expected:&lt;60&gt; but was:&lt;260&gt;". ITS OWN MASS — {@code HeatNetwork:245} leaving a
+     * expected:&lt;60&gt; but was:&lt;260&gt;". ITS OWN MASS — {@code HeatNetwork#tickThermodynamics} at {@code capacity += boltedCapacity;} leaving a
      * bolted chiller out of the loop's capacity: "a chiller bolted onto the hot loop must add its own
-     * thermal mass to it … (before=60): … \"heatCapacity\":60". THE CLAUSE — {@code HeatNetwork:452}
+     * thermal mass to it … (before=60): … \"heatCapacity\":60". THE CLAUSE — {@code HeatNetwork#runPumps} at {@code depositInto(world, hot, moved + workPaid);}
      * depositing a tenth of heat plus work: "THE CLAUSE: the hot loop gains what the cold loop lost
      * PLUS the work … (cold lost 6000, battery paid 240, hot gained 624) expected:&lt;6240&gt; but
      * was:&lt;624&gt;". The premises are arrangements and are not witnessed.</p>
@@ -141,12 +140,11 @@ public class HeatChillerTest extends AbstractSharedServerTest {
      * which puts it below the hot loop, and requires heat to go on leaving it. The cold loop has no way
      * out but the chiller, so the energy it lost is energy the chiller moved up the gradient.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. TAKES NOTHING — {@code
-     * TileHeatChiller:92} and {@code :104} both answering as if powered: "an unpowered chiller takes
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. TAKES NOTHING — {@code TileHeatChiller#getThroughputPerTick} at {@code if (energy.getUniversalEnergyStored() <= 0)} and {@code TileHeatChiller#payWork} at {@code workThisTick = Math.max(0L, energy.extractEnergy(wanted, false));} both answering as if powered: "an unpowered chiller takes
      * nothing out of the loop it draws from: … expected:&lt;6000&gt; but was:&lt;0&gt;". WITH POWER
-     * — {@code TileHeatChiller:94} offering no throughput: "the same chiller with power must take
+     * — {@code TileHeatChiller#getThroughputPerTick} at {@code return HeatNetwork.perTick(StellurgyConfiguration.getCurrentConfig().shipHeatChillerThroughput);} offering no throughput: "the same chiller with power must take
      * heat out, or the reading above measured nothing: … \"heatStored\":6000". UP THE GRADIENT — a
-     * line after {@code HeatNetwork:435} skipping a pump whose hot side is the hotter: "heat must go
+     * line after {@code HeatNetwork#runPumps} at {@code double hotKelvin = hot.getTemperatureKelvin();} skipping a pump whose hot side is the hotter: "heat must go
      * on leaving the cold loop although the hot loop is already hotter (cold charged to 886 at half
      * the hot loop's rise; hot 322538 milliK) … \"heatStored\":886". The premises are arrangements and
      * are not witnessed.</p>

@@ -81,13 +81,13 @@ public class AtmospherePredicatesTest {
      * thresholds the answers differ. That gap is the whole clause.
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. BETWEEN IS UNBREATHABLE -
-     * {@code AirState:440} breathing from the combustion threshold: "air between the two bands must
-     * NOT be breathable: ...". BETWEEN STILL BURNS - {@code AirState:426} burning only from the
+     * {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} breathing from the combustion threshold: "air between the two bands must
+     * NOT be breathable: ...". BETWEEN STILL BURNS - {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} burning only from the
      * breathing threshold: "but it must still burn - fire and lungs are two different questions about
-     * the same gas: ...". THIN DOES NOT BURN - {@code AirState:426} burning whatever the oxidiser: "and
-     * air far below the combustion band must not burn ...". ORDINARY AIR BURNS - {@code AirState:426}
+     * the same gas: ...". THIN DOES NOT BURN - {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} burning whatever the oxidiser: "and
+     * air far below the combustion band must not burn ...". ORDINARY AIR BURNS - {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;}
      * refusing combustion from 20% oxidiser up: "ordinary air burns: ...". AND IS BREATHABLE -
-     * {@code AirState:440} refusing breath from 20% oxidiser up: "and is breathable: ...". The two
+     * {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} refusing breath from 20% oxidiser up: "and is breathable: ...". The two
      * premises are arrangements and are not witnessed.</p>
      */
     @Test
@@ -120,10 +120,10 @@ public class AtmospherePredicatesTest {
      * Nothing burns in a vacuum, whatever the config says, because there is no oxidiser there.
      *
      * <p>red-witnessed: one DOUBLE inversion per verdict, 2026-09-30 - each predicate has two defences
-     * here, the vacuum ceiling and the oxidiser threshold. NO BURNING - {@code AirState:420} no longer
-     * refusing a vacuum AND {@code AirState:426} accepting any oxidiser at all: "an empty composition
-     * has no oxidiser to burn". NO BREATHING - {@code AirState:434} no longer refusing a vacuum AND
-     * {@code AirState:440} accepting any oxidiser at all: "and nothing to breathe".</p>
+     * here, the vacuum ceiling and the oxidiser threshold. NO BURNING - {@code AirState#allowsCombustion} at {@code if (getTotalPressure() <= VACUUM_CEILING)} no longer
+     * refusing a vacuum AND {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} accepting any oxidiser at all: "an empty composition
+     * has no oxidiser to burn". NO BREATHING - {@code AirState#isBreathableAir} at {@code if (getTotalPressure() <= VACUUM_CEILING)} no longer refusing a vacuum AND
+     * {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} accepting any oxidiser at all: "and nothing to breathe".</p>
      */
     @Test
     public void aVacuumBurnsNothing() {
@@ -136,11 +136,11 @@ public class AtmospherePredicatesTest {
      * ordering rather than as numbers, so it survives every rebalance.
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. COMBUSTION MONOTONE -
-     * {@code AirState:426} refusing combustion from 20% oxidiser up: "adding oxidiser may never take
-     * combustion away (at 190000000)". BREATH MONOTONE - {@code AirState:440} refusing breath from 20%
+     * {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} refusing combustion from 20% oxidiser up: "adding oxidiser may never take
+     * combustion away (at 190000000)". BREATH MONOTONE - {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} refusing breath from 20%
      * oxidiser up: "adding oxidiser may never take breathability away (at 190000000)". POISON MAKES IT
-     * TOXIC - {@code AirState:460} calling a poison toxic only at three times its limit: "and adding a
-     * poison must make it so". REMOVING IT CLEARS IT - {@code AirState:129} removing half of what was
+     * TOXIC - {@code AirState#worstToxin} at {@code if (excess >= 1.0D && excess > worstExcess - 1e-9D)} calling a poison toxic only at three times its limit: "and adding a
+     * poison must make it so". REMOVING IT CLEARS IT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was
      * drawn: "and removing it must take the toxicity with it". The clean-air premise is an arrangement
      * and is not witnessed.</p>
      *
@@ -174,10 +174,10 @@ public class AtmospherePredicatesTest {
      * A poison is judged against ITS OWN limit, so good air is no defence and the predicate needs to
      * know nothing about which gas it is looking at.
      *
-     * <p>red-witnessed: 2026-09-30. UNDER ITS OWN LIMIT - a DOUBLE inversion, {@code AirState:453} AND
-     * {@code AirState:460} both halving the limit: "under its own limit, a poison is not yet
-     * poisoning: ..."; {@code AirState:460} alone stays green, because the starting worst excess of 1.0
-     * enforces the same limit a second time. STRICTER POISON IS OVER - {@code AirState:459} judging
+     * <p>red-witnessed: 2026-09-30. UNDER ITS OWN LIMIT - a DOUBLE inversion, {@code AirState#worstToxin} at {@code double worstExcess = 1.0D;} AND
+     * {@code AirState#worstToxin} at {@code if (excess >= 1.0D && excess > worstExcess - 1e-9D)} both halving the limit: "under its own limit, a poison is not yet
+     * poisoning: ..."; {@code AirState#worstToxin} at {@code if (excess >= 1.0D && excess > worstExcess - 1e-9D)} alone stays green, because the starting worst excess of 1.0
+     * enforces the same limit a second time. STRICTER POISON IS OVER - {@code AirState#worstToxin} at {@code double excess = (double) entry.getValue() / gas.hazardThreshold();} judging
      * every poison against ammonia's limit: "the SAME amount of a stricter poison is over ITS limit:
      * ...". The premise is an arrangement and is not witnessed.</p>
      *
@@ -207,10 +207,10 @@ public class AtmospherePredicatesTest {
      * Corrosion needs something corrosive, something to dissolve it into, and heat — and it reads all
      * three rather than switching on one.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. WET IS WORSE - {@code AirState:494}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. WET IS WORSE - {@code AirState#corrosionIndex} at {@code double wet = 1.0D + (double) roleTotal(GasRole.SOLVENT) / ONE_ATM;}
      * ignoring the solvent: "water makes it worse: dry=10.0 wet=10.0". HOT IS WORSE -
-     * {@code AirState:495} ignoring the temperature: "and so does heat: dry=10.0 hot=10.0". CLEAN AIR -
-     * {@code AirState:489} answering 0.1 when nothing attacks: "clean air attacks nothing
+     * {@code AirState#corrosionIndex} at {@code double warm = Math.max(0.5D, getTemperatureKelvin() / Math.max(1, ambientKelvin()));} ignoring the temperature: "and so does heat: dry=10.0 hot=10.0". CLEAN AIR -
+     * {@code AirState#corrosionIndex} at {@code return 0.0D;} answering 0.1 when nothing attacks: "clean air attacks nothing
      * expected:&lt;0.0&gt; but was:&lt;0.1&gt;". The premise is an arrangement and is not
      * witnessed.</p>
      */
@@ -240,13 +240,16 @@ public class AtmospherePredicatesTest {
      * that raises it — the two halves of "no storage without a consumer".
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. EVERY GAS HAS A ROLE - a DOUBLE
-     * inversion, {@code GasRegistry:47} registering helium with no role AND {@code GasRegistry:75}
-     * no longer refusing that at registration: "a gas with no role has no reason to be modelled:
-     * Gas[helium []]". FINDABLE BY NAME - {@code GasRegistry:79} keying by the upper-cased name: "a gas
-     * must be findable by the name its save data uses: ... but was:&lt;null&gt;". EVERY HAZARD HAS A
-     * GAS - {@code GasRegistry:41} making water inert: "a predicate keys on SOLVENT and nothing in the
-     * registry can raise it". EVERY POISON HAS A LIMIT - {@code GasRegistry:54} giving ammonia no
-     * limit: "a poison with no limit can never poison anyone: Gas[ammonia [FUEL, TOXIC]]".</p>
+     * inversion, the {@code GasRegistry#HELIUM} at {@code new Gas("helium", "helium", 4.0D, 4.2D, 0, GasRole.INERT)} row declared with no role AND {@code Gas#Gas} at
+     * {@code if (roles.length == 0)} made never to hold: "a gas with no role has no reason to be
+     * modelled: Gas[helium []]". FINDABLE BY NAME - {@code GasRegistry#byName} at
+     * {@code index.put(gas.name(), gas);} keying by the upper-cased name: "a gas must be findable by
+     * the name its save data uses: Gas[nitrogen [INERT]] … but was:&lt;null&gt;". EVERY HAZARD HAS A
+     * GAS - the {@code GasRegistry#WATER} at {@code new Gas("water", "water", 18.0D, 373.1D, 0, GasRole.SOLVENT)} row made inert: "a predicate keys on SOLVENT and nothing in
+     * the registry can raise it". EVERY POISON HAS A LIMIT - the {@code GasRegistry#AMMONIA} at {@code new Gas("ammonia", "ammonia", 17.0D, 239.8D, 300, GasRole.TOXIC, GasRole.FUEL)} row given
+     * no limit: "a poison with no limit can never poison anyone: Gas[ammonia [FUEL, TOXIC]]". (The last
+     * two were taken while each row was still wrapped in {@code register(...)}; the rows' values are
+     * unchanged since.)</p>
      */
     @Test
     public void everyGasHasAJobAndEveryHazardHasAGas() {
@@ -268,20 +271,52 @@ public class AtmospherePredicatesTest {
     }
 
     /**
+     * Every gas the registry declares is one a save can name: it is listed, and it is found by the
+     * name its composition is written under. A declared gas missing from the list would be read back
+     * from a save as unknown and dropped — the composition would lose it without a word.
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each in {@code GasRegistry}. LISTED —
+     * {@code HELIUM} left out of {@code ALL}: "declared gas HELIUM is missing from the registry's
+     * list". FOUND BY NAME — {@code GasRegistry#byName} at {@code index.put(gas.name(), gas);} keying
+     * by the upper-cased name: "declared gas NITROGEN must be found by its saved name … but
+     * was:&lt;null&gt;". NOTHING EXTRA — {@code NITROGEN} listed in {@code ALL} twice: "and the list
+     * holds nothing the registry does not declare expected:&lt;11&gt; but was:&lt;12&gt;".</p>
+     */
+    @Test
+    public void everyDeclaredGasIsOneASaveCanName() throws Exception {
+        int declared = 0;
+        for (java.lang.reflect.Field field : GasRegistry.class.getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+            if (field.getType() != Gas.class || !java.lang.reflect.Modifier.isStatic(modifiers)
+                    || !java.lang.reflect.Modifier.isPublic(modifiers)) {
+                continue;
+            }
+            Gas gas = (Gas) field.get(null);
+            declared++;
+            assertTrue("declared gas " + field.getName() + " is missing from the registry's list",
+                    GasRegistry.all().contains(gas));
+            assertEquals("declared gas " + field.getName() + " must be found by its saved name",
+                    gas, GasRegistry.byName(gas.name()));
+        }
+        assertEquals("and the list holds nothing the registry does not declare",
+                declared, GasRegistry.all().size());
+    }
+
+    /**
      * A composition survives a save, INCLUDING a substance the three old keys could never name — and
      * a gas the running game no longer knows is dropped rather than guessed at.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OXYGEN - {@code AirState:560} writing
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. OXYGEN - {@code AirState#writeToNBT} at {@code gases.setLong(entry.getKey().name(), entry.getValue());} writing
      * oxygen at half: "oxygen comes back expected:&lt;210000000&gt; but was:&lt;105000000&gt;".
-     * NITROGEN - {@code AirState:560} writing nitrogen at half: "so does the nitrogen
-     * expected:&lt;790000000&gt; but was:&lt;395000000&gt;". METHANE - {@code AirState:576} skipping
+     * NITROGEN - {@code AirState#writeToNBT} at {@code gases.setLong(entry.getKey().name(), entry.getValue());} writing nitrogen at half: "so does the nitrogen
+     * expected:&lt;790000000&gt; but was:&lt;395000000&gt;". METHANE - {@code AirState#readFromNBT} at {@code state.set(GasRegistry.byName(name), gases.getLong(name));} skipping
      * methane on read: "and so does a gas the old three keys could not have named
-     * expected:&lt;1234&gt; but was:&lt;0&gt;". TEMPERATURE - {@code AirState:563} writing half the
+     * expected:&lt;1234&gt; but was:&lt;0&gt;". TEMPERATURE - {@code AirState#writeToNBT} at {@code nbt.setInteger("airK", temperatureMilliK);} writing half the
      * temperature: "and the temperature with them expected:&lt;293000&gt; but was:&lt;146500&gt;".
-     * DROPPED - {@code AirState:576} reading an unknown gas as nitrogen: "a substance this game no
+     * DROPPED - {@code AirState#readFromNBT} at {@code state.set(GasRegistry.byName(name), gases.getLong(name));} reading an unknown gas as nitrogen: "a substance this game no
      * longer knows is DROPPED, never guessed at expected:&lt;1000001234&gt; but
      * was:&lt;1000006234&gt;". NOT REACHABLE BY NAME -
-     * {@code GasRegistry:94} answering helium for a name it does not know: "a substance this game does
+     * {@code GasRegistry#byName} at {@code return name == null ? null : BY_NAME.get(name);} answering helium for a name it does not know: "a substance this game does
      * not know is not reachable by name expected null, but was:&lt;Gas[helium [INERT]]&gt;". The known-gas line is a premise
      * and is not witnessed.</p>
      */

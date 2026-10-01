@@ -109,7 +109,7 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code HullMelting:120} melting nothing until 1000 K past a material's
+     * red-witnessed: with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting nothing until 1000 K past a material's
      * ceiling: "past its own limit the block is not damaged, it is gone - and rock leaves lava
      * behind: … expected:&lt;minecraft:[lava]&gt; but was:&lt;minecraft:[stone]&gt;", 2026-09-30. The
      * two premises at its head are arrangements and are not witnessed.
@@ -132,7 +132,7 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
     }
 
     /**
-     * red-witnessed: with {@code HullMelting:120} melting from 300 K below a material's ceiling:
+     * red-witnessed: with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting from 300 K below a material's ceiling:
      * "below the limit the rung must not fire at all - a block is lost at a temperature, not at a
      * mood: … expected:&lt;minecraft:[stone]&gt; but was:&lt;minecraft:[lava]&gt;", 2026-09-30.
      */
@@ -158,7 +158,7 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
      * block that was placed must be gone. The premise reads the same position before the cook, so the
      * block compared against is the one that actually stood there.</p>
      *
-     * <p>red-witnessed: with {@code HullMelting:120} melting nothing until 1000 K past a material's
+     * <p>red-witnessed: with {@code HullMelting#meltIfPast} at {@code || actingKelvin < material.ceilingKelvin())} melting nothing until 1000 K past a material's
      * ceiling: "a loop hotter than its own pipes has no pipes - the pipe that stood there must be gone:
      * … Actual: stellurgy:heatpipe", 2026-09-30. The premise at its head is an arrangement and is not
      * witnessed.</p>
@@ -194,7 +194,7 @@ public class HullMeltsPastItsMaterialTest extends AbstractSharedServerTest {
      * table merely fails to name: that case would never cross a threshold at all, and would say
      * nothing about the rule.</p>
      *
-     * <p>red-witnessed: with {@code HullMelting:110} no longer sparing a block the world will not
+     * <p>red-witnessed: with {@code HullMelting#meltIfPast} at {@code if (block.getBlockHardness(state, world, pos) < 0.0F)} no longer sparing a block the world will not
      * break: "a block the world refuses to let be broken is never taken by heat, even past its own
      * material's ceiling: … expected:&lt;minecraft:[bedrock]&gt; but was:&lt;minecraft:[lava]&gt;",
      * 2026-09-30. The two premises are arrangements and are not witnessed.</p>

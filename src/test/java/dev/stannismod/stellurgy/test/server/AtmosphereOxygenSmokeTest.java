@@ -73,11 +73,10 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      * samples go through the handler branch — the detector's no-handler branch is not reached here.
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30, for the three verdicts this branch
-     * rewrote. DEFAULT — {@code TileAtmosphereDetector:43} starting on {@code VACUUM}: "detector
+     * rewrote. DEFAULT — {@code TileAtmosphereDetector#TileAtmosphereDetector} at {@code assertionToDetect = AtmosphereAssertion.BREATHABLE;} starting on {@code VACUUM}: "detector
      * should default to watching for breathable air: … expected:&lt;[BREATHABLE]&gt; but
-     * was:&lt;[VACUUM]&gt;". BREATHABLE — {@code AtmosphereAssertions:35} never holding: "overworld
-     * air must satisfy \"breathable\": … \"detected\":false". NOT VACUUM — {@code
-     * AtmosphereAssertions:45} calling any air without a zone vacuum: "overworld air must not satisfy
+     * was:&lt;[VACUUM]&gt;". BREATHABLE — {@code AtmosphereAssertions#holdsAt} at {@code return breathable(air, published);} never holding: "overworld
+     * air must satisfy \"breathable\": … \"detected\":false". NOT VACUUM — {@code AtmosphereAssertions#holdsAt} at {@code return air != null ? air.getTotalPressure() <= 0L : published == Atmosphere.VACUUM;} calling any air without a zone vacuum: "overworld air must not satisfy
      * \"vacuum\": … \"detected\":true". Both of the last two reds came through the handler branch:
      * the overworld has an atmosphere handler.</p>
      */

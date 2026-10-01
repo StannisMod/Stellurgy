@@ -410,8 +410,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * {@code protectsFrom} &rarr; {@code decrementAir} is never called and the tank's oxygen stays
      * at its initial value.
      *
-     * <p>red-witnessed: with {@code AtmosphereHandler} asking {@code VACUUM.isImmune} of every body in
-     * a breathable atmosphere every ten ticks (it spends a suit's air, hurts nobody), this fails with
+     * <p>red-witnessed: with {@code AtmosphereHandler#onTick} at {@code if (atmosType.canTick() &&}
+     * given an else branch asking {@code VACUUM.isImmune} of every body in a breathable atmosphere
+     * every ten ticks (it spends a suit's air, hurts nobody), this fails with
      * "a breathable atmosphere must never reach the suit's tank at all; drains recorded" — 2026-09-28.</p>
      */
     @Test
@@ -472,9 +473,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * is not recorded — and only the flip itself is guaranteed to be an edge: the tank starts with
      * oxygen, so the run of {@code true}s before it is what makes the {@code false} a change.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. DAMAGE — {@code HazardExposure:145}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. DAMAGE — {@code HazardExposure#applyTo} at {@code if (row.damage() != null)}
      * no longer applying a row's damage: "vacuum damage must apply once the tank is drained … no
-     * `living_hurt` carrying source = Vacuum". REFUSAL RECORDED — {@code Atmosphere:137} applying
+     * `living_hurt` carrying source = Vacuum". REFUSAL RECORDED — {@code Atmosphere#onTick} at {@code if (dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player))} applying
      * the exposure even to a player the suit protects: "the suit gate must be recorded turning the
      * player DOWN — that flip is the contract …". Not witnessed: the drain link, the client's health
      * and the emptied tank.</p>
@@ -546,8 +547,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      *
      * <p>Pins the END STATE (air rises over the window) rather than a per-tick mB rate.</p>
      *
-     * <p>red-witnessed: with {@code TileGasChargePad} draining its tank but no longer calling
-     * {@code fillable.increment}, this fails with "no `suit_air_filled` whose 'filled' is not 0" —
+     * <p>red-witnessed: with {@code TileGasChargePad#canPerformFunction} at
+     * {@code fillable.increment(stack, drained.amount);} removed, so the pad still drains its tank
+     * but fills nothing, this fails with "no `suit_air_filled` whose 'filled' is not 0" —
      * 2026-09-28.</p>
      */
     @Test
@@ -625,7 +627,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * {@code protectsFrom} branch is never evaluated and no decrement fires.
      *
      * <p>red-witnessed: with the same breathable-drain inversion as
-     * {@link #breathableAtmosphereDoesNotDrainChestTank}, this fails with "a breathable atmosphere must
+     * {@link #breathableAtmosphereDoesNotDrainChestTank} — {@code AtmosphereHandler#onTick} at
+     * {@code if (atmosType.canTick() &&} given an else branch asking {@code VACUUM.isImmune} of every
+     * body in a breathable atmosphere every ten ticks — this fails with "a breathable atmosphere must
      * never reach the enchanted suit's buffer; drains recorded" — 2026-09-28.</p>
      */
     @Test
@@ -676,8 +680,8 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * whole suit was consulted and the chest was asked to pay. Only then does the silence in
      * {@code living_hurt} say the suit held rather than that the atmosphere never looked at him.</p>
      *
-     * <p>red-witnessed: with {@code ItemAirUtils.decrementAir} reporting the air spent without
-     * spending it (protection intact), this fails with "the drained buffer must reach the client's
+     * <p>red-witnessed: with {@code ItemAirUtils#decrementAir} at {@code nbt.setInteger("air", newAmt);}
+     * skipped, so it reports the air spent without spending it (protection intact), this fails with "the drained buffer must reach the client's
      * chest slot — no `client_slot_tag_set`" — 2026-09-28.</p>
      */
     @Test
@@ -759,7 +763,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * {@code living_hurt} from {@code Vacuum} proves the atmosphere tick ran on THIS player, and the
      * empty drain log then says the missing chest never entered a decrement path.</p>
      *
-     * <p>red-witnessed: with {@code HazardExposure:145} no longer applying a row's damage: "vacuum
+     * <p>red-witnessed: with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: "vacuum
      * damage must apply to a bare-skinned player — no `living_hurt`", 2026-09-30. Only that link is
      * witnessed; the empty drain log, the client's health and the chest reading are not.</p>
      */
@@ -815,7 +819,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * same damage plus the no-chest decrement contract: this one is the narrower, older pin and the
      * one the suit tests cross-check themselves against.</p>
      *
-     * <p>red-witnessed: with {@code HazardExposure:145} no longer applying a row's damage: "the
+     * <p>red-witnessed: with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: "the
      * vacuum must damage the player at all before the client can be shown it — no `living_hurt`",
      * 2026-09-30. The client-health link after it is not witnessed.</p>
      */
@@ -867,8 +871,9 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * mean the suit held. The gate's own {@code immune:true} is not asserted, because that recorder
      * writes only on a CHANGE and an unbroken run of protection may produce no record at all.</p>
      *
-     * <p>red-witnessed: with {@code ItemSpaceChest.decrementAir} reporting the air spent without
-     * draining its tank (protection intact), this fails with "the drained tank must reach the client's
+     * <p>red-witnessed: with {@code ItemSpaceChest#decrementAir} at
+     * {@code fluidDrained = fluidItem.drain(amtDrained, true);} made a simulated drain, so it reports
+     * the air spent without draining its tank (protection intact), this fails with "the drained tank must reach the client's
      * chest slot — no `client_slot_tag_set`" — 2026-09-28.</p>
      */
     @Test
@@ -1075,11 +1080,13 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * what suffocating in a badly built box looks like.</p>
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. CONTROL — {@code PressurizedAir}
-     * made a ticking, unbreathable atmosphere ({@code Atmosphere:41}) that raises the heat row
-     * ({@code AtmosphereHazards:139}): "control leg: the room itself must not hurt him while it is at
-     * cabin temperature … start=20.0 after=16.0". HURTS — {@code AtmosphereHazards:139} dropping the
-     * heat row: "a compartment past the crew threshold must hurt the person in it … no
-     * `client_health_updated` below 20.0". HEAT ITSELF — {@code HazardExposure:145} skipping the damage
+     * made a ticking, unbreathable atmosphere (the {@code Atmosphere#PRESSURIZEDAIR} at {@code new Atmosphere(false, true, true, "PressurizedAir")} constant) that
+     * raises the heat row (the row {@code AtmosphereHazards#byAtmosphere} at
+     * {@code put(table, Atmosphere.VERYHOT, HEAT);} names): "control leg: the room itself must
+     * not hurt him while it is at cabin temperature … start=20.0 after=16.0". HURTS —
+     * {@code AtmosphereHazards#byAtmosphere} at {@code put(table, Atmosphere.VERYHOT, HEAT);} dropping
+     * the heat row (taken while that table was a static block; the row is unchanged): "a compartment past the crew threshold must hurt the person in it … no
+     * `client_health_updated` below 20.0". HEAT ITSELF — {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} skipping the damage
      * of the heat row only, so it still sets him alight: "the overheated room must itself deal him
      * heat damage — not only set him alight — no `living_hurt` carrying who = ForgeTestClient and
      * source = Heat was recorded within 200 ticks", with the fire's own {@code living_hurt} records
@@ -1187,7 +1194,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * covered by this class's vacuum scenarios; this is the other failure the life-support design
      * names — regeneration not keeping up, leaving a room still full of gas and still lethal.</p>
      *
-     * <p>red-witnessed: with {@code HazardExposure:145} no longer applying a row's damage: "a
+     * <p>red-witnessed: with {@code HazardExposure#applyTo} at {@code if (row.damage() != null)} no longer applying a row's damage: "a
      * pressurised room below the breathable oxygen floor must hurt an unsuited player, and the CLIENT
      * must be told it (he started at 20.0) — no `client_health_updated` below 20.0", 2026-09-30.</p>
      *
@@ -1232,13 +1239,14 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      * rules out), and a falling air buffer alone is what a suit draining without protecting anybody
      * looks like.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. DRAIN — {@code AtmosphereHazards:135}
-     * dropping the low-oxygen row: "the stale air must reach the suit's buffer … no
-     * `suit_air_drained` carrying route = enchanted". NO REFUSAL — {@code ItemAirUtils:177} spending
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. DRAIN — {@code AtmosphereHazards#byAtmosphere}
+     * at {@code put(table, Atmosphere.LOWOXYGEN, THIN_AIR);} dropping the low-oxygen row (taken while
+     * that table was a static block; the row is unchanged): "the stale air must reach the suit's buffer … no
+     * `suit_air_drained` carrying route = enchanted". NO REFUSAL — {@code ItemAirWrapper#protectsFrom} at {@code return commitProtection ? decrementAir(stack, 1) == 1 : getAirRemaining(stack) > 0;} spending
      * the air and then refusing protection anyway: "the suit must protect its wearer from stale zone
-     * air; decisions since the window opened: …". NO HEALTH — {@code Atmosphere:137} applying the
+     * air; decisions since the window opened: …". NO HEALTH — {@code Atmosphere#onTick} at {@code if (dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards.isImmune(exposure, player))} applying the
      * exposure even to a protected player: "and no health may have been spent on it;
-     * healthStart=20.0 healthAfter=19.0". PAYS — {@code ItemAirUtils:77} reporting the air spent
+     * healthStart=20.0 healthAfter=19.0". PAYS — {@code ItemAirUtils#decrementAir} at {@code nbt.setInteger("air", newAmt);} reporting the air spent
      * without writing it: "and it must PAY for that protection … before=1000 after=1000". Not
      * witnessed: the client's rendering of the drained suit, and the full-suit premise.</p>
      */

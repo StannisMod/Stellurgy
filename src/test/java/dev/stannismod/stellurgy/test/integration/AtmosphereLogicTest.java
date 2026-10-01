@@ -90,11 +90,12 @@ public class AtmosphereLogicTest {
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. NO MUTATORS — a
      * {@code setIsBreathable(boolean)} added to {@code Atmosphere}: "an atmosphere must not be
      * tellable to lie about itself, and these can tell it: [setIsBreathable]". UNBREATHABLE — the
-     * four-argument constructor ({@code Atmosphere:70}) making a flammable non-ticking atmosphere
-     * breathable: a bare {@code AssertionError} at the {@code assertFalse} on
-     * {@code isBreathable()}. COMBUSTION KEPT — the same constructor dropping the combustion flag of
-     * anything neither breathable nor ticking: "the constructor must keep combustion distinct from
-     * breathable".</p>
+     * four-argument constructor, {@code Atmosphere#Atmosphere} at
+     * {@code this.isBreathable = isBreathable;}, made to store true: a bare {@code AssertionError} at
+     * the {@code assertFalse} on {@code isBreathable()}. COMBUSTION KEPT — the same constructor at
+     * {@code this.allowsCombustion = allowsCombustion;} made to store the breathable flag instead:
+     * "the constructor must keep combustion distinct from breathable". (Both re-taken 2026-09-30 after
+     * the fields became final and the three-argument constructor began delegating to this one.)</p>
      */
     @Test
     public void whatAnAtmosphereSaysAboutItselfCannotBeChangedAfterItIsBuilt() {

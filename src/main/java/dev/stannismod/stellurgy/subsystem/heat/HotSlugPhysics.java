@@ -120,7 +120,7 @@ public class HotSlugPhysics {
 
         // What it lands on is cooked by the slug's own temperature, and the block's own capacity is
         // the bill. A slug that cannot pay simply does not melt it.
-        long cost = ThermalMaterials.blockCapacity(world, under);
+        long cost = ThermalMaterials.INSTANCE.blockCapacity(world, under);
         if (cost > 0L && TileHeatDump.chargeOf(stack) >= cost
                 && HullMelting.meltIfPast(world, under, kelvin)) {
             spend(stack, cost);

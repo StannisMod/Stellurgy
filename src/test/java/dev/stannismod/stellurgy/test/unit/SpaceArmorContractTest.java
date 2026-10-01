@@ -80,7 +80,7 @@ public class SpaceArmorContractTest {
     // ───────────────────── the protection matrix ─────────────────────────
 
     /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor:249} dropping protection from heat: "space armor must
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} dropping protection from heat: "space armor must
      * protect from HEAT", 2026-09-30.</p>
      */
     @Test
@@ -98,7 +98,7 @@ public class SpaceArmorContractTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor:249} answering yes unconditionally: "air that raises
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes unconditionally: "air that raises
      * no hazard needs no protecting from", 2026-09-30.</p>
      */
     @Test
@@ -113,10 +113,10 @@ public class SpaceArmorContractTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ItemSpaceArmor:249} answering yes whenever it is acted on: "protect
+     * <p>red-witnessed: with {@code ItemSpaceArmor#protectsFrom} at {@code return !hazards.isEmpty();} answering yes whenever it is acted on: "protect
      * decision must be commit-invariant for [] expected:&lt;true&gt; but was:&lt;false&gt;",
      * 2026-09-30. This asks the base piece, whose answer never read the commit flag; the chest that
-     * does spend on commit ({@code ItemSpaceChest:280}) is not what it calls.</p>
+     * does spend on commit ({@code ItemSpaceChest#protectsFrom} at {@code if (!super.protectsFrom(hazards, needsSuppliedOxygen, stack, commitProtection))}) is not what it calls.</p>
      */
     @Test
     public void theProtectionDecisionIsTheSameWhetherOrNotItIsActedOn() {

@@ -149,8 +149,9 @@ public class AtmospherePlayerEventTest {
     /**
      * The overworld is breathable, and the gate says so for a player standing in it.
      *
-     * <p>red-witnessed: with {@code AtmosphereHandler.getAtmosphereType(Entity)} answering VACUUM
-     * for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own
+     * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType} at
+     * {@code if (StellurgyConfiguration.getCurrentConfig().enableOxygen)} preceded by a return of
+     * VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own
      * dimension check instead stays GREEN — no other world's handler exists in this scenario to
      * answer for the overworld.</p>
      */
@@ -172,8 +173,7 @@ public class AtmospherePlayerEventTest {
     /**
      * An airless planet resolves as unbreathable for a player standing on it.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SOMETHING — {@code
-     * AtmosphereHandler:672} answering nothing for an unbreathable dimension: "the gate must answer
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. SOMETHING — {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();} answering nothing for an unbreathable dimension: "the gate must answer
      * SOMETHING for a player on a Stellurgy planet: … \"hasAtmosphere\":false". UNBREATHABLE — the
      * same line answering {@code AIR} for every dimension: "a planet declared with zero atmosphere
      * must resolve as unbreathable … \"breathable\":true".</p>
@@ -191,7 +191,7 @@ public class AtmospherePlayerEventTest {
     /**
      * Dim change clears the entry; the new dim repopulates with its own.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler:672}.
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, all at {@code AtmosphereHandler#getAtmosphereType} at {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere();}.
      * SOMETHING BEFORE — answering nothing for an unbreathable dimension: "the airless planet must
      * resolve to SOMETHING before the move". UNBREATHABLE BEFORE — answering {@code AIR} everywhere:
      * "the airless planet must resolve as unbreathable before the move: … \"breathable\":true".

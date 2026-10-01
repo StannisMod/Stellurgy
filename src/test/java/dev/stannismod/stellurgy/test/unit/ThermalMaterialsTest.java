@@ -1,14 +1,13 @@
 package dev.stannismod.stellurgy.test.unit;
 
 import java.io.File;
-import java.lang.reflect.Field;
-import java.nio.file.Files;
 
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
@@ -34,48 +33,24 @@ public class ThermalMaterialsTest {
     private int prevJoulesPerUnit;
     private int prevAmbient;
 
-    /** The table file as it stood before this class, or null when there was none. */
-    private static byte[] tableFileBefore;
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
 
     /**
-     * The subject is the SHIPPED table, so the class puts it in place itself.
-     *
-     * <p>{@code ThermalMaterials.load()} reads a table file from the run directory whenever one
-     * exists, and a file left there by any earlier run - a dev world, another test - would otherwise be
-     * what every verdict below reads. With no file, {@code load()} answers the shipped rows. The file's
-     * path is read off the table rather than written here, so the arrangement follows production if
-     * the path moves.</p>
+     * The subject is the SHIPPED table, so each test reads one of its own from a file that does not
+     * exist yet: with no file, {@code load} answers the shipped rows. The install's own table is
+     * never consulted, so a file some earlier run left in the run directory cannot become the subject.
      */
+    private ThermalMaterials table;
+
     @BeforeClass
-    public static void bootstrap() throws Exception {
+    public static void bootstrap() {
         MinecraftBootstrap.ensure();
-        File table = tableFile();
-        tableFileBefore = table.exists() ? Files.readAllBytes(table.toPath()) : null;
-        Files.deleteIfExists(table.toPath());
-        ThermalMaterials.INSTANCE.load();
     }
 
-    /**
-     * Puts back what was there. {@code load()} with no file writes the shipped table out, so when
-     * there was no file before this class, the one it wrote is removed again afterwards.
-     */
-    @AfterClass
-    public static void restoreTheTableFile() throws Exception {
-        File table = tableFile();
-        if (tableFileBefore != null) {
-            Files.write(table.toPath(), tableFileBefore);
-            ThermalMaterials.INSTANCE.load();
-        } else {
-            Files.deleteIfExists(table.toPath());
-            ThermalMaterials.INSTANCE.load();
-            Files.deleteIfExists(table.toPath());
-        }
-    }
-
-    private static File tableFile() throws Exception {
-        Field path = ThermalMaterials.class.getDeclaredField("file");
-        path.setAccessible(true);
-        return new File((String) path.get(ThermalMaterials.INSTANCE));
+    @Before
+    public void readTheShippedTable() {
+        table = ThermalMaterials.load(new File(folder.getRoot(), "thermalMaterials.json").getPath());
     }
 
     @Before
@@ -97,8 +72,8 @@ public class ThermalMaterialsTest {
         config.shipHeatAmbientKelvin = prevAmbient;
     }
 
-    private static ThermalMaterial material(String name) {
-        ThermalMaterial found = ThermalMaterials.INSTANCE.byName(name);
+    private ThermalMaterial material(String name) {
+        ThermalMaterial found = table.byName(name);
         assertNotNull("the shipped table must know " + name, found);
         return found;
     }
@@ -110,7 +85,7 @@ public class ThermalMaterialsTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ThermalMaterial:71} doubling the product: "the energy a lump holds
+     * <p>red-witnessed: with {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} doubling the product: "the energy a lump holds
      * is rho * c * dT and nothing else expected:&lt;5013234068&gt; but was:&lt;10026468136&gt;",
      * 2026-09-30.</p>
      */
@@ -123,9 +98,9 @@ public class ThermalMaterialsTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. COSTS CAPACITY - {@code ThermalMaterial:67}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. COSTS CAPACITY - {@code ThermalMaterial#joulesPerCubicMetre} at {@code long usable = (long) ceilingKelvin - Math.max(0, marginKelvin) - startKelvin;}
      * ignoring the margin: "charging a slug short of its ceiling must cost capacity ...: 5366776668 -&gt;
-     * 5366776668". EXACTLY THE MARGIN - {@code ThermalMaterial:71} doubling the product: "and exactly
+     * 5366776668". EXACTLY THE MARGIN - {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} doubling the product: "and exactly
      * the margin's worth of it expected:&lt;353542600&gt; but was:&lt;707085200&gt;".</p>
      */
     @Test
@@ -143,7 +118,7 @@ public class ThermalMaterialsTest {
     }
 
     /**
-     * <p>red-witnessed: with the guard at {@code ThermalMaterial:68} disabled: "a slug in a room hotter
+     * <p>red-witnessed: with the guard at {@code ThermalMaterial#joulesPerCubicMetre} at {@code if (usable <= 0L)} disabled: "a slug in a room hotter
      * than the slug melts is not a heat sink expected:&lt;0&gt; but was:&lt;-1462860&gt;",
      * 2026-09-30.</p>
      */
@@ -161,17 +136,18 @@ public class ThermalMaterialsTest {
      * 600 K.
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. LEAD UNDER TWICE WATER -
-     * {@code ThermalMaterial:71} forgetting the specific heat: "and yet a litre of it is worth less
+     * {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} forgetting the specific heat: "and yet a litre of it is worth less
      * than twice a litre of water ...: water=80000 lead=3481380". GRAPHITE BEATS IRON -
-     * {@code ThermalMaterial:67} capping the usable span at 100 K: "graphite is denser than nothing
+     * {@code ThermalMaterial#joulesPerCubicMetre} at {@code long usable = (long) ceilingKelvin - Math.max(0, marginKelvin) - startKelvin;} capping the usable span at 100 K: "graphite is denser than nothing
      * much and beats iron anyway, on ceiling alone: carbon=160234000". ONLY TUNGSTEN BEATS GRAPHITE -
-     * {@code ThermalMaterial:71} forgetting the density: "and only tungsten beats graphite:
+     * {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} forgetting the density: "and only tungsten beats graphite:
      * tungsten=455868". The premise before them is an arrangement and is not witnessed.</p>
      *
-     * <p>red-witnessed, the class arrangement, 2026-09-30: with the shipped iron at
-     * {@code ThermalMaterials:439} made 20000 kg/m3: "graphite is denser than nothing much and beats
-     * iron anyway, on ceiling alone: carbon=5779640380". Before the class removed the run directory's
-     * table file, the same change left every method here green.</p>
+     * <p>red-witnessed: the class arrangement, 2026-09-30, re-taken after each test began reading a
+     * table of its own: with {@code ThermalMaterials#defaults} at
+     * {@code put(m, new ThermalMaterial("iron", 7874, 449, 1811));} made 20000 kg/m3, "graphite is
+     * denser than nothing much and beats iron anyway, on ceiling alone: carbon=5779640380". While the
+     * class read the run directory's table file, the same change left every method here green.</p>
      */
     @Test
     public void aHigherCeilingBeatsAHigherDensity() {
@@ -201,12 +177,12 @@ public class ThermalMaterialsTest {
      * be under a quarter, which any rebalance can change without the slug stopping being linear.</p>
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-30. AT LEAST FOUR TIMES -
-     * {@code ThermalMaterials:192} adding a flat 1000 units to every slug: "four times the material is
+     * {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} adding a flat 1000 units to every slug: "four times the material is
      * at least four times the heat ...: one=13733 four=51934" (run with the shipped iron made denser
      * for another verdict; the flat term is what breaks it). NO MORE THAN THREE OVER -
-     * {@code ThermalMaterials:192} doubling every slug bigger than a litre: "and no more than the three
+     * {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} doubling every slug bigger than a litre: "and no more than the three
      * units four rounded-down fractions can add: one=5013 four=40104". A change that stays linear is
-     * not a red: with {@code ThermalMaterial:71} doubling every capacity this stays green. The premise
+     * not a red: with {@code ThermalMaterial#joulesPerCubicMetre} at {@code return (long) densityKgPerCubicMetre * specificHeatJoulesPerKgKelvin * usable;} doubling every capacity this stays green. The premise
      * is an arrangement and is not witnessed.</p>
      */
     @Test
@@ -225,9 +201,9 @@ public class ThermalMaterialsTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HALVES - {@code ThermalMaterials:186}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HALVES - {@code ThermalMaterials#slugCapacity} at {@code int joulesPerUnit = Math.max(1, config.shipHeatSlugJoulesPerUnit);}
      * ignoring the configured conversion: "halving what a heat unit is worth must halve the slug
-     * expected:&lt;2506&gt; but was:&lt;5013&gt;". REORDERS NONE - {@code ThermalMaterials:186}
+     * expected:&lt;2506&gt; but was:&lt;5013&gt;". REORDERS NONE - {@code ThermalMaterials#slugCapacity} at {@code int joulesPerUnit = Math.max(1, config.shipHeatSlugJoulesPerUnit);}
      * converting materials denser than 8000 kg/m3 at a quarter of the rate once the conversion moves:
      * "and it must not change which material is the better slug".</p>
      */
@@ -249,16 +225,16 @@ public class ThermalMaterialsTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ABSENT - {@code ThermalMaterials:167}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. ABSENT - {@code ThermalMaterials#byName} at {@code return name == null ? null : materials.get(name.toLowerCase(Locale.ROOT));}
      * answering iron for a name it does not know: "a material nobody described must read as absent
      * expected null, but was:&lt;ThermalMaterial[iron ...]&gt;". CARRIES NOTHING -
-     * {@code ThermalMaterials:182} substituting iron for a missing material: "and absent must carry
+     * {@code ThermalMaterials#slugCapacity} at {@code if (material == null || millilitres <= 0L)} substituting iron for a missing material: "and absent must carry
      * nothing rather than a default expected:&lt;0&gt; but was:&lt;5013&gt;".</p>
      */
     @Test
     public void anUnknownSubstanceIsNotSilentlyGivenACapacity() {
         assertNull("a material nobody described must read as absent",
-                ThermalMaterials.INSTANCE.byName("unobtainium"));
+                table.byName("unobtainium"));
         assertEquals("and absent must carry nothing rather than a default", 0L,
                 ThermalMaterials.slugCapacity(null, 1_000));
     }
@@ -267,16 +243,16 @@ public class ThermalMaterialsTest {
      * One row per substance, reached from every shape it comes in. The point of keying by material is
      * that an ingot, a block and a nugget of the same metal are the same substance.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each at {@code ThermalMaterials:60}
-     * forgetting one prefix. INGOT: "an ore-dictionary ingot name must resolve". BLOCK: "a block of it
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, each the {@code ThermalMaterials#PREFIXES} at {@code "block", "ingot", "plate", "stick", "gear", "dust", "nugget", "gem", "ore"}
+     * list forgetting one prefix. INGOT: "an ore-dictionary ingot name must resolve". BLOCK: "a block of it
      * is the same substance expected:&lt;iron&gt; but was:&lt;null&gt;". DUST: "so is a dust of it
      * expected:&lt;iron&gt; but was:&lt;null&gt;".</p>
      */
     @Test
     public void everyShapeOfOneSubstanceResolvesToTheSameRow() {
-        ThermalMaterial fromIngot = ThermalMaterials.INSTANCE.byOreName("ingotIron");
-        ThermalMaterial fromBlock = ThermalMaterials.INSTANCE.byOreName("blockIron");
-        ThermalMaterial fromDust = ThermalMaterials.INSTANCE.byOreName("dustIron");
+        ThermalMaterial fromIngot = table.byOreName("ingotIron");
+        ThermalMaterial fromBlock = table.byOreName("blockIron");
+        ThermalMaterial fromDust = table.byOreName("dustIron");
 
         assertNotNull("an ore-dictionary ingot name must resolve", fromIngot);
         // Read null-safely: a shape that resolves to nothing must fail on ITS message, not on a
@@ -290,12 +266,15 @@ public class ThermalMaterialsTest {
     // ─── volume: derived from the shape, never authored beside the item ─────────
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. A CUBIC METRE -
-     * {@code ThermalMaterials:71} making a block two: "a block is a cubic metre of the stuff
-     * expected:&lt;1000000&gt; but was:&lt;2000000&gt;". NINE INGOTS - {@code ThermalMaterials:72}
-     * making an ingot an eighth: "nine ingots to a block ... expected:&lt;111111&gt; but
-     * was:&lt;125000&gt;". NINE NUGGETS - {@code ThermalMaterials:79} making a nugget an eightieth:
-     * "and nine nuggets to an ingot expected:&lt;12345&gt; but was:&lt;12500&gt;".</p>
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30 (taken while the table was filled in a
+     * static block; its rows are unchanged). A CUBIC METRE - {@code ThermalMaterials#prefixVolumes} at
+     * {@code volumes.put("block", 1_000_000L);} making a block two: "a block is a cubic metre of the
+     * stuff expected:&lt;1000000&gt; but was:&lt;2000000&gt;". NINE INGOTS -
+     * {@code ThermalMaterials#prefixVolumes} at {@code volumes.put("ingot", 1_000_000L / 9);} making an
+     * ingot an eighth: "nine ingots to a block ... expected:&lt;111111&gt; but was:&lt;125000&gt;". NINE
+     * NUGGETS - {@code ThermalMaterials#prefixVolumes} at {@code volumes.put("nugget", 1_000_000L / 81);}
+     * making a nugget an eightieth: "and nine nuggets to an ingot expected:&lt;12345&gt; but
+     * was:&lt;12500&gt;".</p>
      */
     @Test
     public void theShapeOfAnItemIsWhatSaysHowMuchSubstanceItIs() {
@@ -310,7 +289,7 @@ public class ThermalMaterialsTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ThermalMaterials:331} answering an ingot's volume for a shape it
+     * <p>red-witnessed: with {@code ThermalMaterials#volumeMillilitres} at {@code return 0L;} answering an ingot's volume for a shape it
      * does not know: "an unrecognised shape must not be silently given a size expected:&lt;0&gt; but
      * was:&lt;111111&gt;", 2026-09-30.</p>
      */
@@ -321,7 +300,7 @@ public class ThermalMaterialsTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ThermalMaterials:192} adding a flat 1000 units to every slug: "the
+     * <p>red-witnessed: with {@code ThermalMaterials#slugCapacity} at {@code return perCubicMetre * millilitres / 1_000_000L / joulesPerUnit;} adding a flat 1000 units to every slug: "the
      * substance is the same, so a litre of it is worth the same either way expected:&lt;5014&gt; but
      * was:&lt;5022&gt;", 2026-09-30. The premise before it is an arrangement and is not
      * witnessed.</p>
@@ -346,13 +325,13 @@ public class ThermalMaterialsTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ThermalMaterials:167} answering iron for a name it does not know:
+     * <p>red-witnessed: with {@code ThermalMaterials#byName} at {@code return name == null ? null : materials.get(name.toLowerCase(Locale.ROOT));} answering iron for a name it does not know:
      * "a prefix is not a licence to invent a material expected null, but was:&lt;ThermalMaterial[iron
      * ...]&gt;", 2026-09-30.</p>
      */
     @Test
     public void anOreNameOfSomethingTheTableDoesNotKnowResolvesToNothing() {
         assertNull("a prefix is not a licence to invent a material",
-                ThermalMaterials.INSTANCE.byOreName("ingotUnobtainium"));
+                table.byOreName("ingotUnobtainium"));
     }
 }

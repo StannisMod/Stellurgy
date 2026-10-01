@@ -19094,7 +19094,7 @@ public class TestProbeCommand extends CommandBase {
                     + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
                             .volumeMillilitres(world, pos)
                     + ",\"capacity\":"
-                    + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+                    + dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE
                             .blockCapacity(world, pos)
                     + ",\"ceilingKelvin\":" + (material == null ? 0 : material.ceilingKelvin()) + "}");
             return;
@@ -19179,7 +19179,7 @@ public class TestProbeCommand extends CommandBase {
                         new net.minecraft.item.ItemStack(world.getBlockState(pos).getBlock()));
         long volume = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
                 .volumeMillilitres(world, pos);
-        long capacity = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials
+        long capacity = dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials.INSTANCE
                 .blockCapacity(world, pos);
         send(sender, "{\"ok\":true,\"material\":\"" + (material == null ? "" : material.name())
                 + "\",\"volumeMillilitres\":" + volume

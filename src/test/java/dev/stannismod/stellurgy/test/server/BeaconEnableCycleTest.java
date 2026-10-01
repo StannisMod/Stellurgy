@@ -209,9 +209,18 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
             String type = Events.text(record, "type");
             anyBeacon |= type != null && type.startsWith("beacon_");
         }
-        return anyBeacon ? records
-                : "(no beacon record at all in " + records.length() + " bytes of events — either the "
-                        + "break never reached production, or the recording mixins are not applied)";
+        if (anyBeacon) {
+            return records;
+        }
+        // The ring is bounded, so "none" has a third reading beside "never happened" and "not
+        // recorded": written and then EVICTED. Only the reply's own counters can tell that one apart,
+        // so they travel in exactly the branch that needs them.
+        return "(no beacon record at all in " + records.length() + " bytes of events; evicted since"
+                + " the mark: beacon_break=" + Events.droppedOf(records, "beacon_break")
+                + " beacon_registered=" + Events.droppedOf(records, "beacon_registered")
+                + " beacon_unregistered=" + Events.droppedOf(records, "beacon_unregistered")
+                + " — zero evictions means the break never reached production or the recording mixins"
+                + " are not applied; any eviction means the record may have been written and lost)";
     }
 
     /** True iff the dim's beacon-locations registry contains the triple

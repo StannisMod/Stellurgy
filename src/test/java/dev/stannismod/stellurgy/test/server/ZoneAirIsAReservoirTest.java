@@ -54,7 +54,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * admitted gas — and the test derives exactly where from the pressures before and after, so the
      * assertion is the law and not a number.</p>
      *
-     * <p>red-witnessed: with {@code AirState:389} mixing by the plain average of the two
+     * <p>red-witnessed: with {@code AirState#mixIn} at {@code double mixed = ((double) here * getTemperatureKelvin() + (double) amountArriving * incomingKelvin)} mixing by the plain average of the two
      * temperatures: "the room must end up at the enthalpy-weighted mean … expected 314.648… K …
      * measured 293.001 K", 2026-09-30. The four premises are arrangements and are not witnessed.</p>
      *
@@ -137,7 +137,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * half — without it the assertion would also pass on an implementation where nothing happened at
      * all.</p>
      *
-     * <p>red-witnessed: with {@code AirState:129} ({@code draw}) cooling what is left by a percent on
+     * <p>red-witnessed: with {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} ({@code draw}) cooling what is left by a percent on
      * every draw: "what is left is the same gas at the same temperature — removing part of a body
      * does not cool the rest: … \"airTempMilliK\":361749", 2026-09-30. The three premises are
      * arrangements and are not witnessed.</p>
@@ -176,10 +176,9 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
      * number it was holding when it still had air in it. A stale reading here would hand the failure
      * ladder a hot compartment where there is nothing to be hot.</p>
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30, in the dry-vent room. AMBIENT — {@code
-     * AirState:259}'s empty-air rule removed, so the reading is whatever the gas last held: "a zone
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30, in the dry-vent room. AMBIENT — {@code AirState#getTemperatureMilliK} at {@code return getTotalPressure() <= 0L ? ambientKelvin() * 1000 : temperatureMilliK;}'s empty-air rule removed, so the reading is whatever the gas last held: "a zone
      * holding nothing must read ambient, not what it was at when it still had air: … \"airO2\":0 …
-     * expected:&lt;293000&gt; but was:&lt;400000&gt;". NO HEAT — {@code AirState:282} giving air a
+     * expected:&lt;293000&gt; but was:&lt;400000&gt;". NO HEAT — {@code AirState#getHeatCapacity} at {@code return getTotalPressure() / PER_PPM * Math.max(0, volumeBlocks) * perBlockAtOneAtm / 1_000_000L;} giving air a
      * heat capacity whatever its pressure: "and must hold no heat at all: … \"airO2\":0 …
      * expected:&lt;0&gt; but was:&lt;760&gt;". The hot-room and empty-room premises are arrangements
      * and are not witnessed.</p>

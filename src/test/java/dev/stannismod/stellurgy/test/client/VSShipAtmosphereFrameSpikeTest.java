@@ -122,7 +122,7 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     /**
      * RESULT-1 is the control: a sealed cabin on an assembled ship seals a blob at all.
      *
-     * <p>red-witnessed: with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob:87}) refusing any
+     * <p>red-witnessed: with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob#addBlock} at {@code if (blobHandler.canFormBlob())}) refusing any
      * block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: "RESULT-1: a vent in a
      * sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…
      * \"blobSize\":0)", 2026-09-28, and again on 2026-09-30 after the gate read gained its
