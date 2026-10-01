@@ -16,13 +16,13 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 /**
- * The galaxy as one connection to a server has been told about it: its planets and stars, and its
- * stations. Owned by the CONNECTION — kept on the netty channel, built when the connection is made
- * and gone with it — so nothing of one server can be read while connected to the next, and nothing
- * has to be cleared in between.
+ * What this client holds of the server it is connected to: the galaxy it has been told about (planets,
+ * stars, stations) and the configuration the server sent. Owned by the CONNECTION — kept on the netty
+ * channel, built when the connection is made and gone with it — so nothing of one server can be read
+ * while connected to the next, and nothing has to be cleared in between.
  *
  * <p>Looked up through FML's current play handler rather than the player: the server sends the galaxy
- * before the join-game packet, while the client has no player yet.</p>
+ * and its configuration before the join-game packet, while the client has no player yet.</p>
  */
 @SideOnly(Side.CLIENT)
 public final class ConnectionGalaxy {
@@ -32,27 +32,47 @@ public final class ConnectionGalaxy {
 
     public final DimensionManager dimensions;
     public final SpaceObjectManager spaceObjects;
+    /** The configuration the server sent, or {@code null}: a local server sends none. */
+    private volatile StellurgyConfiguration serverConfig;
 
     private ConnectionGalaxy() {
         this.dimensions = new DimensionManager(StellurgyConfiguration.getCurrentConfig().minDimension);
         this.spaceObjects = new SpaceObjectManager();
     }
 
+    /** The configuration the server sent, or {@code null} when it sent none. */
+    public StellurgyConfiguration serverConfig() {
+        return serverConfig;
+    }
+
+    /** Takes the configuration the server sent at login. It is sent once per connection. */
+    public void adoptServerConfig(StellurgyConfiguration config) {
+        if (serverConfig != null) {
+            throw new IllegalStateException("This connection already has the server's configuration; it is sent once, at login");
+        }
+        serverConfig = config;
+    }
+
     /**
-     * The galaxy of the connection this client has open.
+     * The connection this client has open.
      *
      * @throws IllegalStateException when the client has no open connection — there is then no server
      *                               whose galaxy could be meant
      */
     public static ConnectionGalaxy current() {
-        INetHandler handler = FMLClientHandler.instance().getClientPlayHandler();
-        if (handler instanceof NetHandlerPlayClient) {
-            ConnectionGalaxy galaxy = of(((NetHandlerPlayClient) handler).getNetworkManager());
-            if (galaxy != null) {
-                return galaxy;
-            }
+        ConnectionGalaxy galaxy = currentOrNull();
+        if (galaxy == null) {
+            throw new IllegalStateException("No open connection to a server: there is no galaxy on this client");
         }
-        throw new IllegalStateException("No open connection to a server: there is no galaxy on this client");
+        return galaxy;
+    }
+
+    /** The connection this client has open, or {@code null} when it has none. */
+    public static ConnectionGalaxy currentOrNull() {
+        INetHandler handler = FMLClientHandler.instance().getClientPlayHandler();
+        return handler instanceof NetHandlerPlayClient
+                ? of(((NetHandlerPlayClient) handler).getNetworkManager())
+                : null;
     }
 
     /**

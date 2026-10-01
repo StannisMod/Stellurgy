@@ -738,7 +738,7 @@ public class XMLPlanetLoader {
             // The planet-type table travels with the generator, and only with it: an authored-anchors-only
             // world has nothing that draws a type, so writing the presets there would put a section into
             // the file that nothing reads.
-            for (PlanetTypePreset preset : PlanetTypes.presets()) {
+            for (PlanetTypePreset preset : dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getPlanetTypes().presets()) {
                 galaxyElement.appendChild(writePlanetType(doc, preset));
             }
         }

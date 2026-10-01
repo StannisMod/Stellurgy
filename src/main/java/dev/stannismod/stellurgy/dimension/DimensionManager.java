@@ -84,6 +84,8 @@ public class DimensionManager implements IGalaxy {
      * load has chosen one.
      */
     private int moonId = Constants.INVALID_PLANET;
+    /** The planet types this save's worlds are typed from: its planet file's, or the code-shipped set. */
+    private dev.stannismod.stellurgy.universe.PlanetTypes planetTypes = dev.stannismod.stellurgy.universe.PlanetTypes.stock();
     private Random random;
     private boolean hasBeenInitialized = false;
     private HashMap<Integer, DimensionProperties> dimensionList;
@@ -146,6 +148,11 @@ public class DimensionManager implements IGalaxy {
     /** Asteroid kinds by id: the server's from its asteroid file, a client's as the server sent them. */
     public Map<String, Asteroid> getAsteroidTypes() {
         return asteroidTypes;
+    }
+
+    /** The planet types this save's worlds are typed from. */
+    public dev.stannismod.stellurgy.universe.PlanetTypes getPlanetTypes() {
+        return planetTypes;
     }
 
     /** The Moon's dimension, or {@link Constants#INVALID_PLANET} when none was made. */
@@ -1142,10 +1149,9 @@ public class DimensionManager implements IGalaxy {
             props.setStar(props.getStarId());
         }
 
-        // Install the authored planet-type table for the same reason and on the same terms: it is a
-        // JVM-global, so an absent (or trimmed) <planetType> section must restore the stock set rather
-        // than leave the previous world's presets standing.
-        dev.stannismod.stellurgy.universe.PlanetTypes.setPresets(
+        // The save's planet-type table: its file's <planetType> section, or the code-shipped set when
+        // the file states none.
+        planetTypes = dev.stannismod.stellurgy.universe.PlanetTypes.authored(
                 dimCouplingList == null ? null : dimCouplingList.planetTypes);
 
         // make sure to set dim offset back to original to make things consistant

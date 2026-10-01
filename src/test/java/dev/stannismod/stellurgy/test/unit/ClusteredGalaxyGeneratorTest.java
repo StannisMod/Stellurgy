@@ -1313,9 +1313,9 @@ public class ClusteredGalaxyGeneratorTest {
                                                SystemBody body) {
             BodyProfile profile = system.star().isPresent()
                     ? PlanetDerivation.derive(seed, anchor, body.name(), 0, system.star().get(), false,
-                            body.orbitalDistance())
+                            body.orbitalDistance(), dev.stannismod.stellurgy.universe.PlanetTypes.stock())
                     : PlanetDerivation.deriveRogue(seed, body.name(), 0,
-                            g.config().rogue.giantFraction);
+                            g.config().rogue.giantFraction, dev.stannismod.stellurgy.universe.PlanetTypes.stock());
             return "  derived " + anchor.cellKey() + ' ' + body.name().cellKey()
                     + " type=" + profile.typeName()
                     + " mass=" + Double.toString(profile.massEarths())

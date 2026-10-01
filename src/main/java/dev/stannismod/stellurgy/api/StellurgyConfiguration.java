@@ -56,9 +56,13 @@ public class StellurgyConfiguration {
     private static final Logger logger = LogManager.getLogger(Constants.modId);
 
     private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, harvestableGasses, spawnableGasses, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
-    private static StellurgyConfiguration currentConfig = new StellurgyConfiguration();
-    private static StellurgyConfiguration diskConfig;
-    private static boolean usingServerConfig = false;
+    /**
+     * This process's own configuration, read from its file at pre-init. Effectively final, client /
+     * dedicated-server lifetime: the reference is never replaced; its fields are filled by
+     * {@link #loadPreInit()} / {@link #loadPostInit()} and rewritten only by the operator reloads
+     * (config sync, {@code /addtorch}, {@code /addsealant}).
+     */
+    private static final StellurgyConfiguration ownConfig = new StellurgyConfiguration();
 
     // ASM compat fix for PlusTiC Portly tools rotating Stellurgy rockets on release.
 
@@ -479,33 +483,20 @@ public class StellurgyConfiguration {
         }
     }
 
+    /**
+     * The configuration in force for the CALLER: a server's own; on a client, the configuration the
+     * connected server sent, or the client's own when it sent none (a local server, which runs this
+     * very configuration) or there is no connection. Before Forge has injected the proxy no
+     * connection can exist, so the process's own is the answer.
+     */
     public static StellurgyConfiguration getCurrentConfig() {
-        if (currentConfig == null) {
-            logger.error("Had to generate a new config, this shouldn't happen");
-            return new StellurgyConfiguration();
-        }
-        return currentConfig;
-    }
-
-    public static void loadConfigFromServer(StellurgyConfiguration config) {
-        if (usingServerConfig)
-            throw new IllegalStateException("Cannot load server config when already using server config!");
-
-        diskConfig = currentConfig;
-        currentConfig = config;
-        usingServerConfig = true;
-    }
-
-    public static void useClientDiskConfig() {
-        if (usingServerConfig) {
-            currentConfig = diskConfig;
-            usingServerConfig = false;
-        }
+        dev.stannismod.stellurgy.common.CommonProxy proxy = dev.stannismod.stellurgy.Stellurgy.proxy;
+        return proxy == null ? ownConfig : proxy.configInForce(ownConfig);
     }
 
     public static void loadPreInit() {
 
-        StellurgyConfiguration stellurgyConfig = getCurrentConfig();
+        StellurgyConfiguration stellurgyConfig = ownConfig;
         net.minecraftforge.common.config.Configuration config = stellurgyConfig.config;
 
         //General
@@ -722,7 +713,7 @@ public class StellurgyConfiguration {
     }
 
     public static void loadPostInit() {
-        StellurgyConfiguration stellurgyConfig = getCurrentConfig();
+        StellurgyConfiguration stellurgyConfig = ownConfig;
 
         //Register fuels
         logger.info("Start registering liquid rocket fuels");
@@ -1178,8 +1169,9 @@ public class StellurgyConfiguration {
         return this;
     }
 
+    /** Writes this process's own configuration back to its file; a server's copy has no file here. */
     public void save() {
-        if (!usingServerConfig)
+        if (this == ownConfig)
             config.save();
     }
 

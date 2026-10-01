@@ -600,6 +600,21 @@ public class ClientProxy extends CommonProxy {
     }
 
     @Override
+    public dev.stannismod.stellurgy.api.StellurgyConfiguration configInForce(dev.stannismod.stellurgy.api.StellurgyConfiguration own) {
+        if (isServerThread()) {
+            return own;
+        }
+        ConnectionGalaxy connection = ConnectionGalaxy.currentOrNull();
+        dev.stannismod.stellurgy.api.StellurgyConfiguration sent = connection == null ? null : connection.serverConfig();
+        return sent == null ? own : sent;
+    }
+
+    @Override
+    public void adoptServerConfig(dev.stannismod.stellurgy.api.StellurgyConfiguration config) {
+        ConnectionGalaxy.current().adoptServerConfig(config);
+    }
+
+    @Override
     public dev.stannismod.stellurgy.dimension.DimensionManager connectionDimensions(net.minecraft.network.NetworkManager manager) {
         ConnectionGalaxy galaxy = ConnectionGalaxy.keptOn(manager);
         return galaxy == null ? null : galaxy.dimensions;

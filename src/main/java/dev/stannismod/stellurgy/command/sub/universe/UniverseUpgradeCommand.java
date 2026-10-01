@@ -95,7 +95,8 @@ public class UniverseUpgradeCommand extends StellurgyCommand {
         UniverseSchema schema = registry.adoptSchema(pack);
         // A schema version can be moved here and now: this build carries the new one, so the world can
         // start deriving under it immediately rather than after a restart.
-        UniverseRegistry.attachSchemaGenerator(schema.generator(pack));
+        UniverseRegistry.attachSchemaGenerator(schema.generator(pack,
+                dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getPlanetTypes()));
         // A CONFIGURATION change cannot be seen from inside a server that is running — a changed
         // <galaxyGen> stops the load before this command can be typed. So the permission is left here
         // for that load to spend.

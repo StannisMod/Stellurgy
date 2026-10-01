@@ -155,6 +155,16 @@ public class CommonProxy {
         return null;
     }
 
+    /** The configuration in force for the caller: a server always runs its own. */
+    public dev.stannismod.stellurgy.api.StellurgyConfiguration configInForce(dev.stannismod.stellurgy.api.StellurgyConfiguration own) {
+        return own;
+    }
+
+    /** Adopts the configuration a server sent to this client. A dedicated server receives none. */
+    public void adoptServerConfig(dev.stannismod.stellurgy.api.StellurgyConfiguration config) {
+        throw new IllegalStateException("a dedicated server is sent no server configuration");
+    }
+
     /** The running server's stations: a dedicated server has no other side to ask about. */
     public dev.stannismod.stellurgy.stations.SpaceObjectManager getSpaceObjectManager() {
         return dev.stannismod.stellurgy.Stellurgy.serverSpaceObjects();

@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import org.junit.After;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -40,12 +39,6 @@ import static org.junit.Assert.assertTrue;
 public class SystemRetinueTest {
 
     private static final long SEED = 0xA57E401DL;
-
-    @After
-    public void restoreGlobals() {
-        PlanetTypes.resetToStock();
-        PlanetTypes.setWorldTypeAvailability(null);
-    }
 
     private static GalacticCoord cell(long sx, long sy, long sz) {
         return GalacticCoord.ofSectorLocal(sx, sy, sz, 0L, 0L, 0L);

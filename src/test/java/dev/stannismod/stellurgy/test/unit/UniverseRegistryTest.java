@@ -1007,7 +1007,7 @@ public class UniverseRegistryTest {
         UniverseSchema v1 = UniverseSchemas.current();
 
         assertSame("the generator a schema builds must measure by that schema's laws",
-                v1.laws(), v1.generator(packConfig()).laws());
+                v1.laws(), v1.generator(packConfig(), dev.stannismod.stellurgy.universe.PlanetTypes.stock()).laws());
         assertEquals("and the stamp is that schema's laws, measured",
                 UniverseRegistry.lawsFingerprintOf(v1.laws()),
                 UniverseRegistry.currentLawsFingerprint());

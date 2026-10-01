@@ -1547,7 +1547,8 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         // wrong model would be placed wrongly and then persisted.
         UniverseSchema schema = reg.reconcileSchema(packGalaxyConfig);
         activeSchema = schema;
-        attachSchemaGenerator(schema.generator(packGalaxyConfig));
+        attachSchemaGenerator(schema.generator(packGalaxyConfig,
+                dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getPlanetTypes()));
         LOGGER.info("Universe schema {} ({}) in force, configuration {}", schema.version(),
                 schema.label(), reg.configFingerprint());
         if (!schema.isStable()) {

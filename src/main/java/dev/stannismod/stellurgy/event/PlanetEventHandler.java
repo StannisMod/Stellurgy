@@ -348,10 +348,9 @@ public class PlanetEventHandler {
 
     @SubscribeEvent
     public void disconnected(ClientDisconnectionFromServerEvent event) {
-        // Reload configs from disk
-        StellurgyConfiguration.useClientDiskConfig();
-        // The galaxy itself goes with the connection that owns it; what it left behind outside
-        // itself is the Forge dimension registrations its planets made on this client. Only a remote
+        // The galaxy and the configuration the server sent go with the connection that owns them; what
+        // the galaxy left behind outside itself is the Forge dimension registrations its planets made
+        // on this client. Only a remote
         // server's: in single player those are the integrated server's, which withdraws its own when
         // it stops.
         DimensionManager galaxy = dev.stannismod.stellurgy.Stellurgy.proxy.connectionDimensions(event.getManager());

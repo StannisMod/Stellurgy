@@ -265,7 +265,7 @@ public class VoidContentTest {
         // star, rather than a gap where the insolation used to be.
         ClusteredGalaxyGenerator gen = gen();
         GalacticCoord anchor = aRogueAnchor(gen);
-        BodyProfile profile = PlanetDerivation.deriveRogue(SEED, anchor, 0, GalaxyGenConfig.RogueTuning.physical().giantFraction);
+        BodyProfile profile = PlanetDerivation.deriveRogue(SEED, anchor, 0, GalaxyGenConfig.RogueTuning.physical().giantFraction, dev.stannismod.stellurgy.universe.PlanetTypes.stock());
 
         assertEquals(SystemBodyKind.ROGUE_PLANET, profile.kind());
         assertTrue("a starless world is colder than anything a star lights: " + profile.temperatureKelvin()
@@ -277,7 +277,7 @@ public class VoidContentTest {
         assertEquals("and no orbit of its own", SystemBody.ORBIT_UNKNOWN, profile.orbitalDistance());
         assertEquals("deterministic, like every other derived body",
                 profile.temperatureKelvin(),
-                PlanetDerivation.deriveRogue(SEED, anchor, 0, GalaxyGenConfig.RogueTuning.physical().giantFraction).temperatureKelvin());
+                PlanetDerivation.deriveRogue(SEED, anchor, 0, GalaxyGenConfig.RogueTuning.physical().giantFraction, dev.stannismod.stellurgy.universe.PlanetTypes.stock()).temperatureKelvin());
     }
 
     @Test
