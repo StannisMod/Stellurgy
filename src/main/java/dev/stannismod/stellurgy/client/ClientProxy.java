@@ -88,7 +88,6 @@ import dev.stannismod.stellurgy.tile.multiblock.machine.*;
 @Mod.EventBusSubscriber(value = Side.CLIENT)
 public class ClientProxy extends CommonProxy {
 
-    private static final dev.stannismod.stellurgy.dimension.DimensionManager dimensionManagerClient = new dev.stannismod.stellurgy.dimension.DimensionManager();
     private static final Map<ResourceLocation, WavefrontObject> models = new HashMap<>();
 
     public static WavefrontObject getModel(ResourceLocation location) {
@@ -405,6 +404,7 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void registerEventHandlers() {
         super.registerEventHandlers();
+        MinecraftForge.EVENT_BUS.register(ConnectionGalaxy.Events.class);
         MinecraftForge.EVENT_BUS.register(new RocketEventHandler());
         MinecraftForge.EVENT_BUS.register(new DelayedParticleRenderingEventHandler());
         MinecraftForge.EVENT_BUS.register(ModuleContainerPan.class);
@@ -585,9 +585,28 @@ public class ClientProxy extends CommonProxy {
         return biome.getBiomeName();
     }
 
+    /**
+     * In single player the integrated server runs in this process, so the side is the CALLER's: its
+     * threads are in Forge's server thread group, everything else here is the client.
+     */
     @Override
     public dev.stannismod.stellurgy.dimension.DimensionManager getDimensionManager() {
-        return dimensionManagerClient;
+        return isServerThread() ? super.getDimensionManager() : ConnectionGalaxy.current().dimensions;
+    }
+
+    @Override
+    public dev.stannismod.stellurgy.stations.SpaceObjectManager getSpaceObjectManager() {
+        return isServerThread() ? super.getSpaceObjectManager() : ConnectionGalaxy.current().spaceObjects;
+    }
+
+    @Override
+    public dev.stannismod.stellurgy.dimension.DimensionManager connectionDimensions(net.minecraft.network.NetworkManager manager) {
+        ConnectionGalaxy galaxy = ConnectionGalaxy.keptOn(manager);
+        return galaxy == null ? null : galaxy.dimensions;
+    }
+
+    private static boolean isServerThread() {
+        return FMLCommonHandler.instance().getEffectiveSide() == Side.SERVER;
     }
 
     private static class FluidStateMapper extends StateMapperBase {

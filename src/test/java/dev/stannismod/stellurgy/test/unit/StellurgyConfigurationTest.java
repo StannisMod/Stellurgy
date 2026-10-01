@@ -28,8 +28,7 @@ public class StellurgyConfigurationTest {
         assertNotNull(cfg.standardGeodeOres);
         assertNotNull(cfg.standardLaserDrillOres);
         assertNotNull(cfg.laserBlackListDims);
-        assertNotNull(cfg.initiallyKnownPlanets);
-        assertNotNull(cfg.asteroidTypes);
+        assertNotNull(cfg.blackHoleGeneratorBlocks);
     }
 
     @Test
@@ -62,15 +61,6 @@ public class StellurgyConfigurationTest {
     }
 
     @Test
-    public void planetConfigDefaultsStable() {
-        StellurgyConfiguration cfg = new StellurgyConfiguration();
-
-        // The Moon's dimension id starts unset (Constants.INVALID_PLANET) until config
-        // assigns it. Assertion is an "invalid" sentinel, not a number.
-        assertTrue("MoonId must default to a sentinel, not a real dim id", cfg.MoonId < 0 || cfg.MoonId == 0 || cfg.MoonId == Integer.MIN_VALUE);
-    }
-
-    @Test
     public void getCurrentConfigReturnsSingleton() {
         StellurgyConfiguration first = StellurgyConfiguration.getCurrentConfig();
         StellurgyConfiguration second = StellurgyConfiguration.getCurrentConfig();
@@ -99,42 +89,34 @@ public class StellurgyConfigurationTest {
      * so the deep-copy branch was dead and every {@code @ConfigProperty} collection
      * was shallow-copied by reference — a correctness landmine for the
      * server→client {@code PacketConfigSync} copy. This pins container
-     * independence across all three collection kinds (List, Set, Map).</p>
+     * independence for the collection kinds the config holds (List, Map).</p>
      */
     @Test
     public void cloneConstructorGivesIndependentCollections() {
         StellurgyConfiguration src = new StellurgyConfiguration();
-        src.laserBlackListDims.add(42);       // List
-        src.initiallyKnownPlanets.add(7);     // Set
-        src.asteroidTypes.put("c017-key", null); // Map
+        src.laserBlackListDims.add(42);              // List
+        src.blackHoleGeneratorBlocks.put(null, 7);   // Map
 
         StellurgyConfiguration copy = new StellurgyConfiguration(src);
 
         assertNotSame("copy must own an independent list (C017)",
                 src.laserBlackListDims, copy.laserBlackListDims);
-        assertNotSame("copy must own an independent set (C017)",
-                src.initiallyKnownPlanets, copy.initiallyKnownPlanets);
         assertNotSame("copy must own an independent map (C017)",
-                src.asteroidTypes, copy.asteroidTypes);
+                src.blackHoleGeneratorBlocks, copy.blackHoleGeneratorBlocks);
 
         // Mutating the copy must not leak into the source.
         copy.laserBlackListDims.add(99);
-        copy.initiallyKnownPlanets.add(99);
-        copy.asteroidTypes.put("c017-extra", null);
+        copy.blackHoleGeneratorBlocks.clear();
         assertEquals("mutating the copy's list must not touch the source",
                 1, src.laserBlackListDims.size());
-        assertEquals("mutating the copy's set must not touch the source",
-                1, src.initiallyKnownPlanets.size());
         assertEquals("mutating the copy's map must not touch the source",
-                1, src.asteroidTypes.size());
+                1, src.blackHoleGeneratorBlocks.size());
 
         // Contents must still be carried over by the copy.
         assertTrue("copy must contain the source's list element",
                 copy.laserBlackListDims.contains(42));
-        assertTrue("copy must contain the source's set element",
-                copy.initiallyKnownPlanets.contains(7));
-        assertTrue("copy must contain the source's map entry",
-                copy.asteroidTypes.containsKey("c017-key"));
+        assertEquals("copy must contain the source's map entry",
+                Integer.valueOf(7), new StellurgyConfiguration(src).blackHoleGeneratorBlocks.get(null));
     }
 
     /**
@@ -186,8 +168,6 @@ public class StellurgyConfigurationTest {
         assertEquals(0, cfg.standardGeodeOres.size());
         assertEquals(0, cfg.standardLaserDrillOres.size());
         assertEquals(0, cfg.laserBlackListDims.size());
-        assertEquals(0, cfg.initiallyKnownPlanets.size());
-        assertEquals(0, cfg.asteroidTypes.size());
 
         // Reading every uninitialised primitive must NOT throw NPE / underflow.
         // (Tripwire: if any of these become Integer/Float boxed, JVM-default

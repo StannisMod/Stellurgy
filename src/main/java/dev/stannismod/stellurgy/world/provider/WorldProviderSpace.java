@@ -119,6 +119,6 @@ public class WorldProviderSpace extends WorldProviderPlanet {
             if (spaceObject != null)
                 return (DimensionProperties) spaceObject.getProperties();
         }
-        return DimensionManager.defaultSpaceDimensionProperties;
+        return DimensionManager.getInstance().getDefaultSpaceProperties();
     }
 }

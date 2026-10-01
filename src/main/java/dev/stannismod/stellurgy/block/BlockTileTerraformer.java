@@ -116,17 +116,12 @@ public class BlockTileTerraformer extends RotatableBlock {
     public void onBlockPlacedBy(World world, BlockPos pos, IBlockState state, EntityLivingBase player, @Nonnull ItemStack itemstack) {
         super.onBlockPlacedBy(world, pos, state, player, itemstack);
         if (!world.isRemote) {
-
-            if (!DimensionProperties.proxylists.isinitialized(DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getId())){
-                DimensionProperties.proxylists.initdim(DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).getId());
-            }
-
-            DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).registerProtectingBlock(pos);
+            DimensionProperties.registerProtectingBlock(world, pos);
         }
     }
     public void breakBlock(World world, BlockPos pos, IBlockState state) {
         if (!world.isRemote)
-            DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).unregisterProtectingBlock(pos);
+            DimensionProperties.unregisterProtectingBlock(world, pos);
 
         TileEntity tile = world.getTileEntity(pos);
 

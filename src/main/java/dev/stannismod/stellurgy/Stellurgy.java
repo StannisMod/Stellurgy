@@ -105,7 +105,6 @@ import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
 import dev.stannismod.stellurgy.tile.satellite.TileTerraformingTerminal;
 import dev.stannismod.stellurgy.world.decoration.MapGenLander;
 import dev.stannismod.stellurgy.world.ore.OreGenerator;
-import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import dev.stannismod.stellurgy.world.type.WorldTypePlanetGen;
 import dev.stannismod.stellurgy.world.type.WorldTypeSpace;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
@@ -217,17 +216,10 @@ public class Stellurgy {
     * The two services above belong to the JVM. These two belong to the SERVER, and the difference is
     * in their names because it is a difference in lifetime, not in style.
     *
-    * <p>Both objects happen to be process-wide singletons, but their STATE is the running server's —
-    * station locations, orbits, temporary dimensions, the initialised flag, the save's planets — and
-    * each already has an {@code onServerStopped()} that empties it. So the reference this mod object
-    * publishes is attached when a server starts and RELEASED when it stops, exactly as
-    * {@code spaceSubsystem} beside it is: an API caller between servers is told there is no galaxy,
-    * rather than handed the last one's emptied object.</p>
-    *
-    * <p>This is not the end state. The right owner for state that belongs to a server is the server,
-    * and a process-wide singleton whose maps are cleared rather than replaced keeps a stale reference
-    * alive across saves. Attaching and releasing here makes the LIFETIME honest and is a strictly
-    * smaller change than moving the objects; the ownership question is recorded, not answered.</p>
+    * <p>Both are the running server's own objects ({@link #serverDimensions()},
+    * {@link #serverSpaceObjects()}), so the reference this mod object publishes is attached when a
+    * server starts and RELEASED when it stops, exactly as {@code spaceSubsystem} beside it is: an API
+    * caller between servers is told there is no galaxy.</p>
     */
     public void attachServerServices(ISpaceObjectManager manager, IGalaxy galaxy) {
         apiSpaceObjects = installOnce(apiSpaceObjects, manager, "the space object manager");
@@ -301,6 +293,62 @@ public class Stellurgy {
     }
 
     /**
+     * The running server's galaxy and its stations. Static by transitivity (fields of the mod object);
+     * effectively final, SERVER lifetime: built by {@link #beginServerLifetime()} when a server is about
+     * to start and released by {@link #endServerLifetime()} when it has stopped. Nothing in them is
+     * ever cleared for reuse — the next server builds its own.
+     */
+    private DimensionManager serverDimensions;
+    private SpaceObjectManager serverSpaceObjects;
+
+    /**
+     * The running server's galaxy.
+     *
+     * @throws IllegalStateException when no server is running
+     */
+    public static DimensionManager serverDimensions() {
+        DimensionManager dimensions = instance == null ? null : instance.serverDimensions;
+        if (dimensions == null) {
+            throw new IllegalStateException("No server is running: there is no server galaxy");
+        }
+        return dimensions;
+    }
+
+    /**
+     * The running server's stations.
+     *
+     * @throws IllegalStateException when no server is running
+     */
+    public static SpaceObjectManager serverSpaceObjects() {
+        SpaceObjectManager spaceObjects = instance == null ? null : instance.serverSpaceObjects;
+        if (spaceObjects == null) {
+            throw new IllegalStateException("No server is running: there are no server stations");
+        }
+        return spaceObjects;
+    }
+
+    /**
+     * Builds the state whose lifetime is one server. The server-start hook calls it; so does the
+     * headless test bootstrap, which runs no server and arranges the server's state the same way.
+     */
+    public void beginServerLifetime() {
+        if (serverDimensions != null || serverSpaceObjects != null) {
+            throw new IllegalStateException("A server lifetime is already open; a second begin is a lifecycle bug");
+        }
+        serverDimensions = new DimensionManager(dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().minDimension);
+        serverSpaceObjects = new SpaceObjectManager();
+    }
+
+    /** Releases the state {@link #beginServerLifetime()} built, undoing its Forge dimension registrations. */
+    public void endServerLifetime() {
+        if (serverDimensions != null) {
+            serverDimensions.unregisterAllDimensions();
+        }
+        serverDimensions = null;
+        serverSpaceObjects = null;
+    }
+
+    /**
      * Returns a player to the plain world — see {@link dev.stannismod.stellurgy.player.PlayerRelease}.
      *
      * <p><b>Lifetime: the MOD's, and stated because it differs from {@code spaceSubsystem} above.</b>
@@ -310,9 +358,8 @@ public class Stellurgy {
      * at mod init and left on the bus. So its lifetime is theirs; giving it a shorter one would say
      * something untrue about what it holds.</p>
      *
-     * <p>That the owners' own state is the SERVER's while their objects are the mod's is a real
-     * defect and a pre-existing one, recorded in {@code attachServerServices}' javadoc below. This
-     * class neither worsens nor fixes it.</p>
+     * <p>That the owners' own state is the SERVER's while their objects are the mod's is a real,
+     * pre-existing defect. This class neither worsens nor fixes it.</p>
      */
     private dev.stannismod.stellurgy.player.PlayerRelease playerRelease;
 
@@ -443,7 +490,6 @@ public class Stellurgy {
         MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.world.WorldRuntime.Attach.class);
 
         //Init API
-        DimensionManager.planetWorldProvider = WorldProviderPlanet.class;
         instance.installSealHandler(SealableBlockHandler.INSTANCE);
         SealableBlockHandler.INSTANCE.loadDefaultData();
 
@@ -636,7 +682,7 @@ public class Stellurgy {
 
 
         //Register Space Objects
-        SpaceObjectManager.getSpaceManager().registerSpaceObjectType("genericObject", SpaceStationObject.class);
+        SpaceObjectManager.registerSpaceObjectType("genericObject", SpaceStationObject.class);
 
 
         //Register item/block crap
@@ -1375,7 +1421,7 @@ public class Stellurgy {
         VSIntegration.init();
         // End compat stuff
 
-        MinecraftForge.EVENT_BUS.register(SpaceObjectManager.getSpaceManager());
+        MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.stations.SpaceObjectManagerEvents.class);
         // Keeps /time off the worlds whose skip is locked. Registered unconditionally: it stands
         // aside the moment no loaded world is locked, so the default-everything case pays nothing.
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.world.TimeCommandGuard());
@@ -1419,9 +1465,6 @@ public class Stellurgy {
         //TODO recipes?
         machineRecipes.registerXMLRecipes();
 
-        //Add the overworld as a discovered planet
-        dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets.add(0);
-
         TilePlugBase.energy_multiplier =  dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig(). blockEnergyHatchCapacityMultiplier;
         TileFluidHatch.capacityMultiplier =  dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().blockLiquidHatchCapacityMultiplier;
 
@@ -1431,9 +1474,9 @@ public class Stellurgy {
 
     @EventHandler
     public void serverStarted(FMLServerStartedEvent event) {
-        for (int dimId : DimensionManager.getInstance().getLoadedDimensions()) {
-            DimensionProperties properties = DimensionManager.getInstance().getDimensionProperties(dimId);
-            if (!properties.isNativeDimension && properties.getId() == dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId && !Loader.isModLoaded("GalacticraftCore")) {
+        for (int dimId : serverDimensions.getLoadedDimensions()) {
+            DimensionProperties properties = serverDimensions.getDimensionProperties(dimId);
+            if (!properties.isNativeDimension && properties.getId() == serverDimensions.getMoonId() && !Loader.isModLoaded("GalacticraftCore")) {
                 properties.isNativeDimension = true;
             }
         }
@@ -1449,14 +1492,14 @@ public class Stellurgy {
         // together in serverStopped. Here rather than in either object's constructor: a constructor
         // runs from its class's own static initialiser, at whatever moment something first touches
         // the class, which may be before Forge has assigned this mod instance at all.
-        attachServerServices(SpaceObjectManager.getSpaceManager(),
-                dev.stannismod.stellurgy.dimension.DimensionManager.getInstance());
+        attachServerServices(serverSpaceObjects, serverDimensions);
     }
 
     @EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
+        beginServerLifetime();
         // Populate dimension properties before worlds get loaded
-        DimensionManager.getInstance().createAndLoadDimensions(resetFromXml);
+        serverDimensions.createAndLoadDimensions(resetFromXml);
     }
 
     @EventHandler
@@ -1513,7 +1556,7 @@ public class Stellurgy {
         try {
             if (load.loadFile(file)) {
                 for (Asteroid asteroid : load.loadPropertyFile()) {
-                    dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().asteroidTypes.put(asteroid.ID, asteroid);
+                    serverDimensions.getAsteroidTypes().put(asteroid.ID, asteroid);
                 }
             }
         } catch (IOException e) {
@@ -1579,8 +1622,6 @@ public class Stellurgy {
     @EventHandler
     public void serverStopped(FMLServerStoppedEvent event) {
         dev.stannismod.stellurgy.wirelessdata.NetworkRegistry.clear();
-        dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().onServerStopped();
-        SpaceObjectManager.getSpaceManager().onServerStopped();
         dev.stannismod.stellurgy.space.SpaceSubsystem.onServerStopped();
         dev.stannismod.stellurgy.event.PlanetEventHandler.onServerStopped();
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
@@ -1588,11 +1629,9 @@ public class Stellurgy {
         detachServerServices();
         dev.stannismod.stellurgy.universe.UniverseRegistry.onServerStopped();
         AtmosphereHandler.clear();
-        dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId = Constants.INVALID_PLANET;
         ((BlockSeal) StellurgyBlocks.blockPipeSealer).clearMap();
-        DimensionManager.getInstance().setDimOffset(config.getInt("minDimension", "Planet", 2, -127, 8000, "Dimensions including and after this number are allowed to be made into planets"));
-        dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().spaceDimId = config.get(Configuration.CATEGORY_GENERAL, "spaceStationId", -2, "Dimension ID to use for space stations").getInt();
         WeightEngine.INSTANCE.save();
+        endServerLifetime();
     }
 
     @SubscribeEvent

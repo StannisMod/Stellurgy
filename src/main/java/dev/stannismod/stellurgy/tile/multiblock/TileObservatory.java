@@ -583,7 +583,7 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
 
             int g = 0;
             Asteroid asteroidSmol;
-            if (lastButton != -1 && lastType != null && !lastType.isEmpty() && (asteroidSmol = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(lastType)) != null) {
+            if (lastButton != -1 && lastType != null && !lastType.isEmpty() && (asteroidSmol = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().get(lastType)) != null) {
                 List<StackEntry> harvestList = asteroidSmol.getHarvest(lastSeed + lastButton, Math.max(1 - ((Math.min(getDataAmt(DataType.COMPOSITION), 2000) + Math.min(getDataAmt(DataType.MASS), 2000)) / 4000f), 0));
                 for (StackEntry entry : harvestList) {
                     ItemStack s = entry.stack;
@@ -621,12 +621,12 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
             int totalAmountAllowed = 10;
             float totalWeight = 0;
 
-            List<String> keys = new ArrayList<>(StellurgyConfiguration.getCurrentConfig().asteroidTypes.keySet());
+            List<String> keys = new ArrayList<>(dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().keySet());
             Collections.sort(keys);
 
             List<Asteroid> viableTypes = new LinkedList<>();
             for (String str : keys) {
-                Asteroid asteroid = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(str);
+                Asteroid asteroid = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().get(str);
                 if (asteroid != null && asteroid.distance <= getMaxDistance()) {
                     totalWeight += asteroid.getProbability();
                     viableTypes.add(asteroid);

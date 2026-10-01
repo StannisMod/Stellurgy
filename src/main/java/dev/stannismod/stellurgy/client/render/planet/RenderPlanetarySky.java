@@ -618,11 +618,11 @@ GL11.glPopMatrix();
         } else {
             children = new LinkedList<>();
             isMoon = false;
-            atmosphere = DimensionManager.overworldProperties.getAtmosphereDensityAtHeight(mc.getRenderViewEntity().posY);
-            solarOrbitalDistance = DimensionManager.overworldProperties.orbitalDist;
+            atmosphere = DimensionManager.getInstance().getOverworldProperties().getAtmosphereDensityAtHeight(mc.getRenderViewEntity().posY);
+            solarOrbitalDistance = DimensionManager.getInstance().getOverworldProperties().orbitalDist;
             sunColor = new Vec3d(1, 1, 1);
-            primaryStar = DimensionManager.overworldProperties.getStar();
-            properties = DimensionManager.overworldProperties;
+            primaryStar = DimensionManager.getInstance().getOverworldProperties().getStar();
+            properties = DimensionManager.getInstance().getOverworldProperties();
         }
 
         currentplanetphi = myPhi;

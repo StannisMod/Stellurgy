@@ -41,9 +41,9 @@ import static org.junit.Assert.assertTrue;
  * dim count is read on the client via the {@code invoke_static_chain} bridge
  * probe before and after a server kick.</p>
  *
- * <p><b>Corrected contract, pinned here (C031 fix, Path B)</b>: after a remote
- * disconnect the client's {@code DimensionManager.getRegisteredDimensions()} is
- * empty (was non-empty while connected).</p>
+ * <p><b>Contract pinned here</b>: leaving a remote server withdraws the dimension
+ * registrations its planets made on the client, and the client then holds no
+ * galaxy at all — the galaxy belongs to the connection and went with it.</p>
  */
 public class ClientDimensionClearOnDisconnectE2ETest {
 
@@ -227,17 +227,18 @@ public class ClientDimensionClearOnDisconnectE2ETest {
                         + " already-empty registry proves nothing about the ghost it exists to"
                         + " prevent: " + cleared, clearedDims > 0);
 
-        // The end state, read ONCE from production's own accessor. The event above is recorded at
-        // the clear's HEAD, one statement before the maps are emptied — so the chain says the clear
-        // RAN and this says the registry is EMPTY, which is a second claim and worth making. What
-        // it is NOT is a gap to poll: the statement between them is on the client's own thread and
-        // has completed before any probe round trip can be answered, so a hundred ticks of asking
-        // could only ever repeat the first answer. (The old form's own comment said "polled briefly
-        // and not read once", which is the shape this migration is removing wherever the gap turns
-        // out to be nothing.)
-        int after = clientStellurgyDimCount();
-        assertEquals("leaving a remote server must clear the client's Stellurgy dimension "
-                        + "registry (was " + before + ", the clear recorded " + cleared + ")",
-                0, after);
+        // The end state, read ONCE from production's own accessor: the galaxy belonged to the
+        // connection, so a client that has left holds none at all — not an empty one, which a reader
+        // could not tell from a server with no planets. The disconnect has completed before the
+        // probe round trip is answered, so this is a read, not a gap to poll.
+        String afterLeaving;
+        try {
+            afterLeaving = "answered " + clientHarness.bot().invokeStaticChain(DM_CLASS, "getInstance,getRegisteredDimensions");
+        } catch (java.io.IOException refused) {
+            afterLeaving = refused.getMessage();
+        }
+        assertTrue("a client that has left a server must hold no galaxy of it (had " + before
+                        + " dimensions; the clear recorded " + cleared + "): " + afterLeaving,
+                afterLeaving.contains("No open connection"));
     }
 }

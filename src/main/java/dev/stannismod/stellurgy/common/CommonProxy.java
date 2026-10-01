@@ -24,8 +24,6 @@ import java.util.LinkedList;
 
 public class CommonProxy {
 
-    private static final dev.stannismod.stellurgy.dimension.DimensionManager dimensionManagerServer = new dev.stannismod.stellurgy.dimension.DimensionManager();
-
     public void registerRenderers() {
 
     }
@@ -144,8 +142,22 @@ public class CommonProxy {
         return "";
     }
 
+    /** The running server's galaxy: a dedicated server has no other side to ask about. */
     public dev.stannismod.stellurgy.dimension.DimensionManager getDimensionManager() {
-        return dimensionManagerServer;
+        return dev.stannismod.stellurgy.Stellurgy.serverDimensions();
+    }
+
+    /**
+     * The galaxy kept on a CLIENT connection, open or closing, or {@code null} when it has none. A
+     * dedicated server holds no client connections, so it has none.
+     */
+    public dev.stannismod.stellurgy.dimension.DimensionManager connectionDimensions(net.minecraft.network.NetworkManager manager) {
+        return null;
+    }
+
+    /** The running server's stations: a dedicated server has no other side to ask about. */
+    public dev.stannismod.stellurgy.stations.SpaceObjectManager getSpaceObjectManager() {
+        return dev.stannismod.stellurgy.Stellurgy.serverSpaceObjects();
     }
 
     // atmosphere detector

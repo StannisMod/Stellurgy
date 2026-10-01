@@ -18,7 +18,6 @@ import org.apache.logging.log4j.Logger;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.integration.MatterOvedriveIntegration;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.util.SealableBlockHandler;
@@ -77,10 +76,11 @@ public class StellurgyConfiguration {
     public double warpTBIBurnMult = 10.0;
     @ConfigProperty(needsSync = true)
     public int dataBusBigMultiplier = 4;
-    @ConfigProperty
-    public int MoonId = Constants.INVALID_PLANET;
     @ConfigProperty(needsSync = true)
     public int spaceDimId = -2;
+    /** Lowest dimension id a planet may take; read once at pre-init. */
+    @ConfigProperty
+    public int minDimension = 2;
     // Movable-ship space subsystem (server-authoritative; loaded in loadPreInit, never network-synced).
     // There is deliberately NO enable flag here: space is the mod's subject rather than one of its
     // features, and it registers wherever the mod runs. See SpaceSubsystem.shouldRegister.
@@ -257,14 +257,10 @@ public class StellurgyConfiguration {
     public LinkedList<Block> blackListRocketBlocks = new LinkedList<>();
     @ConfigProperty
     public LinkedList<String> standardGeodeOres = new LinkedList<>();
-    @ConfigProperty(needsSync = true, internalType = Integer.class)
-    public HashSet<Integer> initiallyKnownPlanets = new HashSet<>();
     @ConfigProperty
     public boolean geodeOresBlackList;
     @ConfigProperty
     public boolean laserDrillOresBlackList;
-    @ConfigProperty(needsSync = true, keyType = String.class, valueType = Asteroid.class)
-    public HashMap<String, Asteroid> asteroidTypes = new HashMap<>();
     @ConfigProperty
     public int oxygenVentSize;
     @ConfigProperty
@@ -599,7 +595,7 @@ public class StellurgyConfiguration {
         stellurgyConfig.telescopeSurveyDataPerStep = config.get(PLANET, "telescopeSurveyDataPerStep", 0, "Distance data one step of a survey consumes, drawn from the observatory's data buses the same way its asteroid scan draws. A step with too little data waits rather than resolving, so an unfed instrument stalls instead of working for free. Zero (the default) means a survey costs nothing - what it should cost is a balance question, not a mechanic one.", 0, Integer.MAX_VALUE).getInt();
         stellurgyConfig.telescopeObscuredAtMagnitudes = config.get(PLANET, "telescopeObscuredAtMagnitudes", 5d, "How much dust a survey can see THROUGH, in magnitudes of visual extinction - the unit astronomy measures interstellar dust in. A nebula between the instrument and what it is looking at dims it; past this much, the survey can still tell that a system is there but can no longer make out its bodies, and writes the bare coordinate instead. The default is the real boundary at which faint objects behind a cloud disappear: ~1 magnitude is noticeable dimming, ~5 is where things start vanishing, ~10 is an opaque dark cloud. Raise it to see through thicker clouds; set it to 0 to turn concealment off entirely.", 0d, Double.MAX_VALUE).getDouble();
         stellurgyConfig.telescopePassiveRadiusSteps = config.get(PLANET, "telescopePassiveRadiusSteps", 1, "How far, in STAR TERRITORIES, the passive local radar reaches around the observatory's own. 0 is the system you are standing in and nothing else; 1 (the default) adds the twenty-six territories around it. Territories and not cells: one look already yields every body of the system that owns it, so a radius counted in cells never reached a neighbour at all - two cells was a fifth of the way to the innermost planet of the system the instrument was already standing in. Passive costs nothing; the pointing is what looks far away.", 0, Integer.MAX_VALUE).getInt();
-        DimensionManager.getInstance().setDimOffset(config.getInt("minDimension", PLANET, 2, -127, 8000, "Lowest dimension ID that can be used for planets."));
+        stellurgyConfig.minDimension = config.getInt("minDimension", PLANET, 2, -127, 8000, "Lowest dimension ID that can be used for planets.");
         stellurgyConfig.canPlayerRespawnInSpace = config.get(PLANET, "allowPlanetRespawn", false, "Allow bed respawn on planets with breathable air.").getBoolean();
         stellurgyConfig.forcePlayerRespawnInSpace = config.get(PLANET, "forcePlanetRespawn", false, "Allow bed respawn on planets even without breathable air. Requires 'allowPlanetRespawn=true'.").getBoolean();
         stellurgyConfig.perDimWorldInfo = config.get(PLANET, Constants.CONFIG_KEY_PER_DIM_WORLD_INFO, true, "Master switch for Stellurgy's per-dimension WorldInfo overrides on planets: per-planet weather AND per-planet time-of-day / working beds. When false, planets use the vanilla shared-overworld WorldInfo and NONE of the weather/time mixins are woven — fully classic behaviour. The sub-toggles below (enableCustomPlanetWeather) only take effect when this is true.").getBoolean();

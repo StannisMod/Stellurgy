@@ -60,7 +60,7 @@ public class AtmosphereHandler {
 
         //If O2 is allowed and
         DimensionProperties dimProp = DimensionManager.getInstance().getDimensionProperties(dimId);
-        if (StellurgyConfiguration.getCurrentConfig().enableOxygen && dimProp.hasSurface() && (StellurgyConfiguration.getCurrentConfig().overrideGCAir || dimId != StellurgyConfiguration.getCurrentConfig().MoonId || dimProp.isNativeDimension)) {
+        if (StellurgyConfiguration.getCurrentConfig().enableOxygen && dimProp.hasSurface() && (StellurgyConfiguration.getCurrentConfig().overrideGCAir || dimId != dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getMoonId() || dimProp.isNativeDimension)) {
 
             //dunno how, but double registering could happen.
             //don't let old registered handler survive in the background forever

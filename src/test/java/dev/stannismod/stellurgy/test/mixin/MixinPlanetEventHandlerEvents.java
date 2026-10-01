@@ -63,9 +63,9 @@ public abstract class MixinPlanetEventHandlerEvents {
     @Inject(method = "disconnected", at = @At("HEAD"))
     private void stellurgyTest$disconnected(ClientDisconnectionFromServerEvent event, CallbackInfo ci) {
         TestTrace.instrumentHere(INSTRUMENT);
-        // The same question production asks one line later, asked before it acts on the answer.
-        boolean remote = FMLCommonHandler.instance().getMinecraftServerInstance() == null;
-        DimensionManager manager = DimensionManager.getInstance();
+        // The same question production asks a few lines later, asked before it acts on the answer.
+        boolean remote = !event.getManager().isLocalChannel();
+        DimensionManager manager = dev.stannismod.stellurgy.Stellurgy.proxy.connectionDimensions(event.getManager());
         int dimsBefore;
         if (manager == null) {
             dimsBefore = -1;

@@ -26,10 +26,7 @@ import static org.junit.Assert.assertTrue;
  *       the {@link dev.stannismod.stellurgy.tile.multiblock.TileAtmosphereTerraformer};</li>
  *   <li>force-ticking the controller without a complete structure does NOT
  *       crash (the production path checks {@code isComplete} before doing
- *       any work);</li>
- *   <li>{@code /stellurgytest terraforming info} reports a consistent
- *       {@code proxyInitialized} state — the cross-cutting field every
- *       terraforming production path depends on.</li>
+ *       any work).</li>
  * </ol>
  *
  * <p>The atmosphere mutation path (set-density &rarr; real density change with
@@ -71,15 +68,6 @@ public class TerraformerMultiBlockCycleTest extends AbstractHeadlessServerTest {
                 "stellurgytest machine info 0 " + x + " " + y + " " + z));
         assertEquals("tile must survive tick burst: " + postInfo,
                 "TileAtmosphereTerraformer", MachineInfo.of(postInfo).tileSimpleName());
-
-        // Terraforming info must keep reporting proxyInitialized — the
-        // cross-cutting field every gameplay path depends on. (Production:
-        // DimensionProperties.proxyInitialized governs whether the
-        // terraforming-helper has been built lazily.)
-        String terraInfo = String.join("\n", client().execute(
-                "stellurgytest terraforming info 0"));
-        assertTrue("terraforming info missing proxyInitialized: " + terraInfo,
-                Reply.of(terraInfo).has("proxyInitialized"));
     }
 
     private static int extractInt(String s, String field) {

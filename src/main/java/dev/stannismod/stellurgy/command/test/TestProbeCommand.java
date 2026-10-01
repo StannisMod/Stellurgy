@@ -9608,8 +9608,8 @@ public class TestProbeCommand extends CommandBase {
             // /stellurgytest station warp-collision <destDim> [count] — C066 repro. Creates
             // `count` stations (default 3), puts ALL into the warp orbit (WARPDIMID) with
             // an already-elapsed transition, forces the "arrived" entry branch, then
-            // invokes SpaceObjectManager.onServerTick(null) directly and catches
-            // (onServerTick never dereferences its event arg). On the buggy live for-each
+            // invokes the station server-tick handler directly and catches
+            // (it never dereferences its event arg). On the buggy live for-each
             // (moveStationToBody removes the arriving station from the same list being
             // iterated) 3+ same-tick arrivals throw a ConcurrentModificationException (with
             // exactly 2 the LinkedList silently drops the 2nd instead — 3 exercises the
@@ -9645,7 +9645,7 @@ public class TestProbeCommand extends CommandBase {
             boolean threw = false;
             String exClass = "";
             try {
-                mgr.onServerTick(null);
+                dev.stannismod.stellurgy.stations.SpaceObjectManagerEvents.onServerTick(null);
             } catch (Throwable t) {
                 threw = true;
                 exClass = t.getClass().getSimpleName();
@@ -12959,22 +12959,18 @@ public class TestProbeCommand extends CommandBase {
             info.put("name", props.getName());
             info.put("originalAtmosphere", reflectInt(props, "originalAtmosphereDensity"));
             info.put("currentAtmosphere", props.getAtmosphereDensity());
-            // Safe access to terraforming proxy state — these methods may NPE if
-            // proxylists hasn't been initialized for the dim yet.
-            try {
-                boolean inited = DimensionProperties.proxylists.isinitialized(dim);
-                info.put("proxyInitialized", inited);
-                if (inited) {
-                    info.put("protectingBlockCount",
-                            DimensionProperties.proxylists.getProtectingBlocksForDimension(dim).size());
-                    info.put("chunksFullyTerraformed",
-                            DimensionProperties.proxylists.getChunksFullyTerraformed(dim).size());
-                    info.put("chunksFullyBiomeChanged",
-                            DimensionProperties.proxylists.getChunksFullyBiomeChanged(dim).size());
-                    info.put("helperPresent", DimensionProperties.proxylists.gethelper(dim) != null);
-                }
-            } catch (Exception e) {
-                info.put("proxyError", e.getClass().getSimpleName() + ": " + e.getMessage());
+            // Terraforming state lives in the planet's world, so it is readable only while that
+            // world is loaded.
+            net.minecraft.world.World world = net.minecraftforge.common.DimensionManager.getWorld(dim);
+            info.put("worldLoaded", world != null);
+            if (world != null) {
+                dev.stannismod.stellurgy.dimension.TerraformingRecord record =
+                        dev.stannismod.stellurgy.dimension.TerraformingRecord.of(world);
+                info.put("protectingBlockCount", record.protectingBlocks().size());
+                info.put("chunksFullyTerraformed", record.terraformedChunks().size());
+                info.put("chunksFullyBiomeChanged", record.biomeChangedChunks().size());
+                info.put("helperPresent",
+                        dev.stannismod.stellurgy.util.TerraformingHelper.of(world) != null);
             }
             send(sender, jsonMap(info));
             return;

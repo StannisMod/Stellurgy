@@ -34,7 +34,9 @@ public class AsteroidRecipeMaker {
 
         // Fallback: whatever Stellurgy already has in memory (better than nothing)
         try {
-            Map<String, Asteroid> map = StellurgyConfiguration.getCurrentConfig().asteroidTypes;
+            // Throws while the client has no connection — JEI loads at the title screen — which is
+            // the same answer the empty map used to give there.
+            Map<String, Asteroid> map = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes();
             if (map != null && !map.isEmpty()) {
                 cached = buildPagedFromMap(map);
                 cachedMTime = mtime;

@@ -49,8 +49,10 @@ public class TerraformingSmokeTest extends AbstractHeadlessServerTest {
                     target, mutated.integer(CURRENT));
             assertEquals("originalAtmosphere unexpectedly mutated: " + after,
                     original, mutated.integer(ORIG));
-            assertTrue("proxylists not reported: " + after,
-                    Reply.of(after).has("proxyInitialized"));
+            // A change of air is what sets the ground to change: the planet's world now has a
+            // terraforming helper working on it.
+            assertTrue("no terraforming helper on the planet's world after the atmosphere changed: " + after,
+                    Reply.of(after).bool("helperPresent"));
         } finally {
             client().execute("stellurgytest terraforming set-density 0 " + currentBefore);
         }

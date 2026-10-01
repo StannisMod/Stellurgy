@@ -2303,7 +2303,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
             ItemStack stack = storage.getGuidanceComputer().getStackInSlot(0);
 
-            Asteroid asteroid = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(((ItemAsteroidChip) stack.getItem()).getType(stack));
+            Asteroid asteroid = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().get(((ItemAsteroidChip) stack.getItem()).getType(stack));
 
             if (asteroid != null) {
                 asteroidDrillingMult = asteroid.timeMultiplier;

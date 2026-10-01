@@ -11,10 +11,10 @@ import java.lang.reflect.Field;
 /**
  * Idempotent helper that initializes:
  *   1. vanilla Minecraft static registries via {@link Bootstrap#register()};
- *   2. Stellurgy's {@code @SidedProxy} field with a plain {@link CommonProxy} instance,
- *      which transitively wires {@code DimensionManager} (its static
- *      {@code dimensionManagerServer} field is eagerly constructed when CommonProxy
- *      is loaded).
+ *   2. Stellurgy's {@code @SidedProxy} field with a plain {@link CommonProxy} instance, and its
+ *      {@code @Instance} field with a mod object, as Forge would;
+ *   3. one server lifetime on that mod object, opened by the same method the server-start hook
+ *      calls, so {@code DimensionManager.getInstance()} answers with the "server's" galaxy.
  *
  * Mod-specific registries (Stellurgy blocks, items, tile entities, packets) and the Forge
  * lifecycle (preInit/init/postInit) are NOT initialized — those require a real
@@ -71,20 +71,36 @@ public final class MinecraftBootstrap {
                 dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy = new dev.stannismod.stellurgy.libvulpes.common.CommonProxy();
             }
 
-            // 3. Register a deterministic "Sol" star with id=0 so that
-            // DimensionProperties.readFromNBT (line ~1646) can resolve
-            // DimensionManager.getInstance().getStar(0) without NPE.
-            // This mirrors the production world-load path where Sol is the first
-            // star registered in DimensionManager.preloadGalaxy.
-            if (DimensionManager.getInstance().getStar(0) == null) {
-                StellarBody sol = new StellarBody();
-                sol.setId(0);
-                sol.setName("Sol");
-                sol.setTemperature(100);
-                DimensionManager.getInstance().addStar(sol);
+            // 3. The mod object and one server lifetime on it.
+            if (Stellurgy.instance == null) {
+                Stellurgy.instance = new Stellurgy();
             }
+            Stellurgy.instance.beginServerLifetime();
+            registerSol();
 
             done = true;
         }
+    }
+
+    /**
+     * Ends the open server lifetime and begins the next, as a server stop and a server start do.
+     * The new galaxy is set up the way {@link #ensure()} sets up the first.
+     */
+    public static void restartServerLifetime() {
+        ensure();
+        Stellurgy.instance.endServerLifetime();
+        Stellurgy.instance.beginServerLifetime();
+        registerSol();
+    }
+
+    // A deterministic "Sol" star with id=0, so that DimensionProperties.readFromNBT can resolve
+    // DimensionManager.getInstance().getStar(0). This mirrors the production world-load path, where
+    // Sol is the first star registered.
+    private static void registerSol() {
+        StellarBody sol = new StellarBody();
+        sol.setId(0);
+        sol.setName("Sol");
+        sol.setTemperature(100);
+        DimensionManager.getInstance().addStar(sol);
     }
 }

@@ -804,7 +804,7 @@ public class XMLPlanetLoader {
         if (!properties.customIcon.isEmpty())
             nodePlanet.setAttribute(ATTR_ICON, properties.customIcon);
 
-        nodePlanet.appendChild(createTextNode(doc, ELEMENT_ISKNOWN, Boolean.toString(StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets.contains(properties.getId()))));
+        nodePlanet.appendChild(createTextNode(doc, ELEMENT_ISKNOWN, Boolean.toString(dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getInitiallyKnownPlanets().contains(properties.getId()))));
 
         if (properties.hasRings) {
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_HASRINGS, "true"));
@@ -1563,7 +1563,7 @@ public class XMLPlanetLoader {
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_ISKNOWN)) {
                 String text = planetPropertyNode.getTextContent();
                 if (text != null && text.equalsIgnoreCase("true")) {
-                    StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets.add(properties.getId());
+                    dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getInitiallyKnownPlanets().add(properties.getId());
                 }
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(GENERATECRATERS)) {
                 String text = planetPropertyNode.getTextContent();

@@ -116,9 +116,7 @@ public class PacketDimInfo extends BasePacket {
     @Override
     public void executeClient(EntityPlayer thePlayer) {
         if (deleteDim) {
-            if (DimensionManager.getInstance().isDimensionCreated(dimNumber)) {
-                DimensionManager.getInstance().deleteDimension(dimNumber);
-            }
+            DimensionManager.getInstance().forgetDimension(dimNumber);
         } else {
             dimProperties = new DimensionProperties(dimNumber);
             dimProperties.readFromNBT(dimNBT);

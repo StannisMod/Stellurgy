@@ -350,24 +350,19 @@ public class PlanetEventHandler {
     public void disconnected(ClientDisconnectionFromServerEvent event) {
         // Reload configs from disk
         StellurgyConfiguration.useClientDiskConfig();
-        // C031: clear stale client-side Stellurgy dimension data when leaving a REMOTE
-        // server so it doesn't bleed into the next server joined in the same
-        // client session. dimensionList/starList are a JVM-global singleton and
-        // PacketDimInfo only merges per-id — it never removes a dim that existed
-        // only on the previous server, so those linger as ghost planets/stars.
-        // Guarded to remote-only: in single-player the client and the integrated
-        // server share this DimensionManager, and the integrated server's own
-        // onServerStopped already clears it — clearing here mid-shutdown could
-        // race its save.
-        if (net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance() == null) {
-            DimensionManager.getInstance().unregisterAllDimensions();
+        // The galaxy itself goes with the connection that owns it; what it left behind outside
+        // itself is the Forge dimension registrations its planets made on this client. Only a remote
+        // server's: in single player those are the integrated server's, which withdraws its own when
+        // it stops.
+        DimensionManager galaxy = dev.stannismod.stellurgy.Stellurgy.proxy.connectionDimensions(event.getManager());
+        if (galaxy != null && !event.getManager().isLocalChannel()) {
+            galaxy.unregisterAllDimensions();
         }
         // Released here, by the owner: the warp flash is this CLIENT's, and its end time is a moment
         // on the world it was started in. Carried across the gap it is compared against the NEXT
         // world's clock, which knows nothing about it — so the overlay either draws for no reason or
         // is already expired, and which one you get depends on where that world's day count happens
-        // to stand. Unconditional, unlike the dimension sweep above: nothing but this client writes
-        // these two, so there is no integrated server whose shutdown could be raced.
+        // to stand. Nothing but this client writes these two.
         endTime = 0;
         duration = 0;
     }
@@ -414,12 +409,6 @@ public class PlanetEventHandler {
         }
     }
 
-    @SubscribeEvent
-    public void tickClient(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END)
-            DimensionManager.getInstance().tickDimensionsClient();
-    }
-
     //Make sure the player receives data about the dimensions
     @SubscribeEvent
     public void playerLoggedInEvent(ServerConnectionFromClientEvent event) {
@@ -440,6 +429,13 @@ public class PlanetEventHandler {
         for (ISpaceObject spaceObject : SpaceObjectManager.getSpaceManager().getSpaceObjects()) {
             PacketHandler.sendToDispatcher(new PacketSpaceStationInfo(spaceObject.getId(), spaceObject), event.getManager());
         }
+
+        // Sent to a local client too: it keeps its own copy of the galaxy, as a remote one does.
+        for (dev.stannismod.stellurgy.util.Asteroid asteroid : DimensionManager.getInstance().getAsteroidTypes().values()) {
+            PacketHandler.sendToDispatcher(new dev.stannismod.stellurgy.network.PacketAsteroidInfo(asteroid), event.getManager());
+        }
+        PacketHandler.sendToDispatcher(new dev.stannismod.stellurgy.network.PacketKnownPlanets(
+                DimensionManager.getInstance().knownPlanets), event.getManager());
 
         PacketHandler.sendToDispatcher(new PacketDimInfo(0, DimensionManager.getInstance().getDimensionProperties(0)), event.getManager());
     }

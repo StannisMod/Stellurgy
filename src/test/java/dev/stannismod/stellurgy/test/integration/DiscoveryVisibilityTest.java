@@ -51,7 +51,7 @@ public class DiscoveryVisibilityTest {
     public void isKnownXmlFlagDrivesInitialKnownSet() throws Exception {
         int knownDim = 7901;
         int unknownDim = 7902;
-        Set<Integer> initSet = StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets;
+        Set<Integer> initSet = DimensionManager.getInstance().getInitiallyKnownPlanets();
         boolean hadKnown = initSet.contains(knownDim);
         boolean hadUnknown = initSet.contains(unknownDim);
         try {
