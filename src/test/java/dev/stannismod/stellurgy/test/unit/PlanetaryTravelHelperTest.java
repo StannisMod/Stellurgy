@@ -203,10 +203,7 @@ public class PlanetaryTravelHelperTest {
 
     @Test
     public void transbodyInjectionBurnIsPositiveForIntraSystemTravel() {
-        // Production line 53: if intra-system, returns
-        //   baseInjectionHeight * sqrt(distanceMultiplier).
-        // With TEST_BASE_INJECTION=100 and moon.orbitalDist=250
-        // (multiplier=2.5), the formula yields 100*sqrt(2.5) ~= 158.
+        // If intra-system, the burn is baseInjectionHeight * sqrt(distanceMultiplier).
         // Pin "positive" without coupling to the exact integer —
         // any regression returning 0 or negative is caught.
         int burn = PlanetaryTravelHelper
@@ -216,6 +213,37 @@ public class PlanetaryTravelHelperTest {
                         + StellurgyConfiguration.getCurrentConfig().transBodyInjection
                         + " moon.orbitalDist=" + MOON_ORBITAL_DIST,
                 burn > 0);
+    }
+
+    /**
+     * A trip between a planet and its moon, in either direction, is lengthened by the moon's
+     * distance read as it was read while Luna stood at 150: {@code moonViewUnits / 100}, so 1.5 for
+     * Luna and in proportion for any other moon.
+     *
+     * <p>Acceptance, stated before the code: the moon here stands at {@code MOON_ORBITAL_DIST} = 250
+     * units, so both directions read {@code 150 x 250 / 3 844 / 100} (about 0.0976), within 1e-12 of
+     * double rounding — one verdict over both. Read raw, both read 2.5.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code PlanetaryTravelHelper#moonBurnMultiplier} at
+     * {@code return AstronomicalBodyHelper.moonViewUnits(moon.getOrbitalDist()) / MOON_VIEW_UNITS_PER_BASE_BURN}
+     * back on the raw distance ({@code moon.getOrbitalDist() / 100d}), this fails with "planet to
+     * moon, then moon to planet: [2.5, 2.5]: arrays first differed at element [0];
+     * expected:&lt;0.09755463059313214&gt; but was:&lt;2.5&gt;"; and with
+     * {@code AstronomicalBodyHelper#moonViewUnits} at
+     * {@code return MOON_VIEW_UNITS_AT_LUNA * (orbitalDistance / (double) MOON_REFERENCE_UNITS)}
+     * replaced by {@code return MOON_VIEW_UNITS_AT_LUNA}, with "[1.5, 1.5] … but was:&lt;1.5&gt;".</p>
+     */
+    @Test
+    public void aBurnBetweenAPlanetAndItsMoonReadsTheMoonAsLunaWasReadAt150() {
+        // 150 and 100 are the contract, not production's constants read back: Luna's view distance
+        // and the view units per base burn, as they stood before Luna's distance was corrected.
+        double expected = 150d * MOON_ORBITAL_DIST
+                / dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS / 100d;
+        double[] actual = {
+                PlanetaryTravelHelper.getBodyDistanceMultiplier(PLANET_A, MOON_OF_A, false),
+                PlanetaryTravelHelper.getBodyDistanceMultiplier(MOON_OF_A, PLANET_A, false)};
+        org.junit.Assert.assertArrayEquals("planet to moon, then moon to planet: "
+                + java.util.Arrays.toString(actual), new double[]{expected, expected}, actual, 1e-12);
     }
 
     @Test

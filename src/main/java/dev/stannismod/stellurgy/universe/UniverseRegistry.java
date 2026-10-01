@@ -433,10 +433,15 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     // ─── System content (bodies + POIs) ────────────────────────────────────────
 
     /**
-     * The ZONE read (A#1a sub-decision c): the bodies whose own cell IS {@code coord}'s cell — the one
-     * body whose orbital zone this cell hosts (or none: an inter-body void cell), any moons sharing the
-     * parent's cell, plus the POIs keyed at this cell. Consumers: the descent trigger, the wells query,
-     * entry placement. For the whole system, use {@link #systemBodiesAt}.
+     * The CELL read: the bodies whose own cell IS {@code coord}'s cell — the one body whose zone this
+     * cell hosts (or none: an inter-body void cell) — plus the POIs keyed at this cell. For the whole
+     * system, use {@link #systemBodiesAt}.
+     *
+     * <p><b>A moon of that body is NOT in this list.</b> It has a cell of its own inside the body's
+     * zone, so it is only ever in the list for ITS cell. This used to say the opposite, and a caller
+     * that reads "the bodies near here" out of that sentence gets a list that can never hold a moon —
+     * which is exactly what silently killed the descent trigger for every moon in the game. Anything
+     * asking what a craft can REACH wants {@link #skyBodiesAt} and a distance.</p>
      */
     public List<SystemBody> bodiesAt(GalacticCoord systemCoord) {
         GalacticCoord cell = systemCoord.cellCentre();
@@ -449,23 +454,32 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 }
             }
         }
-        addPoisOf(cell, frameOf(bodies, cell), bodies);
+        addPoisOf(cell, bodies, bodies);
         return bodies;
     }
 
     /**
-     * Append the POIs keyed at {@code cell}, re-bound to {@code frame}.
+     * Append the POIs keyed at {@code cell}, re-bound to the frame that cell rides.
      *
      * <p>A POI is persisted as a name plus an offset — which frame that cell rides is a property of
      * the CELL and is resolved here. Without the rebinding an orbital station in a planet's cell
      * would keep a static frame while the planet's own cell moved, so the two would drift apart at
      * orbital speed while sharing one address.</p>
+     *
+     * <p><b>The frame is resolved only if there is a POI to bind</b>, and that is not an
+     * optimisation. The fallback for a cell no body stands in is a STATIC frame, and building one
+     * asks a zoned cell where it is statically — which a cell inside a MOON's zone cannot answer:
+     * placing it needs its parent zone's lattice width, and a cell key does not carry one, so
+     * {@code AbsolutePos.ofCellName} throws rather than guess. Computing that eagerly threw out of
+     * every read of an empty cell in a moon's zone, which is where a craft parked beside a moon
+     * lives.</p>
      */
-    private void addPoisOf(GalacticCoord cell, CellFrame frame, List<SystemBody> out) {
+    private void addPoisOf(GalacticCoord cell, List<SystemBody> bodiesHere, List<SystemBody> out) {
         List<SystemBody> pois = poiOverrides.get(cell.cellCentre().cellKey());
-        if (pois == null) {
+        if (pois == null || pois.isEmpty()) {
             return;
         }
+        CellFrame frame = frameOf(bodiesHere, cell);
         for (SystemBody poi : pois) {
             out.add(poi.withFrame(frame));
         }
@@ -507,9 +521,38 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             }
         }
         for (GalacticCoord cell : seenCells) {
-            addPoisOf(cell, frameOf(bodies, cell), out);
+            addPoisOf(cell, bodies, out);
         }
         return out;
+    }
+
+    /**
+     * The edge length, in blocks, of one cell of the lattice inside {@code zoneCell}'s zone —
+     * <b>read off the names of the bodies that live in it</b>, never re-derived.
+     *
+     * <p>A zone has exactly one lattice, and it was sized once, when its children were named
+     * ({@code SystemContent.moonCellIn}): the size depends on the innermost child, which only the
+     * naming pass sees in full. Any later caller that needs the width — a crossing re-addressing a
+     * craft, say — must read the answer rather than compute a second one, because the width is
+     * deliberately absent from a cell key ({@link GalacticCoord#cellBlocks()}): two lattices do not
+     * conflict, they silently produce different names for the same place.</p>
+     *
+     * <p>{@link GalacticCoord#WIDTH_UNKNOWN} when this zone names no body — which is a real answer
+     * and not a failure: a zone with nothing to name apart is undivided, and the caller can say so
+     * in its own terms. It is also the answer when the registry cannot attribute the cell.</p>
+     */
+    public long zoneLatticeBlocks(GalacticCoord zoneCell) {
+        if (zoneCell == null) {
+            return GalacticCoord.WIDTH_UNKNOWN;
+        }
+        String zoneKey = zoneCell.cellKey();
+        for (SystemBody b : systemBodiesAt(zoneCell)) {
+            GalacticCoord name = b == null ? null : b.name();
+            if (name != null && zoneKey.equals(name.zone()) && name.cellBlocks() > 0L) {
+                return name.cellBlocks();
+            }
+        }
+        return GalacticCoord.WIDTH_UNKNOWN;
     }
 
     /**
@@ -679,9 +722,20 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
 
     /**
      * The absolute position of the frame origin of the cell NAMED by {@code name}, at {@code tick} —
-     * the position of that cell's PRIMARY. A cell with no primary is void and its origin is the
-     * static {@code sector * CELL}, which is also the answer when the registry cannot attribute the
-     * cell to any system at all.
+     * the position of that cell's PRIMARY.
+     *
+     * <p>Three answers, in order.</p>
+     * <ol>
+     *   <li><b>A body stands here</b> and defines a frame: its position at the tick.</li>
+     *   <li><b>The cell is EMPTY but sits inside a ZONE</b>: the zone's body at the tick, displaced by
+     *       this cell's fixed offset in that zone's lattice. Every cell of a zone rides the zone's
+     *       body, occupied or not — that is what a zone IS — and this is the clause that makes it
+     *       true. Without it an empty cell of Earth's zone took the static answer below and rode
+     *       NOTHING, so a craft that flew out of Luna's cell stopped being carried by anything at
+     *       all: it left one frame and was handed no other.</li>
+     *   <li><b>Otherwise</b> the cell is void in the galactic lattice and stands still, which is also
+     *       the answer when the registry cannot attribute the cell to any system.</li>
+     * </ol>
      */
     @Override
     public AbsolutePos originAt(GalacticCoord name, long tick) {
@@ -692,6 +746,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             if (b.definesFrame()) {
                 return b.frame().originAt(tick);
             }
+        }
+        GalacticCoord zone = name.zone() == null ? null : GalacticCoord.fromCellKey(name.zone());
+        if (zone != null && name.cellBlocks() > 0L) {
+            long width = name.cellBlocks();
+            return originAt(zone, tick).plus(name.sectorX() * width, name.sectorY() * width,
+                    name.sectorZ() * width);
         }
         return AbsolutePos.ofCellName(name);
     }

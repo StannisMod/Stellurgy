@@ -31,7 +31,8 @@ public class RenderSpaceSky extends RenderPlanetarySky {
         super();
     }
 
-    protected void drawStar(BufferBuilder buffer, StellarBody sun, DimensionProperties properties, int solarOrbitalDistance, float sunSize, Vec3d sunColor, float multiplier) {
+    @Override
+    protected void drawStar(BufferBuilder buffer, StellarBody sun, DimensionProperties properties, long solarOrbitalDistance, float sunSize, Vec3d sunColor, float multiplier) {
         DimensionProperties parentProperties = properties.getParentProperties();
         if (parentProperties != null && sun != parentProperties.getStarData())
             super.drawStar(buffer, sun, properties, solarOrbitalDistance, sunSize, sunColor, multiplier);
@@ -73,7 +74,7 @@ public class RenderSpaceSky extends RenderPlanetarySky {
 
                 GL11.glPushMatrix();
 
-                f10 = size * 2f * AstronomicalBodyHelper.getBodySizeMultiplier(planetOrbitalDistance);
+                f10 = size * 2f * AstronomicalBodyHelper.getSizeMultiplierAtHeight(planetOrbitalDistance);
 
                 GlStateManager.color(0, 0, 0);
                 GlStateManager.disableCull();
@@ -102,7 +103,7 @@ public class RenderSpaceSky extends RenderPlanetarySky {
 
                 GlStateManager.color((float) 1, (float) .7, (float) .5, 1f);
                 buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                f10 = size * 7f * AstronomicalBodyHelper.getBodySizeMultiplier(planetOrbitalDistance);
+                f10 = size * 7f * AstronomicalBodyHelper.getSizeMultiplierAtHeight(planetOrbitalDistance);
                 buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
                 buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
                 buffer.pos(f10, 0.0D, f10).tex(1.0D, 1.0D).endVertex();
@@ -122,7 +123,7 @@ public class RenderSpaceSky extends RenderPlanetarySky {
 
                     GlStateManager.color((float) 1, (float) .5, (float) .4, 1f);
                     buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                    f10 = size * 40f * AstronomicalBodyHelper.getBodySizeMultiplier(planetOrbitalDistance);
+                    f10 = size * 40f * AstronomicalBodyHelper.getSizeMultiplierAtHeight(planetOrbitalDistance);
                     buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
                     buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
                     buffer.pos(f10, 0.0D, f10).tex(1.0D, 1.0D).endVertex();
@@ -138,7 +139,7 @@ public class RenderSpaceSky extends RenderPlanetarySky {
 
                     GlStateManager.color((float) 0.8, (float) .7, (float) .4, 1f);
                     buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                    f10 = size * 30f * AstronomicalBodyHelper.getBodySizeMultiplier(planetOrbitalDistance);
+                    f10 = size * 30f * AstronomicalBodyHelper.getSizeMultiplierAtHeight(planetOrbitalDistance);
                     //multiplier = 2;
                     buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
                     buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
@@ -155,7 +156,7 @@ public class RenderSpaceSky extends RenderPlanetarySky {
 
                     GlStateManager.color((float) 0.2, (float) .4, (float) 1, 1f);
                     buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                    f10 = size * 15f * AstronomicalBodyHelper.getBodySizeMultiplier(planetOrbitalDistance);
+                    f10 = size * 15f * AstronomicalBodyHelper.getSizeMultiplierAtHeight(planetOrbitalDistance);
                     //multiplier = 2;
                     buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
                     buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
@@ -170,7 +171,7 @@ public class RenderSpaceSky extends RenderPlanetarySky {
                 //Set sun color and distance
                 GlStateManager.color(properties.getStar().getColor()[0], properties.getStar().getColor()[1], properties.getStar().getColor()[2], 1);
                 buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                float f10 = properties.getStar().getSize() * 15f * AstronomicalBodyHelper.getBodySizeMultiplier(planetOrbitalDistance);
+                float f10 = properties.getStar().getSize() * 15f * AstronomicalBodyHelper.getSizeMultiplierAtHeight(planetOrbitalDistance);
                 //multiplier = 2;
                 GL11.glPushMatrix();
                 GL11.glRotatef(60, -60, 0, 1);
@@ -213,7 +214,7 @@ public class RenderSpaceSky extends RenderPlanetarySky {
         //int i1 = k / 4 % 2;
 
         //Set planet Orbiting distance; size
-        float f10 = 100f * AstronomicalBodyHelper.getBodySizeMultiplier(planetOrbitalDistance);
+        float f10 = 100f * AstronomicalBodyHelper.getSizeMultiplierAtHeight(planetOrbitalDistance);
 
         float Xoffset = (float) ((System.currentTimeMillis() / 1000000d % 1));
 

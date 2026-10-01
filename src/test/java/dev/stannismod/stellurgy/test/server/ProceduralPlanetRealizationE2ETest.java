@@ -218,6 +218,53 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
     }
 
     /**
+     * <b>A realized moon is listed under its PLANET, never among its star's planets.</b>
+     *
+     * <p>A star's planet list is what the system's authored content, the star map and the hologram
+     * walk to find the bodies that orbit the STAR; a moon is reached through its parent's children.
+     * {@code DimensionProperties#setStar} keeps moons out of that list on purpose. A moon listed there
+     * too is a second account of one body: drawn at its own small orbit as though about the star, and
+     * built into the system as a planet as well as a moon.</p>
+     *
+     * <p>Positive half on the same read: the moon's parent IS listed, so an empty or unread list cannot
+     * pass the verdict.</p>
+     *
+     * <p>red-witnessed: 2026-10-01, on the code as it stood before the fix — {@code PlanetRealizer#materialize}
+     * at {@code props.setStar(star)} called before the parent was set, plus a second
+     * {@code star.addPlanet(props)} after registration: "moon 15 must be listed under its planet 14,
+     * not among its star's planets [14, 15]".</p>
+     */
+    @Test
+    public void aRealizedMoonIsNotListedAmongItsStarsPlanets() throws Exception {
+        String installed = exec(GEN_INSTALL);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the procedural generator must install: " + installed, Reply.of(installed).ok());
+        String found = exec("stellurgytest space find-moon " + SWEEP_RADIUS);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "a dense procedural galaxy must offer a planet with a moon: " + found, Reply.of(found).ok());
+
+        RealizedBody parent = RealizedBody.at(this::exec, jsonString(found, "parentCellKey"),
+                jsonInt(found, "parentVariant"));
+        RealizedBody moon = RealizedBody.at(this::exec, jsonString(found, "cellKey"),
+                jsonInt(found, "moonVariant"));
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the realized moon must be a moon of the realized planet: moon " + moon.raw()
+                        + " / parent " + parent.raw(), moon.moon && moon.parent == parent.dim);
+
+        Reply moonInfo = Reply.of(exec("stellurgytest planet info " + moon.dim));
+        Reply star = Reply.of(exec("stellurgytest star get " + moonInfo.integer("starId")));
+        java.util.List<Integer> listed = new java.util.ArrayList<>();
+        for (int dim : star.intArray("planetDims")) {
+            listed.add(dim);
+        }
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the moon's parent planet must be listed under the star (the positive half): " + star,
+                listed.contains(parent.dim));
+        assertFalse("moon " + moon.dim + " must be listed under its planet " + parent.dim
+                + ", not among its star's planets " + listed + ": " + star, listed.contains(moon.dim));
+    }
+
+    /**
      * <b>A gas giant's moon is a moon, and its parent never becomes a place you can stand.</b>
      *
      * <p>The half of the same defect that is not an ordering accident. A gas giant is not a descent
