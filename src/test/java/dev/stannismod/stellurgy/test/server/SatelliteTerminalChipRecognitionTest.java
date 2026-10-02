@@ -57,13 +57,16 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  *       compound is cleared.</li>
  * </ul>
  *
- * <p>Out of scope: status 2 (out-of-range). Pinning this branch requires a
- * second dim that's in a different planetary system, which the shared
- * harness doesn't provide as a pre-registered fixture. The branch is
- * defended by {@link
- * dev.stannismod.stellurgy.test.unit.PlanetaryTravelHelperTest} at the
- * helper level; chaining that into the terminal's dispatch is impl, not a
- * contract divergence.
+ * <p>NOT pinned here, and pinned nowhere at this consumer: status 2 (out of range), and the
+ * terminal's own use of the range decision ({@code TileSatelliteTerminal}'s link check before a
+ * download and its "connect" button). The {@code satellite-terminal info} probe computes its status
+ * ladder itself, so a status 2 read through it would be the probe's verdict, not the terminal's.
+ * The range decision the terminal asks — whether two worlds share a planetary system — is pinned
+ * where a player meets it at launch, by
+ * {@link RocketLaunchDepthTest#aRocketOnAPlanetMayGoToItsOwnMoonButNotToAnotherPlanetOrItsMoon} and
+ * {@link RocketLaunchDepthTest#aRocketOnAMoonMayGoToItsPlanetAndASiblingMoonButNotToAnotherPlanet};
+ * that the terminal passes the satellite's world and its own to it the right way round is not seen
+ * by any test.
  */
 public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTest {
 

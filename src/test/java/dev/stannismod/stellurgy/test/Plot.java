@@ -161,6 +161,28 @@ public final class Plot {
         return new Plot(index, owner, dim, lane);
     }
 
+    private Plot(Plot same, int dim) {
+        this.index = same.index;
+        this.owner = same.owner;
+        this.dim = dim;
+        this.originX = same.originX;
+        this.originZ = same.originZ;
+        this.size = same.size;
+    }
+
+    /**
+     * THIS scenario's patch of ground in ANOTHER world — the same footprint, in {@code dim}.
+     *
+     * <p>For a scenario whose subject stands somewhere other than the overworld (a craft built on a
+     * moon). The non-overlap argument carries over unchanged: the footprint is a function of this
+     * plot's index, which is unique within the allocating class, so no sibling scenario of the class
+     * is handed the same footprint in any world. It is a separate plot object with its own record of
+     * cleared volumes, because two worlds' volumes cannot reach into each other.</p>
+     */
+    public Plot inDimension(int dim) {
+        return new Plot(this, dim);
+    }
+
     /**
      * How far into the plot a fixture stands. Leaves {@value} blocks of margin on the low side and
      * {@code size - 1 - INSET - FixtureSite.PAD} on the high side, so a fixture's working envelope

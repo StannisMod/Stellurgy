@@ -4,12 +4,20 @@ import dev.stannismod.stellurgy.test.GameTicks;
 
 import org.junit.Test;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.test.ArrangementFailure;
+import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.NavStatus;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.TelescopeReading;
+import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
+import dev.stannismod.stellurgy.universe.Nebula;
+import dev.stannismod.stellurgy.universe.StellarMagnitude;
+import dev.stannismod.stellurgy.universe.UniverseScale;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -18,10 +26,14 @@ import static org.junit.Assert.assertTrue;
 /**
  * The observatory's region survey, driven on a real server through the machine itself.
  *
- * <p>The unit tier pins the survey's arithmetic; this pins the MACHINE: that an observatory can be
- * aimed at a region, that it sweeps through it on the world's own clock when research is on and
- * resolves it outright when research is off, that stopping and re-aiming cost nothing but the cell in
- * flight, and that what it resolved is written onto the crystal sitting in the machine.</p>
+ * <p>The unit tier pins the arithmetic that reads no mod state — the cone's geometry, the reach a look
+ * budget leaves, and the photometry LAW a star's brightness is computed by. This pins the MACHINE: that
+ * an observatory can be aimed at a region, that it sweeps through it on the world's own clock when
+ * research is on and resolves it outright when research is off, that stopping and re-aiming cost
+ * nothing but the cell in flight, and that what it resolved is written onto the crystal sitting in the
+ * machine — and, in the scenarios at the end, what the instrument makes of a star with the SHIPPED
+ * aperture, what dust costs a look, and what a look teaches the world it is made from. Those read the
+ * running configuration and the galaxy, which is why they are here and not in the unit tier.</p>
  *
  * <p>Every number here is the SERVER's answer; the probes state their own side.</p>
  *
@@ -71,8 +83,9 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         exec("stellurgytest config set planetsMustBeDiscovered " + research);
         exec("stellurgytest config set telescopeScanBaseTicks " + ticksPerStep);
         // An aperture that sees essentially anything, so what a fixture finds is decided by where it
-        // put the fixture and never by how bright the sky happened to draw it. A survey's photometry
-        // is pinned in the unit tier, where a star's luminosity can be stated.
+        // put the fixture and never by how bright the sky happened to draw it. What the SHIPPED
+        // aperture sees is the subject of the photometry scenarios at the end of this class, which
+        // seat stars of a stated luminosity and state their own aperture.
         exec("stellurgytest config set telescopeLimitingMagnitude 30");
         exec("stellurgytest config set telescopeConeHalfAngleDegrees 20");
         exec("stellurgytest config set telescopeScanMaxCells 1000");
@@ -433,5 +446,582 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
 
         assertTrue("a farther region must be a longer survey: near=" + nearTicks + " far=" + farTicks,
                 farTicks > nearTicks);
+    }
+
+    // ── what the SHIPPED instrument sees, what dust costs it, and what a look teaches ─────────────
+    //
+    // The scenarios below state every telescope setting they rest on, at its shipped value unless the
+    // scenario's own subject moves it, because the methods above leave their own aperture behind
+    // (a limit of 30) and JUnit promises no order. Each stands on its own plot.
+
+    /** The record the machine writes when a survey step resolves; {@code complete} on the last. */
+    private static final String SURVEY_ADVANCED = "region_scan_advanced";
+
+    /**
+     * Ticks a survey is given to say it finished. With the research switch off the whole pointing is
+     * resolved on the tile's first server tick after the aim ({@code TileObservatory}'s completion
+     * pass, its instant branch), so this is a ceiling against a machine that never ticks and not a
+     * pace; measured 2026-10-02: 2 to 5 ticks from the aim to the completing record, over five
+     * surveys of up to 95 territories.
+     */
+    private static final int INSTANT_SURVEY_TICKS = 100;
+
+    /**
+     * How many worlds a seated system asks the procedural sky to derive. Any one is enough to tell a
+     * body list from a bare address (the address is ONE record at the star's cell); two, so a
+     * derivation that found room for only one still leaves the system more than its address.
+     */
+    private static final int RETINUE = 2;
+
+    /** A sun-like star is one Sun in size at the Sun's temperature: one solar luminosity. */
+    private static final double SUN_SIZE = 1d;
+
+    /**
+     * The star seated behind a cloud: ten Suns across, a hundred times the Sun's light, five
+     * magnitudes brighter. Brightness is not that scenario's subject, and a sun-like star behind the
+     * cloud the shipped sky first offers needs an aperture past what a player can set (measured
+     * 2026-10-02: m = 32.7 through 20.2 magnitudes of dust, so an aperture of 40.2).
+     */
+    private static final double BRIGHT_STAR_SIZE = 10d;
+
+    /**
+     * The deepest aperture the config loader accepts — the upper bound it reads
+     * {@code telescopeLimitingMagnitude} with in {@code StellurgyConfiguration}.
+     */
+    private static final double PLAYER_APERTURE_CEILING = 40d;
+
+    /** The overworld, which the stock universe binds to Earth. */
+    private static final int EARTH = 0;
+
+    private static String at(FixtureSite site) {
+        return site.dim + " " + site.x + " " + site.y + " " + site.z;
+    }
+
+    /** How the event recorder names a machine: its x,y,z, without the dimension. */
+    private static String machineKey(FixtureSite site) {
+        return site.x + "," + site.y + "," + site.z;
+    }
+
+    private static String cell(long[] sectors) {
+        return sectors[0] + " " + sectors[1] + " " + sectors[2];
+    }
+
+    /** Set a whitelisted config key, refusing the arrangement if the server would not. */
+    private void configure(String key, Object value) throws Exception {
+        Reply.of("stellurgytest config set", exec("stellurgytest config set " + key + " " + value))
+                .requireOk("set " + key + " to " + value);
+    }
+
+    /** A whitelisted config key's value right now, as the server prints it — to be put back. */
+    private String configured(String key) throws Exception {
+        return Reply.of("stellurgytest config get", exec("stellurgytest config get " + key))
+                .requireOk("read " + key).text("value");
+    }
+
+    /** Every telescope setting a scenario below rests on, at the value the game ships with. */
+    private void shippedInstrument() throws Exception {
+        // Research off: the survey resolves outright, so a scenario is about WHAT a look makes of the
+        // sky and not about the clock the research mode paces it on.
+        configure("planetsMustBeDiscovered", false);
+        configure("telescopeLimitingMagnitude", StellurgyConfiguration.DEFAULT_TELESCOPE_LIMITING_MAGNITUDE);
+        configure("telescopeResolveMarginMagnitudes",
+                StellurgyConfiguration.DEFAULT_TELESCOPE_RESOLVE_MARGIN_MAGNITUDES);
+        configure("telescopeConeHalfAngleDegrees",
+                StellurgyConfiguration.DEFAULT_TELESCOPE_CONE_HALF_ANGLE_DEGREES);
+        configure("telescopeScanMaxCells", StellurgyConfiguration.DEFAULT_TELESCOPE_SCAN_MAX_CELLS);
+        configure("telescopeScanCellsPerStep", StellurgyConfiguration.DEFAULT_TELESCOPE_SCAN_CELLS_PER_STEP);
+        configure("telescopeScanBaseTicks", StellurgyConfiguration.DEFAULT_TELESCOPE_SCAN_BASE_TICKS);
+        // The loader's default price of a survey step is zero (StellurgyConfiguration's
+        // telescopeSurveyDataPerStep); a bare observatory has no data buses to pay any other.
+        configure("telescopeSurveyDataPerStep", 0);
+    }
+
+    /** The shipped procedural sky — stars with derived worlds, and the clouds between them. */
+    private void proceduralSky() throws Exception {
+        GalaxyGenConfig shipped = GalaxyGenConfig.defaults();
+        Reply.of("stellurgytest space gen-install",
+                exec("stellurgytest space gen-install " + shipped.density + " " + shipped.minSpacing))
+                .requireOk("install the shipped procedural sky");
+    }
+
+    private void releaseProceduralSky() throws Exception {
+        Reply.of("stellurgytest space gen-reset", exec("stellurgytest space gen-reset"))
+                .requireOk("put the server's own sky back");
+    }
+
+    /**
+     * An observatory at {@code site} with a blank crystal in it, and what it reads idle.
+     *
+     * <p>Its chunk is HELD for the scenario ({@code chunk hold}, dropped by {@link #releaseChunks}):
+     * in play the operator stands at the machine and keeps its world loaded; a headless server has
+     * nobody there, and a world nobody holds is unloaded between two probe calls — measured
+     * 2026-10-02 on the home moon, where four of six parallel instances read "standing world not
+     * loaded" mid-scenario. The hold also keeps the tile ticking, which is what completes a survey.</p>
+     */
+    private TelescopeReading standObservatory(FixtureSite site) throws Exception {
+        Reply.of("stellurgytest chunk hold", exec("stellurgytest chunk hold " + at(site) + " 0"))
+                .requireOk("hold the observatory's chunk loaded");
+        Reply.of("stellurgytest telescope place", exec("stellurgytest telescope place " + at(site)))
+                .requireOk("stand an observatory at " + site);
+        blankCrystal(site);
+        TelescopeReading idle = TelescopeReading.at(this::exec, at(site)).requireOk("read the observatory");
+        requireArranged("the observatory must know where in the galaxy it stands: " + idle.raw(),
+                idle.hasOrigin());
+        return idle;
+    }
+
+    private void releaseChunks() throws Exception {
+        Reply.of("stellurgytest chunk release", exec("stellurgytest chunk release"))
+                .requireOk("release the held chunks");
+    }
+
+    private void blankCrystal(FixtureSite site) throws Exception {
+        int held = Reply.of("stellurgytest telescope crystal",
+                exec("stellurgytest telescope crystal " + at(site))).integer("addresses");
+        requireArranged("the crystal must start blank, or every count after it means nothing: " + held,
+                held == 0);
+    }
+
+    /**
+     * Seat a system with {@link #RETINUE} worlds at {@code sectors}, its star {@code sizeSuns} in size
+     * at the Sun's temperature. Returns its cell key.
+     */
+    private String systemAt(long[] sectors, String name, double sizeSuns) throws Exception {
+        for (long sector : sectors) {
+            requireArranged("the probe seats a system by integer sectors: " + cell(sectors),
+                    Math.abs(sector) <= Integer.MAX_VALUE);
+        }
+        return Reply.of("stellurgytest telescope system", exec("stellurgytest telescope system "
+                        + cell(sectors) + " " + name + " " + RETINUE + " " + sizeSuns + " "
+                        + (int) StellarMagnitude.SOLAR_TEMPERATURE_UNITS))
+                .requireOk("seat the system " + name).text("cellKey");
+    }
+
+    /** Production's photometry of the system seated at {@code sectors}, from this observatory. */
+    private Reply photometry(FixtureSite site, long[] sectors) throws Exception {
+        return Reply.of("stellurgytest telescope sees",
+                exec("stellurgytest telescope sees " + at(site) + " " + cell(sectors)))
+                .requireOk("read the photometry of " + cell(sectors));
+    }
+
+    /** What the crystal in the machine holds of the system owning {@code sectors}. */
+    private Reply recorded(FixtureSite site, long[] sectors) throws Exception {
+        return Reply.of("stellurgytest telescope entries",
+                exec("stellurgytest telescope entries " + at(site) + " " + cell(sectors)))
+                .requireOk("read what the crystal holds of " + cell(sectors));
+    }
+
+    /**
+     * The crystal holds the system's bare address and none of its other bodies.
+     *
+     * <p>Read as the system's OWN records only ({@code telescope entries}: {@code atAnchor},
+     * {@code beyondAddress}): an address the survey wrote for some other seat that this system's
+     * neighbourhood shadows is reported apart ({@code foreign}) and is not this system's record.</p>
+     */
+    private static boolean addressAlone(Reply system) {
+        return system.bool("atAnchor") && system.integer("beyondAddress") == 0;
+    }
+
+    /** The crystal holds no record of the system at all — neither its address nor any body. */
+    private static boolean unseen(Reply system) {
+        return !system.bool("atAnchor") && system.integer("held") == 0;
+    }
+
+    /**
+     * Aim along {@code dir}, {@code steps} territories deep, and wait for the MACHINE to say it
+     * finished — the completing {@code region_scan_advanced} of this observatory, from a mark taken
+     * before the aim.
+     */
+    private void surveyAlong(FixtureSite site, long[] dir, int steps) throws Exception {
+        long before = Reply.of("stellurgytest clock", exec("stellurgytest clock")).longInteger("tick");
+        long mark = events.mark();
+        TelescopeReading aimed = TelescopeReading.of(exec("stellurgytest telescope scan " + at(site) + " "
+                + cell(dir) + " " + steps)).requireOk("aim the instrument");
+        requireArranged("the pointing must reach as deep as it was aimed (" + steps + " territories)"
+                        + " rather than be cut short by its look budget: " + aimed.raw(),
+                aimed.distanceCells() >= (long) steps * aimed.stride());
+        String done = events.awaitRecordWithFields(mark, SURVEY_ADVANCED, "the survey must finish",
+                INSTANT_SURVEY_TICKS, "pos", machineKey(site), "complete", "true");
+        System.out.println("[photometry] survey finished " + ((long) Events.number(done, "tick") - before)
+                + " ticks after the aim");
+    }
+
+    /** Run the local radar over the observatory's own neighbourhood and wait for it to finish. */
+    private void localRadar(FixtureSite site) throws Exception {
+        long mark = events.mark();
+        TelescopeReading.of(exec("stellurgytest telescope passive " + at(site)))
+                .requireOk("start the local radar");
+        events.awaitRecordWithFields(mark, SURVEY_ADVANCED, "the local radar must finish",
+                INSTANT_SURVEY_TICKS, "pos", machineKey(site), "complete", "true");
+    }
+
+    /**
+     * With the SHIPPED aperture, a sun-like star near enough is NAMED — every body of its system on
+     * the crystal — one farther out is a point of light whose address alone is written, and one past
+     * the aperture's reach is not seen at all. Then, on the same instrument: a resolve margin of zero
+     * names whatever is detected, and a deeper aperture registers the star the shipped one missed.
+     *
+     * <p>Fails if {@code TelescopeScan#detect} stops deciding registration by the configured limiting
+     * magnitude and resolvability by that limit less the configured margin, or
+     * {@code TelescopeScan#characterise} stops following only a resolvable detection to its
+     * bodies.</p>
+     *
+     * <p>The three distances are DERIVED from production's photometry for a one-Sun star at the
+     * shipped limit {@code L} and margin {@code M}: the near star at half its resolving reach, the far
+     * one at twice its detecting reach (1.5 magnitudes past {@code L}), and the middle one at the
+     * geometric mean of the two reaches, which is the distance that sits the same number of
+     * magnitudes inside both limits. Each is then MEASURED where production computes it
+     * ({@code telescope sees}, dust included) and refused as an arrangement unless it landed on the
+     * side it was placed for.</p>
+     *
+     * <p>Sees the survey a running observatory performs once aimed; does NOT see the GUI's aim
+     * buttons (the probe aims), the research-paced sweep (switched off here), or a sky other than the
+     * shipped procedural one.</p>
+     *
+     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
+     * {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} reading
+     * {@code if (false)}, this fails with "a sun-like star 2.98… ly away must be NAMED by the shipped
+     * telescope"; with {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading
+     * {@code magnitude <= limitMagnitude}, with "one 32.79… ly away must be a point of light - its
+     * address alone"; with {@code limitMagnitude += 5d;} inserted after
+     * {@code double resolveLimit = limitMagnitude - resolveMarginMagnitudes();}, with "and one 283.19…
+     * ly away, past the shipped reach, must not be seen at all"; with
+     * {@code TelescopeScan#resolveMarginMagnitudes} at
+     * {@code return Math.max(0d, StellurgyConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes);}
+     * answering the shipped default, with "with a resolve margin of zero the star that was only a light
+     * must be named"; with {@code TelescopeScan#limitMagnitude} at
+     * {@code return StellurgyConfiguration.getCurrentConfig().telescopeLimitingMagnitude;} answering the
+     * shipped default, with "an aperture one magnitude deeper must register the star the shipped one
+     * missed, as a light" — one inversion per run, 2026-10-02.</p>
+     */
+    @Test
+    public void theShippedApertureNamesANearSunSeesAFarOneAsALightAndMissesOneBeyondIt()
+            throws Exception {
+        FixtureSite site = site();
+        String marginBefore = configured("telescopeResolveMarginMagnitudes");
+        proceduralSky();
+        try {
+            shippedInstrument();
+            TelescopeReading idle = standObservatory(site);
+            long stride = idle.stepCells;
+            requireArranged("the shipped procedural sky must be the one the instrument walks: its"
+                    + " territories are " + GalaxyGenConfig.defaults().minSpacing + " cells, the"
+                    + " instrument strides " + stride, stride == GalaxyGenConfig.defaults().minSpacing);
+            long[] home = idle.originSectors();
+
+            double limit = StellurgyConfiguration.DEFAULT_TELESCOPE_LIMITING_MAGNITUDE;
+            double margin = StellurgyConfiguration.DEFAULT_TELESCOPE_RESOLVE_MARGIN_MAGNITUDES;
+            double sun = StellarMagnitude.luminositySuns(SUN_SIZE, StellarMagnitude.SOLAR_TEMPERATURE_UNITS);
+            double detectLy = StellarMagnitude.detectionRangeLightYears(sun, limit);
+            double resolveLy = StellarMagnitude.detectionRangeLightYears(sun, limit - margin);
+            double strideLy = UniverseScale.lightYearsForCells(stride);
+            int near = (int) Math.max(1L, (long) Math.floor(0.5d * resolveLy / strideLy));
+            int middle = (int) Math.round(Math.sqrt(resolveLy * detectLy) / strideLy);
+            int far = (int) Math.ceil(2d * detectLy / strideLy);
+            System.out.println("[photometry] a one-Sun star at the shipped aperture is resolved to "
+                    + resolveLy + " ly and detected to " + detectLy + " ly; a territory is " + strideLy
+                    + " ly; seating at " + near + ", " + middle + " and " + far + " territories");
+
+            long[] down = {0L, -1L, 0L};
+            long[] nearCell = {home[0], home[1] - near * stride, home[2]};
+            long[] middleCell = {home[0], home[1] - middle * stride, home[2]};
+            long[] farCell = {home[0], home[1] - far * stride, home[2]};
+            String nearKey = systemAt(nearCell, "near-sun", SUN_SIZE);
+            String middleKey = systemAt(middleCell, "middle-sun", SUN_SIZE);
+            String farKey = systemAt(farCell, "far-sun", SUN_SIZE);
+
+            // Where each star stands against the shipped limits, read where production computes it.
+            Reply nearSeen = photometry(site, nearCell);
+            double shippedLimit = nearSeen.number("limit");
+            double shippedResolve = nearSeen.number("resolveLimit");
+            double nearMag = nearSeen.element("systems", "anchor", nearKey).number("apparentMagnitude");
+            double middleMag = photometry(site, middleCell).element("systems", "anchor", middleKey)
+                    .number("apparentMagnitude");
+            double farMag = photometry(site, farCell).element("systems", "anchor", farKey)
+                    .number("apparentMagnitude");
+            System.out.println("[photometry] limit " + shippedLimit + ", resolve " + shippedResolve
+                    + "; near m=" + nearMag + ", middle m=" + middleMag + ", far m=" + farMag);
+            requireArranged("the near star must be bright enough to make out: m=" + nearMag
+                    + " against " + shippedResolve, nearMag <= shippedResolve);
+            requireArranged("the middle star must be bright enough to register and too faint to make"
+                    + " out: m=" + middleMag + " against " + shippedResolve + ".." + shippedLimit,
+                    middleMag > shippedResolve && middleMag <= shippedLimit);
+            requireArranged("the far star must be past the aperture: m=" + farMag + " against "
+                    + shippedLimit, farMag > shippedLimit);
+            for (long[] seat : new long[][] {nearCell, middleCell, farCell}) {
+                Reply system = recorded(site, seat);
+                requireArranged("each seated system must hold more bodies than its address, or a named"
+                        + " system and a bare address write the same thing: " + system,
+                        system.integer("bodies") > 1);
+            }
+
+            surveyAlong(site, down, far + 1);
+            Reply nearHeld = recorded(site, nearCell);
+            Reply middleHeld = recorded(site, middleCell);
+            Reply farHeld = recorded(site, farCell);
+            assertEquals("a sun-like star " + near * strideLy + " ly away must be NAMED by the shipped"
+                            + " telescope - every body of its system on the crystal: " + nearHeld,
+                    nearHeld.integer("bodies"), nearHeld.integer("held"));
+            assertTrue("one " + middle * strideLy + " ly away must be a point of light - its address"
+                    + " alone: " + middleHeld, addressAlone(middleHeld));
+            assertTrue("and one " + far * strideLy + " ly away, past the shipped reach, must not be"
+                    + " seen at all: " + farHeld, unseen(farHeld));
+
+            // No margin: everything detectable is resolvable.
+            configure("telescopeResolveMarginMagnitudes", 0);
+            blankCrystal(site);
+            surveyAlong(site, down, far + 1);
+            Reply middleNamed = recorded(site, middleCell);
+            assertEquals("with a resolve margin of zero the star that was only a light must be named: "
+                    + middleNamed, middleNamed.integer("bodies"), middleNamed.integer("held"));
+
+            // A deeper aperture - one magnitude past the far star - registers what the shipped one
+            // missed, on the same instrument that missed it.
+            configure("telescopeResolveMarginMagnitudes", margin);
+            configure("telescopeLimitingMagnitude", farMag + 1d);
+            blankCrystal(site);
+            surveyAlong(site, down, far + 1);
+            Reply farFound = recorded(site, farCell);
+            System.out.println("[photometry] the deeper aperture's record of the far system: " + farFound);
+            assertTrue("an aperture one magnitude deeper must register the star the shipped one"
+                    + " missed, as a light: " + farFound, addressAlone(farFound));
+        } finally {
+            configure("telescopeResolveMarginMagnitudes", marginBefore);
+            releaseProceduralSky();
+            releaseChunks();
+        }
+    }
+
+    /**
+     * A system behind dust THICKER than the concealment threshold is still written down — its address
+     * alone, never nothing — while the same system behind the same dust read against a threshold
+     * above it is named. The threshold is read in magnitudes of extinction.
+     *
+     * <p>Fails if {@code TelescopeScan#characterise} stops deciding that an obscured detection costs
+     * the look its bodies and not the look itself, or {@code TelescopeScan#isObscuredAt} stops
+     * comparing the threshold against the extinction in magnitudes.</p>
+     *
+     * <p>The cloud is a real one of the shipped procedural sky ({@code space nebula-find}), the
+     * system is seated on the far side of it along the instrument's own aim, and the dust on that
+     * sight line is MEASURED ({@code space extinction}); the two thresholds straddle that one reading,
+     * so the only thing that differs between the two looks is which side of the threshold the same
+     * dust falls. The thin one sits midway between the dust in magnitudes and the same dust as a
+     * column, which is what makes the unit matter; the thick one at half the dust. The aperture is set
+     * from production's own magnitude of the star (dust included) plus the shipped margin and one
+     * more, so brightness alone would let the instrument name it every time.</p>
+     *
+     * <p>Does NOT see a look with no observer (no production caller makes one) or the obscured-look
+     * count the operator is shown.</p>
+     *
+     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
+     * {@code !isObscuredAt(hit.extinctionMagnitudes())} comparing the column
+     * ({@code hit.extinctionMagnitudes() / Nebula.MAGNITUDES_PER_DENSITY_LIGHT_YEAR}), this fails with
+     * "behind dust thinner than the threshold the system must be named"; the same with
+     * {@code TelescopeScan#isObscuredAt} at {@code return threshold > 0d && extinctionMagnitudes >= threshold;}
+     * reading {@code extinctionMagnitudes > 0d}; with that line reading {@code return false;}, with
+     * "behind dust thicker than the threshold the system must still be written down - its address
+     * alone, never nothing" (it was named); with {@code TelescopeScan#characterise} at
+     * {@code if (!namedSomething)} also requiring the look unobscured, the same message (nothing was
+     * written) — one inversion per run, 2026-10-02.</p>
+     */
+    @Test
+    public void thickDustLeavesASystemItsAddressAndThinDustHidesNothing() throws Exception {
+        FixtureSite site = site();
+        String marginBefore = configured("telescopeResolveMarginMagnitudes");
+        String thresholdBefore = configured("telescopeObscuredAtMagnitudes");
+        proceduralSky();
+        try {
+            shippedInstrument();
+            TelescopeReading idle = standObservatory(site);
+            long stride = idle.stepCells;
+            long[] home = idle.originSectors();
+
+            // The probe's own ceiling on how far it walks, so the search is as wide as it can be.
+            Reply cloud = Reply.of("stellurgytest space nebula-find",
+                    exec("stellurgytest space nebula-find 4096 " + stride)).requireOk("look for a cloud");
+            requireArranged("the shipped sky must hold a cloud along the search: " + cloud,
+                    cloud.bool("found") && cloud.has("centreX"));
+            double[] toCloud = {cloud.longInteger("centreX") - home[0],
+                    cloud.longInteger("centreY") - home[1], cloud.longInteger("centreZ") - home[2]};
+            double cloudCells = Math.sqrt(toCloud[0] * toCloud[0] + toCloud[1] * toCloud[1]
+                    + toCloud[2] * toCloud[2]);
+            requireArranged("the cloud must be somewhere other than where the instrument stands: " + cloud,
+                    cloudCells > 0d);
+            for (double component : toCloud) {
+                requireArranged("the aim at the cloud must fit the instrument's integer aim: " + cloud,
+                        Math.abs(component) <= Integer.MAX_VALUE);
+            }
+            // The first whole territory past the cloud's far edge, along the aim: the look of that
+            // shell lands on the axis, `k` strides out.
+            int k = (int) Math.ceil((cloudCells + cloud.number("radiusCells")) / stride) + 1;
+            long[] aim = {(long) toCloud[0], (long) toCloud[1], (long) toCloud[2]};
+            long[] seat = {home[0] + Math.round(toCloud[0] / cloudCells * k * stride),
+                    home[1] + Math.round(toCloud[1] / cloudCells * k * stride),
+                    home[2] + Math.round(toCloud[2] / cloudCells * k * stride)};
+            String seatKey = systemAt(seat, "veiled-star", BRIGHT_STAR_SIZE);
+
+            Reply line = Reply.of("stellurgytest space extinction", exec("stellurgytest space extinction "
+                    + cell(home) + " " + cell(seat))).requireOk("measure the dust on the sight line");
+            double dust = line.number("magnitudes");
+            requireArranged("the sight line must cross dust: " + line, dust > 0d);
+            double magnitude = photometry(site, seat).element("systems", "anchor", seatKey)
+                    .number("apparentMagnitude");
+            double aperture = magnitude + StellurgyConfiguration.DEFAULT_TELESCOPE_RESOLVE_MARGIN_MAGNITUDES + 1d;
+            System.out.println("[nebula] cloud " + cloudCells + " cells out (radius "
+                    + cloud.number("radiusCells") + "), system " + k + " territories along it; dust "
+                    + dust + " mag, star m=" + magnitude + ", aperture " + aperture);
+            requireArranged("the aperture that makes this star out through the dust must be one a player"
+                    + " can configure (the loader allows at most " + PLAYER_APERTURE_CEILING + "): "
+                    + aperture, aperture <= PLAYER_APERTURE_CEILING);
+            configure("telescopeLimitingMagnitude", aperture);
+            requireArranged("the system must hold more bodies than its address: " + recorded(site, seat),
+                    recorded(site, seat).integer("bodies") > 1);
+
+            // Thin: the threshold above the dust on this line, by less than the same dust read as a
+            // column. The calibration reads a column of C density-light-years as C * M magnitudes with
+            // M < 1, so the column is the LARGER number, and a threshold midway between the two is
+            // above the dust in magnitudes and below it as a column: a concealment that compared the
+            // threshold with the column would hide this system, and one that reads magnitudes does not.
+            double perColumn = Nebula.MAGNITUDES_PER_DENSITY_LIGHT_YEAR;
+            requireArranged("the calibration must read a column as fewer magnitudes than its length, or"
+                    + " the thin threshold below cannot tell the two units apart: " + perColumn,
+                    perColumn < 1d);
+            double thinThreshold = (dust + dust / perColumn) / 2d;
+            configure("telescopeObscuredAtMagnitudes", thinThreshold);
+            surveyAlong(site, aim, k + 1);
+            Reply named = recorded(site, seat);
+            assertEquals("behind dust thinner than the threshold the system must be named: " + named,
+                    named.integer("bodies"), named.integer("held"));
+
+            // Thick: the same dust, the threshold at half of it.
+            configure("telescopeObscuredAtMagnitudes", dust / 2d);
+            blankCrystal(site);
+            surveyAlong(site, aim, k + 1);
+            Reply veiled = recorded(site, seat);
+            System.out.println("[nebula] the obscured look's record of the system: " + veiled);
+            assertTrue("behind dust thicker than the threshold the system must still be written down -"
+                    + " its address alone, never nothing: " + veiled, addressAlone(veiled));
+        } finally {
+            configure("telescopeObscuredAtMagnitudes", thresholdBefore);
+            configure("telescopeResolveMarginMagnitudes", marginBefore);
+            releaseProceduralSky();
+            releaseChunks();
+        }
+    }
+
+    /**
+     * Only a body a look actually MADE OUT teaches the world the observatory stands on. Recording
+     * positions only teaches nothing, a system registered but too faint to make out teaches nothing,
+     * and the same system made out teaches its worlds — on one observatory, in that order.
+     *
+     * <p>Fails if {@code TelescopeScan#characterise} stops reporting only the bodies it named, or
+     * {@code TileObservatory}'s survey stops teaching the ground exactly those.</p>
+     *
+     * <p>Stands on the home moon and looks at the home system with the local radar, because a body
+     * the home system holds has a world of its own (Earth), and only a world can be taught. The moon
+     * and not Earth: the radar scenario above teaches EARTH about the home system with its own wide
+     * aperture, and JUnit promises no order, so Earth's own knowledge is not a clean slate here. The
+     * apertures are set from production's magnitude of the home star as seen from here: the shipped
+     * margin plus one magnitude makes it out, half the margin registers it without making it out.</p>
+     *
+     * <p>Sees the operator's toggle pressed through the machine's own button handler; does NOT see the
+     * GUI that sends it, or the sync of what was taught to a client.</p>
+     *
+     * <p>red-witnessed: with {@code TelescopeScan#characterise} at
+     * {@code if (wholeSystem && hit.resolvable() && !isObscuredAt(hit.extinctionMagnitudes()))} dropping
+     * {@code wholeSystem}, this fails with "recording positions only writes the home system's address
+     * alone"; with every body of the system reported to {@code named} inside {@code if (!namedSomething)},
+     * with "and teaches the world it stands on nothing"; with the same report made only when
+     * {@code wholeSystem}, with "and a point of light teaches the world it stands on nothing"; with
+     * {@code TelescopeScan#detect} at {@code magnitude <= resolveLimit));} reading
+     * {@code magnitude <= limitMagnitude}, with "a system registered but too faint to make out is an
+     * address alone"; at {@code if (memory.record(entryFor(body, observedTick, nameOf)))} skipping a
+     * body with a dimension, with "a look that made the home system out must name Earth on the
+     * crystal"; with {@code TileObservatory#teachThisBody} at {@code here.discoverPlanet(dimId);}
+     * removed, with "and must teach the world it stands on that Earth is there" — one inversion per
+     * run, 2026-10-02.</p>
+     */
+    @Test
+    public void onlyWhatALookMadeOutTeachesTheWorldItStandsOn() throws Exception {
+        int moon = homeMoon();
+        FixtureSite site = plot().inDimension(moon).site();
+        String marginBefore = configured("telescopeResolveMarginMagnitudes");
+        try {
+            shippedInstrument();
+            // The radar's own territory and nothing else: the home system is the whole subject.
+            configure("telescopePassiveRadiusSteps", 0);
+            TelescopeReading idle = standObservatory(site);
+            long[] home = idle.originSectors();
+            Reply sky = photometry(site, home);
+            requireArranged("the observatory's own territory must hold exactly its own system: " + sky,
+                    sky.arrayLength("systems") == 1);
+            String homeSystem = recorded(site, home).text("anchor");
+            double magnitude = sky.element("systems", "anchor", homeSystem).number("apparentMagnitude");
+            double margin = StellurgyConfiguration.DEFAULT_TELESCOPE_RESOLVE_MARGIN_MAGNITUDES;
+            System.out.println("[teaching] from dim " + moon + " the home system " + homeSystem
+                    + " is m=" + magnitude);
+            requireArranged("arrangement: this world must not know Earth before anything is surveyed",
+                    !earthKnownOn(moon));
+
+            // 1. Positions only, through an aperture that could make the system out.
+            configure("telescopeLimitingMagnitude", magnitude + margin + 1d);
+            Reply.of("stellurgytest telescope whole-system",
+                    exec("stellurgytest telescope whole-system " + at(site) + " false"))
+                    .requireOk("set the instrument to record positions only");
+            localRadar(site);
+            Reply positions = recorded(site, home);
+            assertTrue("recording positions only writes the home system's address alone: " + positions,
+                    addressAlone(positions));
+            assertFalse("and teaches the world it stands on nothing", earthKnownOn(moon));
+
+            // 2. Whole systems, through an aperture that registers the system and cannot make it out.
+            Reply.of("stellurgytest telescope whole-system",
+                    exec("stellurgytest telescope whole-system " + at(site) + " true"))
+                    .requireOk("set the instrument to follow detections to their bodies");
+            configure("telescopeLimitingMagnitude", magnitude + margin / 2d);
+            blankCrystal(site);
+            localRadar(site);
+            Reply light = recorded(site, home);
+            assertTrue("a system registered but too faint to make out is an address alone: " + light,
+                    addressAlone(light));
+            assertFalse("and a point of light teaches the world it stands on nothing", earthKnownOn(moon));
+
+            // 3. The same system, made out.
+            configure("telescopeLimitingMagnitude", magnitude + margin + 1d);
+            blankCrystal(site);
+            localRadar(site);
+            Reply madeOut = recorded(site, home);
+            boolean namesEarth = false;
+            for (int dim : madeOut.intArray("namedDims")) {
+                namesEarth |= dim == EARTH;
+            }
+            assertTrue("a look that made the home system out must name Earth on the crystal: " + madeOut,
+                    namesEarth);
+            assertTrue("and must teach the world it stands on that Earth is there", earthKnownOn(moon));
+        } finally {
+            configure("telescopeResolveMarginMagnitudes", marginBefore);
+            releaseChunks();
+        }
+    }
+
+    /** Whether the world {@code standing} has itself learned of Earth — its own knowledge, not the pack's. */
+    private boolean earthKnownOn(int standing) throws Exception {
+        return Reply.of("stellurgytest planet knowledge",
+                exec("stellurgytest planet knowledge " + standing + " " + EARTH)).bool("local");
+    }
+
+    /** The registered world whose parent is Earth. */
+    private int homeMoon() throws Exception {
+        for (int dim : DimList.from(this::exec).registered()) {
+            if (dim == EARTH) {
+                continue;
+            }
+            Reply info = Reply.of("stellurgytest planet info", exec("stellurgytest planet info " + dim));
+            if (info.has("parent") && info.integer("parent") == EARTH) {
+                return dim;
+            }
+        }
+        ArrangementFailure.arrangementFailed("the stock universe must hold a moon of Earth");
+        return EARTH;
     }
 }

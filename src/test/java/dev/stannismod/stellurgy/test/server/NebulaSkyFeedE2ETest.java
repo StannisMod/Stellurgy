@@ -89,8 +89,8 @@ public class NebulaSkyFeedE2ETest extends AbstractHeadlessServerTest {
 
     @Test
     public void aRealCloudDimsWhatIsBehindItAndClearSpaceDoesNot() throws Exception {
-        // What the unit tier cannot reach: it stubs the column, so it can prove the RULE and never
-        // that a generated cloud produces a column at all. This walks a real sight line through a
+        // That a generated cloud produces a column at all. What a survey does with that column is the
+        // telescope's own scenario (TelescopeRegionScanE2ETest); this walks a real sight line through a
         // real cloud in a real world, and a clear line beside it as the control.
         String installed = exec(GEN_INSTALL);
         assertTrue("the procedural generator must install: " + installed,

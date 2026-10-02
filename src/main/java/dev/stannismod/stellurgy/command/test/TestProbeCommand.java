@@ -250,6 +250,9 @@ public class TestProbeCommand extends CommandBase {
                 case "sound":
                     handleSound(server, sender, tail(args));
                     break;
+                case "oredict":
+                    handleOreDict(sender, tail(args));
+                    break;
                 default:
                     send(sender, "{\"error\":\"unknown subcommand\",\"sub\":\"" + args[0] + "\"}");
             }
@@ -2902,14 +2905,36 @@ public class TestProbeCommand extends CommandBase {
                     new dev.stannismod.stellurgy.api.dimension.solar.StellarBody();
             star.setId(starId);
             star.setName(args.length > 4 ? args[4] : ("probe-star-" + starId));
+            // telescope system <sx> <sy> <sz> [name] [retinue] [size] [temperature]
+            // [retinue]: how many worlds the system asks the generator in force to derive around the
+            // star, the pack's own knob (StellarBody.setMaxRetinueBodies). Without it a minted system
+            // is its star alone, and a look that named its bodies writes exactly what a look that
+            // wrote only its address writes - one entry at the anchor - so the two are not tellable
+            // apart. Derived worlds exist only under a generator that derives (an installed
+            // procedural one); the reply's `retinue` is what was ASKED, not what was derived.
+            if (args.length > 5) {
+                star.setMaxRetinueBodies(parseIntOr(args[5], 0));
+            }
+            // [size] [temperature]: the star's bulk, in Suns and in the mod's hundredths of Sol — the
+            // two numbers its brightness is made of. Stated by a caller that places the star against
+            // an aperture; left unstated, the star keeps what a fresh StellarBody holds.
+            if (args.length > 7) {
+                star.setSize((float) parseDoubleOr(args[6], star.getSize()));
+                star.setTemperature(parseIntOr(args[7], star.getTemperature()));
+            }
             dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().addStar(star);
             dev.stannismod.stellurgy.space.GalacticCoord cell =
                     dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
             reg.place(cell, starId);
+            // The star's own bulk ships with the reply, because it is what the star's brightness is
+            // made of: a caller placing it at a distance chosen against an aperture needs the two
+            // numbers the photometry reads, not an assumption about what a fresh star holds.
             send(sender, "{\"ok\":true,\"starId\":" + starId + ",\"name\":\"" + star.getName()
-                    + "\",\"cellKey\":\"" + cell.cellKey() + "\"}");
+                    + "\",\"cellKey\":\"" + cell.cellKey() + "\",\"size\":" + star.getSize()
+                    + ",\"temperature\":" + star.getTemperature()
+                    + ",\"retinue\":" + star.getMaxRetinueBodies() + "}");
             return;
         }
 
@@ -2935,6 +2960,21 @@ public class TestProbeCommand extends CommandBase {
         dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope = observatoryAt(world, pos);
         if (scope == null) {
             send(sender, "{\"error\":\"no observatory at that position\"}");
+            return;
+        }
+
+        if ("whole-system".equalsIgnoreCase(verb) && args.length >= 6) {
+            telescopeWholeSystem(sender, world, scope, args[5]);
+            return;
+        }
+
+        if ("entries".equalsIgnoreCase(verb) && args.length >= 8) {
+            telescopeEntries(server, sender, scope, args);
+            return;
+        }
+
+        if ("sees".equalsIgnoreCase(verb) && args.length >= 8) {
+            telescopeSees(server, sender, scope, args);
             return;
         }
 
@@ -3053,6 +3093,216 @@ public class TestProbeCommand extends CommandBase {
         }
 
         send(sender, "{\"error\":\"unknown telescope verb — try system|place|crystal|scan|info\"}");
+    }
+
+    /**
+     * {@code telescope whole-system <dim> <x> <y> <z> <true|false>} — set the OPERATOR's choice of
+     * whether a detection is followed to the system's bodies or written down as an address alone.
+     *
+     * <p>Pressed through the machine's own button handler ({@code useNetworkData} with the toggle's
+     * packet id), the path a GUI click takes on the server, so the probe arranges the choice the way a
+     * player makes it and never writes the field. The operator is a {@code FakePlayer}: the handler
+     * reopens the GUI for whoever pressed, and Forge's {@code openGui} is a no-op for a fake player,
+     * which is the one kind of player a headless server can supply. The button is a TOGGLE, so it is
+     * pressed only when the machine's current choice differs from the one asked for.</p>
+     *
+     * <p>The packet id is read off the tile by the constant's NAME rather than restated here: a
+     * renumbered button then still works, and a renamed one answers an error instead of pressing some
+     * other button. Replies {@code wholeSystem} as the machine reports it AFTER the press, and
+     * {@code pressed}.</p>
+     */
+    private void telescopeWholeSystem(ICommandSender sender, net.minecraft.world.WorldServer world,
+                                      dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope,
+                                      String wantedArg) {
+        boolean wanted = Boolean.parseBoolean(wantedArg);
+        boolean pressed = false;
+        if (scope.isCharacterisingWholeSystem() != wanted) {
+            byte toggle;
+            try {
+                java.lang.reflect.Field id = dev.stannismod.stellurgy.tile.multiblock.TileObservatory.class
+                        .getDeclaredField("TOGGLE_WHOLE_SYSTEM");
+                id.setAccessible(true);
+                toggle = id.getByte(null);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"ok\":false,\"reason\":\"no whole-system button on the observatory\","
+                        + "\"msg\":\"" + escapeJson(String.valueOf(e.getMessage())) + "\"}");
+                return;
+            }
+            scope.useNetworkData(net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(world),
+                    net.minecraftforge.fml.relauncher.Side.SERVER, toggle,
+                    new net.minecraft.nbt.NBTTagCompound());
+            pressed = true;
+        }
+        boolean now = scope.isCharacterisingWholeSystem();
+        send(sender, "{\"ok\":" + (now == wanted) + ",\"pressed\":" + pressed
+                + ",\"wholeSystem\":" + now + "}");
+    }
+
+    /**
+     * {@code telescope entries <dim> <x> <y> <z> <sx> <sy> <sz>} — what the crystal in this machine
+     * holds about ONE system: the system whose neighbourhood owns cell {@code (sx,sy,sz)}.
+     *
+     * <p>Read-only. A survey writes every system it registered onto one crystal, so a count of the
+     * crystal answers "did it find something" and never "what did it make of THIS system".</p>
+     *
+     * <p>{@code bodies} is how many DISTINCT records the system's bodies make — production's own body
+     * list ({@code systemBodiesAt}) keyed by production's own record identity
+     * ({@code TelescopeScan.entryFor(..).identityKey()}) — and {@code held} is how many of those exact
+     * identities the crystal holds, so a reader compares the two without restating either rule. The
+     * system's bare address is the record {@code TelescopeScan.entryForSystem} writes for its anchor;
+     * {@code atAnchor} is whether the crystal holds that identity, and {@code beyondAddress} how many
+     * of the system's body identities OTHER than it the crystal holds. So a look that made the bodies
+     * out leaves {@code held == bodies}, one that wrote the address alone leaves {@code atAnchor} with
+     * {@code beyondAddress == 0}, and one that never registered the system leaves neither.
+     * {@code namedDims} is the dimensions among this system's records.</p>
+     *
+     * <p>{@code foreign} counts the crystal's OTHER records whose coordinate the registry attributes to
+     * this system ({@code anchorForCell}) without being one of its bodies — an address the survey wrote
+     * for a seat this system's neighbourhood shadows. They are listed in {@code foreignCells} and are
+     * not part of {@code held}. {@code ok:false} with a {@code reason} when no system owns the cell or
+     * there is no crystal, never an empty count.</p>
+     */
+    private void telescopeEntries(MinecraftServer server, ICommandSender sender,
+                                  dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope,
+                                  String[] args) {
+        dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+        if (reg == null) {
+            send(sender, "{\"ok\":false,\"reason\":\"registry unavailable\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.space.GalacticCoord cell =
+                dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(parseLongOr(args[5], 0L),
+                        parseLongOr(args[6], 0L), parseLongOr(args[7], 0L), 0L, 0L, 0L);
+        java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> anchor = reg.anchorForCell(cell);
+        if (!anchor.isPresent()) {
+            send(sender, "{\"ok\":false,\"reason\":\"noSystem\",\"cell\":\"" + cell.cellKey() + "\"}");
+            return;
+        }
+        net.minecraft.item.ItemStack stack = scope.getStackInSlot(
+                dev.stannismod.stellurgy.tile.multiblock.TileObservatory.SLOT_CRYSTAL);
+        if (!dev.stannismod.stellurgy.item.ItemMemoryCrystal.isCrystal(stack)) {
+            send(sender, "{\"ok\":false,\"reason\":\"noCrystal\"}");
+            return;
+        }
+        String anchorKey = anchor.get().cellKey();
+        java.util.Set<String> bodyKeys = new java.util.LinkedHashSet<>();
+        for (dev.stannismod.stellurgy.universe.SystemBody body : reg.systemBodiesAt(anchor.get())) {
+            bodyKeys.add(dev.stannismod.stellurgy.universe.TelescopeScan.entryFor(body, 0L, null)
+                    .identityKey());
+        }
+        // The identity of the system's bare address, as production writes one.
+        String anchorIdentity = dev.stannismod.stellurgy.universe.TelescopeScan.entryForSystem(anchor.get(),
+                reg.systemForCoord(anchor.get()).orElse(null), 0L).identityKey();
+        int held = 0;
+        int beyondAddress = 0;
+        int listed = 0;
+        boolean atAnchor = false;
+        java.util.List<Integer> namedDims = new java.util.ArrayList<>();
+        java.util.List<String> foreignCells = new java.util.ArrayList<>();
+        StringBuilder records = new StringBuilder("[");
+        for (dev.stannismod.stellurgy.navigation.CrystalEntry entry
+                : dev.stannismod.stellurgy.item.ItemMemoryCrystal.memoryOf(stack).list()) {
+            String identity = entry.identityKey();
+            boolean isAddress = anchorIdentity.equals(identity);
+            boolean isBody = bodyKeys.contains(identity);
+            if (isAddress || isBody) {
+                Map<String, Object> one = new LinkedHashMap<>();
+                one.put("cell", entry.coord().cellKey());
+                one.put("kind", entry.kind() == null ? null : entry.kind().name());
+                one.put("dim", entry.dimId());
+                one.put("identity", identity);
+                records.append(listed++ > 0 ? "," : "").append(jsonMap(one));
+                atAnchor |= isAddress;
+                if (isBody) {
+                    held++;
+                }
+                if (isBody && !isAddress) {
+                    beyondAddress++;
+                }
+                if (entry.namesBody()) {
+                    namedDims.add(entry.dimId());
+                }
+                continue;
+            }
+            java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> owner =
+                    reg.anchorForCell(entry.coord());
+            if (owner.isPresent() && anchorKey.equals(owner.get().cellKey())) {
+                foreignCells.add(entry.coord().cellKey());
+            }
+        }
+        records.append(']');
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("anchor", anchorKey);
+        out.put("bodies", bodyKeys.size());
+        out.put("held", held);
+        out.put("atAnchor", atAnchor);
+        out.put("beyondAddress", beyondAddress);
+        out.put("namedDims", namedDims);
+        out.put("foreign", foreignCells.size());
+        out.put("foreignCells", foreignCells);
+        String json = jsonMap(out);
+        send(sender, json.substring(0, json.length() - 1) + ",\"records\":" + records + "}");
+    }
+
+    /**
+     * {@code telescope sees <dim> <x> <y> <z> <sx> <sy> <sz>} — how bright every system the look at
+     * cell {@code (sx,sy,sz)} holds appears FROM THIS OBSERVATORY: production's own photometry,
+     * read-only, for a caller ARRANGING a system on one side of an aperture.
+     *
+     * <p>The numbers are the detection stage's own ({@code TelescopeScan.detect}) asked with no
+     * aperture at all, so nothing is filtered out and nothing is resolved or written: per system, its
+     * {@code anchor}, {@code apparentMagnitude} (dust included), {@code distanceLy} and
+     * {@code extinction}. Beside them, the aperture the game is configured with RIGHT NOW —
+     * {@code limit} and {@code resolveLimit} ({@code TelescopeScan.limitMagnitude} /
+     * {@code resolveLimitMagnitude}) and the concealment threshold {@code obscuredAt}. It does not say
+     * whether anything registers: comparing a magnitude to a limit is the decision a survey makes,
+     * and a caller that wants that verdict runs the survey. A magnitude that is not finite (a system
+     * whose primary emits nothing) is written {@code null}.</p>
+     */
+    private void telescopeSees(MinecraftServer server, ICommandSender sender,
+                               dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope,
+                               String[] args) {
+        dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+        dev.stannismod.stellurgy.space.GalacticCoord origin = scope.scanOrigin();
+        if (reg == null || origin == null) {
+            send(sender, "{\"ok\":false,\"reason\":\"" + (reg == null ? "noRegistry" : "noOrigin") + "\"}");
+            return;
+        }
+        dev.stannismod.stellurgy.space.GalacticCoord look =
+                dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(parseLongOr(args[5], 0L),
+                        parseLongOr(args[6], 0L), parseLongOr(args[7], 0L), 0L, 0L, 0L);
+        StringBuilder seen = new StringBuilder("[");
+        int n = 0;
+        for (dev.stannismod.stellurgy.universe.TelescopeScan.Detection hit
+                : dev.stannismod.stellurgy.universe.TelescopeScan.detect(reg, look, origin,
+                        Double.POSITIVE_INFINITY)) {
+            Map<String, Object> one = new LinkedHashMap<>();
+            one.put("anchor", hit.anchor().cellKey());
+            one.put("apparentMagnitude", finiteOrNull(hit.apparentMagnitude()));
+            one.put("distanceLy", finiteOrNull(hit.distanceLightYears()));
+            one.put("extinction", finiteOrNull(hit.extinctionMagnitudes()));
+            seen.append(n++ > 0 ? "," : "").append(jsonMap(one));
+        }
+        seen.append(']');
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("origin", origin.cellKey());
+        out.put("look", look.cellKey());
+        out.put("limit", dev.stannismod.stellurgy.universe.TelescopeScan.limitMagnitude());
+        out.put("resolveLimit", dev.stannismod.stellurgy.universe.TelescopeScan.resolveLimitMagnitude());
+        out.put("obscuredAt", dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig()
+                .telescopeObscuredAtMagnitudes);
+        out.put("count", n);
+        String json = jsonMap(out);
+        send(sender, json.substring(0, json.length() - 1) + ",\"systems\":" + seen + "}");
+    }
+
+    /** {@code value} when it is a finite number, else {@code null} — JSON has no infinity. */
+    private static Double finiteOrNull(double value) {
+        return Double.isInfinite(value) || Double.isNaN(value) ? null : value;
     }
 
     /**
@@ -6084,6 +6334,99 @@ public class TestProbeCommand extends CommandBase {
             send(sender, out.toString());
             return;
         }
+        // gen-config: READ-ONLY. The generator the save's universe registry has in force, by simple
+        // class name, and — for a procedural one — the configuration that generator was BUILT from,
+        // read off the generator itself rather than off the pack's staging field: the question a pack
+        // author asks is "what does the running universe use", and the answer to that lives past
+        // UniverseRegistry.populate, where the schema turns the staged config into a generator.
+        // `config` is null for a generator that carries none (an authored-anchors-only universe), so
+        // "no procedural sky" is a value and not a missing field.
+        if (args.length >= 1 && "gen-config".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (reg == null) {
+                send(sender, "{\"error\":\"registry unavailable\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.IGalaxyGenerator inForce = reg.generator();
+            dev.stannismod.stellurgy.universe.GalaxyGenConfig cfg =
+                    inForce instanceof dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator
+                            ? ((dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator) inForce).config()
+                            : null;
+            StringBuilder out = new StringBuilder("{\"generator\":\"")
+                    .append(inForce == null ? "null" : inForce.getClass().getSimpleName()).append('"');
+            if (cfg == null) {
+                out.append(",\"config\":null}");
+                send(sender, out.toString());
+                return;
+            }
+            Map<String, Object> scalars = new LinkedHashMap<>();
+            scalars.put("density", cfg.density);
+            scalars.put("minSpacing", cfg.minSpacing);
+            scalars.put("galaxySpacing", cfg.galaxySpacing);
+            scalars.put("galaxyDensity", cfg.galaxyDensity);
+            String scalarJson = jsonMap(scalars);
+            out.append(",\"config\":").append(scalarJson, 0, scalarJson.length() - 1);
+            out.append(",\"starTypes\":[");
+            for (int i = 0; i < cfg.starTypes.size(); i++) {
+                dev.stannismod.stellurgy.universe.GalaxyGenConfig.StarType t = cfg.starTypes.get(i);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("temperature", t.temperature);
+                m.put("minSize", t.minSize);
+                m.put("maxSize", t.maxSize);
+                m.put("weight", t.weight);
+                out.append(i > 0 ? "," : "").append(jsonMap(m));
+            }
+            out.append("],\"galaxyTypes\":[");
+            for (int i = 0; i < cfg.galaxyTypes.size(); i++) {
+                dev.stannismod.stellurgy.universe.GalaxyGenConfig.GalaxyType t = cfg.galaxyTypes.get(i);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("name", t.name);
+                m.put("profile", t.profile.name());
+                m.put("minRadiusLy", t.minRadiusLy);
+                m.put("maxRadiusLy", t.maxRadiusLy);
+                m.put("scaleHeightRatio", t.scaleHeightRatio);
+                m.put("armCount", t.armCount);
+                m.put("rotationSpeedKmS", t.rotationSpeedKmS);
+                m.put("coreRadiusFraction", t.coreRadiusFraction);
+                m.put("minSatellites", t.minSatellites);
+                m.put("maxSatellites", t.maxSatellites);
+                m.put("weight", t.weight);
+                out.append(i > 0 ? "," : "").append(jsonMap(m));
+            }
+            out.append("],\"reservedGalaxies\":[");
+            for (int i = 0; i < cfg.reservedGalaxies.size(); i++) {
+                out.append(i > 0 ? "," : "").append('"')
+                        .append(escapeJson(cfg.reservedGalaxies.get(i).toString())).append('"');
+            }
+            out.append("]}}");
+            send(sender, out.toString());
+            return;
+        }
+        // anchor <starId>: READ-ONLY. The galactic anchor the registry holds as DECLARED for a star —
+        // the galaxy it was declared against ("home" or "gx,gy,gz") and its galaxy-local cell — as
+        // populate() applied it from the pack's staged anchors. `declared:false` for a star that
+        // declared none, which is a value: such a star gets a fallback coordinate, not a declaration.
+        if (args.length >= 2 && "anchor".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            int starId = parseIntOr(args[1], Integer.MIN_VALUE);
+            if (reg == null || starId == Integer.MIN_VALUE) {
+                send(sender, "{\"error\":\"registry unavailable or invalid star id\",\"value\":\""
+                        + escapeJson(args[1]) + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.GalacticAnchor declared = reg.declaredAnchorFor(starId);
+            if (declared == null) {
+                send(sender, "{\"starId\":" + starId + ",\"declared\":false}");
+                return;
+            }
+            send(sender, "{\"starId\":" + starId + ",\"declared\":true,\"galaxy\":\""
+                    + escapeJson(declared.galaxy().toString()) + "\",\"local\":["
+                    + declared.local().sectorX() + "," + declared.local().sectorY() + ","
+                    + declared.local().sectorZ() + "]}");
+            return;
+        }
         // gen-install <density> <minSpacing> [seed]: install a procedural galaxy generator and bind a
         // seed. A world with no <galaxyGen> in its planetDefs runs the authored-anchors-only default, so
         // without this there are no procedural systems to realize at all and every test about them would
@@ -7236,6 +7579,70 @@ public class TestProbeCommand extends CommandBase {
             info.put("skyColor", floatArrayToList(props.skyColor));
             info.put("sunriseSunsetColors", floatArrayToList(props.sunriseSunsetColors));
             send(sender, jsonMap(info));
+            return;
+        }
+        // stellurgytest planet authored <dim> — READ-ONLY, STRICT. What the running game holds for a
+        // body that a pack's planetDefs.xml described, in the fields the loader DECIDES rather than
+        // copies: its place in the hierarchy (parent AND children, because the link is two-sided and
+        // either half can be lost alone), the clamped atmosphere and gravity, the terrain source and
+        // world type, whether its authored weather engages its own cycle, and the laser-drill ore
+        // list as resolved stacks. Unlike `planet info` this resolves through the STRICT lookup, so an
+        // id naming no body answers `found:false` instead of describing the overworld.
+        if (args.length >= 2 && "authored".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+            if (props == null) {
+                send(sender, "{\"dim\":" + dim + ",\"found\":false}");
+                return;
+            }
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("dim", dim);
+            info.put("found", true);
+            info.put("name", props.getName());
+            info.put("parent", props.getParentPlanet());
+            List<Integer> children = new java.util.ArrayList<>(props.getChildPlanets());
+            Collections.sort(children);
+            info.put("children", children);
+            info.put("atmosphereDensity", props.getAtmosphereDensity());
+            info.put("gravity", props.getGravitationalMultiplier());
+            info.put("terrainSource", props.getTerrainSource().name());
+            info.put("terrainWorldType", props.getTerrainWorldType());
+            info.put("usesCustomWorldInfo", props.usesCustomWorldInfo());
+            String head = jsonMap(info);
+            StringBuilder out = new StringBuilder(head.substring(0, head.length() - 1))
+                    .append(",\"laserDrillOres\":[");
+            for (int i = 0; i < props.laserDrillOres.size(); i++) {
+                net.minecraft.item.ItemStack ore = props.laserDrillOres.get(i);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("item", ore.getItem().getRegistryName() == null
+                        ? "null" : ore.getItem().getRegistryName().toString());
+                m.put("meta", ore.getMetadata());
+                m.put("count", ore.getCount());
+                out.append(i > 0 ? "," : "").append(jsonMap(m));
+            }
+            out.append("]}");
+            send(sender, out.toString());
+            return;
+        }
+        // stellurgytest planet named <name> — READ-ONLY. Every REGISTERED dimension whose body
+        // carries exactly this name, so a body whose id the pack did not state (and the allocator
+        // chose) can be found by what the pack DID state. A list, never "the first": two bodies of
+        // one name are an answer, not a lookup to resolve.
+        if (args.length >= 2 && "named".equalsIgnoreCase(args[0])) {
+            String wanted = args[1];
+            List<Integer> dims = new java.util.ArrayList<>();
+            for (Integer registered : DimensionManager.getInstance().getRegisteredDimensions()) {
+                DimensionProperties props = DimensionManager.getInstance()
+                        .getDimensionPropertiesOrNull(registered);
+                if (props != null && wanted.equals(props.getName())) {
+                    dims.add(registered);
+                }
+            }
+            Collections.sort(dims);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("name", wanted);
+            out.put("dims", dims);
+            send(sender, jsonMap(out));
             return;
         }
         // stellurgytest planet set-temp <dim> <kelvin>
@@ -12603,6 +13010,11 @@ public class TestProbeCommand extends CommandBase {
                     // mechanic and its tuning knobs from the test JVM.
                     "advancedWeightSystem",
                     "minLaunchTWR",
+                    // Read by StatsRocket.getThrust at every call, so a runtime flip reaches the
+                    // next launch: the launch-gate tests drive one craft across the threshold by
+                    // the multiplier alone, which is the only way to show the multiplier is applied
+                    // to the thrust the gate compares.
+                    "rocketThrustMultiplier",
                     "partsWearSystem",
                     "increaseWearIntensityProb",
                     "enableCustomPlanetWeather",
@@ -12633,6 +13045,12 @@ public class TestProbeCommand extends CommandBase {
                     // How much dust a survey sees through, in magnitudes. Flippable at runtime so a
                     // test can drive BOTH sides of concealment against one generated cloud.
                     "telescopeObscuredAtMagnitudes",
+                    // How much brighter than the aperture's limit a system must be before its bodies
+                    // are made out, in magnitudes. Read at every detection, so a runtime flip reaches
+                    // the next survey: a test states the shipped margin rather than inheriting
+                    // whatever an earlier scenario left, and can take it to zero to show that zero
+                    // makes everything detectable resolvable.
+                    "telescopeResolveMarginMagnitudes",
                     // The research master switch. A survey is instant without it and paced by the
                     // time curve with it, so both halves of boundary B need it flippable at runtime.
                     "planetsMustBeDiscovered"));
@@ -18205,6 +18623,64 @@ public class TestProbeCommand extends CommandBase {
 
     private static String escapeJson(String s) {
         return s == null ? "" : s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    // Ore dictionary probes ----------------------------------------
+
+    /**
+     * {@code /stellurgytest oredict ...} — READ-ONLY views of Forge's ore dictionary that never
+     * RESERVE a name. {@code OreDictionary.getOres(String)} creates the entry it is asked about, so a
+     * probe built on it would turn "this name is unknown" into "this name is reserved and empty" by
+     * the act of asking; both sub-verbs below go through the non-creating lookup.
+     * <ul>
+     *   <li>{@code get <name>} — {@code exists} (reserved at all), {@code entries} (how many stacks
+     *       are registered under it) and {@code first}: the FIRST registered stack as the dictionary
+     *       holds it — its item, meta and count — or {@code null}. The count is reported because the
+     *       stacks the dictionary hands out are its own prototypes, and a caller that mutates one
+     *       instead of copying it changes what every later reader of that name receives;</li>
+     *   <li>{@code empty} — every name that is reserved but has NO registered stack: the names a
+     *       pack can reference that resolve to nothing because the mod providing them is absent.</li>
+     * </ul>
+     */
+    private void handleOreDict(ICommandSender sender, String[] args) {
+        if (args.length >= 2 && "get".equalsIgnoreCase(args[0])) {
+            String name = args[1];
+            boolean exists = net.minecraftforge.oredict.OreDictionary.doesOreNameExist(name);
+            List<net.minecraft.item.ItemStack> stacks =
+                    net.minecraftforge.oredict.OreDictionary.getOres(name, false);
+            StringBuilder out = new StringBuilder("{\"name\":\"").append(escapeJson(name))
+                    .append("\",\"exists\":").append(exists)
+                    .append(",\"entries\":").append(stacks.size())
+                    .append(",\"first\":");
+            if (stacks.isEmpty()) {
+                out.append("null");
+            } else {
+                net.minecraft.item.ItemStack first = stacks.get(0);
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("item", first.getItem().getRegistryName() == null
+                        ? "null" : first.getItem().getRegistryName().toString());
+                m.put("meta", first.getMetadata());
+                m.put("count", first.getCount());
+                out.append(jsonMap(m));
+            }
+            out.append('}');
+            send(sender, out.toString());
+            return;
+        }
+        if (args.length >= 1 && "empty".equalsIgnoreCase(args[0])) {
+            List<String> names = new java.util.ArrayList<>();
+            for (String name : net.minecraftforge.oredict.OreDictionary.getOreNames()) {
+                if (net.minecraftforge.oredict.OreDictionary.getOres(name, false).isEmpty()) {
+                    names.add(name);
+                }
+            }
+            Collections.sort(names);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("names", names);
+            send(sender, jsonMap(out));
+            return;
+        }
+        send(sender, "{\"error\":\"usage: /stellurgytest oredict get <name> | empty\"}");
     }
 
     // Item / enchantment registry probes -------------------------

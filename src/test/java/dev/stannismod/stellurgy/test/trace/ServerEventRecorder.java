@@ -270,6 +270,55 @@ public final class ServerEventRecorder {
     }
 
     /**
+     * A rocket REFUSED to launch — Stellurgy's own {@code RocketEvent.RocketAbortEvent}, which
+     * {@code EntityRocket.setError} posts on the server for every launch refusal (cannot get there,
+     * outside the planetary system, too heavy, not enough fuel, worn parts, …) and posts nowhere else.
+     * The record carries the entity and the {@code reason} exactly as production packed it — the
+     * translation key, followed by {@code |}-separated arguments when the refusal has any — so a test
+     * compares the key, never a rendering of it.
+     *
+     * <p>Silent about a refusal that never reaches {@code setError} — a pre-launch event cancelled by
+     * another subscriber, a free-flight start rejected through {@code messagePilot} — and about a
+     * client-side copy: {@code setError} posts only when the rocket's world is the server's.</p>
+     */
+    @SubscribeEvent
+    public static void onRocketAborted(RocketEvent.RocketAbortEvent event) {
+        Entity e = event.getEntity();
+        World world = e == null ? event.world : e.world;
+        instrument(world, "server_bus_rocket_aborted");
+        if (world == null) {
+            return;
+        }
+        record(world, "rocket_aborted",
+                "\"e\":" + (e == null ? -1 : e.getEntityId())
+                        + ",\"dim\":" + world.provider.getDimension()
+                        + ",\"reason\":\"" + str(String.valueOf(event.reason)) + "\"");
+    }
+
+    /**
+     * A launch was ACCEPTED — {@code RocketEvent.RocketLaunchEvent}. {@code EntityRocket.launch}
+     * posts it on the server only after every refusal that would reach {@link #onRocketAborted} has
+     * been passed, so for a tier-1 rocket the two are the two outcomes of one decision. The elevator
+     * capsule and the station-deployed rocket post the same event from their own launch paths, which
+     * is why the record names the entity: a reader narrows by {@code e}.
+     *
+     * <p>Silent about the destination (the event carries only the entity) and about a free-flight
+     * start, which does not post this event.</p>
+     */
+    @SubscribeEvent
+    public static void onRocketLaunched(RocketEvent.RocketLaunchEvent event) {
+        Entity e = event.getEntity();
+        World world = e == null ? event.world : e.world;
+        instrument(world, "server_bus_rocket_launched");
+        if (world == null || world.isRemote) {
+            return;
+        }
+        record(world, "rocket_launched",
+                "\"e\":" + (e == null ? -1 : e.getEntityId())
+                        + ",\"dim\":" + world.provider.getDimension());
+    }
+
+    /**
      * An advancement was GRANTED to a player — the completion edge, not a step towards it.
      *
      * <p>Vanilla posts this from {@code PlayerAdvancements.grantCriterion} inside

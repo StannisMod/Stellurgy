@@ -87,6 +87,15 @@ public class PlanetXmlConfigIntegrationTest {
         if (harness != null) harness.close();
     }
 
+    /**
+     * The fixture's fields as the running server holds them, and — its last verdict — that a file
+     * stating no {@code <galaxyGen>} runs its authored anchors only.
+     *
+     * <p>red-witnessed: 2026-10-02, the last verdict only (the field reads above predate this record):
+     * with {@code XMLPlanetLoader#readAllPlanets} at {@code return coupling;} preceded by a line
+     * giving an absent {@code galaxyGenConfig} the shipped {@code GalaxyGenConfig.defaults()}, this
+     * fails with {@code "generator":"ClusteredGalaxyGenerator"}.</p>
+     */
     @Test
     public void fixtureXmlRoundTripsThroughServerStart() throws Exception {
         harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
@@ -116,5 +125,14 @@ public class PlanetXmlConfigIntegrationTest {
                 FIXTURE_ROTATIONAL_PERIOD, info.integer("rotationalPeriod"));
         assertEquals("gravity did not round-trip: " + planetInfo,
                 FIXTURE_GRAVITY_HUNDREDTHS / 100.0, info.number("gravity"), 1e-9);
+
+        // This fixture states no <galaxyGen>, and a pack that states none gets a universe of its
+        // authored systems ONLY — no procedural generator, rather than the shipped generator's
+        // defaults. Read off the generator the running universe has in force. (The file WITH a
+        // <galaxyGen> is PlanetDefsAuthoringTest's.)
+        Reply inForce = Reply.of("stellurgytest space gen-config",
+                String.join("\n", harness.client().execute("stellurgytest space gen-config")));
+        assertEquals("a planetDefs.xml with no <galaxyGen> must run its authored anchors only: "
+                + inForce, "EmptyGalaxyGenerator", inForce.text("generator"));
     }
 }
