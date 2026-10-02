@@ -276,6 +276,21 @@ private int waitForLoadedShip(int dim) throws Exception {
      *  {@code seen}, so this must be named: a flat read answers with whichever came first. */
     private static final String GAME_CHANNEL = "game";
 
+    /**
+     * The server flight recorder's reading for the computer at {@code afcKey} ("dim x y z"), read
+     * through the harness from the test-side recorder on the server's trace. The window is the
+     * recorder's summary span and does not bound {@code seen}, which counts every sample the ring
+     * ever took — the only field {@link #gameSeen} reads.
+     */
+    private String motionTrace(String afcKey) throws Exception {
+        String reply = exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.MotionTrace"
+                + " serverReading " + afcKey + " " + MOTION_TRACE_WINDOW_MS);
+        return Reply.of("MotionTrace.serverReading", reply).text("returned");
+    }
+
+    /** Summary span handed to the recorder; see {@link #motionTrace}: {@code seen} ignores it. */
+    private static final int MOTION_TRACE_WINDOW_MS = 10_000;
+
     /** Blocks per tick for the jump. Slow enough that the ship stays parked for tens of ticks. */
     private static final long PARK_SPEED = HYPERSPACE_JUMP_SPEED;
 
@@ -1105,10 +1120,10 @@ private String hud() throws Exception {
         PilotSeat cellSeat = findSeat(originDim, setup.requireShipId());
         String cellAfcKey = originDim + " " + cellSeat.afcX
                 + " " + cellSeat.afcY + " " + cellSeat.afcZ;
-        long cellTileTicks = gameSeen(exec("stellurgytest vs motion-trace " + cellAfcKey));
+        long cellTileTicks = gameSeen(motionTrace(cellAfcKey));
         // WINDOW: cellTileTicks and cellTileTicksAfter, both in the message, asserted as a rise.
         bot().waitTicks(20);
-        long cellTileTicksAfter = gameSeen(exec("stellurgytest vs motion-trace " + cellAfcKey));
+        long cellTileTicksAfter = gameSeen(motionTrace(cellAfcKey));
         assertTrue("CONTROL: the ship's flight computer must be recording server ticks in an"
                         + " ordinary cell, or the hyperspace reading below is a zero for the wrong"
                         + " reason (samples " + cellTileTicks + " -> " + cellTileTicksAfter
@@ -1192,10 +1207,10 @@ private String hud() throws Exception {
         int afcY = hyperSeat.afcY;
         int afcZ = hyperSeat.afcZ;
         String afcKey = hyperDim + " " + afcX + " " + afcY + " " + afcZ;
-        long tileTicksBefore = gameSeen(exec("stellurgytest vs motion-trace " + afcKey));
+        long tileTicksBefore = gameSeen(motionTrace(afcKey));
         // WINDOW: tileTicksBefore and tileTicksAfter, both in the message, asserted as a rise.
         bot().waitTicks(20);
-        long tileTicksAfter = gameSeen(exec("stellurgytest vs motion-trace " + afcKey));
+        long tileTicksAfter = gameSeen(motionTrace(afcKey));
         assertTrue("the ship's flight computer must keep TICKING while the ship is parked in"
                         + " hyperspace — a jump during which the ship's machinery stops is a"
                         + " cutscene with a player standing in it (server-tick samples "
@@ -1208,8 +1223,8 @@ private String hud() throws Exception {
         // CONTROL: the same question one thousand blocks along, where no tile of this ship lives.
         // Without it a rising count could be the recorder answering for the whole server rather
         // than for the computer this leg named.
-        long noTileThere = gameSeen(exec("stellurgytest vs motion-trace "
-                + hyperDim + " " + (afcX + 1000) + " " + afcY + " " + afcZ));
+        long noTileThere = gameSeen(motionTrace(
+                hyperDim + " " + (afcX + 1000) + " " + afcY + " " + afcZ));
         assertEquals("CONTROL: a subspace address with no tile at it must report no ticks at all,"
                 + " or the reading above describes the server and not this ship", 0L, noTileThere);
 

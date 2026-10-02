@@ -500,7 +500,8 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
                         + matchingRecords(pilotInputs, "\"input\":\"idle\"")
                         + ", every input since the centring began: " + pilotInputs
                         + "\n  who drove the ship: " + (seatNow.hasAfc
-                                ? exec("stellurgytest vs motion-trace " + scenarioDim + " " + seatNow.afcX
+                                ? exec("stellurgytest invoke-static dev.stannismod.stellurgy.test.trace.MotionTrace"
+                                        + " serverReading " + scenarioDim + " " + seatNow.afcX
                                         + " " + seatNow.afcY + " " + seatNow.afcZ + " 20000")
                                 : "(no afc address in: " + seatNow.raw() + ")"),
                 worst <= CURSOR_DEADZONE_OMEGA);

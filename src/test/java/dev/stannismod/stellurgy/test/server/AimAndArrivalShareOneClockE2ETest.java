@@ -120,11 +120,9 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
             // The clock the defective aim read was proxy.getWorldTimeUniversal(0), which on this
             // tier's dedicated server IS the overworld's total time: putting the overworld SPLIT_TICKS
             // behind the space clock reproduces the driver without replacing anything.
-            long overworldNow = jsonLong(moved, "overworld");
-            long spaceNow = jsonLong(moved, "spaceClock");
-            String lagged = exec("stellurgytest space set-world-clock " + (spaceNow - SPLIT_TICKS));
+            String lagged = exec("stellurgytest space set-world-clock behind-space " + SPLIT_TICKS);
             assertTrue("the overworld clock must move: " + lagged, Reply.of(lagged).ok());
-            overworldShift = jsonLong(lagged, "overworld") - overworldNow;
+            overworldShift = jsonLong(lagged, "overworld") - jsonLong(lagged, "before");
 
             // Measure the INPUT before asserting the outcome: a green bought by an arrangement that
             // silently failed to diverge is the failure mode this line exists to make impossible.

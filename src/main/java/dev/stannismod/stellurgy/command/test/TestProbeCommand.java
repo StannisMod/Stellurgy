@@ -6000,7 +6000,13 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             long before = overworld.getTotalWorldTime();
-            overworld.getWorldInfo().setWorldTotalTime(parseLongOr(args[1], before));
+            // `set-world-clock behind-space <ticks>` puts the overworld exactly that far behind the
+            // space clock as read in THIS command. Two commands cannot: the server ticks between
+            // them, so a split computed from an earlier reply arrives larger than asked.
+            long target = args.length >= 3 && "behind-space".equalsIgnoreCase(args[1])
+                    ? dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock() - parseLongOr(args[2], 0L)
+                    : parseLongOr(args[1], before);
+            overworld.getWorldInfo().setWorldTotalTime(target);
             send(sender, "{\"ok\":true,\"before\":" + before + ",\"overworld\":"
                     + overworld.getTotalWorldTime() + ",\"spaceClock\":"
                     + dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock() + "}");
@@ -11659,11 +11665,10 @@ public class TestProbeCommand extends CommandBase {
             return;
         }
         if ("cached-for-player".equalsIgnoreCase(args[0])) {
-            // read AtmosphereHandler.prevAtmosphere via reflection
-            // so tests can assert dim-change cache invalidation. The map
-            // is private static HashMap<EntityPlayer, IAtmosphere>, keyed
-            // by reference; we report the current cached IAtmosphere
-            // (or null) for the first connected player.
+            // The atmosphere a world's handler last committed for the first connected player. Each
+            // world's AtmosphereHandler keeps its own private map, so every loaded world is asked:
+            // a dimension change must leave the player cached in NO world, and reading only the one
+            // he stands in now would answer "not cached" whatever the old world still holds.
             java.util.List<net.minecraft.entity.player.EntityPlayerMP> ps =
                     server.getPlayerList().getPlayers();
             if (ps.isEmpty() && fakePlayer != null) {
@@ -11679,18 +11684,35 @@ public class TestProbeCommand extends CommandBase {
                         AtmosphereHandler
                                 .class.getDeclaredField("prevAtmosphere");
                 f.setAccessible(true);
-                @SuppressWarnings("unchecked")
-                java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
-                        dev.stannismod.stellurgy.api.IAtmosphere> map =
-                        (java.util.HashMap<net.minecraft.entity.player.EntityPlayer,
-                                dev.stannismod.stellurgy.api.IAtmosphere>) f.get(null);
-                dev.stannismod.stellurgy.api.IAtmosphere cached = map.get(player);
+                dev.stannismod.stellurgy.api.IAtmosphere cached = null;
+                StringBuilder cachedIn = new StringBuilder();
+                for (net.minecraft.world.WorldServer w : server.worlds) {
+                    AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(w);
+                    if (handler == null) {
+                        continue;
+                    }
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<net.minecraft.entity.player.EntityPlayer,
+                            dev.stannismod.stellurgy.api.IAtmosphere> map =
+                            (java.util.Map<net.minecraft.entity.player.EntityPlayer,
+                                    dev.stannismod.stellurgy.api.IAtmosphere>) f.get(handler);
+                    dev.stannismod.stellurgy.api.IAtmosphere here = map.get(player);
+                    if (here != null) {
+                        if (cachedIn.length() > 0) {
+                            cachedIn.append(',');
+                        }
+                        cachedIn.append(w.provider.getDimension());
+                        if (cached == null || w == player.world) {
+                            cached = here;
+                        }
+                    }
+                }
                 send(sender, "{\"ok\":true,\"player\":\""
                         + escapeJson(player.getName()) + "\""
                         + ",\"hasCachedAtmosphere\":" + (cached != null)
                         + ",\"cachedAtmosphere\":\""
                         + escapeJson(cached == null ? "" : cached.getUnlocalizedName())
-                        + "\"}");
+                        + "\",\"cachedInDims\":[" + cachedIn + "]}");
             } catch (ReflectiveOperationException e) {
                 send(sender, "{\"error\":\"could not read prevAtmosphere: "
                         + escapeJson(e.getClass().getSimpleName() + ": " + e.getMessage())
