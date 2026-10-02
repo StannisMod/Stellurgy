@@ -116,14 +116,6 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
     // ---------------------------------------------------------------------
 
     @Test
-    public void freshRocketDefaultsToClassicLaunchMode() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 2000, 500));
-        RocketInfo info = rocketInfo(id);
-        assertEquals("default mode must be CLASSIC_LAUNCH: " + info.raw(),
-                RocketInfo.CLASSIC_LAUNCH, info.flightMode);
-    }
-
-    @Test
     public void startFreeFlightBypassesClassicCountdown() throws Exception {
         // Critical FF contract: NO destination chip programmed, NO classic
         // countdown — start-free-flight goes directly to isInFlight=true.

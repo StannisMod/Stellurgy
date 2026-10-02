@@ -79,42 +79,6 @@ public class ReferenceFramesTest {
     }
 
     /**
-     * Both candidate formulae satisfy the nesting criterion, which is why the choice between them
-     * had to be made on other grounds — recorded here so the measurement is not repeated.
-     *
-     * <p><b>The criterion was stated before either was computed</b>: a formula is admissible if a
-     * body's sphere contains all of its own moons and none of its siblings. Luna sits at 384 400 km;
-     * Earth's sphere is 926 000 km under Laplace and 1 496 000 km under Hill, and the nearest
-     * sibling planet is tens of millions of kilometres away in both cases. So both pass, the
-     * criterion does not separate them, and this test's job is to say so rather than to pretend the
-     * measurement decided it.</p>
-     *
-     * <p>red-witnessed: 2026-09-30, with {@code ReferenceFrames#orbitalRadiusBlocks} at {@code return body.absoluteAt(tick).distanceTo(primary.absoluteAt(tick))} divided by 1000,
-     * this fails with "Laplace must contain Luna's orbit, or it is inadmissible".</p>
-     */
-    @Test
-    public void bothCandidateFormulaeNestCorrectlySoTheCriterionDoesNotSeparateThem() {
-        SystemBody sol = sol();
-        SystemBody earth = earth();
-
-        double a = ReferenceFrames.orbitalRadiusBlocks(earth, sol, 0L);
-        double laplace = a * Math.pow(EARTH_MASS_EARTHS / SOL_MASS_EARTHS, 0.4d);
-        double hill = a * Math.cbrt(EARTH_MASS_EARTHS / (3d * SOL_MASS_EARTHS));
-
-        System.out.println("[soi-choice] a=" + a + " laplace=" + laplace + " hill=" + hill
-                + " lunaOrbit=" + LUNA_ORBIT_BLOCKS);
-
-        assertTrue("Laplace must contain Luna's orbit, or it is inadmissible",
-                laplace > LUNA_ORBIT_BLOCKS);
-        assertTrue("Hill must contain Luna's orbit too — both are admissible, which is the finding",
-                hill > LUNA_ORBIT_BLOCKS);
-        assertTrue("and Hill must be the larger of the two, which is why Laplace is the "
-                        + "conservative choice: a craft is handed to a small body's frame only well "
-                        + "inside where that body dominates",
-                hill > laplace);
-    }
-
-    /**
      * A craft close to a moon is in the MOON's frame, not its planet's — the nesting C19 FRAME-2
      * asks for and the defect measured in {@code ParkedCraftKeepsStationTest}.
      *

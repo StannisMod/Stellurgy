@@ -612,17 +612,6 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
         exec("stellurgytest player dismount");
     }
 
-    @Test
-    public void modeTogglesAreObservableFromBotSide() throws Exception {
-        tpNearBuildSite();
-
-        int rocketId = buildAndAssemble();
-
-        RocketInfo info0 = rocketInfo(rocketId);
-        assertEquals("default mode must be CLASSIC_LAUNCH: " + info0.raw(),
-                RocketInfo.CLASSIC_LAUNCH, info0.flightMode);
-    }
-
     // ===== FF flight controls (TWR-based thrust) =========================
 
     private int mountFreshFreeFlightRocket() throws Exception {

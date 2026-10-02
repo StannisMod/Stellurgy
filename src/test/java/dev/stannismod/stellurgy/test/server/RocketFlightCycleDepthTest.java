@@ -182,7 +182,7 @@ public class RocketFlightCycleDepthTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void orbitReachedEventChainHandlesAbsentSatelliteHatch() throws Exception {
+    public void orbitReachedOnARocketWithNoProgrammedChipDoesNotThrow() throws Exception {
         // Defensive: the production onOrbitReached has 3 dispatch branches
         // (satellite chip / asteroid chip / has-seat / no-seat). The
         // "simple" rocket fixture has guidance computer + seat -> the

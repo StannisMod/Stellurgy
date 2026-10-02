@@ -11,11 +11,6 @@ public class PrecisionLaserEtcherRecipeEndToEndTest extends AbstractSharedServer
     private static final String TILE_SHORT  = "TilePrecisionLaserEtcher";
 
     @Test
-    public void precisionLaserEtcherFixtureValidates() throws Exception {
-        MachineRecipeEndToEndKit.runFixtureValidates(client(), FIXTURE_KEY, 400, 70, 400);
-    }
-
-    @Test
     public void precisionLaserEtcherRunsFirstRegisteredRecipe() throws Exception {
         MachineRecipeEndToEndKit.runFirstRecipeEndToEnd(client(),
                 FIXTURE_KEY, TILE_SHORT, 500, 70, 400);

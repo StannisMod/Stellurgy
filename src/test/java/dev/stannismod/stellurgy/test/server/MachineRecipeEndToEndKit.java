@@ -193,15 +193,7 @@ final class MachineRecipeEndToEndKit {
         return out;
     }
 
-    // ---- Sub-test #1: fixture validates -----------------------------------
-
-    static void runFixtureValidates(TestClient c, String fixtureKey,
-                                    int cx, int cy, int cz) throws Exception {
-        FixturePositions p = placeFixture(c, fixtureKey, cx, cy, cz);
-        assertFixtureValidates(c, cx, cy, cz, fixtureKey, p.fullResp);
-    }
-
-    // ---- Sub-test #2: machine runs first recipe end-to-end -----------------
+    // ---- The machine runs its first recipe end-to-end ------------------------
 
     /**
      * same as {@link #runFirstRecipeEndToEnd} except output

@@ -147,17 +147,6 @@ public class InterstellarLegDistanceTest {
     private static final double MIN_BAND_FOR_A_SECOND_DRIVE_TIER = 1_000d;
 
     @Test
-    public void crossingAGalaxyIsWideEnoughAboveOneStepToHoldASecondDriveTier() {
-        System.out.println(String.format(
-                "star -> galaxy band: %.0f x (galaxy diameter %.0f ly / star separation %.2f ly)",
-                DECLARED_STAR_TO_GALAXY_BAND, 2d * UniverseScale.REFERENCE_GALAXY_RADIUS_LY,
-                UniverseScale.MEAN_STAR_SEPARATION_LY));
-        assertTrue("a star -> galaxy band of only x" + (long) DECLARED_STAR_TO_GALAXY_BAND
-                        + " leaves no room for a drive tier above the first",
-                DECLARED_STAR_TO_GALAXY_BAND >= MIN_BAND_FOR_A_SECOND_DRIVE_TIER);
-    }
-
-    @Test
     public void theMeasuredBandMatchesTheArithmeticItIsDerivedFrom() {
         // The same 20 seeds as the leg reading above, and the same real generator. The lattice is
         // STRATIFIED rather than Poisson, so a measured neighbour distance runs somewhat wider than

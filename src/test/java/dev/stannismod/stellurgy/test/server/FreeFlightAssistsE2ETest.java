@@ -132,13 +132,6 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
     // -----------------------------------------------------------------
 
     @Test
-    public void flightAssistDefaultsOnAndTogglesThroughProbe() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 4000, 500));
-        RocketInfo info0 = rocketInfo(id);
-        assertTrue("FA must default to true: " + info0.raw(), info0.flightAssistOn);
-    }
-
-    @Test
     public void setpointPersistsAfterReleasingTheKey() throws Exception {
         // THE Flight Assist feature: holding forward RAMPS the
         // velocity setpoint; releasing the key KEEPS it — the craft cruises

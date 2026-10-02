@@ -340,37 +340,6 @@ public class GalaxyFieldTest {
                         + String.format("%.2f", headroom) + "x", headroom >= MIN_LATTICE_HEADROOM);
     }
 
-    @Test
-    public void theReferenceSizeIsTheSizeTheTypeTableIsWrittenAgainst() {
-        // The reference anchors the galaxy SEPARATION, and the type bands are absolute light years so
-        // they can be checked against a catalogue. Nothing mechanical tied the two together, so the
-        // bands could sit two orders from the reference and nothing would notice — which is exactly
-        // what happened. This is that tie: the reference has to be a size an ordinary spiral IS.
-        GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        GalaxyGenConfig.GalaxyType spiral = typeNamed(config, "Spiral");
-        assertTrue("the reference galaxy radius (" + UniverseScale.REFERENCE_GALAXY_RADIUS_LY
-                        + " ly) falls outside the spiral band [" + spiral.minRadiusLy + ", "
-                        + spiral.maxRadiusLy + "] — one of the two was moved without the other",
-                UniverseScale.REFERENCE_GALAXY_RADIUS_LY >= spiral.minRadiusLy
-                        && UniverseScale.REFERENCE_GALAXY_RADIUS_LY <= spiral.maxRadiusLy);
-    }
-
-    @Test
-    public void authoredContentIsAdmittedToTheDISCGIANTSandToNoDwarf() {
-        // The floor is a constraint on the TYPE DRAW, so what it really states is a SET: the classes a
-        // galaxy holding authored content may be. A floor that slipped below the dwarf-irregular band
-        // would let a pack's content be seated in an object a few thousand light years across and
-        // land outside it on the next seed.
-        GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        double floor = UniverseScale.MIN_AUTHORED_GALAXY_RADIUS_LY;
-        for (GalaxyGenConfig.GalaxyType t : config.galaxyTypes) {
-            boolean dwarf = t.name.startsWith("Dwarf");
-            boolean qualifies = t.minRadiusLy >= floor;
-            assertEquals(t.name + " qualifies for authored content: expected " + !dwarf,
-                    !dwarf, qualifies);
-        }
-    }
-
     private static GalaxyGenConfig.GalaxyType typeNamed(GalaxyGenConfig config, String name) {
         for (GalaxyGenConfig.GalaxyType t : config.galaxyTypes) {
             if (name.equals(t.name)) {

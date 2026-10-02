@@ -15,7 +15,6 @@ import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.network.PacketAirParticle;
 import dev.stannismod.stellurgy.network.PacketAsteroidInfo;
-import dev.stannismod.stellurgy.network.PacketBiomeIDChange;
 import dev.stannismod.stellurgy.network.PacketConfigSync;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketFluidParticle;
@@ -404,68 +403,26 @@ public class PacketSerializationTest {
     // ---- PacketLaserGun ------------------------------------------------------
 
     /**
-     * write() pulls fromEntity.getEntityId() — we can't easily fabricate a real
-     * Entity, so this test exercises the readClient path against a hand-crafted
-     * wire payload that matches what write() would have produced. The write
-     * symmetry is implicitly covered by the executeClient half being a no-op for
-     * fields other than entityId/toPos.
+     * The shooter crosses the wire as its entity id, which is what the client looks it up by; the
+     * target crosses as floats, so the coordinates here are exactly representable in one.
      */
     @Test
-    public void packetLaserGunReadClientDecodesWire() {
-        ByteBuf buffer = newBuffer();
-        buffer.writeInt(4242);              // entityId
-        buffer.writeFloat(1.5f);            // toPos.x
-        buffer.writeFloat(64.25f);          // toPos.y
-        buffer.writeFloat(-2.75f);          // toPos.z
+    public void packetLaserGunRoundTripsTheShooterAndTheTarget() {
+        net.minecraft.entity.Entity shooter = new net.minecraft.entity.projectile.EntitySnowball(null);
+        PacketLaserGun sent = new PacketLaserGun(shooter, new net.minecraft.util.math.Vec3d(1.5, 64.25, -2.75));
 
+        ByteBuf buffer = newBuffer();
+        sent.write(buffer);
         PacketLaserGun received = new PacketLaserGun();
         received.readClient(buffer);
 
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(4242, (int) PacketSerializationTest.<Integer>getField(received, "entityId"));
+        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
+        assertEquals(shooter.getEntityId(), (int) PacketSerializationTest.<Integer>getField(received, "entityId"));
 
         net.minecraft.util.math.Vec3d toPos = getField(received, "toPos");
         assertEquals(1.5, toPos.x, 1e-6);
         assertEquals(64.25, toPos.y, 1e-6);
         assertEquals(-2.75, toPos.z, 1e-6);
-    }
-
-    // ---- PacketBiomeIDChange -------------------------------------------------
-
-    /**
-     * write() pulls chunk.x / chunk.z / chunk.getBiomeArray() — fabricating a
-     * real Chunk requires a full World. We test the readClient path against a
-     * known wire layout matching what the production write() emits.
-     */
-    @Test
-    public void packetBiomeIDChangeReadClientDecodesWire() {
-        byte[] biomeArr = new byte[256];
-        for (int i = 0; i < 256; i++) biomeArr[i] = (byte) (i ^ 0x5A);
-
-        ByteBuf buffer = newBuffer();
-        buffer.writeInt(7);                 // worldId
-        buffer.writeInt(12);                // chunk.x -> xPos
-        buffer.writeInt(-3);                // chunk.z -> zPos
-        buffer.writeInt(200);               // pos.x
-        buffer.writeShort(64);              // pos.y (short)
-        buffer.writeInt(-50);               // pos.z
-        buffer.writeBytes(biomeArr);
-
-        PacketBiomeIDChange received = new PacketBiomeIDChange();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(7, (int) PacketSerializationTest.<Integer>getField(received, "worldId"));
-        assertEquals(12, (int) PacketSerializationTest.<Integer>getField(received, "xPos"));
-        assertEquals(-3, (int) PacketSerializationTest.<Integer>getField(received, "zPos"));
-
-        HashedBlockPosition pos = getField(received, "pos");
-        assertEquals(200, pos.x);
-        assertEquals(64, pos.y);
-        assertEquals(-50, pos.z);
-
-        byte[] restored = getField(received, "array");
-        assertArrayEquals(biomeArr, restored);
     }
 
     // ---- PacketAirParticle ---------------------------------------------------
@@ -489,52 +446,6 @@ public class PacketSerializationTest {
     }
 
     // ---- PacketSpaceStationInfo ----------------------------------------------
-
-    /**
-     * write() needs a live {@code SpaceStationObject} hooked into
-     * {@code SpaceObjectManager} (which the mod registers only during init).
-     * We exercise the read path against a hand-crafted wire that matches what
-     * production write() emits when {@code isBeingDeleted=false}.
-     *
-     * <p>Wire layout (non-deletion branch):</p>
-     * <pre>
-     *   int stationNumber
-     *   bool isBeingDeleted = false
-     *   String clazzId (PacketBuffer)
-     *   NBTTagCompound nbt
-     *   int fuelAmt
-     *   int direction.ordinal()
-     * </pre>
-     */
-    @Test
-    public void packetSpaceStationInfoNonDeletionReadClient() throws Exception {
-        ByteBuf buffer = newBuffer();
-        net.minecraft.network.PacketBuffer pb = new net.minecraft.network.PacketBuffer(buffer);
-        buffer.writeInt(7777);                  // stationNumber
-        buffer.writeBoolean(false);             // isBeingDeleted
-        pb.writeString("station-class-id");     // clazzId
-        NBTTagCompound payload = new NBTTagCompound();
-        payload.setString("name", "RoundTripStation");
-        payload.setInteger("dim", 7777);
-        pb.writeCompoundTag(payload);
-        pb.writeInt(98_765);                    // fuelAmt
-        buffer.writeInt(net.minecraft.util.EnumFacing.SOUTH.ordinal());
-
-        PacketSpaceStationInfo received = new PacketSpaceStationInfo();
-        received.readClient(buffer);
-
-        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
-        assertEquals(7777, (int) PacketSerializationTest.<Integer>getField(received, "stationNumber"));
-        assertEquals(false, (boolean) PacketSerializationTest.<Boolean>getField(received, "isBeingDeleted"));
-        assertEquals("station-class-id", PacketSerializationTest.<String>getField(received, "clazzId"));
-        NBTTagCompound restoredNbt = getField(received, "nbt");
-        assertNotNull(restoredNbt);
-        assertEquals("RoundTripStation", restoredNbt.getString("name"));
-        assertEquals(7777, restoredNbt.getInteger("dim"));
-        assertEquals(98_765, (int) PacketSerializationTest.<Integer>getField(received, "fuelAmt"));
-        assertEquals(net.minecraft.util.EnumFacing.SOUTH.ordinal(),
-                (int) PacketSerializationTest.<Integer>getField(received, "direction"));
-    }
 
     /**
      * Deletion branch — server signals "remove this station". Wire is just

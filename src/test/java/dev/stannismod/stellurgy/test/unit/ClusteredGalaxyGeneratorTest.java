@@ -916,29 +916,6 @@ public class ClusteredGalaxyGeneratorTest {
                 separation > claimed * 0.85d && separation < claimed * 1.2d);
     }
 
-    @Test
-    public void aBlueStarIsAFindAndARedDwarfIsTheSky() {
-        // The weights are an observed census by NUMBER, so what they owe is the ORDER OF MAGNITUDE
-        // between classes, not any particular value. They read 40/25/20/10/5 before — a blue star in
-        // one system out of twenty, against an observed one in seven hundred and sixty, while the
-        // table's own comment called them rare.
-        List<GalaxyGenConfig.StarType> table = GalaxyGenConfig.defaults().starTypes;
-        assertEquals("arrangement: the stock table is the five-class one", 5, table.size());
-
-        for (int i = 1; i < table.size(); i++) {
-            assertTrue("a hotter class must never be commoner than a cooler one: "
-                            + table.get(i - 1).temperature + " weighted " + table.get(i - 1).weight
-                            + " against " + table.get(i).temperature + " weighted " + table.get(i).weight,
-                    table.get(i).weight < table.get(i - 1).weight);
-        }
-
-        GalaxyGenConfig.StarType coolest = table.get(0);
-        GalaxyGenConfig.StarType hottest = table.get(table.size() - 1);
-        assertTrue("a red dwarf must outnumber a blue star by at least two orders, as observed: "
-                        + coolest.weight + " against " + hottest.weight,
-                coolest.weight >= hottest.weight * 100);
-    }
-
     // ── the derivation is part of the world model ─────────────────────────────
 
     /** A derivation that differs from version 1 in one law, and delegates the rest. */

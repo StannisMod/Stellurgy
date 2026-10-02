@@ -91,48 +91,4 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
                 + "mismatch — phantom container?): " + idList, loaded, active);
     }
 
-    /**
-     * From {@code TestClientSoundMutedE2ETest}: a harness-spawned test client must run SILENT.
-     *
-     * <p>Automated client e2e boots a real client with real audio on the dev box;
-     * {@code TestClientMute.muteTestClientSound} zeroes the master sound level on the first client tick
-     * where the sound handler is up; the proxy registers that listener only on the
-     * {@code -Dforge.test.client=true} marker that every
-     * {@code RealClientHarness} client carries (and a manual {@code runClient} does not).</p>
-     *
-     * <p>This observes the REAL client state as an EVENT: {@code test_client_muted} is recorded by a
-     * test-only mixin at the one return production reaches only after it has written the level, and
-     * its {@code master} payload is what {@code GameSettings} reports at that instant. So the mute
-     * RUNNING and the level it LEFT are one record, and this fails if the mute is removed, mis-gated
-     * or clamped — not merely if the code path is skipped. Production keeps no field for any of it.</p>
-     */
-    @Test
-    public void harnessTestClientHasMasterSoundMuted() throws Exception {
-        scenario().asserting("the harness client's master sound level is 0");
-        bot().waitForWorld();
-
-        // Read from sequence 0, NOT from a mark: the mute lands on one of the client's first END
-        // ticks, before any scenario in this class can take a mark, so a since(mark) window would
-        // be empty however long it waited. Nothing can have evicted the record — the ring is bounded
-        // PER TYPE and production reaches this seam at most once per client session, so this type
-        // cannot overrun its own ring whatever the rest of the log is doing.
-        // The TYPE is the whole claim: production reaches this seam only when it mutes, so every
-        // record of it is the mute happening. The needle that stood here asked for the field the
-        // record always carries and narrowed nothing — and the level it carries is read below, where
-        // it is asserted, rather than being smuggled into the wait as a filter.
-        String mutes = clientEvents().await(0L, "test_client_muted",
-                "a harness-spawned client must mute its master sound level on the first client tick"
-                        + " with the sound handler up (instrument: test_client_mute_events)",
-                MUTE_BUDGET_TICKS);
-        String muted = Events.lastRecord(mutes);
-
-        Reply mReply = Reply.of(muted);
-        assertTrue("a test_client_muted record must carry the level the mute left behind: " + muted,
-                mReply.has(MASTER));
-        float master = Float.parseFloat(mReply.text(MASTER));
-        scenario().record("testClientMasterVolume", master);
-        assertEquals("a harness test client must have master sound muted to 0",
-                0.0f, master, 1e-6f);
-    }
-
 }

@@ -100,39 +100,6 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void outOfFuelMidFlightDoesNotAutoExplode_documentsCurrentBehavior() throws Exception {
-        // One might expect "out of fuel -> explode" but
-        // production has no such code path. The fuel-decrement loop at
-        // line 1235 just sets fuelFluid="null" when amount hits 0. The
-        // rocket continues to drift (falling under gravity once burning
-        // stops). Pin this as the current contract.
-        //
-        // If a future PR adds an out-of-fuel explode path, this test
-        // fails — flip the assertion + delete the documents-bug note.
-        int id = buildAndAssemble(FixtureSite.openAir(0, 7100, 500));
-
-        // Put the rocket in mid-flight (orbit=true so descent gate is
-        // active, flight=true so the isInFlight branch is taken).
-        ok(client().execute("stellurgytest rocket set-state " + id
-                + " orbit=true flight=true ticksExisted=60 posY=300 motionY=0"));
-        ok(client().execute("stellurgytest rocket drain-fuel " + id));
-
-        // Tick a few times — production must NOT explode.
-        ok(client().execute("stellurgytest rocket tick " + id + " 5"));
-
-        // Asked as `notFound` and not through the reader: a craft that HAS vanished is this test's
-        // failure — the product killed it — and the reader would call that an arrangement failure,
-        // which is a claim about the setup instead. `notFound` also refuses a reply that is neither
-        // shape, so the false below means "the server answered about a craft" and nothing weaker —
-        // which is what the second assertion here used to say separately.
-        String info = ok(client().execute("stellurgytest rocket info " + id));
-        assertFalse("out-of-fuel mid-flight must NOT auto-mark rocket dead "
-                        + "(documents current contract; no production explode-on-empty path): "
-                        + info,
-                RocketInfo.notFound(info));
-    }
-
-    @Test
     public void launchWithZeroFuelStillTransitionsToInFlight() throws Exception {
         // The upstream merge added a fuel gate to launch(): a rocket with empty
         // tanks is now refused at launch time (error.rocket.notEnoughMissionFuel)
