@@ -24,9 +24,7 @@ public class LibVulpesBlocks {
 	public static Block blockPhantom;
 	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockPlaceHolder;
-	/**
-	 * Effectively final, process lifetime: written only by LibVulpes.createContent, LibVulpes.registerBlocks.
-	 */
+	/** Effectively final, process lifetime: written only by LibVulpes.registerBlocks (null without IC2). */
 	public static Block blockIC2Plug;
 	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockStructureBlock;
@@ -53,9 +51,7 @@ public class LibVulpesBlocks {
 	public static Block[] motors;
 	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockCoalGenerator;
-	/**
-	 * Effectively final, process lifetime: written only by LibVulpes.createContent, LibVulpes.registerBlocks.
-	 */
+	/** Effectively final, process lifetime: written only by LibVulpes.registerBlocks (null without GregTech). */
 	public static Block blockGTPlug;
 
 	

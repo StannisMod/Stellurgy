@@ -45,7 +45,7 @@ public class StellurgyBiomes {
      * Effectively final, process lifetime: filled only by StellurgyBiomes.registerBlackListBiome,
      * StellurgyBiomes.blackListVanillaBiomes.
      */
-    private static List<Integer> blackListedBiomeIds;
+    private List<Integer> blackListedBiomeIds;
     /** Effectively final, process lifetime: filled only by StellurgyBiomes.registerBiome. */
     private List<Biome> registeredBiomes;
     /** Effectively final, process lifetime: filled only by StellurgyBiomes.registerHighPressureBiome. */

@@ -161,14 +161,7 @@ public class LibVulpes {
         LibVulpesBlocks.blockAdvancedMotor = new BlockMotor(Material.IRON, 1/1.5f).setCreativeTab(tabMultiblock).setUnlocalizedName("advancedMotor").setHardness(2f);
         LibVulpesBlocks.blockEnhancedMotor = new BlockMotor(Material.IRON, 1/2f).setCreativeTab(tabMultiblock).setUnlocalizedName("enhancedMotor").setHardness(2f);
         LibVulpesBlocks.blockEliteMotor = new BlockMotor(Material.IRON, 1/4f).setCreativeTab(tabMultiblock).setUnlocalizedName("eliteMotor").setHardness(2f);
-        
-        if(Loader.isModLoaded("ic2"))
-        	LibVulpesBlocks.blockIC2Plug = new BlockMultiMachineBattery(Material.IRON, TilePlugInputIC2.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("forgePowerInput").setCreativeTab(tabMultiblock).setHardness(3f);
-        
-        if(Loader.isModLoaded("gregtech"))
-        	LibVulpesBlocks.blockGTPlug = new BlockMultiMachineBattery(Material.IRON, TilePlugInputGregTech.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("gregPowerInput").setCreativeTab(tabMultiblock).setHardness(3f);
-        
-        
+
         //Initialize Items
         LibVulpesItems.itemLinker = new ItemLinker().setUnlocalizedName("Linker").setCreativeTab(tabMultiblock).setRegistryName(REGISTRY_DOMAIN, "linker");
         LibVulpesItems.itemBattery = new ItemIngredient(2).setUnlocalizedName("libvulpes:battery").setCreativeTab(tabMultiblock).setRegistryName(REGISTRY_DOMAIN, "battery");
