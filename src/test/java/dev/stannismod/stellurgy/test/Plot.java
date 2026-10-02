@@ -64,8 +64,8 @@ public final class Plot {
      *
      * <p>A flat harness world would make every coordinate equally good and was tried on 2026-08-14;
      * it cost more heap, more wall clock and three unexplained reds, so the survey stands.
-     * <b>Do not move these numbers without re-running the survey</b> —
-     * {@code FixtureGroundOnPinnedSeedTest} asserts every ground fixture's own surface.</p>
+     * <b>Do not move these numbers without re-running the survey</b> — nothing in the suite checks
+     * a ground fixture's surface, so a wrong number shows up only as a fixture standing in a hole.</p>
      */
     public static final int CLEAN_GROUND_X = 7096;
     /** @see #CLEAN_GROUND_X */

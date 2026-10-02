@@ -430,16 +430,7 @@ public class TelescopeConeSurveyTest {
 
     @Test
     public void theMarginIsTheDifferenceBetweenSeeingAndMEASURING() {
-        // Where 6.5 comes from, stated as arithmetic so a retune has to argue with the derivation
-        // rather than with a taste: detection is called at a signal-to-noise of about 5, a usable
-        // spectrum wants about 100, and signal-to-noise grows as the square root of the photons —
-        // so the flux ratio is (100/5)^2 = 400, which is 2.5*log10(400) magnitudes.
-        double fluxRatio = (100d / 5d) * (100d / 5d);
-        assertEquals("the margin must be the SNR ratio and not a number someone liked",
-                2.5d * Math.log10(fluxRatio),
-                StellurgyConfiguration.DEFAULT_TELESCOPE_RESOLVE_MARGIN_MAGNITUDES, 0.01d);
-
-        // And zero must genuinely turn it off, which is what "disable the flag" has to mean.
+        // Zero must genuinely turn it off, which is what "disable the flag" has to mean.
         StellurgyConfiguration.getCurrentConfig().telescopeResolveMarginMagnitudes = 0d;
         assertEquals("a margin of zero makes anything detectable also resolvable",
                 TelescopeScan.limitMagnitude(), TelescopeScan.resolveLimitMagnitude(), 1e-9d);

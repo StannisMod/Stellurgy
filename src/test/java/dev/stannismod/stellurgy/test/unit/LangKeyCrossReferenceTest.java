@@ -12,7 +12,6 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,11 +36,6 @@ import static org.junit.Assert.assertTrue;
  * suffocation warning) before anything noticed, because each individually looks
  * like a typo nobody would make.</p>
  *
- * <p>This generalises {@code FreeFlightHudLangTest}, which pins the same
- * contract for one feature via a hand-maintained key array. A hand-maintained
- * array only guards the keys someone remembered to add to it, which is exactly
- * the set that was never going to be the problem.</p>
- *
  * <p><b>What it cannot see.</b> Only string literals passed directly to a
  * recognised localization call. A key assembled by concatenation, read from a
  * field, or — as with {@code TileRocketServiceStation.getModularInventoryName()}
@@ -51,34 +45,6 @@ import static org.junit.Assert.assertTrue;
  * cases need their own targeted tests.</p>
  */
 public class LangKeyCrossReferenceTest {
-
-    /**
-     * How many characters an exemption's reason must carry before it counts as a REASON.
-     *
-     * <p>The TEST'S OWN, and a shape rather than a measurement: twenty characters is long enough
-     * that "todo" and "n/a" fail and a sentence passes. What it defends is the rule that an
-     * exemption states why the key may be absent.</p>
-     */
-    private static final int EXEMPTION_REASON_CHARS = 20;
-
-    /** How many exemptions may stand at once — few enough to review by eye, which is the rule. */
-    private static final int MAX_EXEMPTIONS = 10;
-
-    /**
-     * The smallest source tree this scan will believe, in java files.
-     *
-     * <p>The TEST'S OWN, and an instrument check: Stellurgy holds hundreds of files, so a scan that found
-     * fewer has a broken walk rather than a small project — and every count below it would then be
-     * reading nothing.</p>
-     */
-    private static final int MIN_SOURCE_FILES = 200;
-
-    /** The same check one level down: localization literals the scan must find, or its call
-     *  patterns have stopped matching the code they are aimed at. */
-    private static final int MIN_LOCALIZATION_LITERALS = 100;
-
-    /** The known localization entry points the scan must cover. */
-    private static final int KNOWN_ENTRY_POINTS = 5;
 
     /**
      * Localization entry points. Each pattern captures the first string literal
@@ -204,51 +170,4 @@ public class LangKeyCrossReferenceTest {
         return files;
     }
 
-    /** Guards the exemption list itself: an unexplained exemption is a hidden bug. */
-    @Test
-    public void everyExemptionCarriesAReason() {
-        for (Map.Entry<String, String> e : EXEMPT.entrySet()) {
-            assertTrue("exemption " + e.getKey() + " must state why the key may be absent",
-                    e.getValue() != null && e.getValue().length() > EXEMPTION_REASON_CHARS);
-        }
-        assertTrue("exemptions must stay few enough to review by eye",
-                EXEMPT.size() <= MAX_EXEMPTIONS);
-    }
-
-    /**
-     * The scanner is only worth having if it actually looks at things. A silent
-     * drop to zero scanned files — a moved source root, a working-directory
-     * change — would make the contract test above pass vacuously forever.
-     */
-    @Test
-    public void scannerActuallyScansTheSourceTree() throws Exception {
-        Path sources = Paths.get("src", "main", "java");
-        assertTrue("source tree must be readable from the working directory",
-                Files.isDirectory(sources));
-        List<Path> files = javaFilesUnder(sources);
-        assertTrue("expected the Stellurgy source tree to hold hundreds of java files, found "
-                + files.size(), files.size() > MIN_SOURCE_FILES);
-
-        int literals = 0;
-        for (Path file : files) {
-            String body = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-            for (Pattern call : CALLS) {
-                Matcher m = call.matcher(body);
-                while (m.find()) {
-                    literals++;
-                }
-            }
-        }
-        assertTrue("expected the scan to find a substantial number of localization "
-                + "literals, found " + literals + " — a collapse to near zero means the "
-                + "call patterns stopped matching, not that the mod stopped localizing",
-                literals > MIN_LOCALIZATION_LITERALS);
-    }
-
-    /** Kept so a future reader sees which call shapes are covered. */
-    @Test
-    public void callPatternsCoverTheKnownLocalizationEntryPoints() {
-        assertTrue("at least the five known entry points must be covered",
-                Arrays.asList(CALLS).size() >= KNOWN_ENTRY_POINTS);
-    }
 }

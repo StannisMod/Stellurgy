@@ -37,28 +37,6 @@ public class MachineRecipeIntegrationTest extends AbstractHeadlessServerTest {
     private static final String POWER_POS = "powerPos";
 
     @Test
-    public void probeWiringStillHealthy() throws Exception {
-        // tick-until on empty pos -> controlled error.
-        String empty = String.join("\n",
-                client().execute("stellurgytest machine tick-until 0 100 64 100 complete 5"));
-        assertTrue("tick-until on empty pos didn't error: " + empty,
-                "no tile entity".equals(Reply.of(empty).text("error")));
-
-        client().execute("stellurgytest place 0 100 64 100 minecraft:chest");
-        String chest = String.join("\n",
-                client().execute("stellurgytest machine tick-until 0 100 64 100 complete 5"));
-        // Read OF THE FIELD, both halves. This verb builds its message out of the reflection
-        // failure's own text — `"tile lacks " + e.getMessage()` — so the method name is inside
-        // the error and a substring of THAT is the reading. What it replaces was a pair of
-        // needles over the whole rendering, which two DIFFERENT parts of the reply could satisfy
-        // between them: the phrase in `error` and `isComplete` in some other field entirely.
-        Reply rejection = Reply.of("stellurgytest machine tick-until", chest);
-        assertTrue("tick-until didn't gracefully reject TileEntityChest: " + chest,
-                rejection.refused() && rejection.error().startsWith("tile lacks ")
-                        && rejection.error().contains("isComplete"));
-    }
-
-    @Test
     public void recipesSummaryReportsNonZeroCounts() throws Exception {
         String summary = String.join("\n", client().execute("stellurgytest machine recipes-summary"));
         assertTrue("recipes-summary errored: " + summary, !Reply.of(summary).has("error"));

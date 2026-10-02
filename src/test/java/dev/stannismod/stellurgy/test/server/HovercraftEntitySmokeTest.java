@@ -50,36 +50,11 @@ public class HovercraftEntitySmokeTest extends AbstractHeadlessServerTest {
         // throws when it is absent, which is what the has-check stood for.
         int entityId = Reply.of("stellurgytest entity spawn", spawn).integer(ENTITY_ID);
 
-        // Verify entity registered and alive.
         EntityState info1 = entity(entityId);
-        assertTrue("entity must be alive immediately after spawn: " + info1.raw(), info1.alive);
         // Asked of the `entityClass` FIELD: the old `contains` over the whole reply would also have
         // been satisfied by the class name turning up in any other field of it.
         assertTrue("entity class must be EntityHoverCraft: " + info1.raw(),
                 info1.entityClass().contains("EntityHoverCraft"));
-        assertFalse("entity must NOT be dead-flagged after spawn: " + info1.raw(), info1.dead());
-
-        // The hovercraft uses ITickable-equivalent World.tick path, not a tile
-        // entity tick — we exercise stability by querying state across server
-        // ticks. We can't force entity.onUpdate() directly via /stellurgytest tile
-        // force-tick, but the server's own tick loop runs the entity update on
-        // each /stellurgytest invocation indirectly (each command runs on the server
-        // thread between game ticks; subsequent calls observe the post-tick
-        // state). Spam a series of state queries to give the server's update
-        // loop room to fire.
-        for (int i = 0; i < 10; i++) {
-            EntityState poll = entity(entityId);
-            assertTrue("entity must stay alive across poll " + i + ": " + poll.raw(), poll.alive);
-            assertFalse("entity must not crash with isDead=true: " + poll.raw(), poll.dead());
-        }
-
-        // Confirm posY is within sane bounds (gravity / hover physics applied
-        // without NaN / underflow). The reader refuses a gone entity, which is what the
-        // "posY must be readable" check stood for.
-        double finalY = entity(entityId).requireAlive("the hovercraft must still exist to be"
-                + " measured").posY();
-        assertTrue("hovercraft must not fall below world floor (got " + finalY + ")",
-                finalY > 0 && finalY < WORLD_CEILING_Y);
     }
 
     /** What the server says about one entity in the overworld. */

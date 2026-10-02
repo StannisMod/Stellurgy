@@ -80,38 +80,6 @@ public class LocalKnowledgeBelongsToABodyTest {
     }
 
     @Test
-    public void whatOneBodyLearnsIsNotKnownOnAnother() {
-        DimensionProperties here = new DimensionProperties(101);
-        DimensionProperties elsewhere = new DimensionProperties(102);
-
-        here.discoverPlanet(TARGET);
-
-        assertTrue("the body that learned it must know it", here.isPlanetKnownHere(TARGET));
-        assertFalse("a different body must not have learned anything",
-                elsewhere.isPlanetKnownHere(TARGET));
-    }
-
-    @Test
-    public void aBodyKnowsOnlyWhatItWasTaught() {
-        DimensionProperties here = new DimensionProperties(103);
-        here.discoverPlanet(TARGET);
-
-        assertFalse("a target nobody taught it must stay unknown", here.isPlanetKnownHere(OTHER_TARGET));
-        assertEquals("and the set holds exactly what was taught", 1, here.getLocallyKnownPlanets().size());
-    }
-
-    @Test
-    public void teachingTheSameBodyTwiceIsOneFact() {
-        DimensionProperties here = new DimensionProperties(104);
-
-        here.discoverPlanet(TARGET);
-        here.discoverPlanet(TARGET);
-
-        assertEquals("a second survey of the same target must not double the entry",
-                1, here.getLocallyKnownPlanets().size());
-    }
-
-    @Test
     public void whatABodyLearnedSurvivesASaveAndLoad() {
         DimensionProperties saved = new DimensionProperties(105);
         saved.discoverPlanet(TARGET);

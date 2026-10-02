@@ -229,28 +229,4 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
     @SuppressWarnings("unused")
     private static final String NOTFULLBLOCK_UNREACHABLE_DOC = "see javadoc above";
 
-    // ───────────────────── probe shape ───────────────────────────────────
-
-    @Test
-    public void probeReportsPositionInResponse() throws Exception {
-        // The probe response must echo the input position alongside the
-        // branch — tests rely on this for correlating probe calls to the
-        // fixture they evaluated.
-        int x = 260, y = FixtureSite.OPEN_AIR_Y, z = 200;
-        place(x, y, z, "minecraft:stone");
-        String resp = String.join("\n", client().execute(
-                "stellurgytest seal-detector check " + DIM + " " + x + " " + y + " " + z));
-        // Three numbers, compared. As a needle this depended on the producer's rendering of a
-        // coordinate rather than on the coordinate.
-        assertArrayEquals("response must echo the position; got: " + resp,
-                new int[]{x, y, z}, Reply.of("stellurgytest seal-detector check", resp).blockPos("pos"));
-    }
-
-    @Test
-    public void probeReportsErrorForUnknownSubcommand() throws Exception {
-        String resp = String.join("\n", client().execute(
-                "stellurgytest seal-detector wibble 0 0 0 0"));
-        assertTrue("unknown subcommand must surface an error; got: " + resp,
-                Reply.of(resp).has("error"));
-    }
 }

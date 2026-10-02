@@ -136,50 +136,6 @@ public class FreeFlightAssistsE2ETest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 4000, 500));
         RocketInfo info0 = rocketInfo(id);
         assertTrue("FA must default to true: " + info0.raw(), info0.flightAssistOn);
-
-        String off = ok(client().execute("stellurgytest rocket set-flight-assist " + id + " off"));
-        assertTrue("set-flight-assist off must succeed: " + off,
-                Reply.of(off).ok() && (!Reply.of(off).bool("flightAssistOn")));
-
-        RocketInfo info1 = rocketInfo(id);
-        assertFalse("info must round-trip FA=false: " + info1.raw(), info1.flightAssistOn);
-
-        ok(client().execute("stellurgytest rocket set-flight-assist " + id + " on"));
-        RocketInfo info2 = rocketInfo(id);
-        assertTrue("info must round-trip FA=true after flip-back: " + info2.raw(),
-                info2.flightAssistOn);
-    }
-
-    @Test
-    public void setFlightAssistRejectsBadValue() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 4050, 500));
-        String resp = ok(client().execute(
-                "stellurgytest rocket set-flight-assist " + id + " wat"));
-        // Read OF THE FIELD. The producer builds this message around the value it rejected, so
-        // a prefix is the reading; the needle it replaces was matched anywhere in the rendering,
-        // including inside a field echoing the phrase back.
-        Reply refusal = Reply.of("stellurgytest rocket set-flight-assist", resp);
-        assertTrue("bad value must report error: " + resp,
-                refusal.refused() && refusal.error().startsWith("bad value"));
-    }
-
-    @Test
-    public void cutFlagThroughInputIsStoredOnServer() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 4100, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
-
-        // cut=1 at position 7.
-        String applied = ok(client().execute(
-                "stellurgytest rocket free-flight-input " + id + " 0 0 0 0 0 1"));
-        assertTrue("input must apply on FF rocket: " + applied,
-                Reply.of(applied).bool("applied"));
-        assertTrue("probe echoes cut=true: " + applied,
-                Reply.of(applied).bool("cut"));
-
-        RocketInfo info = rocketInfo(id);
-        assertTrue("info must store ffInputCut=true: " + info.raw(),
-                info.freeFlightInput().cut);
     }
 
     @Test

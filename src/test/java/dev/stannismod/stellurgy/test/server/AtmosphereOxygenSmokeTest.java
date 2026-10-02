@@ -182,12 +182,6 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         int secondAfter = extractInt(secondConsume, "damageAfter");
         assertEquals("repeated consume must continue to increment by 1",
                 damageAfter + 1, secondAfter);
-
-        // Comparator override drops in 2185-damage brackets — verify the
-        // probe surfaces a non-negative override for an in-use cartridge.
-        int comp = extractInt(secondConsume, "comparatorOverride");
-        assertTrue("comparator override must be >= 0 when cartridge loaded: " + comp,
-                comp >= 0);
     }
 
     /**

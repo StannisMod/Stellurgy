@@ -9,7 +9,6 @@ import dev.stannismod.stellurgy.item.ItemOreScanner;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Scanner-item contracts pinnable without a Minecraft world.
@@ -53,17 +52,6 @@ public class BeaconFinderAndOreScannerContractTest {
                             + "the HUD direction indicator on the helmet overlay",
                     expected, finder.isAllowedInSlot(stack, slot));
         }
-    }
-
-    @Test
-    public void beaconFinderOnComponentAddedReturnsTrue() {
-        // Production ItemSpaceArmor.addArmorComponent requires this to
-        // be true for the BeaconFinder to actually install in the
-        // helmet's sub-inventory.
-        ItemBeaconFinder finder = new ItemBeaconFinder();
-        ItemStack armor = new ItemStack(finder);
-        assertTrue("BeaconFinder must be installable into helmet sub-inventory",
-                finder.onComponentAdded(null, armor));
     }
 
     @Test

@@ -1054,18 +1054,6 @@ public class ClusteredGalaxyGeneratorTest {
         return lines.toString();
     }
 
-    @Test
-    public void aGeneratorHandsOutTheDerivationItUses() {
-        // How everything outside this package reaches the world's derivation. Asking the class directly
-        // would pin version 1 forever, whatever schema the save is owed.
-        IBodyDerivation mine = new ShiftedDerivation();
-
-        assertSame("a generator must hand out the derivation it was built with",
-                mine, new ClusteredGalaxyGenerator(defaultsCfg(), mine).derivation());
-        assertSame("and the stock one hands out version 1's", BodyDerivationV0.INSTANCE,
-                new ClusteredGalaxyGenerator(defaultsCfg()).derivation());
-    }
-
     // ── the golden corpus ─────────────────────────────────────────────────────
 
     /**

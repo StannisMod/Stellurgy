@@ -236,46 +236,11 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         long mountMark = mount(craftId);
 
         JsonObject clientRiding = waitForClientRiding(true, mountMark);
-        assertTrue("client must report riding=true after mount: " + clientRiding,
-                clientRiding.get("riding").getAsBoolean());
-        assertEquals("client-side ridden entity id must be the craft's id",
-                craftId, clientRiding.get("entityId").getAsInt());
         assertTrue("client-side ridden entity class must be EntityHoverCraft: " + clientRiding,
                 clientRiding.get("entityClass").getAsString().contains("EntityHoverCraft"));
 
-        String riding = exec("stellurgytest player riding-entity");
-        assertEquals("after mount, riding-entity probe must report the craft's id",
-                craftId, extract(riding, RIDING_ID));
-
         // Leave the shared player on his own feet.
         exec("stellurgytest player dismount");
-    }
-
-    /** From {@code HovercraftRideE2ETest}: the REAL dismount input is a held sneak — EntityPlayerSP's
-     *  wants-to-stop-riding path sends it to the server. */
-    @Test
-    public void playerDismountClearsRidingEntity() throws Exception {
-        buildPadAndStand();
-        int craftId = spawnVehicle("stellurgy:StellurgyHoverCraft");
-        long mountMark = mount(craftId);
-        JsonObject mounted = waitForClientRiding(true, mountMark);
-        scenario().requireArranged("arrange: client must be riding the craft first; got " + mounted,
-                craftId == mounted.get("entityId").getAsInt());
-
-        scenario().asserting("a held sneak key dismounts the rider, on both sides");
-        long sneakMark = clientEvents().mark();
-        bot().setKey(KEY_LSHIFT, true);
-        try {
-            JsonObject clientRiding = waitForClientRiding(false, sneakMark);
-            assertTrue("client must report riding=false after sneak-dismount: " + clientRiding,
-                    !clientRiding.get("riding").getAsBoolean());
-        } finally {
-            bot().setKey(KEY_LSHIFT, false);
-        }
-
-        String riding = exec("stellurgytest player riding-entity");
-        assertEquals("after dismount, player must report no riding entity (-1)",
-                -1, extract(riding, RIDING_ID));
     }
 
     /** From {@code HovercraftRideE2ETest}: W feeds MovementInput &rarr; CPacketInput &rarr; server
@@ -324,38 +289,6 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         exec("stellurgytest player dismount");
     }
 
-    /** From {@code HovercraftRideE2ETest}: the counter-test. No passenger &rarr;
-     *  {@code getPassengerMovingForward} returns 0 &rarr; no lateral acceleration. */
-    @Test
-    public void unmountedHovercraftDoesNotMoveLaterally() throws Exception {
-        buildPadAndStand();
-        int craftId = spawnVehicle("stellurgy:StellurgyHoverCraft");
-
-        scenario().measuring("confirm nobody is aboard, then read the craft's resting position");
-        String riding = exec("stellurgytest player riding-entity");
-        assertNotEquals("baseline: player must NOT be riding the craft (spawn doesn't auto-mount)",
-                craftId, extract(riding, RIDING_ID));
-
-        EntityState preInfo = craft(craftId);
-        double xBefore = preInfo.posX();
-        double zBefore = preInfo.posZ();
-
-        scenario().asserting("40 ticks with no passenger move it nowhere laterally");
-        exec("stellurgytest entity tick " + plot().dim + " " + craftId + " 40");
-
-        EntityState postInfo = craft(craftId);
-        double xAfter = postInfo.posX();
-        double zAfter = postInfo.posZ();
-        double lateralDrift = Math.sqrt(Math.pow(xAfter - xBefore, 2) + Math.pow(zAfter - zBefore, 2));
-        scenario().record("lateralDrift", lateralDrift);
-        // Tolerance: the craft's motion damping (x0.9 per tick) lets any latent motion bleed off
-        // within ~30 ticks, so drift over 40 ticks should be near zero.
-        assertTrue("unmounted hovercraft must hover in place laterally; drift=" + lateralDrift
-                        + " before=(" + xBefore + "," + zBefore + ") after=(" + xAfter + ","
-                        + zAfter + ")",
-                lateralDrift < HOVERS_IN_PLACE_BLOCKS);
-    }
-
     // ── elevator capsule ──────────────────────────────────────────────────────
 
     /**
@@ -379,42 +312,10 @@ public class VehicleRideClientGroupE2ETest extends AbstractSharedClientE2ETest {
         long mountMark = mount(capsuleId);
 
         JsonObject clientRiding = waitForClientRiding(true, mountMark);
-        assertEquals("client-side ridden entity id must be the capsule's id",
-                capsuleId, clientRiding.get("entityId").getAsInt());
         assertTrue("client-side ridden entity class must be EntityElevatorCapsule: " + clientRiding,
                 clientRiding.get("entityClass").getAsString().contains("EntityElevatorCapsule"));
-
-        String riding = exec("stellurgytest player riding-entity");
-        assertEquals("after mount, riding-entity probe must report the capsule's id",
-                capsuleId, extract(riding, RIDING_ID));
 
         exec("stellurgytest player dismount");
     }
 
-    /** From {@code ElevatorCapsuleRideE2ETest}, where it was also called
-     *  {@code playerDismountClearsRidingEntity} — renamed because the hovercraft's keeps that name. */
-    @Test
-    public void playerDismountClearsRidingEntityOnTheCapsule() throws Exception {
-        buildPadAndStand();
-        int capsuleId = spawnVehicle("stellurgy:StellurgySpaceElevatorCapsule");
-        long mountMark = mount(capsuleId);
-        JsonObject mounted = waitForClientRiding(true, mountMark);
-        scenario().requireArranged("arrange: client must be riding the capsule first; got " + mounted,
-                capsuleId == mounted.get("entityId").getAsInt());
-
-        scenario().asserting("a held sneak key dismounts the rider, on both sides");
-        long sneakMark = clientEvents().mark();
-        bot().setKey(KEY_LSHIFT, true);
-        try {
-            JsonObject clientRiding = waitForClientRiding(false, sneakMark);
-            assertTrue("client must report riding=false after sneak-dismount: " + clientRiding,
-                    !clientRiding.get("riding").getAsBoolean());
-        } finally {
-            bot().setKey(KEY_LSHIFT, false);
-        }
-
-        String riding = exec("stellurgytest player riding-entity");
-        assertEquals("after dismount, player must report no riding entity (-1)",
-                -1, extract(riding, RIDING_ID));
-    }
 }

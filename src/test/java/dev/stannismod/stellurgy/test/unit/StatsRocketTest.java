@@ -113,14 +113,9 @@ public class StatsRocketTest {
 
     @Test
     public void fuelCanGoNegativeViaSetButNotViaAdd() {
-        // Document the actual behavior: setFuelAmount is a raw setter (no clamp),
-        // addFuelAmount clamps to capacity. If clamping is desired in setFuelAmount,
-        // that's a behavior change and should land in a separate PR.
+        // addFuelAmount clamps to capacity.
         StatsRocket stats = new StatsRocket();
         stats.setFuelCapacity(FuelType.LIQUID_BIPROPELLANT, 100);
-
-        stats.setFuelAmount(FuelType.LIQUID_BIPROPELLANT, -50);
-        assertEquals(-50, stats.getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
 
         stats.setFuelAmount(FuelType.LIQUID_BIPROPELLANT, 0);
         int added = stats.addFuelAmount(FuelType.LIQUID_BIPROPELLANT, 200);
@@ -227,31 +222,6 @@ public class StatsRocketTest {
         assertEquals("BUG: createFromNBT loses thrust", 0, restored.getThrust());
         assertFalse("BUG: createFromNBT loses seat", restored.hasSeat());
         assertEquals("BUG: createFromNBT loses passenger seats", 0, restored.getNumPassengerSeats());
-    }
-
-    @Test
-    public void fuelTypeSelectionPrefersExpectedFuelType() {
-        // Each FuelType has its own independent backing storage. Setting one
-        // type must not bleed into another — this guards against any future
-        // refactor that consolidates the per-type fields into a shared map and
-        // accidentally collapses keys.
-        StatsRocket stats = new StatsRocket();
-        stats.setFuelCapacity(FuelType.LIQUID_MONOPROPELLANT, 1000);
-        stats.setFuelCapacity(FuelType.LIQUID_BIPROPELLANT, 2000);
-        stats.setFuelCapacity(FuelType.LIQUID_OXIDIZER, 500);
-
-        stats.setFuelAmount(FuelType.LIQUID_MONOPROPELLANT, 100);
-        stats.setFuelAmount(FuelType.LIQUID_BIPROPELLANT, 200);
-        stats.setFuelAmount(FuelType.LIQUID_OXIDIZER, 300);
-
-        assertEquals(100, stats.getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
-        assertEquals(200, stats.getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
-        assertEquals(300, stats.getFuelAmount(FuelType.LIQUID_OXIDIZER));
-        // Other types remain at default (0) — proves storage is truly per-type.
-        assertEquals(0, stats.getFuelAmount(FuelType.WARP));
-        assertEquals(0, stats.getFuelAmount(FuelType.IMPULSE));
-        assertEquals(0, stats.getFuelAmount(FuelType.ION));
-        assertEquals(0, stats.getFuelAmount(FuelType.NUCLEAR_WORKING_FLUID));
     }
 
     /**

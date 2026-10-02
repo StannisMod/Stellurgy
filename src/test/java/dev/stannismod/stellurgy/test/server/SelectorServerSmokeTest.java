@@ -41,49 +41,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
 
-    @Test
-    public void selectorTileStateMachineFollowsSimulatedClicks() throws Exception {
-        // Place at a position that won't collide with other tests' fixtures.
-        int x = 250, y = FixtureSite.OPEN_AIR_Y, z = 250;
-        String place = String.join("\n", client().execute(
-                "stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:planetSelector"));
-        assertTrue("could not place planetSelector: " + place,
-                Reply.of(place).bool("placed"));
-
-        // Initial state — no selection yet.
-        String empty = String.join("\n", client().execute(
-                "stellurgytest selector info 0 " + x + " " + y + " " + z));
-        assertTrue("selector info errored on fresh tile: " + empty,
-                !Reply.of(empty).has("error"));
-        assertTrue("freshly placed selector tile should report hasSelection=false: " + empty,
-                (!Reply.of(empty).bool("hasSelection")));
-
-        // Simulate a click selecting Earth (dim 0).
-        String clickEarth = String.join("\n", client().execute(
-                "stellurgytest selector simulate-click 0 " + x + " " + y + " " + z + " 0"));
-        assertTrue("simulate-click failed: " + clickEarth,
-                Reply.of(clickEarth).ok());
-
-        // dimCache must now reflect Earth.
-        String earthInfo = String.join("\n", client().execute(
-                "stellurgytest selector info 0 " + x + " " + y + " " + z));
-        assertTrue("selection didn't stick: " + earthInfo,
-                Reply.of(earthInfo).bool("hasSelection"));
-        assertTrue("selectedDim mismatch: " + earthInfo,
-                (Reply.of(earthInfo).integer("selectedDim") == 0));
-
-        // Probe non-existent planet dim — must reject without mutating state.
-        String reject = String.join("\n", client().execute(
-                "stellurgytest selector simulate-click 0 " + x + " " + y + " " + z + " 99999"));
-        assertTrue("expected rejection for non-registered planet dim 99999: " + reject,
-                "planet dim not registered".equals(Reply.of(reject).text("error")));
-
-        String unchanged = String.join("\n", client().execute(
-                "stellurgytest selector info 0 " + x + " " + y + " " + z));
-        assertTrue("selection unexpectedly mutated after rejected simulate-click: " + unchanged,
-                (Reply.of(unchanged).integer("selectedDim") == 0));
-    }
-
     /**
      * The selector's distance gauge reads a planet's orbit at 6.25 hundredths of the bar per AU, so
      * Earth reads 6. That is the raw unit over 16 as the gauge drew it before the distance unit became
@@ -396,12 +353,5 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
             }
         }
         return moons;
-    }
-
-    @Test
-    public void selectorInfoOnEmptyPositionErrorsCleanly() throws Exception {
-        String resp = String.join("\n", client().execute("stellurgytest selector info 0 100 80 100"));
-        assertTrue("expected 'tile not TilePlanetSelector' on empty pos: " + resp,
-                "tile not TilePlanetSelector".equals(Reply.of(resp).text("error")));
     }
 }

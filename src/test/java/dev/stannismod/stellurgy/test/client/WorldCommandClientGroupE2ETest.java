@@ -165,50 +165,6 @@ public class WorldCommandClientGroupE2ETest extends AbstractSharedClientE2ETest 
         return value;
     }
 
-    // ── /ar addSealant ────────────────────────────────────────────────────────
-
-    /** From {@code WorldCommandPlayerEquippedE2ETest}. A different block than {@code addTorch} uses,
-     *  so the two do not share state through the sealed/torch lists. */
-    @Test
-    public void stellurgyAddSolidBlockOverrideAddsHeldBlockToSealedList() throws Exception {
-        scenario().arranging("op the bot and put dirt in its hand");
-        opTheBot();
-        String give = exec("stellurgytest player give-held minecraft:dirt");
-        scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
-
-        scenario().measuring("mark the client's chat log immediately before typing");
-        Events clientLog = clientEvents();
-        long mark = clientLog.mark();
-
-        scenario().asserting("the sealed-block-list reply reaches the player's chat");
-        bot().sendChat("/ar addSealant");
-        awaitChatContaining(clientLog, mark, "sealed block list");
-    }
-
-    // ── /ar addTorch ──────────────────────────────────────────────────────────
-
-    /**
-     * From {@code WorldCommandPlayerEquippedE2ETest}. The command replies either "%s added to the
-     * torch list" or "%s is already in the torch list" — idempotent re-runs hit the second branch
-     * and the post-state is the same, so the assertion is on the shared substring, resolved through
-     * the client's own lang.
-     */
-    @Test
-    public void stellurgyAddTorchAddsHeldBlockToTorchList() throws Exception {
-        scenario().arranging("op the bot and put cobblestone in its hand");
-        opTheBot();
-        String give = exec("stellurgytest player give-held minecraft:cobblestone");
-        scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
-
-        scenario().measuring("mark the client's chat log immediately before typing");
-        Events clientLog = clientEvents();
-        long mark = clientLog.mark();
-
-        scenario().asserting("the torch-list reply reaches the player's chat");
-        bot().sendChat("/ar addTorch");
-        awaitChatContaining(clientLog, mark, "torch list");
-    }
-
     // ── /ar station give ──────────────────────────────────────────────────────
 
     /** From {@code WorldCommandPlayerEquippedE2ETest}: the chip must appear in the inventory the

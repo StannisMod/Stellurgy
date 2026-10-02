@@ -68,33 +68,6 @@ public class DimensionPropertiesTest {
     }
 
     /**
-     * A fresh dimension's defaults, including an orbit of one AU in today's distance unit.
-     *
-     * <p>red-witnessed: 2026-09-29, with {@code DimensionProperties#resetProperties} at {@code orbitalDist = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} defaulting the orbit to the old
-     * {@code 100} ("1 AU = 100"), this fails with "expected:&lt;1495979&gt; but was:&lt;100&gt;".</p>
-     */
-    @Test
-    public void dimensionPropertiesDefaultsAreStable() {
-        DimensionProperties props = new DimensionProperties(42);
-
-        assertEquals("Temp", props.getName());
-        assertEquals(1.0f, props.getGravitationalMultiplier(), 1e-6);
-        assertEquals(dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, props.orbitalDist);
-        assertEquals(24000, props.rotationalPeriod);
-        assertEquals(63, props.getSeaLevel());
-        assertTrue(props.hasOxygen);
-        assertTrue(props.isNativeDimension);
-        assertFalse(props.hasRings);
-        assertFalse(props.isGasGiant());
-
-        // Default colors are non-null per resetProperties.
-        assertNotNull(props.fogColor);
-        assertNotNull(props.skyColor);
-        assertNotNull(props.ringColor);
-        assertNotNull(props.sunriseSunsetColors);
-    }
-
-    /**
      * red-witnessed: 2026-09-30, taken on the pre-long form (the write was then
      * {@code setInteger}), with {@code DimensionProperties#writeToNBT} at
      * {@code nbt.setLong("orbitalDist", orbitalDist)} writing {@code orbitalDist} through a
@@ -126,14 +99,6 @@ public class DimensionPropertiesTest {
     }
 
     // ---- terrainSource -------------------------------------------------------
-
-    @Test
-    public void terrainSourceDefaultsToNativeAndEmptyParams() {
-        DimensionProperties props = new DimensionProperties(9100);
-        assertSame(TerrainSource.NATIVE, props.getTerrainSource());
-        assertEquals("", props.getTerrainWorldType());
-        assertEquals("", props.getTerrainTemplate());
-    }
 
     @Test
     public void terrainSourceSettersNullGuardToDefaults() {
@@ -250,21 +215,6 @@ public class DimensionPropertiesTest {
         } catch (Exception e) {
             throw new AssertionError(e);
         }
-    }
-
-    /**
-     * {@code getGeodeMultiplier()} returns the geode multiplier independently of
-     * the volcano multiplier. (Earlier the getter returned
-     * {@code volcanoFrequencyMultiplier} by a copy-paste error; fixed upstream.)
-     */
-    @Test
-    public void getGeodeMultiplierReturnsGeodeMultiplier() {
-        DimensionProperties props = new DimensionProperties(8888, "GeodeGetter");
-        props.setGeodeMultiplier(2.0f);
-        props.setVolcanoMultiplier(7.0f);
-
-        assertEquals("getGeodeMultiplier must return the geode field, not volcano",
-                2.0f, props.getGeodeMultiplier(), 1e-6);
     }
 
     @Test

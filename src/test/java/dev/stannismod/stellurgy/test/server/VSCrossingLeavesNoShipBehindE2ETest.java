@@ -58,7 +58,7 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
     /** Where a ship is built, and the clear-sky altitude every crossing lands at. */
     private static final int BUILD_Y = FixtureSite.OPEN_AIR_Y, SKY_Y = 150;
     /** One base per method, far enough apart that no method can resolve another's ship. */
-    private static final int LEG1_X = 5400, LEG2_X = 6000, LEG3_X = 6600;
+    private static final int LEG1_X = 5400, LEG2_X = 6000;
     /** Distance between a crossing's source and its destination — well beyond {@link #POSE_TOLERANCE}. */
     private static final int HOP = 160;
     /** How far a re-assembled ship's own pose may sit from the anchor it was seeded on. */
@@ -98,68 +98,6 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
         }
     }
 
-    /**
-     * The nearest-ship lookup must not answer with a hull that owns no blocks.
-     *
-     * <p>The two legs above measure what the WORLD is left holding. This one measures what the
-     * LOOKUP is willing to say, which is a different failure and outlives the first: the manager
-     * collects an emptied hull on its next tick, so for the remainder of the tick in which a
-     * crossing cuts one, a blockless craft is still in the loaded set and still has a position.
-     * Anything asking "which ship is here" in that window — a seat lookup, a pose read, a teleport,
-     * the opening lookup of the next crossing out of the same place — could be handed a craft that
-     * is on its way out of the world, and this class's own history records the symptom: a seat
-     * search answering {@code seatFound:false} on a ship that had just been built.
-     *
-     * <p><b>The window is entered deliberately, not waited for.</b> Provoking it for real means
-     * winning a race against the destroy pass; the probe empties a loaded ship and asks the lookup
-     * inside ONE call, which is the only place the window is guaranteed to still be open — two probe
-     * commands are separated by a whole world pass, so a second command would ask after the
-     * collector had run and would pass on a build with no filter at all.
-     *
-     * <p>Nothing is left behind: the destroy pass collects the emptied hull on its next tick, the
-     * same path a cut hull takes in production.
-     */
-    @Test
-    @org.junit.Ignore("SUBJECT REMOVED, retired in place 2026-09-14. This pins a property of the"
-            + " nearest-ship lookup — that it refuses a hull whose blocks have just been taken away —"
-            + " and that lookup no longer exists: a ship's blocks live in its subspace, so in the"
-            + " world it has a pose and no extent for a distance to be measured to, and the whole"
-            + " positional family was removed rather than bounded. Its fault injector"
-            + " (`vs empty-nearest-and-look`) went with it, so the body below calls a verb that is"
-            + " not there. Kept rather than deleted because the REASONING is the part worth finding"
-            + " again: a craft with no blocks is a record on its way out of the world, and any lookup"
-            + " that hands it to a caller gives an answer that is about to stop being true.")
-    public void theNearestShipLookupRefusesAHullWithNoBlocks() throws Exception {
-
-        // The ship must be loaded and findable before it is emptied, or this leg tests the lookup
-        // against nothing — established by `buildShipAt` on the substrate's own records.
-        buildShipAt(LEG3_X);
-
-        String looked = exec("stellurgytest vs empty-nearest-and-look 0 "
-                + LEG3_X + " " + BUILD_Y + " " + BASE_Z);
-        assertTrue("the fault injection itself failed, so this leg measures nothing: " + looked,
-                Reply.of(looked).ok());
-
-        String emptied = field(looked, "emptied");
-        String answered = field(looked, "lookupAnswered");
-        assertTrue("the injection must name the ship it emptied, or there is nothing to compare the"
-                + " lookup's answer against: " + looked, !emptied.isEmpty());
-        assertTrue("the nearest-ship lookup answered with the hull whose blocks had just been taken"
-                        + " away. A craft with no blocks is not a craft: it is a record on its way out"
-                        + " of the world, and handing it to a caller that asked which ship is HERE"
-                        + " gives an answer that is about to stop being true — the seat searches, pose"
-                        + " reads and teleports behind this lookup then act on a ship that is leaving."
-                        + " emptied=" + emptied + " lookupAnswered=" + answered,
-                !emptied.equals(answered));
-    }
-
-    /** One named field out of a probe envelope, or {@code ""} when it carries none. */
-    private static String field(String json, String key) {
-        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
-        // FIELD name, so it cannot know what a missing one means — and the callers here
-        // include waits, which read the shape that does not carry the field yet.
-        return Reply.of(json).textOr(key, "");
-    }
 
     @org.junit.After
     public void resetPermaload() throws Exception {

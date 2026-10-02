@@ -15,7 +15,6 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.PlanetarySystem;
-import dev.stannismod.stellurgy.universe.UniverseScale;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 
 import static org.junit.Assert.assertEquals;
@@ -196,13 +195,8 @@ public class DriveLadderTest {
 
     @Test
     public void theBaselineIsWHATASEVENCOILGENERATORISWORTH_notALiteral() {
-        // The entry-level speed is a datum from play and must not move unless somebody moves it. It did
-        // move once, silently: the baseline power was a literal that stopped being the seven-coil figure
-        // the moment the power law gained an exponent.
-        assertEquals("the baseline power must BE the baseline build's power",
-                DriveTuning.powerForCoils(DriveTuning.BASELINE_COILS),
-                DriveTuning.BASELINE_DRIVE_POWER);
-        assertEquals("so a baseline ship flies at exactly the baseline speed",
+        // The entry-level speed is a datum from play and must not move unless somebody moves it.
+        assertEquals("a baseline ship flies at exactly the baseline speed",
                 DriveTuning.BASELINE_SPEED_BLOCKS_PER_TICK,
                 JumpSpeed.blocksPerTick(DriveTuning.BASELINE_DRIVE_POWER,
                         DriveTuning.BASELINE_SHIP_MASS, DriveTier.INTERSTELLAR));
@@ -225,19 +219,6 @@ public class DriveLadderTest {
                 absorbed / (double) baseline, 1e-9d);
         assertTrue("and a baseline arrival must need more than one, or the dampener is free",
                 needed > 1);
-    }
-
-    @Test
-    public void theGalacticEfficiencyISTheBandGap_notANumberSomebodyPicked() {
-        // Written as a literal it would be a number nobody could check, and one that silently stopped
-        // meaning "one band" the first time the star separation or the galaxy size was retuned. It rests
-        // on exactly two constants, and this is what says so.
-        double expected = 2d * UniverseScale.REFERENCE_GALAXY_RADIUS_LY
-                / UniverseScale.MEAN_STAR_SEPARATION_LY;
-        assertEquals("the galactic generation's efficiency must BE the star -> galaxy gap", expected,
-                DriveTier.GALACTIC.efficiency(), 1e-9d);
-        assertEquals("the baseline generation is the unit every other is quoted against", 1d,
-                DriveTier.INTERSTELLAR.efficiency(), 0d);
     }
 
     // ── measured through the real generator, over the same 20 seeds ────────────

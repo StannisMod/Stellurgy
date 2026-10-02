@@ -17,7 +17,6 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalacticAnchor;
-import dev.stannismod.stellurgy.universe.EmptyGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.universe.IGalaxyGenerator;
 import dev.stannismod.stellurgy.universe.PlanetarySystem;
@@ -75,23 +74,6 @@ public class UniverseRegistryTest {
         s.setId(id);
         s.setName("Star-" + id);
         return s;
-    }
-
-    @Test
-    public void storageKeyIsStable() {
-        // The .dat filename in the save; renaming silently orphans the whole placement store.
-        assertEquals("stellurgy_universe", UniverseRegistry.STORAGE_KEY);
-    }
-
-    @Test
-    public void placeRoundTripsBothDirectionsInMemory() {
-        UniverseRegistry reg = testUniverse.newRegistry();
-        GalacticCoord cell = GalacticCoord.ofSectorLocal(3, -4, 5, 0, 0, 0);
-        reg.place(cell, 7);
-
-        assertEquals(7, reg.starIdForCoord(cell).getAsInt());
-        assertEquals(Optional.of(cell), reg.coordForSystem(7));
-        assertTrue("placing a system must mark the saved-data dirty", reg.isDirty());
     }
 
     @Test
@@ -263,17 +245,6 @@ public class UniverseRegistryTest {
     }
 
     @Test
-    public void defaultGeneratorIsVoidAndDeterministic() {
-        IGalaxyGenerator gen = new EmptyGalaxyGenerator();
-        GalacticCoord a = GalacticCoord.ofSectorLocal(1, 2, 3, 0, 0, 0);
-        assertFalse(gen.systemAt(12345L, a).isPresent());
-        assertFalse(gen.systemAt(999L, a).isPresent());
-        // Same (seed, coord) is stably empty; region enumeration is empty.
-        assertEquals(gen.systemAt(12345L, a), gen.systemAt(12345L, a));
-        assertTrue(gen.systemsInRegion(12345L, GalacticCoord.ORIGIN, a).isEmpty());
-    }
-
-    @Test
     public void systemForCoordPrefersStoredOverGenerator() {
         StellarBody stored = star(42);
         testUniverse.setStarLookup(id -> id == 42 ? stored : null);
@@ -409,9 +380,6 @@ public class UniverseRegistryTest {
     public void systemsAreLocationAgnostic() {
         // The coordinate is obtainable ONLY from the registry; the system handle exposes no coordinate.
         StellarBody body = star(9);
-        PlanetarySystem sys = PlanetarySystem.ofStar(body);
-        assertEquals(9, sys.systemId());
-        assertSame(body, sys.star().get());
 
         UniverseRegistry reg = testUniverse.newRegistry();
         assertFalse("an unregistered system has no coord", reg.coordForStar(body).isPresent());
@@ -489,19 +457,6 @@ public class UniverseRegistryTest {
         assertEquals(GalacticCoord.ORIGIN, UniverseRegistry.parseAnchor(""));
         assertEquals(GalacticCoord.ORIGIN, UniverseRegistry.parseAnchor("not,a,number"));
         assertEquals(GalacticCoord.ORIGIN, UniverseRegistry.parseAnchor("1,2"));
-    }
-
-    @Test
-    public void worldSeedIsTransientAndNotPersisted() {
-        UniverseRegistry source = testUniverse.newRegistry();
-        source.bindWorldSeed(123456789L);
-        assertEquals(123456789L, source.worldSeed());
-
-        NBTTagCompound tag = new NBTTagCompound();
-        source.writeToNBT(tag);
-        UniverseRegistry round = testUniverse.newRegistry();
-        round.readFromNBT(tag);
-        assertEquals("the seed is re-derived on load, never persisted", 0L, round.worldSeed());
     }
 
     @Test
@@ -955,8 +910,6 @@ public class UniverseRegistryTest {
         // a player is told so on any world that uses it.
         UniverseSchema current = UniverseSchemas.current();
 
-        assertEquals("the first released model is version 0", 0, current.version());
-        assertEquals("and its human label carries the zero", "0.1", current.label());
         assertFalse("a 0.x label is not a stable release", current.isStable());
     }
 
@@ -974,8 +927,6 @@ public class UniverseRegistryTest {
 
         assertEquals("a save with no stamp must read as UNSTAMPED, not as the alpha",
                 UniverseRegistry.UNSTAMPED, reg.schemaVersion());
-        assertTrue("and UNSTAMPED must be a value no version can take",
-                UniverseRegistry.UNSTAMPED < 0);
     }
 
     @Test

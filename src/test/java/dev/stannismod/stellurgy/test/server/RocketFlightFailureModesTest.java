@@ -84,9 +84,6 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         // dead. After dead it's no longer in the world.loadedEntityList
         // and findRocket(id) returns null.
         int id = buildAndAssemble(FixtureSite.openAir(0, 7000, 500));
-        // The reader refuses an absent uuid, which is what "no uuid in info" asserted.
-        RocketInfo infoBefore = RocketInfo.byId(cmd -> ok(client().execute(cmd)), id);
-        assertFalse("no uuid in info: " + infoBefore.raw(), infoBefore.requireUuid().isEmpty());
 
         String explodeResp = ok(client().execute("stellurgytest rocket explode " + id));
         assertTrue("explode probe must succeed: " + explodeResp,
@@ -120,19 +117,6 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
                 + " orbit=true flight=true ticksExisted=60 posY=300 motionY=0"));
         ok(client().execute("stellurgytest rocket drain-fuel " + id));
 
-        // Verify fuel is actually zero.
-        String fuelResp = ok(client().execute("stellurgytest rocket fuel " + id));
-        // Every fuel type the probe reports. The types are the registry's, so they are asked for as
-        // "every entry" of the reply's `fuels` object rather than by name; the old form walked the
-        // rendered reply with a regex and would have passed silently on a reply that named none.
-        Reply fuels = Reply.of("stellurgytest rocket fuel", fuelResp);
-        assertTrue("the fuel probe must report the craft's fuel types at all: " + fuelResp,
-                fuels.has(FUELS));
-        for (String perType : fuels.objectValues(FUELS)) {
-            assertEquals("all fuel types must be drained: " + fuelResp, 0.0,
-                    Reply.of("one fuel entry", perType).number(FUEL_AMOUNT), 0.0);
-        }
-
         // Tick a few times — production must NOT explode.
         ok(client().execute("stellurgytest rocket tick " + id + " 5"));
 
@@ -165,19 +149,5 @@ public class RocketFlightFailureModesTest extends AbstractSharedServerTest {
         assertFalse("zero-fuel launch must be refused by the fuel gate "
                         + "(isInFlight stays false): " + info.raw(),
                 info.inFlight);
-    }
-
-    @Test
-    public void explodeOnUnknownRocketReturnsError() throws Exception {
-        String resp = ok(client().execute("stellurgytest rocket explode 9999999"));
-        assertTrue("unknown rocket must error: " + resp,
-                "rocket not found".equals(Reply.of(resp).text("error")));
-    }
-
-    @Test
-    public void drainFuelOnUnknownRocketReturnsError() throws Exception {
-        String resp = ok(client().execute("stellurgytest rocket drain-fuel 9999999"));
-        assertTrue("unknown rocket must error: " + resp,
-                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 }

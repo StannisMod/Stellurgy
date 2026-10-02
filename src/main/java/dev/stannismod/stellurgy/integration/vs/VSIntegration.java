@@ -19,8 +19,7 @@ import dev.stannismod.stellurgy.entity.IFlightBackend;
  *
  * <p><b>Boundary rule — do not break:</b> this class MUST NOT import or reference
  * any {@code org.valkyrienskies.*} type, so it is always safe for the JVM to
- * load. Every VS-touching call goes through {@link VSBridge}. The unit test
- * {@code VSIntegrationTest} pins this contract.</p>
+ * load. Every VS-touching call goes through {@link VSBridge}. No test pins this rule.</p>
  *
  * <p><b>What that rule no longer buys, said plainly.</b> It used to end "…so a VS-importing class
  * is never loaded on a Stellurgy install without VS", and the bridge was reached only behind an

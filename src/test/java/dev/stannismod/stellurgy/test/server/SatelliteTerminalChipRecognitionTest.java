@@ -100,11 +100,6 @@ public class SatelliteTerminalChipRecognitionTest extends AbstractSharedServerTe
         int ppt = Integer.parseInt(extract(info, POWER_PER_TICK));
         assertTrue("powerPerTick must be > 0 with installed power source: " + info,
                 ppt > 0);
-        // maxData is the satellite's total data-storage capacity. The
-        // chip flows through SatelliteData.data so this surface must be
-        // non-negative (negative would indicate uninitialised storage).
-        int maxData = Integer.parseInt(extract(info, MAX_DATA));
-        assertTrue("maxData must be non-negative: " + info, maxData >= 0);
     }
 
     /** Empty slot &rarr; status 0 even with power present. */

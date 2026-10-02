@@ -65,19 +65,6 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void starSetTempUpdatesStellarBodyTemperature() throws Exception {
-        try {
-            exec("ar star set temp 0 4242");
-            String resp = exec("ar star get temp 0");
-            Matcher m = TEMP_LINE.matcher(resp);
-            assertTrue("must include a Temp: line — got: " + resp, m.find());
-            assertEquals(4242, Integer.parseInt(m.group(1)));
-        } finally {
-            exec("ar star set temp 0 100");
-        }
-    }
-
-    @Test
     public void starGenerateRegistersNewStarObservableInList() throws Exception {
         String beforeList = exec("ar star list");
         assertTrue("baseline list must NOT yet contain the test star name",

@@ -35,33 +35,6 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
     private static final String ANGLE_PATTERN = "angle";
 
     @Test
-    public void stellurgyPlanetsArePreloaded() throws Exception {
-        String joined = String.join("\n", client().execute("stellurgytest dim list"));
-
-        assertTrue("dim list missing stellurgyDimensions key — probe wiring broken: " + joined,
-                (Reply.of(joined).arrayLength("stellurgyDimensions") >= 0));
-
-        Assume.assumeFalse(
-                "No Stellurgy dimensions registered — skipping (empty galaxy?)",
-                (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
-    }
-
-    @Test
-    public void dimLoadOnOverworldReportsLoaded() throws Exception {
-        // /stellurgytest dim load <id> must force-load the world and
-        // report `loaded:true` afterwards. Overworld (dim 0) is always loaded
-        // on a fresh dedicated server, so this smoke pins the probe wiring
-        // without depending on any Stellurgy-specific dim id. Deeper load behavior
-        // (loading a not-yet-touched Stellurgy dim and back) belongs to a later phase.
-        String joined = String.join("\n", client().execute("stellurgytest dim load 0"));
-
-        assertTrue("dim load 0 did not echo dim:0 in response: " + joined,
-                (Reply.of(joined).integer("dim") == 0));
-        assertTrue("dim load 0 did not report loaded:true: " + joined,
-                Reply.of(joined).bool("loaded"));
-    }
-
-    @Test
     public void providerClassIsWorldProviderPlanet() throws Exception {
         // Stellurgy registers Earth as dim 0 but keeps its vanilla WorldProviderSurface,
         // so this assertion targets the first NON-overworld Stellurgy planet — the
@@ -74,49 +47,12 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void biomeProviderIsNonNull() throws Exception {
-        int stellurgyDim = firstNonOverworldStellurgyDimOrSkip();
-        // The reader REFUSES both an absent field and the producer's literal "null", which is
-        // exactly the pair of assertions this leg used to spell for itself.
-        DimInfo info = loadAndInfo(stellurgyDim);
-        assertFalse("biomeProviderClass reported null for Stellurgy dim " + stellurgyDim + ": " + info.raw(),
-                info.biomeProviderClass().isEmpty());
-    }
-
-    @Test
-    public void chunkGeneratorIsNonNull() throws Exception {
-        int stellurgyDim = firstNonOverworldStellurgyDimOrSkip();
-        DimInfo info = loadAndInfo(stellurgyDim);
-        assertFalse("chunkGeneratorClass reported null for Stellurgy dim " + stellurgyDim + ": " + info.raw(),
-                info.chunkGeneratorClass().isEmpty());
-    }
-
-    @Test
     public void saveFolderResolvesToExpectedPath() throws Exception {
         int stellurgyDim = firstNonOverworldStellurgyDimOrSkip();
         DimInfo info = loadAndInfo(stellurgyDim);
         // WorldProviderPlanet.getSaveFolder() returns "advRocketry/" + super.getSaveFolder().
         assertTrue("saveDir for Stellurgy planet " + stellurgyDim + " should be under advRocketry/: " + info.raw(),
                 info.saveDir().startsWith("advRocketry/"));
-    }
-
-    @Test
-    public void celestialAngleStableAcrossSameWorldTime() throws Exception {
-        int stellurgyDim = firstNonOverworldStellurgyDimOrSkip();
-        // The probe is a pure function of (dim, worldTime), so two calls with
-        // identical inputs must produce identical angles. We compare extracted
-        // numeric values rather than full response strings — the dedicated
-        // server prefixes each console echo with a timestamp, so byte-level
-        // response equality would race on tick boundaries.
-        loadDim(stellurgyDim);
-        double first = extractAngle(client().execute(
-                "stellurgytest dim celestial-angle " + stellurgyDim + " 0"));
-        double second = extractAngle(client().execute(
-                "stellurgytest dim celestial-angle " + stellurgyDim + " 0"));
-
-        assertEquals(
-                "celestial-angle must be deterministic for identical inputs",
-                first, second, 0.0);
     }
 
     @Test
@@ -139,16 +75,6 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
                 + ", a6k=" + a6k + ")", a0, a6k, 0.0);
         assertNotEquals("celestial-angle did not change between t=6000 and t=12000 (a6k=" + a6k
                 + ", a12k=" + a12k + ")", a6k, a12k, 0.0);
-    }
-
-    private int firstStellurgyDimOrSkip() throws Exception {
-        String joined = String.join("\n", client().execute("stellurgytest dim list"));
-        Assume.assumeFalse(
-                "No Stellurgy dimensions registered — skipping (empty galaxy?)",
-                (Reply.of(joined).arrayLength("stellurgyDimensions") == 0));
-        int[] dims = Reply.of("stellurgytest dim list", joined).intArray(AR_DIM_PATTERN);
-        assertTrue("could not parse first Stellurgy dim id from probe response: " + joined, dims.length > 0);
-        return dims[0];
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {

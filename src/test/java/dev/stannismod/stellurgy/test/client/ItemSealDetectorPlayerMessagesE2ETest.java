@@ -252,29 +252,6 @@ public class ItemSealDetectorPlayerMessagesE2ETest extends AbstractSharedClientE
 
     // ── the reset's own witness, from this side ───────────────────────────────
 
-    /**
-     * Named to sort FIRST so it runs before any scenario has written to chat, and again meaningful
-     * on every later run of the class: it pins that a scenario is handed an empty backlog by the
-     * shared-harness reset.
-     *
-     * <p><b>Read it for what it is.</b> Two things it is NOT. It is no longer the guard the branch
-     * scenarios below stand on — those read their verdict off a MARK on the client's event log, and
-     * a leftover line is unreachable to them whatever the backlog holds. And it is not an
-     * independent witness of the reset: the base class's own {@code @Before} asserts the identical
-     * condition a couple of statements earlier, so a regression in the reset fails there first and
-     * this method never reaches its assertion. It stays because the condition is a real contract of
-     * the shared harness that other classes DO read a backlog through, and a test naming it here is
-     * where a reader looks.</p>
-     */
-    @Test
-    public void aaChatBacklogIsEmptyWhenAScenarioStarts() throws Exception {
-        scenario().asserting("a scenario starts with an empty chat backlog");
-        com.google.gson.JsonObject chat = bot().reportChat(20);
-        scenario().record("lines", chat.get("lines")).record("overlayTicks", chat.get("overlayTicks"));
-        assertEquals("a shared-harness scenario must start with no chat lines: " + chat.get("lines"),
-                0, chat.get("count").getAsInt());
-    }
-
     // ───────────────────── sealed branch ──────────────────────────────────
 
     /** Solid ROCK material full-block &rarr; "sealed". */

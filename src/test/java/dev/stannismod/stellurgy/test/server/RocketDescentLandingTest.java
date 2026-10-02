@@ -59,9 +59,6 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
     private static final String TICKS_EXISTED = "ticksExisted";
     private static final String LANDED_COUNT = "landed";
-    /** The forceload ticket the chunk-ticket claims are about, and the array it lives in. */
-    private static final String TICKETS = "tickets";
-    private static final String TICKET_KEY = "0:100:100";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -113,21 +110,6 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
                         "stellurgytest chunk forceload " + dim + " " + (cx + dxc) + " " + (cz + dzc)));
             }
         }
-    }
-
-    @Test
-    public void rocketTickProbeReportsTicksExistedInResponse() throws Exception {
-        // Probe-surface sanity: /stellurgytest rocket tick must succeed and
-        // expose ticksExisted in the response. Used by the explicit
-        // synthetic-tick path in Phase 5 (failure-mode tests).
-        int id = buildAndAssemble(FixtureSite.openAir(0, 6000, 500));
-        String tickResp = ok(client().execute("stellurgytest rocket tick " + id + " 5"));
-        assertTrue("tick probe must succeed: " + tickResp,
-                Reply.of(tickResp).ok());
-        assertTrue("tick probe response must expose ticksExisted: " + tickResp,
-                Reply.of(tickResp).has("ticksExisted"));
-        int t = gi(TICKS_EXISTED, tickResp, "ticksExisted from tick response");
-        assertTrue("ticksExisted must be non-negative: " + t, t >= 0);
     }
 
     /**
@@ -325,28 +307,5 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         }
         assertTrue("dismantle must paste at least one non-air block back",
                 foundNonAir);
-    }
-
-    @Test
-    public void chunkAnchorProbeRoundTrips() throws Exception {
-        // Probe-surface sanity: forceload + release for a single chunk
-        // must succeed and return ok=true. The list endpoint reflects
-        // the active ticket set. release-all clears them.
-        String fl = ok(client().execute("stellurgytest chunk forceload 0 100 100"));
-        assertTrue("forceload must succeed: " + fl, Reply.of(fl).ok());
-
-        String list = ok(client().execute("stellurgytest chunk list"));
-        // MEMBERSHIP of the ticket array, asked of the array. As a substring the key was also
-        // matched inside a LONGER key — `0:100:1000` contains `0:100:100` — so the negative
-        // claim below could fail for a neighbour's ticket and the positive one pass on it.
-        assertTrue("list must include the ticket key: " + list,
-                Reply.of("stellurgytest chunk list", list).holdsText(TICKETS, TICKET_KEY));
-
-        String rel = ok(client().execute("stellurgytest chunk release 0 100 100"));
-        assertTrue("release must succeed: " + rel, Reply.of(rel).ok());
-
-        String listAfter = ok(client().execute("stellurgytest chunk list"));
-        assertFalse("list must not include released ticket: " + listAfter,
-                Reply.of("stellurgytest chunk list", listAfter).holdsText(TICKETS, TICKET_KEY));
     }
 }

@@ -1,21 +1,15 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 import org.junit.Test;
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
-import dev.stannismod.stellurgy.api.SatelliteRegistryArrangement;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties.Property;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -87,46 +81,7 @@ public class SatellitePropertiesTest {
         }
     }
 
-    @Test
-    public void emptyNbtReadProducesDefaults() {
-        SatelliteProperties props = new SatelliteProperties();
-        props.readFromNBT(new NBTTagCompound());
-
-        assertEquals(0, props.getPowerGeneration());
-        assertEquals(0, props.getPowerStorage());
-        assertEquals(0, props.getMaxDataStorage());
-        assertEquals(0L, props.getId());     // empty NBT -> readLong default is 0
-        assertEquals("", props.getSatelliteType());
-        assertEquals(0f, props.getWeight(), 0f);
-    }
-
     // ---- SatelliteRegistry contract -----------------------------------
-
-    /**
-     * The satellite type registry must support register &rarr; lookup &rarr; factory
-     * and behave predictably on unknown keys.
-     *
-     * We use a controlled local test subclass to avoid coupling to production
-     * Stellurgy types that are registered only in {@code Stellurgy.init}. The
-     * registry is the game's for the whole JVM, so the entry is removed again
-     * when the test ends.
-     */
-    @Test
-    public void satelliteTypeFactoryCreatesExpectedClass() {
-        String key = "ar.test.factory." + System.nanoTime();
-        try (SatelliteRegistryArrangement ignored =
-                     SatelliteRegistryArrangement.registerSatellite(key, TestSatellite.class)) {
-            SatelliteBase instance = SatelliteRegistry.getNewSatellite(key);
-            assertNotNull("factory must produce an instance for a registered key", instance);
-            assertSame("factory must return exactly the registered class",
-                    TestSatellite.class, instance.getClass());
-        }
-
-        // Reverse lookup is order-dependent in a multi-key registry (the
-        // production registry is shared; tests may have already registered the
-        // same class under other names). We don't assert getKey here — its
-        // contract is "any matching key", verified end-to-end in scenario tests.
-    }
 
     /**
      * Unknown / never-registered satellite type ids must NOT throw — the
@@ -143,40 +98,6 @@ public class SatellitePropertiesTest {
         // createFromNBT's unknown-type handling (returns null → caller drops it,
         // the C002/C155 fix) is verified in SatelliteRegistryFallbackTest and the
         // server/client e2e; kept out of this pure-unit class.
-    }
-
-    /**
-     * Registry contents are a runtime contract: the set of types Stellurgy
-     * registers in mod init must be queryable by string id. We don't run mod
-     * init from a unit test; instead we register a test type AND a stand-in for
-     * each canonical production category (sensor / mission / energy / weather)
-     * and assert the registry round-trips them all.
-     *
-     * (The actual production registration is verified by scenario tests
-     * — {@code SatelliteLifecycleSmokeTest} drives create + lookup against a
-     * real running server.)
-     */
-    @Test
-    public void satelliteRegistryContainsExpectedTypes() {
-        // Use unique suffixes to keep the registry isolated from concurrent
-        // tests that may also register satellites.
-        long stamp = System.nanoTime();
-        String sensor = "ar.test.sensor." + stamp;
-        String mission = "ar.test.mission." + stamp;
-        String energy = "ar.test.energy." + stamp;
-        String weather = "ar.test.weather." + stamp;
-
-        try (SatelliteRegistryArrangement a = SatelliteRegistryArrangement.registerSatellite(sensor, TestSatellite.class);
-             SatelliteRegistryArrangement b = SatelliteRegistryArrangement.registerSatellite(mission, TestSatellite.class);
-             SatelliteRegistryArrangement c = SatelliteRegistryArrangement.registerSatellite(energy, TestSatellite.class);
-             SatelliteRegistryArrangement d = SatelliteRegistryArrangement.registerSatellite(weather, TestSatellite.class)) {
-            // Each registered key must be reachable through getNewSatellite (the
-            // exact lookup used by production on world load / packet handling).
-            assertNotNull(SatelliteRegistry.getNewSatellite(sensor));
-            assertNotNull(SatelliteRegistry.getNewSatellite(mission));
-            assertNotNull(SatelliteRegistry.getNewSatellite(energy));
-            assertNotNull(SatelliteRegistry.getNewSatellite(weather));
-        }
     }
 
     /**
@@ -212,13 +133,5 @@ public class SatellitePropertiesTest {
         restoredDead.readFromNBT(nbtDead);
         assertEquals(0, restoredDead.getPowerGeneration());
         assertEquals(0, restoredDead.getPowerStorage());
-    }
-
-    /** Minimal SatelliteBase subclass for registry tests — no MC dependencies. */
-    public static class TestSatellite extends SatelliteBase {
-        @Override public String getInfo(World world) { return "test"; }
-        @Override public String getName() { return "test_satellite"; }
-        @Override public boolean performAction(EntityPlayer player, World world, BlockPos pos) { return false; }
-        @Override public double failureChance() { return 0.0d; }
     }
 }

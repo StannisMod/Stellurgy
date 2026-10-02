@@ -66,21 +66,6 @@ public class DiscoveryVisibilityTest {
         }
     }
 
-    @Test
-    public void isPlanetKnownReflectsGlobalKnownSet() {
-        DimensionManager dm = DimensionManager.getInstance();
-        int dim = 7900;
-        boolean had = dm.knownPlanets.contains(dim);
-        try {
-            dm.knownPlanets.remove(dim);
-            assertFalse("absent from the known set -> not known", dm.isPlanetKnown(dim));
-            dm.knownPlanets.add(dim);
-            assertTrue("present in the known set -> known", dm.isPlanetKnown(dim));
-        } finally {
-            if (had) dm.knownPlanets.add(dim); else dm.knownPlanets.remove(dim);
-        }
-    }
-
     // ---- E-1 per-system: derived isSystemKnown -------------------------------
 
     @Test

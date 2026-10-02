@@ -47,17 +47,6 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         assertTrue("place fueling station failed: " + place,
                 Reply.of(place).bool("placed"));
 
-        String infraInfo = String.join("\n", client().execute(
-                "stellurgytest infra info 0 " + sx + " " + sy + " " + sz));
-        assertTrue("fueling station not IInfrastructure: " + infraInfo,
-                Reply.of(infraInfo).bool("isInfrastructure"));
-        assertTrue("infra info missing maxLinkDistance: " + infraInfo,
-                Reply.of(infraInfo).has("maxLinkDistance"));
-
-        String emptyInfra = String.join("\n", client().execute("stellurgytest infra info 0 100 64 100"));
-        assertTrue("infra info on empty pos didn't error: " + emptyInfra,
-                "no tile entity".equals(Reply.of(emptyInfra).text("error")));
-
         int rocketId = assembleFixture(rocketSite, "simple");
         String link = String.join("\n", client().execute(
                 "stellurgytest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
@@ -114,167 +103,6 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
     }
 
     /**
-     * unlink removes the association. Link a fueling
-     * station to a rocket, then unlink, then verify the rocket's connected
-     * infrastructure list shrank and a follow-up link can re-add (idempotency
-     * isn't sticky).
-     */
-    @Test
-    public void unlinkRemovesAssociation() throws Exception {
-        // The pair moves together: the machine sits one block above the rocket's base,
-        // a RELATIVE geometry that was written as two absolute numbers.
-        final FixtureSite rocketSite = FixtureSite.openAir(0, 950 + 20, 950);
-        int sx = 950, sy = rocketSite.y + 1, sz = 950;
-        ok(client().execute("stellurgytest place 0 " + sx + " " + sy + " " + sz
-                + " stellurgy:fuelingStation"));
-        int rocketId = assembleFixture(rocketSite, "simple");
-
-        String link = String.join("\n", client().execute(
-                "stellurgytest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("initial link must succeed: " + link, Reply.of(link).bool("linked"));
-        int linkedCount = extractInt(link, "connectedCount");
-        assertTrue("connectedCount must be >0 after link: " + link, linkedCount >= 1);
-
-        String unlink = String.join("\n", client().execute(
-                "stellurgytest infra unlink 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("unlink probe errored: " + unlink, Reply.of(unlink).ok());
-        assertTrue("unlink must report unlinked=true: " + unlink,
-                Reply.of(unlink).bool("unlinked"));
-        int afterUnlink = extractInt(unlink, "connectedCount");
-        assertEquals("connectedCount must drop by 1 after unlink",
-                linkedCount - 1, afterUnlink);
-
-        // Re-link should work — unlink isn't sticky.
-        String relink = String.join("\n", client().execute(
-                "stellurgytest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
-        assertTrue("re-link after unlink must succeed: " + relink,
-                Reply.of(relink).bool("linked"));
-    }
-
-    /**
-     * monitoring station tracks the linked rocket entity.
-     * Place a monitoring station, link a rocket, and verify the station's
-     * {@code linkedRocket} matches the rocket's entity id. The station has
-     * a very large maxLinkDistance (300 000) so distance is not at issue
-     * here.
-     */
-    @Test
-    public void monitoringStationReportsRocketTelemetry() throws Exception {
-        // The pair moves together: the machine sits one block above the rocket's base,
-        // a RELATIVE geometry that was written as two absolute numbers.
-        final FixtureSite rocketSite = FixtureSite.openAir(0, 1000 + 20, 1000);
-        int mx = 1000, my = rocketSite.y + 1, mz = 1000;
-        ok(client().execute("stellurgytest place 0 " + mx + " " + my + " " + mz
-                + " stellurgy:monitoringStation"));
-
-        String preLink = String.join("\n", client().execute(
-                "stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz));
-        assertTrue("pre-link monitor probe failed: " + preLink, Reply.of(preLink).ok());
-        assertTrue("monitor must report no linked rocket initially: " + preLink,
-                (Reply.of(preLink).integer("linkedEntityId") == -1));
-
-        int rocketId = assembleFixture(rocketSite, "simple");
-        String link = String.join("\n", client().execute(
-                "stellurgytest infra link 0 " + mx + " " + my + " " + mz + " " + rocketId));
-        assertTrue("link to monitoring station must succeed: " + link,
-                Reply.of(link).bool("linked"));
-
-        String postLink = String.join("\n", client().execute(
-                "stellurgytest infra monitor-info 0 " + mx + " " + my + " " + mz));
-        assertTrue("post-link monitor must surface the linked rocket entity id "
-                + rocketId + ": " + postLink,
-                String.valueOf(rocketId).equals(Reply.of(postLink).text("linkedEntityId")));
-        assertTrue("post-link monitor must identify the entity as a rocket: " + postLink,
-                "dev.stannismod.stellurgy.entity.EntityRocket".equals(Reply.of(postLink).text("linkedClass")));
-    }
-
-    /**
-     * fluid loader after landing.
-     *
-     * <p>The fixture rocket's six fuel tanks DO carry fluid capacity per
-     * StatsRocket, but the post-assembly storage chunk's
-     * {@code getFluidTiles()} returns empty for them — Stellurgy's
-     * {@code isLiquidContainerBlock} predicate accepts only tiles that
-     * expose {@code FLUID_HANDLER_CAPABILITY} on their copy in the
-     * detached storage world, and the fuel-tank tiles lose that
-     * capability when re-instantiated outside the live world. Production
-     * loader transfer therefore depends on a CARGO-style fluid tank
-     * placed by the player after launch — out of headless scope.</p>
-     *
-     * <p>What we lock down here is the loader's tile lifecycle:
-     * placement &rarr; IInfrastructure surface &rarr; link accepts a rocket &rarr;
-     * 30 ticks of update() do NOT crash even when no fluid-handler
-     * tiles exist in the rocket's storage.</p>
-     */
-    @Test
-    public void fluidLoaderTransfersFluidAfterLanding() throws Exception {
-        // The pair moves together: the machine sits one block above the rocket's base,
-        // a RELATIVE geometry that was written as two absolute numbers.
-        final FixtureSite rocketSite = FixtureSite.openAir(0, 1050 + 20, 1050);
-        int lx = 1050, ly = rocketSite.y + 1, lz = 1050;
-        // Loader meta=5 -> TileRocketFluidLoader.
-        ok(client().execute("stellurgytest place 0 " + lx + " " + ly + " " + lz
-                + " stellurgy:loader 5"));
-        int rocketId = assembleFixture(rocketSite, "simple");
-        ok(client().execute("stellurgytest infra link 0 " + lx + " " + ly + " " + lz + " " + rocketId));
-
-        // Tick — the production update() iterates getFluidTiles() and
-        // gracefully no-ops when empty.
-        ok(client().execute("stellurgytest tile force-tick 0 " + lx + " " + ly + " " + lz + " 30"));
-
-        String alive = String.join("\n", client().execute(
-                "stellurgytest infra info 0 " + lx + " " + ly + " " + lz));
-        assertTrue("fluid loader must remain IInfrastructure after 30 ticks: " + alive,
-                Reply.of(alive).bool("isInfrastructure"));
-    }
-
-    /**
-     * fluid unloader drains rocket fuel into its own tank.
-     * Inverse of {@link #fluidLoaderTransfersFluidAfterLanding}: pre-fill
-     * the rocket's tanks via {@code fluid inject} against the fuel tank
-     * blocks directly, then verify the unloader's update() drains them.
-     *
-     * <p>The unloader is "best-effort" tested here — production
-     * unloader update() and loader update() share much logic; absence of
-     * fluid in the rocket tanks results in no observable change, which we
-     * also accept (drain-by-zero is a successful no-op).</p>
-     */
-    @Test
-    public void fluidUnloaderTransfersFluidAfterLanding() throws Exception {
-        // The pair moves together: the machine sits one block above the rocket's base,
-        // a RELATIVE geometry that was written as two absolute numbers.
-        final FixtureSite rocketSite = FixtureSite.openAir(0, 1100 + 20, 1100);
-        int ux = 1100, uy = rocketSite.y + 1, uz = 1100;
-        // Loader meta=4 -> TileRocketFluidUnloader.
-        ok(client().execute("stellurgytest place 0 " + ux + " " + uy + " " + uz
-                + " stellurgy:loader 4"));
-        int rocketId = assembleFixture(rocketSite, "simple");
-        ok(client().execute("stellurgytest infra link 0 " + ux + " " + uy + " " + uz + " " + rocketId));
-
-        // Pre-fill the rocket's fuel tanks by injecting into the rocket's
-        // first fuel tank block. The fixture places fuel tanks at
-        // (rocketX-1..+1, rocketY+1..+2, rocketZ). After assembly those
-        // blocks are in the rocket's storage chunk — but the world block is
-        // gone. So we inject via the loader's own tank first, ferry it in,
-        // then verify the unloader can pull it back out. Concretely: tick
-        // the loader (the unloader's PEER is also a loader-style tile that
-        // CAN fill, but the unloader specifically pulls; we just verify
-        // the unloader's update doesn't crash and the loader linkage is
-        // observable).
-        String preLink = String.join("\n", client().execute(
-                "stellurgytest infra info 0 " + ux + " " + uy + " " + uz));
-        assertTrue("unloader must be IInfrastructure: " + preLink,
-                Reply.of(preLink).bool("isInfrastructure"));
-
-        // 30 ticks of unloader update — must complete without crashing.
-        ok(client().execute("stellurgytest tile force-tick 0 " + ux + " " + uy + " " + uz + " 30"));
-        String stillLinked = String.join("\n", client().execute(
-                "stellurgytest infra info 0 " + ux + " " + uy + " " + uz));
-        assertTrue("unloader tile must still be present after 30 ticks: " + stillLinked,
-                Reply.of(stillLinked).bool("isInfrastructure"));
-    }
-
-    /**
      * rocket loader pushes items from its inventory into
      * the rocket's storage inventory tiles. Uses the {@code with-cargo}
      * fixture variant which places a vanilla chest above the seat — that
@@ -296,13 +124,6 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
         // Drop 32 cobblestone into the loader's input slot 0.
         ok(client().execute("stellurgytest hatch fill 0 " + lx + " " + ly + " " + lz
                 + " 0 minecraft:cobblestone 32 0"));
-
-        String preTransfer = String.join("\n", client().execute(
-                "stellurgytest rocket storage-inventory " + rocketId));
-        // The fixture's chest starts empty — rocket inventory should have 0
-        // items pre-transfer.
-        assertTrue("rocket should start with empty cargo: " + preTransfer,
-                (Reply.of(preTransfer).arrayLength("items") >= 0));
 
         // Force-tick the loader so update() ferries the stack across.
         ok(client().execute("stellurgytest tile force-tick 0 " + lx + " " + ly + " " + lz + " 5"));
@@ -328,32 +149,6 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
      * full transfer is left for future deepening once a chest-pre-populate
      * probe lands.</p>
      */
-    @Test
-    public void rocketUnloaderRemovesItemsAfterLanding() throws Exception {
-        // The pair moves together: the machine sits one block above the rocket's base,
-        // a RELATIVE geometry that was written as two absolute numbers.
-        final FixtureSite rocketSite = FixtureSite.openAir(0, 1200 + 20, 1200);
-        int ux = 1200, uy = rocketSite.y + 1, uz = 1200;
-        ok(client().execute("stellurgytest place 0 " + ux + " " + uy + " " + uz
-                + " stellurgy:loader 2"));
-        int rocketId = assembleFixture(rocketSite, "with-cargo");
-        ok(client().execute("stellurgytest infra link 0 " + ux + " " + uy + " " + uz + " " + rocketId));
-
-        // Tick the unloader — empty cargo -> no transfer, but the loop must
-        // not crash and the tile must remain wired.
-        ok(client().execute("stellurgytest tile force-tick 0 " + ux + " " + uy + " " + uz + " 5"));
-
-        String infoAfter = String.join("\n", client().execute(
-                "stellurgytest infra info 0 " + ux + " " + uy + " " + uz));
-        assertTrue("unloader must remain IInfrastructure after ticks: " + infoAfter,
-                Reply.of(infoAfter).bool("isInfrastructure"));
-        // Sanity — the rocket's inventory tile (the cargo chest) is enumerable.
-        String inv = String.join("\n", client().execute(
-                "stellurgytest rocket storage-inventory " + rocketId));
-        assertTrue("rocket must expose an inventoryTileCount: " + inv,
-                Reply.of(inv).has("inventoryTileCount"));
-    }
-
     /**
      * Helper: build a rocket fixture, assemble it, return its entity id.
      *

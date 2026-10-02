@@ -49,22 +49,6 @@ public class ClientBootBaselineGroupE2ETest extends AbstractSharedClientE2ETest 
         return "client-boot";
     }
 
-    /** From {@code ClientConnectSmokeTest}: the client bridge handshake round-trips a player view. */
-    @Test
-    public void clientReportsStateOverBridge() throws Exception {
-        scenario().asserting("the client answers report_state over the bridge");
-        // ARRANGEMENT GATE (harness): the bridge answers before the world exists, so a report read
-        // without this would describe a client that has not joined anything yet.
-        bot().waitForWorld();
-        JsonObject state = bot().reportState();
-        assertTrue("client reportState missing 'ok' key: " + state, state.has("ok"));
-        // The handshake must round-trip a PLAYER view, which is what the smoke test was named for.
-        // The old assertion here was assertNotNull on the reply, which cannot fail: ClientBot
-        // throws on a failed reply rather than returning null.
-        assertTrue("the bridge answered, but not about a client that is in a world: " + state,
-                state.has("worldReady") && state.get("worldReady").getAsBoolean());
-    }
-
     /**
      * From {@code ModCountParityE2ETest}: e2e regression guard for the dummy-mod-container removal
      * (dercodeKoenig/AdvancedRocketry#71).

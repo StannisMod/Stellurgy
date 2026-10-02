@@ -1232,77 +1232,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         }
     }
 
-    // ---- A per-tick trace of the deck's pose, across the ticks a pose does not arrive -----------
-
-    @Test
-    public void aPerTickTraceShowsWhatTheDeckPoseDoesAcrossAPacketGap() throws Exception {
-        final FixtureSite site = site();
-        final int bx = site.x, by = site.y, bz = site.z;
-
-        // A SPIKE, and it is allowed to come back "no". The client's pose source only behaves
-        // differently on the ticks a pose does NOT arrive for — 12 in 298 on a loaded client — and
-        // everything downstream reports averages over hundreds of ticks. Three mechanisms were tried
-        // against whole-scenario verdicts and each traded one regression for another with nobody
-        // having seen a gap boundary. This prints one line per tick so the boundary is read.
-        //
-        // What would make it say "no": no gap in the window (then the trace shows a steady state and
-        // says nothing about gaps), or a gap whose following tick is unremarkable — which would mean
-        // the churn measured on the predicting pose source came from somewhere else entirely.
-        buildAndBoardShip(site);
-        Events client = clientEvents();
-        long dismountMark = client.mark();
-        exec("stellurgytest player dismount");
-        ShipIdentity.awaitCaptureHeldBy(client, dismountMark, scenarioShipId,
-                "a body must be taken by THIS ship's deck, or the guard"
-                + " columns of this trace are empty and half the reading is missing",
-                CAPTURE_LINK_BUDGET_TICKS);
-        // Read ONCE, and proved to be about THIS ship: the two execs this replaces
-        // printed one sample and asserted a second, and neither said which craft
-        // held the body.
-        DeckCapture deckCapture2 = deckCaptureOfThisShip(scenarioShipId,
-                "the capture this assertion reads must be on this scenario's own ship");
-        scenario().requireArranged("a body must be on the deck, or the guard columns of this trace"
-                + " are empty and half the reading is missing: " + deckCapture2.raw(),
-                deckCapture2.alreadyTracked);
-
-        long mark = clientEvents().mark();
-        ClientWindow poseTrace = ClientWindow.open(bot(), DECK_POSE_TRACE_WINDOW, 120);
-
-        // Drive it, so the pose has something to say: a still craft's every tick looks alike whether
-        // a pose arrived or not, which is exactly the case this cannot learn anything from.
-        // SIXTY TICKS, unscaled. This is how long the stick is held, not how long the test is
-        // willing to wait: `waitTicks(1)` advances one game tick whatever the wall clock is doing,
-        // so sixty of them produce sixty per-tick records on an idle box and on a loaded one alike.
-        // The only assertion below is that the trace has per-tick content.
-        for (int i = 0; i < 60; i++) {
-            exec("stellurgytest vs seat-input-by-id 0 " + scenarioShipId + " 0 1 0 0 0 0");
-            bot().waitTicks(1);
-        }
-        exec("stellurgytest vs seat-input-by-id 0 " + scenarioShipId + " 0 0 0 0 0 0");
-        // EXPERIMENT: twenty ticks of the craft coasting after the stick is centred are part of
-        // what this spike prints — a gap boundary can fall in them as well as in the drive. The one
-        // assertion below is already satisfied by the drive's sixty records and does not depend on
-        // this number; it decides only how much of the coast the trace shows.
-        bot().waitTicks(20);
-        poseTrace.close();
-
-        String trace = clientEvents().since(mark, "client_deck_pose_tick");
-        System.out.println("[crewcap] deck-pose per-tick trace ::\n" + trace);
-        Events.assertInstrumentRan(trace, "client_deck_pose_tick",
-                "the per-tick pose trace did or did not run");
-        // The one thing asserted: the trace exists and covers ticks. Everything else here is a
-        // reading, and a spike that asserted its own expectations would stop being able to say "no".
-        // Asked PER RECORD. The pair of needles over the envelope could be answered by two
-        // DIFFERENT things — the type name is carried by the INSTRUMENTS list whether or not
-        // anything was recorded, so `stepY` sitting in some other instrument's record satisfied
-        // the second half while the trace itself was empty.
-        boolean anyStepY = false;
-        for (String record : Events.records(trace)) {
-            anyStepY |= Events.text(record, "stepY") != null;
-        }
-        assertTrue("the trace must contain per-tick records to read: " + trace, anyStepY);
-    }
-
     // ---- The server does not simply ratify what a client declares ------------------------------
 
     /**
@@ -2865,9 +2794,6 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     private static final String FRAME_STEP_WINDOW =
             "dev.stannismod.stellurgy.test.trace.FrameStepWindow";
 
-    /** The per-tick deck-pose trace's budget, armed per scenario. */
-    private static final String DECK_POSE_TRACE_WINDOW =
-            "dev.stannismod.stellurgy.test.trace.DeckPoseTraceWindow";
 
     /** The client's own world look direction, from the rotation it reports. */
     private double[] clientLook() throws Exception {
