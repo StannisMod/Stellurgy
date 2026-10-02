@@ -161,23 +161,48 @@ import dev.stannismod.stellurgy.world.biome.*;
 public class Stellurgy {
 
     private static final String PLANET = "Planet";
+    /** Effectively final, process lifetime: built once at class initialisation. */
+    public static final Logger logger = LogManager.getLogger(Constants.modId);
+    @SidedProxy(clientSide = "dev.stannismod.stellurgy.client.ClientProxy", serverSide = "dev.stannismod.stellurgy.common.CommonProxy")
+    public static CommonProxy proxy;
+    @Instance(value = Constants.modId)
+    public static Stellurgy instance;
+
+    // ---- What the mod holds for the whole process ---------------------------------------------
+    //
+    // Fields of THIS object, not statics of the class: Forge builds the mod object once and calls
+    // every lifecycle hook on it, so the state those hooks build belongs on it, reached through
+    // `instance`.
+
     /** The machine recipe tables. Filled by the mod in preInit / recipe registration / postInit and
      *  read for the life of the side; rewritten only by the operator's /reloadrecipes, a partial
-     *  re-initialisation of the mod and the sanctioned exception to statics being written once. */
-    public static final RecipeHandler machineRecipes = new RecipeHandler();
-    public static final Logger logger = LogManager.getLogger(Constants.modId);
-    private static final CreativeTabs tabAdvRocketry = new CreativeTabs("stellurgy") {
+     *  re-initialisation of the mod and the sanctioned exception to being written once.
+     *  Effectively final, process lifetime: built with the mod object. */
+    public final RecipeHandler machineRecipes = new RecipeHandler();
+    /** Effectively final, process lifetime: built with the mod object (a creative tab registers itself
+     *  in vanilla's tab array when it is constructed). */
+    private final CreativeTabs tabAdvRocketry = new CreativeTabs("stellurgy") {
         @Override
         @Nonnull
         public ItemStack getTabIconItem() {
             return new ItemStack(StellurgyItems.itemSatelliteIdChip);
         }
     };
-    @SidedProxy(clientSide = "dev.stannismod.stellurgy.client.ClientProxy", serverSide = "dev.stannismod.stellurgy.common.CommonProxy")
-    public static CommonProxy proxy;
-    public static String version;
-    @Instance(value = Constants.modId)
-    public static Stellurgy instance;
+    /** Effectively final, process lifetime: written only by {@link #preInit}. */
+    public String version;
+
+    /** The vendored libVulpes, folded into this mod: built with the mod object, driven from its
+     *  lifecycle hooks. Effectively final, process lifetime. */
+    public final dev.stannismod.stellurgy.libvulpes.LibVulpes libVulpes =
+            new dev.stannismod.stellurgy.libvulpes.LibVulpes();
+    /** The vendored force-field system, folded into this mod: built with the mod object, driven from
+     *  its lifecycle hooks. Effectively final, process lifetime. */
+    public final dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem affs =
+            new dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem();
+    /** The vendored Valkyrien Skies host object: built with the mod object, driven from its lifecycle
+     *  hooks. Effectively final, process lifetime. */
+    public final org.valkyrienskies.mod.common.ValkyrienSkiesMod valkyrienSkies =
+            new org.valkyrienskies.mod.common.ValkyrienSkiesMod();
 
     // ---- The four API services, owned here ---------------------------------------------------
     //
@@ -194,9 +219,19 @@ public class Stellurgy {
     // point it already had — moving init order is a separate change with separate risk — but now
     // has ONE writer, and a second install is a loud error instead of a silent overwrite.
 
+    /** Effectively final, process lifetime: written only by Stellurgy.installSealHandler. */
     private IAtmosphereSealHandler apiSealHandler;
+    /**
+     * Effectively final, server lifetime: written only by Stellurgy.attachServerServices,
+     * Stellurgy.detachServerServices at server start, released at server stop.
+     */
     private ISpaceObjectManager apiSpaceObjects;
+    /**
+     * Effectively final, server lifetime: written only by Stellurgy.attachServerServices,
+     * Stellurgy.detachServerServices at server start, released at server stop.
+     */
     private IGalaxy apiGalaxy;
+    /** Effectively final, process lifetime: written only by Stellurgy.installGravityManager. */
     private IGravityManager apiGravity;
 
     private static <T> T installOnce(T current, T next, String what) {
@@ -255,18 +290,20 @@ public class Stellurgy {
     public IGravityManager gravity() {
         return apiGravity;
     }
-    public static WorldType planetWorldType;
-    public static WorldType spaceWorldType;
-    public static MaterialRegistry materialRegistry = new MaterialRegistry(Constants.modId);
+    /** Effectively final, process lifetime: written only by {@link #load}. */
+    public WorldType planetWorldType;
+    /** Effectively final, process lifetime: written only by {@link #load}. */
+    public WorldType spaceWorldType;
+    /** Effectively final, process lifetime: built with the mod object; filled at registration. */
+    public final MaterialRegistry materialRegistry = new MaterialRegistry(Constants.modId);
     /** Products other mods may have auto-generated recipes for, accumulated from registry events
-     *  during load and consumed once by {@code createAutoGennedRecipes} at init. OWNER: the LOADER
-     *  — FML fires those events once per launch and the recipes are built once from what they left
-     *  here. Final: the map is filled, never replaced. */
-    private static final HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
-    /** The mod's config file. Written once by preInit; its contents are edited at run time only by the
-     *  operator's /addtorch and /addsealant, a partial re-initialisation of the mod and the sanctioned
-     *  exception to statics being written once. */
-    private static Configuration config;
+     *  during load and consumed once by {@code createAutoGennedRecipes} at init - FML fires those
+     *  events once per launch. Effectively final, process lifetime: filled only by {@link #registerOre}. */
+    private final HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
+    /** The mod's config file. Its contents are edited at run time only by the operator's /addtorch and
+     *  /addsealant, a partial re-initialisation of the mod and the sanctioned exception to being
+     *  written once. Effectively final, process lifetime: written only by {@link #preInit}. */
+    private Configuration config;
 
     /**
      * This server's space subsystem, or {@code null} when it has none (before server start, on a
@@ -285,6 +322,9 @@ public class Stellurgy {
      * no setter and no swap seam, so nothing can leave a running server without its subsystem. A test
      * that wants an isolated stack builds its own {@code SpaceSubsystem} and ticks it itself; it
      * cannot pass it off as the server's.</p>
+     *
+     * Effectively final, server lifetime: written only by Stellurgy.serverStarting, Stellurgy.serverStopped
+     * at server start, released at server stop.
      */
     private dev.stannismod.stellurgy.space.SpaceSubsystem spaceSubsystem;
 
@@ -383,6 +423,8 @@ public class Stellurgy {
      *
      * <p>That the owners' own state is the SERVER's while their objects are the mod's is a real,
      * pre-existing defect. This class neither worsens nor fixes it.</p>
+     *
+     * Effectively final, process lifetime: written only by Stellurgy.postInit.
      */
     private dev.stannismod.stellurgy.player.PlayerRelease playerRelease;
 
@@ -396,6 +438,7 @@ public class Stellurgy {
     }
 
     //CONFIG-stuff here to make sure we load early enough
+    /** Effectively final, process lifetime: written only by Stellurgy.preInit. */
     private boolean resetFromXml;
 
     //Biome registry.
@@ -505,10 +548,11 @@ public class Stellurgy {
         // libVulpes was a separate mod and is folded into this container. It goes FIRST: everything below
         // builds on the products, materials and packet discriminators it registers, and it used to
         // be a separate mod that FML initialised before this one.
-        LibVulpes.instance.preInit(event);
+        libVulpes.preInit(event);
 
         version = event.getModMetadata().version;
 
+        dev.stannismod.stellurgy.atmosphere.AtmosphereHandler.createDamageSources();
         dev.stannismod.stellurgy.world.WorldRuntime.register();
         // Forge cannot withdraw a DimensionType, so the two space types are registered once, here, on
         // both sides; the dimension IDS that use them are each server's own.
@@ -688,17 +732,17 @@ public class Stellurgy {
 
 
         //Register machine recipes
-        LibVulpes.registerRecipeHandler(TileCuttingMachine.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/CuttingMachine.xml");
-        LibVulpes.registerRecipeHandler(TilePrecisionAssembler.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/PrecisionAssembler.xml");
-        LibVulpes.registerRecipeHandler(TileChemicalReactor.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/ChemicalReactor.xml");
-        LibVulpes.registerRecipeHandler(TileCrystallizer.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Crystallizer.xml");
-        LibVulpes.registerRecipeHandler(TileElectrolyser.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Electrolyser.xml");
-        LibVulpes.registerRecipeHandler(TileElectricArcFurnace.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/ElectricArcFurnace.xml");
-        LibVulpes.registerRecipeHandler(TileLathe.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Lathe.xml");
-        LibVulpes.registerRecipeHandler(TileRollingMachine.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/RollingMachine.xml");
-        LibVulpes.registerRecipeHandler(BlockSmallPlatePress.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/SmallPlatePress.xml");
-        LibVulpes.registerRecipeHandler(TileCentrifuge.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Centrifuge.xml");
-        LibVulpes.registerRecipeHandler(TilePrecisionLaserEtcher.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/PrecisionLaserEtcher.xml");
+        libVulpes.registerRecipeHandler(TileCuttingMachine.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/CuttingMachine.xml");
+        libVulpes.registerRecipeHandler(TilePrecisionAssembler.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/PrecisionAssembler.xml");
+        libVulpes.registerRecipeHandler(TileChemicalReactor.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/ChemicalReactor.xml");
+        libVulpes.registerRecipeHandler(TileCrystallizer.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Crystallizer.xml");
+        libVulpes.registerRecipeHandler(TileElectrolyser.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Electrolyser.xml");
+        libVulpes.registerRecipeHandler(TileElectricArcFurnace.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/ElectricArcFurnace.xml");
+        libVulpes.registerRecipeHandler(TileLathe.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Lathe.xml");
+        libVulpes.registerRecipeHandler(TileRollingMachine.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/RollingMachine.xml");
+        libVulpes.registerRecipeHandler(BlockSmallPlatePress.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/SmallPlatePress.xml");
+        libVulpes.registerRecipeHandler(TileCentrifuge.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Centrifuge.xml");
+        libVulpes.registerRecipeHandler(TilePrecisionLaserEtcher.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/PrecisionLaserEtcher.xml");
 
 
         //AUDIO
@@ -727,11 +771,11 @@ public class Stellurgy {
 
         // Valkyrien Skies is vendored into Stellurgy and hosted by Stellurgy's mod container: drive its lifecycle
         // from Stellurgy's own handlers (VS is no longer a separate @Mod with its own @EventHandler methods).
-        ValkyrienSkiesMod.INSTANCE.preInit(event);
+        valkyrienSkies.preInit(event);
 
         // Advanced Force Field System (shield subsystem) was a separate mod and is folded into Stellurgy's
         // mod container: drive its lifecycle from Stellurgy's own handlers, as with VS above.
-        AdvancedForceFieldSystem.INSTANCE.preInit(event);
+        affs.preInit(event);
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
@@ -1217,7 +1261,7 @@ public class Stellurgy {
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("TitaniumAluminide", "pickaxe", 1, 0xaec2de, AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("GEAR").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue(), false));
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("TitaniumIridium", "pickaxe", 1, 0xd7dfe4, AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("GEAR").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue(), false));
 
-        materialRegistry.registerOres(LibVulpes.tabLibVulpesOres);
+        materialRegistry.registerOres(libVulpes.tabLibVulpesOres);
 
         //OreDict stuff
         OreDictionary.registerOre("turfMoon", new ItemStack(StellurgyBlocks.blockMoonTurf));
@@ -1247,7 +1291,7 @@ public class Stellurgy {
 
     @EventHandler
     public void load(FMLInitializationEvent event) {
-        LibVulpes.instance.init(event);
+        libVulpes.init(event);
         StellurgyAdvancements.register();
         proxy.init();
 
@@ -1350,14 +1394,14 @@ public class Stellurgy {
 
         machineRecipes.createAutoGennedRecipes(modProducts);
 
-        ValkyrienSkiesMod.INSTANCE.init(event);
-        AdvancedForceFieldSystem.INSTANCE.init(event);
+        valkyrienSkies.init(event);
+        affs.init(event);
     }
 
 
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
-        LibVulpes.instance.postInit(event);
+        libVulpes.postInit(event);
 
         if (weights != null) {
             throw new IllegalStateException("the weight table is written once per process");
@@ -1476,8 +1520,6 @@ public class Stellurgy {
                 spaceEvents, hyperspaceVoid);
         MinecraftForge.EVENT_BUS.register(ServerStateEvents.class);
 
-        PacketHandler.init();
-
         GameRegistry.registerWorldGenerator(new OreGenerator(), 100);
 
         ForgeChunkManager.setForcedChunkLoadingCallback(instance, new WorldEvents());
@@ -1498,8 +1540,8 @@ public class Stellurgy {
         TilePlugBase.energy_multiplier =  dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig(). blockEnergyHatchCapacityMultiplier;
         TileFluidHatch.capacityMultiplier =  dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().blockLiquidHatchCapacityMultiplier;
 
-        ValkyrienSkiesMod.INSTANCE.postInit(event);
-        AdvancedForceFieldSystem.INSTANCE.postInit(event);
+        valkyrienSkies.postInit(event);
+        affs.postInit(event);
     }
 
     @EventHandler
@@ -1638,7 +1680,7 @@ public class Stellurgy {
         }
         //End open and load ore files
 
-        ValkyrienSkiesMod.INSTANCE.serverStart(event);
+        valkyrienSkies.serverStart(event);
     }
 
 

@@ -15,7 +15,9 @@ import java.util.stream.Collectors;
 public class NounListNameGenerator implements NameGenerator {
     private static final int NOUN_LIST_LENGTH = 6801;
     private static final int DEFAULT_NOUNS_PER_NAME = 3;
+    /** Effectively final, process lifetime: set once when the object is built. */
     private final List<String> nouns = new ArrayList<>(NOUN_LIST_LENGTH);
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final NounListNameGenerator instance = new NounListNameGenerator();
 
     private NounListNameGenerator() {

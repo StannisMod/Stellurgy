@@ -26,6 +26,7 @@ import java.util.Random;
 
 public class ChunkProviderAsteroids extends ChunkProviderPlanet {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     protected static final IBlockState AIR = Blocks.AIR.getDefaultState();
     private final World world;
     private final boolean generateStructures;

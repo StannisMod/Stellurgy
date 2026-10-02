@@ -56,6 +56,7 @@ import java.util.function.Function;
 // second @Mod in one jar broke every FML mechanism that partitions by mod (sided-proxy and
 // event-bus-subscriber owner resolution match the target class name against the @Mod class name).
 public class ValkyrienSkiesMod {
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	@java.lang.SuppressWarnings("all")
 	private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(ValkyrienSkiesMod.class);
 	/**
@@ -63,9 +64,9 @@ public class ValkyrienSkiesMod {
 	 * in {@link #preInit} (by {@code registerBlock}, and by {@code BaseItem}'s constructor during
 	 * {@code registerItems}), only read after — by {@code RegisterEvents}.
 	 */
-	public static final List<Block> BLOCKS = new ArrayList<>();
-	/** @see #BLOCKS */
-	public static final List<Item> ITEMS = new ArrayList<>();
+	public final List<Block> blocks = new ArrayList<>();
+	/** @see #blocks */
+	public final List<Item> items = new ArrayList<>();
 	// MOD INFO CONSTANTS
 	// MOD_ID is "valkyrienskies". HOST_MOD_ID is the modid of the mod that actually owns VS's
 	// lifecycle and event-bus subscriptions now — Stellurgy.
@@ -89,12 +90,6 @@ public class ValkyrienSkiesMod {
 	public static final String HOST_MOD_ID = Constants.modId;
 	static final String MOD_FINGERPRINT = "b308676914a5e7d99459c1d2fb298744387899a7";
 	/**
-	 * The one VS host object. Final, lifetime the process: created at class initialisation (no
-	 * {@code @Instance} — there is no "valkyrienskies" mod container to inject from), before any
-	 * registry event references it. Stellurgy's lifecycle handlers drive it.
-	 */
-	public static final ValkyrienSkiesMod INSTANCE = new ValkyrienSkiesMod();
-	/**
 	 * Effectively final, lifetime the process: written by Forge's sided-proxy injection, never by this
 	 * mod. {@code modId} names Stellurgy's container, because VS is part of Stellurgy's mod.
 	 */
@@ -105,26 +100,33 @@ public class ValkyrienSkiesMod {
 	 * The pool collision tasks run on. Effectively final, lifetime the process: written once by
 	 * {@link #preInit} (a second pre-init throws), only read after.
 	 */
-	private static ForkJoinPool physicsThreadPool = null;
-	// The blocks and the item below are fields of INSTANCE, so statics by transitivity. Effectively
-	// final, lifetime the process: written once in preInit (registerBlocks / registerItems), only read
-	// after; a second pre-init throws before reaching them.
+	private ForkJoinPool physicsThreadPool = null;
+	// This object is the host mod's ({@code Stellurgy.instance.valkyrienSkies}) - there is no
+	// "valkyrienskies" mod container and no @Instance to inject from - so every field of it is a static
+	// by transitivity. The blocks and the item below are effectively final, lifetime the process:
+	// written once in preInit (registerBlocks / registerItems), only read after; a second pre-init
+	// throws before reaching them.
+	/** Effectively final, process lifetime: written only by ValkyrienSkiesMod.registerBlocks. */
 	public Block captainsChair;
+	/** Effectively final, process lifetime: written only by ValkyrienSkiesMod.registerBlocks. */
 	public Block passengerChair;
+	/** Effectively final, process lifetime: written only by ValkyrienSkiesMod.registerBlocks. */
 	public Block waterPump;
+	/** Effectively final, process lifetime: written only by ValkyrienSkiesMod.registerBlocks. */
 	public Block boatChair;
+	/** Effectively final, process lifetime: written only by ValkyrienSkiesMod.registerItems. */
 	public Item shipTracker;
 	/**
 	 * The three channels. Effectively final, lifetime the process: written once by
 	 * {@code registerNetworks} in {@link #preInit} (a second pre-init throws), only read after.
 	 */
-	public static SimpleNetworkWrapper physWrapperNetwork;
+	public SimpleNetworkWrapper physWrapperNetwork;
 	/** @see #physWrapperNetwork */
-	public static SimpleNetworkWrapper physWrapperTransformUpdateNetwork;
+	public SimpleNetworkWrapper physWrapperTransformUpdateNetwork;
 	/** @see #physWrapperNetwork */
-	public static SimpleNetworkWrapper controlNetwork;
-	/** Final, lifetime the process: created at class initialisation and never changed. */
-	public static final CreativeTabs VS_CREATIVE_TAB = new TabValkyrienSkies(MOD_ID);
+	public SimpleNetworkWrapper controlNetwork;
+	/** Effectively final, process lifetime: built with this object. */
+	public final CreativeTabs creativeTab = new TabValkyrienSkies(MOD_ID);
 	// Add-on module detection (the "vs_control" / "vs_world" list, its isAnyModuleLoaded flag and
 	// accessor, and the login warning that consumed them) removed: this physics core is vendored as
 	// part of this mod rather than shipped as a platform for those add-ons, so there is nothing to
@@ -142,7 +144,7 @@ public class ValkyrienSkiesMod {
 		log.debug("Initializing configuration.");
 		runConfiguration();
 		log.debug("Instantiating the physics thread executor.");
-		ValkyrienSkiesMod.physicsThreadPool = new ForkJoinPool(VSConfig.threadCount);
+		this.physicsThreadPool = new ForkJoinPool(VSConfig.threadCount);
 		log.debug("Initializing networks.");
 		registerNetworks(event);
 		VSCapabilityRegistry.registerCapabilities();
@@ -252,8 +254,8 @@ public class ValkyrienSkiesMod {
 	}
 
 	private Block registerBlock(Block block) {
-		ValkyrienSkiesMod.BLOCKS.add(block);
-		ValkyrienSkiesMod.ITEMS.add(new ItemBlock(block).setRegistryName(block.getRegistryName()));
+		this.blocks.add(block);
+		this.items.add(new ItemBlock(block).setRegistryName(block.getRegistryName()));
 		return block;
 	}
 
@@ -265,19 +267,19 @@ public class ValkyrienSkiesMod {
 	 * Whether SpongeForge is loaded. Effectively final, lifetime the process: written once by
 	 * {@link #init} (a second init throws), {@code null} until then.
 	 */
-	private static Boolean isSpongePresent = null;
+	private Boolean isSpongePresent = null;
 
 	/**
 	 * This service is directly responsible for running collision tasks.
 	 */
 	@java.lang.SuppressWarnings("all")
 	public static ForkJoinPool getPhysicsThreadPool() {
-		return ValkyrienSkiesMod.physicsThreadPool;
+		return dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.physicsThreadPool;
 	}
 
 	/** @throws IllegalStateException before {@link #init} has asked the loader */
 	public static boolean isSpongePresent() {
-		Boolean present = ValkyrienSkiesMod.isSpongePresent;
+		Boolean present = dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.isSpongePresent;
 		if (present == null) {
 			throw new IllegalStateException("Valkyrien Skies has not been initialised; whether Sponge is present is not known yet");
 		}

@@ -35,6 +35,7 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  */
 public final class VSDescentPasteResolver implements DescentController.PasteResolver {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /** Blocks between adjacent paste lanes at a planet's spawn (simultaneous-descent spread). */

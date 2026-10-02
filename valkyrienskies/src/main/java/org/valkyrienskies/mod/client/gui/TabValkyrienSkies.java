@@ -15,7 +15,7 @@ public class TabValkyrienSkies extends CreativeTabs {
 
     @Override
     public ItemStack getTabIconItem() {
-        return new ItemStack(Item.getItemFromBlock(ValkyrienSkiesMod.INSTANCE.captainsChair));
+        return new ItemStack(Item.getItemFromBlock(dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.captainsChair));
     }
 
 }

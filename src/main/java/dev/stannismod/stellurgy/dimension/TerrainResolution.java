@@ -52,11 +52,11 @@ public final class TerrainResolution {
         } else if (requested == TerrainSource.TEMPLATE) {
             String template = props.getTerrainTemplate();
             if (template != null && !template.isEmpty())
-                return new TerrainResolution(TerrainSource.TEMPLATE, Stellurgy.planetWorldType);
+                return new TerrainResolution(TerrainSource.TEMPLATE, Stellurgy.instance.planetWorldType);
             warnOnce(dim, props, "requests TEMPLATE terrain with no template path; falling back to NATIVE");
         }
 
-        return new TerrainResolution(TerrainSource.NATIVE, Stellurgy.planetWorldType);
+        return new TerrainResolution(TerrainSource.NATIVE, Stellurgy.instance.planetWorldType);
     }
 
     /** Once per planet, so a per-chunk or per-lookup resolve cannot spam the log. */

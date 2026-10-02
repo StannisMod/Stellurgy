@@ -23,6 +23,7 @@ import java.util.Locale;
 
 public class BlockFuelTank extends BlockFullyRotatable implements IFuelTank {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public final static PropertyEnum<TankStates> TANKSTATES = PropertyEnum.create("tankstates", TankStates.class);
 
     public BlockFuelTank(Material mat) {

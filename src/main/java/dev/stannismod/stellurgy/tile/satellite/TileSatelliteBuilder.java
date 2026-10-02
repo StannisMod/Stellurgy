@@ -29,6 +29,7 @@ import dev.stannismod.stellurgy.item.*;
 
 public class TileSatelliteBuilder extends TileMultiPowerConsumer implements IModularInventory, IInventory, IButtonInventory {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = new Object[][][]{
             {{'c'}},
             {{'P'}}

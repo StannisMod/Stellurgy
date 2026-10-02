@@ -52,9 +52,17 @@ public class StellurgyConfiguration {
     private final static String COMPAT = "Compatibility";
     /** OWNER: the LOADER — log4j hands out one object per name for the launch, and this class asks
      *  for it by name like every other class here does. Nothing releases it because nothing may.
-     *  Not to be confused with the configuration below, which is the SERVER's while one is joined. */
+     *  Not to be confused with the configuration below, which is the SERVER's while one is joined.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     private static final Logger logger = LogManager.getLogger(Constants.modId);
 
+    /**
+     * The raw string lists read from the config file. Effectively final, process lifetime: written only
+     * by {@link #loadPreInit()}; all but geodeOres, blackHoleGeneratorTiming and orbitalLaserOres are read
+     * again (and may be rewritten) by {@link #loadPostInit()}.
+     */
     private static String[] sealableBlockWhiteList, sealableBlockBlackList, breakableTorches, blackListRocketBlocksStr, harvestableGasses, spawnableGasses, entityList, geodeOres, blackHoleGeneratorTiming, orbitalLaserOres, liquidMonopropellant, liquidBipropellantFuel, liquidBipropellantOxidizer, liquidNuclearWorkingFluid;
     /**
      * This process's own configuration, read from its file at pre-init. Effectively final, client /

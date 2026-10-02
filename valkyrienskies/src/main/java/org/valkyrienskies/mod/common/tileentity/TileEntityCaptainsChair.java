@@ -18,7 +18,7 @@ public class TileEntityCaptainsChair extends TileEntityPilotableImpl {
     @Override
     public void processControlMessage(PilotControlsMessage message, EntityPlayerMP sender) {
         IBlockState blockState = getWorld().getBlockState(getPos());
-        if (blockState.getBlock() == ValkyrienSkiesMod.INSTANCE.captainsChair) {
+        if (blockState.getBlock() == dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.captainsChair) {
             PhysicsObject physicsObject = getParentPhysicsEntity();
             if (physicsObject != null) {
                 processCalculationsForControlMessageAndApplyCalculations(physicsObject, message,

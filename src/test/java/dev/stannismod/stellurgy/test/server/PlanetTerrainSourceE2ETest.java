@@ -35,7 +35,7 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
     private static final int FALLBACK_DIM = 9992;
     private static final int OPTIONS_DIM = 9993;
 
-    /** The registered name of {@code Stellurgy.planetWorldType} (see {@code WorldTypePlanetGen}). */
+    /** The registered name of {@code Stellurgy.instance.planetWorldType} (see {@code WorldTypePlanetGen}). */
     private static final String AR_PLANET_WORLD_TYPE = "PlanetGen";
 
     /** A flat preset no default world could produce, so "the options arrived" is visible in blocks. */

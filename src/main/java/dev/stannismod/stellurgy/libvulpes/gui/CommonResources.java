@@ -2,6 +2,9 @@ package dev.stannismod.stellurgy.libvulpes.gui;
 
 import net.minecraft.util.ResourceLocation;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class CommonResources {
 	public static final ResourceLocation genericBackground = new ResourceLocation("libvulpes:textures/gui/maingui.png");
 	

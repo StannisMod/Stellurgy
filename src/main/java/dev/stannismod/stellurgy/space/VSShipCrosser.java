@@ -19,6 +19,8 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  * plus {@link VSIntegration#parkShipAt}/{@link VSIntegration#unparkShipAt}. Both crossings paste into a
  * clear void column so the flood-fill re-assembly grabs only the ship. A safe no-op
  * (returns {@code null} - the transit aborts cleanly) when a world is missing.
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class VSShipCrosser implements ShipTransitManager.Crosser {
 

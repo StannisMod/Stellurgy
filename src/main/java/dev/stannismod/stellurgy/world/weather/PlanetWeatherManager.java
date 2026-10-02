@@ -35,6 +35,7 @@ import java.util.Set;
  */
 public final class PlanetWeatherManager {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("StellurgyWeather");
 
     // Codes for SPacketChangeGameState. CAREFUL: the vanilla protocol

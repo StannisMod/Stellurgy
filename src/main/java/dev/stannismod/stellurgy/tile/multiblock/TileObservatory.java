@@ -65,6 +65,9 @@ import java.util.Random;
 import java.util.Map;
 import dev.stannismod.stellurgy.Stellurgy;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class TileObservatory extends TileMultiPowerConsumer implements IModularInventory, IDataInventory, IGuiCallback {
 
     /** Where this observatory's asteroid list was scrolled to, on the client. */

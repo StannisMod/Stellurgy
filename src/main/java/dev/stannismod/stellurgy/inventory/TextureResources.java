@@ -6,6 +6,9 @@ import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
 import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class TextureResources {
     public static final ResourceLocation progressBars = new ResourceLocation("stellurgy:textures/gui/progressBars/progressBars.png");
     public static final ResourceLocation rocketHud = new ResourceLocation("stellurgy:textures/gui/rocketHUD.png");

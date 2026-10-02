@@ -55,6 +55,7 @@ import org.apache.logging.log4j.Logger;
  */
 public final class DeckHold {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /**

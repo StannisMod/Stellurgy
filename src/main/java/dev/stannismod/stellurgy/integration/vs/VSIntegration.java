@@ -33,6 +33,7 @@ public final class VSIntegration {
     /** Valkyrien Skies Core mod id (the 1.12.2 line). */
     public static final String MODID = "valkyrienskies";
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/vs");
 
     private VSIntegration() {}

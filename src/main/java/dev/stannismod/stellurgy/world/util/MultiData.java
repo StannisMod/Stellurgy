@@ -19,6 +19,7 @@ public class MultiData implements IDataHandler {
         reset();
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final java.util.EnumSet<DataStorage.DataType> SUPPORTED_TYPES =
         java.util.EnumSet.of(
             DataStorage.DataType.COMPOSITION,

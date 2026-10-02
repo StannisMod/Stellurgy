@@ -7,6 +7,7 @@ import net.minecraft.client.renderer.tileentity.TileEntitySpecialRenderer;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.Vec3i;
+import net.minecraftforge.fml.common.registry.ForgeRegistries;
 import dev.stannismod.stellurgy.backwardCompat.WavefrontObject;
 import dev.stannismod.stellurgy.tile.TileBrokenPart;
 import dev.stannismod.stellurgy.util.IBrokenPartBlock;
@@ -17,10 +18,31 @@ import java.util.Map;
 
 public class RendererBrokenPart extends TileEntitySpecialRenderer<TileBrokenPart> {
 
+    /** One model per broken-part block, loaded by the constructor - which the client proxy runs in init,
+     *  after the blocks are registered - and only read after. */
     private final Map<ResourceLocation, WavefrontObject> models = new HashMap<>();
 
+    public RendererBrokenPart() {
+        for (Block block : ForgeRegistries.BLOCKS) {
+            if (block instanceof IBrokenPartBlock) {
+                ResourceLocation location = modelOf(block);
+                models.put(location, WavefrontObject.required(location));
+            }
+        }
+    }
+
+    private static ResourceLocation modelOf(Block block) {
+        String name = block.getUnlocalizedName().split("\\.")[1].toLowerCase();
+        return new ResourceLocation(block.getRegistryName().getResourceDomain(), "models/block/models/" + name + ".obj");
+    }
+
     private WavefrontObject model(ResourceLocation location) {
-        return models.computeIfAbsent(location, WavefrontObject::required);
+        WavefrontObject model = models.get(location);
+        if (model == null) {
+            throw new IllegalStateException("no broken-part model loaded for " + location
+                    + " - the block was not registered when this renderer was built");
+        }
+        return model;
     }
 
     @Override
@@ -63,7 +85,7 @@ public class RendererBrokenPart extends TileEntitySpecialRenderer<TileBrokenPart
                 this.bindTexture(new ResourceLocation(res.getResourceDomain(), pathToTexture));
             }
 
-            model(new ResourceLocation(res.getResourceDomain(), "models/block/models/" + name + ".obj")).renderAll();
+            model(modelOf(blk)).renderAll();
 
             if (destroyStage >= 0) {
                 GlStateManager.matrixMode(5890);

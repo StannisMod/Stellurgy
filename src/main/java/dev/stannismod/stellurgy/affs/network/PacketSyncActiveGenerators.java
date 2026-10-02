@@ -40,7 +40,7 @@ public class PacketSyncActiveGenerators implements IMessage {
         if (world == null || world.isRemote) {
             return;
         }
-        AdvancedForceFieldSystem.NETWORK.sendToDimension(fromWorld(world), world.provider.getDimension());
+        dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendToDimension(fromWorld(world), world.provider.getDimension());
     }
 
     public static void sendFullSnapshotToPlayer(EntityPlayerMP player) {
@@ -51,7 +51,7 @@ public class PacketSyncActiveGenerators implements IMessage {
         if (world == null || world.isRemote) {
             return;
         }
-        AdvancedForceFieldSystem.NETWORK.sendTo(fromWorld(world), player);
+        dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendTo(fromWorld(world), player);
     }
 
     @Override

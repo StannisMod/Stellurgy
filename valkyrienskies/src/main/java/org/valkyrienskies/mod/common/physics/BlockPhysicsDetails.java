@@ -29,12 +29,16 @@ public class BlockPhysicsDetails {
      * Blocks mapped to their mass: the built-in masses plus the configured overrides. Written whole
      * by {@link #syncWithConfig}, never edited in place, so the physics thread reads either the old
      * table or the new one. {@code null} until the mod's init has built it.
+     *
+     * Effectively final, process lifetime: written only by BlockPhysicsDetails.syncWithConfig.
      */
     private static volatile Map<Block, Double> blockToMass;
     /**
      * Material mapped to their mass. Built from vanilla's material constants and literals only, which
      * nothing a server, a config or a registry remap can change, so it is the same table in every
      * lifetime whenever this class happens to load.
+     *
+     * Effectively final, process lifetime: filled only by BlockPhysicsDetails.materialMasses.
      */
     private static final Map<Material, Double> materialMass = materialMasses();
 

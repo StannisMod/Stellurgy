@@ -20,6 +20,7 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  */
 public final class VSShipCrossingOps implements ShipCrossingService.Ops {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final org.apache.logging.log4j.Logger LOGGER =
             org.apache.logging.log4j.LogManager.getLogger(VSShipCrossingOps.class);
 

@@ -20,6 +20,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.Random;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class BlockLightwoodLeaves extends BlockLeaves {
 
     protected static final String[] names = {"blueLeaf"};

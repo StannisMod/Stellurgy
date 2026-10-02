@@ -17,6 +17,7 @@ import java.util.List;
 
 public class ItemSatelliteIdentificationChip extends Item implements ISatelliteIdItem {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static String name = "name";
 
     public static SatelliteBase getSatellite(@Nonnull ItemStack stack) {

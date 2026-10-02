@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * Handles the physics for a given world. This is run on a separate thread, not on the game tick.
  */
 public class VSWorldPhysicsLoop implements Runnable {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     @java.lang.SuppressWarnings("all")
     private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(VSWorldPhysicsLoop.class);
     // The number of physics ticks to be considered in the average tick time.

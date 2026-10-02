@@ -41,6 +41,9 @@ import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class TileWirelessTransceiver extends TileEntity implements INetworkMachine, IModularInventory, ILinkableTile, IDataHandler, ITickable, IToggleButton, IGuiCallback {
 
     private static final int DEFAULT_TRANSFER_INTERVAL_TICKS = 20;

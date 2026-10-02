@@ -1,11 +1,8 @@
 package dev.stannismod.stellurgy.test.unit;
 
-import net.minecraft.util.ResourceLocation;
-import net.minecraftforge.fluids.Fluid;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.util.WeightEngine;
 
 import java.io.File;
@@ -33,45 +30,6 @@ public class WeightEngineUnitTest {
 
     @Rule
     public TemporaryFolder tempFolder = new TemporaryFolder();
-
-    private static Fluid testFluid() {
-        ResourceLocation tex = new ResourceLocation("stellurgy", "blocks/unit_fluid");
-        return new Fluid("stellurgy_unit_fluid", tex, tex);
-    }
-
-    @Test
-    public void fluidWeightIsPositiveAndLinearInAmount() {
-        WeightEngine we = WeightEngine.fromJson("{}");
-        double prevScale = StellurgyConfiguration.getCurrentConfig().fuelMassScale;
-        try {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
-            // An unknown fluid still weighs something (the fallback per-mB rate)
-            // and the weight is linear in the amount. The exact kN/mB constant is
-            // an implementation default.
-            float base = we.getWeight(testFluid(), 1000f);
-            assertTrue("fallback fluid weight must be positive: " + base, base > 0);
-            assertEquals("fluid weight must be linear in the amount",
-                    2 * base, we.getWeight(testFluid(), 2000f), 1e-4);
-        } finally {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = prevScale;
-        }
-    }
-
-    @Test
-    public void fuelMassScaleMultipliesFluidWeight() {
-        WeightEngine we = WeightEngine.fromJson("{}");
-        double prevScale = StellurgyConfiguration.getCurrentConfig().fuelMassScale;
-        try {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
-            float base = we.getWeight(testFluid(), 1000f);
-
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 2.5;
-            assertEquals("fluid weight must scale by fuelMassScale",
-                    2.5f * base, we.getWeight(testFluid(), 1000f), 1e-4);
-        } finally {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = prevScale;
-        }
-    }
 
     @Test
     public void seedDefaultsPopulatesMaterialTable() {

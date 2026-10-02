@@ -21,6 +21,9 @@ import java.lang.reflect.Method;
 import java.util.OptionalDouble;
 import java.util.WeakHashMap;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class GravityHandler implements IGravityManager {
 
     public static final float LIVING_OFFSET = 0.0755f;

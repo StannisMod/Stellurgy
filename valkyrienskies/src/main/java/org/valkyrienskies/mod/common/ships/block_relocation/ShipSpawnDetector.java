@@ -18,6 +18,8 @@ public class ShipSpawnDetector extends SpatialDetector {
      * The blocks a ship-spawn flood does not cross. Written whole by {@link #syncWithConfig}, never
      * edited in place, so an assembly reads either the old set or the new one and never a half-built
      * one. {@code null} until the mod's init has built it.
+     *
+     * Effectively final, process lifetime: written only by ShipSpawnDetector.syncWithConfig.
      */
     private static volatile Set<Block> blacklist;
 

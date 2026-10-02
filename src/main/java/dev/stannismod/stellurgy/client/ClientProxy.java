@@ -112,7 +112,6 @@ public class ClientProxy extends CommonProxy {
         ClientRegistry.bindTileEntitySpecialRenderer(dev.stannismod.stellurgy.tile.multiblock.machine.TileCentrifuge.class, new dev.stannismod.stellurgy.client.render.multiblocks.RenderCentrifuge());
         ClientRegistry.bindTileEntitySpecialRenderer(TilePrecisionLaserEtcher.class, new RendererPrecisionLaserEtcher());
         ClientRegistry.bindTileEntitySpecialRenderer(TileSolarArray.class, new RendererSolarArray());
-        ClientRegistry.bindTileEntitySpecialRenderer(TileBrokenPart.class, new RendererBrokenPart());
 
         //ClientRegistry.bindTileEntitySpecialRenderer(TileModelRenderRotatable.class, modelBlock);
 
@@ -142,7 +141,11 @@ public class ClientProxy extends CommonProxy {
             }
         }, StellurgyItems.itemSpaceSuit_Boots, StellurgyItems.itemSpaceSuit_Chest, StellurgyItems.itemSpaceSuit_Helmet, StellurgyItems.itemSpaceSuit_Leggings);
 
-        Stellurgy.materialRegistry.init();
+        Stellurgy.instance.materialRegistry.init();
+
+        // In init, not with the other renderers in pre-init: it loads one model per broken-part block,
+        // and the blocks are registered only after pre-init.
+        ClientRegistry.bindTileEntitySpecialRenderer(TileBrokenPart.class, new RendererBrokenPart());
     }
 
     @Override
@@ -308,6 +311,9 @@ public class ClientProxy extends CommonProxy {
      * last world it showed of that server with the connection already closed. The release waits for
      * the world because the channel closes on the network thread while the game thread is still
      * rendering that world, and the sky reads the galaxy every frame of that gap.
+     *
+     * Effectively final, server lifetime: written only by ClientProxy.release at server start, released at
+     * server stop.
      */
     private volatile ServerView serverView;
 

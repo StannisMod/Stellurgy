@@ -22,6 +22,7 @@ import java.util.function.Function;
 
 public class ModelRocket implements IModel {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final ModelResourceLocation resource =new ModelResourceLocation("stellurgy:rocket.obj");
 
     @Override
@@ -64,6 +65,7 @@ public class ModelRocket implements IModel {
 
     private final static class State implements IModelState {
 
+        /** Effectively final, process lifetime: built once at class initialisation. */
         static final State myState = new State();
 
         @Override

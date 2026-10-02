@@ -27,6 +27,7 @@ public abstract class TilePlugBase extends TilePointer implements IModularInvent
 
 	protected UniversalBattery storage;
 	protected int teir;
+	/** Effectively final, process lifetime: written only by Stellurgy.postInit. */
 	public static float energy_multiplier = 1.0f;
 	
 	public TilePlugBase() {

@@ -46,6 +46,9 @@ import static dev.stannismod.stellurgy.Stellurgy.logger;
 import dev.stannismod.stellurgy.api.*;
 
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class DimensionManager implements IGalaxy {
 
     public static final String workingPath = "advRocketry";
@@ -1299,7 +1302,7 @@ public class DimensionManager implements IGalaxy {
             SpaceObjectManager.getSpaceManager().readFromNBT(nbtTag);
         }
 
-        nbt.setString("prevVersion", Stellurgy.version);
+        nbt.setString("prevVersion", Stellurgy.instance.version);
 
         return loadedDimProps;
     }

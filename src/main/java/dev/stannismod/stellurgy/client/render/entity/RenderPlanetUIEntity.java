@@ -16,6 +16,9 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.entity.EntityUIPlanet;
 import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class RenderPlanetUIEntity extends Render<EntityUIPlanet> implements IRenderFactory<EntityUIPlanet> {
 
     public static final ResourceLocation planetUIBG = new ResourceLocation("stellurgy:textures/gui/planetUIOverlay.png");

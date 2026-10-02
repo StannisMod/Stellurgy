@@ -56,6 +56,9 @@ import java.util.WeakHashMap;
 
 import dev.stannismod.stellurgy.world.WorldRuntime;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 @EventBusSubscriber(modid = ValkyrienSkiesMod.HOST_MOD_ID)
 public class EventsCommon {
 
@@ -216,7 +219,7 @@ public class EventsCommon {
                 }
             }
             for (final Map.Entry<EntityPlayerMP, ShipTransformUpdateMessage> addressed : perPlayer.entrySet()) {
-                ValkyrienSkiesMod.physWrapperTransformUpdateNetwork
+                dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.physWrapperTransformUpdateNetwork
                         .sendTo(addressed.getValue(), addressed.getKey());
             }
         } catch (Exception e) {

@@ -21,7 +21,11 @@ import dev.stannismod.stellurgy.space.BlockDelta;
  */
 public final class BodyEphemeris {
 
-    /** The law of something that does not move: zero displacement at every tick. */
+    /**
+     * The law of something that does not move: zero displacement at every tick.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     public static final BodyEphemeris STATIC = new BodyEphemeris(0L, 0L, 0L, 0d, 0d, 0d, false, 0d, 0L);
 
     // A FIXED law (period <= 0) carries its displacement directly; an ORBIT law derives it.

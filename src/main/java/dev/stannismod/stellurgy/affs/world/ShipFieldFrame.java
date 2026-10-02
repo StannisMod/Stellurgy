@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  */
 public final class ShipFieldFrame implements FieldFrame {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Vec3d ZERO = new Vec3d(0.0D, 0.0D, 0.0D);
 
     private final World world;

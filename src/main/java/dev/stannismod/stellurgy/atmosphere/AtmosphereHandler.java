@@ -37,11 +37,30 @@ import java.util.WeakHashMap;
 import dev.stannismod.stellurgy.world.WorldRuntime;
 
 public class AtmosphereHandler {
-    public static final DamageSource vacuumDamage = new DamageSource("Vacuum").setDamageBypassesArmor().setDamageIsAbsolute();
-    public static final DamageSource lowOxygenDamage = new DamageSource("LowOxygen").setDamageBypassesArmor().setDamageIsAbsolute();
-    public static final DamageSource heatDamage = new DamageSource("Heat").setDamageBypassesArmor().setDamageIsAbsolute();
-    public static final DamageSource oxygenToxicityDamage = new DamageSource("OxygenToxicity").setDamageBypassesArmor().setDamageIsAbsolute();
-    private static final int MAX_BLOB_RADIUS = ((StellurgyConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1) ? 256 : StellurgyConfiguration.getCurrentConfig().oxygenVentSize;
+    /** The atmosphere damage sources. Effectively final, process lifetime: written only by
+     *  {@link #createDamageSources}, which the mod calls in pre-init - not at whichever moment of play
+     *  first touched this class. */
+    public static DamageSource vacuumDamage, lowOxygenDamage, heatDamage, oxygenToxicityDamage;
+
+    /** Called once by the mod in pre-init. */
+    public static void createDamageSources() {
+        if (vacuumDamage != null) {
+            throw new IllegalStateException("atmosphere damage sources are created once per process");
+        }
+        vacuumDamage = new DamageSource("Vacuum").setDamageBypassesArmor().setDamageIsAbsolute();
+        lowOxygenDamage = new DamageSource("LowOxygen").setDamageBypassesArmor().setDamageIsAbsolute();
+        heatDamage = new DamageSource("Heat").setDamageBypassesArmor().setDamageIsAbsolute();
+        oxygenToxicityDamage = new DamageSource("OxygenToxicity").setDamageBypassesArmor().setDamageIsAbsolute();
+    }
+    /**
+     * Read from the config in force at each use. It was a static snapshot taken whenever this class was
+     * first touched - the first world load, possibly a client's while connected to another server - and
+     * then kept for the process, past any config reload.
+     */
+    private static int maxBlobRadius() {
+        StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
+        return ((config.atmosphereHandleBitMask & 1) == 1) ? 256 : config.oxygenVentSize;
+    }
     /**
      * What a WORLD keeps for this subsystem ({@link WorldRuntime}): its handler, if it has one, and the
      * depth of structure writes in flight into it. Both die with the world object.
@@ -237,7 +256,7 @@ public class AtmosphereHandler {
              */
 
 
-            List<AreaBlob> nearbyBlobs = handler.getBlobWithinRadius(pos, MAX_BLOB_RADIUS);
+            List<AreaBlob> nearbyBlobs = handler.getBlobWithinRadius(pos, maxBlobRadius());
             for (AreaBlob blob : nearbyBlobs) {
 
                 if (blob.getBlobMaxRadius() > pos.getDistance(blob.getRootPosition())) {
@@ -313,7 +332,7 @@ public class AtmosphereHandler {
 			if(handler == null)
 				return; //WTF
 
-			for(AreaBlob blob : handler.getBlobWithinRadius(pos, MAX_BLOB_RADIUS)) {
+			for(AreaBlob blob : handler.getBlobWithinRadius(pos, maxBlobRadius())) {
 
 				if(blob.contains(pos) && !blob.isPositionAllowed(world, pos))
 					blob.removeBlock(x, y, z);
@@ -354,7 +373,7 @@ public class AtmosphereHandler {
     }
 
     private void onBlockRemove(HashedBlockPosition pos) {
-        List<AreaBlob> blobs = getBlobWithinRadius(pos, MAX_BLOB_RADIUS);
+        List<AreaBlob> blobs = getBlobWithinRadius(pos, maxBlobRadius());
         for (AreaBlob blob : blobs) {
             //Make sure that a block can actually be attached to the blob
             for (EnumFacing dir : EnumFacing.VALUES)
@@ -457,7 +476,7 @@ public class AtmosphereHandler {
      */
     public boolean addBlock(@Nonnull IBlobHandler handler, @Nonnull HashedBlockPosition pos) {
         AreaBlob blob = blobs.get(handler);
-        blob.addBlock(pos, getBlobWithinRadius(pos, MAX_BLOB_RADIUS));
+        blob.addBlock(pos, getBlobWithinRadius(pos, maxBlobRadius()));
         return !blob.getLocations().isEmpty();
     }
 

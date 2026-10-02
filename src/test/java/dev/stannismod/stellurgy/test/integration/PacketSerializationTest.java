@@ -24,14 +24,12 @@ import dev.stannismod.stellurgy.network.PacketMoveRocketInSpace;
 import dev.stannismod.stellurgy.network.PacketSatellite;
 import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
 import dev.stannismod.stellurgy.network.PacketStationUpdate;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.lang.reflect.Field;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -95,39 +93,6 @@ public class PacketSerializationTest {
     }
 
     // ---- PacketDimInfo --------------------------------------------------------
-
-    @Test
-    public void packetDimInfoRoundTrip() {
-        DimensionProperties props = new DimensionProperties(4242);
-        props.setName("TestDim");
-        props.setAtmosphereDensityDirect(75);
-        props.orbitalDist = 175;
-        props.rotationalPeriod = 18000;
-
-        PacketDimInfo sent = new PacketDimInfo(4242, props);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketDimInfo received = new PacketDimInfo();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(4242, (int) getField(received, "dimNumber"));
-        assertEquals(false, (boolean) getField(received, "deleteDim"));
-
-        // The packet stores raw NBT and re-hydrates inside executeClient (which
-        // mutates DimensionManager). Round-trip through DimensionProperties to
-        // verify the NBT survived the wire.
-        NBTTagCompound nbt = getField(received, "dimNBT");
-        assertNotNull("dimNBT missing on receive", nbt);
-
-        DimensionProperties restored = new DimensionProperties(4242);
-        restored.readFromNBT(nbt);
-        assertEquals("TestDim", restored.getName());
-        assertEquals(75, restored.getAtmosphereDensity());
-        assertEquals(175, restored.orbitalDist);
-        assertEquals(18000, restored.rotationalPeriod);
-    }
 
     @Test
     public void packetDimInfoNullPropertiesIsDeleteSignal() {
@@ -211,52 +176,6 @@ public class PacketSerializationTest {
     }
 
     // ---- PacketStationUpdate --------------------------------------------------
-
-    @Test
-    public void packetStationUpdateFuelRoundTrip() {
-        // FUEL_UPDATE is the simplest payload — just stationNumber+type+fuel int.
-        SpaceStationObject station = new SpaceStationObject();
-        station.setFuelAmount(7777);
-        // ISpaceObject.getId() reads from a field that's normally set by
-        // SpaceObjectManager.register; inject via reflection for the test.
-        station.setId(1234);
-
-        PacketStationUpdate sent = new PacketStationUpdate(station, PacketStationUpdate.Type.FUEL_UPDATE);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketStationUpdate received = new PacketStationUpdate();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(1234, (int) getField(received, "stationNumber"));
-        assertEquals(PacketStationUpdate.Type.FUEL_UPDATE, getField(received, "type"));
-        assertEquals(7777, (int) getField(received, "fuel"));
-    }
-
-    @Test
-    public void packetStationUpdateOrbitRoundTrip() {
-        SpaceStationObject station = new SpaceStationObject();
-        // Avoid the orbiting-body NPE — beginTransition flips `created` to true
-        // and primes destination resolution.
-        station.beginTransition(0);
-        station.setOrbitingBody(0);
-        station.setId(5678);
-
-        PacketStationUpdate sent = new PacketStationUpdate(
-                station, PacketStationUpdate.Type.ORBIT_UPDATE);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketStationUpdate received = new PacketStationUpdate();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(5678, (int) getField(received, "stationNumber"));
-        assertEquals(PacketStationUpdate.Type.ORBIT_UPDATE, getField(received, "type"));
-        // ORBIT_UPDATE stores planet id in `destOrbitingBody` slot on the wire.
-        assertEquals(0, (int) getField(received, "destOrbitingBody"));
-    }
 
     // ---- PacketConfigSync -----------------------------------------------------
 

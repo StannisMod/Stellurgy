@@ -38,7 +38,7 @@ public class PacketFieldTouchEffect implements IMessage {
             return;
         }
         BlockPos safePos = generatorPos == null ? BlockPos.ORIGIN : generatorPos;
-        AdvancedForceFieldSystem.NETWORK.sendToAllAround(
+        dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendToAllAround(
             of(world, safePos, touchPoint == null ? new Vec3d(safePos.getX(), safePos.getY(), safePos.getZ()) : touchPoint),
             new NetworkRegistry.TargetPoint(
                 world.provider.getDimension(),

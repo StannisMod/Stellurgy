@@ -42,6 +42,7 @@ public final class PlanetTypes {
 
     // A self-contained logger rather than Stellurgy.logger: loading the mod class triggers Forge
     // bootstrap, which would break pure unit tests of the derivation this class feeds.
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("Stellurgy|Universe");
 
     /**

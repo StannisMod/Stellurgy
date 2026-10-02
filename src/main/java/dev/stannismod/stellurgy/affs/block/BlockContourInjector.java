@@ -24,7 +24,7 @@ public class BlockContourInjector extends Block implements ITileEntityProvider, 
         super(material);
         setUnlocalizedName(name);
         setRegistryName(AdvancedForceFieldSystem.MODID, name);
-        setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         setHardness(3.0F);
         setResistance(10.0F);
         setSoundType(SoundType.METAL);
@@ -53,6 +53,6 @@ public class BlockContourInjector extends Block implements ITileEntityProvider, 
 
     @Override
     public Item createItemBlock() {
-        return new ItemBlock(this).setRegistryName(getRegistryName()).setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        return new ItemBlock(this).setRegistryName(getRegistryName()).setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
     }
 }

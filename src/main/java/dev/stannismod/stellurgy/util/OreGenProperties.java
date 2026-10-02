@@ -50,7 +50,11 @@ public class OreGenProperties {
         return Math.max(1, (int) Math.round(value * factor));
     }
 
-    /** Ore-dictionary names that begin with {@code ore} but are not metals. */
+    /**
+     * Ore-dictionary names that begin with {@code ore} but are not metals.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     private static final java.util.Set<String> NON_METAL_ORES = new java.util.HashSet<>(
             java.util.Arrays.asList("orecoal", "oreredstone", "orelapis", "orediamond", "oreemerald",
                     "orequartz", "oresulfur", "oresaltpeter", "orenitre", "oreapatite", "orecertusquartz",

@@ -44,6 +44,14 @@ import static org.junit.Assert.fail;
  */
 public class TelescopeRegionScanTest {
 
+    /** The scan reads the config, which loads the mod class, whose static block touches vanilla's
+     *  fluid registry - vanilla's registries, which the fast tiers may use. Asked here, not left to
+     *  whichever class happened to run first in the fork. */
+    @org.junit.BeforeClass
+    public static void bootstrap() {
+        dev.stannismod.stellurgy.test.MinecraftBootstrap.ensure();
+    }
+
     /** The universe this test arranges; one per test, so nothing reaches the next. */
     private final dev.stannismod.stellurgy.test.TestUniverse testUniverse = new dev.stannismod.stellurgy.test.TestUniverse();
 

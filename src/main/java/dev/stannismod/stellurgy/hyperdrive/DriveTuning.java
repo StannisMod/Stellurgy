@@ -7,6 +7,8 @@ package dev.stannismod.stellurgy.hyperdrive;
  * a test that asserts "a coil is worth 1000 drive power" fails the day someone rebalances, without
  * anything actually having broken. What the tests pin is the SHAPE — more coils give more power, a
  * heavier ship on the same drive is slower, an empty capacitor cannot open a window.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class DriveTuning {
 

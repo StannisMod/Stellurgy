@@ -44,7 +44,7 @@ public class GuiFieldGenerator extends GuiAffsBase {
         if (button.id == 0 || button.id == 1) {
             int radius = tile.getRadius();
             radius += button.id == 0 ? -1 : 1;
-            AdvancedForceFieldSystem.NETWORK.sendToServer(new PacketSetFieldRadius(tile.getPos(), radius));
+            dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendToServer(new PacketSetFieldRadius(tile.getPos(), radius));
         }
     }
 

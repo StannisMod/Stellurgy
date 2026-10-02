@@ -37,6 +37,7 @@ import net.minecraft.util.math.BlockPos;
  */
 public final class ShipTransitManager {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /**

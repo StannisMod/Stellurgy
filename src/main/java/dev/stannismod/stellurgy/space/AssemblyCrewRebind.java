@@ -29,6 +29,7 @@ import org.apache.logging.log4j.Logger;
  */
 public final class AssemblyCrewRebind {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy.assemblycrewrebind");
 
     /** Retry budget in server ticks (~60 s at 20 TPS). Giving up strands the pilot on a mount

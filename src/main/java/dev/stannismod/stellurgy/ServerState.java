@@ -50,6 +50,12 @@ public final class ServerState {
     public final DeckMovementBound deckMovement = new DeckMovementBound();
     /** The planet event handler's tick count and owed delayed transitions. */
     public final PlanetEventHandler.ServerPart planetEvents = new PlanetEventHandler.ServerPart();
+    /** Login seatings, held slot cells and ship-lost notices queued for this server's players. */
+    public final dev.stannismod.stellurgy.space.SpaceEventHandler.ServerPart spaceEvents =
+            new dev.stannismod.stellurgy.space.SpaceEventHandler.ServerPart();
+    /** How long each player has been adrift in this server's hyperspace. */
+    public final dev.stannismod.stellurgy.space.HyperspaceVoid.ServerPart hyperspaceVoid =
+            new dev.stannismod.stellurgy.space.HyperspaceVoid.ServerPart();
     /** The pending steps of the developer command {@code runtests}. */
     public final IngameTestOrchestrator ingameTests = new IngameTestOrchestrator();
     /** The executor the threaded atmosphere fill runs on; shut down by {@link #release()}. */

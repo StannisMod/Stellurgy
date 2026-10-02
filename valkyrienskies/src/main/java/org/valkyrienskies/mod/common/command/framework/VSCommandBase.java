@@ -37,6 +37,8 @@ public class VSCommandBase<K> extends CommandBase {
      * singletons or effectively static. Final and unmodifiable, lifetime the process: built by this
      * class's initialiser from two fixed converters, whenever the class is first touched — the same
      * table in every lifetime, computed from nothing a server, a config or a registry can change.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     @SuppressWarnings("rawtypes")
     private static final Map<Class, ITypeConverter> pureConverters;

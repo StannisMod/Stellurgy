@@ -48,6 +48,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public static final int DEFAULT_RADIUS = 4;
     private static final int CLIENT_SYNC_BASE_INTERVAL_TICKS = 20;
     private static final int CLIENT_SYNC_JITTER_TICKS = 10;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DamageSource SHIELD_COLLISION_DAMAGE = new DamageSource("affs.shield_collision");
 
     /**

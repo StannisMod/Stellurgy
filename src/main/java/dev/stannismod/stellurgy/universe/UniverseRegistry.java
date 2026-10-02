@@ -71,6 +71,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
 
     // A self-contained logger rather than Stellurgy.logger: loading the mod class triggers Forge
     // bootstrap (FluidRegistry.enableUniversalBucket), which would break pure unit tests of this registry.
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("Stellurgy|Universe");
 
     // ─── The override store (persisted) ───────────────────────────────────────
@@ -191,6 +192,33 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         return bound;
     }
 
+    /** The world models this registry can open a save under; bound by {@link #get(World)}. */
+    private volatile UniverseSchemas schemas = null;
+
+    /**
+     * Bind the catalogue of world models this registry reconciles a save against. Production binds
+     * {@link UniverseSchemas#builtIn()} in {@link #get(World)}; a test builds a registry and binds the
+     * catalogue it needs. Rebinding the same catalogue is a no-op; another is an error.
+     */
+    public void bindSchemas(UniverseSchemas catalogue) {
+        if (catalogue == null) {
+            throw new NullPointerException("catalogue");
+        }
+        if (schemas != null && schemas != catalogue) {
+            throw new IllegalStateException("this universe registry is already bound to another schema catalogue");
+        }
+        schemas = catalogue;
+    }
+
+    /** The bound catalogue; a registry nobody bound has none, and says so. */
+    public UniverseSchemas schemas() {
+        UniverseSchemas bound = schemas;
+        if (bound == null) {
+            throw new IllegalStateException("no schema catalogue is bound to this universe registry");
+        }
+        return bound;
+    }
+
     /**
      * What each authored star was DECLARED as, keyed by star id — the galaxy-local form, kept so the
      * catalogue can be written back in the language it was written in. Never persisted: it is re-read
@@ -243,6 +271,9 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         } else {
             registry = new UniverseRegistry();
             storage.setData(STORAGE_KEY, registry);
+        }
+        if (registry.schemas == null) {
+            registry.bindSchemas(UniverseSchemas.builtIn());
         }
         // Bound here and not only at populate: worlds load, and may derive, before the server has
         // finished starting.
@@ -1379,8 +1410,8 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     /** What THIS build's newest schema measures with — what a fresh world is stamped against. */
-    public static String currentLawsFingerprint() {
-        return lawsFingerprintOf(UniverseSchemas.current().laws());
+    public String currentLawsFingerprint() {
+        return lawsFingerprintOf(schemas().current().laws());
     }
 
     /**
@@ -1410,7 +1441,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     public UniverseSchema reconcileSchema(GalaxyGenConfig config) {
         String fingerprint = fingerprintOf(config);
         if (schemaVersion == UNSTAMPED) {
-            UniverseSchema schema = UniverseSchemas.current();
+            UniverseSchema schema = schemas().current();
             if (!byCell.isEmpty() || !pinnedSystems.isEmpty()) {
                 // A world with content but no stamp predates the stamp. Nothing records what generated
                 // it, so adopting the current model is the only move available — said out loud, because
@@ -1422,11 +1453,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             stampSchema(schema.version(), fingerprint);
             return schema;
         }
-        Optional<UniverseSchema> saved = UniverseSchemas.of(schemaVersion);
+        Optional<UniverseSchema> saved = schemas().of(schemaVersion);
         if (!saved.isPresent()) {
             throw new UniverseSchemaMismatchException(
                     "This world was generated under universe schema " + schemaVersion
-                            + ", which this build does not carry (it has " + UniverseSchemas.released()
+                            + ", which this build does not carry (it has " + schemas().released()
                             + "). Install a build that carries schema " + schemaVersion
                             + " to open this world.");
         }
@@ -1456,7 +1487,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                         + "everything else is re-derived from here.", configFingerprint, fingerprint);
                 upgradeArmed = false;
                 stampSchema(UniverseSchemas.CURRENT, fingerprint);
-                return UniverseSchemas.current();
+                return schemas().current();
             }
             throw new UniverseSchemaMismatchException(
                     "The <galaxyGen> configuration has changed since this world was generated: it was "
@@ -1498,7 +1529,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     public UniverseSchema adoptSchema(GalaxyGenConfig config) {
-        UniverseSchema schema = UniverseSchemas.current();
+        UniverseSchema schema = schemas().current();
         stampSchema(schema.version(), fingerprintOf(config));
         return schema;
     }

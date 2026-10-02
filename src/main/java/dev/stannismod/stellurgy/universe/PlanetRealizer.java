@@ -52,6 +52,7 @@ import dev.stannismod.stellurgy.util.XMLPlanetLoader;
  */
 public final class PlanetRealizer {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("Stellurgy|Universe");
 
     private PlanetRealizer() {

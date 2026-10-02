@@ -491,6 +491,7 @@ public abstract class MixinWorld implements IWorldVS, IHasShipManager {
         manager = managerSupplier.apply(World.class.cast(this));
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final RayTraceResult DUMMY_RAYTRACE_RESULT = new RayTraceResult(Vec3d.ZERO, EnumFacing.DOWN);
 
     /**

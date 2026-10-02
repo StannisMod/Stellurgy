@@ -39,6 +39,8 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
  * {@code Integer.MAX_VALUE}).</p>
  *
  * <p>Pure DATA — a walkable realization is Layer 2. Scale constants are {@code tunable}.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class SystemContent {
 

@@ -22,6 +22,7 @@ public final class BodyDerivationV0 implements IBodyDerivation {
      */
     public static final BodyDerivationV0 INSTANCE = new BodyDerivationV0(PlanetTypes.stock());
 
+    /** Effectively final, process lifetime: set once when the object is built. */
     private final PlanetTypes types;
 
     /** Version 0's laws, typing worlds from {@code types}. */

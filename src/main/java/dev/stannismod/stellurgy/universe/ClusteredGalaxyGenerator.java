@@ -43,6 +43,8 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
  * with a real star id ({@code 0..N}) or a dim id. About half of systems hold a companion, and a
  * companion is a star in its own right: it has its own id, its own orbit about the primary, and its own
  * cell, so a world can be bound to it and every world here is lit by all of them.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
 

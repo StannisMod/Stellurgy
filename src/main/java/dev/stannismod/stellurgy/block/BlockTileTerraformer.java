@@ -41,6 +41,7 @@ import dev.stannismod.stellurgy.Stellurgy;
 public class BlockTileTerraformer extends RotatableBlock {
     protected Class<? extends TileEntity> tileClass;
     protected int guiId;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyBool STATE = PropertyBool.create("state");
 
     public BlockTileTerraformer(Class<? extends TileEntity> tileClass, int guiId) {

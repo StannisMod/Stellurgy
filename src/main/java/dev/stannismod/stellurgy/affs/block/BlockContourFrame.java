@@ -13,7 +13,7 @@ public class BlockContourFrame extends Block implements IHasItemBlock {
         super(material);
         setUnlocalizedName(name);
         setRegistryName(AdvancedForceFieldSystem.MODID, name);
-        setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         setHardness(2.5F);
         setResistance(8.0F);
         setSoundType(SoundType.METAL);
@@ -21,6 +21,6 @@ public class BlockContourFrame extends Block implements IHasItemBlock {
 
     @Override
     public Item createItemBlock() {
-        return new ItemBlock(this).setRegistryName(getRegistryName()).setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        return new ItemBlock(this).setRegistryName(getRegistryName()).setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
     }
 }

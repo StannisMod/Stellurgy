@@ -357,6 +357,7 @@ public final class WeightEngine {
         return m;
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Map<Material, String> MATERIAL_NAMES = buildMaterialNames();
 
     private static Map<Material, String> buildMaterialNames() {

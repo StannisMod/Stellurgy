@@ -228,7 +228,11 @@ public final class GalaxyField {
      */
     public static final class Material {
 
-        /** Nothing here: the cube is empty, or a point too far from anything in it. */
+        /**
+         * Nothing here: the cube is empty, or a point too far from anything in it.
+         *
+         * Effectively final, process lifetime: built once at class initialisation.
+         */
         public static final Material NONE = new Material(0d, 0d);
 
         /**

@@ -61,7 +61,7 @@ public class UniverseStatusCommand extends StellurgyCommand {
                 "commands.stellurgy.universe.status.frozen", registry.pinnedSystemCount()));
         sender.sendMessage(new TextComponentTranslation(
                 "commands.stellurgy.universe.status.released",
-                UniverseSchemas.released().toString()));
+                registry.schemas().released().toString()));
         if (registry.isUpgradeArmed()) {
             sender.sendMessage(new TextComponentTranslation(
                     "commands.stellurgy.universe.status.armed"));

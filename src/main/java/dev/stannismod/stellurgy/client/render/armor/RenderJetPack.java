@@ -14,6 +14,7 @@ public class RenderJetPack extends ModelBiped {
      * {@code RenderJetPack} for every frame it is drawn, and no object of ours outlives that call.
      */
     private static WavefrontObject model;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation texture = new ResourceLocation("stellurgy:textures/models/jetpack.png");
 
     ModelBiped biped;

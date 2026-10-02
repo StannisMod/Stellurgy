@@ -6,6 +6,9 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.IAtmosphere;
 import dev.stannismod.stellurgy.api.atmosphere.AtmosphereRegister;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class AtmosphereType implements IAtmosphere {
 
     /** Packet-safe send for atmosphere effects: FakePlayers / headless test

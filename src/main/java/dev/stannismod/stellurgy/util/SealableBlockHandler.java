@@ -30,22 +30,34 @@ import java.util.Set;
 public final class SealableBlockHandler implements IAtmosphereSealHandler {
     /**
      * INSTANCE
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     public static final SealableBlockHandler INSTANCE = new SealableBlockHandler();
     /**
      * List of blocks not allowed.
+     *
+     * Effectively final, process lifetime: filled only by SealableBlockHandler.addUnsealableBlock,
+     * SealableBlockHandler.addSealableBlock.
      */
     private List<Block> blockBanList = new ArrayList<>();
     /**
      * List of blocks that are allowed regardless of properties.
+     *
+     * Effectively final, process lifetime: filled only by SealableBlockHandler.addUnsealableBlock,
+     * SealableBlockHandler.addSealableBlock.
      */
     private List<Block> blockAllowList = new ArrayList<>();
     /**
      * List of block materials not allowed.
+     *
+     * Effectively final, process lifetime: filled only by SealableBlockHandler.loadDefaultData.
      */
     private List<Material> materialBanList = new ArrayList<>();
     /**
      * List of block materials that are allowed regardless of properties.
+     *
+     * Effectively final, process lifetime: set once when the object is built.
      */
     private List<Material> materialAllowList = new ArrayList<>();
     //TODO add meta support

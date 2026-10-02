@@ -388,6 +388,9 @@ public class PhysicsObject implements IPhysicsEntity {
     }
 
 
+    /**
+     * Every field of this object is effectively final, process lifetime: set once when the object is built.
+     */
     public enum DeconstructState {
         NOT_DECONSTRUCTING(false, false, false), DECONSTRUCT_NORMAL(true, true, true), DECONSTRUCT_IMMEDIATE_NO_COPY(true, false, false);
         private final boolean deconstructShip;

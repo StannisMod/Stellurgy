@@ -65,6 +65,8 @@ public class StellurgyAPI {
      * and not {@code @ObjectHolder}, which would allow both — this tree uses that annotation nowhere
      * at all, and a lone instance of it fails by leaving a silent {@code null} if the registry name
      * ever drifts from the string in the annotation.</p>
+     *
+     * Effectively final, process lifetime: written only by Stellurgy.registerEnchants.
      */
     public static Enchantment enchantmentSpaceProtection;
 }

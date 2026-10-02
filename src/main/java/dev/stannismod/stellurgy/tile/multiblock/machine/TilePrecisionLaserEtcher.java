@@ -26,6 +26,7 @@ import java.util.List;
 
 public class TilePrecisionLaserEtcher extends TileMultiblockMachine implements IModularInventory {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
             {{"slab", "slab", "slab"},
                     {Blocks.AIR, "slab", Blocks.AIR},

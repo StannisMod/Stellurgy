@@ -58,7 +58,10 @@ import dev.stannismod.stellurgy.block.*;
  * Purpose: validate the rocket structure as well as give feedback to the player as to what needs to be
  * changed to complete the rocket structure
  * Also will be used to "build" the rocket components from the placed frames, control fuel flow etc
- **/
+ *
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements ITickable, IButtonInventory, INetworkMachine, IDataSync, IModularInventory, IProgressBar, ILinkableTile {
 
     protected static final ResourceLocation backdrop = new ResourceLocation("stellurgy", "textures/gui/rocketBuilder.png");
@@ -195,6 +198,15 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         if (registeredBus) {
             MinecraftForge.EVENT_BUS.unregister(this);
             registeredBus = false;
+        }
+    }
+
+    // A server stop unloads worlds without unloading their chunks, so onChunkUnload never runs then;
+    // without this the machine, and its world, stayed on the process-wide bus after the server.
+    @SubscribeEvent
+    public void onWorldUnload(net.minecraftforge.event.world.WorldEvent.Unload event) {
+        if (event.getWorld() == world) {
+            unregisterFromBus();
         }
     }
 
@@ -1550,6 +1562,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         MULTIPLEFLIGHTCOMPUTERS("msg.rocketbuilder.multipleflightcomputers"),
         MULTIPLEPILOTSEATS("msg.rocketbuilder.multiplepilotseats");
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final String translationKey;
 
         ErrorCodes(String translationKey) {

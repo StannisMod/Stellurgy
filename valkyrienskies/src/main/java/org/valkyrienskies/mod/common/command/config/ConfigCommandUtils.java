@@ -79,6 +79,7 @@ class ConfigCommandUtils {
             || type.isEnum();
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ImmutableList<String> booleanCompletions = ImmutableList.of("true", "false");
 
     public static List<String> getAutocompletions(Field field) {

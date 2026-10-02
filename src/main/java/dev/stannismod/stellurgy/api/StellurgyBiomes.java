@@ -15,22 +15,42 @@ import java.util.List;
  */
 public class StellurgyBiomes {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final StellurgyBiomes instance = new StellurgyBiomes();
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome moonBiome;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome hotDryBiome;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome alienForest;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome spaceBiome;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome stormLandsBiome;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome crystalChasms;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome swampDeepBiome;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome marsh;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome oceanSpires;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome moonBiomeDark;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome volcanic;
+    /** Effectively final, process lifetime: written only by Stellurgy.register. */
     public static Biome volcanicBarren;
+    /**
+     * Effectively final, process lifetime: filled only by StellurgyBiomes.registerBlackListBiome,
+     * StellurgyBiomes.blackListVanillaBiomes.
+     */
     private static List<Integer> blackListedBiomeIds;
+    /** Effectively final, process lifetime: filled only by StellurgyBiomes.registerBiome. */
     private List<Biome> registeredBiomes;
+    /** Effectively final, process lifetime: filled only by StellurgyBiomes.registerHighPressureBiome. */
     private List<Biome> registeredHighPressureBiomes;
+    /** Effectively final, process lifetime: filled only by StellurgyBiomes.registerSingleBiome. */
     private List<Biome> registeredSingleBiome;
 
     private StellurgyBiomes() {

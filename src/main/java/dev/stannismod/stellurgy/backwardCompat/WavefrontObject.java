@@ -21,6 +21,8 @@ import java.util.regex.Pattern;
 /**
  * Wavefront Object importer
  * Based heavily off of the specifications found at http://en.wikipedia.org/wiki/Wavefront_.obj_file
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public class WavefrontObject {
     // Compiled patterns are immutable and built from literals only, so they are the same value in

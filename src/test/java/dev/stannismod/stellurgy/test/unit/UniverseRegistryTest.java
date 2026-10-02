@@ -895,7 +895,7 @@ public class UniverseRegistryTest {
         reg.reconcileSchema(packConfig());
 
         assertEquals("a fresh world records the laws it was generated under",
-                UniverseRegistry.currentLawsFingerprint(), reg.lawsFingerprint());
+                reg.currentLawsFingerprint(), reg.lawsFingerprint());
 
         NBTTagCompound tag = new NBTTagCompound();
         reg.writeToNBT(tag);
@@ -908,7 +908,7 @@ public class UniverseRegistryTest {
     public void theShippedModelIsTheAlphaAndSaysSo() {
         // The leading zero is the whole statement: this model may be REPLACED rather than extended, and
         // a player is told so on any world that uses it.
-        UniverseSchema current = UniverseSchemas.current();
+        UniverseSchema current = UniverseSchemas.builtIn().current();
 
         assertFalse("a 0.x label is not a stable release", current.isStable());
     }
@@ -951,14 +951,14 @@ public class UniverseRegistryTest {
     public void aVersionsLawsTravelWithIt() {
         // The point of the whole exercise: selecting a version selects the metric too, so a build that
         // ships a new one does not re-measure the worlds already made under the old.
-        UniverseSchema v1 = UniverseSchemas.current();
+        UniverseSchema v1 = UniverseSchemas.builtIn().current();
 
         assertSame("the generator a schema builds must measure by that schema's laws",
                 v1.laws(), v1.generator(packConfig(), dev.stannismod.stellurgy.universe.PlanetTypes.stock(),
                         new dev.stannismod.stellurgy.universe.ReportOnce()).laws());
         assertEquals("and the stamp is that schema's laws, measured",
                 UniverseRegistry.lawsFingerprintOf(v1.laws()),
-                UniverseRegistry.currentLawsFingerprint());
+                testUniverse.newRegistry().currentLawsFingerprint());
     }
 
     @Test
@@ -1048,7 +1048,7 @@ public class UniverseRegistryTest {
             assertTrue("the refusal must name the laws the world was made under: "
                     + expected.getMessage(), expected.getMessage().contains("0000deadbeef0000"));
             assertTrue("and what this build's schema 1 measures: " + expected.getMessage(),
-                    expected.getMessage().contains(UniverseRegistry.currentLawsFingerprint()));
+                    expected.getMessage().contains(testUniverse.newRegistry().currentLawsFingerprint()));
             assertFalse("it must not blame the pack's configuration, which has not moved: "
                     + expected.getMessage(), expected.getMessage().contains("<galaxyGen> configuration"));
         }

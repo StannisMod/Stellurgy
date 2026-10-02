@@ -58,6 +58,8 @@ import java.util.List;
  *   - Slot 0: input chip (sat or station chip)
  *   - Slot 1: output written chip
  *   - "Scan" button to populate/refresh the list from server state
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public class TileOrbitalRegistry extends TileMultiPowerConsumer
         implements IModularInventory, IButtonInventory, IGuiCallback, IInventory {

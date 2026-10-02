@@ -76,6 +76,7 @@ import java.util.*;
 
 public class PlanetEventHandler {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ItemStack component = new ItemStack(StellurgyItems.itemUpgrade, 1, 4);
     /** What this handler keeps for one server ({@code ServerState#planetEvents}), and dies with it. */
     public static final class ServerPart {

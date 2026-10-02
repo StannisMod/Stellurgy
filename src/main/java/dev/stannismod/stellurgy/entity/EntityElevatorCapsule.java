@@ -37,6 +37,9 @@ import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import javax.annotation.Nullable;
 import java.util.List;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class EntityElevatorCapsule extends Entity implements INetworkEntity {
 
     public static final double MAX_HEIGHT = StellurgyConfiguration.getCurrentConfig().orbit;

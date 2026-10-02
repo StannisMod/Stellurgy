@@ -48,6 +48,8 @@ import dev.stannismod.stellurgy.tile.TilePilotSeat;
  * what survives a ship being rebuilt into a fresh subspace.</p>
  *
  * <p>Server main thread only.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class CrewTransfer {
 

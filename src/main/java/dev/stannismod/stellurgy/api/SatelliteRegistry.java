@@ -19,8 +19,10 @@ public class SatelliteRegistry {
      * through this API) in the FML init phases, and only read afterwards. A test that adds an
      * entry takes it back when it is done.
      */
+    /** Effectively final, process lifetime: filled only by SatelliteRegistry.registerSatellite. */
     static HashMap<String, Class<? extends SatelliteBase>> registry = new HashMap<>();
 
+    /** Effectively final, process lifetime: filled only by SatelliteRegistry.registerSatelliteProperty. */
     static HashMap<ItemStack, SatelliteProperties> itemPropertiesRegistry = new HashMap<>();
 
     /**

@@ -22,6 +22,7 @@ public class RecipesMachine {
     //This is a bit of a hack
     static class DummyRecipe implements net.minecraft.item.crafting.IRecipe
     {
+        /** Effectively final, process lifetime: built once at class initialisation. */
         private static ItemStack result = new ItemStack(Items.DIAMOND, 64);
         private ResourceLocation name;
 
@@ -219,11 +220,15 @@ public class RecipesMachine {
 		}
 	}
 
+	/** Effectively final, process lifetime: filled only by RecipesMachine.addRecipe. */
 	public HashMap<Class<? extends TileMultiblockMachine>, List<IRecipe>> recipeList;
 
 	/** The game's recipe tables. Never replaced; {@link #recipeList} is filled by the mod in its init
 	 *  phases and read for the life of the side, rewritten only by the operator's /reloadrecipes, a
-	 *  partial re-initialisation of the mod and the sanctioned exception to statics being written once. */
+	 *  partial re-initialisation of the mod and the sanctioned exception to statics being written once.
+	 *
+	 * Effectively final, process lifetime: built once at class initialisation.
+	 */
 	private static final RecipesMachine instance = new RecipesMachine();
 
 	public RecipesMachine() {

@@ -23,6 +23,8 @@ public class FastBlockModelRenderer {
      * OptiFine's {@code Config.isShaders}, or {@code null} when OptiFine is not installed. Whether a
      * class is on the classpath is a fact of the process, the same whenever this class loads; whether
      * shaders are ON is not, so it is asked on every draw rather than remembered.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     private static final Method OPTIFINE_IS_SHADERS = optifineIsShaders();
 

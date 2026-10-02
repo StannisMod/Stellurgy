@@ -31,6 +31,7 @@ public class SpaceObjectManager implements ISpaceObjectManager {
      * and only read after.
      */
     private static final Map<String, Class<?>> TYPES_BY_NAME = new HashMap<>();
+    /** Effectively final, process lifetime: filled only by SpaceObjectManager.registerSpaceObjectType. */
     private static final Map<Class<?>, String> NAMES_BY_TYPE = new HashMap<>();
     private int nextId = 1;
     private long nextStationTransitionTick = -1;

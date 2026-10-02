@@ -6,6 +6,9 @@ import com.fasterxml.jackson.dataformat.cbor.databind.CBORMapper;
 import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.util.jackson.annotations.VSAnnotationIntrospector;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class VSJacksonUtil {
 
     // Built in this class's initialiser, which the JVM runs once and publishes safely to every thread

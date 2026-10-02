@@ -15,6 +15,7 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
  */
 public final class LightYearVector {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final LightYearVector ZERO = new LightYearVector(0d, 0d, 0d);
 
     private final double x;

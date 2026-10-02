@@ -35,6 +35,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class TileChemicalReactor extends TileMultiblockMachine {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
             {{null, 'c', null},
                     {'L', 'I', 'L'}},

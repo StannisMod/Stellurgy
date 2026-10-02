@@ -234,7 +234,11 @@ public final class JumpGate {
     /** Not enough energy aboard for the whole flight — possible, and it may end early. */
     public static final String MSG_ENERGY_SHORTFALL = "msg.jumpgate.energyshortfall";
 
-    /** Every clause, by stage. Built once when the class loads and never changed after. */
+    /**
+     * Every clause, by stage. Built once when the class loads and never changed after.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     private static final Map<Stage, List<Predicate>> CLAUSES = clauses();
 
     private JumpGate() {

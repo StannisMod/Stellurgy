@@ -14,6 +14,9 @@ import org.valkyrienskies.mod.common.physics.BlockPhysicsDetails;
 import org.valkyrienskies.mod.common.ships.block_relocation.ShipSpawnDetector;
 
 // NOTE: When updating names/comments remember to update them in the lang files.
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 @SuppressWarnings("WeakerAccess") // NOTE: Any forge config option MUST be "public"
 @Config(modid = ValkyrienSkiesMod.MOD_ID)
 public class VSConfig {

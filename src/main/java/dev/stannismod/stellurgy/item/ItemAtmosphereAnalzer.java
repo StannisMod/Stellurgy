@@ -40,9 +40,11 @@ import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
-    private static ResourceIcon icon;
     private static ResourceLocation eyeCandySpinner = new ResourceLocation("stellurgy:textures/gui/eyeCandy/spinnyThing.png");
 
     private static String breathable = LibVulpes.proxy.getLocalizedString("msg.atmanal.canbreathe");

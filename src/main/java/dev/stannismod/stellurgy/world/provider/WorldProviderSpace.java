@@ -102,7 +102,7 @@ public class WorldProviderSpace extends WorldProviderPlanet {
     @Override
     protected void init() {
         this.hasSkyLight = true;
-        world.getWorldInfo().setTerrainType(Stellurgy.spaceWorldType);
+        world.getWorldInfo().setTerrainType(Stellurgy.instance.spaceWorldType);
 
         this.biomeProvider = new BiomeProviderSingle(StellurgyBiomes.spaceBiome);//new ChunkManagerPlanet(worldObj, worldObj.getWorldInfo().getGeneratorOptions(), DimensionManager.getInstance().getDimensionProperties(worldObj.provider.getDimension()).getBiomes());
 

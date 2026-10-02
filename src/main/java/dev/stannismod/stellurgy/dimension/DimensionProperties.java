@@ -49,6 +49,9 @@ import dev.stannismod.stellurgy.api.*;
 import dev.stannismod.stellurgy.util.*;
 
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class DimensionProperties implements Cloneable, IDimensionProperties {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
@@ -2890,6 +2893,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         FRIGID(175),
         SNOWBALL(0);
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final int temp;
 
         Temps(int i) {
@@ -2946,6 +2950,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         LOW(25),
         NONE(0);
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final int value;
 
         AtmosphereTypes(int value) {
@@ -2973,6 +2978,9 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         }
     }
 
+    /**
+     * Every field of this object is effectively final, process lifetime: set once when the object is built.
+     */
     public enum PlanetIcons {
         EARTHLIKE(new ResourceLocation("stellurgy:textures/planets/Earthlike.png")),
         LAVA(new ResourceLocation("stellurgy:textures/planets/Lava.png")),

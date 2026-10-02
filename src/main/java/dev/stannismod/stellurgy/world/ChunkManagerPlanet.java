@@ -63,7 +63,7 @@ public class ChunkManagerPlanet extends BiomeProvider {
 
     public ChunkManagerPlanet(World world, String str, List<BiomeEntry> biomes) {
         //Note: world MUST BE REGISTERED WITH THE DIMENSION MANAGER
-        this(world.getSeed(), Stellurgy.planetWorldType, str, DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()), biomes);
+        this(world.getSeed(), Stellurgy.instance.planetWorldType, str, DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()), biomes);
     }
 
     /**

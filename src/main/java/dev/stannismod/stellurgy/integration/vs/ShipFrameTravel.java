@@ -1767,7 +1767,10 @@ public final class ShipFrameTravel {
 
     /** The installed client port, or {@code null} on a dedicated server, which has no client look
      *  and where a player's flight is client-authoritative anyway. Written only by
-     *  {@link #installClientLookSource}. */
+     *  {@link #installClientLookSource}.
+     *
+     * Effectively final, process lifetime: written only by ShipFrameTravel.installClientLookSource.
+     */
     private static volatile ClientLookSource clientLookSource = null;
 
     /**
@@ -2039,7 +2042,10 @@ public final class ShipFrameTravel {
 
     /** Gravity-up for the hull walker. The stand/slide mechanic follows the LOCAL gravity by
      *  ruling; this constant is the seam a zero-/alternate-gravity space subsystem later feeds
-     *  ({@code null} would disable the lift/step/slide machinery honestly). */
+     *  ({@code null} would disable the lift/step/slide machinery honestly).
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     private static final double[] WORLD_UP = {0.0, 1.0, 0.0};
 
     /** The ship's three axes as world-frame unit vectors, or null while the transform is away. */

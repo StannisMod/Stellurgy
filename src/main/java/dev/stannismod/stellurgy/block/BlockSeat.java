@@ -27,6 +27,7 @@ import java.util.List;
 
 public class BlockSeat extends Block {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final AxisAlignedBB bb = new AxisAlignedBB(0, 0, 0, 1, .125, 1);
 
     public BlockSeat(Material mat) {

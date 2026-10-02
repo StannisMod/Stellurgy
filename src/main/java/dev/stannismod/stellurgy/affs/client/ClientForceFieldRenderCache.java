@@ -264,6 +264,7 @@ public final class ClientForceFieldRenderCache {
     }
 
     public static final class RenderMesh {
+        /** Effectively final, process lifetime: built once at class initialisation. */
         public static final RenderMesh EMPTY = new RenderMesh(Collections.emptyList());
         private final List<Triangle> triangles;
 

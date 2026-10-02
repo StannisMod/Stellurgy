@@ -20,6 +20,9 @@ public final class TestUniverse {
     private final List<UniverseRegistry> registries = new ArrayList<>();
     /** This universe's own report memory, standing where a server's galaxy would. */
     private final ReportOnce reports = new ReportOnce();
+    /** The world models this universe's registries reconcile against: the ones this build carries. */
+    private final dev.stannismod.stellurgy.universe.UniverseSchemas schemas =
+            dev.stannismod.stellurgy.universe.UniverseSchemas.builtIn();
     private IGalaxyGenerator generator;
     private IntFunction<StellarBody> starLookup;
 
@@ -27,6 +30,7 @@ public final class TestUniverse {
     public UniverseRegistry newRegistry() {
         UniverseRegistry registry = new UniverseRegistry();
         registry.bindReports(reports);
+        registry.bindSchemas(schemas);
         if (generator != null) {
             registry.attachGenerator(generator);
         }

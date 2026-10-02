@@ -65,6 +65,7 @@ import dev.stannismod.stellurgy.tile.TilePilotSeat;
  */
 public final class AboardRecord {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     private AboardRecord() { }

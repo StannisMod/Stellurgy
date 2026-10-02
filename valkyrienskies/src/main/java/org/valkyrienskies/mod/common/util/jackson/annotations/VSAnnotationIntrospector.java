@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
 
 public class VSAnnotationIntrospector extends JacksonAnnotationIntrospector {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final VSAnnotationIntrospector instance = new VSAnnotationIntrospector();
 
     private VSAnnotationIntrospector() {}

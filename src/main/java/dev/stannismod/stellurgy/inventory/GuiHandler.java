@@ -10,6 +10,9 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.satellite.SatelliteOreMapping;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class GuiHandler implements IGuiHandler {
 
     /**

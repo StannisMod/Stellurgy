@@ -23,6 +23,7 @@ import static java.lang.Math.min;
 
 public class RocketFx extends Particle {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final ResourceLocation icon = new ResourceLocation("stellurgy:textures/particle/soft2.png");
 
     float alpha = 0.45f;

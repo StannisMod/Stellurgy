@@ -24,6 +24,7 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 
 public class BlockLinkedHorizontalTexture extends Block {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyEnum<IconNames> TYPE = PropertyEnum.create("type", IconNames.class);
 
     //Mapping of side to names
@@ -85,6 +86,7 @@ public class BlockLinkedHorizontalTexture extends Block {
         RIGHTEDGE("rightedge"),
         NOEDGE("noedge");
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         private String suffix;
 
         IconNames(String suffix) {

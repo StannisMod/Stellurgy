@@ -36,6 +36,7 @@ public final class RocketGuiNavigation {
 
     private static final int BACK_BUTTON_Y = BACK_BUTTON_MARGIN;
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation[] BACK_BUTTON_TEXTURE =
             TextureResources.buttonBuild;
 

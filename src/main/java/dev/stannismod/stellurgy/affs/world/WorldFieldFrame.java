@@ -6,6 +6,8 @@ import net.minecraft.util.math.Vec3d;
  * The identity frame — a standalone shield on a planet, asteroid or station. Field coordinates ARE
  * world coordinates and the shell is static, so every conversion is a no-op and the surface velocity is
  * zero. This is AFFS's original world-frame behaviour, unchanged; a stateless singleton.
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class WorldFieldFrame implements FieldFrame {
 

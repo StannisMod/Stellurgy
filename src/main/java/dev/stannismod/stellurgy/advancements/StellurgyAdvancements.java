@@ -6,6 +6,9 @@ import net.minecraftforge.fml.relauncher.ReflectionHelper;
 
 import java.lang.reflect.Method;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class StellurgyAdvancements {
 
     /* The triggers live as long as the side, exactly as vanilla's own in CriteriaTriggers: each is
@@ -32,7 +35,6 @@ public class StellurgyAdvancements {
             ATM_TERRAFORMER,
             DEATH_STAR
     };
-    private static Method CriterionRegister;
 
     public static void register() {
         Method method;

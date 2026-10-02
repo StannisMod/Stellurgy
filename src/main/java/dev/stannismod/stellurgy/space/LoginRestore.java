@@ -32,6 +32,8 @@ import org.apache.logging.log4j.Logger;
  * observable rather than silent.</p>
  *
  * <p>Server main thread only.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class LoginRestore {
 

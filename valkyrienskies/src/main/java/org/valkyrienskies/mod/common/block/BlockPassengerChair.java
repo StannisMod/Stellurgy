@@ -34,6 +34,7 @@ import org.valkyrienskies.mod.common.util.BaseBlock;
 @ParametersAreNonnullByDefault
 public class BlockPassengerChair extends BaseBlock {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyDirection FACING = BlockHorizontal.FACING;
 
     public BlockPassengerChair() {

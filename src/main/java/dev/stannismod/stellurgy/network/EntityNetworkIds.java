@@ -35,6 +35,8 @@ import java.util.Map;
  * the middle, never reuse a removed slot -- a retired entry stays where it is (its number stays
  * burned) so no id ever changes meaning. The ids are runtime-only: NBT and the registry use names,
  * and both sides of a connection are this same jar, so appending is wire-safe.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class EntityNetworkIds {
 

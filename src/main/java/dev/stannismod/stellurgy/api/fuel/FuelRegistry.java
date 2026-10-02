@@ -10,6 +10,7 @@ import net.minecraftforge.fluids.Fluid;
 
 public class FuelRegistry {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final FuelRegistry instance = new FuelRegistry();
 
     /**
@@ -104,7 +105,9 @@ public class FuelRegistry {
         //Stores a fuel entry for each type of fuel. Effectively final for the life of the side: filled
         //by the mod's postInit config load (and add-ons through FuelRegistry in the init phases),
         //only read afterwards.
+        /** Effectively final, process lifetime: filled only by FuelType.addFuel. */
         final HashSet<FuelEntry> fuels;
+        /** Effectively final, process lifetime: set once when the object is built. */
         public final int id;
 
         FuelType(int id) {
