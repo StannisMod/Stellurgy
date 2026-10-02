@@ -299,7 +299,7 @@ public class GalaxyFieldTest {
         // "Empty of stars", not "empty": what a ship meets out here is material the galaxies threw out,
         // and that is the ejecta halo rather than the profile. This pins the half that has not moved —
         // nothing CONDENSES out here — and VoidContentTest pins the half that has.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg(1.0d));
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg(1.0d));
         Galaxy home = gen.galaxies().home(77L);
         // Past the whole RETINUE, not just past the primary: a satellite sits one to three diameters
         // out, so probing at three radii would be probing inside a galaxy and this test would be
@@ -598,7 +598,7 @@ public class GalaxyFieldTest {
         // that populates its primary. Had the profile been read off the cube's OWNER instead, every
         // satellite would be named, addressable and completely empty, which is what this catches.
         GalaxyGenConfig config = cfg(1.0d);
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         GalaxyField f = gen.galaxies();
 
         long seed = 0xC0FFEEL;

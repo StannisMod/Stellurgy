@@ -1,7 +1,10 @@
-package dev.stannismod.stellurgy.command.test;
+package dev.stannismod.stellurgy.test.trace;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 
 /**
  * A flight recorder for MOTION SMOOTHNESS: bounded rings of where a tier-2 ship, its pilot and the
@@ -35,16 +38,20 @@ import java.util.Map;
  * <p>A magnitude here always ships with the components it came from, because a distance that will
  * not move cannot say WHICH axis is stuck.</p>
  *
- * <p><b>Always on, deliberately.</b> The rings are allocated on first use and every sample is a
- * handful of stores into preallocated primitive arrays — no allocation, no formatting, nothing that
- * can itself perturb the timing it measures. Gating this on test mode would have made it useless in
- * the one place the symptom has ever been seen, which is a real play session: the point of a flight
- * recorder is that it was already running when the thing happened.</p>
+ * <h2>Who owns it</h2>
+ *
+ * <p>The side it records: one instance is a field of each side's {@link SideTrace}, so the server's
+ * rings die with the {@code MinecraftServer} and the client's with {@code Minecraft}. The server's
+ * instance carries the two server channels and that side's chunk count, the client's the two client
+ * channels, its chunk count and its ship-pose arrivals. Every sample is written by a test mixin,
+ * so a released jar records nothing.</p>
  *
  * <p><b>Thread model.</b> One ring per (channel, key), and each ring is written by exactly one
  * thread — physics thread, server thread, or client thread. Readers (a probe, a reflective harness
  * read) run on a different thread and may catch a half-written newest sample; a diagnostic can
- * afford that, and every summary below is computed over the samples BEHIND the write cursor.</p>
+ * afford that, and every summary below is computed over the samples BEHIND the write cursor. Every
+ * sample is a handful of stores into preallocated primitive arrays — no allocation, no formatting,
+ * nothing that can itself perturb the timing it measures.</p>
  */
 public final class MotionTrace {
 
@@ -58,41 +65,6 @@ public final class MotionTrace {
     public static final int CLIENT_FRAME = 3;
 
     private static final int CHANNELS = 4;
-    /** Ring depth per channel. At 60 Hz physics / 60 fps this is ~68 s of history; at 20 Hz, ~3.5 min. */
-    private static final int[] CAPACITY = {4096, 2048, 2048, 4096};
-    /**
-     * The period each channel's clock is SUPPOSED to run at, in milliseconds; 0 where there is no
-     * declared rate and the channel's own median is the only yardstick (a frame rate is whatever the
-     * machine manages).
-     *
-     * <p>This exists because a late beat has to be late against something, and the channel's own
-     * median is the wrong something on a clock whose beats are legitimately uneven. A client tick is
-     * the case that forced it: vanilla runs the tick inside the render loop, so at 30 fps the ticks
-     * land on frame boundaries at 33.7 or 67.4 ms and average the 50 ms they are meant to — against
-     * their own median of 33.7 every second beat "arrives late", and a hitch count built that way
-     * reports a healthy client as stuttering, in every run, forever.</p>
-     */
-    private static final double[] NOMINAL_MS = {1000.0 / 60.0, 50.0, 50.0, 0.0};
-    /**
-     * Where a channel keeps a SECOND pose, or -1 where it keeps only its own.
-     *
-     * <p>Only the client tick has one: the pilot's position in columns 1..3 and the MOUNT he rides
-     * in 6..8. Two poses in one sample is how a freeze is localised without a second run — the
-     * pilot's view is the mount's position plus an offset, so a tick where the pilot did not move
-     * either had a mount that did not move or did not apply one that did, and those are different
-     * defects.</p>
-     */
-    private static final int[] SECOND_POSE_COL = {-1, -1, 6, -1};
-    /**
-     * Where a channel keeps the COMMANDED speed, or -1 where it keeps none.
-     *
-     * <p>Reported as a maximum over the window so a caller can bound the craft's motion by what was
-     * actually ASKED of it rather than by the ceiling anyone could have asked for. The difference
-     * decides whether a bound can see anything: a craft cruising at 2 blocks/tick whose client pose
-     * jumps 4 in one tick is inside the 3-block setpoint ceiling once the two clocks' phase beat is
-     * allowed for, and outside its own command by a factor of two.</p>
-     */
-    private static final int[] CMD_SPEED_COL = {5, 1, -1, -1};
     /**
      * Columns carried per sample. Their meaning is per-channel; see the recording methods.
      *
@@ -136,15 +108,14 @@ public final class MotionTrace {
     private static final int MAX_KEYS = 4;
 
     /**
-     * Cumulative count of chunks that finished loading, both sides, since the game started. Sampled
-     * into {@link #GAME} and {@link #CLIENT_TICK} so a tick that took too long can be attributed to
-     * chunk work rather than merely correlated with it by eye.
+     * Chunks that finished loading on this side, cumulative. Sampled into {@link #GAME} and
+     * {@link #CLIENT_TICK} so a tick that took too long can be attributed to chunk work rather than
+     * merely correlated with it by eye.
      */
-    public static volatile long serverChunkLoads = 0L;
-    public static volatile long clientChunkLoads = 0L;
+    private volatile long chunkLoads;
 
     /**
-     * Ship transform updates the CLIENT has applied, cumulative.
+     * Ship transform updates this side's client has applied, cumulative.
      *
      * <p>The client's ship pose is an exponential filter chasing whatever the last packet said, so
      * how many packets landed inside a window is the difference between "the ship moved unevenly"
@@ -155,20 +126,19 @@ public final class MotionTrace {
      * <p>Cumulative rather than per-window on purpose — a counter read only at the end of a window
      * supports a correlation between legs and never an attribution inside one.</p>
      */
-    public static volatile long clientShipTransformUpdates = 0L;
+    private volatile long shipTransformUpdates;
 
     /** How many rings each channel has dropped to stay inside the key budget. Never reset by a read. */
-    private static final long[] KEY_EVICTIONS = new long[CHANNELS];
+    private final long[] keyEvictions = new long[CHANNELS];
 
     /** Per-channel rings, keyed by flight-computer position for the per-ship channels, 0 for global. */
-    private static final Map<Long, Ring>[] RINGS = newRingMaps();
+    private final Map<Long, Ring>[] rings = newRingMaps();
 
-    private MotionTrace() {
+    MotionTrace() {
     }
 
-
     @SuppressWarnings("unchecked")
-    private static Map<Long, Ring>[] newRingMaps() {
+    private Map<Long, Ring>[] newRingMaps() {
         Map<Long, Ring>[] maps = new Map[CHANNELS];
         for (int i = 0; i < CHANNELS; i++) {
             final int channel = i;
@@ -178,7 +148,7 @@ public final class MotionTrace {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<Long, Ring> eldest) {
                     if (size() > MAX_KEYS) {
-                        KEY_EVICTIONS[channel]++;
+                        keyEvictions[channel]++;
                         return true;
                     }
                     return false;
@@ -188,7 +158,79 @@ public final class MotionTrace {
         return maps;
     }
 
+    /** Ring depth per channel. At 60 Hz physics / 60 fps this is ~68 s of history; at 20 Hz, ~3.5 min. */
+    private static int capacity(int channel) {
+        return channel == PHYS || channel == CLIENT_FRAME ? 4096 : 2048;
+    }
+
+    /**
+     * The period each channel's clock is SUPPOSED to run at, in milliseconds; 0 where there is no
+     * declared rate and the channel's own median is the only yardstick (a frame rate is whatever the
+     * machine manages).
+     *
+     * <p>This exists because a late beat has to be late against something, and the channel's own
+     * median is the wrong something on a clock whose beats are legitimately uneven. A client tick is
+     * the case that forced it: vanilla runs the tick inside the render loop, so at 30 fps the ticks
+     * land on frame boundaries at 33.7 or 67.4 ms and average the 50 ms they are meant to — against
+     * their own median of 33.7 every second beat "arrives late", and a hitch count built that way
+     * reports a healthy client as stuttering, in every run, forever.</p>
+     */
+    private static double nominalMs(int channel) {
+        switch (channel) {
+            case PHYS:
+                return 1000.0 / 60.0;
+            case GAME:
+            case CLIENT_TICK:
+                return 50.0;
+            default:
+                return 0.0;
+        }
+    }
+
+    /**
+     * Where a channel keeps a SECOND pose, or -1 where it keeps only its own.
+     *
+     * <p>Only the client tick has one: the pilot's position in columns 1..3 and the MOUNT he rides
+     * in 6..8. Two poses in one sample is how a freeze is localised without a second run — the
+     * pilot's view is the mount's position plus an offset, so a tick where the pilot did not move
+     * either had a mount that did not move or did not apply one that did, and those are different
+     * defects.</p>
+     */
+    private static int secondPoseCol(int channel) {
+        return channel == CLIENT_TICK ? 6 : -1;
+    }
+
+    /**
+     * Where a channel keeps the COMMANDED speed, or -1 where it keeps none.
+     *
+     * <p>Reported as a maximum over the window so a caller can bound the craft's motion by what was
+     * actually ASKED of it rather than by the ceiling anyone could have asked for. The difference
+     * decides whether a bound can see anything: a craft cruising at 2 blocks/tick whose client pose
+     * jumps 4 in one tick is inside the 3-block setpoint ceiling once the two clocks' phase beat is
+     * allowed for, and outside its own command by a factor of two.</p>
+     */
+    private static int cmdSpeedCol(int channel) {
+        switch (channel) {
+            case PHYS:
+                return 5;
+            case GAME:
+                return 1;
+            default:
+                return -1;
+        }
+    }
+
     // -- recording -------------------------------------------------------------------------------
+
+    /** One chunk finished loading on this side. */
+    public void chunkLoaded() {
+        chunkLoads++;
+    }
+
+    /** One ship pose packet was applied by this side's client. */
+    public void shipTransformArrived() {
+        shipTransformUpdates++;
+    }
 
     /**
      * One physics step of a ship driven by the flight computer at {@code key}.
@@ -200,9 +242,9 @@ public final class MotionTrace {
      * step by one controller on one ship; anything else shows up otherwise only as a sample rate
      * that has quietly doubled, which reads like an instrument fault rather than a defect.</p>
      */
-    public static void phys(long key, long worldTick, double controllerTag, double shipTag, double dt,
-                            double x, double y, double z,
-                            double speed, double cmdSpeed, double mass, boolean clamped) {
+    public void phys(long key, long worldTick, double controllerTag, double shipTag, double dt,
+                     double x, double y, double z,
+                     double speed, double cmdSpeed, double mass, boolean clamped) {
         ring(PHYS, key).add(System.nanoTime(), worldTick, dt, x, y, z, speed, cmdSpeed, mass,
                 clamped ? 1.0 : 0.0, 0.0, 0.0, controllerTag, shipTag);
     }
@@ -211,13 +253,13 @@ public final class MotionTrace {
      * One world tick of the flight computer at {@code key}.
      *
      * <p>Columns: 1 if a seated pilot's input was present else 0, |commanded v|, |velocity
-     * setpoint|, cumulative server chunk loads, then four zeroes. The INTERVAL between samples is
+     * setpoint|, cumulative chunk loads on this side, then zeroes. The INTERVAL between samples is
      * the server tick period as this tile experiences it, which is the point of the channel.</p>
      */
-    public static void game(long key, long worldTick, boolean pilotInput, double cmdSpeed,
-                            double setpointSpeed) {
+    public void game(long key, long worldTick, boolean pilotInput, double cmdSpeed,
+                     double setpointSpeed) {
         ring(GAME, key).add(System.nanoTime(), worldTick, pilotInput ? 1.0 : 0.0, cmdSpeed,
-                setpointSpeed, serverChunkLoads, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+                setpointSpeed, chunkLoads, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     }
 
     /**
@@ -236,10 +278,10 @@ public final class MotionTrace {
      * MIDDLE one says which. Taken in the same sample as the pilot's, so the two are the same tick
      * by construction rather than by argument.</p>
      */
-    public static void clientTick(long clientTick, double x, double y, double z, boolean riding,
-                                  double mountX, double mountY, double mountZ) {
+    public void clientTick(long clientTick, double x, double y, double z, boolean riding,
+                           double mountX, double mountY, double mountZ) {
         ring(CLIENT_TICK, 0L).add(System.nanoTime(), clientTick, riding ? 1.0 : 0.0, x, y, z,
-                clientChunkLoads, clientShipTransformUpdates, mountX, mountY, mountZ, 0.0,
+                chunkLoads, shipTransformUpdates, mountX, mountY, mountZ, 0.0,
                 0.0, 0.0);
     }
 
@@ -247,11 +289,10 @@ public final class MotionTrace {
      * One rendered frame, carrying the pilot's interpolated EYE point — the only sample in this
      * class that is what he actually looks at.
      *
-     * <p>Columns: partial ticks, then eye x, y, z (the shared positional layout), then four
-     * zeroes.</p>
+     * <p>Columns: partial ticks, then eye x, y, z (the shared positional layout), then zeroes.</p>
      */
-    public static void clientFrame(long clientTick, double eyeX, double eyeY, double eyeZ,
-                                   double partialTicks) {
+    public void clientFrame(long clientTick, double eyeX, double eyeY, double eyeZ,
+                            double partialTicks) {
         ring(CLIENT_FRAME, 0L).add(System.nanoTime(), clientTick, partialTicks, eyeX, eyeY, eyeZ,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     }
@@ -276,10 +317,43 @@ public final class MotionTrace {
     // -- reading ---------------------------------------------------------------------------------
 
     /**
+     * The server's account of how SMOOTHLY the ship driven by the flight computer at
+     * {@code (dim, x, y, z)} moved over the trailing {@code windowMs}: the physics-thread channel
+     * (the clock its velocity integrates on) and the server-tick channel (the clock its command is
+     * republished on), each with the interval distribution of its own clock, the displacement
+     * distribution of the thing it watches, and two named pathologies — {@code hitches} (a beat
+     * that arrived late) and {@code stalls} (a sample that barely moved while its neighbours did).
+     *
+     * <p>Read from the server running in this JVM, through the probe's {@code invoke-static}. The
+     * client channels are the client's, read there ({@link MotionTraceClientSummary}).</p>
+     */
+    public static String serverReading(int dim, int x, int y, int z, int windowMs) {
+        MotionTrace trace = ofCurrentServer();
+        return "{\"ok\":true,\"windowMs\":" + windowMs
+                + ",\"serverChunkLoads\":" + trace.chunkLoads
+                + "," + trace.serverSummary(keyOf(dim, x, y, z), windowMs) + "}";
+    }
+
+    /** Forget every ring the server running in this JVM recorded, so a leg starts from an empty
+     *  recorder. Through the probe's {@code invoke-static}; answers what it did. */
+    public static String resetServer() {
+        ofCurrentServer().reset();
+        return "reset";
+    }
+
+    private static MotionTrace ofCurrentServer() {
+        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        if (server == null) {
+            throw new IllegalStateException("no server runs in this JVM, so it has no flight recorder");
+        }
+        return SideTrace.server(server).motion();
+    }
+
+    /**
      * The server-side summary for one flight computer: both server channels over the trailing
      * {@code windowMs}, as a JSON object body (no braces).
      */
-    public static String serverSummary(long key, long windowMs) {
+    String serverSummary(long key, long windowMs) {
         return "\"phys\":" + summary(PHYS, key, windowMs, true)
                 + ",\"game\":" + summary(GAME, key, windowMs, false);
     }
@@ -289,7 +363,7 @@ public final class MotionTrace {
      * this AFTER a flight leg rather than during it, so the leg's own length has to be selectable
      * at read time rather than at record time.
      */
-    public static String clientSummary() {
+    String clientSummary() {
         StringBuilder sb = new StringBuilder("{");
         long[] windows = {1000L, 3000L, 10000L};
         for (int i = 0; i < windows.length; i++) {
@@ -301,7 +375,7 @@ public final class MotionTrace {
                     .append(",\"frame\":").append(summary(CLIENT_FRAME, 0L, windows[i], true))
                     .append('}');
         }
-        sb.append(",\"chunkLoads\":").append(clientChunkLoads).append('}');
+        sb.append(",\"chunkLoads\":").append(chunkLoads).append('}');
         return sb.toString();
     }
 
@@ -318,7 +392,7 @@ public final class MotionTrace {
      *       the median was not itself ~zero. A craft that stops and starts under a held key.</li>
      * </ul>
      */
-    private static String summary(int channel, long key, long windowMs, boolean positional) {
+    private String summary(int channel, long key, long windowMs, boolean positional) {
         Ring r = peek(channel, key);
         if (r == null) {
             // "Nothing here" has two causes that ask for opposite investigations: this key was
@@ -330,31 +404,31 @@ public final class MotionTrace {
     }
 
     /** Forget everything recorded so far — a fresh leg starts from an empty ring. */
-    public static synchronized void reset() {
+    synchronized void reset() {
         for (int i = 0; i < CHANNELS; i++) {
-            RINGS[i].clear();
-            KEY_EVICTIONS[i] = 0L;
+            rings[i].clear();
+            keyEvictions[i] = 0L;
         }
     }
 
     /** How many rings this channel has evicted since the last {@link #reset()}. */
-    private static synchronized long evictions(int channel) {
-        return KEY_EVICTIONS[channel];
+    private synchronized long evictions(int channel) {
+        return keyEvictions[channel];
     }
 
-    private static synchronized Ring ring(int channel, long key) {
-        Map<Long, Ring> byKey = RINGS[channel];
+    private synchronized Ring ring(int channel, long key) {
+        Map<Long, Ring> byKey = rings[channel];
         Ring r = byKey.get(key);
         if (r == null) {
-            r = new Ring(CAPACITY[channel], NOMINAL_MS[channel], SECOND_POSE_COL[channel],
-                    CMD_SPEED_COL[channel]);
+            r = new Ring(capacity(channel), nominalMs(channel), secondPoseCol(channel),
+                    cmdSpeedCol(channel));
             byKey.put(key, r); // over budget: the put evicts the least recently used ring, loudly
         }
         return r;
     }
 
-    private static synchronized Ring peek(int channel, long key) {
-        return RINGS[channel].get(key);
+    private synchronized Ring peek(int channel, long key) {
+        return rings[channel].get(key);
     }
 
     /**

@@ -449,7 +449,7 @@ public class TelescopeRegionScanTest {
         int queries;
 
         CountingGenerator(GalaxyGenConfig config) {
-            this.real = new ClusteredGalaxyGenerator(config);
+            this.real = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         }
 
         @Override
@@ -569,7 +569,7 @@ public class TelescopeRegionScanTest {
         // re-derives everything by construction, so the discriminator below cannot quietly stop
         // discriminating.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(config));
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config));
         testUniverse.setStarLookup(TelescopeRegionScanTest::star);
         UniverseRegistry registry = testUniverse.newRegistry();
         registry.bindWorldSeed(0xC0FFEEL);
@@ -602,7 +602,7 @@ public class TelescopeRegionScanTest {
 
         // The discriminator: the new universe must genuinely describe something else at that anchor,
         // or the assertion above would hold with no pin at all.
-        String derivedNow = new ClusteredGalaxyGenerator(config).systemAt(0xDEADBEEFL, anchor)
+        String derivedNow = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config).systemAt(0xDEADBEEFL, anchor)
                 .map(sys -> sys.systemId() + "/" + sys.primaryKind() + "/" + sys.name())
                 .orElse("none");
         assertNotEquals("arrangement: the new seed must derive something else at this anchor, or the "
@@ -628,7 +628,7 @@ public class TelescopeRegionScanTest {
         // NUMBER rather than asserted to be small: the bound below is a tripwire against an order of
         // magnitude, and the printed figures are what a decision about survey width is made from.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(config));
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config));
         testUniverse.setStarLookup(TelescopeRegionScanTest::star);
         UniverseRegistry registry = testUniverse.newRegistry();
         registry.bindWorldSeed(0xC0FFEEL);

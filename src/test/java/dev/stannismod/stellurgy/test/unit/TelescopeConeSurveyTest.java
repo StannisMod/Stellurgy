@@ -447,7 +447,7 @@ public class TelescopeConeSurveyTest {
         int bodyQueries;
 
         SplitCountingGenerator(GalaxyGenConfig config) {
-            this.real = new ClusteredGalaxyGenerator(config);
+            this.real = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
         }
 
         @Override
@@ -521,7 +521,7 @@ public class TelescopeConeSurveyTest {
         // finely than that. Without it a sweep reports one seat in k-cubed and calls it the sky: at
         // the shipped division that is 1.3 % of what is out there, reported as all of it.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(config);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config);
 
         int byTerritory = 0;
         int byPoint = 0;
@@ -550,7 +550,7 @@ public class TelescopeConeSurveyTest {
         // aperture must hold under 200 000 looks, register a number of systems a crystal can carry,
         // and cost well under a second of CPU spread over its steps.
         GalaxyGenConfig config = GalaxyGenConfig.defaults();
-        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(config));
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),config));
         testUniverse.setStarLookup(id -> starOf(id, 1f, 100));
         UniverseRegistry registry = testUniverse.newRegistry();
         registry.bindWorldSeed(SEED);

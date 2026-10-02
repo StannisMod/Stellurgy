@@ -220,7 +220,8 @@ public final class PlanetRealizer {
 
         BodyProfile profile = registry.generator().derivation()
                 .derive(registry.worldSeed(), anchor, target.name(), variant,
-                star, target.kind() == SystemBodyKind.MOON, target.orbitalDistance());
+                star, target.kind() == SystemBodyKind.MOON, target.orbitalDistance(),
+                dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports());
         DimensionProperties props = materialize(dimId, profile, star, target, parentBody);
 
         if (!DimensionManager.getInstance().registerDim(props, true)) {

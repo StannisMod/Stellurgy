@@ -6,6 +6,7 @@ import java.util.function.IntFunction;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.universe.IGalaxyGenerator;
+import dev.stannismod.stellurgy.universe.ReportOnce;
 import dev.stannismod.stellurgy.universe.UniverseRegistry;
 
 /**
@@ -17,12 +18,15 @@ import dev.stannismod.stellurgy.universe.UniverseRegistry;
 public final class TestUniverse {
 
     private final List<UniverseRegistry> registries = new ArrayList<>();
+    /** This universe's own report memory, standing where a server's galaxy would. */
+    private final ReportOnce reports = new ReportOnce();
     private IGalaxyGenerator generator;
     private IntFunction<StellarBody> starLookup;
 
     /** A registry under this test's arrangement. */
     public UniverseRegistry newRegistry() {
         UniverseRegistry registry = new UniverseRegistry();
+        registry.bindReports(reports);
         if (generator != null) {
             registry.attachGenerator(generator);
         }

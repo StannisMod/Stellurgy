@@ -54,7 +54,7 @@ public class InterstellarLegDistanceTest {
     @Test
     public void theNearestSystemIsFarEnoughToBeAJumpAndCloseEnoughToBeReached() {
         GalaxyGenConfig cfg = GalaxyGenConfig.defaults();
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg);
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg);
 
         List<Long> ticks = new ArrayList<>();
         List<String> rows = new ArrayList<>();
@@ -155,7 +155,7 @@ public class InterstellarLegDistanceTest {
         // longer the scales apart the drive ladder is derived against.
         final double TOLERANCE_FACTOR = 2d;
 
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(GalaxyGenConfig.defaults());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),GalaxyGenConfig.defaults());
         List<Double> bands = new ArrayList<>();
         for (long seed = 1L; seed <= 20L; seed++) {
             Double stepLy = nearestNeighbourLightYears(gen, seed);

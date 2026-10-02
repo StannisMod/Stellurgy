@@ -167,7 +167,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 for (int z = 0; z < this.sizeZ; z++) {
                     Block block = this.blocks[x][y][z];
                     if (block != null) {
-                        this.weight += WeightEngine.INSTANCE.getWeight(null, block);
+                        this.weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(null, block);
                     }
                 }
             }
@@ -175,7 +175,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
 
         // TEs
         for (TileEntity te : this.tileEntities) {
-            this.weight += WeightEngine.INSTANCE.getTEWeight(te);
+            this.weight += dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(te);
 
             if (te instanceof TileSatelliteHatch) {
                 TileSatelliteHatch hatch = (TileSatelliteHatch) te;
@@ -223,7 +223,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                         Block block = state.getBlock();
 
                         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                            weight += WeightEngine.INSTANCE.getWeight(world, currBlockPos);
+                            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currBlockPos);
                         } else {
                             weight += 1;
                         }
@@ -414,7 +414,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 for (int y = actualMinY; y <= actualMaxY; y++) {
                     BlockPos pos = new BlockPos(x, y, z);
 
-                    weight += WeightEngine.INSTANCE.getWeight(world, pos);
+                    weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, pos);
 
                     IBlockState state = world.getBlockState(pos);
                     ret.blocks[x - actualMinX][y - actualMinY][z - actualMinZ] = state.getBlock();

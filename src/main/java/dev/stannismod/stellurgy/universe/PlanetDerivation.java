@@ -308,10 +308,11 @@ public final class PlanetDerivation {
      * @param orbitalDistance where the body sits, in Stellurgy distance units. A moon takes its
      *                        PARENT's, because what a moon's climate depends on is where the parent is
      * @param types           the planet-type table of the save being derived
+     * @param reports         the deriving galaxy's memory of what it has already reported
      */
     public static BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
                                      StellarBody star, boolean moon, long orbitalDistance,
-                                     PlanetTypes types) {
+                                     PlanetTypes types, ReportOnce reports) {
         GalacticCoord key = bodyCell.cellCentre();
         double metallicity = metallicityOf(seed, anchor);
         int bareTemp = bareTemperature(star, orbitalDistance);
@@ -335,11 +336,11 @@ public final class PlanetDerivation {
                 albedo -> AstronomicalBodyHelper.getAverageTemperature(star, orbit, pressure, albedo);
 
         PlanetTypePreset preset = types.drawType(pressure, temperatureForAlbedo, gravityPercent,
-                giant, CellHash.ofBody(seed, key, variant, SALT_TYPE));
+                giant, CellHash.ofBody(seed, key, variant, SALT_TYPE), reports);
         int temperature = temperatureForAlbedo.applyAsInt(
                 preset == null ? AstronomicalBodyHelper.EARTH_ALBEDO : preset.albedo());
         TerrainOption terrain = types.drawTerrain(preset,
-                CellHash.ofBody(seed, key, variant, SALT_TERRAIN));
+                CellHash.ofBody(seed, key, variant, SALT_TERRAIN), reports);
 
         boolean oxygen = preset != null && preset.allowsOxygen()
                 && CellHash.norm(CellHash.ofBody(seed, key, variant, SALT_OXYGEN)) < OXYGEN_CHANCE;
@@ -386,9 +387,10 @@ public final class PlanetDerivation {
      *                      chance a bound body past the snow line gets — what unbinds a planet is a
      *                      scattering encounter, and a giant is the body doing the scattering
      * @param types the planet-type table of the save being derived
+     * @param reports the deriving galaxy's memory of what it has already reported
      */
     public static BodyProfile deriveRogue(long seed, GalacticCoord bodyCell, int variant,
-                                          double giantFraction, PlanetTypes types) {
+                                          double giantFraction, PlanetTypes types, ReportOnce reports) {
         GalacticCoord key = bodyCell.cellCentre();
         // Its own draw, because it has no star to have inherited one from. A rogue formed in some
         // system and carries that system's metals; which system is not a thing this layer can know.
@@ -408,9 +410,9 @@ public final class PlanetDerivation {
         // fraction of INCIDENT light a surface throws back, and nothing shines on this world. Its heat
         // is its own, so every candidate type is admitted at the same temperature.
         PlanetTypePreset preset = types.drawType(pressure, albedo -> temperature, gravityPercent,
-                bulky, CellHash.ofBody(seed, key, variant, SALT_TYPE));
+                bulky, CellHash.ofBody(seed, key, variant, SALT_TYPE), reports);
         TerrainOption terrain = types.drawTerrain(preset,
-                CellHash.ofBody(seed, key, variant, SALT_TERRAIN));
+                CellHash.ofBody(seed, key, variant, SALT_TERRAIN), reports);
 
         boolean rings = CellHash.norm(CellHash.ofBody(seed, key, variant, SALT_RINGS))
                 < (bulky ? RING_CHANCE_GIANT : RING_CHANCE_ROCKY);

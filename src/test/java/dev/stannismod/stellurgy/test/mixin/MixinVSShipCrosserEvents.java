@@ -4,8 +4,6 @@ import java.util.List;
 import java.util.UUID;
 
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.WorldServer;
-import net.minecraftforge.common.DimensionManager;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,7 +11,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import dev.stannismod.stellurgy.test.trace.CrossingMemory;
-import dev.stannismod.stellurgy.command.test.TestEventLog;
 import dev.stannismod.stellurgy.space.CrewTransfer;
 import dev.stannismod.stellurgy.space.HyperspaceTiles;
 import dev.stannismod.stellurgy.space.ShipCrossingService;
@@ -123,11 +120,6 @@ public abstract class MixinVSShipCrosserEvents {
     }
 
     private static void stellurgyTest$record(String type, String payload) {
-        TestEventLog.record("server", stellurgyTest$serverTick(), type, payload);
-    }
-
-    private static long stellurgyTest$serverTick() {
-        WorldServer overworld = DimensionManager.getWorld(0);
-        return overworld == null ? 0L : overworld.getTotalWorldTime();
+        TestTrace.recordServer(type, payload);
     }
 }

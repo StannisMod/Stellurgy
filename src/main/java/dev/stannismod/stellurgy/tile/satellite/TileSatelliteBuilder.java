@@ -13,7 +13,6 @@ import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.inventory.TextureResources;
-import dev.stannismod.stellurgy.util.WeightEngine;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
@@ -129,7 +128,7 @@ public class TileSatelliteBuilder extends TileMultiPowerConsumer implements IMod
                         maxData += SatelliteRegistry.getSatelliteProperty(getStackInSlot(currentSlotIndex)).getMaxDataStorage();
                 }
 
-                weight += WeightEngine.INSTANCE.getWeight(stack);
+                weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(stack);
             }
 
             //Set final satellite properties

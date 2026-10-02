@@ -16,10 +16,9 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <h2>Why here and not in the caller</h2>
  *
  * <p>The writer is {@code ShipFrameTravel.hullStandTravel}, and the value that matters is its local
- * {@code vWorld} — but that method takes a {@code private static final class ShipFrameState}, which an
- * injector's signature would have to name, so it cannot be injected into from outside. The sweep it
- * calls is public, static, and receives {@code vWorld[0..2]} as its own arguments. So the number is
- * reachable one frame down, without local capture and without touching production.</p>
+ * {@code vWorld} — a local, readable there only by local capture. The sweep it calls is public,
+ * static, and receives {@code vWorld[0..2]} as its own arguments. So the number is reachable one frame
+ * down, without local capture and without touching production.</p>
  *
  * <h2>What the two readings separate</h2>
  *

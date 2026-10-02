@@ -51,12 +51,6 @@ import java.util.regex.PatternSyntaxException;
  */
 public final class WeightEngine {
 
-    /**
-     * The game's engine, over {@code config/advRocketry/weights.json}. Built at class initialisation
-     * and never replaced; its tables are written only by its own {@link #load()} in that constructor.
-     */
-    public static final WeightEngine INSTANCE = new WeightEngine("config/advRocketry/weights.json");
-
     // Stellurgy component defaults (kN) — heavy, purpose-built parts that should not fall back to material.
     private static final double TANK_WEIGHT = 0.2;
     private static final double MOTOR_WEIGHT = 2;

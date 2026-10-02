@@ -282,7 +282,7 @@ public class UniverseRegistryTest {
         reg.bindWorldSeed(0xBEEF);
         GalaxyGenConfig cfg = new GalaxyGenConfig(16, 0.9d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                 GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null);
-        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(cfg));
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg));
 
         // Find an occupied super-cell and a non-star body of its system.
         GalacticCoord anchor = null;
@@ -334,7 +334,7 @@ public class UniverseRegistryTest {
         reg.bindWorldSeed(1234L);
         GalaxyGenConfig cfg = new GalaxyGenConfig(8, 0.9d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                 GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null);
-        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(cfg));
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg));
 
         GalacticCoord anchor = null;
         for (long sup = 0; sup < 8 && anchor == null; sup++) {
@@ -490,7 +490,7 @@ public class UniverseRegistryTest {
     public void bodiesAtMergesProceduralBodiesAndPois() {
         UniverseRegistry reg = testUniverse.newRegistry();
         reg.bindWorldSeed(0xABCDEFL);
-        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new GalaxyGenConfig(1, 0.9d,
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),new GalaxyGenConfig(1, 0.9d,
                 GalaxyGenConfig.DEFAULT_GALAXY_SPACING, GalaxyGenConfig.DEFAULT_GALAXY_DENSITY,
                 null, null)));
 
@@ -954,7 +954,8 @@ public class UniverseRegistryTest {
         UniverseSchema v1 = UniverseSchemas.current();
 
         assertSame("the generator a schema builds must measure by that schema's laws",
-                v1.laws(), v1.generator(packConfig(), dev.stannismod.stellurgy.universe.PlanetTypes.stock()).laws());
+                v1.laws(), v1.generator(packConfig(), dev.stannismod.stellurgy.universe.PlanetTypes.stock(),
+                        new dev.stannismod.stellurgy.universe.ReportOnce()).laws());
         assertEquals("and the stamp is that schema's laws, measured",
                 UniverseRegistry.lawsFingerprintOf(v1.laws()),
                 UniverseRegistry.currentLawsFingerprint());

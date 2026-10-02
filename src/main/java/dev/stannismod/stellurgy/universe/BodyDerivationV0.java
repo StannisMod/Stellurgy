@@ -72,14 +72,15 @@ public final class BodyDerivationV0 implements IBodyDerivation {
 
     @Override
     public BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
-                              StellarBody star, boolean moon, long orbitalDistance) {
-        return PlanetDerivation.derive(seed, anchor, bodyCell, variant, star, moon, orbitalDistance, types);
+                              StellarBody star, boolean moon, long orbitalDistance, ReportOnce reports) {
+        return PlanetDerivation.derive(seed, anchor, bodyCell, variant, star, moon, orbitalDistance, types,
+                reports);
     }
 
     @Override
     public BodyProfile deriveRogue(long seed, GalacticCoord bodyCell, int variant,
-                                   double giantFraction) {
-        return PlanetDerivation.deriveRogue(seed, bodyCell, variant, giantFraction, types);
+                                   double giantFraction, ReportOnce reports) {
+        return PlanetDerivation.deriveRogue(seed, bodyCell, variant, giantFraction, types, reports);
     }
 
     @Override

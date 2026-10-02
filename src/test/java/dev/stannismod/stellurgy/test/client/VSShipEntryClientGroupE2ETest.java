@@ -330,6 +330,9 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         // test's own stdout. Both halves come from their side's event log, which test-only mixins
         // feed — the client half used to be a static-field read of a ring that production carried.
         System.out.println("[ARRIVAL-TRACE server] " + exec("stellurgytest vs arrival-trace"));
+        for (String writer : new String[]{"pos_jump", "vel_jump", "mount", "dismount"}) {
+            System.out.println("[ARRIVAL-TRACE server " + writer + "] " + events().since(0, writer));
+        }
         System.out.println("[ARRIVAL-TRACE client] " + clientEvents().since(0));
         // ...and the end state, read ONCE now that the link has established it happened.
         JsonObject riding = bot().reportRidingEntity();

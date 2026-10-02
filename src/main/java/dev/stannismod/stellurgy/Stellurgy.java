@@ -320,6 +320,28 @@ public class Stellurgy {
         return state;
     }
 
+    /**
+     * The weight table every rocket, satellite and stored structure is weighed by, over
+     * {@code config/advRocketry/weights.json}. Static by transitivity (a field of the mod object);
+     * effectively final, lifetime the PROCESS (the client or the dedicated server): written once by
+     * {@link #postInit} and only read after — a second write throws. Approved by the maintainer
+     * 2026-10-02.
+     */
+    private WeightEngine weights;
+
+    /**
+     * The weight table this process weighs by.
+     *
+     * @throws IllegalStateException before post-init has built it
+     */
+    public static WeightEngine weights() {
+        WeightEngine table = instance == null ? null : instance.weights;
+        if (table == null) {
+            throw new IllegalStateException("the weight table is built in post-init and is not built yet");
+        }
+        return table;
+    }
+
     /** The running server's galaxy. @throws IllegalStateException when no server is running */
     public static DimensionManager serverDimensions() {
         return serverState().dimensions;
@@ -528,9 +550,6 @@ public class Stellurgy {
         if (resetOnlyOnce && resetFromXml) {
             config.get("Planet", "resetPlanetsFromXML", false).set(false);
         }
-        //Load client and UI positioning stuff
-        proxy.loadUILayout(config);
-
         config.save();
 
         //Register cap events
@@ -1340,6 +1359,11 @@ public class Stellurgy {
     public void postInit(FMLPostInitializationEvent event) {
         LibVulpes.instance.postInit(event);
 
+        if (weights != null) {
+            throw new IllegalStateException("the weight table is written once per process");
+        }
+        weights = new WeightEngine("config/advRocketry/weights.json");
+
         CapabilitySpaceArmor.register();
         // The player's own bindings: one home for what this mod holds on him, attached to the
         // player and written with him. Registered beside its siblings; unlike them its storage does
@@ -1632,9 +1656,7 @@ public class Stellurgy {
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
         spaceSubsystem = null;
         detachServerServices();
-        ((BlockSeal) StellurgyBlocks.blockPipeSealer).clearMap();
-        dev.stannismod.stellurgy.universe.SystemContent.reset();
-        WeightEngine.INSTANCE.save();
+        weights.save();
         endServerLifetime();
     }
 

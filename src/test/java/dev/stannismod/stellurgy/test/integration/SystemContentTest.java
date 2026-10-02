@@ -115,7 +115,7 @@ public class SystemContentTest {
 
         GalacticCoord anchor = GalacticCoord.ofSectorLocal(10, 20, 30, 0, 0, 0);
         long s = GalaxyGenConfig.DEFAULT_MIN_SPACING;
-        List<SystemBody> bodies = SystemContent.bodiesOf(star, anchor);
+        List<SystemBody> bodies = SystemContent.bodiesOf(star, anchor, new dev.stannismod.stellurgy.universe.ReportOnce());
 
         assertEquals("first body is the star at the anchor cell", SystemBodyKind.STAR, bodies.get(0).kind());
         assertTrue(bodies.get(0).name().sameCell(anchor));
@@ -182,7 +182,7 @@ public class SystemContentTest {
 
         GalacticCoord anchor = GalacticCoord.ofSectorLocal(11, -4, 6, 0, 0, 0);
         SystemBody authored = null;
-        for (SystemBody b : SystemContent.bodiesOf(star, anchor)) {
+        for (SystemBody b : SystemContent.bodiesOf(star, anchor, new dev.stannismod.stellurgy.universe.ReportOnce())) {
             if (b.dimId() == 720) {
                 authored = b;
             }
@@ -192,7 +192,7 @@ public class SystemContentTest {
                 dev.stannismod.stellurgy.space.AbsolutePos.ofCellName(anchor))
                 / authored.orbitalDistance();
 
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),
                 new GalaxyGenConfig(GalaxyGenConfig.DEFAULT_MIN_SPACING, 1.0d,
                         GalaxyGenConfig.DEFAULT_GALAXY_SPACING, GalaxyGenConfig.DEFAULT_GALAXY_DENSITY,
                         null, null));
@@ -291,7 +291,7 @@ public class SystemContentTest {
 
         GalacticCoord anchor = GalacticCoord.ORIGIN;
         SystemBody body = null;
-        for (SystemBody b : SystemContent.bodiesOf(star, anchor)) {
+        for (SystemBody b : SystemContent.bodiesOf(star, anchor, new dev.stannismod.stellurgy.universe.ReportOnce())) {
             if (b.dimId() == 720) {
                 body = b;
             }
@@ -323,7 +323,7 @@ public class SystemContentTest {
 
         SystemBody giantBody = null;
         SystemBody planetBody = null;
-        for (SystemBody b : SystemContent.bodiesOf(star, GalacticCoord.ORIGIN)) {
+        for (SystemBody b : SystemContent.bodiesOf(star, GalacticCoord.ORIGIN, new dev.stannismod.stellurgy.universe.ReportOnce())) {
             if (b.dimId() == 730) {
                 giantBody = b;
             } else if (b.dimId() == 731) {
@@ -373,7 +373,7 @@ public class SystemContentTest {
                 * AstronomicalBodyHelper.getOrbitalPeriod(
                         AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, 1f) / 2d);
 
-        SystemBody body = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), 740);
+        SystemBody body = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN, new dev.stannismod.stellurgy.universe.ReportOnce()), 740);
         assertNotNull(body);
 
         assertEquals("half an orbit later the body is still addressed by the same cell",
@@ -405,8 +405,8 @@ public class SystemContentTest {
         planet(745, 100, 0.0).setStar(star);
         planet(746, 100, Math.PI).setStar(star);
 
-        GalacticCoord first = cellOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), 745);
-        GalacticCoord second = cellOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), 746);
+        GalacticCoord first = cellOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN, new dev.stannismod.stellurgy.universe.ReportOnce()), 745);
+        GalacticCoord second = cellOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN, new dev.stannismod.stellurgy.universe.ReportOnce()), 746);
 
         assertNotNull(first);
         assertNotNull(second);
@@ -443,7 +443,7 @@ public class SystemContentTest {
                                                  int minSpacingCells, GalacticCoord derived) {
                         return dimId == 747 ? recorded : derived;
                     }
-                });
+                }, new dev.stannismod.stellurgy.universe.ReportOnce());
 
         GalacticCoord actual = cellOf(bodies, 747);
         assertNotNull(actual);
@@ -602,7 +602,7 @@ public class SystemContentTest {
         parent.setStar(star);
         moon.setParentPlanet(parent);
 
-        List<SystemBody> bodies = SystemContent.bodiesOf(star, GalacticCoord.ORIGIN);
+        List<SystemBody> bodies = SystemContent.bodiesOf(star, GalacticCoord.ORIGIN, new dev.stannismod.stellurgy.universe.ReportOnce());
         SystemBody moonBody = bodyOf(bodies, 771);
         SystemBody planetBody = bodyOf(bodies, 770);
         assertNotNull(moonBody);
@@ -660,7 +660,7 @@ public class SystemContentTest {
         assertEquals("the fixture must be a giant, or the two readings coincide and prove nothing",
                 2.535d, parent.gravitationalMultiplier, 0.01d);
 
-        SystemBody moonBody = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), 781);
+        SystemBody moonBody = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN, new dev.stannismod.stellurgy.universe.ReportOnce()), 781);
         assertNotNull(moonBody);
 
         // THE PERIOD OF THE ORBIT THE MOON IS ACTUALLY ON, not of the one it was authored with.

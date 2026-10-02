@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -140,7 +141,7 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
         // `beacon_unregistered` separate them. An earlier attempt put that report in a production LOG
         // and it was unreadable from here — the mod logger writes into the server child's own log,
         // which nothing in this harness captures.
-        String mark = exec("stellurgytest events mark");
+        Events.MarkOrWhyNot mark = events().markIfInstrumented();
 
         // Break the controller via place-air. world.setBlockState calls
         // the old block's breakBlock callback in Forge 1.12, which is
@@ -179,6 +180,12 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
                 String.valueOf(enabled).equals(Reply.of(resp).text("enabled")));
     }
 
+    /** The server's ordered event log, read through this tier's command channel. */
+    private static Events events() {
+        return new Events(WorldCommandFixtures::exec,
+                ticks -> GameTicks.advanceWorld(AbstractSharedServerTest.client(), 0, ticks));
+    }
+
     private static String readBeaconList() throws Exception {
         return exec("stellurgytest beacon list " + planetDim);
     }
@@ -190,16 +197,14 @@ public class BeaconEnableCycleTest extends AbstractSharedServerTest {
      * arrived, this says SO rather than returning an empty string that reads as "the registry did
      * nothing" — which is one of the three answers the caller is trying to tell apart.</p>
      */
-    private static String beaconEventsSince(String markReply) throws Exception {
-        // `stellurgytest events mark` answers `seq`, not `mark`. The first version of this looked for the
-        // latter and reported "no mark was taken" — which is the guard below doing its job: it said
-        // it could not speak rather than returning an empty string that reads as "the registry did
-        // nothing", one of the three answers this method exists to tell apart.
-        Reply mark = Reply.of("stellurgytest events mark", markReply);
-        if (!mark.has("seq")) {
-            return "(no mark was taken, so nothing can be said about the sequence: " + markReply + ")";
+    private static String beaconEventsSince(Events.MarkOrWhyNot mark) throws Exception {
+        // The guard says it could not speak rather than returning an empty string that reads as
+        // "the registry did nothing", one of the three answers this method exists to tell apart.
+        if (!mark.usable()) {
+            return "(no mark was taken, so nothing can be said about the sequence: " + mark.refusal
+                    + ")";
         }
-        String records = exec("stellurgytest events since " + mark.integer("seq"));
+        String records = events().since(mark.seq);
         // Asked of each record's own `type`. `contains("beacon_")` over the envelope is answered
         // by the INSTRUMENTS list, which names every registered recorder whether or not it wrote
         // anything — so the "no beacon record at all" branch below could never be reached, and

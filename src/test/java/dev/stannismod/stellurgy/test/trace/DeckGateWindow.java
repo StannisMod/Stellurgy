@@ -10,6 +10,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.math.AxisAlignedBB;
 
+import dev.stannismod.stellurgy.integration.vs.ShipFrameBody;
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 
 /**
@@ -61,8 +62,8 @@ import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
  * </ul>
  *
  * <p>And beside them, on the SAME record because two reads a tick apart attribute one to whatever
- * the other was: the three process-wide statics {@code ShipFrameTravel} holds
- * ({@code CAPTURE_EPOCH}, {@code clientLookSource}, {@code walkTraceTicks}), and the pending deck
+ * the other was: the body's own capture stamp ({@code captureEpoch}), the static
+ * {@code ShipFrameTravel} holds ({@code clientLookSource}), and the pending deck
  * seeds of the body's world — this body's own ({@code pendingSeed}) and how many that world holds in
  * all ({@code pendingSeedsInWorld}). The seeds used to be one process-wide slot, which is why a seed
  * still naming a PREDECESSOR's player was the hypothesis this window was built for; they are now a
@@ -318,9 +319,7 @@ public final class DeckGateWindow implements TraceWindow {
 
     // ---- the resolver's process-wide statics, read (not re-derived) ------------------------------
 
-    private static final Field CAPTURE_EPOCH = declared("CAPTURE_EPOCH");
     private static final Field CLIENT_LOOK_SOURCE = declared("clientLookSource");
-    private static final Field WALK_TRACE_TICKS = declared("walkTraceTicks");
 
     private static Field declared(String name) {
         try {
@@ -333,7 +332,7 @@ public final class DeckGateWindow implements TraceWindow {
     }
 
     /**
-     * The three statics and the world's pending seeds, as they stand at this decision. A field that
+     * The resolver's static and the world's pending seeds, as they stand at this decision. A field that
      * could not be resolved is named in {@code staticsRead} rather than left out — a missing key and
      * a null value are the same character on the wire, and the whole point of reading these is to
      * tell "there is no stale seed" from "nobody looked".
@@ -342,14 +341,11 @@ public final class DeckGateWindow implements TraceWindow {
         StringBuilder missing = new StringBuilder();
         Map<?, ?> seeds = pendingSeedsOf(entity, missing);
         Object seed = seeds == null ? null : seeds.get(entity);
-        Object epoch = read(CAPTURE_EPOCH, "CAPTURE_EPOCH", missing);
+        long epoch = ((ShipFrameBody) entity).stellurgy$captureEpoch();
         Object look = read(CLIENT_LOOK_SOURCE, "clientLookSource", missing);
-        Object walk = read(WALK_TRACE_TICKS, "walkTraceTicks", missing);
         return "\"staticsRead\":\"" + (missing.length() == 0 ? "ok" : missing.toString()) + "\""
-                + ",\"captureEpoch\":" + (epoch == null ? "null" : "\"" + TestTrace.json(
-                        String.valueOf(epoch)) + "\"")
+                + ",\"captureEpoch\":\"" + epoch + "\""
                 + ",\"clientLookSource\":" + (look != null)
-                + ",\"walkTraceTicks\":" + (walk == null ? "null" : String.valueOf(walk))
                 + ",\"pendingSeedsInWorld\":" + (seeds == null ? "null" : String.valueOf(seeds.size()))
                 + ",\"pendingSeed\":" + (seed == null ? "null" : seedOf(seed));
     }

@@ -826,7 +826,11 @@ public abstract class AbstractSharedClientE2ETest {
             return "(not asked: " + (plotMarkFailure.isEmpty() ? "no mark was taken" : plotMarkFailure)
                     + ")";
         }
-        return askServer("stellurgytest events since " + plotMark + " pos_jump");
+        try {
+            return events().since(plotMark, "pos_jump");
+        } catch (Exception unavailable) {
+            return "(unavailable: " + unavailable + ")";
+        }
     }
 
     /** A server probe asked from a diagnostic: its own failure must never replace the one being told. */
@@ -1251,7 +1255,7 @@ public abstract class AbstractSharedClientE2ETest {
      * sample.
      *
      * <p>Offered here because the alternative is what keeps happening: a scenario that needs one
-     * trace reaches for {@code exec("stellurgytest events …")} and a regex of its own. That shape is right
+     * trace reaches for a raw log command and a regex of its own. That shape is right
      * in exactly one place — the between-scenario reset below, which must never fail a whole class
      * because a recorder was unavailable, and so REMEMBERS an unusable mark instead of throwing.
      * Copied into a scenario the exemption inverts: a silent empty log becomes "it never happened",

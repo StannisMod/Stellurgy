@@ -148,7 +148,8 @@ public final class PlanetTypes {
      */
     public PlanetTypePreset drawType(int pressure,
                                             DoubleToIntFunction temperatureForAlbedo,
-                                            int gravityPercent, boolean gasGiant, long hash) {
+                                            int gravityPercent, boolean gasGiant, long hash,
+                                            ReportOnce reports) {
         List<PlanetTypePreset> admitting = candidates(pressure, temperatureForAlbedo, gravityPercent,
                 gasGiant);
         if (admitting.isEmpty()) {
@@ -156,7 +157,7 @@ public final class PlanetTypes {
             // than one of the types that declined it — an author widening a range needs to know where
             // the world actually sits, not where the last candidate would have put it.
             int neutral = temperatureForAlbedo.applyAsInt(AstronomicalBodyHelper.EARTH_ALBEDO);
-            if (SystemContent.reportOnce("noPlanetType:" + gasGiant + ':' + pressure / 50 + ':'
+            if (reports.first("noPlanetType:" + gasGiant + ':' + pressure / 50 + ':'
                     + neutral / 25 + ':' + gravityPercent / 25)) {
                 LOGGER.warn("no planet type admits a world at pressure {}, {} K, gravity {}% (gasGiant={})"
                         + " - it will be reported as '{}'. Widen a <planetType> range to cover it.",
@@ -183,7 +184,7 @@ public final class PlanetTypes {
      * modset can actually run. Never {@code null}: a preset whose every entry names a missing mod falls
      * back to Stellurgy's own generator, which is the one thing always present.
      */
-    public TerrainOption drawTerrain(PlanetTypePreset preset, long hash) {
+    public TerrainOption drawTerrain(PlanetTypePreset preset, long hash, ReportOnce reports) {
         if (preset == null) {
             return TerrainOption.ofNative(0, 1);
         }
@@ -195,7 +196,7 @@ public final class PlanetTypes {
             }
         }
         if (available.isEmpty()) {
-            if (SystemContent.reportOnce("noTerrain:" + preset.name())) {
+            if (reports.first("noTerrain:" + preset.name())) {
                 LOGGER.warn("planet type '{}' has no runnable terrain source in this modset (every "
                         + "<gen> entry names a WorldType that is not registered) - falling back to the "
                         + "native generator.", preset.name());

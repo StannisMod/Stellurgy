@@ -99,6 +99,9 @@ public class DimensionManager implements IGalaxy {
      * planet file is written back with it.
      */
     private dev.stannismod.stellurgy.universe.GalaxyGenConfig packGalaxyConfig;
+    /** The layout problems this galaxy's derivation has already reported. */
+    private final dev.stannismod.stellurgy.universe.ReportOnce reports =
+            new dev.stannismod.stellurgy.universe.ReportOnce();
     private Random random;
     private boolean hasBeenInitialized = false;
     private HashMap<Integer, DimensionProperties> dimensionList;
@@ -166,6 +169,11 @@ public class DimensionManager implements IGalaxy {
     /** The planet types this save's worlds are typed from. */
     public dev.stannismod.stellurgy.universe.PlanetTypes getPlanetTypes() {
         return planetTypes;
+    }
+
+    /** The layout problems this galaxy's derivation has already reported; the deriving code is handed it. */
+    public dev.stannismod.stellurgy.universe.ReportOnce reports() {
+        return reports;
     }
 
     /** The pack's {@code <galaxyGen>} configuration for this server, or {@code null} if it declares none. */

@@ -99,12 +99,13 @@ public class PlanetGenerateCommand extends StellurgyCommand {
             // could hand a craft to.
             int moonIndex = parent.getChildPlanets().size() + 1;
             profile = derivation.derive(seed, anchor, anchor, moonIndex, star, true,
-                    parent.getSolarOrbitalDistance());
+                    parent.getSolarOrbitalDistance(), dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports());
             orbit = dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator.moonOrbitOf(seed, anchor,
                     moonIndex, parent.getRadius());
         } else {
             orbit = derivation.orbitalDistanceOf(seed, anchor, index, Math.max(1, index + 1), star);
-            profile = derivation.derive(seed, anchor, anchor, index, star, false, orbit);
+            profile = derivation.derive(seed, anchor, anchor, index, star, false, orbit,
+                    dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports());
         }
 
         int dimId = DimensionManager.getInstance().getNextFreeDim(2);

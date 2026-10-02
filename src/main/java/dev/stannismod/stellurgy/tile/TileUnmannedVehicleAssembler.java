@@ -16,7 +16,6 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.entity.EntityStationDeployedRocket;
 import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
 import dev.stannismod.stellurgy.util.StorageChunk;
-import dev.stannismod.stellurgy.util.WeightEngine;
 import dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable;
 import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
@@ -270,7 +269,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                         }
 
                         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                            weight += WeightEngine.INSTANCE.getWeight(world, currPos);
+                            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currPos);
                         } else {
                             weight += 1f; // fallback: count blocks
                         }

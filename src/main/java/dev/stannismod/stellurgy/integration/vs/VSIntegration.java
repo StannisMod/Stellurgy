@@ -990,15 +990,6 @@ public final class VSIntegration {
     }
 
     /**
-     * TEST/HEADLESS: keep VS ships permanently loaded (the {@code permanentlyLoaded} loading setting) so
-     * a player-less server test can observe a freshly assembled ship across probe calls instead of it
-     * auto-unloading.
-     */
-    public static void setShipsPermanentlyLoaded(boolean value) {
-        VSBridge.setShipsPermanentlyLoaded(value);
-    }
-
-    /**
      * Create a flight backend that drives the Valkyrien Skies ship anchored at
      * {@code anchorPos} as a velocity setpoint (model A), or {@code null} when VS is
      * absent. The return type is the Stellurgy-core {@link IFlightBackend}, so a caller in

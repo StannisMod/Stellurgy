@@ -13,7 +13,6 @@ import com.github.stannismod.forge.testing.client.bridge.ForgeTestClientBootstra
 
 import dev.stannismod.stellurgy.api.SatelliteRegistry;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
-import dev.stannismod.stellurgy.command.test.TestEventLog;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 
 /**
@@ -90,7 +89,7 @@ public abstract class MixinSatelliteRegistryEvents {
         if (client) {
             ForgeTestClientBootstrap.noteInstrumentEntered(INSTRUMENT);
         } else {
-            TestEventLog.noteInstrumentEntered(INSTRUMENT);
+            TestTrace.instrumentServer(INSTRUMENT);
         }
     }
 }

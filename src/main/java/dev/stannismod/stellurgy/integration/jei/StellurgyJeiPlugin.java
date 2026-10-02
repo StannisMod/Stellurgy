@@ -99,10 +99,15 @@ public class StellurgyJeiPlugin implements IModPlugin {
     public static final String orbitalLaserDrillUUID = "stellurgy.orbitalLaserDrill";
     public static final String asteroidsUUID = "stellurgy.asteroids";
     public static final String gasGiantsUUID = GasGiantCategory.UID;
-    // JEI builds this plugin and hands it its helpers and runtime through the callbacks below, again
-    // whenever JEI restarts, so both are the plugin's own state and are replaced, never accumulated.
+    /**
+     * JEI's helpers and runtime, handed over by JEI's own callbacks. JEI builds this plugin and holds
+     * it, so these are static by transitivity; their WRITER is JEI, treated like Forge for the
+     * plugins it owns (maintainer ruling 2026-10-02), and each is written once at the start of a JEI
+     * runtime's life — again when JEI restarts, which begins a new one — and only read until then.
+     */
     private IJeiHelpers jeiHelpers;
 
+    /** See {@link #jeiHelpers}. */
     private IJeiRuntime jeiRuntime;
 
     /** Whether this plugin has put its refresh tick on the bus; JEI may call the callbacks again. */

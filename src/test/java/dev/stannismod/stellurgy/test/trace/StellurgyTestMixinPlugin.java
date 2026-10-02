@@ -6,17 +6,13 @@ import java.util.Set;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-import dev.stannismod.stellurgy.command.test.TestEventLog;
-
 /**
- * The plugin of {@code mixins.stellurgy.test.json}, whose entire job is to turn "our test
- * mixins are installed" into a CHECKABLE fact.
+ * The plugin of {@code mixins.stellurgy.test.json}.
  *
- * <p>{@link #onLoad} runs when mixin prepares the configuration — i.e. after the environment has
- * accepted it, not merely after something asked for it. That distinction has cost real runs here: a
- * flag set on the strength of having CALLED something reported a recorder as running while it
- * recorded nothing, forever. So the flag is set HERE and read back through the probe, and a test
- * that finds an empty log can tell "the write never happened" from "nothing was ever instrumented".
+ * <p>"Our test mixins are installed" is a checkable fact without anything here: the configuration is
+ * {@code required}, and the server's event log hangs on {@code MinecraftServer} by one of its mixins,
+ * so a log that answers at all is the proof the configuration was applied ({@link ServerEventLog}).
+ * {@link #onLoad} only says in the log that mixin prepared it.</p>
  *
  * <p>Applies every mixin in the config unconditionally — there is no gate to make: the config is
  * only ever queued inside a harness-launched JVM.</p>
@@ -25,7 +21,6 @@ public class StellurgyTestMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void onLoad(String mixinPackage) {
-        TestEventLog.markMixinsInstalled();
         System.out.println("[stellurgytest] test-only mixin config prepared for " + mixinPackage);
     }
 

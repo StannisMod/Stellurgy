@@ -2,15 +2,11 @@ package dev.stannismod.stellurgy.test.mixin;
 
 import java.util.UUID;
 
-import net.minecraft.world.WorldServer;
-import net.minecraftforge.common.DimensionManager;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.command.test.TestEventLog;
 import dev.stannismod.stellurgy.space.LoginRestore;
 import dev.stannismod.stellurgy.space.ShipAboardTag;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
@@ -44,8 +40,6 @@ public abstract class MixinLoginRestoreEvents {
             payload += ",\"reason\":\"" + p.reason + "\",\"dim\":" + p.dimension + ",\"aboard\":"
                     + p.aboard + ",\"ship\":\"" + p.shipId + "\",\"y\":" + TestTrace.fmt(p.y);
         }
-        WorldServer overworld = DimensionManager.getWorld(0);
-        TestEventLog.record("server", overworld == null ? 0L : overworld.getTotalWorldTime(),
-                "login_restored", payload);
+        TestTrace.recordServer("login_restored", payload);
     }
 }

@@ -22,6 +22,10 @@ public class ClientProxy extends CommonProxy {
             new ModelResourceLocation(item.getRegistryName(), "inventory"));
     }
 
+    /**
+     * A field of the sided proxy, so a static by transitivity. Final, lifetime the client process:
+     * created with the proxy Forge injects, registered on the bus once by {@link #preInit}.
+     */
     private final VSKeyHandler keyEvents = new VSKeyHandler();
 
     @Override

@@ -1,11 +1,9 @@
 package dev.stannismod.stellurgy.test.trace;
 
-import dev.stannismod.stellurgy.command.test.MotionTrace;
-
 /**
  * The client half of the flight recorder, published as a RECORD at the moment a test asks.
  *
- * <p>The summary is rendered from {@link MotionTrace}'s client rings over trailing wall-clock
+ * <p>The summary is rendered from the client's {@link MotionTrace} rings over trailing wall-clock
  * windows, so WHEN it is taken is part of what it says. It used to be read across the socket as the
  * {@code toString()} of a static field ({@code MotionTrace.CLIENT_SUMMARY}), which the reading could
  * not attribute to a moment; now the render happens on the client thread inside
@@ -23,7 +21,7 @@ public final class MotionTraceClientSummary {
     /** Render the client summary now and record it. Invoked through the static-invoke bridge. */
     public static int record() {
         TestTrace.recordHere("motion_trace_client_summary",
-                "\"summary\":\"" + TestTrace.json(MotionTrace.clientSummary()) + "\"");
+                "\"summary\":\"" + TestTrace.json(SideTrace.client().motion().clientSummary()) + "\"");
         return 0;
     }
 }

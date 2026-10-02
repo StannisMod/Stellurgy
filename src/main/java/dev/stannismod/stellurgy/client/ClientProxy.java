@@ -557,31 +557,6 @@ public class ClientProxy extends CommonProxy {
     }
 
     @Override
-    public void loadUILayout(Configuration config) {
-        final String CLIENT = "Client";
-
-        RocketEventHandler.suitPanel.setRawX(config.get(CLIENT, "suitPanelX", 8).getInt());
-        RocketEventHandler.suitPanel.setRawY(config.get(CLIENT, "suitPanelY", 8).getInt());
-        RocketEventHandler.suitPanel.setSizeModeX(config.get(CLIENT, "suitPanelModeX", -1).getInt());
-        RocketEventHandler.suitPanel.setSizeModeY(config.get(CLIENT, "suitPanelModeY", -1).getInt());
-
-        RocketEventHandler.oxygenBar.setRawX(config.get(CLIENT, "oxygenBarX", -8).getInt());
-        RocketEventHandler.oxygenBar.setRawY(config.get(CLIENT, "oxygenBarY", 57).getInt());
-        RocketEventHandler.oxygenBar.setSizeModeX(config.get(CLIENT, "oxygenBarModeX", 0).getInt());
-        RocketEventHandler.oxygenBar.setSizeModeY(config.get(CLIENT, "oxygenBarModeY", 1).getInt());
-
-        RocketEventHandler.hydrogenBar.setRawX(config.get(CLIENT, "hydrogenBarX", -8).getInt());
-        RocketEventHandler.hydrogenBar.setRawY(config.get(CLIENT, "hydrogenBarY", 74).getInt());
-        RocketEventHandler.hydrogenBar.setSizeModeX(config.get(CLIENT, "hydrogenBarModeX", 0).getInt());
-        RocketEventHandler.hydrogenBar.setSizeModeY(config.get(CLIENT, "hydrogenBarModeY", 1).getInt());
-
-        RocketEventHandler.atmBar.setRawX(config.get(CLIENT, "atmBarX", 8).getInt());
-        RocketEventHandler.atmBar.setRawY(config.get(CLIENT, "atmBarY", 27).getInt());
-        RocketEventHandler.atmBar.setSizeModeX(config.get(CLIENT, "atmBarModeX", -1).getInt());
-        RocketEventHandler.atmBar.setSizeModeY(config.get(CLIENT, "atmBarModeY", 1).getInt());
-    }
-
-    @Override
     public void displayMessage(String msg, int time) {
         RocketEventHandler.setOverlay(Minecraft.getMinecraft().world.getTotalWorldTime() + time, msg);
     }

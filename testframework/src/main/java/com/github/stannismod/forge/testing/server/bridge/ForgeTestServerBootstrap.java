@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Protocol, line-delimited JSON, one object per line, identical in shape to the client bridge:
  * the child writes the literal line {@code READY} once on connect; a request is
- * {@code {"command":"stellurgytest events since 12"}}; a response is {@code {"ok":true,"lines":[…]}} or
+ * {@code {"command":"stellurgytest beacon list 2"}}; a response is {@code {"ok":true,"lines":[…]}} or
  * {@code {"ok":false,"error":"…"}}.</p>
  *
  * <p>What it is silent about: it reports only what the command sent to its sender. Anything the

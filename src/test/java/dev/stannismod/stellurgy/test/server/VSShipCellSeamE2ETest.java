@@ -916,7 +916,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
     }
 
     private String claimsSince(long mark) throws Exception {
-        String records = exec("stellurgytest events since " + mark);
+        String records = events.since(mark);
         // MATCHED ON THE RECORD, never on the bare name. The first version asked whether the reply
         // contained "cell_claim_" — which it always does, because the INSTRUMENTS array lists
         // "cell_claim_events" whether anything was recorded or not. The guard written to stop an

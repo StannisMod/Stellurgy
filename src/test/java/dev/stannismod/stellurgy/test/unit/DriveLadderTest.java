@@ -231,7 +231,7 @@ public class DriveLadderTest {
         // tiers are no longer aimed at the bands they are named for.
         final double TOLERANCE_FACTOR = 2d;
 
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(GalaxyGenConfig.defaults());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),GalaxyGenConfig.defaults());
         long stride = 4L * GalaxyGenConfig.DEFAULT_MIN_SPACING;
         List<Double> legs = new ArrayList<>();
         for (long seed = 1L; seed <= 20L; seed++) {

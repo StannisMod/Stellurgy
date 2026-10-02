@@ -7,7 +7,6 @@ import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry;
 import dev.stannismod.stellurgy.api.fuel.FuelRegistry.FuelType;
-import dev.stannismod.stellurgy.util.WeightEngine;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
 
@@ -138,16 +137,16 @@ public class StatsRocket {
         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
             if (FluidRegistry.isFluidRegistered(getFuelFluid())) {
                 Fluid f = FluidRegistry.getFluid(getFuelFluid());
-                fluidWeight += WeightEngine.INSTANCE.getWeight(f, getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
-                fluidWeight += WeightEngine.INSTANCE.getWeight(f, getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
+                fluidWeight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_MONOPROPELLANT));
+                fluidWeight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_BIPROPELLANT));
             }
             if (FluidRegistry.isFluidRegistered(getOxidizerFluid())) {
                 Fluid f = FluidRegistry.getFluid(getOxidizerFluid());
-                fluidWeight += WeightEngine.INSTANCE.getWeight(f, getFuelAmount(FuelType.LIQUID_OXIDIZER));
+                fluidWeight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.LIQUID_OXIDIZER));
             }
             if (FluidRegistry.isFluidRegistered(getWorkingFluid())) {
                 Fluid f = FluidRegistry.getFluid(getWorkingFluid());
-                fluidWeight += WeightEngine.INSTANCE.getWeight(f, getFuelAmount(FuelType.NUCLEAR_WORKING_FLUID));
+                fluidWeight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(f, getFuelAmount(FuelType.NUCLEAR_WORKING_FLUID));
             }            
         }
         return weight + fluidWeight;

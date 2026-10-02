@@ -106,12 +106,6 @@ public class CommonProxy {
         PacketHandler.sendToPlayersTrackingEntity(new PacketLaserGun(entity, toPos), entity);
     }
 
-    public void loadUILayout(
-            net.minecraftforge.common.config.Configuration config) {
-        // TODO Auto-generated method stub
-
-    }
-
     public void displayMessage(String msg, int time) {
 
     }

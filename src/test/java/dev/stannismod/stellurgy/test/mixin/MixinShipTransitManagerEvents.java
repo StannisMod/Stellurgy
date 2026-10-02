@@ -1,8 +1,6 @@
 package dev.stannismod.stellurgy.test.mixin;
 
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.WorldServer;
-import net.minecraftforge.common.DimensionManager;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -10,7 +8,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.command.test.TestEventLog;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.space.ShipTransitManager;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
@@ -79,12 +76,6 @@ public abstract class MixinShipTransitManagerEvents {
     }
 
     private static void stellurgyTest$record(String type, String payload) {
-        TestEventLog.record("server", stellurgyTest$serverTick(), type, payload);
-    }
-
-    /** The overworld's clock — the one every server-side record is correlated on. */
-    private static long stellurgyTest$serverTick() {
-        WorldServer overworld = DimensionManager.getWorld(0);
-        return overworld == null ? 0L : overworld.getTotalWorldTime();
+        TestTrace.recordServer(type, payload);
     }
 }

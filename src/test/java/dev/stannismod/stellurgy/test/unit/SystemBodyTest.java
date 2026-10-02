@@ -15,6 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Contract tests for {@link SystemBody}: the split between a body's durable NAME — an identifier no
@@ -218,35 +219,31 @@ public class SystemBodyTest {
         assertFalse("an unstated radius writes no key at all", beltTag.hasKey("radiusEarths"));
     }
 
+    /**
+     * A body whose in-cell offset would reach past its own cell is a fault of whatever derived it,
+     * so it is refused when built rather than flattened onto the cell face — where every point of
+     * the orbit beyond the face lands on one spot and the body looks as if it stopped moving.
+     *
+     * <p>red-witnessed: with {@code SystemBody#requireInsideOwnCell} at
+     * {@code if (!offsetLaw.staysWithin(-half, half - 1L))} inverted to never throw, this fails with
+     * "a moon whose orbit is wider than the cell that names it must be refused" (2026-10-02).</p>
+     */
     @Test
-    public void aGiantsMoonSystemSpansFromInsideItsOwnRadiusToBeyondTheCell() {
-        // The last form the model owes: a giant whose retinue runs from a moon skimming its surface
-        // out to one that no longer fits in the cell they share. Both must be EXPRESSIBLE, and the
-        // far one must not corrupt the address — a body outside its own cell would be a body in a
-        // different cell, so the offset saturates on the face instead (and, since 2026-08-16, says
-        // so in the log rather than flattening a whole moon system onto one point in silence).
+    public void aBodyWhoseOffsetLeavesItsOwnCellIsRefusedWhenBuilt() {
         GalacticCoord giantCell = GalacticCoord.ofSectorLocal(9, 0, -3, 0, 0, 0);
         CellFrame frame = CellFrame.staticAt(giantCell);
 
         SystemBody inner = new SystemBody(giantCell, frame, orbit(2d, 100_000L),
                 SystemBodyKind.MOON, Constants.INVALID_PLANET, 1);
-        SystemBody outer = new SystemBody(giantCell, frame,
-                orbit(4d, GalacticCoord.HALF_CELL), SystemBodyKind.MOON,
-                Constants.INVALID_PLANET, 1);
+        assertEquals("a moon that fits stays in the giant's cell", giantCell.cellCentre(), inner.name());
 
-        assertEquals("both moons share the giant's cell — they are one destination",
-                inner.name(), outer.name());
-        assertNotEquals("and they are not in the same place inside it",
-                inner.inCellOffsetAt(0L), outer.inCellOffsetAt(0L));
-
-        for (long tick = 0L; tick < 1000L; tick += 137L) {
-            long dx = Math.abs(outer.inCellOffsetAt(tick).dx());
-            long dy = Math.abs(outer.inCellOffsetAt(tick).dy());
-            long dz = Math.abs(outer.inCellOffsetAt(tick).dz());
-            assertTrue("an offset may never leave the cell that names it, got " + dx + "," + dy
-                            + "," + dz + " against a half-cell of " + GalacticCoord.HALF_CELL,
-                    dx <= GalacticCoord.HALF_CELL && dy <= GalacticCoord.HALF_CELL
-                            && dz <= GalacticCoord.HALF_CELL);
+        try {
+            new SystemBody(giantCell, frame, orbit(4d, GalacticCoord.HALF_CELL), SystemBodyKind.MOON,
+                    Constants.INVALID_PLANET, 1);
+            fail("a moon whose orbit is wider than the cell that names it must be refused");
+        } catch (IllegalArgumentException expected) {
+            assertTrue("the refusal names the cell it overflowed: " + expected.getMessage(),
+                    expected.getMessage().contains("outside its own cell"));
         }
     }
 }

@@ -930,16 +930,6 @@ final class VSBridge {
     }
 
     /**
-     * TEST/HEADLESS: set VS's "ships permanently loaded" flag. Without a player nearby VS unloads a
-     * freshly assembled ship within a tick, so its physics object drops out of the loaded set between
-     * probe calls; enabling this keeps ships loaded so a headless server test can observe them across
-     * calls. (This is the {@code VSConfig.SHIP_LOADING_SETTINGS.permanentlyLoaded} lever.)
-     */
-    static void setShipsPermanentlyLoaded(boolean value) {
-        org.valkyrienskies.mod.common.config.VSConfig.SHIP_LOADING_SETTINGS.permanentlyLoaded = value;
-    }
-
-    /**
      * PARK the ship nearest to {@code (x,y,z)} in the queryable registry: disable its physics so it
      * holds position while {@code ShipTransit} advances its coordinate logically (a physically-flying
      * parked ship in a shared hyperspace world would drift lanes into each other). Works off the

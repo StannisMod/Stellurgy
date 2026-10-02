@@ -48,7 +48,7 @@ public class PlanetRealizationTest {
     /** A dense, void-free galaxy, so the first super-cell probed holds a system. */
     private UniverseRegistry registryWithProceduralGalaxy() {
         UniverseRegistry reg = testUniverse.newRegistry();
-        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),
                 new GalaxyGenConfig(SPACING, 1.0d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                         GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null)));
         reg.bindWorldSeed(SEED);
@@ -394,7 +394,7 @@ public class PlanetRealizationTest {
         assertTrue("a pinned system must have a star", before.isPresent());
 
         // A pack edit: a different spacing, a different density, a whole different galaxy.
-        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(
+        testUniverse.attachGenerator(new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),
                 new GalaxyGenConfig(SPACING / 2, 0.2d, GalaxyGenConfig.DEFAULT_GALAXY_SPACING,
                         GalaxyGenConfig.DEFAULT_GALAXY_DENSITY, null, null)));
 

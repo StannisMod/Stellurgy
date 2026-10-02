@@ -31,7 +31,6 @@ import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
 import dev.stannismod.stellurgy.tile.TileRocketAssemblingMachine.ErrorCodes;
 import dev.stannismod.stellurgy.tile.hatch.TileSatelliteHatch;
 import dev.stannismod.stellurgy.util.StorageChunk;
-import dev.stannismod.stellurgy.util.WeightEngine;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.block.RotatableBlock;
 import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
@@ -482,7 +481,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                             }
 
                             if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                                weight += WeightEngine.INSTANCE.getWeight(world, currBlockPos);
+                                weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currBlockPos);
                             } else {
                                 weight += 1;
                             }

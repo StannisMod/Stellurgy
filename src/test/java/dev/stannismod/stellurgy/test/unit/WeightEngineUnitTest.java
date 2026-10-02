@@ -22,8 +22,8 @@ import static org.junit.Assert.assertTrue;
  * default seeding. Block/material resolution (which needs real ItemStacks) is
  * covered by the server-tier {@code WeightSystemTest}.
  *
- * <p>Every test builds its own engine, so nothing reaches the game's {@link WeightEngine#INSTANCE}
- * or its file.</p>
+ * <p>Every test builds its own engine, so nothing reaches the game's table (the mod's) or its
+ * file.</p>
  */
 public class WeightEngineUnitTest {
 

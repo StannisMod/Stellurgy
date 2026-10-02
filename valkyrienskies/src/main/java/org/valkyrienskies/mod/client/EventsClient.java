@@ -38,16 +38,32 @@ import org.valkyrienskies.mod.common.util.ValkyrienUtils;
 import org.valkyrienskies.mod.fixes.SoundFixWrapper;
 import valkyrienwarfare.api.TransformType;
 
+import dev.stannismod.stellurgy.world.WorldRuntime;
+
 import java.util.Optional;
 import java.util.WeakHashMap;
 
+/**
+ * Holds no state of its own: one instance lives on the Forge bus for the whole client, so anything it
+ * kept would outlive every world it describes. What a handler must carry from one event to the next
+ * belongs to the client world being rendered, as that world's parts ({@link WorldRuntime}).
+ */
 public class EventsClient {
 
-    // The buffer offset the first block-highlight handler replaced, put back by the last one in the
-    // same frame.
-    private double oldXOff;
-    private double oldYOff;
-    private double oldZOff;
+    /** The buffer offset the first block-highlight handler replaced, put back by the last one in the same frame. */
+    private static final class HighlightOffset {
+        double x;
+        double y;
+        double z;
+    }
+
+    /**
+     * The real {@code lastTickPos} of each entity whose render position was bent onto its ship's curve
+     * at the start of a frame, restored at its end. Weak keys: an entity that leaves takes its entry.
+     */
+    private static final class BentLastPositions {
+        final WeakHashMap<Entity, Vector3dc> byEntity = new WeakHashMap<>();
+    }
 
     @SubscribeEvent
     public void onClientTick(ClientTickEvent event) {
@@ -121,9 +137,11 @@ public class EventsClient {
             RayTraceResult objectOver = Minecraft.getMinecraft().objectMouseOver;
             if (objectOver != null && objectOver.hitVec != null) {
                 BufferBuilder buffer = Tessellator.getInstance().getBuffer();
-                oldXOff = buffer.xOffset;
-                oldYOff = buffer.yOffset;
-                oldZOff = buffer.zOffset;
+                HighlightOffset saved = WorldRuntime.of(Minecraft.getMinecraft().world,
+                        HighlightOffset.class, HighlightOffset::new);
+                saved.x = buffer.xOffset;
+                saved.y = buffer.yOffset;
+                saved.z = buffer.zOffset;
 
                 buffer.setTranslation(-physicsObject.get()
                     .getShipRenderer().offsetPos.getX(), -physicsObject.get()
@@ -145,19 +163,17 @@ public class EventsClient {
             RayTraceResult objectOver = Minecraft.getMinecraft().objectMouseOver;
             if (objectOver != null && objectOver.hitVec != null) {
                 BufferBuilder buffer = Tessellator.getInstance().getBuffer();
-                buffer.xOffset = oldXOff;
-                buffer.yOffset = oldYOff;
-                buffer.zOffset = oldZOff;
+                HighlightOffset saved = WorldRuntime.of(Minecraft.getMinecraft().world,
+                        HighlightOffset.class, HighlightOffset::new);
+                buffer.xOffset = saved.x;
+                buffer.yOffset = saved.y;
+                buffer.zOffset = saved.z;
                 // wrapper.wrapping.renderer.inverseTransform(event.getPartialTicks());
                 // objectOver.hitVec = RotationMatrices.applyTransform(wrapper.wrapping.coordTransform.lToWTransform, objectOver.hitVec);
             }
         }
         GL11.glPopMatrix();
     }
-
-    // Used to store the lastTickPos variables of entities, that way we can restore them to their original values after
-    // the rendering code has finished.
-    private final WeakHashMap<Entity, Vector3dc> lastPositionsMap = new WeakHashMap<>();
 
     @SubscribeEvent
     public void onRenderTickEvent(RenderTickEvent event) {
@@ -170,6 +186,8 @@ public class EventsClient {
             partialTicks = Minecraft.getMinecraft().renderPartialTicksPaused;
         }
 
+        final WeakHashMap<Entity, Vector3dc> lastPositionsMap =
+                WorldRuntime.of(world, BentLastPositions.class, BentLastPositions::new).byEntity;
         if (event.phase == Phase.START) {
             lastPositionsMap.clear();
             for (PhysicsObject wrapper : ValkyrienUtils.getPhysosLoadedInWorld(world)) {

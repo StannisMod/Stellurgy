@@ -71,6 +71,8 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
 
     private static final String MOTION_TRACE_CLIENT_SUMMARY =
             "dev.stannismod.stellurgy.test.trace.MotionTraceClientSummary";
+    /** The flight recorder, whose SERVER half is read on the server through invoke-static. */
+    private static final String MOTION_TRACE = "dev.stannismod.stellurgy.test.trace.MotionTrace";
 
     /** A channel's net displacement over the window, as an {@code [x,y,z]} array. */
     private static final String NET_MOVE = "netMove";
@@ -554,9 +556,25 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
                 bot().setFrameRate(previousFrameRate);
             }
             exec("stellurgytest player dismount");
-            exec("stellurgytest vs motion-trace reset");
+            resetServerMotionTrace();
         } catch (Exception ignored) {
         }
+    }
+
+    /** Empty the server's flight-recorder rings, so a leg starts from an empty recorder. */
+    private void resetServerMotionTrace() throws Exception {
+        Reply.of("MotionTrace.resetServer", exec("stellurgytest invoke-static " + MOTION_TRACE
+                + " resetServer")).requireOk("the server's flight recorder must reset");
+    }
+
+    /**
+     * The server's account of the ship driven by the flight computer at {@code afc} over the
+     * trailing {@code windowMs} — its physics and server-tick channels, as their own JSON.
+     */
+    private String serverMotionTrace(int dim, int[] afc, int windowMs) throws Exception {
+        String reply = exec("stellurgytest invoke-static " + MOTION_TRACE + " serverReading "
+                + dim + " " + afc[0] + " " + afc[1] + " " + afc[2] + " " + windowMs);
+        return Reply.of("MotionTrace.serverReading", reply).text("returned");
     }
 
     // --- the measurement ------------------------------------------------------------------------
@@ -708,9 +726,9 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
 
     /**
      * Hold the vertical key for a fixed number of client ticks, then read every clock's account of
-     * the trailing window. The server rings are cleared first; the client rings cannot be (they
-     * live in the other JVM and the harness can only READ a static), which is why the client half
-     * is summarised over trailing windows and read immediately after the key is released.
+     * the trailing window. The server rings are cleared first; the client rings are not (nothing
+     * resets them), which is why the client half is summarised over trailing windows and read
+     * immediately after the key is released.
      */
     /**
      * Hold the climb key until the craft is genuinely under way, and say so plainly if it never is.
@@ -732,10 +750,9 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         bot().holdKey(Keyboard.KEY_R);
         try {
             for (int attempt = 0; attempt < LIFT_ATTEMPTS && moved < LIFT_CLEAR_BLOCKS; attempt++) {
-                exec("stellurgytest vs motion-trace reset");
+                resetServerMotionTrace();
                 bot().waitTicks(LIFT_POLL_TICKS);
-                moved = netMoveLength(section(exec("stellurgytest vs motion-trace " + dim + " " + afc[0]
-                        + " " + afc[1] + " " + afc[2] + " " + WINDOW_MS), "phys"));
+                moved = netMoveLength(section(serverMotionTrace(dim, afc, WINDOW_MS), "phys"));
             }
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
@@ -750,7 +767,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
     }
 
     private Leg measure(String label, int dim, int[] afc) throws Exception {
-        exec("stellurgytest vs motion-trace reset");
+        resetServerMotionTrace();
         bot().holdKey(Keyboard.KEY_R);
         try {
             // STIMULUS: FLY_TICKS of held climb — the flight each leg's traces describe.
@@ -760,8 +777,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         }
         Leg leg = new Leg();
         leg.label = label;
-        leg.serverJson = exec("stellurgytest vs motion-trace " + dim + " " + afc[0] + " " + afc[1]
-                + " " + afc[2] + " " + WINDOW_MS);
+        leg.serverJson = serverMotionTrace(dim, afc, WINDOW_MS);
         // The client half, rendered on the client at THIS moment and recorded after a mark — see
         // MotionTraceClientSummary for why its quotes come back as apostrophes.
         long summaryMark = clientEvents().mark();
@@ -835,7 +851,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         assertTrue("INSTRUMENT CONTROL (" + which + "): the server-tick channel must have recorded "
                 + "samples. " + leg, leg.gameSamples >= MIN_CHANNEL_SAMPLES);
         assertTrue("INSTRUMENT CONTROL (" + which + "): the CLIENT tick channel must have recorded "
-                + "samples — this is the harness reading a static in the other JVM, so a zero here "
+                + "samples — this is the harness reading the client's recorder in the other JVM, so a zero here "
                 + "usually means the read found the wrong class rather than a stalled client. " + leg,
                 leg.clientTickSamples >= MIN_CHANNEL_SAMPLES);
         assertTrue("INSTRUMENT CONTROL (" + which + "): the rendered-FRAME channel must have "
@@ -942,7 +958,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
      * comparison between them would have held.</p>
      */
     private static String section(String json, String key) {
-        String nested = Reply.of("stellurgytest vs motion-trace", json).object(key);
+        String nested = Reply.of("the flight recorder", json).object(key);
         assertNotNull("the motion trace carries no `" + key + "` channel, so nothing below is a "
                 + "reading of it — and read as zeros it would be a reading of a perfectly smooth "
                 + "flight: " + json, nested);

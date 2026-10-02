@@ -106,6 +106,21 @@ public final class BodyEphemeris {
                 || distUnits == 0d;
     }
 
+    /**
+     * Whether every displacement this law will ever produce has each axis within
+     * {@code [low, high]}. A fixed law is checked per axis; an orbit by its radius, which bounds every
+     * axis because the offset's length is the orbital distance at every inclination (see
+     * {@link #orbit}), rounded as {@link #offsetAt} rounds.
+     */
+    public boolean staysWithin(long low, long high) {
+        if (unitBlocks == 0L) {
+            return fixedX >= low && fixedX <= high && fixedY >= low && fixedY <= high
+                    && fixedZ >= low && fixedZ <= high;
+        }
+        long radius = Math.round(Math.abs(distUnits) * unitBlocks);
+        return -radius >= low && radius <= high;
+    }
+
     /** The displacement, in blocks, at world tick {@code tick}. */
     public BlockDelta offsetAt(long tick) {
         if (unitBlocks == 0L) {

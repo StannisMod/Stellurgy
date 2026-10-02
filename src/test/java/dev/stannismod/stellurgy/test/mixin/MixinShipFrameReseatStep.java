@@ -19,12 +19,8 @@ import dev.stannismod.stellurgy.test.trace.TravelPassMemory;
  *
  * <h2>Why a redirect and not a local capture</h2>
  *
- * <p>A capture was the obvious tool and it cannot be used here: the local beside the seat point is a
- * {@code ShipFrameState}, a PRIVATE nested class of the target, and a capture handler has to name
- * every local's type exactly. Widening that class so a test could name it would be the same defect
- * this whole migration is removing, one level down.</p>
- *
- * <p>A redirect needs none of it. The call it replaces carries both halves of the measurement — the
+ * <p>A local capture would have to name every local's type exactly, and read the body's position
+ * before the move from somewhere. A redirect needs none of it. The call it replaces carries both halves of the measurement — the
  * seat point as its arguments, the body's position before the move on the receiver, which is
  * readable only until the call happens. It then performs the original call, so production behaves
  * exactly as written.</p>

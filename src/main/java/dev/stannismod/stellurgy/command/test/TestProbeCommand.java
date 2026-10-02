@@ -56,14 +56,6 @@ import java.util.Map;
  */
 public class TestProbeCommand extends CommandBase {
 
-    /**
-     * The event types that make up a position-writer timeline: who moved a body, who seated it and
-     * who stood it up. Named once, because two verbs read the same slice for the same reason.
-     */
-    // A body can be moved by being PLACED or by being handed a velocity, and a report that counts
-    // only the first reads as "nothing moved it" for the second.
-    private final String[] writerEvents = {"pos_jump", "vel_jump", "mount", "dismount"};
-
     @Override
     @Nonnull
     public String getName() {
@@ -239,9 +231,6 @@ public class TestProbeCommand extends CommandBase {
                     break;
                 case "player":
                     handlePlayer(server, sender, tail(args));
-                    break;
-                case "events":
-                    handleEvents(sender, tail(args));
                     break;
                 case "seal-detector":
                     handleSealDetector(server, sender, tail(args));
@@ -690,44 +679,20 @@ public class TestProbeCommand extends CommandBase {
      * condition that could never be false; they went with it on 2026-09-22.</p>
      */
     private void handleVs(ICommandSender sender, String[] args) {
-        // motion-trace reset — drop every recorded ring, so a leg starts from an empty recorder.
-        // motion-trace <dim> <afcX> <afcY> <afcZ> [windowMs] — the flight recorder's account of how
-        // SMOOTHLY the ship driven by that flight computer moved over the trailing window: the
-        // physics-thread channel (the clock its velocity integrates on), the server-tick channel
-        // (the clock its command is republished on), and — when this JVM is also the client, i.e. a
-        // single-player session — the client tick and per-frame channels. Each reports the interval
-        // distribution of its own clock and the displacement distribution of the thing it watches,
-        // plus two named pathologies: `hitches` (a beat that arrived late) and `stalls` (a sample
-        // that barely moved while its neighbours did). A jerk is one of those two, on one of these
-        // four clocks, and they are not fixed by the same thing.
-        if (args.length >= 1 && "motion-trace".equalsIgnoreCase(args[0])) {
-            if (args.length >= 2 && "reset".equalsIgnoreCase(args[1])) {
-                dev.stannismod.stellurgy.command.test.MotionTrace.reset();
-                send(sender, "{\"ok\":true,\"reset\":true}");
-                return;
-            }
-            if (args.length < 5) {
-                send(sender, "{\"error\":\"usage: vs motion-trace <dim> <afcX> <afcY> <afcZ>"
-                        + " [windowMs] | vs motion-trace reset\"}");
-                return;
-            }
-            long key = dev.stannismod.stellurgy.command.test.MotionTrace.keyOf(
-                    parseIntOr(args[1], Integer.MIN_VALUE), parseIntOr(args[2], 0),
-                    parseIntOr(args[3], 0), parseIntOr(args[4], 0));
-            long windowMs = args.length >= 6 ? parseIntOr(args[5], 10000) : 10000;
-            send(sender, "{\"ok\":true,\"windowMs\":" + windowMs
-                    + ",\"serverChunkLoads\":"
-                    + dev.stannismod.stellurgy.command.test.MotionTrace.serverChunkLoads
-                    + "," + dev.stannismod.stellurgy.command.test.MotionTrace.serverSummary(key, windowMs)
-                    + ",\"client\":"
-                    + dev.stannismod.stellurgy.command.test.MotionTrace.clientSummary() + "}");
-            return;
-        }
-        // permaload <bool> — keep VS ships permanently loaded (headless has no player to hold a ship
-        // loaded, so a freshly assembled ship auto-unloads between probe calls).
+        // permaload <bool> — whether this test server holds every ship loaded with no player near it.
+        // The switch is the test side's, on the server object; reached by name so a released jar,
+        // which has no test classes, carries none.
         if (args.length >= 2 && "permaload".equalsIgnoreCase(args[0])) {
             boolean v = Boolean.parseBoolean(args[1]);
-            dev.stannismod.stellurgy.integration.vs.VSIntegration.setShipsPermanentlyLoaded(v);
+            try {
+                Class.forName("dev.stannismod.stellurgy.test.trace.ShipLoadHold")
+                        .getMethod("set", net.minecraft.server.MinecraftServer.class, boolean.class)
+                        .invoke(null, sender.getServer(), v);
+            } catch (ReflectiveOperationException e) {
+                send(sender, "{\"ok\":false,\"reason\":\"no test-side ship load hold: "
+                        + escapeJson(String.valueOf(e)) + "\"}");
+                return;
+            }
             send(sender, "{\"ok\":true,\"permanentlyLoaded\":" + v + "}");
             return;
         }
@@ -1718,17 +1683,10 @@ public class TestProbeCommand extends CommandBase {
             probeApplySeatInput(sender, seat, args, 3);
             return;
         }
-        // arrival-trace - the SERVER JVM's position-writer timeline around ship crossings, as one
-        // readable line: every deliberate placement, mount and dismount, each naming the code that
-        // did it. Read-only, no waits; the client half is read from the client JVM through its own
-        // event log (`event_since` on the bridge).
-        //
-        // The records come from the event log, which test-only mixins feed. They used to come from
-        // ungated statics in the production tree: eleven hand-tagged call sites plus a per-tick
-        // sampler, all of them building formatted strings on the position-writer path of every
-        // crossing in a shipped game, for nobody. An observation a test wants belongs to the test
-        // side; the mixins that record these live in the test source set and a released jar carries
-        // none of them.
+        // arrival-trace - the crosser's own census of the last arrival: why its re-seat stopped, what
+        // its cut took, and what already sat in the departure's lane. Read-only, no waits. The
+        // position-writer timeline around the crossing is not here: it is in the server's ordered
+        // event log (`pos_jump`, `mount`, `dismount`, ...), read by the test through its own reader.
         if (args.length >= 1 && "arrival-trace".equalsIgnoreCase(args[0])) {
             dev.stannismod.stellurgy.space.SpaceSubsystem census = liveStack();
             if (census == null) {
@@ -1737,10 +1695,6 @@ public class TestProbeCommand extends CommandBase {
             }
             dev.stannismod.stellurgy.space.VSShipCrosser crosser = census.crosser;
             send(sender, "{\"ok\":true"
-                    + ",\"recording\":" + TestEventLog.isRecording()
-                    + ",\"mixins\":" + TestEventLog.areMixinsInstalled()
-                    + ",\"count\":" + TestEventLog.count(writerEvents)
-                    + ",\"events\":\"" + TestEventLog.dump(writerEvents) + "\""
                     // Why the crosser's last re-seat did NOT seat everyone, in the re-seat's own words: whether a
                     // ship claims the arrival point, how many seat tiles the scan reached, and per seat
                     // the three things the match discriminates on. Empty means the last re-seat seated
@@ -6152,6 +6106,7 @@ public class TestProbeCommand extends CommandBase {
             }
             reg.attachGenerator(
                     new dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator(
+                            dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports(),
                             new dev.stannismod.stellurgy.universe.GalaxyGenConfig(minSpacing, density,
                                     genDefaults.galaxySpacing, genDefaults.galaxyDensity, null, null)));
             reg.bindWorldSeed(seed);
@@ -6341,7 +6296,8 @@ public class TestProbeCommand extends CommandBase {
                             .derivation().derive(reg.worldSeed(),
                             anchor.get(), target.name(), variant, star.get(),
                             target.kind() == dev.stannismod.stellurgy.universe.SystemBodyKind.MOON,
-                            target.orbitalDistance());
+                            target.orbitalDistance(),
+                            dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports());
             send(sender, "{\"ok\":true,\"type\":\"" + p.typeName() + "\",\"orbitalDist\":"
                     + p.orbitalDistance() + ",\"mass\":" + p.massEarths() + ",\"radius\":"
                     + p.radiusEarths() + ",\"gravity\":" + p.gravityPercent() + ",\"pressure\":"
@@ -11038,7 +10994,7 @@ public class TestProbeCommand extends CommandBase {
                 powerStorage += sp.getPowerStorage();
             if (flag == dev.stannismod.stellurgy.api.satellite.SatelliteProperties.Property.DATA.getFlag())
                 maxData += sp.getMaxDataStorage();
-            weight += dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getWeight(stack);
+            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(stack);
         }
         dev.stannismod.stellurgy.api.satellite.SatelliteProperties finalProps =
                 new dev.stannismod.stellurgy.api.satellite.SatelliteProperties(
@@ -15221,8 +15177,9 @@ public class TestProbeCommand extends CommandBase {
     }
 
     /**
-     * {@code /stellurgytest invoke-static <class> <method> [int...]} — call a static method taking only
-     * {@code int}s on the SERVER thread, and reply with what it returned.
+     * {@code /stellurgytest invoke-static <class> <method> [arg...]} — call a static method whose
+     * parameters are {@code int}, {@code long} or {@code String} on the SERVER thread, and reply with
+     * what it returned.
      *
      * <p>The server-side twin of the client harness's {@code invoke_static_int}, and it exists for
      * the same reason: an instrument that accumulates per tick lives in the JVM that ticks, and the
@@ -15230,28 +15187,35 @@ public class TestProbeCommand extends CommandBase {
      * client-side window could be opened by a test and a server-side one could not, so an instrument
      * written for "both sides" armed only the client and every server half printed empty.</p>
      *
+     * <p>The method is found by name and argument COUNT, and each argument is converted to the type
+     * its parameter declares. An all-{@code int} signature is tried first, which is the only form this
+     * verb took until the server's event log needed a {@code long} sequence and a {@code String}
+     * type. Two candidates that both accept the arguments are refused as ambiguous rather than one
+     * picked.</p>
+     *
      * <p>Generic on purpose: this class names no test class, the caller does. A failure — no such
      * class, no such method, the method threw — is an error reply naming it, never an empty
      * {@code ok}.</p>
      */
     private void handleInvokeStatic(ICommandSender sender, String[] args) {
         if (args.length < 2) {
-            send(sender, "{\"error\":\"usage: /stellurgytest invoke-static <class> <method> [int...]\"}");
+            send(sender, "{\"error\":\"usage: /stellurgytest invoke-static <class> <method> [arg...]\"}");
             return;
         }
-        Class<?>[] types = new Class<?>[args.length - 2];
-        Object[] values = new Object[args.length - 2];
-        for (int i = 2; i < args.length; i++) {
-            types[i - 2] = int.class;
-            try {
-                values[i - 2] = Integer.parseInt(args[i]);
-            } catch (NumberFormatException e) {
-                send(sender, "{\"error\":\"not an int: " + escapeJson(args[i]) + "\"}");
+        String[] given = java.util.Arrays.copyOfRange(args, 2, args.length);
+        try {
+            java.lang.reflect.Method method = invokableStatic(Class.forName(args[0]), args[1], given);
+            if (method == null) {
+                send(sender, "{\"error\":\"invoke-static " + escapeJson(args[0] + "#" + args[1])
+                        + ": no static method of that name takes " + given.length
+                        + " int/long/String argument(s) these values convert to\"}");
                 return;
             }
-        }
-        try {
-            java.lang.reflect.Method method = Class.forName(args[0]).getDeclaredMethod(args[1], types);
+            Class<?>[] types = method.getParameterTypes();
+            Object[] values = new Object[given.length];
+            for (int i = 0; i < given.length; i++) {
+                values[i] = convertArgument(types[i], given[i]);
+            }
             method.setAccessible(true);
             Object result = method.invoke(null, values);
             send(sender, "{\"ok\":true,\"returned\":\""
@@ -15262,6 +15226,61 @@ public class TestProbeCommand extends CommandBase {
             send(sender, "{\"error\":\"invoke-static " + escapeJson(args[0] + "#" + args[1])
                     + " failed: " + escapeJson(String.valueOf(cause)) + "\"}");
         }
+    }
+
+    /**
+     * The static method {@link #handleInvokeStatic} calls: the all-{@code int} one when every value
+     * is an int and it exists, otherwise the single {@code name}/arity match whose parameters the
+     * values convert to; null when there is none, and an {@link IllegalArgumentException} naming
+     * both when two match.
+     */
+    private static java.lang.reflect.Method invokableStatic(Class<?> owner, String name, String[] given) {
+        Class<?>[] allInts = new Class<?>[given.length];
+        java.util.Arrays.fill(allInts, int.class);
+        java.lang.reflect.Method found = null;
+        for (java.lang.reflect.Method m : owner.getDeclaredMethods()) {
+            if (!m.getName().equals(name) || m.getParameterCount() != given.length
+                    || !java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                    || !acceptsAll(m.getParameterTypes(), given)) {
+                continue;
+            }
+            if (java.util.Arrays.equals(m.getParameterTypes(), allInts)) {
+                return m;
+            }
+            if (found != null) {
+                throw new IllegalArgumentException("ambiguous: " + found + " and " + m
+                        + " both accept " + java.util.Arrays.toString(given));
+            }
+            found = m;
+        }
+        return found;
+    }
+
+    private static boolean acceptsAll(Class<?>[] types, String[] given) {
+        for (int i = 0; i < types.length; i++) {
+            try {
+                convertArgument(types[i], given[i]);
+            } catch (IllegalArgumentException notThisType) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** One invoke-static argument as its parameter's type; {@link IllegalArgumentException} when it
+     *  does not convert or the type is not one the verb carries. */
+    private static Object convertArgument(Class<?> type, String text) {
+        if (type == int.class) {
+            return Integer.parseInt(text);
+        }
+        if (type == long.class) {
+            return Long.parseLong(text);
+        }
+        if (type == String.class) {
+            return text;
+        }
+        throw new IllegalArgumentException("invoke-static carries int, long and String only, not "
+                + type.getName());
     }
 
     private void handlePlace(MinecraftServer server, ICommandSender sender, String[] args) {
@@ -19814,73 +19833,6 @@ public class TestProbeCommand extends CommandBase {
      *       (i.e. {@code openContainer != inventoryContainer}).</li>
      * </ul>
      */
-    /**
-     * {@code /stellurgytest events mark} and {@code /stellurgytest events since <seq>} — the ordered log of what
-     * HAPPENED on this side, so a test can wait for an event rather than sample a value.
-     *
-     * <p>The mark is taken BEFORE the action under test; the read afterwards returns everything since
-     * it, in order. See {@link TestEventLog} for why a poll cannot do this.</p>
-     *
-     * <p>Both replies carry {@code recording} and {@code dropped}: an empty log must never be
-     * confusable with a recorder that was never subscribed, nor with a ring that overflowed.</p>
-     */
-    private void handleEvents(ICommandSender sender, String[] args) {
-        if (args.length >= 1 && "mark".equalsIgnoreCase(args[0])) {
-            send(sender, "{\"ok\":true,\"seq\":" + TestEventLog.mark()
-                    + ",\"recording\":" + TestEventLog.isRecording()
-                    + ",\"mixins\":" + TestEventLog.areMixinsInstalled() + "}");
-            return;
-        }
-        if (args.length >= 2 && "since".equalsIgnoreCase(args[0])) {
-            long from = (long) parseDoubleOr(args[1], 0);
-            String wanted = args.length >= 3 ? args[2] : null;
-            // The records are rendered FIRST and the envelope assembled around them, so that every
-            // envelope key - `count` above all - precedes the records in the reply. A reader takes the
-            // first `"count":` it sees; with the count trailing the array, a record whose payload
-            // carried a `count` field of its own was read as the envelope's, and a chain whose link
-            // HAD been recorded failed as "never recorded" (measured 2026-09-05 on `crew_captured`
-            // with a crew of 0: the payload said count:0, the envelope said count:1, and the reader
-            // believed the payload).
-            StringBuilder records = new StringBuilder();
-            int n = 0;
-            for (TestEventLog.Record r : TestEventLog.since(from)) {
-                if (wanted != null && !wanted.equalsIgnoreCase(r.type)) {
-                    continue;
-                }
-                if (n++ > 0) {
-                    records.append(',');
-                }
-                records.append("{\"seq\":").append(r.seq)
-                        .append(",\"tick\":").append(r.tick)
-                        .append(",\"side\":\"").append(r.side).append('"')
-                        .append(",\"type\":\"").append(r.type).append('"');
-                if (!r.payload.isEmpty()) {
-                    records.append(',').append(r.payload);
-                }
-                records.append('}');
-            }
-            StringBuilder sb = new StringBuilder("{\"ok\":true,\"recording\":")
-                    .append(TestEventLog.isRecording())
-                    .append(",\"mixins\":").append(TestEventLog.areMixinsInstalled())
-                    .append(",\"dropped\":").append(TestEventLog.dropped())
-                    .append(",\"droppedByType\":{").append(TestEventLog.droppedByType()).append('}')
-                    // Which observation points have EXECUTED. Carried on every read because an empty
-                    // `events` list is only an answer once this says somebody was looking.
-                    .append(",\"instruments\":").append(TestEventLog.instrumentsEntered())
-                    .append(",\"from\":").append(from)
-                    .append(",\"count\":").append(n)
-                    .append(",\"events\":[").append(records).append("]}");
-            send(sender, sb.toString());
-            return;
-        }
-        if (args.length >= 1 && "reset".equalsIgnoreCase(args[0])) {
-            TestEventLog.reset();
-            send(sender, "{\"ok\":true}");
-            return;
-        }
-        send(sender, "{\"error\":\"usage: events mark | events since <seq> [type] | events reset\"}");
-    }
-
     private void handlePlayer(MinecraftServer server, ICommandSender sender, String[] args) {
         if (args.length < 1) {
             send(sender, "{\"error\":\"usage: /stellurgytest player inv-bypass <add|remove|status> | open-container\"}");

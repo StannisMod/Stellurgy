@@ -29,7 +29,6 @@ import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
@@ -142,8 +141,8 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
         FontRenderer fontRenderer = Minecraft.getMinecraft().fontRenderer;
 
-        int screenX = RocketEventHandler.atmBar.getRenderX();//8;
-        int screenY = RocketEventHandler.atmBar.getRenderY();//event.getResolution().getScaledHeight() - fontRenderer.FONT_HEIGHT*3;
+        int screenX = dev.stannismod.stellurgy.client.HudLayout.atmosphereBarX(event.getResolution().getScaledWidth());
+        int screenY = dev.stannismod.stellurgy.client.HudLayout.atmosphereBarY(event.getResolution().getScaledHeight());
 
         World world = Minecraft.getMinecraft().world;
         dev.stannismod.stellurgy.client.ClientAtmosphere air = dev.stannismod.stellurgy.client.ClientAtmosphere.of(world);

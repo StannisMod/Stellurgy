@@ -31,6 +31,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.armor.IFillableArmor;
 import dev.stannismod.stellurgy.client.ClientAtmosphere;
 import dev.stannismod.stellurgy.client.FreeFlightHudState;
+import dev.stannismod.stellurgy.client.HudLayout;
 import dev.stannismod.stellurgy.client.KeyBindings;
 import dev.stannismod.stellurgy.client.render.ClientDynamicTexture;
 import dev.stannismod.stellurgy.entity.EntityRocket;
@@ -49,10 +50,6 @@ public class RocketEventHandler extends Gui {
 
 
     private static final int numTicksToDisplay = 100;
-    public static GuiBox suitPanel = new GuiBox(8, 8, 24, 24);
-    public static GuiBox oxygenBar = new GuiBox(8, -57, 80, 48);
-    public static GuiBox hydrogenBar = new GuiBox(8, -74, 80, 48);
-    public static GuiBox atmBar = new GuiBox(8, 27, 200, 48);
 
     /**
      * The HUD state a client WORLD owns: the overlay message, stamped with that world's clock, and
@@ -72,7 +69,7 @@ public class RocketEventHandler extends Gui {
         return WorldRuntime.of(world, HudState.class, HudState::new);
     }
 
-    private ResourceLocation background = TextureResources.rocketHud;
+    private final ResourceLocation background = TextureResources.rocketHud;
 
 
     /** [-1,1] clamp for HUD bar/dot geometry; NaN-safe. */
@@ -412,8 +409,8 @@ public class RocketEventHandler extends Gui {
                     mc.renderEngine.bindTexture(background);
                     GlStateManager.color(1f, 1f, 1f);
                     int width = 83;
-                    int screenX = oxygenBar.getRenderX();//+ 8;
-                    int screenY = oxygenBar.getRenderY();//- 57;
+                    int screenX = HudLayout.oxygenBarX(event.getResolution().getScaledWidth());
+                    int screenY = HudLayout.oxygenBarY(event.getResolution().getScaledHeight());
 
                     //Draw BG
                     this.drawTexturedModalRect(screenX, screenY, 23, 0, width, 17);
@@ -501,8 +498,9 @@ public class RocketEventHandler extends Gui {
             if (modularArmorFlag || ItemAirUtils.INSTANCE.isStackValidAirContainer(armorStack)) {
 
                 int size = 24;
-                int screenY = suitPanel.getRenderY() + (slot - 1) * (size + 8);
-                int screenX = suitPanel.getRenderX();
+                int panelX = HudLayout.suitPanelX(event.getResolution().getScaledWidth());
+                int screenY = HudLayout.suitPanelY(event.getResolution().getScaledHeight()) + (slot - 1) * (size + 8);
+                int screenX = panelX;
 
                 //Draw BG
                 GlStateManager.color(1f, 1f, 1f, 1f);
@@ -536,7 +534,7 @@ public class RocketEventHandler extends Gui {
 
                         //if(texture != null) {
 
-                        screenX = suitPanel.getRenderX() + 4 + index * (size + 2);
+                        screenX = panelX + 4 + index * (size + 2);
 
                         //Draw BG
 
@@ -566,7 +564,7 @@ public class RocketEventHandler extends Gui {
                     }
                 }
 
-                screenX = (index) * (size + 2) + suitPanel.getRenderX() - 12;
+                screenX = (index) * (size + 2) + panelX - 12;
                 //Draw BG
                 GlStateManager.color(1, 1, 1, 1f);
                 Minecraft.getMinecraft().renderEngine.bindTexture(TextureResources.frameHUDBG);
@@ -577,89 +575,5 @@ public class RocketEventHandler extends Gui {
         }
 
         GlStateManager.disableAlpha();
-    }
-
-    public static class GuiBox {
-        int modeX = -1;
-        int modeY = -1;
-        int sizeX, sizeY;
-        boolean isVisible = true;
-        private int x;
-        private int y;
-
-        public GuiBox(int x, int y, int sizeX, int sizeY) {
-            this.setRawX(x);
-            this.setRawY(y);
-            this.sizeX = sizeX;
-            this.sizeY = sizeY;
-        }
-
-        public int getX(int scaledW) {
-
-            if (modeX == 1)
-                return scaledW - getRawX();
-            else if (modeX == 0) {
-                return scaledW / 2 - getRawX();
-            }
-            return getRawX();
-        }
-
-        public int getY(int scaledH) {
-
-            if (modeY == 1)
-                return scaledH - getRawY();
-            else if (modeY == 0) {
-                return scaledH / 2 - getRawY();
-            }
-            return getRawY();
-        }
-
-        public int getRenderX() {
-            ScaledResolution scaledresolution = new ScaledResolution(Minecraft.getMinecraft());
-            int i = scaledresolution.getScaledWidth();
-
-            if (modeX == 1) {
-                return i - getRawX();
-            } else if (modeX == 0) {
-                return i / 2 - getRawX();
-            }
-            return this.getRawX();
-        }
-
-        public int getRenderY() {
-            ScaledResolution scaledresolution = new ScaledResolution(Minecraft.getMinecraft());
-            int i = scaledresolution.getScaledHeight();
-
-            if (modeY == 1) {
-                return i - getRawY();
-            } else if (modeY == 0) {
-                return i / 2 - getRawY();
-            }
-            return this.getRawY();
-        }
-
-        public int getRawX() {
-            return x;
-        }
-
-        public void setRawX(int x) {
-            this.x = x;
-        }
-
-        public int getRawY() {
-            return y;
-        }
-
-        public void setRawY(int y) {
-            this.y = y;
-        }
-
-        public void setSizeModeX(int int1) {
-            modeX = int1;
-        }
-
-        public void setSizeModeY(int int1) {
-            modeY = int1;
-        }
     }
 }

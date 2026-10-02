@@ -8,8 +8,8 @@ import dev.stannismod.stellurgy.test.Events;
 /**
  * The CLIENT's ordered event log behind the same {@link Events} verbs the server log is read through.
  *
- * <p>{@link Events} speaks one probe language — {@code stellurgytest events mark} and
- * {@code stellurgytest events since <seq> [type]} — because that is how the SERVER answers, over a command
+ * <p>{@link Events} speaks one probe language — {@link Events#MARK_COMMAND} and
+ * {@link Events#sinceCommand} — because that is how the SERVER's log is asked, over a command
  * channel. The client bot answers the same two questions on its own socket, as JSON objects rather
  * than a command reply. This is the translation, and it exists so a client-side chain gets
  * {@code await} / {@code awaitCarrying} / {@code assertChain} and their failure narrative instead of
@@ -17,7 +17,7 @@ import dev.stannismod.stellurgy.test.Events;
  *
  * <p><b>Why one adapter and not one per class.</b> Nine classes carried a private copy of these ten
  * lines, and five of them parsed the command by index: {@code parts[3]} on anything that was not
- * {@code stellurgytest events since N} raised a {@code NumberFormatException} from inside a wait, which
+ * a {@code since N} command raised a {@code NumberFormatException} from inside a wait, which
  * reads as the game misbehaving rather than as the test asking the log a question it does not
  * answer. The copy that refused explicitly is the one kept below.</p>
  *
@@ -35,9 +35,6 @@ import dev.stannismod.stellurgy.test.Events;
  * log is not a slower answer, it is a different question.</p>
  */
 public final class ClientEvents {
-
-    private static final String MARK = "stellurgytest events mark";
-    private static final String SINCE = "stellurgytest events since ";
 
     private ClientEvents() {
     }
@@ -290,11 +287,12 @@ public final class ClientEvents {
 
     private static Events.Probe probe(ClientBot bot) {
         return command -> {
-            if (MARK.equals(command)) {
+            if (Events.MARK_COMMAND.equals(command)) {
                 return String.valueOf(bot.eventMark());
             }
-            if (command.startsWith(SINCE)) {
-                String[] parts = command.substring(SINCE.length()).trim().split(" ");
+            if (command.startsWith(Events.SINCE_COMMAND_PREFIX)) {
+                String[] parts = command.substring(Events.SINCE_COMMAND_PREFIX.length()).trim()
+                        .split(" ");
                 return String.valueOf(bot.eventsSince(Long.parseLong(parts[0]),
                         parts.length > 1 ? parts[1] : null));
             }

@@ -163,6 +163,33 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     private volatile IntFunction<StellarBody> starLookup = UniverseRegistry::lookupCatalogueStar;
     /** The model {@link #populate} put in force for this save; null until it has run. */
     private volatile UniverseSchema activeSchema = null;
+    /** The memory of what the galaxy this save belongs to has already reported; bound by {@link #get(World)}. */
+    private volatile ReportOnce reports = null;
+
+    /**
+     * Bind the galaxy whose derivation this registry runs, by its report memory. Rebinding the same
+     * galaxy is a no-op; binding another is an error, because a registry belongs to one server.
+     * Production binds the server's galaxy in {@link #get(World)}; a test arranging a registry of its
+     * own binds one it owns.
+     */
+    public void bindReports(ReportOnce galaxyReports) {
+        if (galaxyReports == null) {
+            throw new NullPointerException("galaxyReports");
+        }
+        if (reports != null && reports != galaxyReports) {
+            throw new IllegalStateException("this universe registry is already bound to another galaxy");
+        }
+        reports = galaxyReports;
+    }
+
+    private ReportOnce reports() {
+        ReportOnce bound = reports;
+        if (bound == null) {
+            throw new IllegalStateException("no galaxy is bound to this universe registry; only a "
+                    + "registry reached through a server world has one");
+        }
+        return bound;
+    }
 
     /**
      * What each authored star was DECLARED as, keyed by star id — the galaxy-local form, kept so the
@@ -210,12 +237,19 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             return null;
         }
         WorldSavedData existing = storage.getOrLoadData(UniverseRegistry.class, STORAGE_KEY);
+        UniverseRegistry registry;
         if (existing instanceof UniverseRegistry) {
-            return (UniverseRegistry) existing;
+            registry = (UniverseRegistry) existing;
+        } else {
+            registry = new UniverseRegistry();
+            storage.setData(STORAGE_KEY, registry);
         }
-        UniverseRegistry fresh = new UniverseRegistry();
-        storage.setData(STORAGE_KEY, fresh);
-        return fresh;
+        // Bound here and not only at populate: worlds load, and may derive, before the server has
+        // finished starting.
+        if (world instanceof WorldServer) {
+            registry.bindReports(dev.stannismod.stellurgy.Stellurgy.serverState().dimensions.reports());
+        }
+        return registry;
     }
 
     // ─── Forward lookups (coord -> system) ─────────────────────────────────────
@@ -588,7 +622,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 return new ArrayList<SystemBody>();
             }
             List<SystemBody> authored = SystemContent.bodiesOf(star, anchor,
-                    generator.minSpacingCells(), this::durableName);
+                    generator.minSpacingCells(), this::durableName, reports());
             return withDerivedRetinue(anchor, star, id, authored);
         }
         return new ArrayList<>(generator.bodiesFor(worldSeed, anchor));
@@ -629,7 +663,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         RecordedName recorded = namesByDim.get(dimId);
         if (recorded != null) {
             if (recorded.starId != starId) {
-                if (SystemContent.reportOnce("nameReused:" + dimId + ':' + recorded.starId + "->" + starId)) {
+                if (reports().first("nameReused:" + dimId + ':' + recorded.starId + "->" + starId)) {
                     LOGGER.error("dimension id {} carries a cell name recorded for system {} but now "
                             + "belongs to system {} - the id was recycled. Re-deriving its name as {} "
                             + "(the stale one would have put this body in another system's "
@@ -637,7 +671,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                             dimId, recorded.starId, starId, derived.cellKey());
                 }
             } else if (!SystemContent.withinBoxOf(recorded.name, anchor, minSpacingCells)) {
-                if (SystemContent.reportOnce("nameEscaped:" + dimId + ':' + recorded.name.cellKey())) {
+                if (reports().first("nameEscaped:" + dimId + ':' + recorded.name.cellKey())) {
                     LOGGER.error("recorded cell name {} of dim {} is no longer inside system {}'s "
                             + "neighbourhood (anchor {}, spacing {}) - the anchor or the spacing moved "
                             + "under it. A name outside its own box attributes to no system: the body "
@@ -1049,7 +1083,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         // carries a planet's name at its star's cell, and a jump aimed at that entry flies to the
         // star; the entry path resolves launch coordinates through here too. Every production caller
         // already handles absence (`isPresent`, `orElse(null)`), so the empty is not a new burden.
-        if (SystemContent.reportOnce("unaddressable:" + props.getStarId() + ':' + props.getId())) {
+        if (reports().first("unaddressable:" + props.getStarId() + ':' + props.getId())) {
             LOGGER.error("dimension {} names star {} but that system's content does not account for "
                     + "it, so it has no cell to be addressed by. Answering EMPTY. Anything that needs "
                     + "to reach this body — the navigation crystal, a jump, an entry placement — must "
@@ -1515,7 +1549,8 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         GalaxyGenConfig packGalaxyConfig = galaxy.getPackGalaxyConfig();
         UniverseSchema schema = reg.reconcileSchema(packGalaxyConfig);
         reg.activeSchema = schema;
-        reg.attachSchemaGenerator(schema.generator(packGalaxyConfig, galaxy.getPlanetTypes()));
+        reg.attachSchemaGenerator(schema.generator(packGalaxyConfig, galaxy.getPlanetTypes(),
+                galaxy.reports()));
         LOGGER.info("Universe schema {} ({}) in force, configuration {}", schema.version(),
                 schema.label(), reg.configFingerprint());
         if (!schema.isStable()) {

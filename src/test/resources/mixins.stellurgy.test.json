@@ -21,6 +21,7 @@
     "MixinShipVelocityAtPoint",
     "MixinDeckMovementBoundInputs",
     "MixinFlightComputerMotionSample",
+    "MixinPhysicsCalculationsMotionSample",
     "MixinPlayerPacketRubberBand",
     "MixinShipTransformUpdateDiag",
     "MixinTilePilotSeatDiag",
@@ -73,6 +74,8 @@
     "MixinTilePilotSeatEvents",
     "MixinBlockPilotSeatEvents",
     "MixinMinecraftServerSideTrace",
+    "MixinMinecraftServerShipLoadHold",
+    "MixinShipLoadingHold",
     "MixinEntityTraceMemory"
   ],
   "client": [

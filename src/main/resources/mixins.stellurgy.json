@@ -12,6 +12,7 @@
     "MixinEntityPlayerJetpackKeys",
     "MixinEntityPlayerShipFlight",
     "MixinEntityShipEyes",
+    "MixinEntityShipFrameCapture",
     "MixinEntityShipLocalMove",
     "MixinEntityTrackerRiderSeesVehicle",
     "MixinNetHandlerDeckMovementBound",

@@ -1,12 +1,9 @@
 package dev.stannismod.stellurgy.universe;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -131,16 +128,18 @@ public final class SystemContent {
     };
 
     /** Legacy-spacing overload: derives with the default super-cell edge. */
-    public static List<SystemBody> bodiesOf(StellarBody star, GalacticCoord systemCoord) {
-        return bodiesOf(star, systemCoord, GalaxyGenConfig.DEFAULT_MIN_SPACING);
+    public static List<SystemBody> bodiesOf(StellarBody star, GalacticCoord systemCoord,
+                                            ReportOnce reports) {
+        return bodiesOf(star, systemCoord, GalaxyGenConfig.DEFAULT_MIN_SPACING, reports);
     }
 
     /**
      * The system's bodies, per-body-cell (A#1a). {@code minSpacingCells} is the active generator's
      * super-cell edge — the box every body cell is clamped into.
      */
-    public static List<SystemBody> bodiesOf(StellarBody star, GalacticCoord systemCoord, int minSpacingCells) {
-        return bodiesOf(star, systemCoord, minSpacingCells, DERIVED_NAMES);
+    public static List<SystemBody> bodiesOf(StellarBody star, GalacticCoord systemCoord, int minSpacingCells,
+                                            ReportOnce reports) {
+        return bodiesOf(star, systemCoord, minSpacingCells, DERIVED_NAMES, reports);
     }
 
     /**
@@ -152,9 +151,11 @@ public final class SystemContent {
      * {@code addressAt}, {@code absoluteAt}. A derivation that took a tick had to pick one instant for
      * the whole system and hand every consumer the chart as of that instant; carrying the LAW instead
      * lets each consumer ask for the moment it is really talking about.</p>
+     *
+     * @param reports the deriving galaxy's memory of what it has already reported
      */
     public static List<SystemBody> bodiesOf(StellarBody star, GalacticCoord systemCoord, int minSpacingCells,
-                                            CellNames names) {
+                                            CellNames names, ReportOnce reports) {
         List<SystemBody> bodies = new ArrayList<>();
         if (star == null) {
             return bodies;
@@ -177,7 +178,8 @@ public final class SystemContent {
             }
             DimensionProperties planet = (DimensionProperties) p;
             BodyEphemeris planetLaw = orbitLawOf(planet, star);
-            GalacticCoord planetName = nameOf(planet, planetLaw, anchor, minSpacingCells, starId, names);
+            GalacticCoord planetName = nameOf(planet, planetLaw, anchor, minSpacingCells, starId, names,
+                    reports);
             CellFrame planetFrame = CellFrame.of(anchorAbs, planetLaw);
             // The orbit travels on the body for authored systems too, so the field means the same thing
             // for the whole catalogue: how far this body is from its star. A body that knew its orbit
@@ -208,13 +210,13 @@ public final class SystemContent {
                 // positions it. Same convention as the procedural side.
                 bodies.add(new SystemBody(
                         moonNameOf(moon, planetBody, starBody, moonLaw, tightestMoon, anchor,
-                                minSpacingCells, starId, names),
+                                minSpacingCells, starId, names, reports),
                         CellFrame.within(planetFrame, moonLaw), BodyEphemeris.STATIC,
                         kindOf(moon, SystemBodyKind.MOON), moon.getId(), starId,
                         planet.getOrbitalDist(), moon.getRadius(), moon.getOrbitalMass()));
             }
         }
-        auditOneRealBodyPerCell(bodies, starId);
+        auditOneRealBodyPerCell(bodies, starId, reports);
         return bodies;
     }
 
@@ -296,11 +298,11 @@ public final class SystemContent {
      * Orbital motion moves a body WITHIN its cell; it does not move it between cells.</p>
      */
     static GalacticCoord nameOf(DimensionProperties planet, BodyEphemeris law, GalacticCoord anchor,
-                                int minSpacingCells, int starId, CellNames names) {
+                                int minSpacingCells, int starId, CellNames names, ReportOnce reports) {
         BlockDelta at0 = law.offsetAt(NAME_TICK);
         GalacticCoord derived = clampIntoBox(
                 anchor.plusLocal(at0.dx(), at0.dy(), at0.dz()).cellCentre(),
-                anchor, minSpacingCells, planet.getId());
+                anchor, minSpacingCells, planet.getId(), reports);
         return names == null ? derived
                 : names.nameFor(planet.getId(), starId, anchor, minSpacingCells, derived);
     }
@@ -323,9 +325,10 @@ public final class SystemContent {
     private static GalacticCoord moonNameOf(DimensionProperties moon, SystemBody parent,
                                             SystemBody primary, BodyEphemeris moonLaw,
                                             long tightestMoonOffsetBlocks, GalacticCoord anchor,
-                                            int minSpacingCells, int starId, CellNames names) {
+                                            int minSpacingCells, int starId, CellNames names,
+                                            ReportOnce reports) {
         GalacticCoord derived = moonCellIn(parent, primary, moonLaw, tightestMoonOffsetBlocks,
-                starId, moon.getId());
+                starId, moon.getId(), reports);
         return names == null ? derived
                 : names.nameFor(moon.getId(), starId, anchor, minSpacingCells, derived);
     }
@@ -335,17 +338,18 @@ public final class SystemContent {
      * derivation shared by the authored catalogue and the procedural generator, so a moon is named
      * the same way whichever built it.
      *
-     * <p>See {@link #moonNameOf} for what the fallback costs. Reported once per parent per session,
+     * <p>See {@link #moonNameOf} for what the fallback costs. Reported once per parent per galaxy,
      * because this derivation runs on every query.</p>
      */
     static GalacticCoord moonCellIn(SystemBody parent, SystemBody primary, BodyEphemeris moonLaw,
-                                    long tightestMoonOffsetBlocks, int starId, int moonDimId) {
+                                    long tightestMoonOffsetBlocks, int starId, int moonDimId,
+                                    ReportOnce reports) {
         GalacticCoord derived = ZoneScale.cellWithin(parent, primary, moonLaw.offsetAt(NAME_TICK),
                 tightestMoonOffsetBlocks, NAME_TICK);
         if (derived != null) {
             return derived;
         }
-        if (reportOnce("noZone:" + starId + ':' + parent.name().cellKey())) {
+        if (reports.first("noZone:" + starId + ':' + parent.name().cellKey())) {
             LOGGER.error("dim {} orbits the body at cell {}, which states no MASS ({}) and so has no "
                     + "zone to divide - there is no lattice to name the moon in and it FALLS BACK to "
                     + "sharing its parent's cell. The two are then one indistinguishable destination: "
@@ -368,29 +372,6 @@ public final class SystemContent {
     }
 
     /**
-     * Layout problems already reported. This derivation runs on EVERY query — the console's forecast
-     * once a second, the render broadcast, the entry resolver, every probe — so an unguarded report
-     * is a flood, not a diagnostic: a 28-minute playtest produced 28,061 clamp warnings and drowned
-     * the log it was needed in. One report per distinct problem, per session.
-     */
-    private static final Set<String> REPORTED = Collections.synchronizedSet(new HashSet<String>());
-
-    /**
-     * Forget what has already been reported (server stop). Without this the set outlives the world it
-     * described: a second world in the same JVM — a dev restart, or every test class after the first
-     * in one fork — has a genuine layout fault swallowed because an earlier, unrelated world already
-     * minted that key.
-     */
-    public static void reset() {
-        REPORTED.clear();
-    }
-
-    /** Report {@code message} once per distinct {@code key} per session. Returns whether it was said. */
-    static boolean reportOnce(String key) {
-        return REPORTED.add(key);
-    }
-
-    /**
      * INVARIANT: at most ONE real body per cell. Every real body owns its own cell — a moon included,
      * whose cell is one of its parent's ZONE. A zone-qualified key can never equal a galactic one, so the audit compares moons against their siblings in the same
      * zone and against nothing else.
@@ -406,7 +387,7 @@ public final class SystemContent {
      * repaired: silently moving an authored body would make the address a player wrote down mean
      * something else, and the honest repair belongs where the layout is decided.</p>
      */
-    private static void auditOneRealBodyPerCell(List<SystemBody> bodies, int starId) {
+    private static void auditOneRealBodyPerCell(List<SystemBody> bodies, int starId, ReportOnce reports) {
         Map<String, List<Integer>> realBodiesByCell = new LinkedHashMap<>();
         for (SystemBody body : bodies) {
             String cell = body.name().cellKey();
@@ -421,7 +402,7 @@ public final class SystemContent {
             if (e.getValue().size() < 2) {
                 continue;
             }
-            if (REPORTED.add("collision:" + starId + ':' + e.getKey() + ':' + e.getValue())) {
+            if (reports.first("collision:" + starId + ':' + e.getKey() + ':' + e.getValue())) {
                 LOGGER.error("system {}: cell {} holds {} REAL bodies (dims {}) - a cell may hold at "
                         + "most one. They are one indistinguishable destination: a jump "
                         + "aimed at that address cannot say which body it meant, and an arrival cannot "
@@ -436,14 +417,14 @@ public final class SystemContent {
      * A clamp means the authored orbit exceeds what the spacing guarantee can host — WARN, don't crash.
      */
     private static GalacticCoord clampIntoBox(GalacticCoord bodyCell, GalacticCoord anchor,
-                                              int minSpacingCells, int dimId) {
+                                              int minSpacingCells, int dimId, ReportOnce reports) {
         long s = Math.max(1, minSpacingCells);
         long reach = reachCells(s);
         long cx = clampAxis(bodyCell.sectorX(), anchor.sectorX(), reach);
         long cy = clampAxis(bodyCell.sectorY(), anchor.sectorY(), reach);
         long cz = clampAxis(bodyCell.sectorZ(), anchor.sectorZ(), reach);
         if ((cx != bodyCell.sectorX() || cy != bodyCell.sectorY() || cz != bodyCell.sectorZ())
-                && REPORTED.add("clamp:" + dimId + ':' + bodyCell.cellKey())) {
+                && reports.first("clamp:" + dimId + ':' + bodyCell.cellKey())) {
             LOGGER.warn("orbit of dim {} reaches past its system's clear space ({} cells at a spacing "
                     + "of {}); clamping its cell from ({},{},{}) back inside it",
                     dimId, reach, s, bodyCell.sectorX(), bodyCell.sectorY(), bodyCell.sectorZ());

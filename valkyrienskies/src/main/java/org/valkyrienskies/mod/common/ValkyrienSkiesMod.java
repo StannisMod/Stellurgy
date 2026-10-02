@@ -58,8 +58,13 @@ import java.util.function.Function;
 public class ValkyrienSkiesMod {
 	@java.lang.SuppressWarnings("all")
 	private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(ValkyrienSkiesMod.class);
-	// Used for registering stuff
+	/**
+	 * VS's blocks and items, for the registry events. Effectively final, lifetime the process: filled
+	 * in {@link #preInit} (by {@code registerBlock}, and by {@code BaseItem}'s constructor during
+	 * {@code registerItems}), only read after — by {@code RegisterEvents}.
+	 */
 	public static final List<Block> BLOCKS = new ArrayList<>();
+	/** @see #BLOCKS */
 	public static final List<Item> ITEMS = new ArrayList<>();
 	// MOD INFO CONSTANTS
 	// MOD_ID is "valkyrienskies". HOST_MOD_ID is the modid of the mod that actually owns VS's
@@ -83,25 +88,42 @@ public class ValkyrienSkiesMod {
 	public static final String MOD_ID = "valkyrienskies";
 	public static final String HOST_MOD_ID = Constants.modId;
 	static final String MOD_FINGERPRINT = "b308676914a5e7d99459c1d2fb298744387899a7";
-	// MOD INSTANCE — self-initialised (no @Instance: there is no "valkyrienskies" mod container to
-	// inject from). Ready at class-load, before any registry event references it.
-	public static ValkyrienSkiesMod INSTANCE = new ValkyrienSkiesMod();
-	// modId names Stellurgy's container so FML injects this proxy as part of Stellurgy's mod (VS is not its own mod).
+	/**
+	 * The one VS host object. Final, lifetime the process: created at class initialisation (no
+	 * {@code @Instance} — there is no "valkyrienskies" mod container to inject from), before any
+	 * registry event references it. Stellurgy's lifecycle handlers drive it.
+	 */
+	public static final ValkyrienSkiesMod INSTANCE = new ValkyrienSkiesMod();
+	/**
+	 * Effectively final, lifetime the process: written by Forge's sided-proxy injection, never by this
+	 * mod. {@code modId} names Stellurgy's container, because VS is part of Stellurgy's mod.
+	 */
 	@SidedProxy(modId = HOST_MOD_ID, clientSide = "org.valkyrienskies.mod.proxy.ClientProxy", serverSide = "org.valkyrienskies.mod.proxy.ServerProxy")
 	public static CommonProxy proxy;
 	static final int VS_ENTITY_LOAD_DISTANCE = 128;
 	/**
-	 * This service is directly responsible for running collision tasks.
+	 * The pool collision tasks run on. Effectively final, lifetime the process: written once by
+	 * {@link #preInit} (a second pre-init throws), only read after.
 	 */
 	private static ForkJoinPool physicsThreadPool = null;
+	// The blocks and the item below are fields of INSTANCE, so statics by transitivity. Effectively
+	// final, lifetime the process: written once in preInit (registerBlocks / registerItems), only read
+	// after; a second pre-init throws before reaching them.
 	public Block captainsChair;
 	public Block passengerChair;
 	public Block waterPump;
 	public Block boatChair;
 	public Item shipTracker;
+	/**
+	 * The three channels. Effectively final, lifetime the process: written once by
+	 * {@code registerNetworks} in {@link #preInit} (a second pre-init throws), only read after.
+	 */
 	public static SimpleNetworkWrapper physWrapperNetwork;
+	/** @see #physWrapperNetwork */
 	public static SimpleNetworkWrapper physWrapperTransformUpdateNetwork;
+	/** @see #physWrapperNetwork */
 	public static SimpleNetworkWrapper controlNetwork;
+	/** Final, lifetime the process: created at class initialisation and never changed. */
 	public static final CreativeTabs VS_CREATIVE_TAB = new TabValkyrienSkies(MOD_ID);
 	// Add-on module detection (the "vs_control" / "vs_world" list, its isAnyModuleLoaded flag and
 	// accessor, and the login warning that consumed them) removed: this physics core is vendored as
@@ -114,6 +136,9 @@ public class ValkyrienSkiesMod {
 	// org.valkyrienskies.mixin.* and cannot be referenced from ordinary (non-mixin) code.
 
 	public void preInit(FMLPreInitializationEvent event) {
+		if (physicsThreadPool != null) {
+			throw new IllegalStateException("Valkyrien Skies pre-init runs once per process");
+		}
 		log.debug("Initializing configuration.");
 		runConfiguration();
 		log.debug("Instantiating the physics thread executor.");
@@ -164,6 +189,9 @@ public class ValkyrienSkiesMod {
 	public void init(FMLInitializationEvent event) {
 		log.info("Valkyrien Skies Initialization: We are running on {} threads; 4 or more is recommended!", Runtime.getRuntime().availableProcessors());
 		proxy.init(event);
+		if (isSpongePresent != null) {
+			throw new IllegalStateException("Valkyrien Skies init runs once per process");
+		}
 		isSpongePresent = Loader.isModLoaded("spongeforge");
 		// Every block is registered by now, so the config's block names resolve.
 		VSConfig.rederive();
@@ -233,7 +261,11 @@ public class ValkyrienSkiesMod {
 		this.shipTracker = new ItemShipTracker("vs_ship_tracker", true);
 	}
 
-	private static boolean isSpongePresent = false;
+	/**
+	 * Whether SpongeForge is loaded. Effectively final, lifetime the process: written once by
+	 * {@link #init} (a second init throws), {@code null} until then.
+	 */
+	private static Boolean isSpongePresent = null;
 
 	/**
 	 * This service is directly responsible for running collision tasks.
@@ -243,8 +275,12 @@ public class ValkyrienSkiesMod {
 		return ValkyrienSkiesMod.physicsThreadPool;
 	}
 
-	@java.lang.SuppressWarnings("all")
+	/** @throws IllegalStateException before {@link #init} has asked the loader */
 	public static boolean isSpongePresent() {
-		return ValkyrienSkiesMod.isSpongePresent;
+		Boolean present = ValkyrienSkiesMod.isSpongePresent;
+		if (present == null) {
+			throw new IllegalStateException("Valkyrien Skies has not been initialised; whether Sponge is present is not known yet");
+		}
+		return present;
 	}
 }
