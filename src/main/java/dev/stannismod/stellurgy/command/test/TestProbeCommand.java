@@ -18883,6 +18883,8 @@ public class TestProbeCommand extends CommandBase {
      *   set <registry-id> <mass>      — register an individual override
      *   set-regex <pattern> <mass>    — register a regex rule
      *   fuel-scale <value>            — set StellurgyConfiguration.fuelMassScale
+     *   content-scale <value>         — set StellurgyConfiguration.contentMassScale
+     *   te <dim> <x> <y> <z>          — the block's whole weight and the CONTENT part of it
      */
     private void handleWeight(ICommandSender sender, String[] args) {
         dev.stannismod.stellurgy.util.WeightEngine we = dev.stannismod.stellurgy.util.WeightEngine.INSTANCE;
@@ -18896,6 +18898,7 @@ public class TestProbeCommand extends CommandBase {
             case "reset":
                 we.resetTables();
                 dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
+                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().contentMassScale = 1.0;
                 info.put("reset", true);
                 info.put("materialCount", we.materialCount());
                 break;
@@ -18938,6 +18941,27 @@ public class TestProbeCommand extends CommandBase {
                 dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().fuelMassScale = Double.parseDouble(args[1]);
                 info.put("fuelScale", Double.parseDouble(args[1]));
                 break;
+            case "content-scale":
+                dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().contentMassScale = Double.parseDouble(args[1]);
+                info.put("contentScale", Double.parseDouble(args[1]));
+                break;
+            case "te": {
+                // te <dim> <x> <y> <z> — what the block at that position weighs as a whole, and the
+                // part of it that is CONTENT: the two numbers the content scale must keep apart.
+                net.minecraft.world.WorldServer world =
+                        sender.getServer() == null ? null : sender.getServer().getWorld(Integer.parseInt(args[1]));
+                BlockPos pos = new BlockPos(Integer.parseInt(args[2]), Integer.parseInt(args[3]),
+                        Integer.parseInt(args[4]));
+                net.minecraft.tileentity.TileEntity te = world == null ? null : world.getTileEntity(pos);
+                info.put("worldLoaded", world != null);
+                info.put("block", world == null ? "" : String.valueOf(world.getBlockState(pos).getBlock().getRegistryName()));
+                info.put("hasTile", te != null);
+                if (te != null) {
+                    info.put("content", we.getTEWeight(te));
+                    info.put("total", we.getWeight(world, pos));
+                }
+                break;
+            }
             default:
                 send(sender, "{\"error\":\"unknown weight subcommand\",\"sub\":\"" + verb + "\"}");
                 return;

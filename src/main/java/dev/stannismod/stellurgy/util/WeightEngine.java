@@ -180,9 +180,15 @@ public enum WeightEngine {
         return (float) (perMb * amount * StellurgyConfiguration.getCurrentConfig().fuelMassScale);
     }
 
+    /**
+     * The mass of what {@code te} holds — its item and fluid capabilities — times the configured
+     * {@code contentMassScale}. This is the CONTENT of a craft and the only thing that knob scales.
+     */
     public float getTEWeight(TileEntity te) {
-        if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystemInventories) return 0;
+        return (float) (heldWeight(te) * StellurgyConfiguration.getCurrentConfig().contentMassScale);
+    }
 
+    private float heldWeight(TileEntity te) {
         float weight = 0;
 
         if (te == null) {
