@@ -334,6 +334,19 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
         // SERVER side first: its commands echo harness markers into the chat the client reset is
         // about to clear. Doing it the other way round leaves the markers behind and the clean
         // assertion below fails for a reason that has nothing to do with the previous scenario.
+        // A DEAD player is not a dirty one, and it is asked before anything below can disguise it.
+        // `set-health 20` on a body that already died puts health back on an entity the server has
+        // finished with and that will never be respawned — the client's death screen is then closed
+        // by the client reset, every gate in this method passes, and from here on no slot write
+        // reaches the client, so each later scenario fails at its own equip naming an item instead
+        // of the death. Measured 2026-10-03: six scenarios of one group, all downstream of one fall.
+        String bodyOnServer = String.join("\n", serverClient().execute("stellurgytest player health"));
+        if (Reply.of(bodyOnServer).has("health") && Reply.of(bodyOnServer).number("health") <= 0) {
+            org.junit.Assert.fail("a previous scenario KILLED the shared player, and no reset can bring"
+                    + " that body back — this scenario and every one after it is downstream of that"
+                    + " death. The last death the server recorded: "
+                    + Events.lastRecord(events().since(0L, "player_died")) + "; server body: " + bodyOnServer);
+        }
         serverClient().execute("clear @a");
         // The harness server runs gamemode=1 (RealDedicatedServerHarness writes it into
         // server.properties), and a scenario that needs survival — a vacuum-damage or a
@@ -448,6 +461,16 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
                         + " asserts afterwards is about a body at the plot, and a body still in"
                         + " flight fails those assertions in the previous scenario's name",
                 PLACEMENT_LINK_BUDGET_TICKS);
+        // FALL DISTANCE, after the placement and for the same reason as health: it is state of the
+        // shared body that the previous scenario wrote and nobody restores. The plot is open air, so
+        // a creative player falls through every scenario, and creative only skips the damage — the
+        // distance keeps adding up, and vanilla /tp does not clear it (`CommandTP` sets `onGround`
+        // and leaves `fallDistance` alone). The first scenario after a long one that switches to
+        // survival and puts him on a block then lands the whole inheritance at once: measured
+        // 2026-10-03, a 77-point `fall` death on a one-block step, after a slow GUI scenario.
+        String fallReset = exec("stellurgytest player set-fall-distance 0");
+        assertTrue("the between-scenario reset must clear the fall distance the previous scenario"
+                + " accumulated: " + fallReset, Reply.of(fallReset).ok());
 
         // Health is restored HERE: after the teleport, and with the settle wait below still between
         // it and the client reset. Both halves of that placement were paid for in a gate.

@@ -487,7 +487,6 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
                 !Reply.of(placeResp).has("error"));
 
         scenario().arranging("stand the survival player two blocks above it, holding the item");
-        exec("gamemode survival @a");
         long equipMark = clientEvents().mark();
         String give = exec("stellurgytest player give-held stellurgy:hovercraft");
         scenario().requireArranged("give-held must succeed: " + give, Reply.of(give).ok());
@@ -497,6 +496,14 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         // ticks that stood here were a guess at a round trip.
         awaitClientPlacedNear(equipMark, x + 0.5, z + 0.5,
                 "the survival player must be standing over the block before he right-clicks at it");
+        // Survival only NOW, over the block and with the fall distance cleared: since the reset he
+        // has been falling through open air in creative, which skips fall damage but not the
+        // distance, so switching first and stepping onto the stone afterwards landed every block of
+        // it — a death whenever the arrangement ran slowly.
+        String fallReset = exec("stellurgytest player set-fall-distance 0");
+        scenario().requireArranged("clearing the fall distance must succeed: " + fallReset,
+                Reply.of(fallReset).ok());
+        exec("gamemode survival @a");
         awaitHeld(equipMark, "stellurgy:hovercraft");
 
         // The stimulus is ray-traced SERVER-side from the player's look, so the aim has to have
@@ -670,9 +677,8 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
             chipOpensAndReopens(modularFullScreenId, leftShift);
         } finally {
             // Whatever screen the chip left open is closed here, and the close is waited for on the
-            // SERVER: the close travels as a client packet while the next scenario's equip is a server
-            // command, and an equip that lands while the server still holds the chip's container never
-            // reaches the client as a slot write (measured: six later scenarios, no `client_slot_set`).
+            // SERVER: the close travels as a client packet, so without the wait the next scenario can
+            // begin while the server still holds the chip's container open for this player.
             long closeMark = events().mark();
             bot().closeScreen();
             events().await(closeMark, "container_closed", "closing the chip's screen must reach the SERVER"
