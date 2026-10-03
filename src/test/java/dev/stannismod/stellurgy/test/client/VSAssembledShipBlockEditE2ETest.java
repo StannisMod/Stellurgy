@@ -90,7 +90,7 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
      * the interaction rather than a mining-speed budget. The block read back is the one the crosshair
      * itself named.</p>
      *
-     * <p>red-witnessed, one break per verdict: with {@code MixinCPacketPlayerDigging:37}
+     * <p>red-witnessed: one break per verdict — with {@code MixinCPacketPlayerDigging#getPacketParent} at {@code if (physicsObject.isPresent())}
      * ({@code getPacketParent}, Valkyrien Skies, vendored) answering null, so the digging packet is
      * served with the player left in the world frame, the wait fails — no {@code block_broken} at the
      * aimed subspace position — 2026-09-29. With {@code MixinChunk:62} refusing to write AIR into a
@@ -133,8 +133,8 @@ public class VSAssembledShipBlockEditE2ETest extends AbstractSharedVsClientE2ETe
      *
      * <p>red-witnessed: the placement passes the server's reach check by TWO routes, and only with
      * both removed does the wait fail — no {@code block_placed} at the aimed position — 2026-09-30:
-     * the packet transform ({@code MixinCPacketPlayerTryUseItemOnBlock:38}, {@code getPacketParent}
-     * answering null) and the ship-aware distance ({@code MixinEntity:133}, whose {@code @Overwrite}
+     * the packet transform ({@code MixinCPacketPlayerTryUseItemOnBlock#getPacketParent} at {@code if (physicsObject.isPresent())}, {@code getPacketParent}
+     * answering null) and the ship-aware distance ({@code MixinEntity#getDistanceSq} at {@code if (vanilla < 64.0D)}, whose {@code @Overwrite}
      * of {@code getDistanceSq} maps a subspace position to the world). The transform alone was broken
      * on 2026-09-29 and the leg stayed GREEN, which is how the second route was found.</p>
      */

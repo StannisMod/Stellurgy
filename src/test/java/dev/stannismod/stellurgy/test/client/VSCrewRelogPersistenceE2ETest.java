@@ -420,7 +420,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double[] ship = buildShip(site);
         Events events = events();
         long captureMark = events.markInstrumented();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        exec("tp @a " + (ship[0] + WALK_START_OFFSET_X) + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the crew member must be TAKEN by THIS ship's deck"
                 + " before he walks on it (" + where + ")", CAPTURE_BUDGET_TICKS);
@@ -503,6 +503,19 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
 
     /** Walk bursts, and ticks per burst: short enough that the body stays on a 5x5 deck, and enough
      *  of them that a per-tick misfire cannot hide in a single burst. */
+    /**
+     * Where a WALKING leg drops its crew member, in blocks along +X from the ship's pose: onto the
+     * clear deck cell beside the pilot seat, never onto the seat.
+     *
+     * <p>The pose is the centre of mass, which on the decked fixture sits in the seat's column, so a
+     * drop at the pose lands him on the seat and wherever it shrugs him off — measured 2026-09-30 on
+     * the rebuilt fixture: 1.28 blocks south of the seat, 1.2 from the deck's edge, and the first
+     * southward burst (≈1.3 blocks) walked him off it (`offDeckTicks=2`). One block east is the
+     * deck's centre row, clear of the seat and of the flight computer (on the -X side), with
+     * 2.5 blocks of deck each way along the Z axis every burst walks.</p>
+     */
+    private static final double WALK_START_OFFSET_X = 1.0;
+
     private static final int WALK_BURSTS = 4;
     /** Six, measured: ten carried him 2.3 blocks per burst and off a deck whose half-width is 2.5,
      *  and the leg then measured the deck edge instead of the guard. */
@@ -565,7 +578,7 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
         double[] ship = buildShip(site);
         Events events = events();
         long captureMark = events.markInstrumented();
-        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        exec("tp @a " + (ship[0] + WALK_START_OFFSET_X) + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
         ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
                 "the crew member must be TAKEN by THIS ship's deck"
                 + " before the server is made to stall under him", CAPTURE_BUDGET_TICKS);

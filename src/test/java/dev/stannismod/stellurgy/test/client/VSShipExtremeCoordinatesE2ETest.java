@@ -478,6 +478,20 @@ public class VSShipExtremeCoordinatesE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("[" + label + "] the CLIENT rider must track the server ship's climb (client="
                 + riderDelta + " server=" + serverDelta + "); server player: " + serverPlayer,
                 Math.abs(riderDelta - serverDelta) < RIDER_TRACKS_SHIP_BLOCKS);
+
+        // LET GO OF THE CRUISE. Releasing the key keeps the cruise the key ramped — Flight Assist
+        // holds it, which is what the setpoint is for — so without this the craft goes on climbing
+        // into whatever the next leg does, and a teleport's "rider arrives WITH his ship" then
+        // compares a server read of a moving craft against a client read taken ticks later. Measured
+        // 2026-09-30 on a hull that tracks its ramp: velY 12.1 blocks/s after the teleport, the
+        // rider 3.0 blocks "ahead" of a ship read three calls earlier. Asserted on the computer's
+        // read-back, not on the command having been delivered.
+        String stopped = exec("stellurgytest vs ff-cruise-by-id " + cellDim + " " + shipId + " 0 0 0");
+        Reply held = Reply.of(stopped);
+        scenario().requireArranged("[" + label + "] the cruise the climb left behind must be let go"
+                        + " before the next leg, or that leg is flown by a climbing craft: " + stopped,
+                held.bool("afcResolved") && held.number("cruiseForward") == 0.0
+                        && held.number("cruiseRight") == 0.0 && held.number("cruiseUp") == 0.0);
     }
 
     /**

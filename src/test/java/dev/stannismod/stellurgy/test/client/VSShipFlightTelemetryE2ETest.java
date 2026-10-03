@@ -283,7 +283,7 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
      * 2: "no `ff_hud` whose latest line carries a non-zero speed readout"; that inversion first left
      * the test GREEN, because the check accepted any non-zero number anywhere in the HUD and the
      * vector line supplied one — it now parses the speed line alone. THE CURSOR —
-     * {@code acceptShipPilotMouseDelta} ({@code KeyBindings:759}) scaling every delta by 0: "must
+     * {@code acceptShipPilotMouseDelta} ({@code KeyBindings:763}) scaling every delta by 0: "must
      * deflect the client's flight cursor (got 0.0)". THE TURN — {@code TileAdvancedFlightComputer}'s
      * roll rate multiplied by 0: "largest omega over the window=0.0". The cursor-centred and brake
      * verdicts the wave touched live in {@link #aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim}
@@ -745,6 +745,15 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- Test 4: a body on a GROUNDED ship's deck stays on the deck, not through it -----------
 
+    /**
+     * A body on a deck with world ground laid right under its feet is not handed to vanilla.
+     *
+     * <p>red-witnessed: {@code ShipFrameTravel#handles} at {@code if (isSupportedByWorldTerrain(entity) && !isSupportedByShipAt(entity, state.shipId, gate))}'s terrain release with its
+     * {@code !isSupportedByShipAt} half removed (the original defect) fails "laying world ground under
+     * the deck must not hand this body … to vanilla" with a {@code steppedOntoTerrain} release,
+     * 2026-09-30 — on the one-block floor this scenario now lays. Only the release verdict is
+     * witnessed by that break.</p>
+     */
     @Test
     public void aBodyOnADeckWithWorldGroundBelowStaysOnTheDeck() throws Exception {
         final FixtureSite site = site();
@@ -786,9 +795,16 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         // and `steppedOntoTerrain` is that gate's word for exactly this.
         Events events = events();
         long floorMark = events.markInstrumented();
-        assertTrue("must lay the world floor under the deck",
-                Reply.of(exec("stellurgytest fill 0 " + (sx - 3) + " " + fy + " " + (sz - 3) + " "
-                        + (sx + 3) + " " + fy + " " + (sz + 3) + " minecraft:stone")).ok());
+        // ONE block, in the column the body stands in, and not a slab: the ground belongs UNDER his
+        // feet, not THROUGH the hull. The body stands on the pilot seat, and the cell under the seat is
+        // empty in the fixture, while the flight computer and the hull's other blocks sit in that same
+        // layer beside it — so a 7x7 floor at this height is laid through the craft. Measured
+        // 2026-09-30 on a hull whose actuators hold it at its attitude: the floor struck the hull, which
+        // was left rolled ~46° (qx 0.39), 1.26 blocks lower and turning at 0.64 rad/s, and the body on
+        // it 2 blocks down — a collision, not the gate this scenario is about.
+        scenario().requireArranged("must lay the world floor under the deck",
+                Reply.of(exec("stellurgytest fill 0 " + sx + " " + fy + " " + sz + " "
+                        + sx + " " + fy + " " + sz + " minecraft:stone")).ok());
         // EXPERIMENT: the body stands 60 ticks over ground that was not there before, and the claim
         // is that no tick of them released it. Overshoot only lengthens the exposure — the strict
         // direction for an absence.

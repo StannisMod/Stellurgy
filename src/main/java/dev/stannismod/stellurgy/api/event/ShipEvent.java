@@ -161,4 +161,32 @@ public class ShipEvent extends Event {
             this.pos = pos;
         }
     }
+
+    /**
+     * What a ship can DO has been re-derived: its flight model — mass, the twelve signed authorities,
+     * thrust to weight — was rebuilt from the hull, because the hull changed or on the periodic
+     * re-measure of its load, which may find the same figures as before. Carries the readout itself,
+     * so a subscriber that shows or reacts to a ship's characteristics needs no second lookup.
+     *
+     * <p>This is where a system that owns a characteristic of its own (shields, a drive) joins the
+     * ship's readout: it hears the ship change, and the readout is the one surface every consumer
+     * reads.</p>
+     *
+     * <p>Posted on each rebuild, server side, from the flight computer. Not posted for a hull that
+     * could not be surveyed; a consumer must not read silence as "unchanged".</p>
+     */
+    public static class FlightModelChangedEvent extends ShipEvent {
+
+        /** Where the flight computer sits. */
+        public final net.minecraft.util.math.BlockPos pos;
+        /** The new readout; its revision increases with every rebuild of this computer's model. */
+        public final dev.stannismod.stellurgy.ship.control.ShipReadout readout;
+
+        public FlightModelChangedEvent(World world, String shipId, BlockPos pos,
+                                       dev.stannismod.stellurgy.ship.control.ShipReadout readout) {
+            super(world, shipId, null);
+            this.pos = pos;
+            this.readout = readout;
+        }
+    }
 }

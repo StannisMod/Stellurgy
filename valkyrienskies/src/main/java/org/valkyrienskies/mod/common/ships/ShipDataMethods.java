@@ -36,6 +36,7 @@ public final class ShipDataMethods {
             shipData.activeForcePositions.remove(pos);
         }
         centerOfMassProvider.onSetBlockState(shipData.getInertiaData(), pos, oldState, newState);
+        shipData.markConstructionChanged();
     }
 
     @java.lang.SuppressWarnings("all")

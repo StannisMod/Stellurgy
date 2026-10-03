@@ -70,8 +70,8 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, for the dry-mass verdict only (the others predate this branch): with
-     * {@code StatsRocket:819} not reading {@code mass}, fails expected 987.5 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
+     * <p>red-witnessed: for the dry-mass verdict only (the others predate this branch — with
+     * {@code StatsRocket#readFromNBT} at {@code this.mass = stats.getFloat("mass");} not reading {@code mass}, fails expected 987.5 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
      */
     @Test
     public void statsRocketNbtRoundTrip() {
@@ -271,8 +271,8 @@ public class StatsRocketTest {
      * earlier Stellurgy versions must not crash on load.
      */
     /**
-     * <p>red-witnessed, for the dry-mass verdict only (the others predate this branch): with
-     * {@code StatsRocket:819} not reading {@code mass}, fails expected 12.5 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
+     * <p>red-witnessed: for the dry-mass verdict only (the others predate this branch — with
+     * {@code StatsRocket#readFromNBT} at {@code this.mass = stats.getFloat("mass");} not reading {@code mass}, fails expected 12.5 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
      */
     @Test
     public void rocketStatsBackwardCompatibleWithOldNbt() {
@@ -320,8 +320,8 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, for the two verdicts this branch changed, 2026-09-30: {@code StatsRocket:294}'s
-     * massless guard skipped fails the TWR (Infinity); {@code :313}'s weight-system switch inverted
+     * <p>red-witnessed: for the two verdicts this branch changed, 2026-09-30 — {@code StatsRocket#getThrustToWeightRatio} at {@code if (getMass() <= 0)}'s
+     * massless guard skipped fails the TWR (Infinity); {@code StatsRocket#canLaunch} at {@code if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)}'s weight-system switch inverted
      * fails the refused launch.</p>
      */
     @Test
@@ -348,8 +348,8 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:261} weighing the mass
-     * without {@code STANDARD_GRAVITY} fails "TWR 2 at one gee" (19.62); {@code :261} weighing without
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code StatsRocket#weightNewtons} at {@code return massKg * STANDARD_GRAVITY * effectiveGravityMultiplier(gravitationalMultiplier);} weighing the mass
+     * without {@code STANDARD_GRAVITY} fails "TWR 2 at one gee" (19.62); {@code StatsRocket#weightNewtons} at {@code return massKg * STANDARD_GRAVITY * effectiveGravityMultiplier(gravitationalMultiplier);} weighing without
      * the gravity multiplier fails "twice the TWR at half the gravity" (2.0). Tolerances measured the
      * same day at zero: residuals 1.2e-7 and 2.4e-7, one float ulp each.</p>
      */
@@ -378,10 +378,10 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:313}'s weight-system switch
-     * inverted fails "cannot lift itself at one gee"; {@code :261} weighing without the gravity
-     * multiplier fails "clears the gate at one sixth gee"; {@code :279} climbing against one gee fails
-     * "on the light body"; {@code :280} losing the climb's sign fails "at one gee".</p>
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code StatsRocket#canLaunch} at {@code if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)}'s weight-system switch
+     * inverted fails "cannot lift itself at one gee"; {@code StatsRocket#weightNewtons} at {@code return massKg * STANDARD_GRAVITY * effectiveGravityMultiplier(gravitationalMultiplier);} weighing without the gravity
+     * multiplier fails "clears the gate at one sixth gee"; {@code StatsRocket#netClimbPerTick} at {@code float netNewtons = getThrust() - weightNewtons(massKg, gravitationalMultiplier);} climbing against one gee fails
+     * "on the light body"; {@code StatsRocket#netClimbPerTick} at {@code return netNewtons / massKg / STANDARD_GRAVITY * GRAVITY_BLOCKS_PER_TICK_SQUARED;} losing the climb's sign fails "at one gee".</p>
      */
     @Test
     public void launchGateFollowsLocalGravityNotEarthGravity() {
@@ -415,8 +415,8 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:256} ignoring
-     * {@code gravityAffectsFuel} fails "a light world reads the same as earth"; {@code :279} weighing the
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code StatsRocket#effectiveGravityMultiplier} at {@code return StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel ? gravitationalMultiplier : 1f;} ignoring
+     * {@code gravityAffectsFuel} fails "a light world reads the same as earth"; {@code StatsRocket#netClimbPerTick} at {@code float netNewtons = getThrust() - weightNewtons(massKg, gravitationalMultiplier);} weighing the
      * climb with the raw multiplier, past the switch, fails the acceleration (0.08 vs 0.152).
      * Tolerances measured the same day at zero: both exact.</p>
      */
@@ -444,7 +444,7 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:316} demanding the
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code StatsRocket#canLaunch} at {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR;} demanding the
      * threshold + 0.2 fails "above the threshold must allow"; − 0.2 fails "below the threshold must
      * block"; {@code >} for {@code >=} fails "exactly at the threshold must allow".</p>
      */
@@ -481,7 +481,7 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:313}'s switch inverted
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code StatsRocket#canLaunch} at {@code if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)}'s switch inverted
      * fails "the gate rejects this rocket while the system is on"; the switch ignored (gate always on)
      * fails "must not block launch".</p>
      */
@@ -515,8 +515,8 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, for the two verdicts this branch changed, 2026-09-30: {@code StatsRocket:280}
-     * negating the climb fails "positive dry acceleration"; {@code :280} capping the net force at 1 N
+     * <p>red-witnessed: for the two verdicts this branch changed, 2026-09-30 — {@code StatsRocket#netClimbPerTick} at {@code return netNewtons / massKg / STANDARD_GRAVITY * GRAVITY_BLOCKS_PER_TICK_SQUARED;}
+     * negating the climb fails "positive dry acceleration"; {@code StatsRocket#netClimbPerTick} at {@code return netNewtons / massKg / STANDARD_GRAVITY * GRAVITY_BLOCKS_PER_TICK_SQUARED;} capping the net force at 1 N
      * fails "more thrust must accelerate the dry rocket harder".</p>
      */
     @Test
@@ -551,8 +551,8 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code StatsRocket:266} weighing a 10 kg tare
-     * on top of the mass fails "TWR must be scale-free"; {@code :280} dividing by a fixed 250 kg fails
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code StatsRocket#getWeightNewtons} at {@code return weightNewtons(getMass(), gravitationalMultiplier);} weighing a 10 kg tare
+     * on top of the mass fails "TWR must be scale-free"; {@code StatsRocket#netClimbPerTick} at {@code return netNewtons / massKg / STANDARD_GRAVITY * GRAVITY_BLOCKS_PER_TICK_SQUARED;} dividing by a fixed 250 kg fails
      * "net climb must be scale-free". Tolerances measured the same day at zero: both exact.</p>
      */
     @Test
@@ -588,8 +588,8 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code BlockRocketMotor:63} rated 480_000 N
-     * fails "exactly TWR 1" (0.9786); {@code StatsRocket:279} climbing against 99% of the weight fails
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code BlockRocketMotor#getThrust} at {@code return 490_500;} rated 480_000 N
+     * fails "exactly TWR 1" (0.9786); {@code StatsRocket#netClimbPerTick} at {@code float netNewtons = getThrust() - weightNewtons(massKg, gravitationalMultiplier);} climbing against 99% of the weight fails
      * "hovers and climbs nowhere". Tolerances measured the same day at zero: residuals 6.0e-8 (one
      * float ulp of 1.0) and 5.1e-9.</p>
      */
@@ -623,7 +623,7 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code StatsRocket:176} a plain narrowing cast, fails expected 2147483647 but was 2147483645, 2026-09-30.</p>
+     * <p>red-witnessed: with {@code StatsRocket#setThrust} at {@code this.thrust = (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, thrust));} a plain narrowing cast, fails expected 2147483647 but was 2147483645, 2026-09-30.</p>
      */
     @Test
     public void thrustSaturatesInsteadOfWrapping() {
@@ -635,8 +635,8 @@ public class StatsRocketTest {
     }
 
     /**
-     * <p>red-witnessed, for the dry-mass verdict only (the other predates this branch): with
-     * {@code StatsRocket:367} copying no mass, fails expected 50.0 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
+     * <p>red-witnessed: for the dry-mass verdict only (the other predates this branch — with
+     * {@code StatsRocket#copy} at {@code stat.mass = this.mass;} copying no mass, fails expected 50.0 but was 0.0, 2026-09-30. Its tolerance, measured the same day at zero: exact.</p>
      */
     @Test
     public void copyProducesIndependentInstance() {

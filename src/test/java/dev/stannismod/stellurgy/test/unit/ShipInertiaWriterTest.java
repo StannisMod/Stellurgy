@@ -39,10 +39,10 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipInertiaWriter:94}'s refusal taken
-     * for every tensor fails "a well-formed frame must be accepted"; {@code :101}'s mass write skipped
-     * fails "total mass must be the frame's" (0.0); {@code :102}'s centre write skipped fails "centre
-     * of mass must be the frame's" (1.346); {@code :103}'s tensor write skipped fails "the tensor must
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipInertiaWriter#applyTo} at {@code if (!isInvertible(tensor))}'s refusal taken
+     * for every tensor fails "a well-formed frame must be accepted"; {@code ShipInertiaWriter#applyTo} at {@code record.setGameTickMass(frame.getTotalMass());}'s mass write skipped
+     * fails "total mass must be the frame's" (0.0); {@code ShipInertiaWriter#applyTo} at {@code record.setGameTickCenterOfMass(new Vector3d(frame.getCentreOfMass()));}'s centre write skipped fails "centre
+     * of mass must be the frame's" (1.346); {@code ShipInertiaWriter#applyTo} at {@code record.setGameMoITensor(tensor);}'s tensor write skipped fails "the tensor must
      * be the frame's".</p>
      */
     @Test
@@ -65,8 +65,8 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed, 2026-09-30: {@code ShipInertiaWriter:173} answering every tensor invertible
-     * fails "must be refused"; the mass written before the check at {@code :93} fails "must leave the
+     * <p>red-witnessed: 2026-09-30 — {@code ShipInertiaWriter#isInvertible} at {@code return !Double.isNaN(det) && !Double.isInfinite(det) && Math.abs(det) > 1.0e-9;} answering every tensor invertible
+     * fails "must be refused"; the mass written before the check at {@code ShipInertiaWriter#applyTo} at {@code Matrix3d tensor = new Matrix3d(frame.getInertia());} fails "must leave the
      * record untouched".</p>
      */
     @Test
@@ -90,7 +90,7 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "cannot be in drift" (a drift was returned), 2026-09-30.</p>
+     * <p>red-witnessed: with {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, fails "cannot be in drift" (a drift was returned), 2026-09-30.</p>
      */
     @Test
     public void aRecordThatAgreesWithTheAuthorityReportsNothing() {
@@ -103,10 +103,10 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipInertiaWriter:121}'s agreement
-     * test inverted fails "must be reported"; {@code :124} naming the ship "?" fails "must name the
-     * ship"; {@code :124} with the sign flipped fails "-0.20 of the authority"; the record repaired
-     * inside {@code compare} before {@code :124} fails "must not repair the record".</p>
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement
+     * test inverted fails "must be reported"; {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} naming the ship "?" fails "must name the
+     * ship"; {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} with the sign flipped fails "-0.20 of the authority"; the record repaired
+     * inside {@code compare} before {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} fails "must not repair the record".</p>
      */
     @Test
     public void driftIsReportedWithItsSignAndMagnitudeAndTheRecordIsLEFTALONE() {
@@ -133,7 +133,7 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipInertiaWriter:121}'s agreement test inverted, fails "half a percent is accumulation" (a drift was returned), 2026-09-30.</p>
+     * <p>red-witnessed: with {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, fails "half a percent is accumulation" (a drift was returned), 2026-09-30.</p>
      */
     @Test
     public void aDisagreementSmallerThanTheToleranceIsNotDrift() {
@@ -150,9 +150,9 @@ public class ShipInertiaWriterTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipInertiaWriter:121} comparing mass
-     * only fails "must be reported"; {@code :124} doubling the centre offset fails "how far the centre
-     * moved"; {@code :124} reporting the centre error as the mass error fails "must not blame it".</p>
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)} comparing mass
+     * only fails "must be reported"; {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} doubling the centre offset fails "how far the centre
+     * moved"; {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);} reporting the centre error as the mass error fails "must not blame it".</p>
      */
     @Test
     public void aCentreThatHasWalkedAwayIsDriftEvenWhenTheMassAgrees() {

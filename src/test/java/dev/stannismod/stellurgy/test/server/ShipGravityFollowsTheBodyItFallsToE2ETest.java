@@ -61,7 +61,7 @@ import static org.junit.Assert.assertTrue;
  * quarter-gravity body would CLIMB by the difference — which is most of the field — and a one-sided
  * "did it sink" gate would wave that through.</p>
  *
- * <p>red-witnessed: with {@code StellurgyWorldGravity:85} answering the configured vector instead of
+ * <p>red-witnessed: with {@code StellurgyWorldGravity#of} at {@code return VSConfig.gravity().mul(multiplier, new Vector3d());} answering the configured vector instead of
  * scaling it by the body's multiplier, the ratio verdict fails at 1.015 ("outside [0.125, 0.5]"),
  * 2026-09-29.</p>
  */

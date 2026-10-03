@@ -65,8 +65,9 @@ import static org.junit.Assert.assertTrue;
  *   <li>The candidate sweep lays a floor under every spot it probes, walking one column upward, so a
  *       higher candidate's floor lands inside the body of the spot below it. The subject spawned in
  *       stone, took {@code IN_WALL} damage and was GONE from the server world by the end of the
- *       window - the "not drawn" body had stopped existing. Fixed by clearing a spot's own volume
- *       immediately before the spawn that is measured on it.</li>
+ *       window - the "not drawn" body had stopped existing. The floors are gone altogether now: the
+ *       leg stands its subject on the real ground, because a floor inside the hull's volume is also
+ *       an obstacle the hull collides with.</li>
  *   <li>The camera is teleported to {@code subject + (8,3,8)}, and the fixture base sits inside a
  *       hill: feet and eye were both in dirt. Vanilla grows {@code RenderGlobal.renderInfos} out of
  *       the chunk section the camera occupies, so a buried camera never reaches the section holding
@@ -168,12 +169,12 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
     /**
      * How long the commanded ~160-degree roll is given to finish, in ticks.
      *
-     * <p>The hold slews at about 2 rad/s, so this turn is roughly 28 ticks of slewing; this is about
-     * four times that, which is slack for a craft that has to start from wherever the previous leg
-     * left it. The slew advances per tick, so the number says how far the craft turns rather than
-     * how long we are willing to wait, and what protects it under load is that the attitude is HELD
-     * once reached. The reached value is printed on every
-     * run, so the size can be re-argued from a measurement.</p>
+     * <p>The hold's slew rate is the fixture's own: it is capped at the rate this hull's actuators
+     * can still stop from, so it is not a constant of the test. The slew advances per tick, so the
+     * number says how far the craft turns rather than how long we are willing to wait. The reached
+     * value is printed on every run, so the size can be re-argued from a measurement. Reaching the
+     * attitude is not staying at it: a nudge after this window is recovered at the same finite
+     * authority, which is why leg A re-reads its precondition when its window closes.</p>
      *
      * <p>Measured on the run that introduced this form, in both scenarios of the class:
      * <b>-0.9346</b> and <b>-0.9347</b> against a gate of {@code < -0.85}. Two readings agreeing to
@@ -194,109 +195,66 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         double[] ship = buildShip(bx, by, bz);
         rollShip(bx, by, bz);
 
-        // Collect EVERY spot beside the hull that is valid for leg A - sitting on WORLD TERRAIN, inside
-        // the ship's grown world box (the bug's precondition) with ZERO ship support (a carried body
-        // belongs to leg B). The valid set is SEARCHED FOR, not assumed: the ship's world box at a
-        // 160 deg roll is not where a hand-picked offset guesses (the first draft put the stand 3 blocks
-        // aside at y=64 and it landed clean outside containment). Both halves of validity are measured
-        // on the server, never assumed - a body merely "near" a ship, or one the ship actually carries,
-        // would make a green run vacuous. Collecting the WHOLE set (not the first match) gives the
-        // re-stage loop below fresh spots to try.
-        java.util.List<double[]> valid = new java.util.ArrayList<double[]>();
+        // Find the spot on the REAL GROUND beside the hull that is valid for leg A: inside the ship's
+        // grown world box (the bug's precondition) with ZERO ship support (a carried body belongs to
+        // leg B). Searched for, not assumed — where a rolled hull's box meets the ground is not where
+        // a hand-picked offset guesses — and both halves are the server's measurement: a body merely
+        // near a ship, or one the ship carries, would make a green vacuous.
+        //
+        // NOTHING IS BUILT FOR IT. This used to lay a stone floor under ~24 candidates one to five
+        // blocks above the ship's centre, on the claim that world blocks inside a ship's box are
+        // independent of it. They are not: VS collides a hull with the world blocks around it
+        // (WorldPhysicsCollider), so the arrangement was building obstacles in the hull's own volume,
+        // and in the run that measured it the held ship moved 2.9 blocks inside one window. The
+        // player-facing case is a body on the ground beside a tilted hull, so that is what is staged.
+        double[] spot = null;
         StringBuilder tried = new StringBuilder();
-        for (double[] spot : terrainSpotsBeside(ship)) {
-            // Exactly ONE stand may exist while probing: a rejected candidate left standing somewhere
+        for (double[] candidateSpot : groundSpotsAround(ship, by + 1)) {
+            // Exactly ONE cow may exist while probing: a rejected candidate left standing somewhere
             // supported would rotate legitimately and read as a red on the subject.
             exec("kill @e[type=cow]");
-            // Snap to the block grid and stand the body exactly ON the placed floor: the previous draft
-            // spawned at the raw (fractional) height with the block a full floor() below, so the subject
-            // hung ~1.7 blocks above its own support and the probe honestly reported
-            // supportedByWorldTerrain=false.
-            spot[1] = Math.floor(spot[1]);
-            standingSpot(spot);
-            int candidate = spawnSubject(spot[0], spot[1], spot[2]);
+            int candidate = spawnSubject(candidateSpot[0], candidateSpot[1], candidateSpot[2]);
             DeckCapture probe = DeckCapture.byId(this::exec, 0, candidate);
-            boolean contained = probe.aboardByContainment;
-            boolean unsupported = probe.shipSupportObstacles == 0;
-            boolean onTerrain = probe.supportedByWorldTerrain;
-            tried.append(String.format(java.util.Locale.ROOT,
-                    "[%.1f,%.1f,%.1f contain=%s obst=%d terr=%s]", spot[0], spot[1], spot[2],
-                    contained, probe.shipSupportObstacles, onTerrain));
-            if (contained && unsupported && onTerrain) {
-                valid.add(spot);
+            if (probe.aboardByContainment) {
+                tried.append(String.format(java.util.Locale.ROOT,
+                        "[%.1f,%.1f contain obst=%d terr=%s]", candidateSpot[0], candidateSpot[2],
+                        probe.shipSupportObstacles, probe.supportedByWorldTerrain));
+            }
+            if (besideTheHull(probe)) {
+                spot = candidateSpot;
+                break;
             }
         }
-        assertTrue("no spot beside this ship was INSIDE its containment, unsupported AND on world "
-                        + "terrain - leg A cannot be staged on this fixture; tried " + tried,
-                !valid.isEmpty());
+        exec("kill @e[type=cow]");
+        scenario().requireArranged("no spot on the ground around this ship was INSIDE its box, unsupported by"
+                        + " it AND standing on world terrain — leg A cannot be staged here. Contained"
+                        + " candidates: " + tried + " | ship: " + ShipInfo.of(shipInfo()),
+                spot != null);
 
-        // Stage the MEASURED body in front of an already-settled camera, and require the client to
-        // actually DRAW it before measuring the gate. That a body inside a ship's world AABB is drawn
-        // through the vanilla living path is a SETUP precondition here, not the contract under test:
-        // under concurrent-fork load it is intermittently NOT drawn at all (measured: 543 frames
-        // rendered, ZERO applyRotations on the only living body in the window), which is a
-        // render-observability gap on the subject, not the gate deciding to rotate it. The
-        // camera-to-subject offset is fixed, so this is not a framing/frustum miss; it tracks the
-        // subject's spot and VS's per-frame state for a world entity inside a ship box. Re-stage at a
-        // FRESH valid spot until one is drawn, under a bounded budget; the rotation contract below is
-        // then measured only on a body the client provably rendered. Each staging spawns AFTER the
-        // camera settles (a teleport re-streams entities; spawning in front of a settled camera removes
-        // that race at its source) and aims at the SUBJECT (the decision under test is about THIS body's
-        // model, off to one side of a steeply rolled hull).
-        String legWindow = null;
-        StringBuilder staging = new StringBuilder();
-        int drawAttempts = 0;
-        for (double[] spot : valid) {
-            exec("kill @e[type=cow]");
-            clearSightline(spot);
-            lookAt(spot[0], spot[1], spot[2]);
-            // Re-establish the spot: the collect sweep laid a floor under EVERY candidate it tried,
-            // and a higher candidate's floor sits inside this one's body. Without this the subject
-            // spawns in stone and suffocates part-way through the very window being measured.
-            assertTrue("the measured spot must be re-cleared before the subject is staged on it",
-                    standingSpot(spot));
-            int subject = spawnSubject(spot[0], spot[1], spot[2]);
-            // Re-probe the FINAL body: validity was established while probing candidates; it is this
-            // entity the assertions speak about. VS jitters a ship's world box between the collect loop
-            // and here, so a spot valid a moment ago can drift off precondition - skip it WITHOUT
-            // spending a draw attempt (no render was staged), a green here would be vacuous.
-            DeckCapture contact = DeckCapture.byId(this::exec, 0, subject);
-            if (!(contact.aboardByContainment && contact.shipSupportObstacles == 0)) {
-                staging.append(String.format(java.util.Locale.ROOT,
-                        "[%.1f,%.1f,%.1f precondition-drifted]", spot[0], spot[1], spot[2]));
-                System.out.println(String.format(java.util.Locale.ROOT,
-                        "[modelgate] legA spot [%.1f,%.1f,%.1f] drifted off precondition, trying next",
-                        spot[0], spot[1], spot[2]));
-                continue;
-            }
-            // ONE staging, and it must draw. This used to re-stage at up to three fresh spots when
-            // the client did not draw the subject, on the theory that a world body inside a ship box
-            // is intermittently culled. It is not: both real causes were in this arrangement (the
-            // subject spawned inside a neighbouring candidate's floor and suffocated; the camera was
-            // teleported inside the hill the fixture is buried in). With those fixed the subject
-            // draws on the first staging, so a second attempt would only hide the next such fault.
-            drawAttempts++;
-            Sampling s = awaitRemoteSampling(subject);
-            System.out.println(String.format(java.util.Locale.ROOT,
-                    "[modelgate] legA draw attempt %d at [%.1f,%.1f,%.1f] -> %s",
-                    drawAttempts, spot[0], spot[1], spot[2], s.drawn ? "DRAWN" : "not drawn " + s.diagnostic));
-            staging.append(String.format(java.util.Locale.ROOT, "[attempt %d %s]",
-                    drawAttempts, s.drawn ? "DRAWN" : s.diagnostic));
-            if (s.drawn) {
-                legWindow = watchModelGate(60);
-            }
-            break;
-        }
-        System.out.println("[modelgate] legA staging summary: "
-                + (legWindow != null ? "DREW after " + drawAttempts + " draw-attempt(s)" : "NEVER DREW")
-                + " | " + staging);
-        assertTrue("the staged body was never DRAWN by the client within the window, so "
-                        + "nothing below can be concluded about the model gate's DECISION. The "
-                        + "diagnostic names the dead stage and reports both sides of the subject "
-                        + "(alive on the server? held by the client?) and what the camera is standing "
-                        + "in. Staged " + drawAttempts + " time(s): " + staging
+        // ONE staging, and it must draw. The camera settles first and the subject is spawned in front
+        // of it (a teleport re-streams entities, so spawning before it would race the arrival).
+        watchFromOutside(spot, ship);
+        int subject = spawnSubject(spot[0], spot[1], spot[2]);
+        Sampling s = awaitRemoteSampling(subject);
+        System.out.println(String.format(java.util.Locale.ROOT, "[modelgate] legA staged at [%.1f,%.1f,%.1f] -> %s",
+                spot[0], spot[1], spot[2], s.drawn ? "DRAWN" : "not drawn " + s.diagnostic));
+        assertTrue("the staged body was never DRAWN by the client, so nothing below can be concluded"
+                        + " about the model gate's DECISION. The diagnostic names the dead stage, both"
+                        + " sides of the subject and what the camera stands in: " + s.diagnostic
                         + " | client cows=" + safeReportCows(),
-                legWindow != null);
+                s.drawn);
+
+        // WINDOW: the precondition is read at BOTH ends, and the verdict is only a verdict if it held
+        // at both. "Beside the hull" is a relation to a hull that stays put; a held hull that moves
+        // during the reading can sweep onto the body — then rotating it is right, and leg B's
+        // contract — or away from it, and then a gate that rotates everything in the box would pass
+        // for want of anything in the box. Each end carries the ship's pose, so a lapsed premise
+        // names what moved.
+        String shipAtOpen = shipInfo();
+        DeckCapture contactAtOpen = DeckCapture.byId(this::exec, 0, subject);
+        String legWindow = watchModelGate(60);
+        String shipAtClose = shipInfo();
+        DeckCapture contactAtClose = DeckCapture.byId(this::exec, 0, subject);
 
         long samples = (long) Events.number(legWindow, "samples");
         long rotated = (long) Events.number(legWindow, "rotated");
@@ -305,8 +263,15 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
         // rotated==0 assertion below true for the wrong reason — prove the instrument fires before
         // believing the zero it reports.
         assertInstrumentFired(legWindow);
+        String bothEnds = " | open: " + ShipInfo.of(shipAtOpen) + " " + contactAtOpen.raw()
+                + " | close: " + ShipInfo.of(shipAtClose) + " " + contactAtClose.raw();
+        scenario().requireArranged("the subject must be inside the hull's box and unsupported by it at"
+                        + " BOTH ends of the window, or the reading is not about a body beside the hull"
+                        + bothEnds,
+                besideTheHull(contactAtOpen) && besideTheHull(contactAtClose));
         assertTrue("a body on world terrain beside a rolled ship must NOT be drawn ship-aligned: "
-                        + rotated + "/" + samples + " decisions pushed a rotation :: " + legWindow,
+                        + rotated + "/" + samples + " decisions pushed a rotation :: " + legWindow
+                        + bothEnds,
                 rotated == 0);
     }
 
@@ -611,70 +576,83 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
                 upY < STEEP_ROLL_UP_Y);
     }
 
-    /** Candidate spots beside the ship, nearest first: the one that is inside the ship's world box
-     *  AND unsupported is found by probing these, never assumed. A rolled 35-block ship's box is
-     *  small and its position is not the base coordinate, so a single hand-picked offset misses. */
-    private java.util.List<double[]> terrainSpotsBeside(double[] ship) {
+    /** How far from the ship's centre, in blocks per axis, the ground is searched for leg A's spot.
+     *  The TEST'S OWN, and it bounds only the COST of the search: whether a spot qualifies is the
+     *  probe's answer, and a search that finds none fails as an arrangement listing every candidate
+     *  the box did contain — so a radius too small reads as "nothing contained", not as a verdict. */
+    private static final int GROUND_SEARCH_RADIUS = 6;
+
+    /** Block-centred standing points on the ground at feet height {@code feetY}, in a square of
+     *  {@link #GROUND_SEARCH_RADIUS} around the ship's centre, nearest first. The ground here is the
+     *  surveyed flat plot, so every point stands on the world's own terrain; which of them the rolled
+     *  hull's box reaches is the probe's to say. */
+    private static java.util.List<double[]> groundSpotsAround(double[] ship, int feetY) {
+        final int cx = (int) Math.floor(ship[0]), cz = (int) Math.floor(ship[2]);
         java.util.List<double[]> spots = new java.util.ArrayList<double[]>();
-        // Sweep HEIGHT too. The first draft searched the terrain plane only and every one of 16
-        // spots came back outside containment: an assembled, rolled ship sits well above the
-        // ground, so at y=65 its box simply is not there. The body does not have to stand on
-        // natural ground - a world block placed under it is world support just the same, and
-        // world blocks inside a ship's world AABB are independent of it (ship blocks live in
-        // subspace).
-        for (double dy : new double[]{1.0, 2.0, 3.0, 4.0, 0.0, 5.0}) {
-            for (double r : new double[]{1.5, 2.5, 3.5}) {
-                for (double[] dir : new double[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
-                    spots.add(new double[]{ship[0] + dir[0] * r, ship[1] + dy, ship[2] + dir[1] * r});
-                }
+        for (int dx = -GROUND_SEARCH_RADIUS; dx <= GROUND_SEARCH_RADIUS; dx++) {
+            for (int dz = -GROUND_SEARCH_RADIUS; dz <= GROUND_SEARCH_RADIUS; dz++) {
+                spots.add(new double[]{cx + dx + 0.5, feetY, cz + dz + 0.5});
             }
         }
+        final double sx = ship[0], sz = ship[2];
+        java.util.Collections.sort(spots, new java.util.Comparator<double[]>() {
+            @Override
+            public int compare(double[] a, double[] b) {
+                return Double.compare(sq(a[0] - sx) + sq(a[2] - sz), sq(b[0] - sx) + sq(b[2] - sz));
+            }
+        });
         return spots;
     }
 
-    /** Give the camera somewhere to stand and a clear volume between it and the subject.
-     *
-     *  <p>Measured, and it is the whole of what this leg's "render-observability gap" ever was: the
-     *  fixture base sits inside a hill, so the camera spot ({@code subject + (8,3,8)}) was INSIDE
-     *  dirt — feet and eye both. Vanilla grows {@code RenderGlobal.renderInfos} out of the chunk
-     *  SECTION the camera occupies, through the occlusion graph; a buried camera therefore renders
-     *  frame after frame and never reaches the section holding the subject. That reads as 543 frames
-     *  with zero {@code applyRotations} on a client that provably held the cow, and it is
-     *  indistinguishable from a cull unless somebody asks what the camera is standing in.
-     *
-     *  <p>Clears the volume both ends live in — never the subject's own floor, one block lower — and
-     *  lays a single block under the camera so it does not fall out of its aim mid-window.</p> */
-    private void clearSightline(double[] spot) throws Exception {
-        int sx = (int) Math.floor(spot[0]), sy = (int) Math.floor(spot[1]), sz = (int) Math.floor(spot[2]);
-        String box = exec("stellurgytest fill 0 " + (sx - 2) + " " + sy + " " + (sz - 2)
-                + " " + (sx + 10) + " " + (sy + 6) + " " + (sz + 10) + " minecraft:air");
-        assertTrue("the camera-to-subject volume must clear: " + box, Reply.of(box).ok());
-        String pad = exec("stellurgytest fill 0 " + (sx + 8) + " " + (sy + 2) + " " + (sz + 8)
-                + " " + (sx + 8) + " " + (sy + 2) + " " + (sz + 8) + " minecraft:stone");
-        assertTrue("the camera needs a floor to stand on: " + pad, Reply.of(pad).ok());
+    private static double sq(double v) {
+        return v * v;
     }
 
-    /** Make {@code spot} somewhere a body can actually STAND: a world block under it (so the support
-     *  is the WORLD's, whatever the ship's box does) and AIR in the two blocks its own volume fills.
+    /** Leg A's premise for one probe of the subject: inside the hull's grown box (the bug's
+     *  precondition), with no ship support under it, standing on world terrain. {@code
+     *  shipSupportObstacles} is {@code -1} when no hull's box contains the body, which is why
+     *  containment is asked separately rather than read off a zero. */
+    private static boolean besideTheHull(DeckCapture probe) {
+        return probe.aboardByContainment && probe.shipSupportObstacles == 0 && !probe.supportedByShip
+                && probe.supportedByWorldTerrain;
+    }
+
+    /** How far past the subject the camera stands, away from the hull, in blocks. The TEST'S OWN:
+     *  close enough that a cow fills a useful part of the frame, far enough that the one block the
+     *  camera stands on is outside any box that reached the subject's spot from the other side. */
+    private static final double CAMERA_STANDOFF = 8.0;
+
+    /** Stand the camera on the far side of {@code spot} from the ship and aim it at the spot.
      *
-     *  <p>Both halves are load-bearing, and the second half is why this used to be
-     *  {@code floorUnder}. The candidate sweep walks one column at several heights and lays a floor
-     *  under each, so the floor laid for the spot one block HIGHER lands exactly inside the body of
-     *  the spot below it. A cow spawned there is inside stone: it takes {@code IN_WALL} damage at
-     *  1 HP per invulnerability window and dies roughly 200 ticks later — after the arrival gate has
-     *  seen it and well inside the measurement window that follows. Measured: the subject was gone
-     *  from the SERVER world ({@code isAlive:false}) at the end of every draw attempt, on a client
-     *  that had held it minutes earlier. Because a later candidate can re-fill this column, the
-     *  caller re-establishes the spot immediately before the spawn it measures.
-     *
-     *  <p>Returns false when either fill did not take.</p> */
-    private boolean standingSpot(double[] spot) throws Exception {
-        int fx = (int) Math.floor(spot[0]), fy = (int) Math.floor(spot[1]), fz = (int) Math.floor(spot[2]);
-        boolean floor = Reply.of(exec("stellurgytest fill 0 " + fx + " " + (fy - 1) + " " + fz
-                + " " + fx + " " + (fy - 1) + " " + fz + " minecraft:stone")).ok();
-        boolean clear = Reply.of(exec("stellurgytest fill 0 " + fx + " " + fy + " " + fz
-                + " " + fx + " " + (fy + 1) + " " + fz + " minecraft:air")).ok();
-        return floor && clear;
+     *  <p>A camera buried in terrain draws no living model at all — vanilla grows
+     *  {@code RenderGlobal.renderInfos} out of the chunk section the camera occupies — so the camera
+     *  gets air to stand in and one block to stand on. That block is the only thing this leg builds,
+     *  and it is put on the side AWAY from the hull because a world block near a hull is a collision
+     *  VS resolves by pushing the hull. The air fill starts at the subject's feet, so the ground it
+     *  stands on is untouched.</p> */
+    private void watchFromOutside(double[] spot, double[] ship) throws Exception {
+        double ox = spot[0] - ship[0], oz = spot[2] - ship[2];
+        double len = Math.sqrt(ox * ox + oz * oz);
+        if (len < 1.0e-6) {
+            ox = 1.0; oz = 0.0; len = 1.0;
+        }
+        double camX = spot[0] + ox / len * CAMERA_STANDOFF, camZ = spot[2] + oz / len * CAMERA_STANDOFF;
+        int feet = (int) Math.floor(spot[1]);
+        int x0 = (int) Math.floor(Math.min(spot[0], camX)) - 1, x1 = (int) Math.floor(Math.max(spot[0], camX)) + 1;
+        int z0 = (int) Math.floor(Math.min(spot[2], camZ)) - 1, z1 = (int) Math.floor(Math.max(spot[2], camZ)) + 1;
+        String box = exec("stellurgytest fill 0 " + x0 + " " + feet + " " + z0 + " " + x1 + " " + (feet + 6)
+                + " " + z1 + " minecraft:air");
+        assertTrue("the camera-to-subject volume must clear: " + box, Reply.of(box).ok());
+        int px = (int) Math.floor(camX), pz = (int) Math.floor(camZ);
+        String pad = exec("stellurgytest fill 0 " + px + " " + (feet + 2) + " " + pz + " " + px + " "
+                + (feet + 2) + " " + pz + " minecraft:stone");
+        assertTrue("the camera needs a floor to stand on: " + pad, Reply.of(pad).ok());
+
+        long moveMark = clientEvents().mark();
+        exec("tp @a " + (px + 0.5) + " " + (feet + 3) + " " + (pz + 0.5) + " 0 0");
+        awaitClientPlacedNear(moveMark, px + 0.5, pz + 0.5,
+                "the camera is moved before it is aimed, and both are the client's");
+        aimAt(spot[0], spot[1], spot[2]);
     }
 
     /** Spawn the subject mob ON the fixture's iron deck (built at {@code rocketY+3 = baseY+4}, walkable

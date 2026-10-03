@@ -101,10 +101,10 @@ public class WeightEngineUnitTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code WeightEngine:238} checking no schema
-     * version fails "must NOT be read" (0.1); {@code :305} deleting the file instead of setting it aside
-     * fails "must be kept beside the new one"; {@code :311}'s reseed skipped fails "must be reseeded"
-     * (held entry 7.0); {@code :312}'s save skipped fails "must write a fresh table"; {@code :370} not
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code WeightEngine#load} at {@code if (root == null || !root.has("formatVersion")} checking no schema
+     * version fails "must NOT be read" (0.1); {@code WeightEngine#retireIncompatibleFile} at {@code if (!current.renameTo(retired))} deleting the file instead of setting it aside
+     * fails "must be kept beside the new one"; {@code WeightEngine#retireIncompatibleFile} at {@code seedDefaults();}'s reseed skipped fails "must be reseeded"
+     * (held entry 7.0); {@code WeightEngine#retireIncompatibleFile} at {@code save();}'s save skipped fails "must write a fresh table"; {@code WeightEngine#save} at {@code json.addProperty("formatVersion", FORMAT_VERSION);} not
      * stamping the version fails "retired again".</p>
      */
     @Test

@@ -53,6 +53,7 @@ public final class PacketRegistry {
             PacketSystemBodiesSync.class,
             PacketNavBodyInfo.class,
             PacketSpaceClockSync.class,
+            PacketShipReadout.class,
     };
 
     private PacketRegistry() {

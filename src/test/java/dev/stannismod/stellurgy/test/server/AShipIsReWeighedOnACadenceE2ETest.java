@@ -41,7 +41,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * on, and it is the half that could silently not exist.</p>
  *
  * <p>red-witnessed: with {@code TileAdvancedFlightComputer.tickMassRound} returning before its
- * {@code backgroundRound} call ({@code :1229}), the round wait fails with "no `ship_mass_measured`
+ * {@code backgroundRound} call ({@code TileAdvancedFlightComputer#tickMassRound} at {@code dev.stannismod.stellurgy.integration.vs.ShipMassTrigger.backgroundRound(world, uuid);}), the round wait fails with "no `ship_mass_measured`
  * carrying ship = … and path = round was recorded within 200 ticks", 2026-09-29.</p>
  */
 public class AShipIsReWeighedOnACadenceE2ETest extends AbstractHeadlessServerTest {

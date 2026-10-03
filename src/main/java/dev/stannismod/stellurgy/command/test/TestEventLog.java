@@ -710,6 +710,36 @@ public final class TestEventLog {
         }
 
         /**
+         * A flight computer REBUILT its ship's flight model — {@code flight_model_changed}.
+         *
+         * <p>Production's own announcement ({@code ShipEvent.FlightModelChangedEvent}), posted after
+         * every survey the computer makes: a change to the hull, the load round, or a computer that had
+         * no model yet. One record per announcement, so "the model has caught up with what I did to the
+         * hull" is a link on the first record after a mark, and the readout is then read once.</p>
+         *
+         * <p>{@code ship} is the craft's durable name, {@code afcX/Y/Z} the computer's own address (a
+         * subspace one on an assembled ship), {@code revision} this computer's rebuild count, and
+         * {@code totalKg} the mass the new model was solved for — the one figure a cargo scenario links
+         * on.</p>
+         */
+        @SubscribeEvent
+        public void onFlightModelChanged(
+                dev.stannismod.stellurgy.api.event.ShipEvent.FlightModelChangedEvent event) {
+            noteInstrumentEntered("server_bus_flight_model_changed");
+            World world = event.world;
+            if (world == null || event.readout == null) {
+                return;
+            }
+            BlockPos p = event.pos;
+            record(sideOf(world), world.getTotalWorldTime(), "flight_model_changed",
+                    "\"ship\":\"" + str(event.shipId) + "\""
+                            + ",\"dim\":" + world.provider.getDimension()
+                            + ",\"afcX\":" + p.getX() + ",\"afcY\":" + p.getY() + ",\"afcZ\":" + p.getZ()
+                            + ",\"revision\":" + event.readout.revision()
+                            + ",\"totalKg\":" + num(event.readout.totalMass()));
+        }
+
+        /**
          * A ship changed WHERE IT IS — the crossing's own account of it.
          *
          * <p>One subscription for all six crossing events, on their common base, which Forge's event

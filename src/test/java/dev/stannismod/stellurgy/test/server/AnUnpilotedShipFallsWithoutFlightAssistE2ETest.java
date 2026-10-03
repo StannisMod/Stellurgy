@@ -37,9 +37,9 @@ import static org.junit.Assert.assertTrue;
  * reporting a successful fall.</p>
  *
  * <p>red-witnessed: with the unmanned branch's {@code !flightAssistEnabled} release in
- * {@code TileAdvancedFlightComputer} ({@code :734}) never taken, the fall verdict fails — "sank only
+ * {@code TileAdvancedFlightComputer} ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)}) never taken, the fall verdict fails — "sank only
  * 0.0 blocks in 61 ticks" — after the hold passed, 2026-09-29. With that branch taken ALWAYS
- * ({@code :734} to {@code if (true)}), the hold verdict fails — "must keep station, and this one moved
+ * ({@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} to {@code if (true)}), the hold verdict fails — "must keep station, and this one moved
  * from 235.7 to 57.1" — 2026-09-30.</p>
  */
 public class AnUnpilotedShipFallsWithoutFlightAssistE2ETest extends AbstractHeadlessServerTest {

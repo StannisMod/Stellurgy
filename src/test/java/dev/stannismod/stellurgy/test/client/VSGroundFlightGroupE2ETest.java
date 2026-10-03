@@ -710,7 +710,7 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
      * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat
      * dummy no longer glued to its ship ({@code EntityDummy:381} made server-only): "the
      * CLIENT-rendered rider must climb with the ship … client=14.78 server=24.25". THE CAMERA STAYS
-     * LOCKED — the ship camera-pin lines ({@code KeyBindings:696-699}) removed: "camYawBefore=0.0
+     * LOCKED — the ship camera-pin lines ({@code KeyBindings:700-699}) removed: "camYawBefore=0.0
      * camYawAfter=180.0". The two waits before them are arrangement links (the spawn, the client
      * standing at the build site).</p>
      */

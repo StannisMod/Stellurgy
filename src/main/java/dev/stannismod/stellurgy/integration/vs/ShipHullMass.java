@@ -117,6 +117,38 @@ final class ShipHullMass {
     }
 
     /**
+     * The mass frame of the blocks inside {@code [min, max]} (inclusive) — a craft still standing on
+     * the pad, before it is a ship. Structure and contents priced exactly as {@link #frameOf} prices
+     * them, so the figure the assembler shows is the figure the ship will fly with; no crew, because
+     * nobody is carried by a craft that is not moving yet. {@code null} when it weighs nothing.
+     */
+    @Nullable
+    static ShipMassFrame frameOfBox(World world, BlockPos min, BlockPos max) {
+        final double ox = min.getX(), oy = min.getY(), oz = min.getZ();
+        ShipMassFrameBuilder builder = new ShipMassFrameBuilder();
+        for (BlockPos p : BlockPos.getAllInBoxMutable(min, max)) {
+            if (world.isAirBlock(p)) {
+                continue;
+            }
+            double mass = StellurgyBlockMass.of(world.getBlockState(p));
+            if (mass > 0.0) {
+                builder.add(MassContributor.ofBlock(p.getX() + 0.5 - ox, p.getY() + 0.5 - oy,
+                        p.getZ() + 0.5 - oz, mass, MassContributor.Kind.STRUCTURAL));
+            }
+            TileEntity tile = world.getTileEntity(p);
+            if (tile != null) {
+                double held = dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getTEWeight(tile);
+                if (held > 0.0) {
+                    builder.add(MassContributor.ofBlock(p.getX() + 0.5 - ox, p.getY() + 0.5 - oy,
+                            p.getZ() + 0.5 - oz, held, MassContributor.Kind.CONTENT));
+                }
+            }
+        }
+        ShipMassFrame local = builder.build();
+        return local.getTotalMass() > 0.0 ? local.translated(ox, oy, oz) : null;
+    }
+
+    /**
      * How much a person's own body weighs, in kilograms, before anything they carry. `tunable`.
      *
      * <p>What they are CARRYING is priced for real, through the same table a crate of the same items

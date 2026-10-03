@@ -61,7 +61,8 @@ import dev.stannismod.stellurgy.util.NuclearEngineLimit;
  * changed to complete the rocket structure
  * Also will be used to "build" the rocket components from the placed frames, control fuel flow etc
  **/
-public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements ITickable, IButtonInventory, INetworkMachine, IDataSync, IModularInventory, IProgressBar, ILinkableTile {
+public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements ITickable, IButtonInventory, INetworkMachine, IDataSync, IModularInventory, IProgressBar, ILinkableTile,
+        dev.stannismod.stellurgy.network.IShipReadoutReceiver {
 
     protected static final ResourceLocation backdrop = new ResourceLocation("stellurgy", "textures/gui/rocketBuilder.png");
     protected static final ProgressBarImage verticalProgressBar = new ProgressBarImage(76, 93, 8, 52, 176, 15, 2, 38, 3, 2, EnumFacing.UP, backdrop);
@@ -102,6 +103,59 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
      * a machine that cannot name its own ship is a machine another ship can borrow.
      */
     private final java.util.List<BlockPos> scannedShipMachines = new java.util.ArrayList<>();
+
+    /**
+     * The readout of the ship on the pad at the last scan, or {@code null} when the build is not a
+     * ship. Server side it gates assembly; client side it is what the Scan shows. Not saved: a scan
+     * is a snapshot, and the next one replaces it.
+     */
+    private dev.stannismod.stellurgy.ship.control.ShipReadout tier2Readout = null;
+
+    /** Who pressed Scan or Build last; the one player a ship readout is sent to. */
+    private java.util.UUID scanRequester = null;
+
+    /**
+     * The thrust-to-weight a pilot was warned about, so the next press on the SAME build assembles
+     * it. A build that changed in between is a different craft and is warned about afresh.
+     */
+    private double warnedThrustToWeight = Double.NaN;
+
+    private void warnRequesterLowThrust(double thrustToWeight) {
+        if (scanRequester == null || world.getMinecraftServer() == null) {
+            return;
+        }
+        net.minecraft.entity.player.EntityPlayerMP player =
+                world.getMinecraftServer().getPlayerList().getPlayerByUUID(scanRequester);
+        if (player != null) {
+            player.sendMessage(new net.minecraft.util.text.TextComponentTranslation(
+                    "msg.rocketbuilder.lowtwr", String.format(java.util.Locale.ROOT, "%.2f", thrustToWeight)));
+        }
+    }
+
+    private void sendTier2Readout() {
+        if (tier2Readout == null || scanRequester == null || world.getMinecraftServer() == null) {
+            return;
+        }
+        net.minecraft.entity.player.EntityPlayerMP player =
+                world.getMinecraftServer().getPlayerList().getPlayerByUUID(scanRequester);
+        if (player != null) {
+            PacketHandler.sendToPlayer(new dev.stannismod.stellurgy.network.PacketShipReadout(
+                    getPos(), tier2Readout, false, 0.0D), player);
+        }
+    }
+
+    /** Client side: the Scan's ship readout arrived. */
+    @Override
+    public void acceptReadout(dev.stannismod.stellurgy.ship.control.ShipReadout readout, boolean saturated,
+                              double wheelFill) {
+        this.tier2Readout = readout;
+        updateText();
+    }
+
+    /** This build's ship readout at the last scan; {@code null} when it is not a ship or was not scanned. */
+    public dev.stannismod.stellurgy.ship.control.ShipReadout tier2Readout() {
+        return tier2Readout;
+    }
     protected ErrorCodes status;
     private ModuleText thrustText, weightText, fuelText, accelerationText;
     private int totalProgress;
@@ -383,6 +437,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         scannedPilotSeatPos = null;
         scannedNavComputerPos = null;
         scannedShipMachines.clear();
+        tier2Readout = null;
 
         //if already a rocket exists, output their stats
 
@@ -600,7 +655,8 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             // Biprop requirement: if any bipropellant thrust exists, require both tanks.
             // Skipped entirely when fuel isn't required (rocketRequireFuel=false) — no
             // tanks of any kind are needed to assemble then.
-            if (StellurgyConfiguration.getCurrentConfig().rocketRequireFuel && thrustBipropellant > 0) {
+            if (scannedFlightComputerPos == null
+                    && StellurgyConfiguration.getCurrentConfig().rocketRequireFuel && thrustBipropellant > 0) {
                 if (fuelCapacityBipropellant <= 0 || fuelCapacityOxidizer <= 0) {
                     status = ErrorCodes.NOFUEL;
                     return new AxisAlignedBB(actualMinX, actualMinY, actualMinZ, actualMaxX, actualMaxY, actualMaxZ);
@@ -611,13 +667,14 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
             if (invalidBlock) {
                 status = ErrorCodes.INVALIDBLOCK;
 
-            } else if (((fuelCapacityBipropellant > 0 && totalFuel > fuelCapacityBipropellant)
+            } else if (scannedFlightComputerPos == null
+                    && (((fuelCapacityBipropellant > 0 && totalFuel > fuelCapacityBipropellant)
                     || (fuelCapacityMonopropellant > 0 && totalFuel > fuelCapacityMonopropellant)
                     || (fuelCapacityNuclearWorkingFluid > 0 && totalFuel > fuelCapacityNuclearWorkingFluid))
                     ||
                     ((thrustBipropellant > 0 && totalFuelUse > bipropellantfuelUse)
                     || (thrustMonopropellant > 0 && totalFuelUse > monopropellantfuelUse)
-                    || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse))) {
+                    || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse)))) {
                 status = ErrorCodes.COMBINEDTHRUST;
 
             } else if (flightComputerCount > 1) {
@@ -631,6 +688,13 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                 // a pilot in any other seat would have silently dead controls. Passenger seats
                 // (the plain seat block) are unrestricted — this counts only pilot seats.
                 status = ErrorCodes.MULTIPLEPILOTSEATS;
+
+            } else if (scannedFlightComputerPos != null) {
+                // A SHIP is not gated by a rocket's thrust and fuel checks. Its engines consume
+                // nothing yet, and whether it can lift itself is a soft verdict, not a refusal: a
+                // ship is finished in place, so an under-thrusted one is a craft to build onto. The
+                // readout below says so, and assembly asks for a second press (assembleRocket).
+                status = ErrorCodes.SUCCESS;
 
             } else if (!hasGuidance && !hasSatellite && scannedFlightComputerPos == null) {
                 // An Advanced Flight Computer is the tier-2 ship's own flight computer, so it
@@ -665,6 +729,21 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         int maxXi = Math.max(actualMinX, actualMaxX);
         int maxYi = Math.max(actualMaxY, actualMinY);
         int maxZi = Math.max(actualMinZ, actualMaxZ);
+
+        // A ship's readout: the flight model of the blocks on the pad, exactly as the assembled ship
+        // will be surveyed, in the field of the world it stands in. Sent to whoever asked for the scan.
+        if (scannedFlightComputerPos != null && status == ErrorCodes.SUCCESS && !world.isRemote) {
+            dev.stannismod.stellurgy.integration.vs.HullSurvey survey =
+                    dev.stannismod.stellurgy.integration.vs.HullSurvey.ofBox(world,
+                            new BlockPos(minXi, minYi, minZi), new BlockPos(maxXi, maxYi, maxZi));
+            if (survey != null) {
+                tier2Readout = dev.stannismod.stellurgy.ship.control.ShipFlightModel.solve(0L,
+                        survey.mass(), survey.design(), survey.live(),
+                        TileAdvancedFlightComputer.HELM_FRAME)
+                        .readout(TileAdvancedFlightComputer.localGravity(world));
+                sendTier2Readout();
+            }
+        }
 
         // use BlockPos ctor so the AABB is [min, max+1) in block space
         return new AxisAlignedBB(
@@ -737,6 +816,20 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         // and terrain intact, exactly like the rocket path) and paste it back one
         // block higher: the air gap under it bounds the flood-fill to the craft.
         if (scannedFlightComputerPos != null) {
+            // A ship that cannot hold itself up here is built only when asked twice. Not refused: a
+            // ship is finished in place, and an extra engine is one block away. The first press
+            // warns and remembers what it warned about; a press on the same build assembles it.
+            if (tier2Readout != null && !tier2Readout.canHover(
+                    dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE)) {
+                double twr = tier2Readout.thrustToWeight(
+                        dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE);
+                if (Double.compare(twr, warnedThrustToWeight) != 0) {
+                    warnedThrustToWeight = twr;
+                    warnRequesterLowThrust(twr);
+                    return;
+                }
+            }
+            warnedThrustToWeight = Double.NaN;
             removeReplaceableBlocks(rocketBB);
             final StorageChunk shipStructure;
             try {
@@ -1132,6 +1225,9 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id,
                                NBTTagCompound nbt) {
+        if ((id == 0 || id == 1) && player != null) {
+            scanRequester = player.getUniqueID();
+        }
         if (id == 0) {
 
             bbCache = getRocketPadBounds(world, pos);
@@ -1183,6 +1279,17 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         }
 
         errorText.setText(getStatus().getErrorCode());
+        if (tier2Readout != null && !isScanning()) {
+            // A ship's figures are its flight model's, not a rocket's: thrust-to-weight from the
+            // holdable upward authority of the actuators on the pad, in this world's field.
+            dev.stannismod.stellurgy.ship.control.ShipReadout.View live =
+                    dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE;
+            accelerationText.setText(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.shiptwr")
+                    + String.format(java.util.Locale.ROOT, " %.2f", tier2Readout.thrustToWeight(live)));
+            if (!tier2Readout.canHover(live)) {
+                errorText.setText(LibVulpes.proxy.getLocalizedString("msg.rocketbuilder.lowtwr.gui"));
+            }
+        }
     }
 
     @Override

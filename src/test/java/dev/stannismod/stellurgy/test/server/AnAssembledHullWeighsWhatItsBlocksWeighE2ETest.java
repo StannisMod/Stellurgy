@@ -41,10 +41,10 @@ import static org.junit.Assert.assertTrue;
  * report that the process exited rather than that a hull was 4% light — so the number arrives here in
  * the record and the failure can carry it.</p>
  *
- * <p>red-witnessed, one break per verdict, 2026-09-30 (the {@code Drift} form): with
- * {@code ShipMassTrigger:84} comparing only on a LOAD, the wait for this craft's comparison fails —
+ * <p>red-witnessed: one break per verdict, 2026-09-30 (the {@code Drift} form — with
+ * {@code ShipMassTrigger#recompute} at {@code if (event.cause != ShipLifecycleEvent.Cause.LOADED)} comparing only on a LOAD, the wait for this craft's comparison fails —
  * "the assembly never compared the full hull pass against the running total"; with
- * {@code ShipInertiaWriter:121}'s agreement test inverted, the verdict fails on {@code "agrees":false}
+ * {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, the verdict fails on {@code "agrees":false}
  * ("disagree").</p>
  */
 public class AnAssembledHullWeighsWhatItsBlocksWeighE2ETest extends AbstractHeadlessServerTest {
@@ -108,7 +108,7 @@ public class AnAssembledHullWeighsWhatItsBlocksWeighE2ETest extends AbstractHead
      * whole fixture. So this separates the two models without pinning the table's exact numbers,
      * which are balance and may be tuned.</p>
      *
-     * <p>red-witnessed: with {@code StellurgyBlockMass.of} ({@code :58}, read by both the hull pass
+     * <p>red-witnessed: with {@code StellurgyBlockMass.of} ({@code StellurgyBlockMass#of} at {@code return WeightEngine.INSTANCE.getWeight(asItem);}, read by both the hull pass
      * and the per-block path) answering 1.0 for every block, the verdict fails — "recorded mass is
      * 35.0 kg, below the 125000.0 kg of iron deck" — 2026-09-29.</p>
      */

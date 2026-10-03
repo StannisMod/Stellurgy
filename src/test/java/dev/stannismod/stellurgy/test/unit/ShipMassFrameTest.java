@@ -52,9 +52,9 @@ public class ShipMassFrameTest {
      * <p>The inertia leg is the load-bearing half: the tensor is expressed <em>about the centre of
      * mass</em>, so it must be invariant here. If it ever stopped being, every craft's handling would
      * silently depend on where its shipyard happened to be allocated.</p>
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrame:108} doubling the hull
-     * in {@code translated} fails "must not invent or lose mass"; {@code :109} not adding the offset
-     * fails "the centre moves by exactly the offset"; {@code :109} rescaling the tensor fails "cannot
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrame#translated} at {@code return new ShipMassFrame(structuralMass, contentMass, crewMass,} doubling the hull
+     * in {@code translated} fails "must not invent or lose mass"; {@code ShipMassFrame#translated} at {@code new Vector3d(centreOfMass).add(dx, dy, dz), inertia);} not adding the offset
+     * fails "the centre moves by exactly the offset"; {@code ShipMassFrame#translated} at {@code new Vector3d(centreOfMass).add(dx, dy, dz), inertia);} rescaling the tensor fails "cannot
      * depend on where the centre IS".</p>
      */
     @Test
@@ -78,10 +78,10 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrameBuilder:59} counting
-     * content as structure fails the structural 1000 (1300); {@code :59} counting content as crew fails
-     * the content 300 (0.0); {@code :63} not accumulating crew fails the crew 80 (0.0);
-     * {@code ShipMassFrame:69} leaving the crew out of the total fails 1380 (1300).</p>
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting
+     * content as structure fails the structural 1000 (1300); {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting content as crew fails
+     * the content 300 (0.0); {@code ShipMassFrameBuilder#add} at {@code crewMass += m;} not accumulating crew fails the crew 80 (0.0);
+     * {@code ShipMassFrame#getTotalMass} at {@code return structuralMass + contentMass + crewMass;} leaving the crew out of the total fails 1380 (1300).</p>
      */
     @Test
     public void totalIsExactlyTheThreeCategories() {
@@ -100,7 +100,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face instead of its centre, fails "the mass-weighted mean" at (1.5, 0, 0), 2026-09-30.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X at its face instead of its centre, fails "the mass-weighted mean" at (1.5, 0, 0), 2026-09-30.</p>
      */
     @Test
     public void centreOfMassIsTheMassWeightedMean() {
@@ -115,8 +115,8 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrameBuilder:67} reading a
-     * block's X at its face fails "a symmetric hull balances at its middle" (0.5); {@code :70} leaving
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a
+     * block's X at its face fails "a symmetric hull balances at its middle" (0.5); {@code ShipMassFrameBuilder#add} at {@code sx += m * x;} leaving
      * content out of the moment fails "cargo on one side must pull the centre".</p>
      */
     @Test
@@ -135,7 +135,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:67} reading a block's X at its face, fails "must not move it", 2026-09-30.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X at its face, fails "must not move it", 2026-09-30.</p>
      */
     @Test
     public void massAddedAtTheCentreOfMassDoesNotMoveIt() {
@@ -153,8 +153,8 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrame:69} leaving content out
-     * of the total fails "more cargo must mean more mass"; {@code ShipMassFrameBuilder:59} counting
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrame#getTotalMass} at {@code return structuralMass + contentMass + crewMass;} leaving content out
+     * of the total fails "more cargo must mean more mass"; {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting
      * content as structure fails "structure is untouched" (1750).</p>
      */
     @Test
@@ -173,10 +173,10 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: the negative mass is refused TWICE — clamped
-     * by {@code MassContributor:60} and dropped by {@code ShipMassFrameBuilder:50} — and only with BOTH
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — the negative mass is refused TWICE — clamped
+     * by {@code MassContributor#ofBlock} at {@code return new MassContributor(x, y, z, Math.max(0.0D, mass), BLOCK_EXTENT, kind);} and dropped by {@code ShipMassFrameBuilder#add} at {@code if (m <= 0.0D)} — and only with BOTH
      * removed does "must not subtract from the hull" fail (100.0); either alone stays green (the
-     * builder's guard alone was tried 2026-09-29). {@code ShipMassFrameBuilder:67} reading a block's X
+     * builder's guard alone was tried 2026-09-29). {@code ShipMassFrameBuilder#add} at {@code double x = contributor.getX();} reading a block's X
      * at its face fails "nor drag the centre of mass toward it" (0.5).</p>
      */
     @Test
@@ -193,7 +193,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:119} writing 0 below the diagonal in place of the xy product, fails "equals its own transpose", 2026-09-30.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder#build} at {@code dxy, dyy, dyz,} writing 0 below the diagonal in place of the xy product, fails "equals its own transpose", 2026-09-30.</p>
      */
     @Test
     public void inertiaIsSymmetric() {
@@ -208,7 +208,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:76}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code double own = m * (s * s) / 6.0D;}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.</p>
      */
     @Test
     public void aSingleBlockHullStillHasAnInvertibleInertia() {
@@ -220,7 +220,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:76}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code double own = m * (s * s) / 6.0D;}'s own-extent term zeroed (point masses), fails on a zero determinant, 2026-09-30.</p>
      */
     @Test
     public void aCollinearHullStillHasAnInvertibleInertia() {
@@ -234,8 +234,8 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrame:49}'s empty frame given
-     * 1 kg fails "weighs nothing"; {@code ShipMassFrameBuilder:99}'s empty guard skipped fails "the
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrame#empty} at {@code return new ShipMassFrame(0.0D, 0.0D, 0.0D, new Vector3d(), new Matrix3d().zero());}'s empty frame given
+     * 1 kg fails "weighs nothing"; {@code ShipMassFrameBuilder#build} at {@code if (total <= 0.0D)}'s empty guard skipped fails "the
      * origin, not a 0/0" (NaN).</p>
      */
     @Test
@@ -248,9 +248,9 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed, one break per verdict, 2026-09-30: {@code ShipMassFrameBuilder:59} counting
-     * content only once a structure has arrived fails "the total" (590 vs 790); {@code :70} assigning
-     * the x moment instead of accumulating it fails "the centre"; {@code :78} assigning ixx fails "the
+     * <p>red-witnessed: one break per verdict, 2026-09-30 — {@code ShipMassFrameBuilder#add} at {@code contentMass += m;} counting
+     * content only once a structure has arrived fails "the total" (590 vs 790); {@code ShipMassFrameBuilder#add} at {@code sx += m * x;} assigning
+     * the x moment instead of accumulating it fails "the centre"; {@code ShipMassFrameBuilder#add} at {@code ixx += own + m * (y * y + z * z);} assigning ixx fails "the
      * tensor".</p>
      */
     @Test
@@ -276,7 +276,7 @@ public class ShipMassFrameTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipMassFrameBuilder:79} giving iyy the long axis's lever, fails "about the long axis must be the cheapest rotation", 2026-09-30.</p>
+     * <p>red-witnessed: with {@code ShipMassFrameBuilder#add} at {@code iyy += own + m * (x * x + z * z);} giving iyy the long axis's lever, fails "about the long axis must be the cheapest rotation", 2026-09-30.</p>
      */
     @Test
     public void aLongHullResistsRollingLessThanYawing() {

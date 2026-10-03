@@ -38,6 +38,8 @@ public class StellurgyBlocks {
     public static Block blockLightwoodWood, sblockLightwoodLeaves, blockLightwoodSapling;
     public static Block blockGuidanceComputer;
     public static Block blockAdvancedFlightComputer;
+    /** Turns a ship about any axis without pushing it; see {@code BlockReactionWheel}. */
+    public static Block blockReactionWheel;
     public static Block blockNavigationComputer;
     /** The hyperdrive family: the machines that make a jump possible. */
     public static Block blockHyperdriveGenerator;

@@ -254,6 +254,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
     private static final double CURSOR_DEFLECTED = 0.2;
 
     /**
+     * How far above the rolled deck, along the deck's own normal, the fly-in point is, in blocks. Not
+     * chosen: it is the clearance this scenario's green runs were taken at — 3 blocks of world height
+     * over the pose at a 45-degree roll, on a craft whose centre of mass sat 0.91 under the deck top
+     * (3 × cos45° − 0.91 = 1.21) — kept when the craft changed under it.
+     */
+    private static final double FLY_IN_DECK_CLEARANCE = 1.21;
+
+    /** The same green-run geometry across the deck: 3 × sin45° = 2.12 blocks along the deck's +X. */
+    private static final double FLY_IN_ACROSS = 2.12;
+
+    /**
      * How far the levelled camera roll may move while the ship is STATIONARY, in degrees.
      *
      * <p>The TEST'S OWN: the ship is not moving, so the honest statement is that the roll does not
@@ -689,17 +700,34 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // touched: a client still standing on the deck is still being captured there.
         awaitClientPlacedNear(awayMark, sx + 200, sz + 200,
                 "the negative leg needs a body that has never stood on this deck");
+        // THE FLY-IN POINT IS PLACED RELATIVE TO THE DECK, not to the pose. The pose is the centre of
+        // mass, and where that sits under the deck is a property of the hull, not of this scenario:
+        // the craft this was written against had it 0.91 below the deck top, so 3 blocks of world
+        // height at the 45-degree roll put him, in the deck's own frame, 2.12 across from the pose
+        // and 1.21 above the deck. The rebuilt craft carries its actuators under the deck and has
+        // it 1.6 below; the same 3 blocks put him 0.4 over the deck, where the deck took him and
+        // engaged the camera (2026-09-30), and a purely vertical correction pushed him past the
+        // deck's edge instead. So the point is that deck-frame offset — 2.12 across, 1.21 over the
+        // deck top — carried into the world through the hull's own attitude. The deck top is the
+        // flight computer's floor (it stands on the deck); the centre of mass and the attitude are
+        // the ship report's own.
+        Reply pose = Reply.of(info.raw());
+        double deckTopAboveCom = Reply.of(exec("stellurgytest vs flight-model-by-id 0 " + scenarioShipId))
+                .integer("afcY") - pose.number("comY");
+        double[] flyIn = rotateByShip(pose, FLY_IN_ACROSS, deckTopAboveCom + FLY_IN_DECK_CLEARANCE, 0.0);
+        final double fx = sx + flyIn[0], fz = sz + flyIn[2];
         Events clientEvents = clientEvents();
         long flyInMark = clientEvents.mark();
-        exec("tp @a " + sx + " " + (sy + 3) + " " + sz + " 0 0");
+        exec("tp @a " + fx + " " + (sy + flyIn[1]) + " " + fz + " 0 0");
         // The reads below must describe him AT the off-deck point, and he starts falling onto the
         // deck the tick his client applies it — so the placement is linked, read every tick rather
         // than every five. A read that followed the link ran after at least one client pass there.
-        clientEvents.awaitMatchingEvery(flyInMark, "client_pos_look_applied",
-                reply -> ClientEvents.appliedNear(reply, sx, sz),
+        // An ARRANGEMENT link: the placement is vanilla's teleport and the premise of the reads below.
+        ArrangementFailure.arranged(() -> clientEvents.awaitMatchingEvery(flyInMark, "client_pos_look_applied",
+                reply -> ClientEvents.appliedNear(reply, fx, fz),
                 "placing the client at the fly-in point",
                 "the fly-in teleport must reach the client before its view there can be read",
-                DECK_LINK_BUDGET_TICKS, 1);
+                DECK_LINK_BUDGET_TICKS, 1));
         // EXPERIMENT: one client tick counted FROM the placement's own record. The record is taken
         // while the client drains its task queue, and a read queued behind it could run before the
         // client ticks or draws at the new point at all — describing the old one. One tick is one
@@ -927,9 +955,11 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
             exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " 0.8660254 0.5 0 0");
             bot().waitTicks(4);
         }
+        // The pilot is at the controls, so the tilt is his to keep once the probe lets go — which his
+        // computer does only once he has put his hands on the stick (see takeTheStickWhileHeld).
+        takeTheStickWhileHeld("at the steep tilt, before the probe hold is cut");
         exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
         double releasedUpY = shipUpYFromInfo(shipInfo());
-        centreFlightCursor();
         // WINDOW: releasedUpY (the instant the command is cut) to `tilted`, and the assertion below
         // holds BOTH ends in the envelope and prints both — the craft has to KEEP the tilt it was
         // brought to, not merely pass through it. Overshoot only gives it longer to drift out.
@@ -1142,10 +1172,12 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         double[] ship = buildShip(site);
 
         // Put the FRESH (never-piloted) craft into a held inversion by writing the attitude: 180
-        // degrees about X is q = (0, 1, 0, 0), so the deck's own +Y points at world −Y. It STAYS
-        // there once written, because an attitude error this far past the reference reseed is
-        // ADOPTED and then held rather than corrected — which is also the maintainer's ship, stuck
-        // inverted after a tumble.
+        // degrees about X is q = (0, 1, 0, 0), so the deck's own +Y points at world −Y — which is
+        // also the maintainer's ship, stuck inverted after a tumble. It does NOT stay there on its
+        // own once the hold is cut: an unmanned computer holds the reference it was assembled with,
+        // and a hull whose actuators can turn it (every fixture since 2026-09-30) slews back to
+        // level. So the hold stands until the pilot is seated and has put his hands on the stick,
+        // which makes the inverted attitude his computer's own (see takeTheStickWhileHeld).
         //
         // Three arrangements were measured side by side (2026-08-22, server tier, same craft type),
         // and only this one works. Re-applying a raw 5 rad/s spin — what this scenario did until
@@ -1172,6 +1204,17 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // in the gate below; a slew that did not get there fails there, loudly.
         GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);
         double reachedUpY = shipUpYFromInfo(shipInfo());
+
+        // ENTER the seat on the inverted ship, with the hold still standing — located inside THIS
+        // ship, not "the first seat in the world" (see mountPilotSeatOfShipAt). The mark is taken
+        // here rather than inside the helper because the helper's other callers take their own.
+        long seatClientMark = clientEvents().mark();
+        mountPilotSeatOfShipAt(bx, by, bz);
+        awaitClientMount(seatClientMark, "the turn commands below are sent BY THE CLIENT from the"
+                + " seat it believes he is in, so the server's own mount receipt is not enough",
+                DECK_LINK_BUDGET_TICKS, "");
+        takeTheStickWhileHeld("seated on the inverted ship, before the probe hold is cut");
+
         // Then let go, and let it sit: REACHING an attitude and KEEPING it are different questions,
         // and everything below needs the second one.
         exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
@@ -1194,15 +1237,6 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
                 + " stay inverted once the hold is cut (upY before the slew=" + upBeforeSlew
                 + ", when cut=" + reachedUpY + ", after the window=" + invertedUpY + "): " + info0,
                 reachedUpY < INVERTED_UP_Y && invertedUpY < INVERTED_UP_Y);
-
-        // ENTER the seat on the inverted ship — located inside THIS ship, not "the first seat in
-        // the world" (see mountPilotSeatOfShipAt). The mark is taken here rather than inside the
-        // helper because the helper's other callers take their own.
-        long seatClientMark = clientEvents().mark();
-        mountPilotSeatOfShipAt(bx, by, bz);
-        awaitClientMount(seatClientMark, "the turn commands below are sent BY THE CLIENT from the"
-                + " seat it believes he is in, so the server's own mount receipt is not enough",
-                DECK_LINK_BUDGET_TICKS, "");
 
         // SYMPTOM "after entering, the ship does not react": a turn command must actually move it.
         // Judged ABOVE what the slew left behind, read here before the command: the hull is not
@@ -1276,8 +1310,10 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         // in the gate below.
         GameTicks.advanceWorld(serverClient(), 0, INVERT_SLEW_WINDOW_TICKS);
         double releasedUpY = deckCamera("shipUpY");
+        // His hands on the stick while the hold stands, so the inversion is what his computer keeps
+        // once it is cut (see takeTheStickWhileHeld); it leaves the cursor centred.
+        takeTheStickWhileHeld("at the inversion, before the probe hold is cut");
         exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
-        centreFlightCursor();
         // WINDOW: releasedUpY (the instant the command is cut) to shipUpY, and the assertion holds
         // BOTH ends inverted and prints both. The same ticks let the slew's residual spin decay
         // before the turn below; that spin is printed as omegaSettled and asserted nowhere.
@@ -1324,6 +1360,53 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
         assertTrue("a seated pilot must still be able to TURN the ship when it is inverted - commanding a "
                 + "turn must spin it up, not leave it dead (omega " + omegaSettled + " before the command,"
                 + " " + omegaTurning + " after)", omegaTurning > omegaSettled + TURN_COMMAND_OMEGA_RAD_PER_S);
+    }
+
+    /**
+     * The seated pilot takes the stick and lets it centre again, while a probe hold keeps the hull at
+     * the attitude it was brought to — so the attitude his computer holds once the probe lets go is
+     * the one he is sitting at, not the one it held before.
+     *
+     * <p>Derived from the flight computer's own rule: while a pilot is at the controls and asks for no
+     * rotation, the reference it holds is pinned to where the ship IS
+     * ({@code TileAdvancedFlightComputer.update}, the {@code !turning} re-seed), and an unmanned or
+     * idle-seated craft keeps holding the last reference it had. A pilot who has never touched the
+     * stick has sent no input at all — the client sends on a change ({@code PilotInputCadence}) — so
+     * without this his craft still holds the attitude it was assembled at and slews back to it the
+     * moment the probe is cleared, which is production doing its job and not the arrangement the
+     * scenario needs.</p>
+     *
+     * <p>The link is the computer's own record of the input arriving ({@code pilot_input_set}, for
+     * THIS ship). The centring's last send is the idle input; the scenario's following read of the
+     * attitude over a window is what says the hold took.</p>
+     */
+    private void takeTheStickWhileHeld(String what) throws Exception {
+        // STIMULUS: each iteration IS a push of the cursor off centre, and the loop ends on its goal
+        // state — a deflection past the dead-zone, which is a CHANGE the client sends.
+        for (int i = 0; i < 20 && Math.abs(flightCursorX(what + ", deflecting")) <= CURSOR_DEFLECTED; i++) {
+            mouseDelta(60, 0);
+            bot().waitTicks(1);
+        }
+        long inputMark = events().mark();
+        centreFlightCursor();
+        // An ARRANGEMENT, not a verdict: the scenario's subject comes after the hold is cut, and this
+        // only establishes that the attitude his computer holds then is the one he is sitting at.
+        ArrangementFailure.arranged(() -> events().awaitRecordWithFields(inputMark, "pilot_input_set",
+                what + " — the pilot's hands on the stick must reach THIS ship's flight computer, or"
+                        + " the hold it keeps afterwards is still the one it was assembled with",
+                DECK_LINK_BUDGET_TICKS, "vsShip", scenarioShipId, "input", "set"));
+    }
+
+    /**
+     * A vector in the hull's own frame carried into the world by the hull's attitude as the ship
+     * report gives it ({@code qw,qx,qy,qz}, the subspace-to-world rotation): v' = v + 2w(u×v) +
+     * 2u×(u×v), u = (qx,qy,qz).
+     */
+    private static double[] rotateByShip(Reply pose, double x, double y, double z) {
+        double w = pose.number("qw"), ux = pose.number("qx"), uy = pose.number("qy"), uz = pose.number("qz");
+        double cx = uy * z - uz * y, cy = uz * x - ux * z, cz = ux * y - uy * x;
+        double ccx = uy * cz - uz * cy, ccy = uz * cx - ux * cz, ccz = ux * cy - uy * cx;
+        return new double[]{x + 2 * (w * cx + ccx), y + 2 * (w * cy + ccy), z + 2 * (w * cz + ccz)};
     }
 
     /** Feed a raw mouse delta to the client's own ship-pilot handler, as the window's mouse would. */
@@ -1699,9 +1782,9 @@ public class VSDeckCaptureAndDismountE2ETest extends AbstractSharedVsClientE2ETe
      *
      * <p>red-witnessed: NOT YET — three attempts, all GREEN. (1) {@code ShipFrameTravel.FLOOR_PROBE_DEPTH}
      * at 0, 2026-09-29: with no floor in reach a body still touching the hull goes to HULL-STAND
-     * ({@code ShipFrameTravel:327}), which keeps the episode open, so no release is recorded.
-     * (2) {@code ShipFrameTravel:1653} handing every aboard body to vanilla's world-frame travel,
-     * 2026-09-30. (3) that, plus Valkyrien Skies' own carry off ({@code EntityDraggable:36}),
+     * ({@code ShipFrameTravel#handles} at {@code state.hullStand = true;}), which keeps the episode open, so no release is recorded.
+     * (2) {@code ShipFrameTravel#travel} at {@code String shipId = anchored.shipId;} handing every aboard body to vanilla's world-frame travel,
+     * 2026-09-30. (3) that, plus Valkyrien Skies' own carry off ({@code EntityDraggable#tickAddedVelocityForWorld} at {@code if (!e.isDead)}),
      * 2026-09-30. So the body is kept by more than one mechanism — the ship-frame resolver and the
      * substrate's world-frame collision — and none of the three drove the resolver to a release, which
      * is the only thing this verdict reads. What would turn it red is a release on a falling deck; the

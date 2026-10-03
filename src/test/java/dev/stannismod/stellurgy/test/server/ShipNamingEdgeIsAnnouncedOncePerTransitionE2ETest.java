@@ -41,19 +41,19 @@ import static org.junit.Assert.assertEquals;
  * has been announced. A duplicate announcement is published in the same manager tick as the one it
  * duplicates, so by the time the awaited record is in the log its twin is too.</p>
  *
- * <p>red-witnessed: with {@code WorldServerShipManager.spawnNewShips} ({@code :405}) noting every
+ * <p>red-witnessed: with {@code WorldServerShipManager.spawnNewShips} ({@code WorldServerShipManager#spawnNewShips} at {@code noteLifecycle(toSpawn, spawnData.cause);}) noting every
  * spawn twice and as {@code ASSEMBLED}, the cycle fails with "must be announced as ASSEMBLED exactly
  * once" and the crossing with "no `ship_lifecycle` carrying … cause = PASTED was recorded within 200
- * ticks", 2026-09-29. With the UNLOADED note ({@code :592}) removed, the cycle fails "dropping the
+ * ticks", 2026-09-29. With the UNLOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at {@code noteLifecycle(physicsObject.getShipData(), ShipLifecycleEvent.Cause.UNLOADED);}) removed, the cycle fails "dropping the
  * ship object must be announced — no … cause = UNLOADED … within 200 ticks"; with the LOADED note
- * ({@code :529}) made twice, it fails "coming back must be announced exactly once", 2026-09-29.
- * One break per remaining verdict, 2026-09-30: the spawn note at {@code :405} removed fails "a craft
- * that has just been built must be announced"; the LOADED note at {@code :529} removed fails "coming
- * back must be announced"; the UNLOADED note at {@code :592} made twice fails "dropping … exactly
- * once"; a PASTED note added beside {@code :529}'s LOADED fails "nothing here was cut and pasted"; a
- * DESTROYED note added beside {@code :592}'s UNLOADED fails "an unloaded craft still EXISTS"; a
- * PASTED spawn at {@code :405} noted twice fails "announced as PASTED exactly once"; a PASTED spawn at
- * {@code :405} also noted as ASSEMBLED fails "a crossing is not a new build".</p>
+ * ({@code WorldServerShipManager#loadAndUnloadShips} at {@code noteLifecycle(toLoad, ShipLifecycleEvent.Cause.LOADED);}) made twice, it fails "coming back must be announced exactly once", 2026-09-29.
+ * One break per remaining verdict, 2026-09-30: the spawn note at {@code WorldServerShipManager#spawnNewShips} at {@code noteLifecycle(toSpawn, spawnData.cause);} removed fails "a craft
+ * that has just been built must be announced"; the LOADED note at {@code WorldServerShipManager#loadAndUnloadShips} at {@code noteLifecycle(toLoad, ShipLifecycleEvent.Cause.LOADED);} removed fails "coming
+ * back must be announced"; the UNLOADED note at {@code WorldServerShipManager#loadAndUnloadShips} at {@code noteLifecycle(physicsObject.getShipData(), ShipLifecycleEvent.Cause.UNLOADED);} made twice fails "dropping … exactly
+ * once"; a PASTED note added beside {@code WorldServerShipManager#loadAndUnloadShips} at {@code noteLifecycle(toLoad, ShipLifecycleEvent.Cause.LOADED);}'s LOADED fails "nothing here was cut and pasted"; a
+ * DESTROYED note added beside {@code WorldServerShipManager#loadAndUnloadShips} at {@code noteLifecycle(physicsObject.getShipData(), ShipLifecycleEvent.Cause.UNLOADED);}'s UNLOADED fails "an unloaded craft still EXISTS"; a
+ * PASTED spawn at {@code WorldServerShipManager#spawnNewShips} at {@code noteLifecycle(toSpawn, spawnData.cause);} noted twice fails "announced as PASTED exactly once"; a PASTED spawn at
+ * {@code WorldServerShipManager#spawnNewShips} at {@code noteLifecycle(toSpawn, spawnData.cause);} also noted as ASSEMBLED fails "a crossing is not a new build".</p>
  */
 public class ShipNamingEdgeIsAnnouncedOncePerTransitionE2ETest extends AbstractHeadlessServerTest {
 

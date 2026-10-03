@@ -389,6 +389,10 @@ public class KeyBindings {
             }
             lines.add(I18n.format("msg.ff.hud.speed", String.format("%.1f", state.speed() * 20.0)));
         }
+        if (state.flightComputer != null) {
+            lines.addAll(ShipReadoutText.hud(state.flightComputer.clientReadout(),
+                    state.flightComputer.clientSaturated(), state.flightComputer.clientWheelFill()));
+        }
         lines.addAll(driveHudLines(state));
         return lines;
     }

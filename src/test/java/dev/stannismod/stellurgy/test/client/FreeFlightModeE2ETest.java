@@ -1670,7 +1670,7 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
     }
 
     /**
-     * <p>red-witnessed: with the four camera-pin lines of {@code KeyBindings:609-612} removed: "camera
+     * <p>red-witnessed: with the four camera-pin lines of {@code KeyBindings#onClientTick} at {@code player.prevRotationYaw   = rocket.prevRotationYaw;} removed: "camera
      * must never detach from the craft on any rendered frame (worst frame divergence 61.46°)",
      * 2026-09-28. That is the verdict whose wait the tick-wait rewrite changed; the at-rest and
      * convergence verdicts after it were outside that rewrite and are not witnessed here.</p>

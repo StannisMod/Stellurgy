@@ -344,7 +344,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      * computer and be ANSWERED … no `nav_arm_decided`". THE JUMP KEY —
      * {@code TileAdvancedFlightComputer.onJumpKey} returning at once: "the jump key, pressed by a
      * seated pilot of a ARMED ship, must be ANSWERED … no `jump_press_decided`". THE LATCH
-     * (2026-09-24) — {@code TileAdvancedFlightComputer:642}'s {@code entryLatched = false} removed: leg
+     * (2026-09-24) — {@code TileAdvancedFlightComputer:647}'s {@code entryLatched = false} removed: leg
      * 9 fails with "no `entry_latch_released` carrying ship = …" after the pilot has flown down through
      * the line. Leg 9's stay-put verdict after it and its {@code STARTED} control have no witness at
      * their own lines: without the latch the ship bounces on arrival and leg 8 fails first, and

@@ -959,6 +959,222 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"shipId\":" + (durable == null ? "null" : "\"" + durable + "\"") + "}");
             return;
         }
+        // flight-model <dim> <afcX> <afcY> <afcZ> — what the flight computer at that address holds as
+        // its ship's derived flight model: the readout's primitives (masses, the twelve signed
+        // authorities DESIGN and LIVE, sustained and burst, the burst endurance), the local field,
+        // thrust-to-weight, and the live slice. Keyed on the computer's block address, which names
+        // one tile. `found:false` = no flight computer there; `model:null` = one that has not
+        // surveyed a hull (not on a ship, or not yet). An infinite figure is sent as null with its
+        // own flag, because JSON has no infinity and a bare `Infinity` makes the reply unreadable.
+        if (args.length >= 5 && "flight-model".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            net.minecraft.util.math.BlockPos afcPos = new net.minecraft.util.math.BlockPos(
+                    parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+            TileEntity afcTe = world.getTileEntity(afcPos);
+            java.util.Map<String, Object> info = new java.util.LinkedHashMap<>();
+            info.put("ok", true);
+            info.put("found", afcTe instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer);
+            if (!(afcTe instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)) {
+                info.put("model", null);
+                send(sender, jsonMap(info));
+                return;
+            }
+            dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer afc =
+                    (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) afcTe;
+            dev.stannismod.stellurgy.ship.control.ShipReadout r = afc.readout();
+            info.put("saturated", afc.isDeliveringLessThanAsked());
+            info.put("wheelFill", afc.wheelFill());
+            info.put("model", r == null ? null : readoutMap(r));
+            send(sender, jsonMap(info));
+            return;
+        }
+        // yard-census <dim> <shipId> — what stands in the named ship's subspace yard: a count per
+        // block registry name, the total, and the box the non-air blocks occupy. For telling WHAT a
+        // hull is made of when its mass or block count is not what its builder laid.
+        if (args.length >= 3 && "yard-census".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID shipUuid;
+            try {
+                shipUuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            net.minecraft.util.math.AxisAlignedBB yard = dev.stannismod.stellurgy.integration.vs
+                    .VSIntegration.shipyardBoundsOf(world, shipUuid);
+            if (yard == null) {
+                send(sender, "{\"ok\":true,\"yard\":null}");
+                return;
+            }
+            java.util.Map<String, Object> counts = new java.util.TreeMap<>();
+            int total = 0;
+            int[] lo = {Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE};
+            int[] hi = {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
+            for (BlockPos p : BlockPos.getAllInBox(new BlockPos(yard.minX, 0, yard.minZ),
+                    new BlockPos(yard.maxX, 255, yard.maxZ))) {
+                net.minecraft.block.state.IBlockState st = world.getBlockState(p);
+                if (st.getBlock() == net.minecraft.init.Blocks.AIR) {
+                    continue;
+                }
+                String name = String.valueOf(st.getBlock().getRegistryName());
+                Object was = counts.get(name);
+                counts.put(name, was == null ? 1 : ((Integer) was) + 1);
+                total++;
+                lo[0] = Math.min(lo[0], p.getX()); lo[1] = Math.min(lo[1], p.getY()); lo[2] = Math.min(lo[2], p.getZ());
+                hi[0] = Math.max(hi[0], p.getX()); hi[1] = Math.max(hi[1], p.getY()); hi[2] = Math.max(hi[2], p.getZ());
+            }
+            java.util.Map<String, Object> info = new java.util.LinkedHashMap<>();
+            info.put("ok", true);
+            info.put("total", total);
+            info.put("counts", counts);
+            info.put("min", total == 0 ? null : lo[0] + "," + lo[1] + "," + lo[2]);
+            info.put("max", total == 0 ? null : hi[0] + "," + hi[1] + "," + hi[2]);
+            send(sender, jsonMap(info));
+            return;
+        }
+        // flight-model-by-id <dim> <shipId> — the same reply, for the flight computer of the ship
+        // named by its physics id, plus that computer's SUBSPACE address (afcX/afcY/afcZ) so a caller
+        // holding only the name can go on to address the computer itself. `found:false` = no flight
+        // computer resolves for that name here.
+        if (args.length >= 3 && "flight-model-by-id".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID shipUuid;
+            try {
+                shipUuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            BlockPos afcPos = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                    .flightComputerOf(world, shipUuid);
+            TileEntity afcTe = afcPos == null ? null : world.getTileEntity(afcPos);
+            java.util.Map<String, Object> info = new java.util.LinkedHashMap<>();
+            info.put("ok", true);
+            boolean found = afcTe instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
+            info.put("found", found);
+            if (!found) {
+                info.put("model", null);
+                send(sender, jsonMap(info));
+                return;
+            }
+            dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer afc =
+                    (dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) afcTe;
+            info.put("afcX", afcPos.getX());
+            info.put("afcY", afcPos.getY());
+            info.put("afcZ", afcPos.getZ());
+            dev.stannismod.stellurgy.ship.control.ShipReadout r = afc.readout();
+            info.put("saturated", afc.isDeliveringLessThanAsked());
+            info.put("wheelFill", afc.wheelFill());
+            info.put("model", r == null ? null : readoutMap(r));
+            send(sender, jsonMap(info));
+            return;
+        }
+        // actuators <dim> <shipId> — every device aboard the ship named by its physics id that can push
+        // or turn it, from the same survey its flight computer builds the model from: the block
+        // address (SUBSPACE), the device's own index within the block, whether it is SUSTAINED (a
+        // motor) or runs on a momentum budget (a wheel), its maximum force or torque vector (N, N·m,
+        // ship frame) and whether it WORKS right now. `survey:false` = the ship could not be surveyed
+        // here (not loaded, or not a ship); an empty list beside `survey:true` is a hull with nothing
+        // aboard that pushes.
+        if (args.length >= 3 && "actuators".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            java.util.UUID shipUuid;
+            try {
+                shipUuid = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"shipId is not a uuid\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.integration.vs.HullSurvey survey =
+                    dev.stannismod.stellurgy.integration.vs.HullSurvey.ofShip(world, shipUuid);
+            if (survey == null) {
+                send(sender, "{\"ok\":true,\"survey\":false,\"actuators\":[]}");
+                return;
+            }
+            java.util.Set<dev.stannismod.stellurgy.ship.control.ActuatorId> working = new java.util.HashSet<>();
+            for (dev.stannismod.stellurgy.ship.control.Actuator a : survey.live()) {
+                working.add(a.id());
+            }
+            StringBuilder out = new StringBuilder("{\"ok\":true,\"survey\":true,\"actuators\":[");
+            boolean first = true;
+            for (dev.stannismod.stellurgy.ship.control.Actuator a : survey.design()) {
+                if (!first) out.append(',');
+                first = false;
+                org.joml.Vector3dc f = a.maxForce();
+                org.joml.Vector3dc t = a.maxTorque();
+                out.append("{\"x\":").append(a.id().x()).append(",\"y\":").append(a.id().y())
+                        .append(",\"z\":").append(a.id().z()).append(",\"index\":").append(a.id().index())
+                        .append(",\"sustained\":").append(a.isSustained())
+                        .append(",\"working\":").append(working.contains(a.id()))
+                        .append(",\"forceX\":").append(f.x()).append(",\"forceY\":").append(f.y())
+                        .append(",\"forceZ\":").append(f.z())
+                        .append(",\"torqueX\":").append(t.x()).append(",\"torqueY\":").append(t.y())
+                        .append(",\"torqueZ\":").append(t.z()).append('}');
+            }
+            send(sender, out.append("]}").toString());
+            return;
+        }
+        // stow <dim> <x> <y> <z> <item> <count> — put up to <count> of <item> into the inventory of the
+        // block at that address (a SUBSPACE one for a block aboard a ship), through its item-handler
+        // capability, as a player loading a hold would. Answers how many went in (`stowed`) and the
+        // stack of that item the block now holds in total (`held`); `inventory:false` = the block
+        // there has no inventory to stow into.
+        if (args.length >= 7 && "stow".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            BlockPos at = new BlockPos(parseIntOr(args[2], 0), parseIntOr(args[3], 0), parseIntOr(args[4], 0));
+            net.minecraft.item.Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(args[5]));
+            if (item == null) {
+                send(sender, "{\"error\":\"unknown item id\",\"id\":\"" + escapeJson(args[5]) + "\"}");
+                return;
+            }
+            TileEntity holdTe = world.getTileEntity(at);
+            net.minecraftforge.items.IItemHandler handler = holdTe == null ? null
+                    : holdTe.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+            if (handler == null) {
+                send(sender, "{\"ok\":true,\"inventory\":false,\"stowed\":0,\"held\":0}");
+                return;
+            }
+            int left = parseIntOr(args[6], 0);
+            int stowed = 0;
+            for (int slot = 0; slot < handler.getSlots() && left > 0; slot++) {
+                int batch = Math.min(left, item.getItemStackLimit(new net.minecraft.item.ItemStack(item)));
+                net.minecraft.item.ItemStack rest = handler.insertItem(slot,
+                        new net.minecraft.item.ItemStack(item, batch), false);
+                int went = batch - rest.getCount();
+                stowed += went;
+                left -= went;
+            }
+            holdTe.markDirty();
+            int held = 0;
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                net.minecraft.item.ItemStack s = handler.getStackInSlot(slot);
+                if (!s.isEmpty() && s.getItem() == item) {
+                    held += s.getCount();
+                }
+            }
+            send(sender, "{\"ok\":true,\"inventory\":true,\"stowed\":" + stowed + ",\"held\":" + held + "}");
+            return;
+        }
         // ship-info <dim> id <shipId> — the ship report keyed on the ship's own IDENTITY. There is
         // no distance term to be wrong about: the ship may be anywhere, and an id naming nothing
         // loaded here answers managed:false, which is a loud arrangement failure rather than a
@@ -8981,6 +9197,7 @@ public class TestProbeCommand extends CommandBase {
             //    first use, so this only brings that moment forward.
             java.util.UUID durableShipId = null;
             int afcCount = 0;
+            BlockPos padComputer = null;
             for (TileEntity padTile : new java.util.ArrayList<>(world.loadedTileEntityList)) {
                 if (!(padTile instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer)
                         || !bb.contains(new net.minecraft.util.math.Vec3d(
@@ -8989,6 +9206,7 @@ public class TestProbeCommand extends CommandBase {
                     continue;
                 }
                 afcCount++;
+                padComputer = padTile.getPos();
                 durableShipId = ((dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer) padTile)
                         .getOrCreateShipId();
             }
@@ -9006,10 +9224,32 @@ public class TestProbeCommand extends CommandBase {
             java.util.List<dev.stannismod.stellurgy.entity.EntityRocket> rockets =
                     world.getEntitiesWithinAABB(dev.stannismod.stellurgy.entity.EntityRocket.class, bb);
             int entityId = rockets.isEmpty() ? -1 : rockets.get(0).getEntityId();
+            // 7. WHAT THIS PRESS DID to a ship build, as a value. `status` cannot say it: a tier-2 press
+            //    that only WARNED (thrust-to-weight under one here) leaves the scan's SUCCESS standing
+            //    exactly as a press that built. What differs is the pad — a press that builds cuts the
+            //    craft out of it, so the flight computer is no longer where the scan found it. Null when
+            //    the build has no flight computer (a rocket), where the question does not arise.
+            //    Beside it, the scan's own readout verdict the press acted on.
+            String shipCut = padComputer == null ? "null"
+                    : String.valueOf(!(world.getTileEntity(padComputer)
+                            instanceof dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer));
+            dev.stannismod.stellurgy.ship.control.ShipReadout scanReadout = builder.tier2Readout();
+            String tier2 = "null";
+            if (scanReadout != null) {
+                double twr = scanReadout.thrustToWeight(
+                        dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE);
+                tier2 = "{\"twrLIVE\":" + (Double.isInfinite(twr) ? "null" : String.valueOf(twr))
+                        + ",\"twrLIVEInfinite\":" + Double.isInfinite(twr)
+                        + ",\"canHoverLIVE\":" + scanReadout.canHover(
+                                dev.stannismod.stellurgy.ship.control.ShipReadout.View.LIVE)
+                        + ",\"gravity\":" + scanReadout.gravity() + "}";
+            }
             send(sender, "{\"ok\":true,\"status\":\"" + postStatusName
                     + "\",\"entityId\":" + entityId + ",\"rocketCount\":" + rockets.size()
                     + ",\"afcCount\":" + afcCount
                     + ",\"shipId\":" + (durableShipId == null ? "null" : "\"" + durableShipId + "\"")
+                    + ",\"shipCut\":" + shipCut
+                    + ",\"scanReadout\":" + tier2
                     + "}");
         } catch (ReflectiveOperationException e) {
             send(sender, "{\"error\":\"reflection failed: " + escapeJson(e.getMessage()) + "\"}");
@@ -15362,6 +15602,136 @@ public class TestProbeCommand extends CommandBase {
     }
 
     /**
+     * The actuators a tier-2 fixture carries beyond its two upward main engines, so the craft can do
+     * what a pilot asks of it: a flight computer delivers the wanted motion only through the hull's
+     * own devices, and a hull that cannot push in a direction does not move in it.
+     *
+     * <p>Every device is placed face-on to a block of the craft, so the assembly's flood fill takes
+     * it aboard, and inside the pad footprint and the tower-bounded scan box. A motor's thrust follows
+     * its ACTUAL facing, which an adjacent fuel tank overrides; each facing below is set explicitly and
+     * is either not beside a tank or is the very facing the tank would force, so the drawn nozzle and
+     * the push agree.</p>
+     *
+     * <p>Two layouts, because the two hull families put their centre of mass in different places:</p>
+     * <ul>
+     *   <li><b>Deck craft</b> — the 5x5 iron deck is most of the mass, so the centre of mass sits in the
+     *       deck, above anything that can be hung under it without blocking the walkway. Three motors
+     *       stand under each deck corner: an X pusher (top), a Z pusher, and a vertical one (bottom),
+     *       the vertical ones alternating up/down by diagonal. The horizontal pushers act below the
+     *       centre of mass, and the vertical corner motors form the couples that cancel that torque,
+     *       so every translation is clean and sustained; the same couples, and the horizontal pairs
+     *       at opposite corners, turn the hull about every axis.</li>
+     *   <li><b>Seat craft</b> — the centre of mass sits in the fuel column, so X pushers stand against
+     *       its ends and Z pushers against its sides at both tank heights, straddling it: each
+     *       direction's pair balances about the centre of mass by throttle alone, and opposite pairs
+     *       at different heights or on opposite sides turn the hull. Two down-pushing motors stand
+     *       under the X pushers.</li>
+     * </ul>
+     * <p>Both carry one reaction wheel beside the upper centre tank, for the attitude a burst can buy
+     * beyond the motors.</p>
+     *
+     * <p>Every motor here is an advanced one (2.45 MN), and that is sized, not preferred: a craft asked
+     * to roll or pitch past vertical must still hold its weight with whatever faces down, so each
+     * translation has to exceed the craft's weight. With the 0.49 MN motor the decked craft had 0.98 MN
+     * sideways against 2.76 MN of weight, and every roll stalled at 90° with the allocation saturated.</p>
+     *
+     * <p>Measured 2026-09-30 through {@code vs flight-model-by-id}, with the reaction wheel at
+     * {@code BlockReactionWheel.TORQUE} 1.9e6 N·m and {@code MOMENTUM_CAPACITY} 1.7e6 N·m·s (LIVE; SI;
+     * weight in the overworld's 9.81 m/s²). "Sustained" is the motors alone; "burst" adds the wheel,
+     * for the seconds its stored momentum lasts — 0.895 s for every rotation below, and for a
+     * translation that uses it:</p>
+     * <ul>
+     *   <li>{@code with-pilot-deck}: 281 250 kg, weight 2.76 MN; surge/sway ±4.905 MN (17.44 m/s²),
+     *       sustained = burst; heave +9.72 MN sustained (TWR 3.52), +9.81 MN burst for 9.7 s / −4.86 MN
+     *       (−4.905 burst for 19.5 s); roll 7.96 sustained / 9.50 burst, pitch 8.12 / 9.69, yaw
+     *       12.7 / 14.0 rad/s² — inertia 1.23e6 / 1.21e6 / 1.54e6 kg·m² (torque ÷ acceleration).
+     *       {@code with-roofed-deck} (Z pushers on the upper layer): 426 250 kg, weight 4.18 MN; surge
+     *       ±4.905 MN, sway ±3.43 MN sustained / 4.10 MN burst (below its weight — it cannot hover
+     *       rolled to vertical, only pitched), heave +9.32 / −4.66 MN sustained; roll 1.99 / 2.40, pitch
+     *       2.00 / 2.41, yaw 8.85 / 9.70 rad/s². With the Z pushers low it was the other way round,
+     *       surge ±3.43 MN, and its pitch-over scenario stalled at upY −0.38. {@code with-jump-drive}:
+     *       321 250 kg, surge/sway ±4.905 MN, heave +9.17 / −4.58 MN sustained; roll 6.07 / 7.27, pitch
+     *       6.43 / 7.71, yaw 11.6 / 12.8 rad/s².</li>
+     *   <li>{@code with-pilot-seat} / {@code advanced-flight-computer-only}: 176 250 kg, weight
+     *       1.73 MN; surge ±6.29 MN sustained / 8.72 MN burst, sway ±4.905 MN, heave ±4.905 MN (TWR
+     *       2.84); roll 19.6 / 23.4, pitch 20.4 / 28.8, yaw 20.4 / 25.3 rad/s².
+     *       {@code with-advanced-flight-computer} 185 250 kg (surge 7.07 / 9.81 MN),
+     *       {@code with-shield-emitter} 181 250 kg (6.71 / 9.31 MN), {@code with-nav-computer}
+     *       190 250 kg (7.56 / 9.81 MN, burst 1.16 s) — sway and heave ±4.905 MN, rotations within
+     *       20% of the seat craft's.</li>
+     *   <li>The three probe-only hulls (see {@code handleFixture}): {@code with-pilot-deck-and-hold}
+     *       282 000 kg, the decked craft's authorities to four figures; {@code hull-without-actuators}
+     *       11 250 kg, nothing in any direction (TWR 0); {@code wheel-only-hull} 16 250 kg, no force,
+     *       burst roll 101 / pitch 129 / yaw 139 rad/s² for 0.895 s.</li>
+     * </ul>
+     */
+    private static void placeTier2Actuators(net.minecraft.world.WorldServer world,
+                                            int rocketX, int rocketY, int rocketZ, boolean deck,
+                                            boolean surgeLayerHigh) {
+        net.minecraft.block.Block motor = dev.stannismod.stellurgy.api.StellurgyBlocks.blockAdvEngine;
+        net.minecraft.util.EnumFacing west = net.minecraft.util.EnumFacing.WEST;
+        net.minecraft.util.EnumFacing east = net.minecraft.util.EnumFacing.EAST;
+        net.minecraft.util.EnumFacing north = net.minecraft.util.EnumFacing.NORTH;
+        net.minecraft.util.EnumFacing south = net.minecraft.util.EnumFacing.SOUTH;
+        net.minecraft.util.EnumFacing up = net.minecraft.util.EnumFacing.UP;
+        net.minecraft.util.EnumFacing down = net.minecraft.util.EnumFacing.DOWN;
+        if (deck) {
+            // The upper layer is nearer the centre of mass, so the pushers standing there are the
+            // cleaner ones; which axis gets it is chosen per craft (see the caller).
+            int xLayer = surgeLayerHigh ? 1 : 2;
+            int zLayer = surgeLayerHigh ? 2 : 1;
+            for (int sx = -1; sx <= 1; sx += 2) {
+                for (int sz = -1; sz <= 1; sz += 2) {
+                    int x = rocketX + 2 * sx, z = rocketZ + 2 * sz;
+                    // Nozzle outward along X: pushes the hull inward, -sx.
+                    placeMotor(world, motor, new BlockPos(x, rocketY + xLayer, z), sx > 0 ? east : west);
+                    // Nozzle outward along Z: pushes the hull inward, -sz.
+                    placeMotor(world, motor, new BlockPos(x, rocketY + zLayer, z), sz > 0 ? south : north);
+                    // (+,+) and (-,-) push up; (+,-) and (-,+) push down.
+                    placeMotor(world, motor, new BlockPos(x, rocketY, z), sx == sz ? down : up);
+                }
+            }
+        } else {
+            for (int sx = -1; sx <= 1; sx += 2) {
+                int x = rocketX + 2 * sx;
+                // Against the column's end tank, which forces exactly this facing: nozzle toward the
+                // tank, push outward, +sx.
+                placeMotor(world, motor, new BlockPos(x, rocketY + 1, rocketZ), sx > 0 ? west : east);
+                placeMotor(world, motor, new BlockPos(x, rocketY + 2, rocketZ), sx > 0 ? west : east);
+                // Beside no tank: nozzle up, push down.
+                placeMotor(world, motor, new BlockPos(x, rocketY, rocketZ), up);
+            }
+            for (int dx = -1; dx <= 1; dx += 2) {
+                for (int sz = -1; sz <= 1; sz += 2) {
+                    for (int dy = 1; dy <= 2; dy++) {
+                        // Against a side tank, which forces this facing: push outward, +sz.
+                        placeMotor(world, motor, new BlockPos(rocketX + dx, rocketY + dy, rocketZ + sz),
+                                sz > 0 ? north : south);
+                    }
+                }
+            }
+        }
+        placeReactionWheel(world, rocketX, rocketY, rocketZ);
+    }
+
+    /**
+     * The one reaction wheel a tier-2 fixture carries: against the upper centre tank's +Z face —
+     * welded, clear of every motor's facing, and off the underside's centre, which the inverted-hull
+     * scenarios stand a body on.
+     */
+    private static void placeReactionWheel(net.minecraft.world.WorldServer world,
+                                           int rocketX, int rocketY, int rocketZ) {
+        world.setBlockState(new BlockPos(rocketX, rocketY + 2, rocketZ + 1),
+                dev.stannismod.stellurgy.api.StellurgyBlocks.blockReactionWheel.getDefaultState());
+    }
+
+    private static void placeMotor(net.minecraft.world.WorldServer world, net.minecraft.block.Block motor,
+                                   BlockPos at, net.minecraft.util.EnumFacing nozzle) {
+        world.setBlockState(at, motor.getDefaultState()
+                .withProperty(dev.stannismod.stellurgy.libvulpes.block.BlockFullyRotatable.FACING, nozzle));
+    }
+
+    /**
      * {@code /stellurgytest fixture rocket <dim> <x> <y> <z>} — builds the
      * BuildRocketTest geometry rooted at the given pad-center coordinates in a
      * single command (faster than 40+ individual /stellurgytest place calls):
@@ -15414,17 +15784,38 @@ public class TestProbeCommand extends CommandBase {
             //                                   (AFC is the tier-2 brain; with VS -> ship, without
             //                                    VS -> NOGUIDANCE, the fallback still needs guidance)
             String variant = args.length >= 6 ? args[5].toLowerCase(java.util.Locale.ROOT) : "simple";
-            boolean includeEngines = !"invalid-no-engine".equals(variant);
+            // Three tier-2 hulls that differ from with-pilot-seat only in what can push or turn them,
+            // for the scenarios whose subject is that difference:
+            //   hull-without-actuators    — the with-pilot-seat hull with NOTHING that pushes or turns:
+            //                               no main engines, no pushers, no reaction wheel. What a
+            //                               flight computer can deliver through it is zero in every
+            //                               direction, so its thrust-to-weight is zero and the
+            //                               assembler asks twice before building it.
+            //   wheel-only-hull           — the same hull with the one reaction wheel and no motor:
+            //                               torque about every axis, no force along any.
+            // And one decked craft with somewhere to put cargo:
+            //   with-pilot-deck-and-hold  — with-pilot-deck plus an EMPTY chest standing on the deck
+            //                               beside the pilot seat, mirroring the flight computer on the
+            //                               seat's other side, as a hold cargo can be stowed in after
+            //                               assembly; the reply names where it sits relative to the
+            //                               flight computer.
+            boolean bareHull = "hull-without-actuators".equals(variant);
+            boolean wheelOnlyHull = "wheel-only-hull".equals(variant);
+            boolean includeHold = "with-pilot-deck-and-hold".equals(variant);
+            boolean seatHullVariant = bareHull || wheelOnlyHull;
+            boolean includeEngines = !"invalid-no-engine".equals(variant) && !bareHull && !wheelOnlyHull;
             boolean includeFuelTanks = !"invalid-no-fuel-tank".equals(variant);
             boolean includeSeat = !"invalid-no-seat".equals(variant)
                     && !"with-pilot-seat".equals(variant) // pilot seat replaces the generic seat
                     && !"with-shield-emitter".equals(variant)
-                    && !"with-jump-drive".equals(variant);
+                    && !"with-jump-drive".equals(variant)
+                    && !seatHullVariant;
             boolean includeGuidance = !"invalid-no-guidance".equals(variant)
                     && !"advanced-flight-computer-only".equals(variant)
                     && !"with-pilot-seat".equals(variant) // AFC is the ship's brain — no guidance
                     && !"with-shield-emitter".equals(variant)
-                    && !"with-jump-drive".equals(variant);
+                    && !"with-jump-drive".equals(variant)
+                    && !seatHullVariant;
             boolean includeCargo = "with-cargo".equals(variant);
             // with-fluid-cargo: same as simple but replaces 2 of the 6 BlockFuelTank
             // positions with BlockPressurizedFluidTank (registry "liquidTank") which
@@ -15485,7 +15876,7 @@ public class TestProbeCommand extends CommandBase {
             boolean includeRoofedDeck = "with-roofed-deck".equals(variant);
             boolean includeJumpDrive = "with-jump-drive".equals(variant);
             boolean includePilotDeck = "with-pilot-deck".equals(variant) || includeRoofedDeck
-                    || includeJumpDrive;
+                    || includeJumpDrive || includeHold;
             // with-shield-emitter — a with-pilot-seat ship (AFC + pilot seat, so it becomes a VS ship)
             // plus one affs:field_generator emitter block welded into the hull. The emitter rides the
             // ship into subspace, so its field frame resolves to the ship (§4.3); the ship-frame e2e
@@ -15497,7 +15888,8 @@ public class TestProbeCommand extends CommandBase {
             // one hull emitter to wrap the craft. Nothing is linked here: welding a ship's machines
             // to its flight computer is the assembling machine's job, and a fixture that pre-linked
             // them would hide the very failure a jump-capable-ship test exists to catch.
-            boolean includePilotSeat = "with-pilot-seat".equals(variant) || includePilotDeck
+            boolean includePilotSeat = "with-pilot-seat".equals(variant) || seatHullVariant
+                    || includePilotDeck
                     || includeShieldEmitter || includeJumpDrive;
             boolean includeNavComputer = "with-nav-computer".equals(variant);
             boolean includeAdvancedFlightComputer = "with-advanced-flight-computer".equals(variant)
@@ -15806,6 +16198,25 @@ public class TestProbeCommand extends CommandBase {
                             net.minecraft.init.Blocks.IRON_BLOCK.getDefaultState());
                 }
             }
+            if (includeAdvancedFlightComputer && wheelOnlyHull) {
+                placeReactionWheel(world, rocketX, rocketY, rocketZ);
+            } else if (includeAdvancedFlightComputer && !bareHull) {
+                // The roofed craft's roof lifts its centre of mass well above the pushers, and its
+                // scenario turns it end over end about X, which it can only do if its SURGE pushers
+                // hold its weight when it stands on its nose — so they take the upper layer there.
+                placeTier2Actuators(world, rocketX, rocketY, rocketZ, includePilotDeck, includeRoofedDeck);
+            }
+            String holdFromComputer = "null";
+            if (includeHold) {
+                // On the deck, beside the pilot seat on the side opposite the flight computer: welded to
+                // the deck below it, clear of every motor (they all hang under the deck), and off the
+                // seat's own column, so the seat's "passable above" cell is untouched.
+                BlockPos hold = new BlockPos(rocketX + 1, rocketY + 4, rocketZ);
+                BlockPos computer = new BlockPos(rocketX - 1, rocketY + 4, rocketZ);
+                world.setBlockState(hold, net.minecraft.init.Blocks.CHEST.getDefaultState());
+                holdFromComputer = "[" + (hold.getX() - computer.getX()) + ","
+                        + (hold.getY() - computer.getY()) + "," + (hold.getZ() - computer.getZ()) + "]";
+            }
             if (includeCargo) {
                 // Vanilla chest above the seat — gives the rocket an IInventory
                 // tile in its storage chunk for rocket-loader / unloader
@@ -15818,7 +16229,8 @@ public class TestProbeCommand extends CommandBase {
             }
 
             send(sender, "{\"ok\":true,\"variant\":\"" + variant + "\",\"builderPos\":[" + builderPos.getX() + ","
-                    + builderPos.getY() + "," + builderPos.getZ() + "]}");
+                    + builderPos.getY() + "," + builderPos.getZ() + "]"
+                    + ",\"holdFromFlightComputer\":" + holdFromComputer + "}");
             return;
         }
         if (args.length >= 5 && "machine".equalsIgnoreCase(args[0])
@@ -18093,6 +18505,52 @@ public class TestProbeCommand extends CommandBase {
                 .append("\",\"count\":").append(stack.getCount())
                 .append(",\"meta\":").append(stack.getMetadata())
                 .append('}');
+    }
+
+    /** A ship readout as JSON-ready data: primitives only, every figure named for what it is. */
+    private static java.util.Map<String, Object> readoutMap(dev.stannismod.stellurgy.ship.control.ShipReadout r) {
+        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("revision", r.revision());
+        java.util.Map<String, Object> mass = new java.util.LinkedHashMap<>();
+        mass.put("structuralKg", r.structuralMass());
+        mass.put("contentKg", r.contentMass());
+        mass.put("crewKg", r.crewMass());
+        mass.put("totalKg", r.totalMass());
+        m.put("mass", mass);
+        m.put("gravity", r.gravity());
+        for (dev.stannismod.stellurgy.ship.control.ShipReadout.View view
+                : dev.stannismod.stellurgy.ship.control.ShipReadout.View.values()) {
+            double twr = r.thrustToWeight(view);
+            m.put("twr" + view.name(), Double.isInfinite(twr) ? null : twr);
+            m.put("twr" + view.name() + "Infinite", Double.isInfinite(twr));
+            m.put("canHover" + view.name(), r.canHover(view));
+        }
+        java.util.Map<String, Object> dirs = new java.util.LinkedHashMap<>();
+        for (dev.stannismod.stellurgy.ship.control.ControlDirection d
+                : dev.stannismod.stellurgy.ship.control.ControlDirection.values()) {
+            java.util.Map<String, Object> dm = new java.util.LinkedHashMap<>();
+            for (dev.stannismod.stellurgy.ship.control.ShipReadout.View view
+                    : dev.stannismod.stellurgy.ship.control.ShipReadout.View.values()) {
+                java.util.Map<String, Object> vm = new java.util.LinkedHashMap<>();
+                for (dev.stannismod.stellurgy.ship.control.Endurance e
+                        : dev.stannismod.stellurgy.ship.control.Endurance.values()) {
+                    vm.put(e.name().toLowerCase(java.util.Locale.ROOT), r.authority(view, d, e));
+                    vm.put(e.name().toLowerCase(java.util.Locale.ROOT) + "Accel", r.acceleration(view, d, e));
+                    // The torque behind a rotational figure, N·m. With the figure itself it is the
+                    // hull's inertia about that axis (torque / accel), which no other field carries.
+                    if (d.axis().isRotation()) {
+                        vm.put(e.name().toLowerCase(java.util.Locale.ROOT) + "Torque", r.torque(view, d, e));
+                    }
+                }
+                double seconds = r.burstSeconds(view, d);
+                vm.put("burstSeconds", Double.isInfinite(seconds) ? null : seconds);
+                vm.put("burstSecondsInfinite", Double.isInfinite(seconds));
+                dm.put(view.name().toLowerCase(java.util.Locale.ROOT), vm);
+            }
+            dirs.put(d.name(), dm);
+        }
+        m.put("directions", dirs);
+        return m;
     }
 
     private static String jsonMap(Map<String, ?> map) {
