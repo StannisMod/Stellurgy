@@ -143,7 +143,7 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
                 + "            <gravitationalMultiplier>100</gravitationalMultiplier>\n"
-                + "            <orbitalDistance>100</orbitalDistance>\n"
+                + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
                 + "            <orbitalTheta>0</orbitalTheta>\n"
                 + "            <orbitalPhi>0</orbitalPhi>\n"
                 + "            <retrograde>false</retrograde>\n"
@@ -170,9 +170,10 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
     // ── the shipped default: a bed does not bring a planet's morning ─────────────────────────────
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE POLICY — {@code TimeSkipPolicy:53}
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE POLICY — {@code TimeSkipPolicy#allows} at {@code return allowOnPlanets}
      * allowing the skip on every planet: "no `time_skip_decided` refusing the skip on dim 9502". THE
-     * CLOCK — {@code MixinWorldServer:45}'s {@code return} after a refusal dropped, so the refused
+     * CLOCK — {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at {@code ar$tellSleepersWhenDawnIs(self); return}
+     * — the return after a refusal — dropped, so the refused
      * skip happens anyway: "The clock was at 20006 before the sleep and 30006 after it".</p>
      */
     @Test
@@ -254,8 +255,10 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
      * A completed sleep on a planet whose skip is allowed wakes it at the PLANET's dawn — the next
      * multiple of its rotational period — and leaves the overworld's clock alone.
      *
-     * <p>red-witnessed: with {@code MixinWorldServer}'s planetary rounding replaced by vanilla's
-     * ({@code setWorldTime(vanillaRounded)} in the per-dim branch), this fails with "sleep skip must
+     * <p>red-witnessed: with {@code MixinWorldServer#roundSleepWakeToRotationalPeriod} at
+     * {@code self.setWorldTime(StellurgyDimensionWorldInfo.computeSleepWakeTime(self.getWorldTime(), rotationalPeriod))}
+     * — the planetary rounding in the per-dim branch — replaced by vanilla's
+     * {@code setWorldTime(vanillaRounded)}, this fails with "sleep skip must
      * land at/after the next planetary dawn (30000), got 24007" — 2026-09-28.</p>
      */
     @Test

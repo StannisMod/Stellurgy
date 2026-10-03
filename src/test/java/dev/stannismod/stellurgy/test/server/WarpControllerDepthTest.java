@@ -1,10 +1,13 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.MachineInfo;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.StationInfo;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import org.junit.Test;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -263,6 +266,104 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         int orbAfter = station(stationId).orbitingPlanetId;
         assertEquals("anchored station's orbit must NOT change despite fuel and destination",
                 orbBefore, orbAfter);
+    }
+
+    /**
+     * What a warp between two planets of one system costs, as a price per AU of their separation:
+     * one fuel per hundredth of an AU, i.e. 100 per AU. That is the price the controller quoted
+     * before the distance unit became a length — its cost WAS the separation in raw units, and a
+     * unit was a hundredth of an AU — measured by reading {@code TileWarpController.getTravelCost}
+     * at the commit before that change. The unit change was ratified as a change of representation,
+     * so the price did not move.
+     */
+    private static final double FUEL_PER_AU = 100d;
+
+    /**
+     * The controller prices a warp between two planets of one star by their separation across the
+     * orbital plane, 100 fuel per AU — whatever unit the orbits are stored in.
+     *
+     * <p>The pair is two planets the production {@code planet generate} command derives for Sol, so
+     * neither orbit is a number this test chose; both orbits and both live angles are read off the
+     * server, and the expected price is the separation of those two positions.
+     * Acceptance, stated before the code: the quote equals {@code 100 x separation(AU)} within the
+     * slack derived beside the assertion (the int truncation, the sine table's step, and the drift
+     * measured between readings on both sides of the quote). Read raw, a 100 km unit quotes that
+     * 14 960 times higher. Every other check in the method is an ARRANGEMENT and raises
+     * {@code ArrangementFailure}.</p>
+     *
+     * <p>What this does not see: the price reaching the GUI's fuel line, and a warp actually spending
+     * it — stations no longer depart (see {@link #aFullyFuelledStationStillDoesNotDepart}).</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code TileWarpController#intraSystemCost} at {@code double auPerUnit = 1d / AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} converting by
+     * the old hundredth of an AU ({@code 1d / 100d}), i.e. pricing the raw separation in units: "a warp
+     * from WarpPriceOrigin (11.998453186842863 AU) to WarpPriceTarget (18.432117696839327 AU), priced
+     * 643.3664509998781 .. 643.3664510005907 at 100 fuel per AU, slack 1.4125960214058866: … expected:
+     * &lt;643.3664510002344&gt; but was:&lt;9624626.0&gt;".</p>
+     */
+    @Test
+    public void aWarpBetweenTwoPlanetsIsPricedByTheirSeparationInAu() throws Exception {
+        DimList.Probe probe = command -> ok(client().execute(command));
+        DimList before = DimList.from(probe);
+        String[] generated = {"WarpPriceOrigin", "WarpPriceTarget"};
+        for (String name : generated) {
+            ok(client().execute("ar planet generate 0 " + name));
+        }
+        int[] added = DimList.from(probe).addedSince(before);
+        requireArranged("planet generate must register exactly one new dimension per call: "
+                + java.util.Arrays.toString(added), added.length == generated.length);
+        int origin = Math.min(added[0], added[1]);
+        int target = Math.max(added[0], added[1]);
+
+        // The station orbits the ORIGIN, not Earth: Earth's star is a separate Sol object from the
+        // registered one, and the controller compares stars by identity, so a warp from Earth is
+        // quoted the interstellar flat rate before this law is ever reached.
+        int stationId = createStationOrbiting(origin);
+        int[] xz = stationSpawnCoords(stationId);
+        ok(client().execute("stellurgytest station set-parent " + stationId + " " + origin));
+        ok(client().execute("stellurgytest station set-dest " + stationId + " " + target));
+
+        // The two planets are read on BOTH sides of the quote, because they move: the quote was
+        // computed at some tick between the two readings, so the expected price lies between the
+        // price at the first and the price at the second, and their difference is the drift.
+        Reply fromBefore = Reply.of(ok(client().execute("stellurgytest planet info " + origin)));
+        Reply destBefore = Reply.of(ok(client().execute("stellurgytest planet info " + target)));
+        String state = placeAndReadWarpState(SPACE_DIM, xz[0], 128, xz[1]);
+        Reply fromAfter = Reply.of(ok(client().execute("stellurgytest planet info " + origin)));
+        Reply destAfter = Reply.of(ok(client().execute("stellurgytest planet info " + target)));
+
+        requireArranged("both worlds must be planets of one star, or the price is the interstellar flat "
+                + "rate and not the law under test: " + fromBefore + " / " + destBefore,
+                fromBefore.integer("starId") == destBefore.integer("starId"));
+        requireArranged("both worlds must be PLANETS — a moon of the parent is priced 1: " + fromBefore
+                + " / " + destBefore, fromBefore.integer("parent") == destBefore.integer("parent"));
+        double au = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+        double a = fromBefore.longInteger("orbitalDistance") / au;
+        double b = destBefore.longInteger("orbitalDistance") / au;
+        double priceBefore = priceAt(a, fromBefore.number("orbitTheta"), b, destBefore.number("orbitTheta"));
+        double priceAfter = priceAt(a, fromAfter.number("orbitTheta"), b, destAfter.number("orbitTheta"));
+        double expected = (priceBefore + priceAfter) / 2d;
+        // The slack, each term derived: the controller truncates the price to an int (below 1); it
+        // looks its sines and cosines up in MathHelper's 65 536-entry table, whose index truncates, so
+        // each coordinate of each planet can be off by its radius times one table step; and the
+        // planets moved by |after - before| while the quote was taken.
+        double tableStep = 2d * Math.PI / 65536d;
+        double tolerance = 1d + (a + b) * Math.sqrt(2d) * tableStep * FUEL_PER_AU
+                + Math.abs(priceAfter - priceBefore) / 2d;
+        requireArranged("the price must stand clear of the controller's floor of 1 by more than the"
+                + " slack, or a floored quote could pass for the law (a=" + a + " AU, b=" + b
+                + " AU, price=" + expected + ", slack=" + tolerance + ")", expected > 1d + tolerance);
+
+        int quoted = Reply.of(state).integer("travelCost");
+        assertEquals("a warp from " + fromBefore.text("name") + " (" + a + " AU) to " + destBefore.text("name")
+                        + " (" + b + " AU), priced " + priceBefore + " .. " + priceAfter
+                        + " at 100 fuel per AU, slack " + tolerance + ": " + state,
+                expected, quoted, tolerance);
+    }
+
+    /** The price, at 100 fuel per AU, of the in-plane separation of two orbits at two angles. */
+    private static double priceAt(double aAu, double thetaA, double bAu, double thetaB) {
+        return FUEL_PER_AU * Math.hypot(aAu * Math.cos(thetaA) - bAu * Math.cos(thetaB),
+                aAu * Math.sin(thetaA) - bAu * Math.sin(thetaB));
     }
 
     @Test

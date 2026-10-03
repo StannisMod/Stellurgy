@@ -230,7 +230,7 @@ public class RenderAsteroidSky extends IRenderHandler {
 
         // === Gather properties (unchanged logic) ===
         float atmosphere;
-        int solarOrbitalDistance, planetOrbitalDistance = 0;
+        long solarOrbitalDistance, planetOrbitalDistance = 0;
         double myPhi = 0, myTheta = 0, myPrevOrbitalTheta = 0, myRotationalPhi = 0;
         boolean isMoon;
         // shadowColorTmp reused; values set below
@@ -647,7 +647,7 @@ public class RenderAsteroidSky extends IRenderHandler {
         GlStateManager.enableCull();
     }
 
-    protected void drawStarAndSubStars(BufferBuilder buffer, StellarBody sun, DimensionProperties properties, int solarOrbitalDistance, float sunSize, Vec3d sunColor, float multiplier) {
+    protected void drawStarAndSubStars(BufferBuilder buffer, StellarBody sun, DimensionProperties properties, long solarOrbitalDistance, float sunSize, Vec3d sunColor, float multiplier) {
         drawStar(buffer, sun, properties, solarOrbitalDistance, sunSize, sunColor, multiplier);
 
         List<StellarBody> subStars = sun.getSubStars();
@@ -681,12 +681,16 @@ public class RenderAsteroidSky extends IRenderHandler {
         return EnumFacing.EAST;
     }
 
-    protected void renderPlanet(BufferBuilder buffer, DimensionProperties properties, float separationToObserver, float alphaMultiplier, double shadowAngle, boolean hasAtmosphere, boolean hasRing, float radiusEarths, float[] shadowColorMultiplier, float alphaMultiplier2) {
+    /**
+     * Draws a moon seen from its planet, or the planet seen from its moon — the only two bodies this
+     * sky draws across a moon's orbit — at {@code moonOrbitalDistance} apart, in distance units.
+     */
+    protected void renderPlanet(BufferBuilder buffer, DimensionProperties properties, long moonOrbitalDistance, float alphaMultiplier, double shadowAngle, boolean hasAtmosphere, boolean hasRing, float radiusEarths, float[] shadowColorMultiplier, float alphaMultiplier2) {
         // Size is the body's OWN radius over the distance to it. It used to be its surface GRAVITY
         // over that distance, which drew two worlds of equal size at different sizes and two worlds
         // of different size at the same one whenever their densities happened to agree. The scale
         // constant is unchanged, so a body of one Earth radius draws exactly as it always did.
-        renderPlanet2(buffer, properties, 20f * AstronomicalBodyHelper.getBodySizeMultiplier(separationToObserver) * radiusEarths, alphaMultiplier, shadowAngle, hasRing, shadowColorMultiplier, alphaMultiplier2);
+        renderPlanet2(buffer, properties, 20f * AstronomicalBodyHelper.getMoonSizeMultiplier(moonOrbitalDistance) * radiusEarths, alphaMultiplier, shadowAngle, hasRing, shadowColorMultiplier, alphaMultiplier2);
     }
 
     protected void renderPlanet2(BufferBuilder buffer, DimensionProperties properties, float size, float alphaMultiplier, double shadowAngle, boolean hasRing, float[] shadowColorMultiplier, float alphaMultiplier2) {
@@ -732,7 +736,7 @@ public class RenderAsteroidSky extends IRenderHandler {
         tessellator.draw();
     }
 
-    protected void drawStar(BufferBuilder buffer, StellarBody sun, DimensionProperties properties, int solarOrbitalDistance, float sunSize, Vec3d sunColor, float multiplier) {
+    protected void drawStar(BufferBuilder buffer, StellarBody sun, DimensionProperties properties, long solarOrbitalDistance, float sunSize, Vec3d sunColor, float multiplier) {
         if (sun != null && sun.isBlackHole()) {
             GlStateManager.enableAlpha();
             GlStateManager.alphaFunc(GL11.GL_GREATER, 0.01f);

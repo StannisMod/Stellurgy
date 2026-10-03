@@ -75,7 +75,7 @@ public class WeatherCommandRedirectE2ETest {
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
                 + "            <gravitationalMultiplier>100</gravitationalMultiplier>\n"
-                + "            <orbitalDistance>100</orbitalDistance>\n"
+                + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
                 + "            <orbitalTheta>0</orbitalTheta>\n"
                 + "            <orbitalPhi>0</orbitalPhi>\n"
                 + "            <retrograde>false</retrograde>\n"
@@ -128,9 +128,9 @@ public class WeatherCommandRedirectE2ETest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand:85} not
+     * <p>red-witnessed: one inversion per leg, 2026-09-28. RAIN — {@code WeatherCommand#execute} at {@code worldinfo.setRaining(true)} not
      * setting the flag: "no `planet_weather_changed` carrying dim = 9304 and raining = true". CLEAR —
-     * the clear branch ({@code WeatherCommand:74}) writing nothing: "… raining = false was recorded
+     * the clear branch ({@code WeatherCommand#execute} at {@code if ("clear".equals(action))}) writing nothing: "… raining = false was recorded
      * within 200 ticks". Dropping only its {@code setRaining(false)} stays GREEN: the
      * {@code setRainTime(0)} beside it makes vanilla's weather cycle flip the flag off on the next
      * tick, so each write suffices alone.</p>

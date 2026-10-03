@@ -116,7 +116,7 @@ public final class SpaceSubsystem {
         this.descent = new DescentController(this.manager, this.ledger, new VSShipCrossingOps(),
                 new VSDescentPasteResolver(), useClock);
         this.cellCrossings = new CellCrossingController(this.manager, this.ledger, new VSShipCrossingOps(),
-                useClock);
+                useClock, SpaceSubsystem::zoneMembershipOf);
         // A jump too short to be worth a hyperspace leg is performed by the same machinery that carries
         // a ship across a cell face — one crossing, ledger straight to the destination, no lane and no
         // mid-flight. The transit manager decides WHICH jumps those are; this hands it the means.
@@ -413,13 +413,285 @@ public final class SpaceSubsystem {
         // does put the ship at zero distance from the body, and an observer→body vector of zero is
         // dropped by the sky renderer — so the pilot spends a jump and arrives at a destination his
         // own sky does not draw.
+        // The ring and the clearance come from the BODIES, as the entry path's do: each body's descent
+        // shell is where its atmosphere begins, so a flat ring sits inside any shell wider than itself —
+        // a moon's, a planet's. (The flight computer's trigger itself still compares a flat radius, so
+        // this clears more than the trigger asks today; the shell is the boundary it is meant to use.)
         java.util.List<GalacticCoord> occupied = new java.util.ArrayList<>();
+        long ring = ShipEntryController.ENTRY_RING_BLOCKS;
+        long clearance = ShipEntryController.DESCENT_RADIUS_BLOCKS;
         for (dev.stannismod.stellurgy.universe.SystemBody body : reg.bodiesAt(target)) {
             occupied.add(body.addressAt(worldTick));
+            ring = Math.max(ring, ShipEntryController.entryRingAround(body));
+            clearance = Math.max(clearance, DescentShell.radiusAround(body));
         }
-        return StandoffRing.standoffFrom(target, occupied, ShipEntryController.ENTRY_RING_BLOCKS,
-                ShipEntryController.DESCENT_RADIUS_BLOCKS,
+        return StandoffRing.standoffFrom(target, occupied, ring, clearance,
                 shipId == null ? 0 : shipId.hashCode());
+    }
+
+    /**
+     * Where a craft BELONGS at {@code tick}, given the address it currently holds — the production
+     * reading of the reference-frame clause, decided by SPHERES.
+     *
+     * <p>{@code null} means "leave it alone", and it is the answer for three different situations
+     * that must not be told apart by the caller: the craft is in no sphere's reach (a galactic cell
+     * with no zone body, or one whose body's children are all far off), it is between the two
+     * thresholds (the hysteresis), or the universe cannot be asked. All three mean the cube goes on
+     * deciding, which is what it always did. A craft in a galactic cell is asked only the inward
+     * question — its outward boundary is that cell's cube.</p>
+     *
+     * <p>Order matters: a child is tested BEFORE the parent's own boundary. A craft deep inside a
+     * moon's sphere is also inside its planet's, and the innermost containing sphere is the one that
+     * governs — asking the outer question first would answer "still in the planet's zone" and never
+     * reach the moon.</p>
+     */
+    public static GalacticCoord zoneMembershipOf(GalacticCoord craftCoord, long tick) {
+        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        return zoneMembershipIn(
+                dev.stannismod.stellurgy.universe.UniverseRegistry.get(server), craftCoord, tick);
+    }
+
+    /**
+     * The same decision, against a stated universe — the form the production entry point above is a
+     * one-line binding of.
+     *
+     * <p>Split out so the whole membership rule can be driven without a server standing behind it.
+     * It is the only decision in the crossing that consults the universe, and it is where a craft's
+     * NAME is chosen: an answer that is well-formed but points at the wrong cell is invisible at
+     * every layer below (a cell key carries no lattice width, so a mismatch renames rather than
+     * fails). A rule with that failure mode may not be reachable only through a booted server.</p>
+     */
+    public static GalacticCoord zoneMembershipIn(
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg,
+            GalacticCoord craftCoord, long tick) {
+        if (craftCoord == null || craftCoord.cellBlocks() <= 0L) {
+            return null;
+        }
+        // A craft in a GALACTIC cell is in the zone of whatever body stands in that cell — a planet's
+        // own cell IS that planet's zone, seen from the galactic lattice. Only the INWARD question is
+        // asked for it: its outward boundary is the cube, which the caller already applies. Without
+        // this a craft that entered space from a planet — whose address is the planet's galactic cell
+        // — could never be taken into a moon's zone however close it flew; only one that arrived in
+        // a zoned cell by jump could.
+        boolean galactic = craftCoord.zone() == null;
+        GalacticCoord zoneCell = galactic ? craftCoord.cellCentre()
+                : GalacticCoord.fromCellKey(craftCoord.zone());
+        if (reg == null || zoneCell == null) {
+            return null;
+        }
+        dev.stannismod.stellurgy.universe.SystemBody zoneBody = frameBodyAt(reg, zoneCell);
+        if (zoneBody == null) {
+            return null;
+        }
+        AbsolutePos craftAt = reg.originAt(craftCoord.cellCentre(), tick)
+                .plus(craftCoord.localX(), craftCoord.localY(), craftCoord.localZ());
+
+        // INWARD first — the innermost containing sphere governs.
+        for (dev.stannismod.stellurgy.universe.SystemBody child : reg.systemBodiesAt(zoneCell)) {
+            if (child == null || child == zoneBody || child.equals(zoneBody)
+                    || !child.definesFrame()) {
+                continue;
+            }
+            if (!java.util.Objects.equals(child.name().zone(), zoneBody.name().cellKey())) {
+                continue; // not a child of THIS zone
+            }
+            double childRadius = ZoneScale.realizedRadiusBlocks(child, zoneBody, tick);
+            AbsolutePos childAt = child.absoluteAt(tick);
+            if (!CellSeam.hasEnteredZone(craftAt.distanceTo(childAt), childRadius)) {
+                continue;
+            }
+            return addressIn(reg, ZoneScale.addressOnLattice(child.name().cellKey(),
+                    latticeOf(reg, child, zoneBody, tick), craftAt.minus(childAt)), craftAt, tick);
+        }
+
+        if (galactic) {
+            return null; // in no child's sphere; the cube decides the rest, as for any galactic cell
+        }
+
+        // OUTWARD — past this zone's own sphere, so the parent's lattice takes it.
+        double zoneRadius = sphereRadiusOf(reg, zoneBody, zoneCell, tick);
+        if (!CellSeam.hasLeftZone(craftAt.distanceTo(zoneBody.absoluteAt(tick)), zoneRadius)) {
+            return null;
+        }
+        if (zoneCell.zone() == null) {
+            // The parent lattice is the GALACTIC one, which is addressed by absolute sectors rather
+            // than by an offset from a body. The craft keeps its position; only its name changes.
+            return addressIn(reg, zoneCell, craftAt, tick);
+        }
+        // Resolved STRICTLY, and deliberately not reused from `primary`: that one falls back to the
+        // star when a parent cannot be found, which is the right reading for a RADIUS (a sphere has
+        // to be measured against something) and the wrong one for an ADDRESS — it would name the
+        // craft in the star's lattice, four levels away from where it is. A craft whose parent body
+        // is missing is left where it is instead.
+        dev.stannismod.stellurgy.universe.SystemBody grandparent =
+                frameBodyAt(reg, GalacticCoord.fromCellKey(zoneCell.zone()));
+        if (grandparent == null) {
+            return null;
+        }
+        // The grandparent's lattice is the one THIS zone's body is itself named in — the craft is
+        // moving out into the company of its own parent, so the width is already on the name it is
+        // leaving. Read through the same helper anyway: one call site cannot be the place a width is
+        // decided, and the inward branch has no such shortcut.
+        return addressIn(reg, ZoneScale.addressOnLattice(grandparent.name().cellKey(),
+                latticeOf(reg, grandparent, primaryOf(reg, grandparent.name()), tick),
+                craftAt.minus(grandparent.absoluteAt(tick))), craftAt, tick);
+    }
+
+    /**
+     * The address a craft at {@code craftAt} holds, given the CELL a lattice has just named for it —
+     * with the in-cell offset measured from the origin that cell actually rides.
+     *
+     * <p>The lattice answers a cell and an offset from the zone body, and for an EMPTY cell those are
+     * the same thing: an empty cell's origin is its zone body displaced by the lattice slot. A cell a
+     * body STANDS in is different — its origin is that body ({@code UniverseRegistry.originAt} clause
+     * one), which is what "a cell rides its primary" means — and the body does not sit at its slot's
+     * centre, only inside it. Handing the lattice's own offset to such a cell measures it from the
+     * wrong point.</p>
+     *
+     * <p>That is not a rounding: a craft leaving a moon's sphere lands in the moon's OWN cell by
+     * construction (a cell contains the sphere of the body it names), so this is the ordinary case
+     * for the outward crossing rather than an edge of it. Measured before this existed: the craft was
+     * displaced <b>321 994 blocks</b> at the instant it crossed — the gap between Luna and its
+     * lattice slot — which is a teleport out of a crossing that is supposed to preserve position.</p>
+     */
+    private static GalacticCoord addressIn(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
+                                           GalacticCoord latticeAddress, AbsolutePos craftAt,
+                                           long tick) {
+        if (reg == null || latticeAddress == null || craftAt == null) {
+            return null;
+        }
+        GalacticCoord cell = latticeAddress.cellCentre();
+        dev.stannismod.stellurgy.space.BlockDelta off = craftAt.minus(reg.originAt(cell, tick));
+        return cell.plusLocal(off.dx(), off.dy(), off.dz());
+    }
+
+    /**
+     * The body a zone's own sphere of influence is measured AGAINST — the body whose zone that zone
+     * lives in, and only where it lives in the galactic lattice, the system's star.
+     *
+     * <p>A sphere of influence is a two-body quantity: {@code r = a·(m/M)^(2/5)} with {@code a} the
+     * separation from the body being orbited. For a planet that body is the star; <b>for a moon it is
+     * its planet</b>, and reading the star there does not fail — it answers with a plausible number
+     * about the wrong pair. Measured on Luna: against Earth its sphere is <b>264 731</b> blocks
+     * (66 183 km, the published value); against Sol the same call returns <b>638 428</b>, so a craft
+     * is judged still inside the moon's influence 2.4 times further out than it is, and the outward
+     * crossing never fires where a pilot actually leaves.</p>
+     *
+     * <p>The inward test never had this: it measures a child against the zone body it was found in,
+     * which is its parent by construction. Only the outward one had to name the pair itself.</p>
+     */
+    private static dev.stannismod.stellurgy.universe.SystemBody primaryOf(
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg, GalacticCoord cellOfZoneBody) {
+        if (reg == null || cellOfZoneBody == null) {
+            return null;
+        }
+        GalacticCoord parentZone = cellOfZoneBody.zone() == null ? null
+                : GalacticCoord.fromCellKey(cellOfZoneBody.zone());
+        dev.stannismod.stellurgy.universe.SystemBody parent =
+                parentZone == null ? null : frameBodyAt(reg, parentZone);
+        return parent != null ? parent : starOf(reg, cellOfZoneBody);
+    }
+
+    /**
+     * The cell width of {@code zoneBody}'s own lattice at {@code tick} — the width the NAMING pass
+     * recorded, and only failing that the width an undivided zone has.
+     *
+     * <p>A crossing may not size a lattice. The size depends on the innermost child of the zone,
+     * which only the naming pass sees in full, and a second derivation does not announce a
+     * disagreement: a cell key carries no width, so two lattices produce two different names for one
+     * place and every reader downstream answers correctly about the wrong cell. Measured before this
+     * existed: on the reference solar system a craft standing exactly where Luna stands was
+     * addressed on a lattice four times too coarse — 7 397 280 blocks against the 1 849 320 Luna is
+     * named on — so it arrived in the cell holding its PLANET and the moon beside it was not in its
+     * sky.
+     *
+     * <p>The fallback is the childless reading and it is an ANSWER, not a stand-in: a zone that names
+     * no body has nothing to divide for, so one cell spanning the whole sphere is what the naming
+     * pass would have produced too. The zero handed to {@code cellBlocks} here therefore states a
+     * fact the registry was asked for, rather than a parameter nobody filled in.</p>
+     */
+    private static long latticeOf(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
+                                  dev.stannismod.stellurgy.universe.SystemBody zoneBody,
+                                  dev.stannismod.stellurgy.universe.SystemBody primary,
+                                  long tick) {
+        long named = reg == null ? GalacticCoord.WIDTH_UNKNOWN
+                : reg.zoneLatticeBlocks(zoneBody.name());
+        return named > 0L ? named : ZoneScale.cellBlocks(zoneBody, primary, 0L, tick);
+    }
+
+    /**
+     * The width of the lattice INSIDE the zone whose own cell is {@code zoneCell}, at {@code tick} —
+     * the same answer {@link #zoneMembershipIn} addresses a craft on, reached by a caller that holds
+     * a cell rather than a body.
+     *
+     * <p>{@link GalacticCoord#WIDTH_UNKNOWN} when no body stands at that cell, and the caller must
+     * say what it does about that rather than substituting a width: a wrong one does not fail, it
+     * renames the cell.</p>
+     *
+     * <p>Public because the alternative is a second derivation of one quantity, and two derivations
+     * of a lattice width do not conflict when they disagree — they produce different well-formed
+     * names for one place. That is the defect this whole area was fixed for.</p>
+     */
+    public static long latticeWidthOfZone(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
+                                          GalacticCoord zoneCell, long tick) {
+        dev.stannismod.stellurgy.universe.SystemBody zoneBody = frameBodyAt(reg, zoneCell);
+        return zoneBody == null ? GalacticCoord.WIDTH_UNKNOWN
+                : latticeOf(reg, zoneBody, primaryOf(reg, zoneCell), tick);
+    }
+
+    /**
+     * The radius of the sphere bounding the zone whose own cell is {@code zoneCell}, at {@code tick}
+     * — the sphere {@link #zoneMembershipIn} carries a craft OUT of, reached by a caller that holds a
+     * cell rather than a body.
+     *
+     * <p>Empty when no body stands at that cell. Not zero: a zero radius is a real answer (a body
+     * with no mass has no sphere, and {@link CellSeam#hasLeftZone} reads it as such), so a missing
+     * body answered with one would read as a massless body.</p>
+     *
+     * <p>Public for the reason {@link #latticeWidthOfZone} is: a test that places a craft against
+     * this boundary must read production's radius, measured against production's choice of primary.
+     * That choice is exactly where a second derivation goes wrong — see {@link #primaryOf}.</p>
+     */
+    public static java.util.OptionalLong zoneSphereRadiusOf(
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg, GalacticCoord zoneCell, long tick) {
+        dev.stannismod.stellurgy.universe.SystemBody zoneBody = frameBodyAt(reg, zoneCell);
+        return zoneBody == null ? java.util.OptionalLong.empty()
+                : java.util.OptionalLong.of(sphereRadiusOf(reg, zoneBody, zoneCell, tick));
+    }
+
+    /** The one reading of a zone's sphere, shared by the crossing and by {@link #zoneSphereRadiusOf}. */
+    private static long sphereRadiusOf(dev.stannismod.stellurgy.universe.UniverseRegistry reg,
+                                       dev.stannismod.stellurgy.universe.SystemBody zoneBody,
+                                       GalacticCoord zoneCell, long tick) {
+        return ZoneScale.realizedRadiusBlocks(zoneBody, primaryOf(reg, zoneCell), tick);
+    }
+
+    /** The body whose frame {@code cell} rides, or {@code null} when the cell is void. */
+    private static dev.stannismod.stellurgy.universe.SystemBody frameBodyAt(
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg, GalacticCoord cell) {
+        if (reg == null || cell == null) {
+            return null;
+        }
+        for (dev.stannismod.stellurgy.universe.SystemBody b : reg.bodiesAt(cell)) {
+            if (b.definesFrame()) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    /** The star of the system {@code cell} belongs to — what a sphere of influence is measured against. */
+    private static dev.stannismod.stellurgy.universe.SystemBody starOf(
+            dev.stannismod.stellurgy.universe.UniverseRegistry reg, GalacticCoord cell) {
+        if (reg == null || cell == null) {
+            return null;
+        }
+        for (dev.stannismod.stellurgy.universe.SystemBody b : reg.systemBodiesAt(cell)) {
+            if (b.kind() == dev.stannismod.stellurgy.universe.SystemBodyKind.STAR) {
+                return b;
+            }
+        }
+        return null;
     }
 
     /**

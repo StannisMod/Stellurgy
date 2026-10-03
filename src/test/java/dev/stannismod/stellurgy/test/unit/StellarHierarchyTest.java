@@ -73,13 +73,26 @@ public class StellarHierarchyTest {
         assertEquals("and the primary's count is its own", 0, primary.getNumPlanets());
     }
 
+    /**
+     * An orbital distance of {@code au} astronomical units, in the field's own unit. The fixtures were
+     * bare hundredths of an AU until 2026-09-30, which is the unit a stale reader of the field also
+     * divided by — fixture and defect agreed, and this class pinned it.
+     *
+     * <p>red-witnessed (the two placement scenarios): with {@code StellarBody.offsetFromSystemAu} back
+     * on {@code / 100d}: "expected:&lt;20.0&gt; but was:&lt;299195.8&gt;" and "expected:&lt;25.0&gt;
+     * but was:&lt;373994.75&gt;", 2026-09-30.</p>
+     */
+    private static int au(double au) {
+        return (int) Math.round(au * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
+    }
+
     // ─── placement ─────────────────────────────────────────────────────────────
 
     @Test
     public void aCompanionStandsWhereItsOrbitSaysAndAPrimaryAtTheOrigin() {
         StellarBody primary = star("A", 1f);
         StellarBody companion = star("B", 0.5f);
-        companion.setOrbitalDistance(2_000); // 20 AU
+        companion.setOrbitalDistance(au(20));
         companion.setBaseTheta(0d);
         primary.addSubStar(companion);
 
@@ -97,9 +110,9 @@ public class StellarHierarchyTest {
         StellarBody a = star("A", 1f);
         StellarBody b = star("B", 0.8f);
         StellarBody c = star("C", 0.3f);
-        b.setOrbitalDistance(2_000);
+        b.setOrbitalDistance(au(20));
         b.setBaseTheta(0d);
-        c.setOrbitalDistance(500);
+        c.setOrbitalDistance(au(5));
         c.setBaseTheta(0d);
         a.addSubStar(b);
         b.addSubStar(c);
@@ -140,23 +153,23 @@ public class StellarHierarchyTest {
     public void apparentSeparationIsARealAngleFromARealDistance() {
         StellarBody primary = star("A", 1f);
         StellarBody close = star("B", 0.5f);
-        close.setOrbitalDistance(5); // 0.05 AU
+        close.setOrbitalDistance(au(0.05));
         primary.addSubStar(close);
 
         StellarBody other = star("C", 1f);
         StellarBody wide = star("D", 0.5f);
-        wide.setOrbitalDistance(2_000); // 20 AU
+        wide.setOrbitalDistance(au(20));
         other.addSubStar(wide);
 
-        float closeAngle = close.apparentSeparationDegrees(100);
-        float wideAngle = wide.apparentSeparationDegrees(100);
+        float closeAngle = close.apparentSeparationDegrees(au(1));
+        float wideAngle = wide.apparentSeparationDegrees(au(1));
 
         assertTrue("a close pair reads as two suns almost together, saw " + closeAngle,
                 closeAngle > 0f && closeAngle < CLOSE_PAIR_DEG);
         assertTrue("a wide companion is somewhere else in the sky entirely, saw " + wideAngle,
                 wideAngle > WIDE_COMPANION_DEG);
         assertEquals("a star nobody orbits has no separation from itself", 0f,
-                primary.apparentSeparationDegrees(100), 0f);
+                primary.apparentSeparationDegrees(au(1)), 0f);
     }
 
     // ─── round trip ────────────────────────────────────────────────────────────
@@ -167,11 +180,11 @@ public class StellarHierarchyTest {
         a.setId(3);
         StellarBody b = star("B", 0.8f);
         b.setId(4);
-        b.setOrbitalDistance(2_000);
+        b.setOrbitalDistance(au(20));
         b.setBaseTheta(0.75d);
         StellarBody c = star("C", 0.3f);
         c.setId(5);
-        c.setOrbitalDistance(500);
+        c.setOrbitalDistance(au(5));
         c.setBaseTheta(2.5d);
         a.addSubStar(b);
         b.addSubStar(c);
@@ -184,14 +197,14 @@ public class StellarHierarchyTest {
         assertEquals(1, read.getSubStars().size());
         StellarBody readB = read.getSubStars().get(0);
         assertEquals("a companion's own id survives", 4, readB.getId());
-        assertEquals(2_000, readB.getOrbitalDistance());
+        assertEquals(au(20), readB.getOrbitalDistance());
         assertEquals(0.75d, readB.getBaseTheta(), 1e-9);
         assertSame("and it still knows what it orbits", read, readB.getParentStar());
 
         assertEquals(1, readB.getSubStars().size());
         StellarBody readC = readB.getSubStars().get(0);
         assertEquals(5, readC.getId());
-        assertEquals(500, readC.getOrbitalDistance());
+        assertEquals(au(5), readC.getOrbitalDistance());
         assertEquals(2.5d, readC.getBaseTheta(), 1e-9);
         assertEquals("the geometry survives to the third star", c.separationAuFrom(a),
                 readC.separationAuFrom(read), 1e-9);

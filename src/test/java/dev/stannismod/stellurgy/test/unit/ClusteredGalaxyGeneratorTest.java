@@ -529,6 +529,11 @@ public class ClusteredGalaxyGeneratorTest {
         assertTrue(checkedAny);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code ClusteredGalaxyGenerator#claimSeat} at {@code phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT)} placing orbits at
+     * twice the blocks per distance unit, this fails with "body at orbit 104997 of system … must
+     * stand that far from its star expected:&lt;4.19988E7&gt; but was:&lt;8.399759966695575E7&gt;".
+     */
     @Test
     public void aBodyStandsExactlyWhereItsOrbitalDistanceSaysItDoes() {
         // The acceptance the whole scale rework exists for: ONE law, ONE constant. A body at orbital
@@ -546,7 +551,7 @@ public class ClusteredGalaxyGeneratorTest {
                     continue;
                 }
                 double expected = (double) body.orbitalDistance()
-                        * AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
+                        * AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
                 double placed = body.absoluteAt(0L).distanceTo(star.absoluteAt(0L));
                 assertEquals("body at orbit " + body.orbitalDistance() + " of system "
                                 + anchor.cellKey() + " must stand that far from its star",
@@ -671,10 +676,8 @@ public class ClusteredGalaxyGeneratorTest {
      * along +X from the origin — the origin being the home galaxy's centre. Sampling a BLOCK rather
      * than a single super-cell is what makes the count a reading of the density there instead of one
      * coin toss.
-     */
-    /**
-     * How many STAR seats a block of super-cells holds — never how many seats of any kind.
      *
+     * <p>STAR seats — never seats of any kind.</p>
      * <p>The difference is load-bearing at the shipped tuning. Free-floating worlds are drawn on the
      * same lattice at a MEASURED twenty-one per star, which saturates it: past {@code 1/density} every
      * cube the star draw passed over holds something, so a count of occupied seats is the constant
@@ -948,13 +951,13 @@ public class ClusteredGalaxyGeneratorTest {
         }
 
         @Override
-        public int referenceDistance(dev.stannismod.stellurgy.api.dimension.solar.StellarBody star) {
+        public long referenceDistance(dev.stannismod.stellurgy.api.dimension.solar.StellarBody star) {
             return base.referenceDistance(star);
         }
 
         @Override
-        public int orbitalDistanceOf(long seed, GalacticCoord anchor, int index, int count,
-                                     dev.stannismod.stellurgy.api.dimension.solar.StellarBody star) {
+        public long orbitalDistanceOf(long seed, GalacticCoord anchor, int index, int count,
+                                      dev.stannismod.stellurgy.api.dimension.solar.StellarBody star) {
             return base.orbitalDistanceOf(seed, anchor, index, count, star) + 7;
         }
 
@@ -970,13 +973,13 @@ public class ClusteredGalaxyGeneratorTest {
 
         @Override
         public int bareTemperature(dev.stannismod.stellurgy.api.dimension.solar.StellarBody star,
-                                   int orbitalDistance) {
+                                   long orbitalDistance) {
             return base.bareTemperature(star, orbitalDistance);
         }
 
         @Override
         public boolean tidallyLockedAt(dev.stannismod.stellurgy.api.dimension.solar.StellarBody star,
-                                       int orbitalDistance) {
+                                       long orbitalDistance) {
             return base.tidallyLockedAt(star, orbitalDistance);
         }
 
@@ -988,7 +991,7 @@ public class ClusteredGalaxyGeneratorTest {
         @Override
         public BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
                                   dev.stannismod.stellurgy.api.dimension.solar.StellarBody star,
-                                  boolean moon, int orbitalDistance) {
+                                  boolean moon, long orbitalDistance) {
             return base.derive(seed, anchor, bodyCell, variant, star, moon, orbitalDistance);
         }
 
@@ -1088,6 +1091,11 @@ public class ClusteredGalaxyGeneratorTest {
      *
      * <p>Regenerate deliberately, never to make a red test green:
      * {@code ./gradlew testUnit -Dstellurgy.universe.corpus.write=true}</p>
+     *
+     * <p>red-witnessed: 2026-09-29, against the fixture regenerated for moon zones: with
+     * {@code ZoneScale#cellsAcrossZone} at {@code long needed = ceilDiv(span, 2L * tightestChildOffsetBlocks)} back to the flat 1024-cell lattice it shipped with, this fails
+     * with "THE WORLD MODEL HAS MOVED. line 14: fixture: body … .1_0_0 kind=MOON … now: body …
+     * .9_0_-2 kind=MOON" — a moon renamed by a lattice regression.</p>
      */
     @Test
     public void theGoldenCorpusIsByteIdentical() throws Exception {

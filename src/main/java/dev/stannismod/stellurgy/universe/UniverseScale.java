@@ -87,9 +87,8 @@ public final class UniverseScale {
      * <p>Diffuse, nameless matter — a comet cloud — is not bound by it and may reach past a
      * neighbour's, exactly as real ones nearly touch: attribution reads names, not matter.</p>
      */
-    public static final int MAX_NAMED_ORBIT_UNITS =
-            (int) Math.min(Integer.MAX_VALUE,
-                    Math.round(SEPARATION_FLOOR_AU / 2d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU));
+    public static final long MAX_NAMED_ORBIT_UNITS =
+            Math.round(SEPARATION_FLOOR_AU / 2d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
 
     /** The same reach, in cells: the margin a system's seat keeps clear of its cube's faces. */
     public static final long SEAT_MARGIN_CELLS = cellsForOrbitUnits(MAX_NAMED_ORBIT_UNITS);
@@ -309,14 +308,14 @@ public final class UniverseScale {
 
     /** How many cells an orbital distance spans. Rounded up: a reach must not come out short. */
     public static long cellsForOrbitUnits(double orbitUnits) {
-        double blocks = Math.max(0d, orbitUnits) * AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
+        double blocks = Math.max(0d, orbitUnits) * AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
         return (long) Math.ceil(blocks / (double) GalacticCoord.CELL);
     }
 
     /** The largest orbital distance that fits inside {@code cells} cells of a system's star. */
     public static double orbitUnitsForCells(long cells) {
         return Math.max(0d, cells) * (double) GalacticCoord.CELL
-                / AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
+                / AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
     }
 
     /**

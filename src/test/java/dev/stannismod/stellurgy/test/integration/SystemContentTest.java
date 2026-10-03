@@ -43,6 +43,29 @@ public class SystemContentTest {
     /** @see #AUTHORED_DIM_A */
     private static final int AUTHORED_DIM_B = 701;
 
+    /**
+     * A moon's orbit for these fixtures, in DISTANCE UNITS — the unit {@code orbitalDist} is stored in.
+     *
+     * <p>The fixtures' moon has always been 25 400 chart blocks from its planet (the literal was
+     * {@code 127} units of 200 blocks). That is 63.5 of today's 400-block units, so the nearest whole
+     * number is taken: 64 units, 25 600 blocks.</p>
+     *
+     * <p><b>Why not through {@link #planet}</b>: its parameter is hundredths of an AU, and one
+     * hundredth of an AU is 14 959 units — about 5.98 million blocks — so 25 400 blocks is not
+     * expressible in it at all. This constant was that expression until 2026-09-29, clamped by
+     * {@code Math.max(1, …)} from zero to 1: every moon here sat 5.98 million blocks out while this
+     * comment said 25 400.</p>
+     */
+    private static final int MOON_DISTANCE_UNITS =
+            (int) Math.round(25_400d / AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
+
+    /** A moon of these fixtures: {@link #planet}'s body, at the fixtures' moon distance. */
+    private static DimensionProperties moon(int dimId) {
+        DimensionProperties m = planet(dimId, 0, 0.9);
+        m.orbitalDist = MOON_DISTANCE_UNITS;
+        return m;
+    }
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
@@ -66,15 +89,25 @@ public class SystemContentTest {
      * suite green while restoring exactly the bug that took planets out of a parked ship's sky. A
      * unit test never ticks the world, so the drift has to be authored in.</p>
      */
-    private static DimensionProperties planet(int dimId, int orbitalDist, double theta) {
+    private static DimensionProperties planet(int dimId, int orbitCentiAu, double theta) {
         DimensionProperties p = new DimensionProperties(dimId);
-        p.orbitalDist = orbitalDist;
+        // The argument is HUNDREDTHS OF AN AU, which is what these cases were written in
+        // when a distance unit WAS one. A distance unit is a length now (100 km), so the
+        // conversion happens here rather than at twenty call sites — and stating it once
+        // is what keeps the cases readable as "one AU", "two AU", "a quarter further out".
+        p.orbitalDist = (int) ((long) orbitCentiAu
+                * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU / 100L);
         p.baseOrbitTheta = theta;
         p.orbitTheta = theta + 1.0; // the body has moved since; a NAME must not notice
         p.orbitalPhi = 0;
         return p;
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the authored law at
+     * {@code ORBIT_UNIT_BLOCKS / 1000} (zero in long arithmetic — an orbit with no length), this fails
+     * with "a planet sits in its OWN cell, not in the star's anchor cell".
+     */
     @Test
     public void authoredPlanetsGetTheirOwnCellsInsideTheSuperCellBox() {
         StellarBody star = new StellarBody();
@@ -130,6 +163,12 @@ public class SystemContentTest {
         }
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the AUTHORED law at
+     * {@code ORBIT_UNIT_BLOCKS / 1000} while the procedural one is untouched, this fails with "one
+     * orbit unit must be one distance in both families expected:&lt;0.0&gt; but
+     * was:&lt;400.00000338384956&gt;" — 400 blocks per unit, the procedural family's measured scale.
+     */
     @Test
     public void oneOrbitalDistanceMeansOneDistanceInBothFamilies() {
         // The acceptance the scale rework exists for. An authored planet and a procedural one at the
@@ -195,6 +234,11 @@ public class SystemContentTest {
         assertTrue("the procedural system must have bodies to compare against", compared > 0);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at
+     * {@code ORBIT_UNIT_BLOCKS / 1000} (zero), this fails with "the planet's coord is its own zone
+     * cell, NOT the system's anchor cell".
+     */
     @Test
     public void planetResolvesToItsOwnCellThroughTheRegistry() {
         StellarBody star = new StellarBody();
@@ -237,6 +281,10 @@ public class SystemContentTest {
      * 6&deg; wedge, which parked every body in a system on the {@code x ≈ orbitalDist} line — one
      * cell apart, each against a cell boundary, so their addresses flipped under the slightest motion
      * and two bodies could share one.
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at
+     * {@code ORBIT_UNIT_BLOCKS / 1000} (zero), this fails with "...and puts the whole orbital radius
+     * along +Z".</p>
      */
     @Test
     public void aQuarterTurnPutsTheBodyAQuarterTurnRound() {
@@ -263,6 +311,9 @@ public class SystemContentTest {
      * render channel all read {@code isDescendTarget()} and must be told the truth by the one place
      * bodies are made. Advertised as landable, it sent a ship's descent into a dimension with no
      * terrain to find.
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#kindOf} at {@code return body.hasSurface() ? ifWalkable : SystemBodyKind.GAS_GIANT} answering the walkable kind
+     * whatever the surface, this fails with "a surface-less body is not somewhere a ship can land".</p>
      */
     @Test
     public void aBodyWithNoSurfaceIsNotADescendTarget() {
@@ -304,6 +355,11 @@ public class SystemContentTest {
      * <p>What is still a function of time — a moon's position INSIDE its parent's cell, which is what
      * a navigation computer leads its aim by — is pinned by
      * {@link #aMoonIsAimedAtWhereItIsNotAtItsParentsCellCentre}.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of
+     * the body's LIVE position instead of its name — the defect this test used to assert as the
+     * model — this fails with "half an orbit later the body is still addressed by the same cell
+     * expected:&lt;19_0_0&gt; but was:&lt;-19_0_0&gt;".</p>
      */
     @Test
     public void aBodysCellIsTheSameCellHalfAnOrbitLater() {
@@ -317,7 +373,8 @@ public class SystemContentTest {
         // ever has from where it began. Which tick that is comes from the body's own orbit, so this
         // pins the DURABILITY of a name, never a particular period.
         long halfPeriodTicks = (long) (24000d
-                * AstronomicalBodyHelper.getOrbitalPeriod(100, 1f) / 2d);
+                * AstronomicalBodyHelper.getOrbitalPeriod(
+                        AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, 1f) / 2d);
 
         SystemBody body = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), 740);
         assertNotNull(body);
@@ -328,7 +385,7 @@ public class SystemContentTest {
         // is durable" would be a statement about the fixture rather than about the derivation.
         assertFalse("the fixture's planet must actually travel over half an orbit",
                 body.absoluteAt(0L).equals(body.absoluteAt(halfPeriodTicks)));
-        assertTrue("...and travel FAR - a cell is 4M blocks wide, so this is many cells' worth",
+        assertTrue("...and travel FAR - more than one galactic cell's width",
                 body.absoluteAt(0L).distanceTo(body.absoluteAt(halfPeriodTicks))
                         > GalacticCoord.CELL);
     }
@@ -338,6 +395,10 @@ public class SystemContentTest {
      * durable name is derived from the body's AUTHORED orbit, so authoring a different orbit gives a
      * different name. Without this, "the name never changes" would be passed by a derivation that
      * returned the same cell for every body in the universe.
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#orbitLawOf} at {@code planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS)} building the law at
+     * {@code ORBIT_UNIT_BLOCKS / 1000} (zero — every orbit collapses onto the anchor), this fails with
+     * "two bodies authored on opposite sides of one star are not one address".</p>
      */
     @Test
     public void aDifferentAuthoredOrbitIsADifferentCell() {
@@ -364,6 +425,10 @@ public class SystemContentTest {
      * round-trip through the world's XML), after a spacing change, and after any later edit to the
      * derivation itself. A name that is merely re-derived consistently is only as stable as its
      * inputs, and those inputs are known to move.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#nameOf} at {@code return names == null ? derived} returning the derivation without
+     * consulting the store, this fails with "the store's name is the body's name, whatever the
+     * derivation would have said".</p>
      */
     @Test
     public void aRecordedNameBeatsAFreshDerivation() {
@@ -397,6 +462,10 @@ public class SystemContentTest {
      * real; the fix is that the moon has a cell of its own, in its parent's zone. Aiming at the cell
      * and aiming at the body are now the same act, which is what "a moon is a destination in its own
      * right" means — and the two answers coinciding is the assertion, not a coincidence to shrug at.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of
+     * the body's live position instead of its name, this fails with "a moon's cell rides the moon,
+     * so aiming at the cell IS aiming at the body".</p>
      */
     @Test
     public void aMoonIsAddressedByItsOwnCellInsideItsParentsZone() {
@@ -405,7 +474,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(750, 200, 0.5);
         parent.gravitationalMultiplier = 1f;
-        DimensionProperties moon = planet(751, 127, 0.9);
+        DimensionProperties moon = moon(751);
         DimensionManager.getInstance().setDimProperties(750, parent);
         DimensionManager.getInstance().setDimProperties(751, moon);
         parent.setStar(star);
@@ -436,6 +505,80 @@ public class SystemContentTest {
     }
 
     /**
+     * <b>The query the descent scan uses can see a moon from its PARENT's cell; the cell read
+     * cannot, and both halves are the assertion.</b>
+     *
+     * <p>This test fails if production breaks the contract that <b>a craft can find a body it is
+     * able to reach without already being in that body's cell.</b> A moon has a cell of its own
+     * inside its parent's zone, so a craft flying at one is in a different cell for the whole
+     * approach — and the descent trigger's candidate list was built from {@code bodiesAt}, the CELL
+     * read, which by construction can never hold it. The trigger went dead for every moon in the
+     * game, silently, and every tier stayed green because they all ask the registry where bodies
+     * are rather than what a craft near one can see.</p>
+     *
+     * <p>The negative half is not decoration. {@code bodiesAt} answering "no moon" is CORRECT — it
+     * is the cell read and the moon is not in that cell — so a later "fix" that widened it would
+     * make the positive leg pass while quietly breaking every consumer that asks it a question
+     * about one cell (attribution, the wells query, entry placement).</p>
+     *
+     * <p><b>What this does NOT pin: that the descent scan CALLS the sky read.</b> The call is
+     * {@code TileAdvancedFlightComputer.descendTargetsIn}, a private step of the flight computer's
+     * tick, and reverting it to {@code bodiesAt} — the defect as it shipped — leaves this test green.
+     * Nothing pins that call yet: the computer is not ticking on the server tier by the time a craft
+     * could be flown near a moon, so it needs a client e2e with a pilot aboard.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code UniverseRegistry#skyBodiesAt} at
+     * {@code List<SystemBody> out = systemBodiesAt(cell)} answering the cell read ({@code bodiesAt})
+     * instead — the defect as it shipped — this fails with "but the SKY read must hold the
+     * moon, or a scan built on it can never find one" (re-run after the message was narrowed).</p>
+     */
+    @Test
+    public void aMoonIsReachableFromItsParentsCellThroughTheSkyReadButNotTheCellRead() {
+        StellarBody star = new StellarBody();
+        star.setId(4261);
+        star.setSize(1f);
+        DimensionProperties parent = planet(790, 200, 0.5);
+        parent.gravitationalMultiplier = 1f;
+        DimensionProperties moon = moon(791);
+        DimensionManager.getInstance().setDimProperties(790, parent);
+        DimensionManager.getInstance().setDimProperties(791, moon);
+        parent.setStar(star);
+        moon.setParentPlanet(parent);
+
+        UniverseRegistry reg = new UniverseRegistry();
+        reg.place(GalacticCoord.ORIGIN, 4261);
+        UniverseRegistry.setStarLookup(id -> id == 4261 ? star : null);
+
+        GalacticCoord parentCell = reg.coordForPlanet(parent).orElse(null);
+        assertNotNull("arrangement: the planet must have a cell", parentCell);
+        GalacticCoord moonCell = reg.coordForPlanet(moon).orElse(null);
+        assertNotNull("arrangement: and so must the moon", moonCell);
+        assertFalse("arrangement: they are different cells, which is what makes this a question",
+                moonCell.sameCell(parentCell));
+
+        // The POSITIVE half of the cell read, in this method (STEP 7): it holds the planet, so the
+        // "no moon" below is the read answering about its one cell and not an empty list.
+        assertTrue("arrangement: the CELL read of the planet's cell must hold the planet itself",
+                holdsDim(reg.bodiesAt(parentCell), 790));
+        assertFalse("the CELL read of the planet's cell must not hold the moon — it is not in it",
+                holdsDim(reg.bodiesAt(parentCell), 791));
+        assertTrue("but the SKY read must hold the moon, or a scan built on it can never find one",
+                holdsDim(reg.skyBodiesAt(parentCell), 791));
+        assertTrue("...and it must still hold the planet itself",
+                holdsDim(reg.skyBodiesAt(parentCell), 790));
+    }
+
+    /** Whether {@code bodies} holds the body of dimension {@code dimId}. */
+    private static boolean holdsDim(List<SystemBody> bodies, int dimId) {
+        for (SystemBody b : bodies) {
+            if (b.dimId() == dimId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * The live half of the moon rule, one level down. A moon's NAME is fixed forever; what moves is
      * its CELL, which rides it — so the moon sits at its own frame's origin at every tick while its
      * absolute position goes round its planet.
@@ -444,6 +587,10 @@ public class SystemContentTest {
      * parent's cell is live. It was, and that motion was exactly what nothing carried a parked craft
      * through. A nav computer no longer has to lead its aim at a moon, because the address it aims
      * at moves with the body.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#addressAt} at {@code BlockDelta offset = inCellOffsetAt(tick)} answering the galactic cell of
+     * the body's live position instead of its name, this fails with "...and it is the same name at
+     * every tick expected:&lt;33_0_18.1_0_1&gt; but was:&lt;33_0_18&gt;".</p>
      */
     @Test
     public void aMoonsCellRidesItSoItsOffsetIsZeroWhileItsPositionIsLive() {
@@ -452,7 +599,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(770, 200, 0.5);
         parent.gravitationalMultiplier = 1f;
-        DimensionProperties moon = planet(771, 127, 0.9);
+        DimensionProperties moon = moon(771);
         DimensionManager.getInstance().setDimProperties(770, parent);
         DimensionManager.getInstance().setDimProperties(771, moon);
         parent.setStar(star);
@@ -464,8 +611,13 @@ public class SystemContentTest {
         assertNotNull(moonBody);
         assertNotNull(planetBody);
 
-        long quarterPeriod = (long) (24000d
-                * AstronomicalBodyHelper.getMoonOrbitalPeriod(127f, 1f) / 4d);
+        // A quarter of the orbit the moon is actually ON — its own law's distance about this parent's
+        // mass. It was the period at 127 units round a mass of 1, which were this fixture's numbers
+        // before a distance unit became 100 km; the moon now stands at 64, so that "quarter" was a
+        // tick with no relation to the orbit, and the samples below were a quarter turn apart only by
+        // luck of the draw.
+        long quarterPeriod = (long) (24000d * AstronomicalBodyHelper.getMoonOrbitalPeriod(
+                (float) moonBody.frame().law().distUnits(), (float) parent.getOrbitalMass()) / 4d);
 
         assertEquals("a moon's name is its OWN cell, in its parent's zone",
                 planetBody.name().cellKey(), moonBody.name().zone());
@@ -489,6 +641,11 @@ public class SystemContentTest {
      * wrong by {@code sqrt(318/2.53)}, so a giant's moons crawled round it 11 times too slowly. The
      * fixture below is that Jupiter, and the two readings are 11× apart, so a run cannot satisfy this
      * test by accident.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code SystemContent#moonLawOf} at {@code orbit, (float) parent.getOrbitalMass())} taking the period from the
+     * AUTHORED distance instead of the lifted one, this fails with "one mass-derived period must bring
+     * it back (was 1372907.1155518861, orbit radius 714400.0)". The fixture, printed: the moon is
+     * lifted to 1 786 units, 714 400 blocks.</p>
      */
     @Test
     public void aMoonsPeriodFollowsItsParentsMassNotItsSurfaceGravity() {
@@ -497,7 +654,7 @@ public class SystemContentTest {
         star.setSize(1f);
         DimensionProperties parent = planet(780, 200, 0.5);
         parent.setBulk(318d, 11.2d); // a Jupiter: gravity falls out as M/R² = 2.53
-        DimensionProperties moon = planet(781, 127, 0.9);
+        DimensionProperties moon = moon(781);
         DimensionManager.getInstance().setDimProperties(780, parent);
         DimensionManager.getInstance().setDimProperties(781, moon);
         parent.setStar(star);
@@ -513,7 +670,8 @@ public class SystemContentTest {
         //
         // This used to compute both readings at the authored 127 units, and the two disagreed with
         // the body all along: a moon this close to an 11.2-radius parent is below the 2.5-parent-radii
-        // floor, so `moonLawOf` lifts it — to 3 572 units here — and it orbits at the lifted distance
+        // floor, so `moonLawOf` lifts it — to 1 786 units (714 400 blocks) here, printed below — and
+        // it orbits at the lifted distance
         // while the expectation was built from the authored one. The mismatch was a near-miss the old
         // period law happened to keep inside the tolerance (3 815 blocks against a 500-block bar once
         // the law was re-anchored on the real Moon), so the tolerance, not the arrangement, was doing
@@ -542,7 +700,9 @@ public class SystemContentTest {
         // side (about two radii away) and a full turn brings it back to where it started. Stated as
         // fractions of the radius rather than as block counts, so neither can quietly become the
         // thing that passes the test when the layout scale moves again.
-        double radiusBlocks = actualUnits * 200d;
+        double radiusBlocks = actualUnits * AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
+        System.out.println("[moon-period] actualUnits=" + actualUnits + " radiusBlocks=" + radiusBlocks
+                + " massPeriodTicks=" + massPeriodTicks + " gravityPeriodTicks=" + gravityPeriodTicks);
         double halfTurn = separation(start, afterHalf);
         double fullTurn = separation(start, afterOnePeriod);
         assertTrue("half a mass-derived period must carry the moon to the far side (was " + halfTurn
@@ -569,6 +729,10 @@ public class SystemContentTest {
      * question, and for the home system, whose anchor sits at sector 0, every negative-offset orbit
      * lands in the neighbouring cube and resolves to NO system: an address the console will happily
      * offer, with nothing at it, that a ship can fly to and never descend from.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code UniverseRegistry#anchorForCell} at {@code GalacticCoord stored = storedAnchorNear(cell)} skipping the
+     * neighbourhood lookup ({@code storedAnchorNear}), this fails with "its own cell must attribute
+     * back to its system".</p>
      */
     @Test
     public void aBodyBehindItsStarStillBelongsToThatSystem() {

@@ -27,7 +27,7 @@ import static dev.stannismod.stellurgy.test.client.ClientGuiTestSupport.screenOf
 
 /**
  * A machine stands in the world, the player right-clicks it open, and drives it with nothing but
- * clicks. Seven scenarios, one client.
+ * clicks. Every scenario here shares one client.
  *
  * <p>What binds them is the instrument, not the subsystem: every one of these needs a REAL client
  * because the contract lives in the client&harr;server round trip — a libVulpes {@code GuiModular}
@@ -591,7 +591,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * and the result synced back. Slots are addressed by the container slot number the report gives,
      * never by guessed coordinates.
      *
-     * <p>red-witnessed: with {@code TileGuidanceComputer:351} not storing what is put into its slot:
+     * <p>red-witnessed: with {@code TileGuidanceComputer#setInventorySlotContents} at {@code super.setInventorySlotContents(slot, stack)} not storing what is put into its slot:
      * "`slots` holds no element whose `item` is stellurgy:planetidchip — it holds 0",
      * 2026-09-28. Making {@code isItemValidForSlot} refuse the chip left this GREEN: the container's
      * quick-move never asks it.</p>
@@ -728,7 +728,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * whatever distance the clicks actually produced — so the arrangement follows the GUI rather
      * than assuming it worked.</p>
      *
-     * <p>red-witnessed: with the distance button's write ({@code TileObservatory:1289}) skipped:
+     * <p>red-witnessed: with the distance button's write ({@code TileObservatory#useNetworkData} at {@code scanDistance = Math.max(1, Math.min(reach, scanDistance + nbt.getInteger("d")))}) skipped:
      * "clicking the distance button twice must move the aim out from 1: … aimDistance:1",
      * 2026-09-28.</p>
      */
@@ -833,7 +833,7 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
      * {@code /stellurgytest selector info} probe then confirms — the whole client&rarr;server selection
      * round-trip rather than just "the GUI opened".
      *
-     * <p>red-witnessed: with {@code TilePlanetSelector:208-209} (the selection writes) skipped:
+     * <p>red-witnessed: with {@code TilePlanetSelector#useNetworkData} at {@code container.setSelectedSystem(dimId)} (the selection writes) skipped:
      * "clicking planet button 0 did not register a selection server-side: … hasSelection:false",
      * 2026-09-28. The link before it records at the handler's RETURN and stays green by design —
      * it says the packet arrived, not that it was applied.</p>
@@ -872,6 +872,194 @@ public class MachineGuiClientGroupE2ETest extends AbstractSharedClientE2ETest {
                 Reply.of(selectorInfo).has("selectedDim"));
 
         bot().closeScreen();
+    }
+
+    /**
+     * The planet selector's star map, as it opens: 100 GUI pixels per AU of a planet's orbit,
+     * measured from the edge of a 50-pixel stellar disc. That is the scale the map was drawn at
+     * before the distance unit became a length — then a unit was a hundredth of an AU and one unit
+     * was one pixel — and the change was ratified as one of representation, so the picture did not
+     * move.
+     *
+     * <p>Acceptance, stated before the code: Earth's button centre stands {@code 100 x a + 50} pixels
+     * from Sol's, {@code a} being Earth's orbit in AU as the server holds it, within 2 x sqrt(2)
+     * pixels (derived beside the assertion). Read raw, a 100 km unit puts it 1.5 million pixels out on a
+     * 2 000-pixel map, which is why the rocket's selector could not be clicked.</p>
+     *
+     * <p>Earth's orbit of one AU is also the default a body takes when nothing states one. That
+     * coincidence hides nothing here: the subject is the SCALE, and the raw form misplaces a planet
+     * at any orbit.</p>
+     *
+     * <p>What this does not see: the planetary view (a planet and its moons), pinned by
+     * {@link #thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150}, and the rocket's own selector, which
+     * opens the same module over a rocket.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code ModulePlanetSelector#renderStarSystem} at {@code double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the orbit
+     * radius — back on the raw unit ({@code properties.getOrbitalDist() * distanceZoomMultiplier}):
+     * "Earth (1.0 AU) must be drawn 150.0 pixels from its star, slack 2.8284271247461903: … expected:
+     * &lt;150.0&gt; but was:&lt;1496028.93842148&gt;". The two {@code requireArranged} lines are
+     * arrangements.</p>
+     */
+    @Test
+    public void theStarMapDrawsAPlanetAtAHundredPixelsPerAu() throws Exception {
+        int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
+
+        scenario().arranging("open the planet selector's star map");
+        String screen = openMachineGui(at);
+        scenario().record("screen", screen);
+
+        Reply earth = Reply.of(exec("stellurgytest planet info 0"));
+        double orbitAu = earth.longInteger("orbitalDistance")
+                / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+        scenario().record("earthOrbitAu", orbitAu);
+
+        scenario().measuring("the star's button and Earth's, as the open GUI lays them out");
+        JsonObject buttons = bot().reportButtons();
+        int solButtonId = STAR_ID_OFFSET + earth.integer("starId");
+        JsonObject sol = null;
+        JsonObject earthButton = null;
+        for (JsonElement element : buttons.getAsJsonArray("buttons")) {
+            JsonObject button = element.getAsJsonObject();
+            int id = button.get("id").getAsInt();
+            if (id == solButtonId) {
+                sol = button;
+            } else if (id == 0) {
+                earthButton = button;
+            }
+        }
+        scenario().requireArranged("the star map must carry Earth's star and Earth itself: " + buttons,
+                sol != null && earthButton != null);
+        // The disc a planet's orbit is measured from: the star view's `(int) (planetSizeMultiplier *
+        // 100)` at the 0.5 the map opens with (ModulePlanetSelector.java:156, :331). Sol's own button
+        // is drawn that wide too, which is what this reads, so a map that opened at another size is
+        // refused here rather than read as a wrong scale.
+        scenario().requireArranged("Sol's disc must be the 50 pixels the orbit is measured from: " + sol,
+                sol.get("width").getAsInt() == STAR_DISC_PX);
+
+        double dx = centreOf(earthButton, "x", "width") - centreOf(sol, "x", "width");
+        double dy = centreOf(earthButton, "y", "height") - centreOf(sol, "y", "height");
+        double expected = orbitAu * 100d + STAR_DISC_PX;
+        // The slack, derived from how the buttons are placed: per axis the planet's offset is an int
+        // truncation (below 1 pixel) and each of the two buttons' half-widths can round by half a
+        // pixel, so each axis is off by under 2 and the distance by under 2 x sqrt(2).
+        double tolerance = 2d * Math.sqrt(2d);
+
+        scenario().asserting("Earth stands 100 pixels per AU beyond the star's disc");
+        assertEquals("Earth (" + orbitAu + " AU) must be drawn " + expected + " pixels from its star, slack "
+                + tolerance + ": sol=" + sol + " earth=" + earthButton, expected, Math.hypot(dx, dy), tolerance);
+
+        bot().closeScreen();
+    }
+
+    /**
+     * The planet selector's PLANETARY view — a planet and its moons, entered by clicking the planet
+     * twice on the star map — draws each moon as it drew one while Luna stood at 150: half a pixel
+     * per moon-view unit at the zoom the view opens with, measured from the edge of the planet's
+     * disc, the moon-view distance being 150 for a moon at Luna's distance.
+     *
+     * <p>Acceptance, stated before the code: each moon's button centre stands
+     * {@code 0.5 x 150 x orbit / 3 844 + W} pixels from Earth's, {@code W} being Earth's button width
+     * as the open GUI reports it and {@code orbit} the moon's distance as the server holds it — 75 +
+     * W for Luna — within 2 x sqrt(2) pixels, the same button-placement rounding as the star map's.
+     * Read raw, Luna stands 1 922 + W pixels out, off the 2 000-pixel map.</p>
+     *
+     * <p>What this does not see: the rocket's own selector, which opens the same module; and a moon
+     * at any distance but the one the world's moons stand at — the proportion is pinned in
+     * {@code AstronomicalBodyHelperTest}.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code ModulePlanetSelector#renderPlanetarySystem} at
+     * {@code AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT}
+     * back on the raw distance ({@code properties.orbitalDist}), this fails with "each moon must be
+     * drawn 0.5 x moonViewUnits + Earth's width (150) pixels from Earth, slack 2.8284271247461903:
+     * expected 2=225.0 drawn 2=2071.27907342299 …: arrays first differed at element [0];
+     * expected:&lt;225.0&gt; but was:&lt;2071.27907342299&gt;". The {@code requireArranged} lines are
+     * arrangements.</p>
+     */
+    @Test
+    public void thePlanetaryViewDrawsAMoonWhereItDrewLunaAt150() throws Exception {
+        int[] at = placeMachineAndStandOnIt("stellurgy:planetSelector");
+
+        scenario().arranging("open the planet selector and click Earth twice to enter its planetary view");
+        scenario().record("screen", openMachineGui(at));
+        java.util.Map<Integer, Long> moonOrbits = new java.util.HashMap<>();
+        for (int dim : dev.stannismod.stellurgy.test.DimList.from(this::exec).registered()) {
+            Reply body = Reply.of(exec("stellurgytest planet info " + dim));
+            // `planet info` on a registered dimension: the producer always writes parent.
+            if (body.integer("parent") == 0) {
+                moonOrbits.put(dim, body.longInteger("orbitalDistance"));
+            }
+        }
+        scenario().requireArranged("Earth must have a moon for the planetary view to draw one", !moonOrbits.isEmpty());
+        scenario().record("moonOrbits", moonOrbits.toString());
+
+        // A player's click on a map button is two things at once: the button's action (select, then
+        // zoom) and the mouse press the map rebuilds itself on. The harness cannot aim the hardware
+        // mouse the map's own button loop reads (ModuleContainerPan.onMouseClicked reads
+        // Mouse.getX/getY, not the click's coordinates), so the two halves are driven apart: the
+        // action by button id, twice, then one press at the screen corner for the rebuild. The
+        // rebuild runs inside that press, on the client thread, so the report below reads its result.
+        scenario().requireArranged("the star map must carry Earth's button to click",
+                buttonWithId(bot().reportButtons(), 0) != null);
+        bot().clickButtonById(0);
+        bot().clickButtonById(0);
+        bot().clickScreenPoint(0, 0, 0);
+
+        scenario().measuring("Earth's button and each moon's, as the planetary view lays them out");
+        JsonObject buttons = bot().reportButtons();
+        JsonObject earth = buttonWithId(buttons, 0);
+        scenario().requireArranged("the planetary view must carry Earth and no star: " + buttons,
+                earth != null && buttonWithId(buttons, STAR_ID_OFFSET) == null);
+        int earthWidth = earth.get("width").getAsInt();
+
+        StringBuilder expectedText = new StringBuilder();
+        StringBuilder drawnText = new StringBuilder();
+        double[] expected = new double[moonOrbits.size()];
+        double[] drawn = new double[moonOrbits.size()];
+        int i = 0;
+        for (java.util.Map.Entry<Integer, Long> moon : moonOrbits.entrySet()) {
+            JsonObject button = buttonWithId(buttons, moon.getKey());
+            scenario().requireArranged("the planetary view must carry moon " + moon.getKey() + ": " + buttons,
+                    button != null);
+            // 0.5, 150 and 3 844: the view's zoom-1 distance multiplier (production's redrawSystem),
+            // Luna's view distance as it stood before her distance was corrected, and her real one.
+            expected[i] = 0.5d * 150d * moon.getValue()
+                    / dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS + earthWidth;
+            drawn[i] = Math.hypot(centreOf(button, "x", "width") - centreOf(earth, "x", "width"),
+                    centreOf(button, "y", "height") - centreOf(earth, "y", "height"));
+            expectedText.append(moon.getKey()).append('=').append(expected[i]).append(' ');
+            drawnText.append(moon.getKey()).append('=').append(drawn[i]).append(' ');
+            i++;
+        }
+        // The slack, derived from how the buttons are placed: per axis the moon's offset is an int
+        // truncation (below 1 pixel) and each of the two buttons' half-widths can round by half a
+        // pixel, so each axis is off by under 2 and the distance by under 2 x sqrt(2).
+        double tolerance = 2d * Math.sqrt(2d);
+
+        scenario().asserting("each moon stands where the view drew Luna while she stood at 150");
+        org.junit.Assert.assertArrayEquals("each moon must be drawn 0.5 x moonViewUnits + Earth's width ("
+                + earthWidth + ") pixels from Earth, slack " + tolerance + ": expected " + expectedText
+                + "drawn " + drawnText + "earth=" + earth, expected, drawn, tolerance);
+
+        bot().closeScreen();
+    }
+
+    /** The button carrying {@code id} in a {@code report_buttons} reply, or null when there is none. */
+    private static JsonObject buttonWithId(JsonObject report, int id) {
+        for (JsonElement element : report.getAsJsonArray("buttons")) {
+            JsonObject button = element.getAsJsonObject();
+            if (button.get("id").getAsInt() == id) {
+                return button;
+            }
+        }
+        return null;
+    }
+
+    /** The star view's stellar disc, in GUI pixels, at the size the map opens with. */
+    private static final int STAR_DISC_PX = 50;
+
+    /** A reported button's centre along one axis. */
+    private static double centreOf(JsonObject button, String edge, String extent) {
+        return button.get(edge).getAsInt() + button.get(extent).getAsInt() / 2d;
     }
 
     // ── navigation console ────────────────────────────────────────────────────

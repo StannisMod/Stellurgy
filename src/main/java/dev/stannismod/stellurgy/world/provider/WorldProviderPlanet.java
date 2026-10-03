@@ -439,7 +439,7 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     private float eclipseValue(@Nonnull DimensionProperties properties, float lightValue, double partialTicks) {
 
         double currentTheta = (((partialTicks * properties.orbitTheta + ((1 - partialTicks) * properties.prevOrbitalTheta)) * 180 / Math.PI) % 360d);
-        int solarDistance = properties.getSolarOrbitalDistance();
+        long solarDistance = properties.getSolarOrbitalDistance();
         float planetaryDistance = properties.getParentOrbitalDistance();
 
         float difference = solarDistance / (200 - planetaryDistance + 0.00001f);
@@ -572,7 +572,7 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     }
 
     @Override
-    public int getOrbitalDistance(@Nullable BlockPos pos) {
+    public long getOrbitalDistance(@Nullable BlockPos pos) {
         return getDimensionProperties(pos).orbitalDist;
     }
 
@@ -623,7 +623,7 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     }
 
 
-    public int getSolarOrbitalDistance(@Nullable BlockPos pos) {
+    public long getSolarOrbitalDistance(@Nullable BlockPos pos) {
         return getDimensionProperties(pos).getSolarOrbitalDistance();
     }
 
