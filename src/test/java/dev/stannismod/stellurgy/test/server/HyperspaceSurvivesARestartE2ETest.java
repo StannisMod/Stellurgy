@@ -33,7 +33,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  *
  * The claim is about what survives a shutdown save and a fresh boot, and neither of those happens
  * in-process. An in-process "restart" — re-importing a record into a live manager — is the shape
- * {@code VSShipTransitPersistE2ETest} already uses, and its own javadoc says so: the JVM does not
+ * {@code VSShipTransitPersistTest} already uses, and its own javadoc says so: the JVM does not
  * restart, so hyperspace is never truly re-created and the physics mod's per-world data is never
  * re-read from disk. That is exactly the half this test exists to measure, so this class manages its
  * own harnesses rather than extending the one-harness base.

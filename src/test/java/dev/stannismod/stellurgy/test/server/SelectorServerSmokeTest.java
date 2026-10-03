@@ -37,7 +37,7 @@ import static org.junit.Assert.assertTrue;
  * <p>It also holds what the two planet selectors DISPLAY of an orbit that the server can read: the
  * selector's distance gauge, and the holographic selector's projection radius.</p>
  *
- * <p>The full client GUI path lives in {@code client/MachineGuiClientGroupE2ETest}.</p>
+ * <p>The full client GUI path lives in {@code client/MachineGuiClientGroupTest}.</p>
  */
 public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
 

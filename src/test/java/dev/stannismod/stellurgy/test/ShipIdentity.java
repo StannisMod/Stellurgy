@@ -26,7 +26,7 @@ import static org.junit.Assert.assertTrue;
  * identity BRIDGING — a durable name to a physics id and back — which is not one verb's answer.</p>
  *
  * <p>Kept out of any base class deliberately: the classes that need it sit under three different
- * bases ({@code AbstractSharedVsClientE2ETest}, {@code AbstractSpaceLoginRestoreClientTest}, the
+ * bases ({@code AbstractSharedVsClientTest}, {@code AbstractSpaceLoginRestoreClientTest}, the
  * harness's own per-method base), and a helper that only some of them can reach is how the same ten
  * lines end up copied three times.</p>
  */

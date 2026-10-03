@@ -30,7 +30,7 @@ import static org.junit.Assert.assertTrue;
  * subject that could still move the ratified half-cell, and this is the leg that measures it.</p>
  *
  * <h2>Why this ASSEMBLES at the coordinate instead of teleporting a ship to it</h2>
- * {@code VSShipExtremeCoordinatesE2ETest} reached extreme <b>Y</b> by rigid-teleporting an assembled
+ * {@code VSShipExtremeCoordinatesTest} reached extreme <b>Y</b> by rigid-teleporting an assembled
  * ship, and left the extreme-|X| leg unautomated for a reason recorded in its own javadoc: after a
  * SECOND relocation the physics goes inert — neither a pilot key nor a velocity setpoint moves the
  * ship — and the pilot-key path dies after a dismount and re-seat across the map. Those are

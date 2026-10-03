@@ -43,7 +43,7 @@ import static org.junit.Assert.assertTrue;
  * 101.8 s and print <b>two distinct client pids</b>. A four-scenario run on ONE shared harness
  * costs <b>73.8 s of boot plus 2.1-3.7 s per scenario</b>. Boot is 25-35x the scenario, and better
  * than 95 % of this tier's wall clock. {@code build.gradle}'s {@code forkEvery 1L} then makes the
- * whole tier's floor equal to its LONGEST class, so the 27-method {@code FreeFlightModeE2ETest}
+ * whole tier's floor equal to its LONGEST class, so the 27-method {@code FreeFlightModeTest}
  * pins it at ~35 min in one fork while the other seven idle.</p>
  *
  * <h2>What a subclass owes</h2>
@@ -89,7 +89,7 @@ import static org.junit.Assert.assertTrue;
  * <p>The chat backlog is the dangerous one, and it is why the pilot for this base class was chosen
  * to be a chat-asserting test: a scenario that proves "the player was told X" by searching the last
  * N chat lines passes on the PREVIOUS scenario's identical line, with no stimulus behind it at all.
- * {@code ItemSealDetectorPlayerMessagesE2ETest} has three methods expecting the same message.</p>
+ * {@code ItemSealDetectorPlayerMessagesTest} has three methods expecting the same message.</p>
  *
  * <p>So {@link #resetBetweenScenarios} does the reset and then <b>asserts the world is clean</b>. A
  * reset nobody checks is indistinguishable from no reset.</p>
@@ -630,7 +630,7 @@ public abstract class AbstractSharedClientE2ETest implements ScopedTest<SharedCl
      * <p>One {@code x,z} pair cannot tell the two causes apart, and they need opposite fixes: a
      * client that never received the teleport is a round-trip that was read too early, while one
      * that received it and ended up elsewhere has a SECOND WRITER owning the body. Measured
-     * 2026-08-12 — four scenarios of {@code VSShipFlightTelemetryE2ETest} red in two of three
+     * 2026-08-12 — four scenarios of {@code VSShipFlightTelemetryTest} red in two of three
      * identical tier runs, each printing one coordinate pair outside every plot in the lane, with
      * {@code harnessAlive=true}; nothing in the message distinguished the two, and the mode stayed
      * unattributable for a session.</p>

@@ -14,8 +14,8 @@ package dev.stannismod.stellurgy.test;
  * multiplies a specific failure: a "find the X" query answering with a DIFFERENT scenario's object,
  * so the assertion passes on scaffolding the test never built. Three queries in the client suite are
  * already global and would do exactly this — {@code stellurgytest rocket list 0} in
- * {@code RocketBuilderGuiE2ETest} and {@code FreeFlightModeE2ETest}, {@code stellurgytest station list} in
- * {@code SpaceDimGuardE2ETest}.</p>
+ * {@code RocketBuilderGuiE2ETest} and {@code FreeFlightModeTest}, {@code stellurgytest station list} in
+ * {@code SpaceDimGuardTest}.</p>
  *
  * <p>The defence is spatial and it is deliberately dumb: <b>one plot per scenario, never
  * recycled</b>. Nothing has to be cleaned up afterwards, because nothing else is ever going to look

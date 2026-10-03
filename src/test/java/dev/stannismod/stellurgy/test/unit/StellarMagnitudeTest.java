@@ -16,7 +16,7 @@ import static org.junit.Assert.assertTrue;
  * distance — {@link StellarMagnitude} reads no configuration, no galaxy and no registry, so nothing
  * in it needs a running game, and a red here names one class. What a telescope with the SHIPPED
  * aperture then does with these numbers — registers, resolves, misses — reads the running
- * configuration and the galaxy, and is pinned on a real server ({@code TelescopeRegionScanE2ETest}).</p>
+ * configuration and the galaxy, and is pinned on a real server ({@code TelescopeRegionScanServerTest}).</p>
  *
  * <p>The expected numbers are the physics the class states, computed here from the law and never
  * read back from the class: the Stefan-Boltzmann ratio {@code L = R^2 (T/T_sun)^4}, the definition of

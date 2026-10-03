@@ -209,7 +209,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
 
     /**
      * A demonstrable held-key climb: well above settle jitter, cheap to reach. Same bar as the
-     * planet-side relog-control pin ({@link VSPilotSeatRelogControlE2ETest}) - the contract is
+     * planet-side relog-control pin ({@link VSPilotSeatRelogControlTest}) - the contract is
      * "held input MOVES the ship within a bounded window", not any particular rate.
      */
     protected static final double MIN_CLIMB = 1.0;
@@ -1306,7 +1306,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         int sz = (int) Math.round(srcInfo.z);
 
         // No throttle. Crossing an atmosphere does not ask who is at the controls - the climb past the
-        // dimension's orbit ceiling is the whole trigger - and `VSUnpilotedEntryE2ETest` pins exactly
+        // dimension's orbit ceiling is the whole trigger - and `VSUnpilotedEntryTest` pins exactly
         // that with the ship's input explicitly CLEARED. The held throttle this used to publish was a
         // relic of a channel that also happened to be JVM-wide, and it cost this leg twice: it flew
         // every other ship on the server, and the all-zero input it left behind kept this ship's

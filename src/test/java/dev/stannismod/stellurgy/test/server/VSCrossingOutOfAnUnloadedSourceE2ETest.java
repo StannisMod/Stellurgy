@@ -21,7 +21,7 @@ import static org.junit.Assert.assertTrue;
  * The other way a crossing can leave a ship behind: the REGISTRY entry of a source that was not loaded
  * when its blocks were cut.
  *
- * <p>{@link VSCrossingLeavesNoShipBehindE2ETest} covers the case where the source ship is loaded — there,
+ * <p>{@link VSCrossingLeavesNoShipBehindTest} covers the case where the source ship is loaded — there,
  * a physics object is what can be stranded. This one covers the opposite starting state, where no physics
  * object exists at all, so whatever collects a crossing's leftovers has to work without one. An entry left
  * behind here has no blocks and nothing loaded behind it, yet it still answers position lookups in that

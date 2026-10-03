@@ -33,7 +33,7 @@ import static org.junit.Assert.assertTrue;
  * {@code M1PlanetToPlanetMilestoneE2ETest} (leg 7b: a jump beside the moon is carried into its zone,
  * seated, and keeps station there).</p>
  *
- * <p>Inside a zone the seam is a sphere, not the cube face {@code VSShipCellSeamE2ETest} flies
+ * <p>Inside a zone the seam is a sphere, not the cube face {@code VSShipCellSeamTest} flies
  * through. The decision and the naming are pinned on the real solar arithmetic by
  * {@code ZoneCrossingAimsAtTheRightCellTest}; what nothing else shows is a REAL ship doing it: the
  * controller arming on the sphere for a craft its cube predicate calls "inside", the carry cutting and
