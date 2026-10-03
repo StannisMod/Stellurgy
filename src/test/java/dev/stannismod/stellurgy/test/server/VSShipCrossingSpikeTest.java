@@ -139,12 +139,6 @@ public class VSShipCrossingSpikeTest extends AbstractSharedServerTest {
         // Shared-harness state-leak contract: don't leave "permanently loaded" set for later tests.
     }
 
-    // --- helpers ------------------------------------------------------------------------------------
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     /** Poll for a loaded VS ship (the assembly is deferred to the ship manager's own tick, which
      *  drains the spawn queue; a headless server also has no player near to auto-load it, so force a
      *  load each round). Bounded ~10 s. Returns the loaded count. */

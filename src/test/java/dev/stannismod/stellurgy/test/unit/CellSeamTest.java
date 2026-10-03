@@ -21,6 +21,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class CellSeamTest {
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord CELL = GalacticCoord.ofSectorLocal(3L, -1L, 7L, 0, 0, 0);
 
     /** The world-frame pose whose local offset is {@code (lx,ly,lz)} — the inverse of the mapping. */

@@ -165,11 +165,7 @@ public class VSJumpDumpsTheCruiseE2ETest extends AbstractSharedServerTest {
     // ─── plumbing, mirroring this tier's siblings ───────────────────────────────
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private int loadedShips(int dim) throws Exception {
         return ShipReadiness.loadedCount(this::exec, dim);

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
@@ -37,6 +38,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class BiomeScannerGetModulesOffStationE2ETest extends AbstractClientE2ETest {
 
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
+
     private static final int X = 8, Y = FixtureSite.OPEN_AIR_Y, Z = 8;
 
     /** How long the client is given to APPLY the server's placement, in ticks — a ceiling on one
@@ -62,7 +74,7 @@ public class BiomeScannerGetModulesOffStationE2ETest extends AbstractClientE2ETe
         // Stand the player on the scanner so its chunk is client-tracked. The tracking follows the
         // CLIENT's own position, so the placement is waited for as the packet that applies it —
         // thirty ticks were a bet on a round trip, and the read below is a client read.
-        Events clientLog = ClientEvents.of(bot());
+        Events clientLog = ClientEvents.of(bot(), evictionReports());
         long standMark = clientLog.mark();
         exec("tp @a " + (X + 0.5) + " " + (Y + 1) + " " + (Z + 0.5) + " 0 60");
         ClientEvents.awaitPlacedNear(clientLog, standMark, X + 0.5, Z + 0.5,

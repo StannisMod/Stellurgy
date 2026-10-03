@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
 
@@ -55,6 +56,17 @@ import static org.junit.Assert.assertTrue;
  *
  */
 public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /**
      * The steep inversion the hull leg needs, as deck-normal Y.
@@ -621,13 +633,13 @@ public class VSShipRenderPoseSkewE2ETest extends AbstractClientE2ETest {
 
     /** The SERVER's ordered event log, stepped by the real client's own ticks. */
     private Events events() {
-        return new Events(this::exec, bot()::waitTicks);
+        return new Events(this::exec, bot()::waitTicks, evictionReports());
     }
 
     /** The CLIENT's ordered event log, behind the same verbs. This class extends the harness base
      *  rather than a Stellurgy shared one, so it reaches the adapter directly. */
     private Events clientEvents() {
-        return ClientEvents.of(bot());
+        return ClientEvents.of(bot(), evictionReports());
     }
 
     /** The CLIENT event log's sequence, taken BEFORE the stimulus — refused unless a recorder is

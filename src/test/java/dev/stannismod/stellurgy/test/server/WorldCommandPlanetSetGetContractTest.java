@@ -4,9 +4,6 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.planetFloatField;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.planetIntField;
 
 /**
  * {@code /ar planet set | get | list} contract pins.

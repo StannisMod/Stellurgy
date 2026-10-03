@@ -108,12 +108,12 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      * these offsets exactly — which is what makes reading a component at a derived address a real
      * measurement rather than a guess.
      */
-    private static final int[] OFF_SEAT = {1, 0, 0};
-    private static final int[] OFF_NAV = {1, 0, 2};
-    private static final int[] OFF_GENERATOR = {3, 0, 0};
-    private static final int[] OFF_CAPACITOR = {3, 1, 0};
-    private static final int[][] OFF_SINKS = {{2, 1, 0}, {3, 1, -1}, {3, 1, 1}, {3, 0, -1}};
-    private static final int[] OFF_EMITTER = {0, 1, 0};
+    private final int[] offSeat = {1, 0, 0};
+    private final int[] offNav = {1, 0, 2};
+    private final int[] offGenerator = {3, 0, 0};
+    private final int[] offCapacitor = {3, 1, 0};
+    private final int[][] offSinks = {{2, 1, 0}, {3, 1, -1}, {3, 1, 1}, {3, 0, -1}};
+    private final int[] offEmitter = {0, 1, 0};
 
     /**
      * The one square the pilot works from: the deck cell immediately south of the seat. The seat is
@@ -121,7 +121,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
      * inside the couple of blocks within which a ship hit survives the raytrace's distance
      * comparison.
      */
-    private static final int[] OFF_STAND = {1, 0, 1};
+    private final int[] offStand = {1, 0, 1};
 
     /** Vanilla eye height for a standing player — the raytrace starts here, not at the feet. */
     private static final double EYE_HEIGHT = 1.62;
@@ -208,24 +208,24 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         // and a component read as "missing" could just as easily be one read at the wrong cell.
         scenario().requireArranged("CONTROL: the ship's subspace copy must preserve the build's own "
                         + "geometry — seat minus flight computer should be "
-                        + describe(OFF_SEAT) + " but is "
+                        + describe(offSeat) + " but is "
                         + describe(new int[]{seatSub[0] - afcSub[0], seatSub[1] - afcSub[1],
                                 seatSub[2] - afcSub[2]}) + ": " + found,
-                seatSub[0] - afcSub[0] == OFF_SEAT[0]
-                        && seatSub[1] - afcSub[1] == OFF_SEAT[1]
-                        && seatSub[2] - afcSub[2] == OFF_SEAT[2]);
+                seatSub[0] - afcSub[0] == offSeat[0]
+                        && seatSub[1] - afcSub[1] == offSeat[1]
+                        && seatSub[2] - afcSub[2] == offSeat[2]);
 
         // ---- 1a) Every drive component is THERE, at its own address inside the ship. -------------
         // Read block by block rather than trusting a summary count: a flood fill that dropped one
         // machine leaves every other number looking healthy.
-        assertComponentAboard(afcSub, OFF_NAV, "stellurgy:navigationComputer", "navigation computer");
-        assertComponentAboard(afcSub, OFF_GENERATOR, "stellurgy:hyperdriveGenerator", "field generator");
-        assertComponentAboard(afcSub, OFF_CAPACITOR, "stellurgy:jumpCapacitor", "jump capacitor");
-        for (int i = 0; i < OFF_SINKS.length; i++) {
-            assertComponentAboard(afcSub, OFF_SINKS[i], "stellurgy:jumpHeatSink",
+        assertComponentAboard(afcSub, offNav, "stellurgy:navigationComputer", "navigation computer");
+        assertComponentAboard(afcSub, offGenerator, "stellurgy:hyperdriveGenerator", "field generator");
+        assertComponentAboard(afcSub, offCapacitor, "stellurgy:jumpCapacitor", "jump capacitor");
+        for (int i = 0; i < offSinks.length; i++) {
+            assertComponentAboard(afcSub, offSinks[i], "stellurgy:jumpHeatSink",
                     "heat sink #" + (i + 1));
         }
-        assertComponentAboard(afcSub, OFF_EMITTER, "stellurgy:jumpFieldEmitter", "hull emitter");
+        assertComponentAboard(afcSub, offEmitter, "stellurgy:jumpFieldEmitter", "hull emitter");
 
         // ---- 1b) …and the SHIP can see them, which is a different question. ----------------------
         // A block that rode into subspace but never got welded to the flight computer is invisible to
@@ -275,7 +275,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                         + "nothing, so it is the assembler's welding that is under test here: " + gate,
                 Reply.of(gate).bool("navComputer"));
 
-        int[] navSub = add(afcSub, OFF_NAV);
+        int[] navSub = add(afcSub, offNav);
         NavStatus navStatus = NavStatus.at(this::exec, 0, navSub[0], navSub[1], navSub[2]);
         assertTrue("and the console itself must report that link: " + navStatus.raw(),
                 navStatus.linked);
@@ -297,7 +297,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
                 seatMapped != null && horizontalDistance(seatWorld, seatMapped) < SAME_POINT_BLOCKS);
 
         // ---- 2a) Board the PILOT SEAT with a real use-key press. ---------------------------------
-        Aim seatAim = aimAt(afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
+        Aim seatAim = aimAt(afcSub, seatSub, offStand, 0.5, 0.2, 0.5, budget);
         assertAimed(seatAim, seatSub, "pilot seat", "pilotseat");
 
         // The mark goes BEFORE the press: a use press is over inside a tick, and a poll that arrives
@@ -340,7 +340,7 @@ public class VSJumpDriveFixtureBoardingE2ETest extends AbstractSharedVsClientE2E
         leaveTheSeat(budget);
 
         // ---- 2b) Open the NAVIGATION CONSOLE with the same real use-key press. -------------------
-        Aim navAim = aimAt(afcSub, navSub, OFF_STAND, 0.5, 0.5, 0.5, budget);
+        Aim navAim = aimAt(afcSub, navSub, offStand, 0.5, 0.5, 0.5, budget);
         assertAimed(navAim, navSub, "navigation console", "navigationcomputer");
 
         // BOTH logs are marked before the press, because opening a console is a two-sided link and a

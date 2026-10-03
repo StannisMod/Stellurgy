@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -32,6 +33,17 @@ import static org.junit.Assert.assertTrue;
  * {@code worldTime % 20 == 0} gate is crossed naturally.</p>
  */
 public class AdvancementsTriggerTest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /** World the advancement is given to fire in - the old 15 s ceiling, said in ticks. */
     private static final int GRANT_TICKS = 300;
@@ -91,7 +103,7 @@ public class AdvancementsTriggerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
 
     private String exec(String cmd) throws Exception {
         return String.join("\n", harness.client().execute(cmd));

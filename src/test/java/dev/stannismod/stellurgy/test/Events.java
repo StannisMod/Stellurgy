@@ -142,10 +142,18 @@ public final class Events {
 
     private final Probe probe;
     private final Step step;
+    /** What has already been announced about evictions from the logs this reads — see {@link EvictionReports}. */
+    private final EvictionReports evictions;
 
-    public Events(Probe probe, Step step) {
+    /**
+     * @param evictions the eviction announcements already made for the logs {@code probe} reads —
+     *                  owned by whatever owns those logs (the class scope of a shared-harness class,
+     *                  the test instance of a per-test boot), never by this short-lived reader
+     */
+    public Events(Probe probe, Step step, EvictionReports evictions) {
         this.probe = probe;
         this.step = step;
+        this.evictions = evictions;
     }
 
     /**
@@ -235,21 +243,6 @@ public final class Events {
     }
 
     /**
-     * The highest eviction count REPORTED so far for each record type, so a growing one is announced
-     * once per growth instead of on every read.
-     *
-     * <p><b>A static, and here is its owner and its lifetime</b>: the TEST JVM — the client or the
-     * server process this suite runs in — for as long as that process lives. It holds nothing but
-     * "what has already been printed", no assertion reads it, and a wrong value costs a duplicate
-     * line or a missing one, never a verdict. Two logs (the server's and the client's) share it and
-     * count separately, so the blind spot is named rather than engineered away: a growth on the
-     * quieter side is masked while the busier side's total is higher. Announcing the busy side is
-     * the point.</p>
-     */
-    private static final java.util.Map<String, Long> REPORTED_EVICTIONS =
-            new java.util.concurrent.ConcurrentHashMap<>();
-
-    /**
      * The STEP between eviction announcements, in records.
      *
      * <p>A reporting cadence, not an assertion, and shared by both logs this reads — the server's
@@ -274,12 +267,12 @@ public final class Events {
      */
     private String read(String command) throws Exception {
         String reply = ask(command);
-        announceEvictions(reply);
+        announceEvictions(reply, evictions);
         return reply;
     }
 
-    /** @see #read(String) — split out so any other reader of a log reply can announce the same. */
-    public static void announceEvictions(String reply) {
+    /** @see #read(String) — what was already announced is {@code reports}'s, the owner of the logs. */
+    private static void announceEvictions(String reply, EvictionReports reports) {
         JsonObject env;
         try {
             env = envelope(reply);
@@ -300,7 +293,7 @@ public final class Events {
             if (now <= 0L) {
                 continue;
             }
-            Long before = REPORTED_EVICTIONS.get(byType.getKey());
+            Long before = reports.lastAnnounced(byType.getKey());
             // A RING'S WORTH since the last line, not every record. These counters climb on every
             // read of a chatty type, so "announce on growth" alone is a line per read — 821 of them
             // in one class, which is the same silence wearing a different coat. One ring's depth is
@@ -309,7 +302,7 @@ public final class Events {
             if (before != null && now < before + RING_DEPTH_PER_TYPE) {
                 continue;
             }
-            REPORTED_EVICTIONS.merge(byType.getKey(), now, Math::max);
+            reports.announced(byType.getKey(), now);
             System.out.println("[events] RING EVICTED `" + byType.getKey() + "` — " + now
                     + " records dropped so far (+" + (before == null ? now : now - before)
                     + " since this was last said). Any window of this type that straddles the"

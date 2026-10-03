@@ -156,7 +156,7 @@ public class VSPilotSeatTakenWhileOfflineE2ETest extends AbstractSharedVsClientE
         // the SERVER's clock: every poll advances the server's own tick counter and then asks again.
         // The mark is taken before the disconnect, so the record cannot be missed between two reads.
         Events offlineEvents = new Events(this::exec,
-                ticks -> GameTicks.advance(serverClient(), GameTicks.server(), ticks));
+                ticks -> GameTicks.advance(serverClient(), GameTicks.server(), ticks), evictionReports());
         long logoutMark = offlineEvents.markInstrumented();
         bot().disconnect();
         String loggedOut = offlineEvents.await(logoutMark, "player_logged_out",

@@ -99,12 +99,6 @@ public class RailgunCargoReceiveContractTest extends AbstractSharedServerTest {
                 matched >= SENT_CARGO_COUNT);
     }
 
-    // -- helpers ----------------------------------------------------------
-
-    private static String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     private static int extract(String src, String field) {
         Reply reply = Reply.of(src);
         assertTrue("field `" + field + "` not found in: " + src, reply.has(field));

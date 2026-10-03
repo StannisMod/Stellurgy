@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonArray;
@@ -57,6 +58,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest {
 
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
+
     private static final int LSHIFT = 42;
     private static final String CHIP = "stellurgy:spacestationchip";
 
@@ -73,13 +85,13 @@ public class ItemStationChipGuiReopenClientE2ETest extends AbstractClientE2ETest
 
     /** The server's ordered event log — {@code mark} before the stimulus, {@code assertChain} after. */
     private Events events() {
-        return new Events(this::exec, bot()::waitTicks);
+        return new Events(this::exec, bot()::waitTicks, evictionReports());
     }
 
     /** The CLIENT's own, behind the same verbs. This class extends the harness base rather than an
      *  Stellurgy shared one, so it reaches the adapter directly. */
     private Events clientEvents() {
-        return ClientEvents.of(bot());
+        return ClientEvents.of(bot(), evictionReports());
     }
 
     /**

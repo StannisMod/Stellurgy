@@ -18,6 +18,7 @@ import static org.junit.Assert.assertNotNull;
  */
 public class ShipLedgerTest {
 
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID SHIP = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     private static GalacticCoord coord(long sector, long local) {

@@ -79,17 +79,17 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
     // ── Machine block-id -> expected Tile* short class name ─
 
     /** Machine block id &rarr; expected Tile* class short name. */
-    private static final Map<String, String> MACHINES = new LinkedHashMap<>();
-    static {
-        MACHINES.put("stellurgy:rollingMachine",             "TileRollingMachine");
-        MACHINES.put("stellurgy:lathe",                      "TileLathe");
-        MACHINES.put("stellurgy:crystallizer",               "TileCrystallizer");
-        MACHINES.put("stellurgy:electrolyser",               "TileElectrolyser");
-        MACHINES.put("stellurgy:chemicalReactor",            "TileChemicalReactor");
-        MACHINES.put("stellurgy:centrifuge",                 "TileCentrifuge");
-        MACHINES.put("stellurgy:arcfurnace",                 "TileElectricArcFurnace");
-        MACHINES.put("stellurgy:precisionassemblingmachine", "TilePrecisionAssembler");
-        MACHINES.put("stellurgy:precisionlaseretcher",       "TilePrecisionLaserEtcher");
+    private final Map<String, String> machineTiles = new LinkedHashMap<>();
+    {
+        machineTiles.put("stellurgy:rollingMachine",             "TileRollingMachine");
+        machineTiles.put("stellurgy:lathe",                      "TileLathe");
+        machineTiles.put("stellurgy:crystallizer",               "TileCrystallizer");
+        machineTiles.put("stellurgy:electrolyser",               "TileElectrolyser");
+        machineTiles.put("stellurgy:chemicalReactor",            "TileChemicalReactor");
+        machineTiles.put("stellurgy:centrifuge",                 "TileCentrifuge");
+        machineTiles.put("stellurgy:arcfurnace",                 "TileElectricArcFurnace");
+        machineTiles.put("stellurgy:precisionassemblingmachine", "TilePrecisionAssembler");
+        machineTiles.put("stellurgy:precisionlaseretcher",       "TilePrecisionLaserEtcher");
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
         StringBuilder failures = new StringBuilder();
         int idx = 0;
-        for (Map.Entry<String, String> e : MACHINES.entrySet()) {
+        for (Map.Entry<String, String> e : machineTiles.entrySet()) {
             String blockId = e.getKey();
             String tileClass = e.getValue();
             int x = xOff + idx * 5;

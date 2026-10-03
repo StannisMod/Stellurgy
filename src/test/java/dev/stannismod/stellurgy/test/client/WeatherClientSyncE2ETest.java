@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
@@ -47,6 +48,17 @@ import static org.junit.Assert.assertTrue;
  * is reproduced inline ({@link #startBoth()} / {@link #stopBoth()}).</p>
  */
 public class WeatherClientSyncE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     private static final int DIM_A = 9301;
     private static final int DIM_B = 9302;
@@ -309,7 +321,7 @@ public class WeatherClientSyncE2ETest {
     // base's, so it reaches {@link ClientEvents} directly instead of through {@code clientEvents()}.
 
     private Events clientEvents() {
-        return ClientEvents.of(clientHarness.bot());
+        return ClientEvents.of(clientHarness.bot(), evictionReports());
     }
 
     /**

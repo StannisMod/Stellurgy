@@ -54,10 +54,6 @@ public class ParkedShipKeepsItsBodiesE2ETest extends AbstractSharedServerTest {
      */
     private static final long AGE_TICKS = 20_000_000L;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     @Test
     public void aBodyStaysInItsOwnCellAcrossAVeryLongDwell() throws Exception {
         // Where the registry says the body is, and what its cell holds — as of now.

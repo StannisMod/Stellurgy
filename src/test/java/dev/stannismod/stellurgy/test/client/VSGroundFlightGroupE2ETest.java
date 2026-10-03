@@ -939,8 +939,11 @@ public class VSGroundFlightGroupE2ETest extends AbstractSharedVsClientE2ETest {
         double of(ShipInfo ship);
     }
 
+    /** A constant: a non-capturing lambda, which holds no state at all. */
     private static final Axis X = ship -> ship.x;
+    /** A constant: a non-capturing lambda, which holds no state at all. */
     private static final Axis Y = ship -> ship.y;
+    /** A constant: a non-capturing lambda, which holds no state at all. */
     private static final Axis Z = ship -> ship.z;
 
     /** The ship nose heading (MC yaw, degrees) from the attitude quaternion in {@code vs ship-info},

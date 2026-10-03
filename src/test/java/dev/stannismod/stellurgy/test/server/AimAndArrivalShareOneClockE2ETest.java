@@ -78,10 +78,6 @@ public class AimAndArrivalShareOneClockE2ETest extends AbstractSharedServerTest 
     /** A floor under the fraction, for the numeric noise of two long round-trips. */
     private static final double ALLOWED_DRIFT_FLOOR_BLOCKS = 8.0;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     @Test
     public void theAimMovesWithTheSpaceClockAndWithNoOtherClock() throws Exception {
         int moonDim = findAMoon();

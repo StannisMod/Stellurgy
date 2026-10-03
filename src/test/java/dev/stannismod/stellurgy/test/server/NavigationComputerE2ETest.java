@@ -224,8 +224,4 @@ public class NavigationComputerE2ETest extends AbstractSharedServerTest {
                 + " " + firstSector + " 1");
         assertTrue("the probe must stock the crystal: " + stocked, Reply.of(stocked).ok());
     }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 }

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.client.ClientBot;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
@@ -116,6 +117,17 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * wiring under test would not exist at all.</p>
  */
 public abstract class AbstractSpaceLoginRestoreClientTest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    protected final EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /** The account every client harness launches under; the server keys his player data by it. */
     protected static final String BOT = "ForgeTestClient";
@@ -1496,7 +1508,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // the link the on-ramp stopped at where the ledger count could only say "still zero".
         events.assertChain(entryMark, "a piloted craft flown past its planet's orbit ceiling must "
                         + "cross into its launch body's cell and settle there, carrying its pilot",
-                RESTORE_LINK_BUDGET_TICKS, Chains.GRANTED_ENTRY);
+                RESTORE_LINK_BUDGET_TICKS, Chains.grantedEntry());
         String entryChain = events.since(entryMark);
         SubsystemStatus ledgerStatus = SubsystemStatus.read(this::exec);
         assertTrue("the entered ship must be countable in the subsystem's own ledger, not only in "
@@ -1982,7 +1994,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * fires ON the connection.</p>
      */
     protected Events events() {
-        return new Events(this::exec, ticks -> bot().waitTicks(ticks));
+        return new Events(this::exec, ticks -> bot().waitTicks(ticks), evictionReports());
     }
 
     /**
@@ -1996,7 +2008,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      */
     protected Events serverClockEvents() {
         return new Events(this::exec,
-                ticks -> GameTicks.advance(serverHarness.client(), GameTicks.server(), ticks));
+                ticks -> GameTicks.advance(serverHarness.client(), GameTicks.server(), ticks), evictionReports());
     }
 
     /**
@@ -2060,7 +2072,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * it: the client reply carries no {@code mixins} flag.</p>
      */
     protected Events clientEvents() {
-        return ClientEvents.of(bot());
+        return ClientEvents.of(bot(), evictionReports());
     }
 
     /**

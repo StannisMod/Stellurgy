@@ -67,11 +67,7 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
-
-    private String exec(String command) throws Exception {
-        return join(client().execute(command));
-    }
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     private static String join(java.util.List<String> response) {
         return String.join("\n", response);

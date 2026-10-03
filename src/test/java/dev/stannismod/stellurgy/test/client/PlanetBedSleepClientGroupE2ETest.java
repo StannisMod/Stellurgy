@@ -209,7 +209,7 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         // if he never slept, `sleep_in_bed`/`player_wake_up` are simply absent, and the failure says
         // so instead of leaving the reader with two candidates.
         dev.stannismod.stellurgy.test.Events events = new dev.stannismod.stellurgy.test.Events(
-                this::exec, bot()::waitTicks);
+                this::exec, bot()::waitTicks, evictionReports());
         long mark = events.mark();
 
         JsonObject click = bot().interactBlock(BED_X, BED_Y, BED_FOOT_Z);
@@ -290,7 +290,7 @@ public class PlanetBedSleepClientGroupE2ETest extends AbstractSharedClientE2ETes
         // afterwards, so nothing can be missed between two samples and there is no race at the start
         // — which is what a poll on the world clock could never give this test.
         dev.stannismod.stellurgy.test.Events events = new dev.stannismod.stellurgy.test.Events(
-                this::exec, bot()::waitTicks);
+                this::exec, bot()::waitTicks, evictionReports());
         long mark = events.mark();
 
         JsonObject click = bot().interactBlock(BED_X, BED_Y, BED_FOOT_Z);

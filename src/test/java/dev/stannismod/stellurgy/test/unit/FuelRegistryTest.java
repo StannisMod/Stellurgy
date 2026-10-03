@@ -17,7 +17,9 @@ import static org.junit.Assert.assertFalse;
  */
 public class FuelRegistryTest {
 
+    /** A constant: {@code ResourceLocation} is immutable: two final strings. */
     private static final ResourceLocation STILL = new ResourceLocation("stellurgy", "test_still");
+    /** A constant: {@code ResourceLocation} is immutable: two final strings. */
     private static final ResourceLocation FLOW = new ResourceLocation("stellurgy", "test_flow");
 
     private static Fluid newFluid(String name) {

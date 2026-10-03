@@ -79,6 +79,9 @@ public class TelescopeRegionScanTest {
     /** Cells the fixture region must hold to be worth sweeping at all — the test's own bar. */
     private static final int MIN_REGION_CELLS = 3;
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord HOME = GalacticCoord.ofSectorLocal(0, 0, 0, 0, 0, 0);
 
     /**

@@ -71,10 +71,6 @@ public class SystemBodiesFeedFollowsTheCellE2ETest extends AbstractSharedServerT
     private static final String SLOT_DIM = "slotDim";
     private static final String BODY_COUNT = "bodyCount";
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     @After
     public void clearStack() throws Exception {
         try {

@@ -9,7 +9,6 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * TileTerraformingTerminal chip-recognition + redstone gate.

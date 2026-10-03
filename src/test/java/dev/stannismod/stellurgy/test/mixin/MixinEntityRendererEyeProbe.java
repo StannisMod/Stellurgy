@@ -74,7 +74,7 @@ public abstract class MixinEntityRendererEyeProbe {
         double px = view.prevPosX + (view.posX - view.prevPosX) * partialTicks;
         double py = view.prevPosY + (view.posY - view.prevPosY) * partialTicks;
         double pz = view.prevPosZ + (view.posZ - view.prevPosZ) * partialTicks;
-        FrameStepWindow.sample(px, py, pz, DeckReference.worldAt(partialTicks));
+        FrameStepWindow.sample(px, py, pz, DeckReference.client().worldAt(partialTicks));
         float eyeHeight = view.getEyeHeight();
         DeckCameraState.noteEye(px + eyeHeight * up[0], py + eyeHeight * up[1],
                 pz + eyeHeight * up[2]);

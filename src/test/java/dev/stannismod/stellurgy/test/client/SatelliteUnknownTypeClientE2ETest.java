@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
@@ -49,6 +50,17 @@ import static org.junit.Assert.assertTrue;
  * that never left.</p>
  */
 public class SatelliteUnknownTypeClientE2ETest extends AbstractClientE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /** The type the probe puts on the wire when none is given — nothing is registered under it. */
     private static final String BOGUS_TYPE = "stellurgy:unregistered.satellite.type.repro";
@@ -140,6 +152,6 @@ public class SatelliteUnknownTypeClientE2ETest extends AbstractClientE2ETest {
     /** The client log, behind the same verbs. This class extends the harness base rather than a Stellurgy
      *  shared one, so it reaches the adapter directly. */
     private Events clientEvents() {
-        return ClientEvents.of(bot());
+        return ClientEvents.of(bot(), evictionReports());
     }
 }

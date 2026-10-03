@@ -62,17 +62,25 @@ public class VSTransitCrewGroupE2ETest extends AbstractSharedVsClientE2ETest {
     }
 
     /**
-     * The render distance the sky scenario widened, or -1 when nothing has touched it. Static: the
-     * value lives in the client JVM, which outlives every test instance in this class.
+     * The render distance the sky scenario widened, or -1 when nothing has touched it. Kept in the
+     * class scope: the value lives in the client JVM, which outlives every test instance in this class
+     * and dies with the class run.
      */
-    private static int previousRenderDistance = -1;
+    private static final class RenderDistanceToRestore {
+        int previous = -1;
+    }
+
+    private RenderDistanceToRestore renderDistance() {
+        return scope().memory(RenderDistanceToRestore.class, RenderDistanceToRestore::new);
+    }
 
     @Override
     protected void resetFamilyStateBeforeTeleport() throws Exception {
         super.resetFamilyStateBeforeTeleport();
-        if (previousRenderDistance >= 0) {
-            bot().setRenderDistance(previousRenderDistance);
-            previousRenderDistance = -1;
+        RenderDistanceToRestore widened = renderDistance();
+        if (widened.previous >= 0) {
+            bot().setRenderDistance(widened.previous);
+            widened.previous = -1;
         }
         flyOutAnyJumpLeftInTheAir();
     }
@@ -162,7 +170,7 @@ private int waitForLoadedShip(int dim) throws Exception {
                 "this scenario's craft must be loaded before the transit is driven");
     }
 
-    // ---- the jump as a CHAIN of events: PILOTED_JUMP_CHAIN, transitEvents, arrivedTargetDim live in
+    // ---- the jump as a CHAIN of events: pilotedJumpChain(), transitEvents, arrivedTargetDim live in
     // the VS base, shared with every transit scenario ----
 
     /**
@@ -332,7 +340,7 @@ private int waitForLoadedShip(int dim) throws Exception {
         // where "the jump never completed" and "the crew was left behind" used to be one number.
         events.assertChain(mark, "a seated crew member's jump must pick him up, cut the hull into the"
                 + " lane, seat him on the parked hull, cut the hull into its destination and put him"
-                + " back aboard before it settles", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
+                + " back aboard before it settles", JUMP_LINK_BUDGET_TICKS, pilotedJumpChain());
         int targetDim = arrivedTargetDim(this::exec);
 
         // ACCEPTANCE (client oracle): the client itself must PERFORM the remount and still have the
@@ -595,7 +603,7 @@ private String execEnvelope(String cmd) throws Exception {
         // nothing in this world to load it, and the chain stops at `crew_reseated` with the placement's
         // own account of what it is waiting on (`crew_reseat_blocked`) in the log it prints.
         events.assertChain(mark, "a crew member must be re-seated on arrival with NOTHING forcing the"
-                + " ship loaded", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
+                + " ship loaded", JUMP_LINK_BUDGET_TICKS, pilotedJumpChain());
         int targetDim = arrivedTargetDim(this::execEnvelope);
 
         JsonObject riding = ridingOnceTheClientHasRemountedAsTheSubject(clientMark,
@@ -777,7 +785,7 @@ private String hud() throws Exception {
         // honestly zero for the wrong reason. The gate is read back off the client's own field rather
         // than assumed. The HUD is deliberately NOT hidden here: it is one of the three subjects.
         com.google.gson.JsonObject rd = bot().setRenderDistance(SKY_RENDER_DISTANCE);
-        previousRenderDistance = rd.get("previous").getAsInt();
+        renderDistance().previous = rd.get("previous").getAsInt();
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
 
@@ -882,7 +890,7 @@ private String hud() throws Exception {
         // same thing one layer down, in the language file's words.
         events.assertChain(mark, "the jump this leg watched must FINISH, or its whole flight was"
                 + " measured on a transit that never arrived", JUMP_LINK_BUDGET_TICKS,
-                PILOTED_JUMP_CHAIN);
+                pilotedJumpChain());
     }
 
     // ---- a crew member on his FEET crosses too ----
@@ -1085,7 +1093,7 @@ private String hud() throws Exception {
         // honestly zero for the wrong reason. Read back off the client's own field rather than
         // assumed; restored by this family's reset, not by an @After.
         JsonObject rd = bot().setRenderDistance(SKY_RENDER_DISTANCE);
-        previousRenderDistance = rd.get("previous").getAsInt();
+        renderDistance().previous = rd.get("previous").getAsInt();
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
 
@@ -1487,7 +1495,7 @@ private String hud() throws Exception {
         // failure prints (`crew_reseat_blocked`), not in a server log somebody has to go and find.
         events.assertChain(mark, "a crew member on his feet must be carried by BOTH crossings: seated"
                 + " on the parked hull for the flight, put back on his deck at the far end, and only"
-                + " then the arrival committed", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
+                + " then the arrival committed", JUMP_LINK_BUDGET_TICKS, pilotedJumpChain());
         int targetDim = arrivedTargetDim(this::exec);
 
         // The CLIENT's half of the arrival: the server's placement is a link above; whether his own
@@ -1562,7 +1570,7 @@ private String hud() throws Exception {
         // at 2, so without this every sky reading below would be honestly zero for the wrong reason.
         // Read back off the client's own field rather than assumed.
         JsonObject rd = bot().setRenderDistance(SKY_RENDER_DISTANCE);
-        previousRenderDistance = rd.get("previous").getAsInt();
+        renderDistance().previous = rd.get("previous").getAsInt();
         assertTrue("the sky pass gate must be open, read back off the client's own field: " + rd,
                 rd.get("skyPassEnabled").getAsBoolean());
 
@@ -1710,7 +1718,7 @@ private String hud() throws Exception {
         // at `crew_reseated` prints the placement's own account of what it is stuck on.
         events.assertChain(mark, "a crew member who stood up mid-flight must be put back on his deck"
                 + " at the far end before the arrival is committed", JUMP_LINK_BUDGET_TICKS,
-                PILOTED_JUMP_CHAIN);
+                pilotedJumpChain());
         int targetDim = arrivedTargetDim(this::exec);
 
         // Is he still THERE — a separate question from his posture, and asked first. A body left

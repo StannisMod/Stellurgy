@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -22,6 +23,17 @@ import static org.junit.Assert.assertTrue;
 </p>
  */
 public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     private static final String SLOT = "slot";
     private static final String COUNT = "count";
@@ -68,7 +80,7 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
 
         // Assemble a ship in a fresh pool slot (cell "deep"). The substrate spawns it from a queue
         // it drains on a later tick, and `ship_spawned` is that drain's own record.
-        Events serverLog = new Events(this::exec, bot()::waitTicks);
+        Events serverLog = new Events(this::exec, bot()::waitTicks, evictionReports());
         long spawnMark = serverLog.markInstrumented();
         String asm = exec("stellurgytest space vs-assemble deep");
         Reply mReply = Reply.of(asm);
@@ -93,7 +105,7 @@ public class SpaceSlotVsShipReloadE2ETest extends AbstractClientE2ETest {
         // what matters and it is a dimension change, so it is waited for as the client's own record
         // of one: a world the client has not left yet still holds a player, and the reload asserted
         // below would then be asked of a world that cannot unload.
-        Events clientLog = ClientEvents.of(bot());
+        Events clientLog = ClientEvents.of(bot(), evictionReports());
         long leaveMark = clientLog.mark();
         exec("stellurgytest tp 0");
         ClientEvents.awaitDim(clientLog, leaveMark, 0,

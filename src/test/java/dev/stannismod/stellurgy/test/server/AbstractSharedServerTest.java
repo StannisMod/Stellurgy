@@ -1,19 +1,21 @@
 package dev.stannismod.stellurgy.test.server;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
+import com.github.stannismod.forge.testing.junit.ClassScope;
+import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
+import com.github.stannismod.forge.testing.junit.ScopedTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import com.github.stannismod.forge.testing.server.TestClient;
-import org.junit.AfterClass;
-import org.junit.Assume;
-import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.rules.TestName;
+import org.junit.runner.RunWith;
 
-import java.util.HashMap;
-import java.util.Map;
-
+import dev.stannismod.stellurgy.test.DimList;
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Plot;
+import dev.stannismod.stellurgy.test.Reply;
 
 /**
  * class-scoped harness lifecycle base class.
@@ -23,10 +25,12 @@ import dev.stannismod.stellurgy.test.Plot;
  * so a class with N independent methods pays N server cold starts.</p>
  *
  * <p>This base class is the opt-in alternative: <strong>one</strong>
- * server JVM is started in {@code @BeforeClass} and closed in
- * {@code @AfterClass}. All {@code @Test} methods in the subclass share
+ * server JVM is started when the class starts and closed when it ends, by
+ * the class run's {@link SharedServerScope} (owned by {@link ClassScopeRunner},
+ * so no static holds it). All {@code @Test} methods in the subclass share
  * that harness, so the class pays ONE cold start however many methods it
- * carries.</p>
+ * carries. A fixture the whole class shares is kept in {@link #scope()}'s
+ * memory, never in a static.</p>
  *
  * <p><b>What a cold start costs, measured 2026-09-21 rather than estimated:</b>
  * a single-class re-run took 74 s of wall clock against 25.7 s of test
@@ -106,48 +110,100 @@ import dev.stannismod.stellurgy.test.Plot;
  * failed against the same root cause. This is the trade-off — keep the
  * shared base only for classes whose methods are stable AND fast.
  */
-public abstract class AbstractSharedServerTest {
+@RunWith(ClassScopeRunner.class)
+@ClassScope(SharedServerScope.class)
+public abstract class AbstractSharedServerTest implements ScopedTest<SharedServerScope> {
 
-    private static volatile RealDedicatedServerHarness shared;
+    /** This class run's server and plots; handed over by the runner before any rule or {@code @Before}. */
+    private SharedServerScope scope;
 
-    @BeforeClass
-    public static void startSharedHarness() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -D"
-                        + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        // Cold-start once for the whole class.
-        shared = RealDedicatedServerHarness.start();
+    @Override
+    public final void attachScope(SharedServerScope scope) {
+        this.scope = scope;
     }
 
-    @AfterClass
-    public static void stopSharedHarness() throws Exception {
-        if (shared != null) {
-            try {
-                shared.close();
-            } finally {
-                shared = null;
-            }
-        }
+    /** What this class run shares beyond the server itself — a fixture built once for the class. */
+    protected final SharedServerScope scope() {
+        return scope;
     }
 
-    /** The shared server's command client. Safe to call from any
-     *  {@code @Test} method; null between @AfterClass and the next class's
-     *  @BeforeClass. */
-    protected static TestClient client() {
-        if (shared == null) {
-            throw new IllegalStateException(
-                    "Shared harness not started — @BeforeClass setup failed "
-                            + "or test called from outside a JUnit lifecycle.");
-        }
-        return shared.client();
+    /**
+     * The eviction announcements already made by this test instance's readers of the server log. Per
+     * INSTANCE, not per class run: a subclass builds its {@link dev.stannismod.stellurgy.test.Events}
+     * in field initialisers, which run in the constructor — before the runner attaches the scope.
+     * No assertion reads it; the price is the cadence of the "RING EVICTED" lines.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    /** Hand this to every {@link dev.stannismod.stellurgy.test.Events} this test builds. */
+    protected final EvictionReports evictionReports() {
+        return evictions;
+    }
+
+    /** The shared server's command client. */
+    protected final TestClient client() {
+        return scope.harness().client();
     }
 
     /** The shared harness. Available for the few cases that need the
      *  RealDedicatedServerHarness API beyond `client()`. */
-    protected static RealDedicatedServerHarness harness() {
-        return shared;
+    protected final RealDedicatedServerHarness harness() {
+        return scope.harness();
+    }
+
+    /** Send a command to the shared server and return the concatenated console response. */
+    protected final String exec(String cmd) throws Exception {
+        return String.join("\n", client().execute(cmd));
+    }
+
+    /**
+     * What time it is in the GAME, asked of the server.
+     *
+     * <p>The server's own tick counter. A test that needs to know how long it is willing to wait for
+     * something asks here rather than looking at a watch. The implementation is {@link GameTicks}'s;
+     * two readers of one clock is exactly one too many.</p>
+     */
+    protected final long serverTick() throws Exception {
+        return GameTicks.read(client(), GameTicks.server());
+    }
+
+    /** Read an integer field out of {@code /stellurgytest planet info <dim>}
+     *  JSON. Asserts the field is present. */
+    protected final int planetIntField(int dim, String field) throws Exception {
+        return Integer.parseInt(planetInfoField(dim, field));
+    }
+
+    /** Read a float/double field out of {@code /stellurgytest planet info <dim>}. */
+    protected final double planetFloatField(int dim, String field) throws Exception {
+        return Double.parseDouble(planetInfoField(dim, field));
+    }
+
+    /** True iff Stellurgy's planet registry knows the given dim, observed via
+     *  {@code /ar planet list} (which iterates {@code getRegisteredDimensions()}
+     *  &rarr; the underlying {@code dimensionList} keyset). Cannot use
+     *  {@code /stellurgytest planet info} here because
+     *  {@code DimensionManager.getDimensionProperties} falls back to
+     *  {@code overworldProperties} for unknown dims, so the
+     *  info probe is incapable of distinguishing "registered" from
+     *  "absent" by itself. */
+    protected final boolean planetExists(int dim) throws Exception {
+        // `stellurgytest dim list` reports `DimensionManager.getRegisteredDimensions()`, the very
+        // collection `/ar planet list` iterates, as a list of integers — so `DIM9` cannot match
+        // `DIM90` the way a chat line could.
+        return DimList.from(this::exec).holds(dim);
+    }
+
+    /**
+     * One field of a planet-info reply, as text. Absence is the answer, and WHICH answer is the
+     * CALLER's: this verb is handed a field name, so it cannot know what a missing one means.
+     */
+    private String planetInfoField(int dim, String field) throws Exception {
+        String src = exec("stellurgytest planet info " + dim);
+        String value = Reply.of("stellurgytest planet info", src).textOr(field, null);
+        if (value == null) {
+            throw new AssertionError("field \"" + field + "\" not found in: " + src);
+        }
+        return value;
     }
 
     // ---- position isolation, as a MECHANISM ----------------------------------------------------
@@ -158,15 +214,11 @@ public abstract class AbstractSharedServerTest {
     // scenario's own plot, in the open-air band, and the clear that follows asserts the volume
     // stays inside it.
     //
-    // Unique WITHIN THE CLASS is the whole requirement, because each class boots its own server in
-    // @BeforeClass and therefore its own world. The key carries the class anyway, so a fork that
-    // runs several classes in one JVM never hands two of them the same patch either.
+    // Unique WITHIN THE CLASS is the whole requirement, because each class boots its own server and
+    // therefore its own world — which is why the allocator lives in the class run's scope.
 
     @Rule
     public final TestName scenarioName = new TestName();
-
-    private static final Map<String, Plot> PLOTS = new HashMap<>();
-    private static int nextPlotIndex;
 
     /**
      * Where this class's plots live. Override for a class whose fixtures are wider than a plot, or
@@ -178,15 +230,7 @@ public abstract class AbstractSharedServerTest {
 
     /** This scenario's own patch of world — allocated once, never recycled. */
     protected final Plot plot() {
-        String key = getClass().getName() + "#" + scenarioName.getMethodName();
-        synchronized (PLOTS) {
-            Plot existing = PLOTS.get(key);
-            if (existing == null) {
-                existing = Plot.forScenario(nextPlotIndex++, key, 0, lane());
-                PLOTS.put(key, existing);
-            }
-            return existing;
-        }
+        return scope.plot(getClass().getName() + "#" + scenarioName.getMethodName(), lane());
     }
 
     /**

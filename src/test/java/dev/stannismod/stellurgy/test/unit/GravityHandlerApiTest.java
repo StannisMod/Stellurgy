@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.unit;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.item.EntityItem;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import sun.misc.Unsafe;
@@ -25,19 +26,23 @@ import static org.junit.Assert.assertFalse;
  */
 public class GravityHandlerApiTest {
 
-    private static Unsafe UNSAFE;
+    private Unsafe unsafe;
 
     @BeforeClass
-    public static void bootstrap() throws Exception {
+    public static void bootstrap() {
         MinecraftBootstrap.ensure();
-        Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-        theUnsafe.setAccessible(true);
-        UNSAFE = (Unsafe) theUnsafe.get(null);
     }
 
-    private static Entity fakeEntity() throws Exception {
+    @Before
+    public void reachUnsafe() throws Exception {
+        Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+        theUnsafe.setAccessible(true);
+        unsafe = (Unsafe) theUnsafe.get(null);
+    }
+
+    private Entity fakeEntity() throws Exception {
         // EntityItem has a real ctor that needs a World — bypass it.
-        return (Entity) UNSAFE.allocateInstance(EntityItem.class);
+        return (Entity) unsafe.allocateInstance(EntityItem.class);
     }
 
     @Test

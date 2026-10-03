@@ -76,7 +76,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    private static void warmup(int blockX, int blockZ) throws Exception {
+    private void warmup(int blockX, int blockZ) throws Exception {
         int cx = blockX >> 4;
         int cz = blockZ >> 4;
         String resp = join(client().execute(
@@ -90,7 +90,7 @@ public class DockingPortNbtAndPacketTest extends AbstractSharedServerTest {
      *  registered as {@code stationMarker} (per Stellurgy's Stellurgy
      *  init), not {@code dockingPort} — the registry name and the
      *  tile-entity class name don't have to match in Forge. */
-    private static void placeDockingPort(int x, int y, int z) throws Exception {
+    private void placeDockingPort(int x, int y, int z) throws Exception {
         String resp = join(client().execute(
                 "stellurgytest place 0 " + x + " " + y + " " + z
                         + " stellurgy:stationMarker"));

@@ -23,7 +23,9 @@ import static org.junit.Assert.assertSame;
  */
 public class OreGenPropertiesTest {
 
+    /** A constant: an enum constant whose only field is a final int. */
     private static final AtmosphereTypes ATM = AtmosphereTypes.NORMAL;
+    /** A constant: an enum constant whose only field is a final int. */
     private static final Temps TEMP = Temps.NORMAL;
 
     @BeforeClass

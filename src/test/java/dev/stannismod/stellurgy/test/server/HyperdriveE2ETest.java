@@ -34,10 +34,6 @@ public class HyperdriveE2ETest extends AbstractSharedServerTest {
     private static final String NAV_C = "0 2720 80 2720";
     private static final String NAV_D = "0 2780 80 2780";
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     /** What the drive standing at {@code afc} is, as the ship's own answer. */
     private DriveInfo drive(String afc) throws Exception {
         return DriveInfo.at(this::exec, "0 " + afc);

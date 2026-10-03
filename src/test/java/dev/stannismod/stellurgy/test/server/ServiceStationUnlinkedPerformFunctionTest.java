@@ -4,7 +4,6 @@ import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * Regression guard for the standalone-repair null-deref invariant (PR #23

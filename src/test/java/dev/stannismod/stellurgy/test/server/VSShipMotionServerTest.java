@@ -40,6 +40,10 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     private static final String VARIANT = "with-advanced-flight-computer";
 
+    /**
+     * A constant: a {@code FixtureSite} is immutable: final ints, a final string and a final, itself
+     * immutable, {@code Plot}.
+     */
     // Horizontally distinct from AdvancedFlightComputerTierGateTest's sites (1200 / 1600): the
     // server is shared, and two craft assembled in one another's working volume interfere whatever
     // each test then asks by id.
@@ -71,11 +75,7 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @After
     public void cleanup() throws Exception {

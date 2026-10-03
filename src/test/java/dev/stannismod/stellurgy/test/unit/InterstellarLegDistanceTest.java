@@ -35,7 +35,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class InterstellarLegDistanceTest {
 
-    /** A baseline drive hauling the placeholder hull: the reference ship every band is quoted for. */
+    /**
+     * A baseline drive hauling the placeholder hull: the reference ship every band is quoted for.
+     *
+     * <p>A constant: a final {@code long} computed once by a pure function of static-final drive
+     * constants.</p>
+     */
     private static final long BASELINE_SPEED =
             JumpSpeed.blocksPerTick(DriveTuning.BASELINE_DRIVE_POWER, DriveTuning.PLACEHOLDER_SHIP_MASS,
                     DriveTier.baseline());

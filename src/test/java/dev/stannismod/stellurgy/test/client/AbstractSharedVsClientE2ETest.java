@@ -91,6 +91,8 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * free and keeps the migration a change of WHO chooses the address rather than a change of how
      * far apart two flying hulls are. A class that wants its plots adjacent says so in its own
      * lane.</p>
+     *
+     * <p>A constant: a {@code Lane} is an immutable value: four final ints.</p>
      */
     protected static final Plot.Lane SHIP_LANE = new Plot.Lane(2000, 8000, 100);
 
@@ -785,7 +787,9 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * reported {@code expected:<13> but was:<3>} for a flight that ended with nobody aboard, a crew
      * that never boarded the parked hull, and a client that was merely slow, all alike.</p>
      */
-    protected static final String[] PILOTED_JUMP_CHAIN = dev.stannismod.stellurgy.test.Chains.PILOTED_JUMP;
+    protected static String[] pilotedJumpChain() {
+        return dev.stannismod.stellurgy.test.Chains.pilotedJump();
+    }
 
     /**
      * The deck-capture verdict for the player, read ONCE and proved to be about {@code shipId}.
@@ -890,7 +894,7 @@ public abstract class AbstractSharedVsClientE2ETest extends AbstractSharedClient
      * {@code events()} hard-codes, and one scenario reads through an envelope-aware one.</p>
      */
     protected final Events transitEvents(Events.Probe probe) {
-        return new Events(probe, bot()::waitTicks);
+        return new Events(probe, bot()::waitTicks, evictionReports());
     }
 
     /**

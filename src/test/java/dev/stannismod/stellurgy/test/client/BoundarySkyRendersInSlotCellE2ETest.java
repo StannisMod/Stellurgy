@@ -174,7 +174,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      * its own is included because it is NOT a descend target and takes the other billboard size — the
      * feed carries both kinds and so must the subject.</p>
      */
-    private static final String[][] SYSTEM = {
+    private final String[][] cellBodies = {
             {"768", "-1072", "-2652", "MOON", "0", "0.27"},           // ~2 961 - the nearest descend target
             {"-23443", "11940", "10363", "MOON", "0", "0.27"},        // ~28 275
             {"-30108", "-13988", "11037", "MOON", "0", "0.27"},       // ~34 985
@@ -192,12 +192,12 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     };
 
     /** A body's radius in Earth radii, as the fixture states it — the sixth column above. */
-    private static double radiusEarths(int index) {
-        return Double.parseDouble(SYSTEM[index][5]);
+    private double radiusEarths(int index) {
+        return Double.parseDouble(cellBodies[index][5]);
     }
 
     /** The same, in the chart blocks the feed sends and the renderer sizes with. */
-    private static double radiusBlocks(int index) {
+    private double radiusBlocks(int index) {
         return radiusEarths(index) * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
     }
 
@@ -352,8 +352,8 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
 
         BufferedImage overworldZenith;
         BufferedImage slotFirstFrame;
-        BufferedImage[] before = new BufferedImage[SYSTEM.length];
-        BufferedImage[] after = new BufferedImage[SYSTEM.length];
+        BufferedImage[] before = new BufferedImage[cellBodies.length];
+        BufferedImage[] after = new BufferedImage[cellBodies.length];
         BufferedImage emptyBefore;
         BufferedImage emptyAfter;
         int slotDim;
@@ -453,7 +453,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
 
             // Before the registrations, so the broadcast they cause cannot land between two reads.
             long feedMark = clientMark();
-            for (String[] body : SYSTEM) {
+            for (String[] body : cellBodies) {
                 // The radius is stated, not implied: since 2026-08-16 the sky sizes a body by the
                 // ANGLE it subtends, so a fixture that named no radius would draw six identical
                 // markers and the size legs below would be measuring nothing.
@@ -468,30 +468,30 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             // could not tell a feed that never came from one that came empty, and could not say which
             // broadcast filled it.
             String feedArrived = awaitClientLog(feedMark, "system_bodies_received",
-                    reply -> anyRecord(reply, "bodies", SYSTEM.length),
-                    "the client must be SENT all " + SYSTEM.length + " bodies of the cell before it"
+                    reply -> anyRecord(reply, "bodies", cellBodies.length),
+                    "the client must be SENT all " + cellBodies.length + " bodies of the cell before it"
                             + " can be asked to draw them", FEED_BUDGET_TICKS);
             Events.assertInstrumentRan(feedArrived, "system_bodies_sync_events",
                     "the client was sent the cell's bodies");
             // And the arrival must have been for THIS slot: the record counts bodies across every dim
             // it carries, so the store is asked which dim they landed under.
             String bodies = clientBodies();
-            assertTrue("the client must hold all " + SYSTEM.length + " bodies UNDER THE SLOT the cell"
+            assertTrue("the client must hold all " + cellBodies.length + " bodies UNDER THE SLOT the cell"
                     + " is bound to (" + slotDim + "), got: " + bodies + " | arrival: " + feedArrived,
-                    countBodies(bodies, slotDim) == SYSTEM.length);
+                    countBodies(bodies, slotDim) == cellBodies.length);
 
             // Cross-side oracle: the SERVER's own feed, for this slot dim, carries exactly these bodies
             // on exactly these bearings. Everything below aims with the server's numbers.
             String feed = exec("stellurgytest space bodies");
             assertEquals("the server feed must carry the whole system for this slot dim: " + feed,
-                    SYSTEM.length, feedBodyCount(feed, slotDim));
-            for (int i = 0; i < SYSTEM.length; i++) {
-                String dir = "\"dir\":[" + SYSTEM[i][0] + "," + SYSTEM[i][1] + "," + SYSTEM[i][2] + "]";
+                    cellBodies.length, feedBodyCount(feed, slotDim));
+            for (int i = 0; i < cellBodies.length; i++) {
+                String dir = "\"dir\":[" + cellBodies[i][0] + "," + cellBodies[i][1] + "," + cellBodies[i][2] + "]";
                 assertTrue("the server must report body " + i + " on its own bearing " + dir
                         + " (a body drawn on a bearing nobody sent is a body a pilot cannot fly at): "
                         + feed, feed.contains(dir));
                 assertTrue("and the client must hold the identical direction: " + bodies,
-                        bodies.contains("dir=" + SYSTEM[i][0] + "," + SYSTEM[i][1] + "," + SYSTEM[i][2]));
+                        bodies.contains("dir=" + cellBodies[i][0] + "," + cellBodies[i][1] + "," + cellBodies[i][2]));
             }
 
             for (int i : new int[] {NEAREST, GIANT, FARTHEST}) {
@@ -503,12 +503,12 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
             // every body the feed carries. The counter this replaces was whatever the LAST frame
             // happened to be, whichever world it was drawn in; here the frame is named.
             String bodiedSky = awaitClientLog(cellMark, "sky_frame_drawn",
-                    reply -> anyRecord(reply, "bodies", SYSTEM.length, dimNeedle(slotDim)),
+                    reply -> anyRecord(reply, "bodies", cellBodies.length, dimNeedle(slotDim)),
                     "the sky must attempt every body the cell's feed carries before its label and"
                             + " boundary counts can be read as a statement about them",
                     SKY_FRAME_BUDGET_TICKS);
             String bodiedFrame = lastRecordWith(bodiedSky, dimNeedle(slotDim),
-                    "\"bodies\":" + SYSTEM.length + ",");
+                    "\"bodies\":" + cellBodies.length + ",");
             labelsWithBodies = lastInt(bodiedFrame, "labels");
             boundariesWithBodies = lastInt(bodiedFrame, "boundaries");
         } finally {
@@ -610,7 +610,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         assertEquals("no body is registered yet, so the sky can have labelled nothing",
                 0, labelsWithNoBodies);
         assertEquals("the sky must label every body it draws, by default and with no configuration",
-                SYSTEM.length, labelsWithBodies);
+                cellBodies.length, labelsWithBodies);
 
         // ----------------------------------------- Leg 6: the atmosphere boundary, by exact count.
         // An atmosphere is drawn around a body a ship can descend to, and around nothing else. The
@@ -619,14 +619,14 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         // reads 6 and a renderer drawing none reads 0. An assertion of "> 0" would accept both of
         // the ways this can be wrong.
         int descendTargets = 0;
-        for (String[] body : SYSTEM) {
+        for (String[] body : cellBodies) {
             if (!"GAS_GIANT".equals(body[3])) {
                 descendTargets++;
             }
         }
         assertEquals("the fixture must hold a non-descend body, or this leg cannot discriminate "
                         + "'one per descend target' from 'one per body'",
-                SYSTEM.length - 1, descendTargets);
+                cellBodies.length - 1, descendTargets);
         assertEquals("no body is registered yet, so no atmosphere can have been drawn",
                 0, boundariesWithNoBodies);
         assertEquals("one atmosphere boundary per descend target, and none for the gas giant",
@@ -890,7 +890,7 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
         double discRadius = discRadiusOf(index);
         double sampleRadius = discRadius / 2.0;
         float[] aim = aimAt(local(index, 0), local(index, 1), local(index, 2));
-        String where = "body " + index + " (" + SYSTEM[index][3] + " at "
+        String where = "body " + index + " (" + cellBodies[index][3] + " at "
                 + Math.round(Math.sqrt(
                         (double) local(index, 0) * local(index, 0)
                                 + (double) local(index, 1) * local(index, 1)
@@ -923,13 +923,13 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
      * on a 70-degree vertical FOV. Used only to SIZE sample boxes; every assertion is still about what
      * the client actually drew, so a build that drew nothing fails whatever the box is.
      */
-    private static double discRadiusOf(int index) {
+    private double discRadiusOf(int index) {
         return Math.toDegrees(Math.atan(
                 ApparentSize.halfSizeFor(radiusBlocks(index), distanceOf(index)) / 90.0)) / 70.0;
     }
 
     /** How far the configured body {@code index} is from the settled ship, in blocks. */
-    private static double distanceOf(int index) {
+    private double distanceOf(int index) {
         double dx = local(index, 0);
         double dy = local(index, 1);
         double dz = local(index, 2);
@@ -937,8 +937,8 @@ public class BoundarySkyRendersInSlotCellE2ETest extends AbstractSharedClientE2E
     }
 
     /** One component of a configured body's local offset (its direction from the settled ship). */
-    private static long local(int index, int axis) {
-        return Long.parseLong(SYSTEM[index][axis]);
+    private long local(int index, int axis) {
+        return Long.parseLong(cellBodies[index][axis]);
     }
 
     /**

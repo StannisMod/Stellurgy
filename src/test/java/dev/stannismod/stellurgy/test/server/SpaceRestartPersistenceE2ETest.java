@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.LedgerEntry;
 import dev.stannismod.stellurgy.test.MaterializedCell;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
@@ -46,6 +47,17 @@ import static org.junit.Assert.assertTrue;
  * nothing worth registering ten dimensions for), so the wiring under test would not exist.</p>
  */
 public class SpaceRestartPersistenceE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /** Stable across both boots — the whole point is that the SECOND server recognises it. */
     private static final String SHIP_ID = "2f8c1f6a-4d3b-4c11-9a7e-0b5d6e7f8a90";
@@ -101,7 +113,7 @@ public class SpaceRestartPersistenceE2ETest {
      */
     private Events events() {
         return new Events(this::exec,
-                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
 
     // THERE IS NO `assumeProductionSubsystemAvailable()` ANY MORE — six scenarios opened with it and

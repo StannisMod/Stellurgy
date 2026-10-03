@@ -49,8 +49,8 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
     private static final String COUNT = "count";
 
     /** What the server says about one dimension, read through the verb's own reader. */
-    private static DimInfo dimInfo(int dim) throws Exception {
-        return DimInfo.forDim(WorldCommandFixtures::exec, dim);
+    private DimInfo dimInfo(int dim) throws Exception {
+        return DimInfo.forDim(this::exec, dim);
     }
 
     @Test
@@ -219,9 +219,5 @@ public class PlanetTerrainSourceE2ETest extends AbstractSharedServerTest {
         }
         Assume.assumeTrue("Only overworld registered — skipping", false);
         return -1;
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
     }
 }

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
@@ -37,6 +38,17 @@ import static org.junit.Assert.assertTrue;
  * <p>Gated on the server's real VS presence; skips cleanly otherwise.</p>
  */
 public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServerTest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
 
     private static final int BASE_X = 7000, BASE_Z = 7000;
@@ -259,7 +271,7 @@ public class VSCrossingOutOfAnUnloadedSourceE2ETest extends AbstractHeadlessServ
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * Wait for the craft this test built to be UNLOADED — the substrate's own {@code unload()},

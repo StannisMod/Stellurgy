@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.FixtureSite;
@@ -46,6 +47,17 @@ import static org.junit.Assert.assertTrue;
  * <p>Gated on the server's real VS presence; skips cleanly otherwise.</p>
  */
 public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractHeadlessServerTest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /**
      * The craft's base, and the altitude every pose question in this class is asked against.
@@ -151,7 +163,7 @@ public class VSDoubleQueuedShipLoadDoesNotKillTheServerE2ETest extends AbstractH
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     // --- observation --------------------------------------------------------------------------------
 

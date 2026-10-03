@@ -955,11 +955,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /** What the production ledger holds about one craft, by its DURABLE id. */
     private LedgerEntry ledger(String stellurgyShipId) throws Exception {

@@ -354,7 +354,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
                 "transit_departed", "login_restored", "hyperspace_arrival_cut");
         events.assertChain(mark, "a pilot who relogged mid-transit must be re-seated on his ship ON"
                 + " ARRIVAL: the jump must pick him up, board him on the parked hull, land, put him"
-                + " back aboard and only then settle", JUMP_LINK_BUDGET_TICKS, PILOTED_JUMP_CHAIN);
+                + " back aboard and only then settle", JUMP_LINK_BUDGET_TICKS, pilotedJumpChain());
         int targetDim = arrivedTargetDim(this::exec);
 
         // The CLIENT's half: the server's re-seat is a link above; whether his own client followed
@@ -367,7 +367,7 @@ public class VSMidTransitRelogControlE2ETest extends AbstractSharedVsClientE2ETe
         // parked hull, and the one it performs on arrival — and NOTHING on the client log marks the
         // arrival cut, so a mark cannot be placed between them (a server sequence number is not a
         // client mark). The claim this link makes is therefore "his client did seat him again after
-        // the relog"; the ARRIVAL re-seat is pinned by `PILOTED_JUMP_CHAIN` above, and the settled
+        // the relog"; the ARRIVAL re-seat is pinned by `pilotedJumpChain()` above, and the settled
         // reads below pin the end state — the seat dummy, and the target cell.
         JsonObject riding = ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
         assertTrue("the re-mounted entity must be the ship's seat dummy: " + riding,

@@ -42,7 +42,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
     private static final String BRANCH = "branch";
     private static final int DIM = 0;
 
-    private static String probe(int x, int y, int z) throws Exception {
+    private String probe(int x, int y, int z) throws Exception {
         String resp = String.join("\n", client().execute(
                 "stellurgytest seal-detector check " + DIM + " " + x + " " + y + " " + z));
         Reply mReply = Reply.of(resp);
@@ -51,7 +51,7 @@ public class SealDetectorDispatchTest extends AbstractSharedServerTest {
         return mReply.text(BRANCH);
     }
 
-    private static void place(int x, int y, int z, String blockId) throws Exception {
+    private void place(int x, int y, int z, String blockId) throws Exception {
         // /stellurgytest place uses minecraft:<name> form; ensure chunk loaded by
         // first placing air at the position (no-op for an already-air cell
         // but force-loads the chunk).

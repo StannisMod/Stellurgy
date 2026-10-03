@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.milestone;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -83,6 +84,17 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * the server boots.</p>
  */
 public class M1PlanetToPlanetMilestoneE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /**
      * How many addresses the console must list for the pilot to have SOMEWHERE to fly.
@@ -212,14 +224,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
     private static final int ORBIT_LINE = 255;
 
     /** Seat and standing square, as offsets from the ship's FLIGHT COMPUTER (the deck layout). */
-    private static final int[] OFF_SEAT = {1, 0, 0};
-    private static final int[] OFF_STAND = {1, 0, 1};
+    private final int[] offSeat = {1, 0, 0};
+    private final int[] offStand = {1, 0, 1};
     /**
      * The navigation console, as an offset from the flight computer: two cells beyond the seat over
      * the one square the drive bay leaves to stand on, so the seated pilot has a clear sightline to
      * it without leaving his seat.
      */
-    private static final int[] OFF_NAV = {1, 0, 2};
+    private final int[] offNav = {1, 0, 2};
 
     /** Vanilla eye height for a standing player — a raytrace starts here, not at the feet. */
     private static final double EYE_HEIGHT = 1.62;
@@ -300,7 +312,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // The loop's pilot-input delivery chain, both halves, for the failure messages below: a
         // window opened with the pair, so its counts are this run's.
         seatDelivery = SeatDelivery.open(this::exec, bot(),
-                new Events(this::exec, bot()::waitTicks), clientEvents());
+                new Events(this::exec, bot()::waitTicks, evictionReports()), clientEvents());
     }
 
     /** This run's pilot-input delivery windows — see {@link SeatDelivery}. */
@@ -391,7 +403,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // from the boarding onward reads it now — the seat's verdict, the console's, the crossings'
         // — and a reader that only exists from halfway down is one more reason for the early legs to
         // keep polling values.
-        Events events = new Events(this::exec, bot()::waitTicks);
+        Events events = new Events(this::exec, bot()::waitTicks, evictionReports());
         long tLeg = System.currentTimeMillis();
 
         // Leg 4 says why, and it holds for the whole loop: an observer is aboard the whole way, so
@@ -509,17 +521,17 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // the offset it was built at. Without this control the deck square the pilot is placed on
         // below is a guess, and a failed press could just as easily be a bot standing nowhere.
         requireArranged("CONTROL: the ship's subspace copy must preserve the build's own "
-                        + "geometry — seat minus flight computer should be " + describe(OFF_SEAT)
+                        + "geometry — seat minus flight computer should be " + describe(offSeat)
                         + " but is " + describe(new int[]{seatSub[0] - afcSub[0],
                                 seatSub[1] - afcSub[1], seatSub[2] - afcSub[2]}) + ": " + found,
-                seatSub[0] - afcSub[0] == OFF_SEAT[0]
-                        && seatSub[1] - afcSub[1] == OFF_SEAT[1]
-                        && seatSub[2] - afcSub[2] == OFF_SEAT[2]);
+                seatSub[0] - afcSub[0] == offSeat[0]
+                        && seatSub[1] - afcSub[1] == offSeat[1]
+                        && seatSub[2] - afcSub[2] == offSeat[2]);
 
         // A held stack consumes the use press before the block ever sees it.
         emptyTheHand();
 
-        Aim seatAim = aimAt(afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
+        Aim seatAim = aimAt(afcSub, seatSub, offStand, 0.5, 0.2, 0.5, budget);
         assertAimed(seatAim, seatSub, "pilot seat", "pilotseat");
 
         // THE PRESS, THE SEAT'S VERDICT, AND THE MOUNT — three links that a single "is he riding yet"
@@ -587,7 +599,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
                     + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a space cell —"
                     + " that is the on-ramp a real player flies, and holding one key is the whole of"
-                    + " his input", climbBudget, Chains.GRANTED_ENTRY);
+                    + " his input", climbBudget, Chains.grantedEntry());
         } finally {
             bot().releaseKey(Keyboard.KEY_R);
         }
@@ -659,7 +671,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                         + "it is linked to — the console the pilot reaches for is addressed from that "
                         + "computer: " + seatProbe,
                 navAfcSub != null);
-        int[] navSub = add(navAfcSub, OFF_NAV);
+        int[] navSub = add(navAfcSub, offNav);
 
         // The drive's capacitor holds no charge on a freshly built craft and this ship carries no
         // generator, so the window it needs is paid for here. Seeding stored energy is the same class
@@ -1700,9 +1712,9 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
     /** He takes the seat again, exactly the way he took it the first time: aim at it and press use. */
     private JsonObject sitBackDown(Events log, int dim, int[] afcSub, int budget) throws Exception {
-        int[] seatSub = add(afcSub, OFF_SEAT);
+        int[] seatSub = add(afcSub, offSeat);
         holdNothing();
-        Aim aim = aimAt(dim, afcSub, seatSub, OFF_STAND, 0.5, 0.2, 0.5, budget);
+        Aim aim = aimAt(dim, afcSub, seatSub, offStand, 0.5, 0.2, 0.5, budget);
         assertAimed(aim, seatSub, "pilot seat", "pilotseat");
         long sitMark = log.mark();
         long sitClientMark = clientEvents().mark();
@@ -1747,7 +1759,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
                             > Events.recordsWhere(reply, "gui", "none").size(),
                     "opening any screen", "the navigation console must open", 360,
                     () -> {
-                        aim[0] = aimAt(dim, afcSub, navSub, OFF_STAND, 0.5, 0.5, 0.5, budget);
+                        aim[0] = aimAt(dim, afcSub, navSub, offStand, 0.5, 0.5, 0.5, budget);
                         assertAimed(aim[0], navSub, "navigation console", "navigationcomputer");
                         pressUse();
                     }, 60);
@@ -1832,7 +1844,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
         // awaited over the chain, so a load undone by an unload does not answer. A usable hull is one
         // whose blocks are in its subspace, which is what the seat search needs. Then ONE search.
         String hullId = ShipIdentity.awaitPhysicsIdOf(this::exec,
-                new Events(this::exec, bot()::waitTicks), dim, builtShipName, budget * 5);
+                new Events(this::exec, bot()::waitTicks, evictionReports()), dim, builtShipName, budget * 5);
         lastSeatProbe = exec("stellurgytest vs find-seat " + dim + " id " + hullId);
         rememberAnchor(lastSeatProbe);
         return lastSeatProbe;
@@ -2042,7 +2054,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
 
         // Marked BEFORE the Scan click: the first thing awaited below is the scan pass ENDING, and
         // that pass starts on this click.
-        Events spawnEvents = new Events(this::exec, bot()::waitTicks);
+        Events spawnEvents = new Events(this::exec, bot()::waitTicks, evictionReports());
         long spawnMark = spawnEvents.markInstrumented();
         bot().clickButtonById(BUTTON_SCAN);
 
@@ -2500,7 +2512,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
      *  {@link Events#mark} refuses a sequence unless a recorder is subscribed, which is what keeps
      *  an empty log later from reading as "it never happened". */
     private Events clientEvents() {
-        return ClientEvents.of(bot());
+        return ClientEvents.of(bot(), evictionReports());
     }
 
     /**
@@ -2643,7 +2655,7 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             throw new AssertionError(never.getMessage()
                     + " | the client renders: " + bot().reportRidingEntity()
                     + " | every mount the SERVER has recorded this boot: "
-                    + new Events(this::exec, bot()::waitTicks).since(0L, "mount") + diagnosis, never);
+                    + new Events(this::exec, bot()::waitTicks, evictionReports()).since(0L, "mount") + diagnosis, never);
         }
         // Read ONCE, now that the link says the mount happened: a settled state, not a wait.
         return bot().reportRidingEntity();

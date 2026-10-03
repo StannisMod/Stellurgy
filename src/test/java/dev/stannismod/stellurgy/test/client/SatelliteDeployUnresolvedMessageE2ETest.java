@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
@@ -37,6 +38,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class SatelliteDeployUnresolvedMessageE2ETest extends AbstractClientE2ETest {
 
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
+
     /** The message production commits to when a hatch's type no longer resolves. */
     private static final String DEPLOY_FAILED_KEY = "msg.rocket.satelliteDeployFailed";
 
@@ -63,7 +75,7 @@ public class SatelliteDeployUnresolvedMessageE2ETest extends AbstractClientE2ETe
         // markInstrumented, not mark: the server link is recorded by a test-only MIXIN, so an empty
         // log has a second silent cause — the coremod never queued the mixin configuration — and
         // both must be ruled out before a silence is allowed to mean anything.
-        Events events = new Events(this::exec, bot()::waitTicks);
+        Events events = new Events(this::exec, bot()::waitTicks, evictionReports());
         long serverMark = events.markInstrumented();
         long clientMark = clientMark();
 
@@ -97,7 +109,7 @@ public class SatelliteDeployUnresolvedMessageE2ETest extends AbstractClientE2ETe
     // reached through the adapter directly rather than through a shared base's clientEvents().
 
     private Events clientEvents() {
-        return ClientEvents.of(bot());
+        return ClientEvents.of(bot(), evictionReports());
     }
 
     /** The client log's sequence, taken BEFORE the action under test — refused unless a recorder is

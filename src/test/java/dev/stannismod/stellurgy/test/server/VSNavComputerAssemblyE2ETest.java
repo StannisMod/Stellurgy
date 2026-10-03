@@ -82,8 +82,4 @@ public class VSNavComputerAssemblyE2ETest extends AbstractSharedServerTest {
                         + " (pre-assembly state was " + before + ")",
                 after.linked);
     }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 }

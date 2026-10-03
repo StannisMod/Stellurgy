@@ -78,8 +78,4 @@ public class ItemUpgradeSlotEligibilityTest extends AbstractSharedServerTest {
         assertTrue("meta=" + meta + " feet expected=" + feet + "; resp=" + resp,
                 String.valueOf(feet).equals(Reply.of(resp).text("feet")));
     }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 }

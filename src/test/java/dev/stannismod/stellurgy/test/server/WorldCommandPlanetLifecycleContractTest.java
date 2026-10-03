@@ -9,9 +9,6 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.planetExists;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.planetIntField;
 
 /**
  * {@code /ar planet generate | delete | reset} lifecycle.
@@ -38,7 +35,7 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
      * now; both enumerate {@code DimensionManager.getInstance().getRegisteredDimensions()}
      * ({@code PlanetListCommand:28}).</p>
      */
-    private static Set<Integer> dimIds() throws Exception {
+    private Set<Integer> dimIds() throws Exception {
         Set<Integer> ids = new HashSet<>();
         for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list")).intArray("stellurgyDimensions")) {
             ids.add(dim);

@@ -227,13 +227,7 @@ public class VSCrossingLeavesNoShipBehindE2ETest extends AbstractSharedServerTes
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
-
-    // --- helpers ------------------------------------------------------------------------------------
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
 
     /**

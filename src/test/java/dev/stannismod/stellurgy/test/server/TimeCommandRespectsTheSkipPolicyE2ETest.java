@@ -32,10 +32,6 @@ public class TimeCommandRespectsTheSkipPolicyE2ETest extends AbstractSharedServe
     /** How far a clock may drift on its own between two probe round-trips. */
     private static final long DRIFT_ALLOWANCE = 400L;
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     /** A planet dimension the shipped universe actually has, or {@link Integer#MIN_VALUE}. */
     private int findAPlanet() throws Exception {
         CellInfo home = CellInfo.atSector(this::exec, 0, 0, 0, 0);

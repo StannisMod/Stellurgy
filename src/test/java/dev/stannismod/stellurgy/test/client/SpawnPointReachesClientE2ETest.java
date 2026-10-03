@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
@@ -52,6 +53,17 @@ import static org.junit.Assert.assertTrue;
  * nothing. Lifecycle is reproduced inline, as in {@code WeatherClientSyncE2ETest}.</p>
  */
 public class SpawnPointReachesClientE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /** Pre-staged planet with a deterministic dim id, as in the weather e2e. */
     private static final int PLANET_DIM = 9401;
@@ -328,7 +340,7 @@ public class SpawnPointReachesClientE2ETest {
 
     /** The CLIENT's own event log, behind the shared verbs. */
     private Events clientEvents() {
-        return ClientEvents.of(clientHarness.bot());
+        return ClientEvents.of(clientHarness.bot(), evictionReports());
     }
 
     /** How long the client is given to FOLLOW a transfer the server has already performed — one

@@ -7,10 +7,13 @@ import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Reply;
-import org.junit.AfterClass;
+import com.github.stannismod.forge.testing.junit.ClassScope;
+import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
+import com.github.stannismod.forge.testing.junit.ScopedTest;
+import com.github.stannismod.forge.testing.junit.TestClassScope;
 import org.junit.Assume;
-import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -40,10 +43,8 @@ import static org.junit.Assert.assertEquals;
  * around a world of their own. This class boots ONCE, around one file that holds every case below;
  * every method only READS, through read-only probe verbs, so no method can see another's.</p>
  *
- * <p><b>Static fields</b> — {@code workDir} and {@code harness}: written once by
- * {@link #bootTheAuthoredWorld()} at the start of this class's run and released by
- * {@link #stopTheAuthoredWorld()} at its end; JUnit's class lifecycle is their only writer. They
- * belong to this test JVM's fixture, not to the mod.</p>
+ * <p><b>Who owns the server</b> — {@link AuthoredWorld}, the class scope: the runner's run of this
+ * class opens it before the first test and closes it after the last, so no static holds it.</p>
  *
  * <p><b>No waits.</b> Every decision read here is taken before the server reports ready: the file is
  * parsed at server-about-to-start and the universe is populated at server-starting, both ahead of the
@@ -56,7 +57,9 @@ import static org.junit.Assert.assertEquals;
  * file with no {@code <galaxyGen>} at all, which needs a different file:
  * {@code PlanetXmlConfigIntegrationTest} reads that off its own authored world.</p>
  */
-public class PlanetDefsAuthoringTest {
+@RunWith(ClassScopeRunner.class)
+@ClassScope(PlanetDefsAuthoringTest.AuthoredWorld.class)
+public class PlanetDefsAuthoringTest implements ScopedTest<PlanetDefsAuthoringTest.AuthoredWorld> {
 
     private static final int PRIMUS = 9601;
     private static final int PRIMUS_MOON = 9602;
@@ -74,6 +77,9 @@ public class PlanetDefsAuthoringTest {
      * out, which is the configured {@code minDimension} at its shipped default. Measured 2026-10-02
      * in this world before that body was added: the unnumbered body was allocated exactly this id
      * ({@code stellurgyDimensions:[9601,9602,2,…]}, {@code logs/repin-b-inv1.log}).
+     *
+     * <p>A constant: a final {@code int}: the DEFAULT of a fresh configuration object, a literal in its field
+     * initialiser, never the live configuration.</p>
      */
     private static final int FIRST_FREE = new dev.stannismod.stellurgy.api.StellurgyConfiguration().minDimension;
     private static final String STATES_THE_FIRST_FREE_ID = "StatesTheFirstFreeId";
@@ -87,7 +93,7 @@ public class PlanetDefsAuthoringTest {
     private static final int COUNTED_DECLARED = 9612;
 
     /** Every DIMID this file states — the ids the allocator must NOT hand the unnumbered body. */
-    private static final int[] AUTHORED_DIMS = {PRIMUS, PRIMUS_MOON, HEAVY, LIGHT, DRILLER,
+    private final int[] authoredDims = {PRIMUS, PRIMUS_MOON, HEAVY, LIGHT, DRILLER,
             DRILLER_UNRESOLVED, MOD_TERRAIN, BOGUS_TERRAIN, STATES_NO_WEATHER, STATES_A_WEATHER_LENGTH,
             FIRST_FREE, HELD_TWICE, COUNTED_DECLARED};
 
@@ -116,32 +122,46 @@ public class PlanetDefsAuthoringTest {
     private static final int COUNTED_PLANETS = 2;
     private static final int COUNTED_GAS_GIANTS = 1;
 
-    private static Path workDir;
-    private static RealDedicatedServerHarness harness;
+    /** This class run's authored world; handed over by the runner before any test runs. */
+    private AuthoredWorld world;
 
-    @BeforeClass
-    public static void bootTheAuthoredWorld() throws Exception {
-        Assume.assumeTrue("Server harness disabled — set -D"
-                        + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-planetdefs-authoring-");
-        // Where production looks for a pack's file: "./config/" + configFolder, relative to the
-        // server's working directory — which the harness sets to the root it is handed.
-        Path configDir = workDir.resolve("config").resolve(
-                dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder);
-        Files.createDirectories(configDir);
-        Files.write(configDir.resolve("planetDefs.xml"), authoredFile().getBytes(StandardCharsets.UTF_8));
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+    @Override
+    public void attachScope(AuthoredWorld scope) {
+        this.world = scope;
     }
 
-    @AfterClass
-    public static void stopTheAuthoredWorld() throws Exception {
-        if (harness != null) {
-            try {
-                harness.close();
-            } finally {
-                harness = null;
+    /**
+     * The one server this class boots, around a fresh directory holding {@link #authoredFile()} — owned
+     * by the runner's run of the class, started before its first test and closed after its last.
+     */
+    public static final class AuthoredWorld extends TestClassScope {
+
+        private RealDedicatedServerHarness harness;
+
+        @Override
+        protected void open(Class<?> testClass) throws Exception {
+            Assume.assumeTrue("Server harness disabled — set -D"
+                            + AbstractHeadlessServerTest.PROP_HARNESS_ENABLED + "=true",
+                    Boolean.parseBoolean(System.getProperty(
+                            AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
+            Path workDir = Files.createTempDirectory("forge-server-planetdefs-authoring-");
+            // Where production looks for a pack's file: "./config/" + configFolder, relative to the
+            // server's working directory — which the harness sets to the root it is handed.
+            Path configDir = workDir.resolve("config").resolve(
+                    dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder);
+            Files.createDirectories(configDir);
+            Files.write(configDir.resolve("planetDefs.xml"), authoredFile().getBytes(StandardCharsets.UTF_8));
+            harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+        }
+
+        @Override
+        protected void close() throws Exception {
+            if (harness != null) {
+                try {
+                    harness.close();
+                } finally {
+                    harness = null;
+                }
             }
         }
     }
@@ -290,7 +310,7 @@ public class PlanetDefsAuthoringTest {
         // Vanilla's own three ids (overworld 0, nether -1, end 1) and the loader's invalid sentinel
         // are never free; the file's stated ids belong to other bodies.
         List<Integer> taken = new ArrayList<>(Arrays.asList(0, -1, 1, Constants.INVALID_PLANET));
-        for (int statedDim : AUTHORED_DIMS) {
+        for (int statedDim : authoredDims) {
             taken.add(statedDim);
         }
         List<String> solUnderFirstFree = new ArrayList<>();
@@ -720,7 +740,7 @@ public class PlanetDefsAuthoringTest {
     // ---- instruments -----------------------------------------------------------------------------
 
     /** The system the registry anchors star {@code starId} at, as {@code space cell-info} reads it. */
-    private static Reply systemOf(int starId) throws Exception {
+    private Reply systemOf(int starId) throws Exception {
         Reply anchor = probe("stellurgytest space anchor " + starId);
         requireArranged("star " + starId + " must be placed somewhere: " + anchor, anchor.has("cell"));
         return probe("stellurgytest space cell-info " + anchor.text("cell")).requireOk("read star "
@@ -763,16 +783,16 @@ public class PlanetDefsAuthoringTest {
                 + " restIsMoonsAndBelts=" + restIsMoonsAndBelts;
     }
 
-    private static Reply probe(String command) throws Exception {
-        return Reply.of(command, String.join("\n", harness.client().execute(command)));
+    private Reply probe(String command) throws Exception {
+        return Reply.of(command, String.join("\n", world.harness.client().execute(command)));
     }
 
-    private static DimList dims() throws Exception {
-        return DimList.of(String.join("\n", harness.client().execute("stellurgytest dim list")));
+    private DimList dims() throws Exception {
+        return DimList.of(String.join("\n", world.harness.client().execute("stellurgytest dim list")));
     }
 
     /** A body this file states, which the arrangement requires to exist. */
-    private static Reply authored(int dim) throws Exception {
+    private Reply authored(int dim) throws Exception {
         Reply reply = probe("stellurgytest planet authored " + dim);
         requireArranged("dimension " + dim + " must hold a body before its fields are read: " + reply,
                 reply.bool("found"));
@@ -780,7 +800,7 @@ public class PlanetDefsAuthoringTest {
     }
 
     /** A body whose EXISTENCE is part of the verdict: {@code null} when the server holds none. */
-    private static Reply authoredOrAbsent(int dim) throws Exception {
+    private Reply authoredOrAbsent(int dim) throws Exception {
         Reply reply = probe("stellurgytest planet authored " + dim);
         return reply.bool("found") ? reply : null;
     }

@@ -51,7 +51,7 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
     @Test
     public void anUnmannedJumpEndsOnItsPoseNotInThePasteBand() throws Exception {
 
-        ShipReadiness.letShipsUnload(this::exec,
+        ShipReadiness.letShipsUnload(this::execEnvelope,
                 "an unmanned arrival must establish its own loadedness; held up by the harness,"
                 + " \"the pose is realized\" would be asserted about a craft that was never let go");
 
@@ -61,7 +61,7 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // Marked before the fixture is built, because the registry add it is waited on below happens
         // INSIDE that call: a mark taken after it would be waiting for a second ship.
         long buildMark = events.mark();
-        TransitSetup setup = TransitSetup.piloted(this::exec);
+        TransitSetup setup = TransitSetup.piloted(this::execEnvelope);
         int originDim = setup.originDim;
         int ax = setup.anchorX, ay = setup.anchorY, az = setup.anchorZ;
 
@@ -76,7 +76,7 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
 
         // Marked BEFORE the command whose effect is awaited.
         long transitMark = events.mark();
-        String begin = exec("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
+        String begin = execEnvelope("stellurgytest space transit-begin " + originDim + " " + ax + " " + ay + " " + az
                 + " " + HYPERSPACE_JUMP_SPEED);
         assertTrue("transit did not begin (departure crossing failed): " + begin,
                 Reply.of(begin).bool("began"));
@@ -84,9 +84,9 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
         // No pump: the server advances the jump. Waited for as the arrival production announces.
         String arrivedRecord = events.awaitRecordWithFields(transitMark, "ship_transit_ended",
                 "the ship never arrived at all; the transit now reads "
-                        + exec("stellurgytest space transit-status"),
+                        + execEnvelope("stellurgytest space transit-status"),
                 ARRIVAL_TICKS, "ship", setup.requireDurableId(), "route", "HYPERSPACE");
-        String lastTick = exec("stellurgytest space transit-status");
+        String lastTick = execEnvelope("stellurgytest space transit-status");
 
         // Positive control for the instrument: the probe must have RESOLVED the arrived ship at all.
         // Without this, an assertion about where the ship is would also pass on a run where the registry
@@ -126,9 +126,9 @@ public class VSUnmannedTransitSettlesOnItsPoseE2ETest extends AbstractSharedServ
      */
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
+            new Events(this::execEnvelope, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
-    private String exec(String cmd) throws Exception {
+    private String execEnvelope(String cmd) throws Exception {
         String envelope = "";
         for (String line : client().execute(cmd)) {
             int brace = line.indexOf('{');

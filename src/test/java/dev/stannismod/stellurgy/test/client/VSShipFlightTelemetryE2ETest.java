@@ -1152,7 +1152,12 @@ public class VSShipFlightTelemetryE2ETest extends AbstractSharedVsClientE2ETest 
         bot().invokeStaticInt(KEY_BINDINGS, "acceptShipPilotMouseDelta", dx, dy);
     }
 
-    /** The SPEED line the pilot reads ({@code msg.ff.hud.speed}, "SPD <n> m/s"). */
+    /**
+     * The SPEED line the pilot reads ({@code msg.ff.hud.speed}, "SPD <n> m/s").
+     *
+     * <p>A constant: a compiled {@code Pattern} is immutable and thread-safe; each use makes its own
+     * matcher.</p>
+     */
     private static final Pattern HUD_SPEED = Pattern.compile("SPD ([0-9]+\\.[0-9]+) m/s");
 
     /**

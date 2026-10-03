@@ -15,21 +15,24 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  * samples the ship at, so the reference costs the frame nothing. It used to live in production's
  * deck look, which held it only for this measurement.</p>
  *
- * <p>Client thread only: written from the deck-look tick recorder, read from the render probe. Test
- * source set.</p>
+ * <p>The client's, kept in its {@link SideTrace} ({@link #client()}): created with the client and
+ * released with it. Client thread only: written from the deck-look tick recorder, read from the render
+ * probe. Test source set.</p>
  */
 public final class DeckReference {
 
-    private static boolean set;
-    private static double subX, subY, subZ;
-    private static double[] worldPrev;
-    private static double[] worldCur;
+    private boolean set;
+    private double subX, subY, subZ;
+    private double[] worldPrev;
+    private double[] worldCur;
 
-    private DeckReference() {
+    /** The client's reference. */
+    public static DeckReference client() {
+        return SideTrace.client().memory(DeckReference.class, DeckReference::new);
     }
 
     /** One engaged tick of {@code player}'s deck look: anchor the point if new, sample its image. */
-    public static void tick(Entity player) {
+    public void tick(Entity player) {
         String shipId = ShipFrameTravel.aboardShipId(player);
         if (!set) {
             double[] sub = VSIntegration.toShipFrameFor(player.world, shipId, player.posX, player.posY, player.posZ);
@@ -50,7 +53,7 @@ public final class DeckReference {
     }
 
     /** The deck look is not engaged: the episode, and its reference, are over. */
-    public static void clear() {
+    public void clear() {
         set = false;
         worldPrev = null;
         worldCur = null;
@@ -58,7 +61,7 @@ public final class DeckReference {
 
     /** The reference point's world position this frame, lerped between the tick samples, or
      *  {@code null} while no episode holds one. */
-    public static double[] worldAt(float partialTicks) {
+    public double[] worldAt(float partialTicks) {
         double[] cur = worldCur;
         double[] prev = worldPrev;
         if (cur == null || prev == null) {

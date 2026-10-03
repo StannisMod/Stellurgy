@@ -36,10 +36,6 @@ public class Tier1AimsAtWhatThisWorldKnowsE2ETest extends AbstractSharedServerTe
     private static final int CZ = 4900;
     private static final int X = 4900;
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
-
     private String where() {
         return "0 " + X + " " + CY + " " + CZ;
     }

@@ -1506,6 +1506,9 @@ public class FreeFlightModeE2ETest extends AbstractSharedClientE2ETest {
 
     // ===== HUD indication ===============================
 
+    /**
+     * A constant: a compiled {@code Pattern} is immutable and thread-safe; each use makes its own matcher.
+     */
     private static final Pattern HUD_VRT =
             Pattern.compile("VRT ([+-][0-9.]+)/([+-][0-9.]+)");
 

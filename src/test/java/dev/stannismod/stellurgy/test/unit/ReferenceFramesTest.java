@@ -173,6 +173,9 @@ public class ReferenceFramesTest {
 
     // ---- fixture ------------------------------------------------------------------------------
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord ANCHOR = GalacticCoord.ORIGIN;
     private static final double EARTH_PERIOD_TICKS = 365.25d * 24_000d;
     private static final double LUNA_PERIOD_TICKS =

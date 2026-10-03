@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -34,6 +35,17 @@ import static org.junit.Assert.assertTrue;
  * cadence {@code AtmosphereHandler.onTick} subscribes to.</p>
  */
 public class AtmospherePlayerEventTest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /**
      * Server ticks granted beyond the living updates requested. The handler resolves inside the
@@ -110,7 +122,7 @@ public class AtmospherePlayerEventTest {
     /** This class's reader of the server's ordered event log. */
     private Events events() {
         return new Events(this::exec,
-                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
 
     /** Stations the fake player in {@code dim} and starts {@code ticks} living updates there. */

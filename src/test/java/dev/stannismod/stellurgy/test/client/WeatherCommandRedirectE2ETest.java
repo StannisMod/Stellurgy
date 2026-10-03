@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -42,6 +43,17 @@ import static org.junit.Assert.assertTrue;
  * XML must exist in the workdir BEFORE the server boots.</p>
  */
 public class WeatherCommandRedirectE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     private static final int DIM = 9304;
     /** Must match the framework's single-client default username — the op grant keys on it. */
@@ -233,7 +245,7 @@ public class WeatherCommandRedirectE2ETest {
 
     /** The CLIENT's own event log, behind the shared verbs. */
     private Events clientEvents() {
-        return ClientEvents.of(clientHarness.bot());
+        return ClientEvents.of(clientHarness.bot(), evictionReports());
     }
 
     /** How long the client is given to FOLLOW a transfer the server has already performed. */
@@ -245,7 +257,7 @@ public class WeatherCommandRedirectE2ETest {
      */
     private Events serverEvents() {
         return new Events(cmd -> String.join("\n", serverHarness.client().execute(cmd)),
-                ticks -> GameTicks.advance(serverHarness.client(), GameTicks.server(), ticks));
+                ticks -> GameTicks.advance(serverHarness.client(), GameTicks.server(), ticks), evictionReports());
     }
 
     /**

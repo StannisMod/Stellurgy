@@ -151,10 +151,15 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
      * ({@code VSWorldPhysicsLoop:64}), so {@code targetTps} IS the rate — and it is a config field,
      * which is the whole reason a test may not carry a copy of it. Before this, the instrument
      * control asserted {@code physHz > 40 && < 85} under a message quoting "its declared 60 Hz":
-     * three numbers, none of which the test owned, and a config change would have left the bound
-     * asserting a rate nothing runs at.</p>
+     * three numbers, none of which the test owned.</p>
+     *
+     * <p><b>What this reads, exactly.</b> {@code VSConfig} is loaded here, in the TEST JVM, so this is
+     * the field's COMPILED default — not the game's config, which lives in the child game JVM. The two
+     * agree only because the harness boots every world in a fresh directory with no Valkyrien Skies
+     * config file, so the game runs that same default (checked 2026-10-03). A world carrying a config
+     * file that overrides Target TPS would break the agreement, and this test would not notice.</p>
      */
-    private static final double PHYSICS_HZ = org.valkyrienskies.mod.common.config.VSConfig.targetTps;
+    private final double physicsHz = org.valkyrienskies.mod.common.config.VSConfig.targetTps;
 
     /**
      * The server tick rate, from vanilla's own period: {@code MinecraftServer} runs a tick every
@@ -322,7 +327,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // so the chain is required, not asserted: a jump that settles with its pilot left behind is
         // a post-jump leg with no pilot, and the chain names the link that left him.
         requireChain(events, mark, "the pilot must arrive SEATED in the target cell, or the post-jump"
-                + " leg has no pilot and measures a drifting hulk", PILOTED_JUMP_CHAIN);
+                + " leg has no pilot and measures a drifting hulk", pilotedJumpChain());
         int targetDim = arrivedTargetDim(this::exec);
         JsonObject arrivedRiding =
                 ridingOnceTheClientHasRemounted(clientMark, CLIENT_REMOUNT_BUDGET_TICKS);
@@ -433,7 +438,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
      * (1 561 chunks against 3 401 on the run that produced this task), and the ratio between them
      * was reading that difference.</p>
      */
-    private static void assertFliesSmoothly(String which, Leg leg) {
+    private void assertFliesSmoothly(String which, Leg leg) {
         // A tick that produced no pose IS the jerk, named. The physics channel runs at its own rate
         // against the world tick, so several of its samples share one tick and only the gap means
         // anything there; the two per-tick writers contract to exactly one sample per tick.
@@ -447,7 +452,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // And the sequence itself: no step the drive could not have commanded, and no change
         // between steps steeper than the setpoint can ramp. Both bounds are per TICK where they
         // are declared, so each channel's is scaled by the ratio of its own declared rate to the
-        // tick rate — the physics loop takes PHYSICS_HZ / 20 steps per tick, so it may cover that
+        // tick rate — the physics loop takes physicsHz / 20 steps per tick, so it may cover that
         // fraction of a tick's ground in one of them. Two declared numbers, no invented third.
         // Bounded by what the drive was actually ASKED for, read off the recorder, rather than by
         // the ceiling anyone could have asked for. Measured 2026-09-21, and the difference is the
@@ -463,7 +468,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // The PHYSICS channel is judged first, and that order is load-bearing: its own largest step
         // is used below as the quantum of the client's pose advance, so it has to be established as
         // commandable before anything is derived from it.
-        double physPerSample = SERVER_TICK_HZ / PHYSICS_HZ;
+        double physPerSample = SERVER_TICK_HZ / physicsHz;
         assertStepsAreCommandable(which, leg, leg.phys, commanded * physPerSample, 0.0, 0.0);
 
         // THE CLIENT'S POSE ADVANCES IN WHOLE PHYSICS STEPS, and how many land in one client tick
@@ -843,7 +848,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         return p95 / p50;
     }
 
-    private static void assertInstrumentSpoke(String which, Leg leg) {
+    private void assertInstrumentSpoke(String which, Leg leg) {
         assertTrue("INSTRUMENT CONTROL (" + which + "): the physics-thread channel must have "
                 + "recorded samples. A mute channel cannot be distinguished from a perfectly "
                 + "smooth one, so every reading below it would be a silence read as a pass. " + leg,
@@ -886,7 +891,7 @@ public class VSFlightSmoothnessAcrossJumpE2ETest extends AbstractSharedVsClientE
         // The TOLERANCE stays the test's own, and that is the honest split: how far a sampled rate
         // may sit from its declared one on a loaded box is a property of THIS harness, not of the
         // game. It is one factor for both channels instead of four hand-picked edges.
-        assertRateNearItsDeclaration("physics", which, leg.physHz, PHYSICS_HZ, leg);
+        assertRateNearItsDeclaration("physics", which, leg.physHz, physicsHz, leg);
         assertRateNearItsDeclaration("server-tick", which, leg.gameHz, SERVER_TICK_HZ, leg);
     }
 

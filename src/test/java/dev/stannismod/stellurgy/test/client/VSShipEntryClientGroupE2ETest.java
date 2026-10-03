@@ -86,7 +86,10 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * where production performs it ({@code MixinShipCrossingServiceEvents},
      * {@code MixinShipEntryControllerEvents}, {@code MixinVSShipCrossingOpsEvents}, {@code MixinShipLedgerEvents}).
      */
-    private static final String[] ENTRY_CHAIN = dev.stannismod.stellurgy.test.Chains.GRANTED_ENTRY;
+    private static String[] entryChain() {
+        return dev.stannismod.stellurgy.test.Chains.grantedEntry();
+    }
+
     private static final String SLOT_DIMS = "slotDims";
     private static final String SLOT_DIM = "slotDim";
     private static final String AFC_X = "afcX";
@@ -142,7 +145,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      * The cells this family's PROBE occupants are parked on — a fixed, family-owned list, so the
      * reset can hand them back without having to discover what the previous scenario did.
      */
-    private static final int[] PRESSURE_CELLS = {90, 91, 92, 93};
+    private final int[] pressureCells = {90, 91, 92, 93};
 
     @Override
     protected void seedGameDirectory(GameDirSeed seed) {
@@ -182,7 +185,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             // so far more usefully than a reset would.
             return;
         }
-        for (int cell : PRESSURE_CELLS) {
+        for (int cell : pressureCells) {
             String released = exec("stellurgytest space release " + cell + " 0 0");
             assertTrue("a probe-held cell must be handed back between scenarios, or the next"
                     + " scenario's pool is full for a reason that has nothing to do with its own"
@@ -259,7 +262,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
             int climbBudget = 4000;
             events.assertChain(entryMark, "a ship climbing under its own power past the orbit line ("
                     + ORBIT_LINE + ") must be taken by the entry crossing and SETTLE in a cell - the"
-                    + " whole on-ramp a real player flies", climbBudget, ENTRY_CHAIN);
+                    + " whole on-ramp a real player flies", climbBudget, entryChain());
             String decisions = events.since(entryMark, "entry_decided");
             System.out.println("[GATE-STATS after entry leg] " + clientGateStats());
             assertTrue("the entry gate must have GRANTED this entry (STARTED), whatever else it decided"
@@ -471,7 +474,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
         java.util.Set<Integer> pool = slotDimsOfPool();
         scenario().requireArranged("the pool must report its slots before they can be held: " + pool,
                 !pool.isEmpty());
-        for (int cell : PRESSURE_CELLS) {
+        for (int cell : pressureCells) {
             if (slotsHeldByPressureCells().containsAll(pool)) {
                 break;
             }
@@ -486,7 +489,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
                 + " heldByThisScenario=" + held
                 + " lastOccupy=" + (occupy == null ? "none" : occupy.raw()), held.containsAll(pool));
         MaterializedCell further = MaterializedCell.at(this::exec,
-                PRESSURE_CELLS[PRESSURE_CELLS.length - 1] + " 0 0");
+                pressureCells[pressureCells.length - 1] + " 0 0");
         scenario().requireArranged("instrument control: with every slot held by an OCCUPIED cell, a"
                 + " further occupy must be REFUSED - else the pool is not actually exhausted and the"
                 + " entry would be granted: " + further.raw(), further.exhausted);
@@ -751,7 +754,7 @@ public class VSShipEntryClientGroupE2ETest extends AbstractSharedVsClientE2ETest
      */
     private java.util.Set<Integer> slotsHeldByPressureCells() throws Exception {
         java.util.Set<Integer> held = new java.util.LinkedHashSet<Integer>();
-        for (int cell : PRESSURE_CELLS) {
+        for (int cell : pressureCells) {
             String reply = exec("stellurgytest space cell-slot " + cell + " 0 0");
             // absence is the answer: this is the wait, and "the flag is not there yet" is
             // the state it exists to sit through.

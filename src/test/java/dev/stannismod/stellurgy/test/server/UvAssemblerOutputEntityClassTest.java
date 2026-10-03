@@ -10,7 +10,6 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * output entity-class delta between the two assemblers.
@@ -69,7 +68,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
 
         int entityId = lastRocketId();
         // The reader REFUSES a report with no entityClass, which is what the null check asserted.
-        String entityClass = RocketInfo.byId(WorldCommandFixtures::exec, entityId).entityClass;
+        String entityClass = RocketInfo.byId(this::exec, entityId).entityClass;
         assertTrue("rocket assembler must spawn EntityRocket "
                         + "(not EntityStationDeployedRocket); got " + entityClass,
                 entityClass.endsWith(".EntityRocket"));
@@ -91,7 +90,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 Reply.of(assemble).ok());
 
         int entityId = lastRocketId();
-        String entityClass = RocketInfo.byId(WorldCommandFixtures::exec, entityId).entityClass;
+        String entityClass = RocketInfo.byId(this::exec, entityId).entityClass;
         assertTrue("UV assembler must spawn EntityStationDeployedRocket; got "
                         + entityClass,
                 entityClass.endsWith(".EntityStationDeployedRocket"));
@@ -108,7 +107,7 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
                 m[2]};
     }
 
-    private static int lastRocketId() throws Exception {
+    private int lastRocketId() throws Exception {
         String list = exec("stellurgytest rocket list 0");
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket ids in list: " + list, !built.isEmpty());

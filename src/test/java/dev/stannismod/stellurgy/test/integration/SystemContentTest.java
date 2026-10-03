@@ -55,6 +55,9 @@ public class SystemContentTest {
      * expressible in it at all. This constant was that expression until 2026-09-29, clamped by
      * {@code Math.max(1, …)} from zero to 1: every moon here sat 5.98 million blocks out while this
      * comment said 25 400.</p>
+     *
+     * <p>A constant: a final primitive computed once, by pure arithmetic, from static-final production
+     * constants.</p>
      */
     private static final int MOON_DISTANCE_UNITS =
             (int) Math.round(25_400d / AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);

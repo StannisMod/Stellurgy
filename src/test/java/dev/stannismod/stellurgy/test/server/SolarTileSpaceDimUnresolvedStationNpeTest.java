@@ -173,7 +173,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      * Create a station orbiting {@code planet}, stand a solar panel at its spawn location, and answer
      * the panel's position.
      */
-    private static int[] panelOnANewStation(int planet, String what) throws Exception {
+    private int[] panelOnANewStation(int planet, String what) throws Exception {
         Reply station = Reply.of("stellurgytest station create",
                 join(client().execute("stellurgytest station create " + planet)));
         ArrangementFailure.requireArranged(what + " — the station must be created: " + station,
@@ -195,7 +195,7 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
     }
 
     /** The energy a panel holds, through its Forge energy capability. */
-    private static int storedIn(int[] panel) throws Exception {
+    private int storedIn(int[] panel) throws Exception {
         Reply stored = Reply.of("stellurgytest energy stored", join(client().execute(
                 "stellurgytest energy stored " + SPACE_DIM + " " + panel[0] + " " + panel[1] + " "
                         + panel[2])));

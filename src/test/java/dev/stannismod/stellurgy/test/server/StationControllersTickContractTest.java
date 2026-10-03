@@ -6,7 +6,6 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * station-controller tick behaviour contracts.
@@ -264,8 +263,8 @@ public class StationControllersTickContractTest extends AbstractSharedServerTest
     }
 
     /** What the server says about one station. */
-    private static StationInfo station(int stationId) throws Exception {
-        return StationInfo.byId(WorldCommandFixtures::exec, stationId);
+    private StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(this::exec, stationId);
     }
 
     private int[] stationSpawn(int stationId) throws Exception {

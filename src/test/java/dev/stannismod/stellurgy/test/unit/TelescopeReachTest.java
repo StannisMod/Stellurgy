@@ -21,6 +21,9 @@ import static org.junit.Assert.fail;
  */
 public class TelescopeReachTest {
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord HOME = GalacticCoord.ofSectorLocal(0L, 0L, 0L, 0L, 0L, 0L);
 
     /**

@@ -127,6 +127,8 @@ public final class Plot {
          * is air and therefore terrain-independent. <b>Do not move it</b> — that green is what makes
          * it a default rather than a guess. A scenario that needs GROUND is on its own terrain and
          * should declare its own lane.
+         *
+         * <p>A constant: a {@code Lane} is an immutable value: four final ints.</p>
          */
         public static final Lane DEFAULT = new Lane(4000, 4000, SIZE);
     }

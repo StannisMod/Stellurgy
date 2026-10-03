@@ -174,6 +174,8 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
     /**
      * A jump speed that makes ANY distance one tick of flight — so the route is always the direct
      * crossing, whatever the distance from the fixture's origin to the body aimed at.
+     *
+     * <p>A constant: a final {@code long} computed from literals.</p>
      */
     private static final long ONE_TICK_JUMP_SPEED = 1L << 40;
 
@@ -247,11 +249,7 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /** On the SERVER's clock: the world asked about is the one that may not be ticking yet. */
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this

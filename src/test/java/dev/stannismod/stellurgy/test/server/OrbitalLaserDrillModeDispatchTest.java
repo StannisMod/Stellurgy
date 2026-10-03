@@ -63,8 +63,4 @@ public class OrbitalLaserDrillModeDispatchTest extends AbstractSharedServerTest 
         assertTrue("drop count must be > 0; resp=" + resp,
                 !(Reply.of(resp).integer("dropCount") == 0));
     }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 }

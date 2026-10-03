@@ -10,7 +10,6 @@ import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * {@code /ar star *}, {@code /ar dumpBiomes},
@@ -24,6 +23,9 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
  */
 public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
 
+    /**
+     * A constant: a compiled {@code Pattern} is immutable and thread-safe; each use makes its own matcher.
+     */
     private static final Pattern TEMP_LINE = Pattern.compile("Temp:\\s*(-?\\d+)");
 
     @Test

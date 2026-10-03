@@ -319,8 +319,6 @@ public final class DeckGateWindow implements TraceWindow {
 
     // ---- the resolver's process-wide statics, read (not re-derived) ------------------------------
 
-    private static final Field CLIENT_LOOK_SOURCE = declared("clientLookSource");
-
     private static Field declared(String name) {
         try {
             Field f = ShipFrameTravel.class.getDeclaredField(name);
@@ -342,7 +340,7 @@ public final class DeckGateWindow implements TraceWindow {
         Map<?, ?> seeds = pendingSeedsOf(entity, missing);
         Object seed = seeds == null ? null : seeds.get(entity);
         long epoch = ((ShipFrameBody) entity).stellurgy$captureEpoch();
-        Object look = read(CLIENT_LOOK_SOURCE, "clientLookSource", missing);
+        Object look = read(declared("clientLookSource"), "clientLookSource", missing);
         return "\"staticsRead\":\"" + (missing.length() == 0 ? "ok" : missing.toString()) + "\""
                 + ",\"captureEpoch\":\"" + epoch + "\""
                 + ",\"clientLookSource\":" + (look != null)

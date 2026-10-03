@@ -59,10 +59,6 @@ public class ShieldLimiterBalanceTest extends AbstractSharedServerTest {
         return Reply.of(json).integer(key);
     }
 
-    private static String exec(String command) throws Exception {
-        return join(client().execute(command));
-    }
-
     private static String join(List<String> resp) {
         return String.join("\n", resp);
     }

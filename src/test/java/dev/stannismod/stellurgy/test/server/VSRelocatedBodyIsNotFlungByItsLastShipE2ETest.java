@@ -227,11 +227,7 @@ public class VSRelocatedBodyIsNotFlungByItsLastShipE2ETest extends AbstractShare
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */

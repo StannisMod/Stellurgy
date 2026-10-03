@@ -3,8 +3,9 @@ package dev.stannismod.stellurgy.test;
 import net.minecraft.init.Bootstrap;
 
 /**
- * Idempotent helper that initializes vanilla Minecraft's static registries via
- * {@link Bootstrap#register()} - and nothing of the mod.
+ * Initializes vanilla Minecraft's static registries via {@link Bootstrap#register()} - and nothing
+ * of the mod. Idempotent because {@code Bootstrap.register} is: vanilla guards it with its own
+ * {@code alreadyRegistered} flag, so a second call does nothing and this class keeps no state.
  *
  * <p>That is the whole of what the unit and integration tiers may borrow. A test that needs the mod's
  * state - its proxy, its mod object, a server lifetime and the galaxy that server holds, the current
@@ -20,17 +21,11 @@ import net.minecraft.init.Bootstrap;
  */
 public final class MinecraftBootstrap {
 
-    /** Test JVM lifetime: written once, by the first {@link #ensure()}. */
-    private static volatile boolean done = false;
-
     private MinecraftBootstrap() {}
 
     public static void ensure() {
-        if (done) return;
         synchronized (MinecraftBootstrap.class) {
-            if (done) return;
             Bootstrap.register();
-            done = true;
         }
     }
 }

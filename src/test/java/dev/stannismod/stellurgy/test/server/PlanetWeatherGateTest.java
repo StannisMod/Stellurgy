@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -38,6 +39,17 @@ import static org.junit.Assert.assertTrue;
  * back through {@code stellurgytest weather get}.</p>
  */
 public class PlanetWeatherGateTest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /**
      * Ticks the weather cycle is given to announce a dimension.
@@ -220,6 +232,6 @@ public class PlanetWeatherGateTest {
     /** This boot's reader of the server's ordered event log — the harness is this class's own. */
     private Events events() {
         return new Events(cmd -> String.join("\n", harness.client().execute(cmd)),
-                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
 }

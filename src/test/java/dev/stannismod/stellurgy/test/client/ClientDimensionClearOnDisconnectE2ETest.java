@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -46,6 +47,17 @@ import static org.junit.Assert.assertTrue;
  * galaxy at all — the galaxy belongs to the connection and went with it.</p>
  */
 public class ClientDimensionClearOnDisconnectE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     private static final int DIM_A = 9701;
     private static final int DIM_B = 9702;
@@ -138,7 +150,7 @@ public class ClientDimensionClearOnDisconnectE2ETest {
     // of through {@code clientEvents()}.
 
     private Events clientEvents() {
-        return ClientEvents.of(clientHarness.bot());
+        return ClientEvents.of(clientHarness.bot(), evictionReports());
     }
 
     /** The first integer {@code field} of a {@code since} reply, or {@code Integer.MIN_VALUE}. */

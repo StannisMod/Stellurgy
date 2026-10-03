@@ -18,6 +18,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class JumpGateTest {
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord TARGET = GalacticCoord.ofSectorLocal(9L, 2L, 2L, 0L, 0L, 0L);
 
     /**

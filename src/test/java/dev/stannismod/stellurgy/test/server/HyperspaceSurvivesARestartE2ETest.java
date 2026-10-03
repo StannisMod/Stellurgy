@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -70,6 +71,17 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * made about, across a real restart.</p>
  */
 public class HyperspaceSurvivesARestartE2ETest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /** World a ship is given to appear in VS's registry - the old 60 x 250 ms. */
     private static final int REGISTER_TICKS = 300;
@@ -152,7 +164,7 @@ public class HyperspaceSurvivesARestartE2ETest {
      */
     private Events events() {
         return new Events(this::exec,
-                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks), evictionReports());
     }
 
     /**

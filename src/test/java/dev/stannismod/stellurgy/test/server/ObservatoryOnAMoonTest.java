@@ -43,11 +43,7 @@ public class ObservatoryOnAMoonTest extends AbstractSharedServerTest {
     private static final int RADAR_RECORD_TICKS = 20;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
-
-    private String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The regime under test, stated: research OFF, the shipped default, where an observation

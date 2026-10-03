@@ -65,24 +65,6 @@ import static org.junit.Assert.assertTrue;
 public class SpikeFarCoordinatePlayabilityTest extends AbstractClientE2ETest {
 
     /**
-     * Measured indistinguishable from the origin: 2M, 8M, 16M, <b>16,777,216 = 2²⁴</b>, 20M, 24M —
-     * so the suspicion that 2²⁴ is the wall is refuted, and the vanilla wiki's first documented
-     * horizontal symptom (sound positioning) does not touch walking, standing or collision.
-     * 28M is the only rung that ever failed, and on both sides at once (client displacement 0.0000,
-     * not just the server's), which rules out the server dragging him back.
-     *
-     * <p><b>28M is deliberately NOT in the ladder.</b> It is the one coordinate that ever failed, and
-     * it failed for a reason none of arrangement, run position, server-side revert or 2²⁴ explains —
-     * a ladder of {@code 0, 28M, 24M, 28M, 0} was run for exactly that and both 28M rungs failed
-     * while the 24M between them and the trailing origin passed. The finding is recorded where a
-     * finding belongs; keeping a permanently red rung here would only make this class dead weight in
-     * every client gate. The ladder below is the range the design actually uses — half-cell 16M, with
-     * 20M and 24M as margin — so this class now guards "a player lives normally at the coordinates
-     * our cells use", which is a different and durable claim from the one it was written for.</p>
-     */
-    private static final int[] X_LADDER = {0, 8_000_000, 16_000_000, 20_000_000, 24_000_000};
-
-    /**
      * The arena's Z. The physics mod's reserved quadrant starts at {@code chunkZ >= -1599}
      * (Z ≥ -25,584); everything here sits well below it, so its teleport veto never fires and the
      * only thing under test is the coordinate's own magnitude.

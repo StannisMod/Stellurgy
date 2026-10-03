@@ -45,11 +45,7 @@ public class SpaceCellBindingSurvivesWorldUnloadE2ETest extends AbstractSharedSe
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @Test
     public void aBoundCellKeepsItsWorldAndARevisitRepairsOneThatWentAnyway() throws Exception {

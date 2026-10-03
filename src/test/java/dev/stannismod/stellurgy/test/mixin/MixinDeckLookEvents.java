@@ -64,9 +64,9 @@ public abstract class MixinDeckLookEvents {
         TestTrace.instrument(player, "deck_look_events");
         boolean active = isActive();
         if (active) {
-            DeckReference.tick(player);
+            DeckReference.client().tick(player);
         } else {
-            DeckReference.clear();
+            DeckReference.client().clear();
         }
         PilotInputAccessor look = (PilotInputAccessor) (Object)
                 PilotInput.of((net.minecraft.client.entity.EntityPlayerSP) player);

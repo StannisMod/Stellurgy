@@ -42,6 +42,9 @@ import static org.junit.Assert.assertTrue;
 public class DimensionSplitBrainReconcileTest {
 
     private static final String AR_DIMS = "stellurgyDimensions";
+    /**
+     * A constant: a compiled {@code Pattern} is immutable and thread-safe; each use makes its own matcher.
+     */
     private static final Pattern PLANET_DIMID =
             Pattern.compile("<planet\\b[^>]*\\bDIMID=\"(-?\\d+)\"");
 

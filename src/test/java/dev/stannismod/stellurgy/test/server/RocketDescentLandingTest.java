@@ -53,7 +53,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
     private final Events events =
-            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks));
+            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static final String ROCKET_LIST_ID = "id";
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
@@ -80,7 +80,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     // shared dedicated-server harness for >30 s (likely chunk-unload
     // bookkeeping over entities still in those chunks). We let the
     // tickets leak for the duration of the class — they're freed
-    // implicitly when the harness shuts down at @AfterClass. Each test
+    // implicitly when the class's harness shuts down. Each test
     // picks a position-disjoint chunk so leaked tickets do not bleed
     // into other tests.
 

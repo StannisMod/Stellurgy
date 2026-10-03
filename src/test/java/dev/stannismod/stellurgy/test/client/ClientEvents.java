@@ -4,6 +4,7 @@ import com.github.stannismod.forge.testing.client.ClientBot;
 
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
+import dev.stannismod.stellurgy.test.EvictionReports;
 
 /**
  * The CLIENT's ordered event log behind the same {@link Events} verbs the server log is read through.
@@ -270,8 +271,8 @@ public final class ClientEvents {
     }
 
     /** The bot's own event log, read through {@link Events}, paced by that same bot's ticks. */
-    public static Events of(ClientBot bot) {
-        return new Events(probe(bot), bot::waitTicks);
+    public static Events of(ClientBot bot, EvictionReports evictions) {
+        return new Events(probe(bot), bot::waitTicks, evictions);
     }
 
     /**
@@ -281,8 +282,8 @@ public final class ClientEvents {
      * read and the thing being waited ON are then different, and a wait paced by a disconnected
      * bot's ticks never advances.</p>
      */
-    public static Events of(ClientBot bot, Events.Step step) {
-        return new Events(probe(bot), step);
+    public static Events of(ClientBot bot, Events.Step step, EvictionReports evictions) {
+        return new Events(probe(bot), step, evictions);
     }
 
     private static Events.Probe probe(ClientBot bot) {

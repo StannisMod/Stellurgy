@@ -1146,11 +1146,6 @@ public class ClusteredGalaxyGeneratorTest {
         static final String FIXTURE_RESOURCE = "/universe/golden-corpus-v1.txt";
         static final String FIXTURE_PATH = "src/test/resources/universe/golden-corpus-v1.txt";
 
-        /** Fixed seeds. Arbitrary, and that is the point — they are frozen, not chosen for an outcome. */
-        private static final long[] SEEDS = {
-                1L, 42L, 1337L, 8675309L, -1L, 6_942_069L, 2_147_483_647L,
-        };
-
         /** Territories swept per axis, centred on the origin — the home galaxy's centre. */
         private static final int SPAN = 1;
 
@@ -1164,7 +1159,9 @@ public class ClusteredGalaxyGeneratorTest {
             sb.append("config ").append(config.fingerprint()).append('\n');
             renderScale(sb);
             renderCosmology(sb);
-            for (long seed : SEEDS) {
+            // Fixed seeds. Arbitrary, and that is the point — they are frozen, not chosen for an outcome.
+            long[] seeds = {1L, 42L, 1337L, 8675309L, -1L, 6_942_069L, 2_147_483_647L};
+            for (long seed : seeds) {
                 renderSeed(sb, config, seed);
             }
             return sb.toString();

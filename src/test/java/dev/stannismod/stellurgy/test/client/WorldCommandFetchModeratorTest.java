@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.client.RealClientHarness;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
@@ -50,6 +51,17 @@ import static org.junit.Assert.assertTrue;
  * client tests will exhaust display/RAM on a typical dev box.</p>
  */
 public class WorldCommandFetchModeratorTest {
+
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
 
     /** Distinct usernames — the server's PlayerList keys on these and
      *  rejects duplicates as "already connected", so bot1 ≠ bot2 must
@@ -134,12 +146,12 @@ public class WorldCommandFetchModeratorTest {
 
     /** The SERVER's ordered event log; the step ticks the TARGET's client between reads. */
     private Events serverEvents() {
-        return new Events(this::exec, bot2Harness.bot()::waitTicks);
+        return new Events(this::exec, bot2Harness.bot()::waitTicks, evictionReports());
     }
 
     /** The TARGET client's own ordered event log — the side the contract is stated on. */
     private Events bot2Events() {
-        return ClientEvents.of(bot2Harness.bot());
+        return ClientEvents.of(bot2Harness.bot(), evictionReports());
     }
 
     /**
@@ -195,7 +207,7 @@ public class WorldCommandFetchModeratorTest {
         exec("stellurgytest place 0 " + sx + " " + (sy - 1) + " " + sz + " minecraft:stone");
         exec("stellurgytest place 0 " + tx + " " + (ty - 1) + " " + tz + " minecraft:stone");
 
-        Events bot1Log = ClientEvents.of(bot1Harness.bot());
+        Events bot1Log = ClientEvents.of(bot1Harness.bot(), evictionReports());
         long bot1Placed = bot1Log.mark();
         long bot2Placed = bot2Events().mark();
         exec("tp " + BOT1_NAME + " " + (sx + 0.5) + " " + sy + " " + (sz + 0.5));

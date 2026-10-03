@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 
 import org.junit.Test;
@@ -63,6 +64,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
 
+    /**
+     * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
+     * boots its harness per test (or manages it itself), so the server and client whose counters it
+     * compares live no longer than this instance.
+     */
+    private final EvictionReports evictions = new EvictionReports();
+
+    private EvictionReports evictionReports() {
+        return evictions;
+    }
+
     private static final String BUILDER_POS = "builderPos";
     private static final String DUMMY_ID = "dummyId";
 
@@ -73,7 +85,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
     private static final double SURVIVAL_STEP_EPSILON = 0.05d;
 
     /** The control, then the ratified half-cell. 24M is not carried: one far rung is the question. */
-    private static final int[] X_LADDER = {0, 16_000_000};
+    private final int[] xLadder = {0, 16_000_000};
 
     /** Below the reserved quadrant's Z edge (Z ≥ -25,584), so the arena is ordinary world at every X. */
     private static final int ARENA_Z = -100_000;
@@ -133,7 +145,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
         StringBuilder out;
 
         try {
-            for (int x : X_LADDER) {
+            for (int x : xLadder) {
                 String arrangement = arrange(x);
                 if (arrangement != null) {
                     inconclusive.add("x=" + x + " " + arrangement);
@@ -275,7 +287,7 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
             for (String line : inconclusive) {
                 built.append("  INCONCLUSIVE ").append(line).append('\n');
             }
-            for (int x : X_LADDER) {
+            for (int x : xLadder) {
                 if (!verdicts.containsKey(x) && !hasPrefix(inconclusive, "x=" + x + " ")) {
                     built.append("  NOT REACHED x=").append(x).append('\n');
                 }
@@ -390,12 +402,12 @@ public class SpikeFarCoordinateShipTest extends AbstractClientE2ETest {
      *  {@link Events#mark} refuses a sequence unless a recorder is subscribed, which is what keeps
      *  an empty log later from reading as "it never happened". */
     private Events clientEvents() throws Exception {
-        return ClientEvents.of(bot());
+        return ClientEvents.of(bot(), evictionReports());
     }
 
     /** The SERVER's ordered event log, stepped on this client's ticks. */
     private Events serverEvents() {
-        return new Events(this::exec, bot()::waitTicks);
+        return new Events(this::exec, bot()::waitTicks, evictionReports());
     }
 
     private double riderY() throws Exception {

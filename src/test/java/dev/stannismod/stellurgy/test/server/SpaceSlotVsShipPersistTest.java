@@ -35,11 +35,7 @@ public class SpaceSlotVsShipPersistTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * Wait for the substrate's registry to take a ship, on the registry's own add.

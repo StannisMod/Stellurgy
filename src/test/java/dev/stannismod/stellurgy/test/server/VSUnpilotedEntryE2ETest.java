@@ -50,7 +50,7 @@ import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.awaitEnt
  *
  * <p>Narrowing the probe stack's slot set to its own slots (the binder used to see the whole pool) did
  * NOT fix it, which rules that hypothesis out by control. A server JVM is started per CLASS here
- * ({@code @BeforeClass}/{@code @AfterClass}), so a class of its own gives this leg a boot in which it is
+ * (the shared base's class scope), so a class of its own gives this leg a boot in which it is
  * the FIRST consumer — the home the bug ledger asked for rather than a red shipped or an order pinned
  * to hide which scenario lands third.</p>
  *
@@ -136,11 +136,7 @@ public class VSUnpilotedEntryE2ETest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     /** Keep every slot world's ships load-queued while a wait runs. See {@link EntrySlots}. */
     private void loadAllEntrySlots(String setup) throws Exception {

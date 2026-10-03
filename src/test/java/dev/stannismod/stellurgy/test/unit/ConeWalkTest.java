@@ -24,6 +24,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class ConeWalkTest {
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord APEX = GalacticCoord.ofSectorLocal(7_000L, -3_000L, 11_000L,
             0L, 0L, 0L);
     /** An aim with a component on every axis; (1, 2, -2) is three long, so its unit vector is exact. */
@@ -37,6 +40,8 @@ public class ConeWalkTest {
      * The most a look's direction can move by being rounded to a whole cell, at the NEAREST shell: a
      * look is placed by rounding each of its three components, which moves it at most half a cell per
      * axis, i.e. {@code sqrt(3)/2} cells, and the nearest look stands one stride out.
+     *
+     * <p>A constant: a final {@code double} computed from constants.</p>
      */
     private static final double ROUNDING_RADIANS = Math.sqrt(3d) / 2d / STRIDE;
 
