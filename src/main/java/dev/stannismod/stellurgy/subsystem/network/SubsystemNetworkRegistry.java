@@ -2,10 +2,12 @@ package dev.stannismod.stellurgy.subsystem.network;
 
 import net.minecraft.world.World;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -50,6 +52,20 @@ final class SubsystemNetworkRegistry {
             return Collections.emptySet();
         }
         return Collections.unmodifiableSet(new HashSet<>(nodesOf(domain)));
+    }
+
+    /** The nodes of this domain in this world that are a {@code type}, as a list the caller owns. */
+    synchronized <T> List<T> nodesIn(SubsystemNetworkDomain domain, World world, Class<T> type) {
+        List<T> found = new ArrayList<>();
+        if (domain == null || world == null) {
+            return found;
+        }
+        for (ISubsystemNetworkNode node : nodesOf(domain)) {
+            if (type.isInstance(node) && node.getNodeWorld() == world) {
+                found.add(type.cast(node));
+            }
+        }
+        return found;
     }
 
     /** Every domain that has registered a node on this server — what the manager ticks. */

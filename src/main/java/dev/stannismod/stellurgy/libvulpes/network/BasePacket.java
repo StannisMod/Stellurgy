@@ -6,7 +6,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.world.WorldServer;
+import net.minecraft.network.NetHandlerPlayServer;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
@@ -89,71 +89,34 @@ public abstract class BasePacket implements IMessage {
 		write(buf);
 	}
 
+	/*
+	 * How a packet reaches its executor. The channel's codec decodes on the netty thread; these two
+	 * handlers, one per side, then queue the executor on that side's game thread, in arrival order,
+	 * in the same queue vanilla's own packets are applied from. Every packet of this channel runs its
+	 * execute method on the game thread.
+	 *
+	 * The PLAYER is read when the executor runs, never when the packet arrives. Between the two the
+	 * game thread may still apply packets queued earlier, and some of those replace the player: a
+	 * client's SPacketRespawn builds a new EntityPlayerSP in a new world, a server's respawn builds a
+	 * new EntityPlayerMP. A player captured on arrival is then the old one, and a packet that looks its
+	 * world up through him lands in the world he left.
+	 */
+
 	public static class BasePacketHandlerServer implements IMessageHandler<BasePacket, IMessage> {
 		@Override
 		public IMessage onMessage(BasePacket message, MessageContext ctx) {
-
-			((WorldServer) ctx.getServerHandler().player.world).addScheduledTask(new executor(message, ctx.getServerHandler().player, ctx.side));
-
-
-
+			NetHandlerPlayServer handler = ctx.getServerHandler();
+			handler.player.getServerWorld().addScheduledTask(() -> message.executeServer(handler.player));
 			return null;
-		}
-
-		public static class executor implements Runnable {
-
-			final Side side;
-			final BasePacket packet;
-			final EntityPlayer player;
-
-			public executor(BasePacket packet, EntityPlayer player, Side side) {
-				this.packet = packet;
-				this.player = player;
-				this.side = side;
-			}
-
-			@Override
-			public void run() {
-					packet.executeServer((EntityPlayerMP) player);
-			}
 		}
 	}
 
 	public static class BasePacketHandlerClient implements IMessageHandler<BasePacket, IMessage> {
 		@Override
 		public IMessage onMessage(BasePacket message, MessageContext ctx) {
-			switch(ctx.side) {
-			case CLIENT:
-				Minecraft.getMinecraft().addScheduledTask(new executor(message, Minecraft.getMinecraft().player, ctx.side));
-				break;
-			case SERVER:
-				((WorldServer) ctx.getServerHandler().player.world).addScheduledTask(new executor(message, ctx.getServerHandler().player, ctx.side));
-				break;
-			}
-
+			Minecraft mc = Minecraft.getMinecraft();
+			mc.addScheduledTask(() -> message.executeClient(mc.player));
 			return null;
-		}
-
-		public static class executor implements Runnable {
-
-			final Side side;
-			final BasePacket packet;
-			final EntityPlayer player;
-
-			public executor(BasePacket packet, EntityPlayer player, Side side) {
-				this.packet = packet;
-				this.player = player;
-				this.side = side;
-			}
-
-			@Override
-			public void run() {
-				if(side.isClient()) {
-					packet.executeClient(player);
-				}
-				else
-					packet.executeServer((EntityPlayerMP) player);
-			}
 		}
 	}
 }

@@ -72,6 +72,12 @@ public class AdvancedForceFieldSystem {
     public static Item itemLaserGun;
     public static ItemCodeDevice ITEM_CODE_DEVICE;
 
+    /*
+     * OWNER of the blocks and items below: Forge's registries, which last as long as the JVM. These
+     * fields are this mod's handles on the instances it registered there — written once, by
+     * initContent() at the first registry event, and never released, because a registered block
+     * cannot be unregistered. Not services: a BlockFieldGenerator is a block type, whatever its name.
+     */
     public static BlockFieldGenerator BLOCK_FIELD_GENERATOR;
     public static BlockShieldGenerator BLOCK_SHIELD_GENERATOR;
     public static BlockShieldAccumulator BLOCK_SHIELD_ACCUMULATOR;

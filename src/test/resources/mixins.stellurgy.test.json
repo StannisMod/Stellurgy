@@ -119,6 +119,7 @@
     "MixinClientProxyEvents",
     "MixinClientBeamTrackerEvents",
     "MixinClientShotTrackerEvents",
+    "MixinTileWeaponConsoleReadoutEvents",
     "MixinMinecraftSideTrace"
   ]
 }

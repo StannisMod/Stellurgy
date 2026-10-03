@@ -2,6 +2,9 @@ package dev.stannismod.stellurgy.tile.weapon;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.inventory.Container;
+import net.minecraft.inventory.IContainerListener;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -9,6 +12,7 @@ import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
+import net.minecraftforge.fml.common.network.ByteBufUtils;
 import net.minecraftforge.fml.relauncher.Side;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
@@ -63,10 +67,15 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
 
     private static final byte NET_TOGGLE_HOLD_FIRE = 0;
     private static final byte NET_CLEAR_TARGET = 1;
+    /** Server&rarr;client: what the open screen should say. See {@link ReadoutSync}. */
+    private static final byte NET_READOUT = 2;
+
+    /** The screen's lines, in the order {@link #readoutLines} produces them. */
+    private static final int READOUT_LINES = 4;
 
     private boolean registered;
 
-    /** Client-side text, rebuilt each time the GUI is opened. */
+    /** The open screen's readout lines; refilled each time the server sends a readout. */
     private final List<ModuleText> readouts = new ArrayList<>();
 
     @Override
@@ -112,7 +121,14 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
     public void applyNetworkState(SubsystemNetworkState state) {
     }
 
-    /** The network this console is on, or null when it stands alone. */
+    /**
+     * The network this console is on, or null when it stands alone.
+     *
+     * <p>SERVER ONLY in meaning. The network lives in the server session; a client JVM attached to a
+     * remote server has none and reads null here, so nothing a client shows may be derived from this
+     * — the screen is told by the server instead ({@link ReadoutSync}). Every getter below inherits
+     * this.</p>
+     */
     public WeaponNetworkState network() {
         SubsystemNetworkState state = SubsystemNetworkManager.getState(WeaponNetworkDomain.INSTANCE,
                 world, pos);
@@ -314,6 +330,13 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
 
     // ---- GUI
 
+    /**
+     * The screen. Built on both sides — libVulpes pairs the server's container with the client's — but
+     * its READOUT is the server's alone: the client builds the lines blank and the server fills them
+     * ({@link ReadoutSync}), because everything they describe lives in a network the client JVM does
+     * not run. Blank until the first readout lands, which claims nothing, rather than a client-side
+     * "no network" that would be a confident wrong answer.
+     */
     @Override
     public List<ModuleBase> getModules(int id, EntityPlayer player) {
         List<ModuleBase> modules = new ArrayList<>();
@@ -326,48 +349,124 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
                 LibVulpes.proxy.getLocalizedString("msg.weaponConsole.clearTarget"), this,
                 TextureResources.buttonBuild, 80, 18));
 
-        addReadout(modules, 10, 68, statusLine());
-        addReadout(modules, 10, 80, gunLine());
-        addReadout(modules, 10, 92, targetLine());
-        addReadout(modules, 10, 104, sensorLine());
+        for (int line = 0; line < READOUT_LINES; line++) {
+            ModuleText text = new ModuleText(10, 68 + 12 * line, "", 0x2b2b2b);
+            readouts.add(text);
+            modules.add(text);
+        }
+        modules.add(new ReadoutSync(this));
         return modules;
     }
 
-    private void addReadout(List<ModuleBase> modules, int x, int y, String text) {
-        ModuleText module = new ModuleText(x, y, text, 0x2b2b2b);
-        readouts.add(module);
-        modules.add(module);
-    }
-
-    private String statusLine() {
-        String status = readoutText(networkStatusKey());
-        return isHoldFire() ? readoutText("msg.weaponConsole.line.networkHolding", status)
-                : readoutText("msg.weaponConsole.line.network", status);
-    }
-
-    private String gunLine() {
+    /**
+     * Everything the screen says, as the server knows it. Server only — see {@link #network()}.
+     *
+     * <p>A tag rather than finished text: the client translates into its own language, and the
+     * server's proxy cannot. A target or a contact is present in the tag only when it exists.</p>
+     */
+    NBTTagCompound readoutTag() {
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setString("status", networkStatusKey());
+        tag.setBoolean("holding", isHoldFire());
         int[] mounts = getMountTelemetry();
-        return mounts[1] > 0
-                ? readoutText("msg.weaponConsole.line.gunsOutOfArc", getGunCount(), mounts[0], mounts[1])
-                : readoutText("msg.weaponConsole.line.guns", getGunCount(), mounts[0]);
-    }
-
-    private String targetLine() {
+        tag.setInteger("guns", getGunCount());
+        tag.setInteger("onTarget", mounts[0]);
+        tag.setInteger("saturated", mounts[1]);
         Vec3d target = getTarget();
-        return target == null ? readoutText("msg.weaponConsole.line.targetNone")
-                : readoutText("msg.weaponConsole.line.target", target.x, target.y, target.z);
+        if (target != null) {
+            tag.setDouble("targetX", target.x);
+            tag.setDouble("targetY", target.y);
+            tag.setDouble("targetZ", target.z);
+        }
+        TargetTrack acquired = getAcquiredTrack();
+        if (acquired != null) {
+            tag.setBoolean("locked", acquired.isLocked(StellurgyConfiguration.getCurrentConfig()
+                    .fireControlSensorLockQualityToFire));
+            tag.setDouble("distance", acquired.getDistance());
+            tag.setDouble("quality", acquired.getQuality());
+        }
+        return tag;
     }
 
-    private String sensorLine() {
-        TargetTrack acquired = getAcquiredTrack();
-        if (acquired == null) {
-            return readoutText("msg.weaponConsole.line.sensorNone");
+    /** The screen's lines for a readout, in the client's language; {@link #READOUT_LINES} of them. */
+    private static String[] readoutLines(NBTTagCompound readout) {
+        String status = readoutText(readout.getString("status"));
+        String network = readout.getBoolean("holding")
+                ? readoutText("msg.weaponConsole.line.networkHolding", status)
+                : readoutText("msg.weaponConsole.line.network", status);
+        int guns = readout.getInteger("guns");
+        int onTarget = readout.getInteger("onTarget");
+        int saturated = readout.getInteger("saturated");
+        String gunLine = saturated > 0
+                ? readoutText("msg.weaponConsole.line.gunsOutOfArc", guns, onTarget, saturated)
+                : readoutText("msg.weaponConsole.line.guns", guns, onTarget);
+        String targetLine = readout.hasKey("targetX")
+                ? readoutText("msg.weaponConsole.line.target", readout.getDouble("targetX"),
+                        readout.getDouble("targetY"), readout.getDouble("targetZ"))
+                : readoutText("msg.weaponConsole.line.targetNone");
+        String sensorLine = !readout.hasKey("distance")
+                ? readoutText("msg.weaponConsole.line.sensorNone")
+                : readoutText(readout.getBoolean("locked") ? "msg.weaponConsole.line.sensor"
+                                : "msg.weaponConsole.line.sensorTooPoor",
+                        readout.getDouble("distance"), readout.getDouble("quality"));
+        return new String[] {network, gunLine, targetLine, sensorLine};
+    }
+
+    /** Client: a readout from the server arrived for the open screen. */
+    private void showReadout(NBTTagCompound readout) {
+        String[] lines = readoutLines(readout);
+        for (int line = 0; line < readouts.size() && line < lines.length; line++) {
+            readouts.get(line).setText(lines[line]);
         }
-        boolean locked = acquired.isLocked(StellurgyConfiguration.getCurrentConfig()
-                .fireControlSensorLockQualityToFire);
-        return readoutText(locked ? "msg.weaponConsole.line.sensor"
-                        : "msg.weaponConsole.line.sensorTooPoor",
-                acquired.getDistance(), acquired.getQuality());
+    }
+
+    /**
+     * Carries the readout to whoever has this console's screen open, while it is open.
+     *
+     * <p>Lives in the container, not in the tile's update tag, because the readout matters only to a
+     * player looking at it: a container exists exactly while one is, and is per player. The tile
+     * itself owns nothing to replicate — every line is the network's state or the guns' — so an
+     * update tag would mean every console recomputing and pushing, forever, for screens nobody has
+     * open.</p>
+     *
+     * <p>Sent whenever the readout differs from the last one sent — once on opening, then on each
+     * change. Not thresholded: a closing contact changes its displayed distance about every tick, the
+     * player is watching exactly that, and the cost is one small packet a tick to one player. Its own
+     * packet rather than a window property, because a window property is a {@code short} and a
+     * target coordinate is not.</p>
+     */
+    private static final class ReadoutSync extends ModuleBase {
+
+        private final TileWeaponConsole console;
+        private NBTTagCompound sent;
+
+        ReadoutSync(TileWeaponConsole console) {
+            super(0, 0);
+            this.console = console;
+        }
+
+        @Override
+        public int numberOfChangesToSend() {
+            return 1;
+        }
+
+        /**
+         * Overridden whole: the base answers yes on two consecutive ticks for one change, which for a
+         * packet means sending it twice.
+         */
+        @Override
+        public boolean isUpdateRequired(int localId) {
+            World world = console.getWorld();
+            return world != null && !world.isRemote && !console.readoutTag().equals(sent);
+        }
+
+        @Override
+        public void sendChanges(Container container, IContainerListener listener, int variableId, int localId) {
+            if (listener instanceof EntityPlayerMP) {
+                sent = console.readoutTag();
+                PacketHandler.sendToPlayer(new PacketMachine(console, NET_READOUT), (EntityPlayerMP) listener);
+            }
+        }
     }
 
     /**
@@ -387,17 +486,29 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
 
     @Override
     public void writeDataToNetwork(ByteBuf out, byte id) {
+        if (id == NET_READOUT) {
+            ByteBufUtils.writeTag(out, readoutTag());
+        }
     }
 
     @Override
     public void readDataFromNetwork(ByteBuf in, byte packetId, NBTTagCompound nbt) {
+        if (packetId == NET_READOUT) {
+            nbt.setTag("readout", ByteBufUtils.readTag(in));
+        }
     }
 
     @Override
     public void useNetworkData(EntityPlayer player, Side side, byte id, NBTTagCompound nbt) {
+        if (side.isClient()) {
+            if (id == NET_READOUT) {
+                showReadout(nbt.getCompoundTag("readout"));
+            }
+            return;
+        }
         // Who may press these buttons is the GUI's own rule; a packet is the same press, so it answers
         // to the same rule rather than to a second one written here.
-        if (side.isClient() || !canInteractWithContainer(player)) {
+        if (!canInteractWithContainer(player)) {
             return;
         }
         if (id == NET_TOGGLE_HOLD_FIRE) {

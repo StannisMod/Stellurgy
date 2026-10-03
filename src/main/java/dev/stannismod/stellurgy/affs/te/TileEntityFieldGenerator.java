@@ -50,7 +50,6 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     private static final int CLIENT_SYNC_BASE_INTERVAL_TICKS = 20;
     private static final int CLIENT_SYNC_JITTER_TICKS = 10;
     private static final DamageSource SHIELD_COLLISION_DAMAGE = new DamageSource("affs.shield_collision");
-    private static final Set<TileEntityFieldGenerator> ACTIVE_GENERATORS = new HashSet<>();
     private static final Map<UUID, PlayerLastSafePosition> PLAYER_LAST_SAFE_POSITIONS = new HashMap<>();
 
     // Coil capacity is read from config at construction (config is loaded in preInit, before any tile
@@ -212,7 +211,6 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         super.onLoad();
         resolveFieldFrame();
         if (world != null && !world.isRemote) {
-            ACTIVE_GENERATORS.add(this);
             SubsystemNetworkManager.of(world).register(this);
             SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
             refreshEffectiveRadius();
@@ -709,7 +707,6 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            ACTIVE_GENERATORS.remove(this);
             SubsystemNetworkManager.of(world).unregister(this);
             SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
@@ -719,24 +716,26 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            ACTIVE_GENERATORS.remove(this);
             SubsystemNetworkManager.of(world).unregister(this);
             SubsystemNetworkManager.of(world).markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
     }
 
-    public static Set<TileEntityFieldGenerator> getActiveGenerators() {
-        return ACTIVE_GENERATORS;
-    }
-
     /**
-     * Cheap global short-circuit for the strike / residual-ray paths: true iff any emitter is loaded and
-     * active anywhere. Lets a raytrace-layer hook bail in O(1) in the common no-shields-present case
-     * before touching per-generator geometry.
+     * Every field generator loaded in {@code world}, powered or not.
+     *
+     * <p>Read from the server's network registry, which a generator joins when it loads and leaves when
+     * it breaks, unloads or its world does — so there is no second list to fall out of step with it,
+     * and none outlives the server. Empty for a client world: generators are server tiles, and a
+     * client never holds them.</p>
      */
-    public static boolean hasActiveGenerators() {
-        return !ACTIVE_GENERATORS.isEmpty();
+    public static List<TileEntityFieldGenerator> loadedIn(World world) {
+        if (world == null || world.isRemote) {
+            return Collections.emptyList();
+        }
+        return SubsystemNetworkManager.of(world).nodesIn(ShieldNetworkManager.DOMAIN, world,
+                TileEntityFieldGenerator.class);
     }
 
     private int getShieldDrainForPhase(int phase) {

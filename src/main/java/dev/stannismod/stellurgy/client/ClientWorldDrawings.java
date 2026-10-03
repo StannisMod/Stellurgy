@@ -68,18 +68,16 @@ public final class ClientWorldDrawings implements ICapabilityProvider {
     /**
      * Applies a packet's news to the drawings of the world the client is in when it is applied.
      *
-     * <p>The mod's packets arrive on the network thread, where the client world may be mid-change.
-     * Queued on the client thread, the action runs in the same queue vanilla's own packets are applied
-     * from, so a round announced after a change of dimension lands in the new world. With no world
-     * loaded there is nothing to draw on, and the news is dropped with it.</p>
+     * <p>Called from a packet's {@code executeClient}, which the channel runs on the client thread in
+     * the same queue vanilla's own packets are applied from — so a round announced after a change of
+     * dimension finds the new world here. With no world loaded there is nothing to draw on, and the
+     * news is dropped with it.</p>
      */
     public static void apply(Consumer<ClientWorldDrawings> action) {
-        Minecraft mc = Minecraft.getMinecraft();
-        mc.addScheduledTask(() -> {
-            if (mc.world != null) {
-                action.accept(of(mc.world));
-            }
-        });
+        World world = Minecraft.getMinecraft().world;
+        if (world != null) {
+            action.accept(of(world));
+        }
     }
 
     /** Registers the capability and the handler that gives every client world its drawings. */

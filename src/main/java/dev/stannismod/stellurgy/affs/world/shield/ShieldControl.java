@@ -141,17 +141,21 @@ public final class ShieldControl {
         return newCode;
     }
 
-    /** Every loaded emitter belonging to the given domain. */
+    /**
+     * Every loaded emitter belonging to the given domain. Searched in {@code world} alone, because a
+     * domain is one world's: a fixed installation's is named by its dimension and a hull's by its
+     * ship, which is in one world at a time.
+     */
     public static List<TileEntityFieldGenerator> emittersInDomain(World world, String domainId) {
         List<TileEntityFieldGenerator> result = new ArrayList<>();
-        if (world == null || domainId == null) {
+        if (domainId == null) {
             return result;
         }
-        for (TileEntityFieldGenerator emitter : TileEntityFieldGenerator.getActiveGenerators()) {
-            if (emitter == null || emitter.isInvalid() || emitter.getWorld() == null) {
+        for (TileEntityFieldGenerator emitter : TileEntityFieldGenerator.loadedIn(world)) {
+            if (emitter.isInvalid()) {
                 continue;
             }
-            if (domainId.equals(ShieldDomains.forBlock(emitter.getWorld(), emitter.getPos()))) {
+            if (domainId.equals(ShieldDomains.forBlock(world, emitter.getPos()))) {
                 result.add(emitter);
             }
         }

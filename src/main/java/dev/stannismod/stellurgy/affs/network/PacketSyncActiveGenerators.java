@@ -27,13 +27,8 @@ public class PacketSyncActiveGenerators implements IMessage {
     public static PacketSyncActiveGenerators fromWorld(World world) {
         PacketSyncActiveGenerators packet = new PacketSyncActiveGenerators();
         packet.dimension = world.provider.getDimension();
-        int dimension = packet.dimension;
-        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.getActiveGenerators()) {
-            if (generator == null || generator.isInvalid() || !generator.isFieldPowered()) {
-                continue;
-            }
-            World generatorWorld = generator.getWorld();
-            if (generatorWorld == null || generatorWorld.provider.getDimension() != dimension) {
+        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.loadedIn(world)) {
+            if (generator.isInvalid() || !generator.isFieldPowered()) {
                 continue;
             }
             packet.entries.add(new Entry(generator.getPos(), generator.getRadius()));

@@ -80,18 +80,11 @@ public final class FieldSurfaceMath {
         return compositeShellDistance(generators, point) <= 0.0D;
     }
 
+    /** The generators in {@code world} that are projecting a shell now. Empty for a client world. */
     public static List<TileEntityFieldGenerator> getActiveGenerators(World world) {
         List<TileEntityFieldGenerator> generators = new ArrayList<>();
-        if (world == null) {
-            return generators;
-        }
-        int dimension = world.provider.getDimension();
-        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.getActiveGenerators()) {
-            if (generator == null || generator.isInvalid()) {
-                continue;
-            }
-            World generatorWorld = generator.getWorld();
-            if (generatorWorld == null || generatorWorld.provider.getDimension() != dimension) {
+        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.loadedIn(world)) {
+            if (generator.isInvalid()) {
                 continue;
             }
             if (!generator.isFieldPowered()) {

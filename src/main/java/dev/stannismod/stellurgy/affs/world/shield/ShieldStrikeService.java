@@ -69,10 +69,6 @@ public final class ShieldStrikeService {
     /** The powered shell this ray enters first, or null. The one shell search in this service. */
     private static TileEntityFieldGenerator nearestShell(World world, Vec3d origin, Vec3d dir,
                                                          double maxDist) {
-        // Cheap global short-circuit before any per-generator geometry.
-        if (!TileEntityFieldGenerator.hasActiveGenerators()) {
-            return null;
-        }
         List<TileEntityFieldGenerator> generators = FieldSurfaceMath.getActiveGenerators(world);
         TileEntityFieldGenerator nearest = null;
         double nearestT = Double.POSITIVE_INFINITY;

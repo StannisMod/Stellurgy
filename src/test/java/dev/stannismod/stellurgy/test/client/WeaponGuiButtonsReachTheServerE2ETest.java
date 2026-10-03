@@ -8,10 +8,11 @@ import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.assertTrue;
 
 /**
  * The buttons on the weapon console's and the fire-control sensor's screens change what the SERVER's
- * guns and sensors do.
+ * guns and sensors do, and the console's screen shows what the server's network is doing.
  *
  * <p>Every other test of the console and the sensor drives them through probe verbs, which call the
  * same methods on the server directly. A player has no probe: the screen is the only way he has to
@@ -87,6 +88,75 @@ public class WeaponGuiButtonsReachTheServerE2ETest extends AbstractClientE2ETest
                 "the console's Hold Fire button was pressed and the battery never held fire on the"
                         + " server: the press never left the client",
                 Weapons.SUBJECT_TICKS, "pos", Weapons.at(gunX, Y, Z), "held", "true");
+        bot().closeScreen();
+    }
+
+    /**
+     * The console's screen says what the SERVER's network says — its gun count and status — and
+     * follows it when it changes: Hold Fire pressed, the screen says the network is holding.
+     *
+     * <p>The screen's readout is the client log's {@code client_console_readout}, written where the
+     * server's readout is handed to the screen's lines. The status is checked against a WINDOW of two
+     * server reads, one before the screen opened and one after its readout landed: a network's status
+     * may legitimately move in between (a gun finishing its charge), and the screen is right if it
+     * shows either of the states the server was in while it was being told.</p>
+     *
+     * <p>red-witnessed: with {@code TileWeaponConsole#getModules} at {@code modules.add(new ReadoutSync(this));}
+     * followed by the client copy filling its own lines ({@code showReadout(readoutTag())}) and
+     * {@code TileWeaponConsole#useNetworkData} at {@code if (id == NET_READOUT)} ignoring the server's
+     * readout — the shape the screen shipped with, every line derived on the client — this fails at
+     * "the console's screen never showed the server's battery — one gun, not holding — no
+     * `client_console_readout` carrying pos = 624,84,620 and guns = 1 and holding = false was recorded
+     * within 600 ticks", with a {@code client_console_readout} in the same log, so the instrument ran
+     * and saw the client's own zero (2026-10-01; green on the fixed tree the same day).</p>
+     *
+     * <p>red-witnessed: with {@code TileWeaponConsole#readoutTag} at {@code tag.setString("status", networkStatusKey());}
+     * writing the fixed key {@code msg.weaponConsole.status.unknown} instead — a screen told SOMETHING,
+     * but not the server's status — this fails at "the console's screen shows network status
+     * 'unknown', which the server's network was in neither before the screen opened ('disconnected')
+     * nor after its readout landed ('disconnected')" (2026-10-01).</p>
+     *
+     * <p>red-witnessed: with {@code TileWeaponConsole#isUpdateRequired} at {@code return world != null && !world.isRemote && !console.readoutTag().equals(sent);}
+     * also requiring {@code sent == null} — the readout sent on opening and never again — this fails at
+     * "Hold Fire was pressed and the console's screen never said the network is holding — no
+     * `client_console_readout` carrying pos = 624,84,620 and holding = true was recorded within 600
+     * ticks" (2026-10-01).</p>
+     */
+    @Test
+    public void theConsolesScreenShowsTheServersNetwork() throws Exception {
+        Events server = new Events(this::exec, bot()::waitTicks);
+        Events client = ClientEvents.of(bot());
+        prepareSite();
+        int gunX = X + 3, consoleX = X + 4;
+        long built = server.markInstrumented();
+        buildGun(gunX);
+        Weapons.awaitAssembled(server, built, gunX, Y, Z, PARTS, "the gun never assembled");
+        placeBlock("stellurgy:weaponConsole", consoleX, Y, Z);
+        ask("stellurgytest turret charge " + DIM + " " + gunX + " " + Y + " " + Z).requireOk("charge the gun");
+        String console = DIM + " " + consoleX + " " + Y + " " + Z;
+        Reply before = ask("stellurgytest weaponconsole read " + console).requireOk("read the console on the server");
+        requireArranged("the console is not commanding the one gun beside it on the server, so its"
+                + " screen has nothing to show: " + before, before.bool("network") && before.integer("guns") == 1);
+
+        standBeside();
+        long opened = client.mark();
+        String screen = ClientGuiTestSupport.openGuiByRightClick(bot(), client, consoleX, Y, Z);
+        requireArranged("right-clicking the console opened no screen: " + screen, !screen.isEmpty());
+        String shown = client.awaitRecordWithFields(opened, "client_console_readout",
+                "the console's screen never showed the server's battery — one gun, not holding",
+                Weapons.SUBJECT_TICKS, "pos", Weapons.at(consoleX, Y, Z), "guns", "1", "holding", "false");
+        Reply after = ask("stellurgytest weaponconsole read " + console).requireOk("read the console again");
+        String screenStatus = Events.text(shown, "status");
+        assertTrue("the console's screen shows network status '" + screenStatus + "', which the server's"
+                        + " network was in neither before the screen opened ('" + before.text("status")
+                        + "') nor after its readout landed ('" + after.text("status") + "')",
+                screenStatus.equals(before.text("status")) || screenStatus.equals(after.text("status")));
+
+        long pressed = client.mark();
+        bot().clickButtonById(CONSOLE_HOLD_FIRE_BUTTON);
+        client.awaitRecordWithFields(pressed, "client_console_readout",
+                "Hold Fire was pressed and the console's screen never said the network is holding",
+                Weapons.SUBJECT_TICKS, "pos", Weapons.at(consoleX, Y, Z), "holding", "true");
         bot().closeScreen();
     }
 

@@ -1504,8 +1504,6 @@ public class Stellurgy {
                 spaceEvents, hyperspaceVoid);
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.util.DelayedActionBar());
 
-        PacketHandler.init();
-
         GameRegistry.registerWorldGenerator(new OreGenerator(), 100);
 
         ForgeChunkManager.setForcedChunkLoadingCallback(instance, new WorldEvents());

@@ -1030,14 +1030,15 @@ public class TestProbeCommand extends CommandBase {
             // emitters <dim> — list every LOADED emitter in the dimension with its subspace block pos,
             // its world centre, and its frame state. On a VS ship the world centre is the hull-mapped
             // centre (far from the subspace pos), which is exactly what a ship-frame e2e verifies: the
-            // shell tracks the flying ship. Uses the static registry, so it finds a ship's emitter once
-            // the ship (and its chunk) is loaded, without the test knowing the subspace coordinates.
+            // shell tracks the flying ship. Reads the server's node registry, so it finds a ship's
+            // emitter once the ship (and its chunk) is loaded, without the test knowing the subspace
+            // coordinates. A dimension that is not loaded has no emitters loaded either.
             int dim = parseIntOr(args[1], Integer.MIN_VALUE);
             java.util.List<Map<String, Object>> emitters = new java.util.ArrayList<>();
             for (dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator e
-                    : dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator.getActiveGenerators()) {
-                if (e == null || e.isInvalid() || e.getWorld() == null
-                        || e.getWorld().provider.getDimension() != dim) {
+                    : dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator.loadedIn(
+                            net.minecraftforge.common.DimensionManager.getWorld(dim))) {
+                if (e.isInvalid()) {
                     continue;
                 }
                 Map<String, Object> m = new LinkedHashMap<>();

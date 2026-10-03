@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.network;
 
+import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketItemModifcation;
 
@@ -67,8 +69,9 @@ public final class PacketRegistry {
      */
     public static void registerAll() {
         verify(PACKETS);
+        PacketHandler channel = LibVulpes.instance.packets();
         for (Class<?> packet : PACKETS) {
-            PacketHandler.INSTANCE.addDiscriminator(packet);
+            channel.addDiscriminator(packet.asSubclass(BasePacket.class));
         }
     }
 

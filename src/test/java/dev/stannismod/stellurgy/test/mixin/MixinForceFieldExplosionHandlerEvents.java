@@ -49,10 +49,7 @@ public abstract class MixinForceFieldExplosionHandlerEvents {
         }
         TestTrace.instrument(world, INSTRUMENT);
         StringBuilder emitters = new StringBuilder();
-        for (TileEntityFieldGenerator emitter : TileEntityFieldGenerator.getActiveGenerators()) {
-            if (emitter == null || emitter.getWorld() != world) {
-                continue;
-            }
+        for (TileEntityFieldGenerator emitter : TileEntityFieldGenerator.loadedIn(world)) {
             if (emitters.length() > 0) {
                 emitters.append(',');
             }

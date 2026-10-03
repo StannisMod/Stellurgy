@@ -118,7 +118,12 @@ public class LibVulpes {
 		}
 	};
 
-	public static MaterialRegistry materialRegistry = new MaterialRegistry(REGISTRY_DOMAIN);
+	/**
+	 * OWNER: the process. The table of materials this mod's ores, ingots and parts are generated
+	 * from; filled during mod init and turned into blocks and items registered with Forge, whose
+	 * registries last as long as the JVM. Nothing replaces it, so it is final.
+	 */
+	public static final MaterialRegistry materialRegistry = new MaterialRegistry(REGISTRY_DOMAIN);
 
 	/**
 	 * Stands in for the {@code @Instance} FML filled while libVulpes was a mod of its own, and has
@@ -129,6 +134,23 @@ public class LibVulpes {
 	 * {@code openGui} or {@code registerGuiHandler}; those take the host.
 	 */
 	public static final LibVulpes instance = new LibVulpes();
+
+	/**
+	 * The mod's network channel. OWNER: this object, for the process — built once, first thing in
+	 * {@link #preInit}, because building one registers it with FML, which never lets it go.
+	 */
+	private PacketHandler packets;
+
+	/**
+	 * @throws IllegalStateException before {@link #preInit} has built the channel: nothing can be
+	 *                               registered on it or sent through it yet
+	 */
+	public PacketHandler packets() {
+		if (packets == null) {
+			throw new IllegalStateException("libVulpes' network channel is not built: preInit has not run");
+		}
+		return packets;
+	}
 
 	public static void registerRecipeHandler(Class clazz, String fileName) {
 		userModifiableRecipes.put(clazz, fileName);
@@ -310,6 +332,12 @@ public class LibVulpes {
 	 */
 	public void preInit(FMLPreInitializationEvent event)
 	{
+		// First: every packet class, ours and the host's, registers on this channel, and the
+		// discriminators are numbered in that order.
+		if (packets != null) {
+			throw new IllegalStateException("libVulpes' channel is already registered: preInit ran twice");
+		}
+		packets = new PacketHandler();
 		createContent();
 		// Here, not at class-load, so the order against the host's own registry listeners is
 		// decided by the host's call order rather than by whenever this class happened to load.
@@ -375,9 +403,9 @@ public class LibVulpes {
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("Iridium", "pickaxe", 2, 0xdedcce, AllowedProducts.getProductByName("COIL").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue()));
 
 		//
-		PacketHandler.INSTANCE.addDiscriminator(PacketMachine.class);
-		PacketHandler.INSTANCE.addDiscriminator(PacketEntity.class);
-		PacketHandler.INSTANCE.addDiscriminator(PacketChangeKeyState.class);
+		packets.addDiscriminator(PacketMachine.class);
+		packets.addDiscriminator(PacketEntity.class);
+		packets.addDiscriminator(PacketChangeKeyState.class);
 	}
 
 	/**
@@ -388,7 +416,6 @@ public class LibVulpes {
 	public void init(FMLInitializationEvent event) {
 		registerRecipes();
 		proxy.init();
-		PacketHandler.init();
 		proxy.registerEventHandlers();
 
 

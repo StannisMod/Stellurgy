@@ -19,7 +19,6 @@ import dev.stannismod.stellurgy.libvulpes.api.LibVulpesBlocks;
 import dev.stannismod.stellurgy.libvulpes.api.LibVulpesItems;
 import dev.stannismod.stellurgy.libvulpes.common.CommonProxy;
 import dev.stannismod.stellurgy.libvulpes.entity.fx.FxErrorBlock;
-import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
 
 import java.util.LinkedList;
 
@@ -51,11 +50,6 @@ public class ClientProxy extends CommonProxy {
 			Minecraft.getMinecraft().effectRenderer.addEffect(fx);
 		}
 	}
-	@Override
-	public void addScheduledTask(BasePacket packet) {
-		//Minecraft.getMinecraft().addScheduledTask(new ExecutorClient(packet, Minecraft.getMinecraft().thePlayer, Side.CLIENT));
-	}
-	
 	@Override
 	public void preInitItems()
 	{

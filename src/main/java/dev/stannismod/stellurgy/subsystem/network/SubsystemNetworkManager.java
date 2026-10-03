@@ -77,8 +77,9 @@ public final class SubsystemNetworkManager {
      *
      * <p>Reads whatever server session this JVM is running, for a world of either side: a client JVM
      * attached to a remote server runs no session and reads null, while an integrated server's client
-     * thread reads that server's state by dimension. The second is a cross-side read, and it is what
-     * the consoles' client-built readouts currently show in single player; it is not a contract.</p>
+     * thread reads that server's state by dimension. The second is a cross-side read and not a
+     * contract: a screen that must show network state is told it by the server, as the weapon
+     * console's is.</p>
      */
     public static SubsystemNetworkState getState(SubsystemNetworkDomain domain, World world, BlockPos pos) {
         SubsystemNetworkManager current = Stellurgy.subsystemNetworks();
@@ -96,6 +97,15 @@ public final class SubsystemNetworkManager {
     /** Every node of this domain on this server, as a copy the caller may iterate freely. */
     public Set<ISubsystemNetworkNode> snapshot(SubsystemNetworkDomain domain) {
         return registry.snapshot(domain);
+    }
+
+    /**
+     * The nodes of this domain loaded in this world that are a {@code type}, as a list the caller
+     * owns. A domain that needs "every X that is loaded" asks here rather than keeping its own list
+     * beside this one: the registry is written at exactly the moments such a list would be.
+     */
+    public <T> List<T> nodesIn(SubsystemNetworkDomain domain, World world, Class<T> type) {
+        return registry.nodesIn(domain, world, type);
     }
 
     /** Call when the topology changed — a node placed, broken, or its connectivity altered. */
