@@ -3,6 +3,8 @@
         <planet name="Earth" DIMID="0" dimMapping="" customIcon="earthlike">
             <fogColor>1,1,1</fogColor>
             <skyColor>0,0,1</skyColor>
+            <mass>1.0</mass>
+            <radius>1.0</radius>
             <atmosphereDensity>100</atmosphereDensity>
             <gravitationalMultiplier>100</gravitationalMultiplier>
             <orbitalDistance>120</orbitalDistance>
@@ -13,6 +15,8 @@
                 <isKnown>true</isKnown>
                 <fogColor>1.0,1.0,1.0</fogColor>
                 <skyColor>1.0,1.0,1.0</skyColor>
+                <mass>0.0123</mass>
+                <radius>0.2727</radius>
                 <gravitationalMultiplier>16</gravitationalMultiplier>
                 <orbitalDistance>45</orbitalDistance>
                 <orbitalPhi>0</orbitalPhi>

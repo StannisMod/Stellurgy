@@ -60,10 +60,10 @@ public class DimensionPropertiesTest {
         props.gravitationalMultiplier = 1.0f;
         props.orbitalDist = 100;
         props.rotationalPeriod = 24000;
-        props.setAtmosphereDensityDirect(100);
         props.skyColor = new float[]{0.5f, 0.7f, 1.0f};
         props.fogColor = new float[]{0.6f, 0.6f, 0.6f};
-        props.hasOxygen = true;
+        props.setBulk(1d, 1d);
+        props.realizeAtmosphere(true, 100);
         return props;
     }
 
@@ -76,7 +76,7 @@ public class DimensionPropertiesTest {
         assertEquals(100, props.orbitalDist);
         assertEquals(24000, props.rotationalPeriod);
         assertEquals(63, props.getSeaLevel());
-        assertTrue(props.hasOxygen);
+        assertTrue(props.hasOxygen());
         assertTrue(props.isNativeDimension);
         assertFalse(props.hasRings);
         assertFalse(props.isGasGiant());
@@ -292,12 +292,13 @@ public class DimensionPropertiesTest {
     }
 
     @Test
-    public void setAtmosphereDensityDirectDoesNotCorruptIdOrHierarchy() {
+    public void realizingTheAtmosphereDoesNotCorruptIdOrHierarchy() {
         DimensionProperties props = new DimensionProperties(123, "Mars");
         setIntField(props, "starId", 5);
         setIntField(props, "parentPlanet", -1);
+        props.setBulk(1d, 1d);
 
-        props.setAtmosphereDensityDirect(42);
+        props.realizeAtmosphere(true, 42);
 
         // Identity invariants survive density mutation.
         assertEquals(123, props.getId());
@@ -351,11 +352,12 @@ public class DimensionPropertiesTest {
 
         // DimensionProperties.hasAtmosphere() flips at NORMAL/LOW boundary.
         DimensionProperties earth = new DimensionProperties(7771, "Earth");
-        earth.setAtmosphereDensityDirect(100);
+        earth.setBulk(1d, 1d);
+        earth.realizeAtmosphere(true, 100);
         assertTrue("density=100 should have atmosphere", earth.hasAtmosphere());
 
         DimensionProperties vacuum = new DimensionProperties(7772, "Vac");
-        vacuum.setAtmosphereDensityDirect(0);
+        vacuum.realizeAtmosphere(false, 0);
         assertFalse("density=0 should be no atmosphere", vacuum.hasAtmosphere());
     }
 

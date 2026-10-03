@@ -34,6 +34,14 @@ package dev.stannismod.stellurgy.universe;
  *       Only systems nobody has touched are re-derived: a PINNED system keeps the bodies it was saved
  *       with, so its moons keep the shared name, and anything else that stored a moon's address
  *       before this (a navigation crystal) still names the parent's cell.</li>
+ *   <li><b>2026-10-01 — a pressure is air the world keeps.</b> The derivation now asks which gases a
+ *       body holds against its gravity and its cold, and a body that keeps none reports pressure 0
+ *       and its bare, greenhouse-free temperature — before, it reported the total it was offered,
+ *       scanned as an atmosphere, landed as a vacuum and stayed as warm as that atmosphere would have
+ *       made it. Its type is kept when it admits the airless world and redrawn among airless types
+ *       when it does not. <b>Measured blast radius: 6 bodies in the golden corpus, every one of them
+ *       cold</b> (five ice or barren worlds at 1-687 hundredths of an atmosphere and a 24 K
+ *       super-Earth at 32 771); no type changed, no world that keeps air moved.</li>
  * </ul>
  */
 public final class UniverseSchemaV0 implements UniverseSchema {

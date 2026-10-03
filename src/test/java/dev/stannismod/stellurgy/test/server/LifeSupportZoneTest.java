@@ -296,8 +296,9 @@ public class LifeSupportZoneTest extends AbstractSharedServerTest {
      *  ceiling … \"airO2\":660000000"; and, the separator's delivery at all, {@code TileGasSeparator#combine} at {@code air.addOxygen(admitted, fromTheTank);} draining the tank without adding the oxygen to the room: "… climbing from
      *  260000000 and no further than 300000000: … expected:&lt;300000000&gt; but
      *  was:&lt;260000000&gt;" — the room starts above what its vent tops up to, so nothing but the
-     *  separator could have moved it. STAYS BREATHABLE — {@code AirState#deriveAtmosphere} at {@code if (oxidiser > config.lifeSupportMaxPartialO2)} calling the ceiling
-     *  itself oxygen-rich: "and the room must stay breathable rather than turn oxygen-toxic: …
+     *  separator could have moved it. STAYS BREATHABLE — {@code AirState#oxygenRung} at {@code if (oxidiser > config.lifeSupportMaxPartialO2)} calling the ceiling
+     *  itself oxygen-rich (taken on the pre-move form, when this statement stood verbatim in
+     *  {@code deriveAtmosphere}): "and the room must stay breathable rather than turn oxygen-toxic: …
      *  \"highO2\"". NOT DRY — {@code TileGasSeparator#combine} at {@code if (admitted <= 0L)} emptying the tank once it can admit
      *  nothing: "it must have stopped because of the ceiling, not because the tank ran dry: …
      *  \"tankAmount\":0".</p> */

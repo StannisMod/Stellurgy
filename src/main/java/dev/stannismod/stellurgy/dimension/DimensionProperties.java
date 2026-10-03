@@ -28,6 +28,9 @@ import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
 import dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.Afuckinginterface;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
@@ -111,7 +114,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public float[] ringColor;
     public float gravitationalMultiplier;
     public int orbitalDist;
-    public boolean hasOxygen;
     public boolean colorOverride;
     //Used in solar panels
     public double peakInsolationMultiplier;
@@ -162,7 +164,14 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     StellarBody star;
     int starId;
     private int originalAtmosphereDensity;
-    private int atmosphereDensity;
+    /**
+     * What this world's outdoor air is made of — the one authority on it. The pressure and whether
+     * there is oxygen are READ from it ({@link #getAtmosphereDensity}, {@link #hasOxygen}); nothing
+     * stores either beside it. Realized once, at creation ({@link #realizeAtmosphere}), and after that
+     * changed only by exchanges that move real gas ({@link #addToAtmosphere},
+     * {@link #setAtmosphereDensity}).
+     */
+    private AirState air;
     private String name;
     //public ExtendedBiomeProperties biomeProperties;
     private LinkedList<BiomeEntry> allowedBiomes;
@@ -312,7 +321,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         tickingSatellites = new HashMap<>();
         isNativeDimension = true;
         skyRenderOverride = false;
-        hasOxygen = true;
         colorOverride = false;
         peakInsolationMultiplier = -1;
         peakInsolationMultiplierWithoutAtmosphere = -1;
@@ -510,6 +518,11 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public void copyData(DimensionProperties props) {
         this.satellites = props.satellites;
         this.tickingSatellites = props.tickingSatellites;
+        // The air is authored once, at creation, and the SAVED state is its authority ever after: a
+        // world re-read from its planet file would otherwise be re-derived from a flag and a total, and
+        // every gas an exchange put in or took out since would be lost on the next load.
+        this.air = props.air.copy();
+        this.originalAtmosphereDensity = props.originalAtmosphereDensity;
     }
 
 
@@ -555,7 +568,10 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         gravitationalMultiplier = 1;
         rotationalPeriod = DEFAULT_ROTATIONAL_PERIOD;
         orbitalDist = 100;
-        originalAtmosphereDensity = atmosphereDensity = 100;
+        // Sea-level Earth air: what this constructor has always meant by a world nobody described —
+        // a pressure of 100 with oxygen — now stated as the gases it is made of.
+        air = AirState.earthLike();
+        originalAtmosphereDensity = getAtmosphereDensity();
         childPlanets = new HashSet<>();
         requiredArtifacts = new LinkedList<>();
         parentPlanet = Constants.INVALID_PLANET;
@@ -877,7 +893,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         }
 
-        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity);
+        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity());
         Temps tempType = Temps.getTempFromValue(getAverageTemp());
 
         if (isStar() && getStarData().isBlackHole())
@@ -928,7 +944,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             }
         }
 
-        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity);
+        AtmosphereTypes atmType = AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity());
         Temps tempType = Temps.getTempFromValue(getAverageTemp());
 
 
@@ -1091,17 +1107,89 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
 
+    /** One hundredth of an atmosphere in the composition's unit: the step of the density readout. */
+    private static final long CENTI_ATM = AirState.ONE_ATM / 100L;
+
+    /**
+     * The surface pressure, 100 = 1 atm — the SUM of what the air holds.
+     * <p>
+     * Rounded rather than truncated: a derived composition shares its total between gases by rounding
+     * each share, so the parts can sum to a few billionths under the total they were cut from, and a
+     * truncating readout would report such a world one step thinner than it was made.
+     */
     public int getAtmosphereDensity() {
-        return atmosphereDensity;
+        return (int) Math.min(Integer.MAX_VALUE, Math.round(air.getTotalPressure() / (double) CENTI_ATM));
     }
 
-    //TODO: allow for more exotic atmospheres
+    /** Whether this world's air holds any free oxygen at all — read from the air, never stored. */
+    public boolean hasOxygen() {
+        return air.getOxygen() > 0L;
+    }
 
+    /** What this world's outdoor air is made of, as an independent copy: editing it changes nothing. */
+    public AirState getAir() {
+        return air.copy();
+    }
+
+    /**
+     * Give this world its air, from its finished facts — the ONE way a world's composition comes into
+     * being. Call it after the mass, the radius, the temperature and giant-ness are final: the gases
+     * that stay are decided by all four ({@link BodyAtmosphere#derive}).
+     *
+     * @param oxygenated    whether this world's own roll gave it free oxygen
+     * @param statedDensity the total its source states, 100 = 1 atm; zero or less is an airless world,
+     *                      and needs no bulk
+     * @throws IllegalArgumentException for a positive density on a body with no mass or radius: what
+     *                                  such a body could hold has no answer
+     */
+    public void realizeAtmosphere(boolean oxygenated, int statedDensity) {
+        air = statedDensity <= 0 ? AirState.vacuum()
+                : BodyAtmosphere.derive(mass, radius, getAverageTemp(), isGasGiant, oxygenated,
+                statedDensity * CENTI_ATM);
+        originalAtmosphereDensity = getAtmosphereDensity();
+    }
+
+    /**
+     * Put gas into this world's air — an exchange that moves real substance, so the pressure rises by
+     * exactly what came in and a gas the air did not hold before is now part of it. The portion
+     * arrives at this world's temperature.
+     */
+    public void addToAtmosphere(AirState portion) {
+        for (Map.Entry<Gas, Long> entry : portion.composition().entrySet()) {
+            air.add(entry.getKey(), entry.getValue(), getAverageTemp());
+        }
+        atmosphereChanged();
+    }
+
+    /**
+     * Thicken or thin the whole mix to this total, every gas in its own proportion.
+     * <p>
+     * Scaling cannot create a gas, so an airless world has nothing to scale: asking one for air is
+     * refused rather than answered with a composition nobody chose. Gas reaches such a world through
+     * {@link #addToAtmosphere}, which says WHICH.
+     *
+     * @throws IllegalStateException for a positive total asked of a world whose air holds nothing
+     */
     public void setAtmosphereDensity(int atmosphereDensity) {
+        long target = Math.max(0, atmosphereDensity) * CENTI_ATM;
+        long total = air.getTotalPressure();
+        if (total <= 0L && target > 0L) {
+            throw new IllegalStateException("dimension " + getId() + " holds no gas to thicken to "
+                    + atmosphereDensity + "; add a named gas instead");
+        }
+        AirState scaled = new AirState(0L, 0L, 0L, air.getTemperatureMilliK());
+        if (target > 0L) {
+            for (Map.Entry<Gas, Long> entry : air.composition().entrySet()) {
+                scaled.add(entry.getKey(), Math.round(entry.getValue() * ((double) target / total)),
+                        air.getTemperatureKelvin());
+            }
+        }
+        air = scaled;
+        atmosphereChanged();
+    }
 
-        int prevAtm = this.atmosphereDensity;
-        this.atmosphereDensity = atmosphereDensity;
-
+    /** Everything that follows a change of the air while the world is in play. */
+    private void atmosphereChanged() {
         // The ONE input that changes while a world is in play — the terraformer thickens or thins the
         // air, and the greenhouse term moves with it. Everything else a temperature is derived from
         // (the stars, the orbit, the albedo) is fixed when the world is materialized, and is STATED
@@ -1111,12 +1199,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         load_terraforming_helper(true);
 
-
         PacketHandler.sendToAll(new PacketDimInfo(getId(), this));
-    }
-
-    public void setAtmosphereDensityDirect(int atmosphereDensity) {
-        originalAtmosphereDensity = this.atmosphereDensity = atmosphereDensity;
     }
 
     /**
@@ -1130,37 +1213,32 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
      * @return the default atmosphere of this dimension
      */
     public Atmosphere getAtmosphere() {
-        if (hasAtmosphere() && hasOxygen) {
-            if (averageTemperature >= 900)
-                return Atmosphere.SUPERHEATED;
-            if (Temps.getTempFromValue(getAverageTemp()) == Temps.TOOHOT)
-                return Atmosphere.VERYHOT;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.SUPERHIGHPRESSURE)
-                return Atmosphere.SUPERHIGHPRESSURE;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.HIGHPRESSURE)
-                return Atmosphere.HIGHPRESSURE;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.LOW)
-                return Atmosphere.LOWOXYGEN;
-            return Atmosphere.AIR;
-        } else if (hasAtmosphere() && !hasOxygen) {
-            if (averageTemperature >= 900)
-                return Atmosphere.SUPERHEATEDNOO2;
-            if (Temps.getTempFromValue(averageTemperature) == Temps.TOOHOT)
-                return Atmosphere.VERYHOTNOO2;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.SUPERHIGHPRESSURE)
-                return Atmosphere.SUPERHIGHPRESSURENOO2;
-            if (AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()) == AtmosphereTypes.HIGHPRESSURE)
-                return Atmosphere.HIGHPRESSURENOO2;
+        if (!hasAtmosphere())
+            return Atmosphere.VACUUM;
+        // Heat and pressure are the PLANET's rungs, and whether oxygen is present only picks the
+        // variant on them. Below them the air answers for itself, against the same band a room is
+        // judged by — so a trace of oxygen reads as too little oxygen, not as none, and a dense
+        // oxygen world can be one a person cannot breathe for the oxygen alone.
+        boolean oxygen = hasOxygen();
+        if (averageTemperature >= 900)
+            return oxygen ? Atmosphere.SUPERHEATED : Atmosphere.SUPERHEATEDNOO2;
+        if (Temps.getTempFromValue(averageTemperature) == Temps.TOOHOT)
+            return oxygen ? Atmosphere.VERYHOT : Atmosphere.VERYHOTNOO2;
+        AtmosphereTypes band = AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity());
+        if (band == AtmosphereTypes.SUPERHIGHPRESSURE)
+            return oxygen ? Atmosphere.SUPERHIGHPRESSURE : Atmosphere.SUPERHIGHPRESSURENOO2;
+        if (band == AtmosphereTypes.HIGHPRESSURE)
+            return oxygen ? Atmosphere.HIGHPRESSURE : Atmosphere.HIGHPRESSURENOO2;
+        if (!oxygen)
             return Atmosphere.NOO2;
-        }
-        return Atmosphere.VACUUM;
+        return air.oxygenRung(Atmosphere.AIR);
     }
 
     /**
      * @return true if the planet has an atmosphere
      */
     public boolean hasAtmosphere() {
-        return AtmosphereTypes.getAtmosphereTypeFromValue(atmosphereDensity).compareTo(AtmosphereTypes.NONE) < 0;
+        return AtmosphereTypes.getAtmosphereTypeFromValue(getAtmosphereDensity()).compareTo(AtmosphereTypes.NONE) < 0;
     }
 
     /**
@@ -1495,7 +1573,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         Random random = new Random(System.nanoTime());
 
-        if (atmosphereDensity > AtmosphereTypes.LOW.value && random.nextInt(3) == 0 && not_terraforming) {
+        if (getAtmosphereDensity() > AtmosphereTypes.LOW.value && random.nextInt(3) == 0 && not_terraforming) {
             List<Biome> list = new LinkedList<>(StellurgyBiomes.instance.getSingleBiome());
 
             while (list.size() > 1) {
@@ -1513,7 +1591,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         }
 
 
-        if (atmosphereDensity <= AtmosphereTypes.LOW.value) {
+        if (getAtmosphereDensity() <= AtmosphereTypes.LOW.value) {
             viableBiomes.add(StellurgyBiomes.moonBiome);
             viableBiomes.add(StellurgyBiomes.moonBiomeDark);
         } else if (Temps.getTempFromValue(averageTemperature).hotterOrEquals(Temps.TOOHOT)) {
@@ -1564,7 +1642,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             viableBiomes = ZUtils.copyRandomElements(viableBiomes, maxBiomesPerPlanet);
         }
 
-        if (atmosphereDensity > AtmosphereTypes.HIGHPRESSURE.value && Temps.getTempFromValue(averageTemperature).isInRange(Temps.NORMAL, Temps.HOT))
+        if (getAtmosphereDensity() > AtmosphereTypes.HIGHPRESSURE.value && Temps.getTempFromValue(averageTemperature).isInRange(Temps.NORMAL, Temps.HOT))
             viableBiomes.addAll(StellurgyBiomes.instance.getHighPressureBiomes());
 
         return viableBiomes;
@@ -2017,14 +2095,9 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         orbitalPhi = nbt.getDouble("orbitPhi");
         rotationalPhi = nbt.getDouble("rotationalPhi");
         isRetrograde = nbt.getBoolean("isRetrograde");
-        hasOxygen = nbt.getBoolean("hasOxygen");
         colorOverride = nbt.getBoolean("colorOverride");
-        atmosphereDensity = nbt.getInteger("atmosphereDensity");
-
-        if (nbt.hasKey("originalAtmosphereDensity"))
-            originalAtmosphereDensity = nbt.getInteger("originalAtmosphereDensity");
-        else
-            originalAtmosphereDensity = atmosphereDensity;
+        air = AirState.readFromNBT(nbt.getCompoundTag("air"));
+        originalAtmosphereDensity = nbt.getInteger("originalAtmosphereDensity");
 
         peakInsolationMultiplier = nbt.getDouble("peakInsolationMultiplier");
         peakInsolationMultiplierWithoutAtmosphere = nbt.getDouble("peakInsolationMultiplierWithoutAtmosphere");
@@ -2474,9 +2547,10 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         nbt.setDouble("orbitPhi", orbitalPhi);
         nbt.setDouble("rotationalPhi", rotationalPhi);
         nbt.setBoolean("isRetrograde", isRetrograde);
-        nbt.setBoolean("hasOxygen", hasOxygen);
         nbt.setBoolean("colorOverride", colorOverride);
-        nbt.setInteger("atmosphereDensity", atmosphereDensity);
+        NBTTagCompound airTag = new NBTTagCompound();
+        air.writeToNBT(airTag);
+        nbt.setTag("air", airTag);
         nbt.setInteger("originalAtmosphereDensity", originalAtmosphereDensity);
         nbt.setDouble("peakInsolationMultiplier", peakInsolationMultiplier);
         nbt.setDouble("peakInsolationMultiplierWithoutAtmosphere", peakInsolationMultiplierWithoutAtmosphere);
@@ -2613,7 +2687,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
      * @return the density of the atmosphere at the given height
      */
     public float getAtmosphereDensityAtHeight(double y) {
-        return atmosphereDensity * MathHelper.clamp((float) (1 + (256 - y) / 200f), 0f, 1f) / 100f;
+        return getAtmosphereDensity() * MathHelper.clamp((float) (1 + (256 - y) / 200f), 0f, 1f) / 100f;
     }
 
     /**

@@ -1087,10 +1087,14 @@ public class ClusteredGalaxyGeneratorTest {
      * <ul>
      *   <li><b>No diff</b> — the world model is unchanged; the release is a minor one and existing saves
      *       carry on under the same schema version.</li>
-     *   <li><b>A diff, on a version that has REACHED A RELEASE</b> — the world model has moved under
-     *       worlds that exist, so the change needs a NEW schema version registered in
+     *   <li><b>A diff, on a STABLE version that has REACHED A RELEASE</b> — the world model has moved
+     *       under worlds that exist, so the change needs a NEW schema version registered in
      *       {@code UniverseSchemas}, and this fixture is regenerated alongside it. Not a discussion:
      *       a diff here IS the definition of a different universe.</li>
+     *   <li><b>A diff, on an ALPHA version (label {@code 0.x}) that has reached a release</b> — the
+     *       version is edited IN PLACE, because the leading zero is the promise that it may be: a world
+     *       made under an alpha is told on every load that its sky may move. The edit is recorded in the
+     *       version's own javadoc with its measured blast radius, and the fixture is regenerated.</li>
      *   <li><b>A diff, on a version that has not shipped yet</b> — the version is edited IN PLACE and
      *       the fixture regenerated with it. A model nobody outside the branch has ever generated a
      *       world under owes nobody compatibility, and minting a version for it would fill the registry
@@ -1136,10 +1140,11 @@ public class ClusteredGalaxyGeneratorTest {
                     new String(expected, StandardCharsets.UTF_8),
                     new String(rendered, StandardCharsets.UTF_8))
                     + "\nEvery system nobody has visited moves with it, in every save generated under "
-                    + "this version. If the change is NOT intended, this is the bug. If it is: a version "
-                    + "that has already reached a release needs a NEW schema version in UniverseSchemas "
-                    + "beside it, while a version that has not shipped yet is edited in place — it owes "
-                    + "nobody compatibility. Either way the fixture is regenerated deliberately, with "
+                    + "this version. If the change is NOT intended, this is the bug. If it is: a STABLE "
+                    + "version that has already reached a release needs a NEW schema version in "
+                    + "UniverseSchemas beside it; an alpha (0.x), shipped or not, and any version that has "
+                    + "not shipped are edited in place — an alpha recording the edit and its blast radius "
+                    + "in its own javadoc. Either way the fixture is regenerated deliberately, with "
                     + "-Dstellurgy.universe.corpus.write=true.");
         }
     }

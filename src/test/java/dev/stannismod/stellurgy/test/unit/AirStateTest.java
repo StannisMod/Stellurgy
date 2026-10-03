@@ -190,7 +190,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (oxidiser < config.lifeSupportMinPartialO2)} doubling the lower edge of the band: an
+     * <p>red-witnessed: with {@code AirState#oxygenRung} at {@code if (oxidiser < config.lifeSupportMinPartialO2)} doubling the lower edge of the band (taken on the pre-move form, when this statement stood verbatim in {@code deriveAtmosphere}): an
      * AssertionError with no message at the assertion, 2026-09-30.</p>
      */
     @Test
@@ -199,7 +199,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code if (oxidiser < config.lifeSupportMinPartialO2)} moving the lower edge of the band down by 10: "expected
+     * <p>red-witnessed: with {@code AirState#oxygenRung} at {@code if (oxidiser < config.lifeSupportMinPartialO2)} moving the lower edge of the band down by 10 (taken on the pre-move form, when this statement stood verbatim in {@code deriveAtmosphere}): "expected
      * same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
     @Test
@@ -209,7 +209,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code AirState#deriveAtmosphere} at {@code return oxidiser <= 0L ? Atmosphere.NOO2 : Atmosphere.LOWOXYGEN;} calling air with no oxygen at all merely low on it:
+     * <p>red-witnessed: with {@code AirState#oxygenRung} at {@code return oxidiser <= 0L ? Atmosphere.NOO2 : Atmosphere.LOWOXYGEN;} calling air with no oxygen at all merely low on it (taken on the pre-move form, when this statement stood verbatim in {@code deriveAtmosphere}):
      * "expected same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;", 2026-09-30.</p>
      */
     @Test
@@ -219,8 +219,9 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HIGH OXYGEN - {@code AirState#deriveAtmosphere} at {@code if (oxidiser > config.lifeSupportMaxPartialO2)}
-     * moving the upper edge of the band up by 10: "expected same:&lt;Atmosphere@...&gt; was
+     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HIGH OXYGEN - {@code AirState#oxygenRung} at {@code if (oxidiser > config.lifeSupportMaxPartialO2)}
+     * moving the upper edge of the band up by 10 (taken on the pre-move form, when this statement stood
+     * verbatim in {@code deriveAtmosphere}): "expected same:&lt;Atmosphere@...&gt; was
      * not:&lt;Atmosphere@...&gt;". STILL FEEDS FIRE - the {@code Atmosphere#HIGHOXYGEN} at {@code new Atmosphere(true, false, true, "highO2")}
      * constant declaring the label non-flammable: "an oxygen-rich room being flammable is the hazard,
      * not a bug". NOT BREATHABLE - the same constant declaring the label breathable: an AssertionError with no message. The last
@@ -354,7 +355,7 @@ public class AirStateTest {
     }
 
     /**
-     * <p>red-witnessed: with the guard at {@code AirState#deriveAtmosphere} at {@code if (config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2)} disabled: "no usable band means no
+     * <p>red-witnessed: with the guard at {@code AirState#oxygenRung} at {@code if (config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2)} disabled (taken on the pre-move form, when this statement stood verbatim in {@code deriveAtmosphere}): "no usable band means no
      * governor, not a hazard expected same:&lt;Atmosphere@...&gt; was not:&lt;Atmosphere@...&gt;",
      * 2026-09-30.</p>
      */

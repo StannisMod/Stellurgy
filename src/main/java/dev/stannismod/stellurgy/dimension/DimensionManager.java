@@ -100,7 +100,7 @@ public class DimensionManager implements IGalaxy {
         seedEarthDefaults(overworldProperties);
 
         defaultSpaceDimensionProperties = new DimensionProperties(SpaceObjectManager.WARPDIMID, false);
-        defaultSpaceDimensionProperties.setAtmosphereDensityDirect(0);
+        defaultSpaceDimensionProperties.realizeAtmosphere(false, 0);
         defaultSpaceDimensionProperties.setAverageTemp(0);
         defaultSpaceDimensionProperties.gravitationalMultiplier = 0.1f;
         defaultSpaceDimensionProperties.orbitalDist = 100;
@@ -114,30 +114,27 @@ public class DimensionManager implements IGalaxy {
     }
 
     /**
-     * Give the loaded OVERWORLD the unit bulk when its planet file states none, and say so.
+     * Give the loaded OVERWORLD the unit bulk when its saved state holds none, and say so.
      *
      * <p>A save written while {@link #overworldProperties} was blank (see {@link #seedEarthDefaults})
-     * carries a dim-0 planet with no mass and no radius, because the writer emits bulk only for a body
-     * that has it. Nothing later restores it: the planet file is authoritative when present, so dim 0
-     * comes from the file and never from the static above, and the world stays sizeless in processes
-     * that no longer have the defect that made it.</p>
+     * carries a dim-0 body with no mass and no radius, because the NBT writer emits bulk only for a
+     * body that has it. The planet FILE no longer reaches here: a body there that states no bulk is
+     * refused at load, the overworld included, so this answers only the saved state.</p>
      *
      * <p>It is a REPAIR of the one body whose bulk is a definition rather than a measurement — Earth
      * masses and Earth radii are the units the whole catalogue is stated in — and it is announced,
-     * because a body silently gaining a radius is indistinguishable from one that always had it. A
-     * pack that wants a different overworld states its own and this never fires.</p>
+     * because a body silently gaining a radius is indistinguishable from one that always had it.</p>
      */
     private static void repairOverworldBulk(DimensionProperties properties) {
         if (properties == null || properties.getId() != 0 || properties.hasBulkProperties()) {
             return;
         }
         properties.setBulk(1d, 1d);
-        logger.warn("The overworld's planet entry states no mass and no radius; applying the unit"
+        logger.warn("The overworld's saved state holds no mass and no radius; applying the unit"
                 + " bulk (1 Earth mass, 1 Earth radius) it is DEFINED as. A body with no radius draws"
                 + " at the marker size at every range and carries the flat 512-block proximity shell"
                 + " instead of an atmosphere. Written by a version that blanked the overworld's"
-                + " defaults on world teardown; state <mass>/<radius> in planetDefs.xml to silence"
-                + " this.");
+                + " defaults on world teardown.");
     }
 
     /**
@@ -163,7 +160,6 @@ public class DimensionManager implements IGalaxy {
         sol.setId(0);
         sol.setName("Sol");
 
-        earth.setAtmosphereDensityDirect(100);
         //Temperature in Kelvin, 286 is 13 Degrees C
         earth.setAverageTemp(286);
         earth.gravitationalMultiplier = 1f;
@@ -176,6 +172,8 @@ public class DimensionManager implements IGalaxy {
         // derived value happens to agree, and that agreement is not what the mark is for.
         earth.setGravityAuthored(true);
         earth.setBulk(1d, 1d);
+        // After the bulk and the temperature, because the air is decided by both.
+        earth.realizeAtmosphere(true, 100);
         earth.orbitalDist = 100;
         earth.skyColor = new float[]{1f, 1f, 1f};
         earth.setName("Earth");
@@ -887,7 +885,7 @@ public class DimensionManager implements IGalaxy {
                 //Register the moon
                 if (dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId != Constants.INVALID_PLANET) {
                     DimensionProperties dimensionProperties = new DimensionProperties(dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId);
-                    dimensionProperties.setAtmosphereDensityDirect(0);
+                    dimensionProperties.realizeAtmosphere(false, 0);
                     dimensionProperties.setAverageTemp(20);
                     // TIDALLY LOCKED TO ITS PARENT, expressed the way this codebase expresses it:
                     // `getParentPlanetThetaFromMoon` moves the parent across a moon's sky by
@@ -1121,9 +1119,9 @@ public class DimensionManager implements IGalaxy {
         DimensionManager.getInstance().knownPlanets.addAll(dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets);
 
 
-        // Whatever path dim 0 arrived by — the planet file, temp.dat, or the shipped defaults — it is
-        // the overworld and it has a size. Here rather than in one of the loops above because there
-        // are three of them and only the LAST writer decides what the world runs with.
+        // Whatever saved path dim 0 arrived by — temp.dat or the shipped defaults; the planet file
+        // refuses a sizeless body itself — it is the overworld and it has a size. Here rather than in
+        // one of the loops above because only the LAST writer decides what the world runs with.
         repairOverworldBulk(dimensionList.get(0));
 
         // Run all sanity checks now

@@ -143,6 +143,8 @@ public class DiscoveryVisibilityTest {
         return "<star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" isBlackHole=\"false\""
                 + " diskAngle=\"70\" numPlanets=\"1\" numGasGiants=\"0\">\n"
                 + "  <planet name=\"" + planetName + "\" DIMID=\"" + dimId + "\">\n"
+                + "    <mass>1.0</mass>\n"
+                + "    <radius>1.0</radius>\n"
                 + "    <isKnown>" + known + "</isKnown>\n"
                 + "  </planet>\n"
                 + "</star>\n";

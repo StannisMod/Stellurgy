@@ -6,6 +6,7 @@ import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.FixtureSite;
 
+import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 
 import static org.junit.Assert.assertEquals;
@@ -46,9 +47,7 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         assertTrue("baseline Earth not breathable — env contamination? " + baseline,
                 Reply.of(baseline).bool("breathable"));
 
-        String planet = String.join("\n", client().execute("stellurgytest planet info 0"));
-        int originalDensity = extractInt(planet, "atmosphereDensity");
-        assertTrue("could not read Earth atmosphereDensity: " + planet, originalDensity >= 0);
+        PlanetAir originalAir = PlanetAir.snapshot(c -> String.join("\n", client().execute(c)), 0);
 
         try {
             String setResp = String.join("\n", client().execute("stellurgytest atmosphere set-density 0 0"));
@@ -60,7 +59,8 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
             assertTrue("density=0 should yield non-breathable, got: " + vacResp,
                     (!Reply.of(vacResp).bool("breathable")));
         } finally {
-            client().execute("stellurgytest atmosphere set-density 0 " + originalDensity);
+            // The gases, not the pressure: an emptied world cannot be thickened back by a number.
+            originalAir.restore(c -> String.join("\n", client().execute(c)));
         }
     }
 

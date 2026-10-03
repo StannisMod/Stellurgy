@@ -97,6 +97,8 @@ public class XMLPlanetLoaderTest {
     public void planetWithExplicitDimIdGetsThatId() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"Earth\" DIMID=\"9001\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "</planet>\n")));
         assertEquals(1, coupling.dims.size());
@@ -109,6 +111,8 @@ public class XMLPlanetLoaderTest {
     public void planetWithoutDimIdGetsAllocatedDim() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"Earth\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "</planet>\n")));
         assertEquals(1, coupling.dims.size());
@@ -127,8 +131,12 @@ public class XMLPlanetLoaderTest {
         // Moon -> child of Earth via nested <planet>.
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"Earth\" DIMID=\"7001\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <planet name=\"Moon\" DIMID=\"7002\">\n"
+              + "    <mass>1.0</mass>\n"
+              + "    <radius>1.0</radius>\n"
               + "    <isKnown>true</isKnown>\n"
               + "  </planet>\n"
               + "</planet>\n")));
@@ -154,6 +162,8 @@ public class XMLPlanetLoaderTest {
     public void weatherFieldsAreParsed() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"Stormworld\" DIMID=\"7100\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <rainStartLength>3000</rainStartLength>\n"
               + "  <rainProlongationLength>4000</rainProlongationLength>\n"
@@ -177,6 +187,8 @@ public class XMLPlanetLoaderTest {
     public void weatherFieldsDefaultWhenMissing() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"NoWeatherXml\" DIMID=\"7101\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "</planet>\n")));
         DimensionProperties props = coupling.dims.get(0);
@@ -196,6 +208,8 @@ public class XMLPlanetLoaderTest {
         // than the old behaviour of propagating up to a fatal exitJava.
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"BadWeather\" DIMID=\"7102\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <rainMarker>NOT_A_NUMBER</rainMarker>\n"
               + "</planet>\n")));
@@ -206,7 +220,7 @@ public class XMLPlanetLoaderTest {
     // ---- Clamping ------------------------------------------------------------
 
     /**
-     * <p>red-witnessed: with {@code XMLPlanetLoader#readPlanetFromNode} at {@code properties.setAtmosphereDensityDirect(Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()), DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE));} dropping the upper clamp: "atmosphere density
+     * <p>red-witnessed: with {@code XMLPlanetLoader#readPlanetFromNode} at {@code statedDensity = Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()), DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE);} dropping the upper clamp (taken on the pre-change form, when the same clamp was handed straight to {@code setAtmosphereDensityDirect}): "atmosphere density
      * must clamp to MAX_ATM_PRESSURE expected:&lt;2147483&gt; but was:&lt;2147484&gt;",
      * 2026-09-30.</p>
      */
@@ -216,6 +230,8 @@ public class XMLPlanetLoaderTest {
         // being "above the maximum" the moment the maximum moves, and then this pins nothing.
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"DenseAtm\" DIMID=\"7200\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <atmosphereDensity>" + (DimensionProperties.MAX_ATM_PRESSURE + 1)
               + "</atmosphereDensity>\n"
@@ -229,6 +245,8 @@ public class XMLPlanetLoaderTest {
     public void atmosphereDensityClampsBelowMin() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"VacuumAtm\" DIMID=\"7201\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <atmosphereDensity>-999</atmosphereDensity>\n"
               + "</planet>\n")));
@@ -241,6 +259,8 @@ public class XMLPlanetLoaderTest {
     public void gravityClampsAboveMax() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"HeavyG\" DIMID=\"7202\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <gravitationalMultiplier>99999</gravitationalMultiplier>\n"
               + "</planet>\n")));
@@ -274,12 +294,13 @@ public class XMLPlanetLoaderTest {
         star.setBlackHole(false);
 
         DimensionProperties planet = new DimensionProperties(7302, "WriteRtPlanet");
+        // Bulk first: stating it derives a gravity, which the authored gravity below then replaces.
+        planet.setBulk(1.2d, 1.1d);
         planet.gravitationalMultiplier = 1.5f;
         planet.orbitalDist = 175;
         planet.rotationalPeriod = 19_200;
-        planet.setAtmosphereDensityDirect(125);
         planet.setStar(star);
-        planet.hasOxygen = true;
+        planet.realizeAtmosphere(true, 125);
 
         star.addPlanet(planet);
 
@@ -348,6 +369,8 @@ public class XMLPlanetLoaderTest {
     public void gravityClampsBelowMin() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"NoG\" DIMID=\"7203\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <gravitationalMultiplier>-100</gravitationalMultiplier>\n"
               + "</planet>\n")));
@@ -382,6 +405,8 @@ public class XMLPlanetLoaderTest {
 
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"PhantomOreWorld\" DIMID=\"7400\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <laserDrillOres>" + phantom + "</laserDrillOres>\n"
               + "</planet>\n")));
@@ -403,6 +428,8 @@ public class XMLPlanetLoaderTest {
 
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"DrillOreWorld\" DIMID=\"7401\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <laserDrillOres>  " + oreName + " ; 5 </laserDrillOres>\n"
               + "</planet>\n")));
@@ -429,9 +456,13 @@ public class XMLPlanetLoaderTest {
     public void malformedPlanetIsSkippedAndOthersStillLoad() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"GoodWorld\" DIMID=\"7500\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "</planet>\n"
               + "<planet name=\"BrokenWorld\" DIMID=\"7501\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <rainMarker>NOT_A_NUMBER</rainMarker>\n"
               + "</planet>\n")));
@@ -491,6 +522,7 @@ public class XMLPlanetLoaderTest {
         star.setBlackHole(false);
 
         DimensionProperties planet = new DimensionProperties(7601, "OreGenWorld");
+        planet.setBulk(1d, 1d);
         planet.setStar(star);
 
         OreGenProperties ore = new OreGenProperties();
@@ -714,6 +746,8 @@ public class XMLPlanetLoaderTest {
     public void terrainSourceModWorldtypeParsesFromXml() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"ForeignWorld\" DIMID=\"7700\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <terrainSource>MOD_WORLDTYPE</terrainSource>\n"
               + "  <terrainWorldType>BIOMESOP</terrainWorldType>\n"
@@ -727,6 +761,8 @@ public class XMLPlanetLoaderTest {
     public void unknownTerrainSourceDegradesToNativeWithoutSkippingPlanet() throws Exception {
         DimensionPropertyCoupling coupling = parse(galaxy(star("Sol",
                 "<planet name=\"TypoWorld\" DIMID=\"7701\">\n"
+              + "  <mass>1.0</mass>\n"
+              + "  <radius>1.0</radius>\n"
               + "  <isKnown>true</isKnown>\n"
               + "  <terrainSource>NONSENSE</terrainSource>\n"
               + "</planet>\n")));
@@ -745,6 +781,7 @@ public class XMLPlanetLoaderTest {
         star.setBlackHole(false);
 
         DimensionProperties planet = new DimensionProperties(7711, "TemplatePlanet");
+        planet.setBulk(1d, 1d);
         planet.setTerrainSource(TerrainSource.TEMPLATE);
         planet.setTerrainTemplate("packplanet");
         planet.setStar(star);

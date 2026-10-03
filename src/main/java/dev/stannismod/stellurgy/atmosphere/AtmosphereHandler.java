@@ -356,18 +356,16 @@ public class AtmosphereHandler {
      * combustible on the label while its own oxidiser says otherwise. Everything that lights, ignites
      * or refuses to ignite asks here, so there is one answer and it comes from the gas.
      * <p>
-     * Where there is no zone — outdoors, on a planet — there is no composition to ask yet, so the
-     * dimension's own atmosphere still answers. That fallback is the boundary between the model and
-     * the half of the world that has not joined it, and it disappears when a planet carries a
-     * composition of its own.
+     * Where there is no zone — outdoors, on a planet — the planet's own air answers, by the same
+     * predicate: indoors and outdoors are two holders of one kind of air.
      */
     public boolean allowsCombustionAt(@Nonnull BlockPos pos) {
         AirState air = getAirStateAt(pos);
         if (air != null) {
             return air.allowsCombustion();
         }
-        Atmosphere outside = getDefaultAtmosphereType();
-        return outside != null && outside.allowsCombustion();
+        DimensionProperties outside = DimensionManager.getInstance().getDimensionProperties(dimId);
+        return outside != null && outside.getAir().allowsCombustion();
     }
 
     /**

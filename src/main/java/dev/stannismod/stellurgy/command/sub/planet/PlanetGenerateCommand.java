@@ -100,8 +100,9 @@ public class PlanetGenerateCommand extends StellurgyCommand {
         props.orbitalDist = orbit;
         props.setBulk(profile.massEarths(), profile.radiusEarths());
         props.gravitationalMultiplier = profile.gravityPercent() / 100f;
-        props.setAtmosphereDensityDirect(profile.pressure());
         props.setAverageTemp(profile.temperatureKelvin());
+        props.setGasGiant(profile.kind() == dev.stannismod.stellurgy.universe.SystemBodyKind.GAS_GIANT);
+        props.realizeAtmosphere(profile.hasOxygen(), profile.pressure());
         props.initDefaultAttributes();
         if (moon) {
             props.setParentPlanet(parent);

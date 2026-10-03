@@ -806,7 +806,7 @@ public class XMLPlanetLoader {
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_RINGCOLOR, properties.ringColor[0] + "," + properties.ringColor[1] + "," + properties.ringColor[2]));
         }
 
-        if (!properties.hasOxygen)
+        if (!properties.hasOxygen())
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_HASOXYGEN, "false"));
         if (properties.colorOverride)
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_COLOR_OVERRIDE, "true"));
@@ -831,8 +831,8 @@ public class XMLPlanetLoader {
         nodePlanet.appendChild(createTextNode(doc, ELEMENT_FOGCOLOR, properties.fogColor[0] + "," + properties.fogColor[1] + "," + properties.fogColor[2]));
         nodePlanet.appendChild(createTextNode(doc, ELEMENT_SKYCOLOR, properties.skyColor[0] + "," + properties.skyColor[1] + "," + properties.skyColor[2]));
         nodePlanet.appendChild(createTextNode(doc, ELEMENT_GRAVITY, (int) (properties.getGravitationalMultiplier() * 100f)));
-        // Bulk properties are written only when the planet HAS them, so a catalogue that never stated a
-        // mass round-trips to the same file it came from.
+        // Written only when the planet HAS them: a zero would be refused on reading back exactly as an
+        // absent element is, and absence says plainly what was missing.
         if (properties.hasBulkProperties()) {
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_MASS, Double.toString(properties.getMass())));
             nodePlanet.appendChild(createTextNode(doc, ELEMENT_RADIUS, Double.toString(properties.getRadius())));
@@ -1105,6 +1105,12 @@ public class XMLPlanetLoader {
             }
         }
 
+        // What the file says about the air, held until every other fact is read: the composition is
+        // realized from all of them at once. Unstated, a body is the sea-level oxygen world a
+        // planetDefs entry has always meant by saying nothing.
+        boolean oxygenated = true;
+        int statedDensity = 100;
+
         while (planetPropertyNode != null) {
             if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_FOGCOLOR)) {
                 String[] colors = planetPropertyNode.getTextContent().split(",");
@@ -1197,7 +1203,7 @@ public class XMLPlanetLoader {
                     Stellurgy.logger.warn("Invalid sky color specified"); //TODO: more detailed error msg
                 }
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_HASOXYGEN))
-                properties.hasOxygen = Boolean.parseBoolean(planetPropertyNode.getTextContent());
+                oxygenated = Boolean.parseBoolean(planetPropertyNode.getTextContent());
             else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_COLOR_OVERRIDE))
                 properties.colorOverride = Boolean.parseBoolean(planetPropertyNode.getTextContent());
             else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_SKYOVERRIDE))
@@ -1220,7 +1226,7 @@ public class XMLPlanetLoader {
             else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_ATMDENSITY)) {
 
                 try {
-                    properties.setAtmosphereDensityDirect(Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()), DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE));
+                    statedDensity = Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()), DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE);
                 } catch (NumberFormatException e) {
                     Stellurgy.logger.warn("Invalid atmosphereDensity specified"); //TODO: more detailed error msg
                 }
@@ -1608,16 +1614,27 @@ public class XMLPlanetLoader {
             planetPropertyNode = planetPropertyNode.getNextSibling();
         }
 
+        // Every body in this file states its bulk, whatever else it says: the air it keeps is decided
+        // by its mass and size, and one rule for the whole file is simpler than a rule that depends on
+        // which other elements happen to be present. Thrown, so the per-planet guard in
+        // readAllPlanets names the star and skips this body rather than inventing a size for it.
+        if (!properties.hasBulkProperties()) {
+            throw new IllegalArgumentException("planet '" + properties.getName() + "' states no <"
+                    + ELEMENT_MASS + "> and <" + ELEMENT_RADIUS + ">; every planetDefs body must state both,"
+                    + " in Earth masses and Earth radii");
+        }
+
         //Star may not be registered at this time, use ID version instead
         properties.setStar(star.getId());
 
         // Set temperature. From the LOCAL star object, not through properties.getStar(): the star is
         // not in the catalogue yet (see the line above), so the lookup would come back null here and
         // the world would be born at the temperature of deep space. The albedo is the world's own, so
-        // an authored planet and a derived one are warmed by the same law.
+        // an authored planet and a derived one are warmed by the same law. The greenhouse term reads
+        // the STATED total, as a derived world's does.
         properties.setAverageTemp(AstronomicalBodyHelper.getAverageTemperature(star,
-                properties.getSolarOrbitalDistance(), properties.getAtmosphereDensity(),
-                properties.getAlbedo()));
+                properties.getSolarOrbitalDistance(), statedDensity, properties.getAlbedo()));
+        properties.realizeAtmosphere(oxygenated, statedDensity);
 
         //If no biomes are specified add some!
         if (properties.getBiomes().isEmpty())

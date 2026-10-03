@@ -71,6 +71,8 @@ public class WeatherCommandRedirectE2ETest {
                 + "          isBlackHole=\"false\" diskAngle=\"70\" "
                 + "          numPlanets=\"1\" numGasGiants=\"0\">\n"
                 + "        <planet name=\"RedirectPlanet\" DIMID=\"" + DIM + "\">\n"
+                + "            <mass>1.0</mass>\n"
+                + "            <radius>1.0</radius>\n"
                 + "            <isKnown>true</isKnown>\n"
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"

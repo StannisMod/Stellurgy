@@ -102,7 +102,8 @@ public class PacketSerializationTest {
     public void packetDimInfoRoundTrip() {
         DimensionProperties props = new DimensionProperties(4242);
         props.setName("TestDim");
-        props.setAtmosphereDensityDirect(75);
+        props.setBulk(1d, 1d);
+        props.realizeAtmosphere(true, 75);
         props.orbitalDist = 175;
         props.rotationalPeriod = 18000;
 

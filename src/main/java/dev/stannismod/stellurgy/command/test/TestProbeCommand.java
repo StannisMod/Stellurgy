@@ -6389,7 +6389,7 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"radius\":" + props.getRadius() + ",\"gravity\":"
                     + Math.round(props.getGravitationalMultiplier() * 100f) + ",\"pressure\":"
                     + props.getAtmosphereDensity() + ",\"temperature\":" + props.getAverageTemp()
-                    + ",\"oxygen\":" + props.hasOxygen + ",\"locked\":" + props.isTidallyLocked()
+                    + ",\"oxygen\":" + props.hasOxygen() + ",\"locked\":" + props.isTidallyLocked()
                     + ",\"metallicity\":" + props.getMetallicity() + ",\"gasGiant\":"
                     + props.isGasGiant() + ",\"terrainSource\":\"" + props.getTerrainSource()
                     // Moon-ness, and the dimension it hangs off. Reported because a moon whose parent
@@ -7222,7 +7222,9 @@ public class TestProbeCommand extends CommandBase {
             info.put("orbitalDistance", props.orbitalDist);
             info.put("rotationalPeriod", props.rotationalPeriod);
             info.put("hasRings", props.hasRings);
-            info.put("hasOxygen", props.hasOxygen);
+            info.put("hasOxygen", props.hasOxygen());
+            // What the outdoor air is made of, by substance, in the composition's own unit.
+            info.put("gases", gasesOf(props.getAir()));
             info.put("seaLevel", props.getSeaLevel());
             info.put("rainStartLength", props.getRainStartLength());
             info.put("thunderStartLength", props.getThunderStartLength());
@@ -7257,13 +7259,51 @@ public class TestProbeCommand extends CommandBase {
             out.put("ok", true);
             out.put("dim", dim);
             out.put("averageTemperature", props.getAverageTemp());
-            out.put("hasOxygen", props.hasOxygen);
+            out.put("hasOxygen", props.hasOxygen());
             out.put("atmosphereDensity", props.getAtmosphereDensity());
             out.put("atmosphere", props.getAtmosphere().getUnlocalizedName());
             send(sender, jsonMap(out));
             return;
         }
+        // stellurgytest planet add-gas <dim> <gasName> <amount>
+        // Puts real gas into a planet's air through the exchange production uses (the terraformer's),
+        // so a test can give a world a trace of something its derivation never would — or put back,
+        // exactly, the air a snapshot recorded. <amount> is in the composition's own unit, the one
+        // `planet info`'s "gases" reports.
+        if (args.length >= 4 && "add-gas".equalsIgnoreCase(args[0])) {
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            dev.stannismod.stellurgy.atmosphere.gas.Gas gas =
+                    dev.stannismod.stellurgy.atmosphere.gas.GasRegistry.byName(args[2]);
+            long amount = parseLongOr(args[3], -1L);
+            DimensionProperties props = DimensionManager.getInstance().getDimensionPropertiesOrNull(dim);
+            if (props == null || gas == null || amount <= 0L) {
+                send(sender, "{\"error\":\"unknown planet, unknown gas or non-positive amount\",\"dim\":"
+                        + dim + ",\"gas\":\"" + escapeJson(args[2]) + "\",\"amount\":" + amount + "}");
+                return;
+            }
+            dev.stannismod.stellurgy.atmosphere.AirState portion =
+                    dev.stannismod.stellurgy.atmosphere.AirState.vacuum();
+            portion.add(gas, amount, props.getAverageTemp());
+            props.addToAtmosphere(portion);
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("dim", dim);
+            out.put("hasOxygen", props.hasOxygen());
+            out.put("atmosphereDensity", props.getAtmosphereDensity());
+            out.put("gases", gasesOf(props.getAir()));
+            send(sender, jsonMap(out));
+            return;
+        }
         send(sender, "{\"error\":\"unknown planet subcommand\"}");
+    }
+
+    /** A composition as {@code {gasName: amount}}, the amount in the composition's own unit. */
+    private static Map<String, Object> gasesOf(dev.stannismod.stellurgy.atmosphere.AirState air) {
+        Map<String, Object> gases = new LinkedHashMap<>();
+        for (Map.Entry<dev.stannismod.stellurgy.atmosphere.gas.Gas, Long> entry : air.composition().entrySet()) {
+            gases.put(entry.getKey().name(), entry.getValue());
+        }
+        return gases;
     }
 
     private static List<Double> floatArrayToList(float[] arr) {

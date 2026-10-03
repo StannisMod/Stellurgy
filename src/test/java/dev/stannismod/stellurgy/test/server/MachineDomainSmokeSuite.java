@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.EnergyStore;
 import dev.stannismod.stellurgy.test.MachineInfo;
+import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Test;
 
@@ -426,9 +427,7 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
 
         // 3. Vacuum precondition: Earth -> density 0 -> non-breathable.
         // Snapshot original so we restore it after.
-        String planet = join(client().execute("stellurgytest planet info 0"));
-        Reply dmReply = Reply.of(planet);
-        int originalDensity = dmReply.has(PLANET_DENSITY) ? Integer.parseInt(dmReply.text(PLANET_DENSITY)) : 100;
+        PlanetAir originalAir = PlanetAir.snapshot(c -> join(client().execute(c)), 0);
 
         try {
             String setVac = join(client().execute(
@@ -441,7 +440,8 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
             assertTrue("density=0 must yield non-breathable atmosphere: " + atm,
                     (!Reply.of(atm).bool("breathable")));
         } finally {
-            client().execute("stellurgytest atmosphere set-density 0 " + originalDensity);
+            // The gases, not the pressure: an emptied world cannot be thickened back by a number.
+            originalAir.restore(c -> join(client().execute(c)));
         }
     }
 

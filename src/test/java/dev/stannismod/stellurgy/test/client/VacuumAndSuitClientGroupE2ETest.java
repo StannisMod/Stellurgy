@@ -8,6 +8,7 @@ import org.junit.runners.MethodSorters;
 
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
+import dev.stannismod.stellurgy.test.PlanetAir;
 import dev.stannismod.stellurgy.test.Reply;
 
 import dev.stannismod.stellurgy.test.Plot;
@@ -205,9 +206,11 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                 expectBreathable ? readBack >= 1 : readBack == 0);
     }
 
-    private void restoreDim(int originalDensity) {
+    private void restoreDim(PlanetAir originalAir) {
         try {
-            exec("stellurgytest atmosphere set-density " + plot().dim + " " + Math.max(originalDensity, 1));
+            // The gases, not the pressure: a world emptied to vacuum cannot be thickened back by a
+            // number, since its air no longer says what it was made of.
+            originalAir.restore(this::exec);
         } catch (Exception ignored) {
             // Teardown only — the next scenario sets the density it needs and proves it took.
         }
@@ -417,7 +420,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void breathableAtmosphereDoesNotDrainChestTank() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
             setDensityAndConfirm(100, true);
@@ -455,7 +458,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertEquals("chest air must hold steady when the atmosphere doesn't drain; before=1000"
                     + " after=" + chestAirAfter, 1000, chestAirAfter);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -482,7 +485,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void drainedChestTankTransitionsToVacuumDamage() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -531,7 +534,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertEquals("tank must be fully drained after the wait window; chestAir="
                     + chestAirAfter, 0, chestAirAfter);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -634,7 +637,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void suitedPlayerInBreathableDimDoesNotLoseChestAir() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
             setDensityAndConfirm(100, true);
@@ -665,7 +668,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertEquals("chest air must be unchanged in breathable atmosphere; before=1000 after="
                     + chestAirAfter, 1000, chestAirAfter);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -686,7 +689,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void suitedPlayerInVacuumLosesChestAirOverTime() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -748,7 +751,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     + " healthAfter=" + healthAfter + " diag=" + exec("stellurgytest player suit-diag"),
                     healthAfter >= healthStart);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -769,7 +772,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void unsuitedPlayerInVacuumLosesNoAirAndTakesDamage() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -803,7 +806,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertEquals("chestAir must remain -1 throughout — no chest = no decrement path",
                     -1, readChestAir());
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -825,7 +828,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void vacuumDamageReachesTheClient() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -855,7 +858,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     LINK_BUDGET_TICKS);
             scenario().record("healthAfter", current);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -878,7 +881,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void vacuumDrainsOxygenFromChestSubInventoryTank() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             standOnOwnPlatformInSurvival();
 
@@ -937,7 +940,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertTrue("a full suit must keep isImmune=true while the tank has oxygen; healthStart="
                     + healthStart + " healthAfter=" + healthAfter, healthAfter >= healthStart);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -1095,7 +1098,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void overheatedZoneAirHurtsAnUnsuitedCrewman() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             setDensityAndConfirm(100, true);
             int veryHot = configInt("shipHeatCrewVeryHotKelvin");
@@ -1158,7 +1161,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
                     LINK_BUDGET_TICKS);
             scenario().record("healthAfterHeating", healthHot);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -1204,7 +1207,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void staleZoneAirHurtsAnUnsuitedPlayer() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             setDensityAndConfirm(100, true);
             String at = sealStaleZoneAndStandInIt();
@@ -1225,7 +1228,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             scenario().record("healthAfter", healthAfter)
                     .record("ventInfoAfter", exec("stellurgytest vent info " + at));
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 
@@ -1252,7 +1255,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
      */
     @Test
     public void staleZoneAirDrainsTheSuitAndNotTheCrew() throws Exception {
-        int originalDensity = snapshotDensity();
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, plot().dim);
         try {
             setDensityAndConfirm(100, true);
             sealStaleZoneAndStandInIt();
@@ -1302,7 +1305,7 @@ public class VacuumAndSuitClientGroupE2ETest extends AbstractSharedClientE2ETest
             assertTrue("the client must render the drained suit, not a stale full one; client="
                     + clientAirAfter, clientAirAfter < 1000);
         } finally {
-            restoreDim(originalDensity);
+            restoreDim(originalAir);
         }
     }
 }

@@ -3,6 +3,8 @@ package dev.stannismod.stellurgy.universe;
 import java.util.function.DoubleToIntFunction;
 
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.BodyAtmosphere;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
@@ -341,11 +343,30 @@ public final class PlanetDerivation {
                 giant, CellHash.ofBody(seed, key, variant, SALT_TYPE));
         int temperature = temperatureForAlbedo.applyAsInt(
                 preset == null ? AstronomicalBodyHelper.EARTH_ALBEDO : preset.albedo());
-        TerrainOption terrain = PlanetTypes.drawTerrain(preset,
-                CellHash.ofBody(seed, key, variant, SALT_TERRAIN));
-
         boolean oxygen = preset != null && preset.allowsOxygen()
                 && CellHash.norm(CellHash.ofBody(seed, key, variant, SALT_OXYGEN)) < OXYGEN_CHANCE;
+
+        // What the world KEEPS of that total. A world that loses or freezes out every gas has no air,
+        // and no greenhouse either: its pressure is zero and it is as cold as its bare surface — so the
+        // scan, the landing and the temperature a recompute reproduces all describe the same body. Its
+        // type is kept when it admits the airless world (an ice world stays ice, its air now lying on
+        // it) and drawn afresh among the airless types when it does not.
+        int keptPressure = pressure;
+        if (pressure > 0 && BodyAtmosphere.derive(mass, radius, temperature, giant, oxygen,
+                pressure * (AirState.ONE_ATM / 100L)).getTotalPressure() <= 0L) {
+            keptPressure = DimensionProperties.MIN_ATM_PRESSURE;
+            DoubleToIntFunction airless =
+                    albedo -> AstronomicalBodyHelper.getAverageTemperature(star, orbit, 0, albedo);
+            if (preset == null || !preset.admits(keptPressure, airless.applyAsInt(preset.albedo()),
+                    gravityPercent, giant)) {
+                preset = PlanetTypes.drawType(keptPressure, airless, gravityPercent, giant,
+                        CellHash.ofBody(seed, key, variant, SALT_TYPE));
+            }
+            temperature = airless.applyAsInt(
+                    preset == null ? AstronomicalBodyHelper.EARTH_ALBEDO : preset.albedo());
+        }
+        TerrainOption terrain = PlanetTypes.drawTerrain(preset,
+                CellHash.ofBody(seed, key, variant, SALT_TERRAIN));
         boolean locked = (preset == null || preset.tidallyLockable()) && !giant
                 && tidallyLockedAt(star, orbitalDistance);
         boolean rings = !moon
@@ -357,7 +378,7 @@ public final class PlanetDerivation {
         SystemBodyKind kind = giant ? SystemBodyKind.GAS_GIANT
                 : (moon ? SystemBodyKind.MOON : SystemBodyKind.PLANET);
         return new BodyProfile(kind, preset == null ? PlanetTypes.UNCLASSIFIED : preset.name(), preset,
-                orbitalDistance, mass, radius, gravityPercent, pressure, temperature, oxygen, locked,
+                orbitalDistance, mass, radius, gravityPercent, keptPressure, temperature, oxygen, locked,
                 rings, metallicity, terrain, spin);
     }
 

@@ -536,10 +536,22 @@ public class AirState {
                 return breathableGas ? Atmosphere.VERYHOT : Atmosphere.VERYHOTNOO2;
         }
 
+        return oxygenRung(Atmosphere.PRESSURIZEDAIR);
+    }
+
+    /**
+     * Where this air sits against the breathing band, answering {@code inBand} when it is inside it.
+     * <p>
+     * The ONE band for every holder of air: a zone names its in-band air {@code PRESSURIZEDAIR} and a
+     * planet names it {@code AIR}, and the bounds they are judged by are the same two config numbers —
+     * a planet's outdoors obeys the band a room does.
+     */
+    public Atmosphere oxygenRung(Atmosphere inBand) {
+        StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
         // An un-loaded config leaves both bounds at zero, which would otherwise read as "every
         // zone is oxygen-toxic". No usable band means no governor, not a hazard.
         if (config.lifeSupportMaxPartialO2 <= config.lifeSupportMinPartialO2)
-            return Atmosphere.PRESSURIZEDAIR;
+            return inBand;
 
         long oxidiser = roleTotal(GasRole.OXIDISER);
         if (oxidiser < config.lifeSupportMinPartialO2)
@@ -547,7 +559,14 @@ public class AirState {
         if (oxidiser > config.lifeSupportMaxPartialO2)
             return Atmosphere.HIGHOXYGEN;
 
-        return Atmosphere.PRESSURIZEDAIR;
+        return inBand;
+    }
+
+    /** An independent copy: the same gases at the same temperature, sharing nothing with this one. */
+    public AirState copy() {
+        AirState twin = new AirState(0L, 0L, 0L, temperatureMilliK);
+        twin.composition.putAll(composition);
+        return twin;
     }
 
     /**

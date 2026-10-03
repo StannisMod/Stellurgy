@@ -507,11 +507,11 @@ Physical:
 | `retrograde` | boolean | Orbits the other way. |
 | `rotationalPeriod` | ticks | Must be `> 0`; a non-positive value warns and is ignored. |
 | `tidallyLocked` | boolean | Keeps one face to its star; overrides `rotationalPeriod` in effect. |
-| `mass` | Earth masses | See the precedence rule below. |
-| `radius` | Earth radii | See the precedence rule below. |
+| `mass` | Earth masses | **Required.** A planet without both `mass` and `radius` is refused at load (see below). |
+| `radius` | Earth radii | **Required**, with `mass`. |
 | `gravitationalMultiplier` | percent of Earth | Clamped to `0..400`. See below. |
-| `atmosphereDensity` | `100` = 1 atm | Clamped to `0..1600`. |
-| `hasOxygen` | boolean | Default `true`. Only `false` is written back. |
+| `atmosphereDensity` | `100` = 1 atm | Clamped to `0..1600`. The TOTAL the world is given; which gases make it up is derived (see below). |
+| `hasOxygen` | boolean | Default `true`. Whether the world's own roll gave it free oxygen. Only `false` is written back. |
 | `metallicity` | relative to Sol | Feeds ore richness. `1.0` is not written back. |
 | `avgTemperature` | Kelvin | **Written, never read.** The temperature is recomputed at load from the star, the orbital distance and the atmosphere. Editing it does nothing. |
 
@@ -654,21 +654,30 @@ Every clamp is silent. A `clumpSize` of `1000` becomes `255` with no warning.
 
 ## 9. Combinations — what wins when two fields disagree
 
-**Gravity versus bulk.** A planet may state `gravitationalMultiplier`, or `mass` **and** `radius`, or
-all three.
+**Every planet states its `mass` and `radius`.** A planet that does not — an airless one, an oxygen
+world and the overworld (`DIMID="0"`) included — is a load error: it is logged, it is skipped, and so
+is every moon nested inside it. Nothing invents a size for it. The reason is the air: which gases a
+world keeps is decided by its mass, its size and its temperature, so a body without a size has a
+question with no answer.
+
+**Gravity versus bulk.** With the bulk always stated, gravity is either stated too or derived:
 
 | stated | result |
 |---|---|
-| `gravitationalMultiplier` only | That gravity. No mass or radius; anything needing bulk falls back to gravity. |
-| `mass` + `radius` only | Gravity is **derived**: `g = M / R²`, clamped to `0.05 .. 4.0` g. |
-| all three | **The authored gravity wins.** Mass and radius are still stored and still used for orbital periods and for anything that needs a real bulk. |
-
-The last row is the important one: adding `mass` and `radius` to a planet that already states a
-gravity cannot change how that planet plays. It only gives the model the numbers it was missing.
+| `mass` + `radius` | Gravity is **derived**: `g = M / R²`, clamped to `0.05 .. 4.0` g. |
+| `mass` + `radius` + `gravitationalMultiplier` | **The authored gravity wins.** Mass and radius are still used for orbital periods, for the air, and for anything that needs a real bulk. |
 
 **Mass and radius are order-independent** but each is applied against the other's current value, so
-stating only one of them leaves the other at zero — and a zero radius means no bulk properties at all.
-State both or neither.
+stating only one of them leaves the other at zero — which is the same as stating neither.
+
+**Oxygen and density versus the air.** `atmosphereDensity` and `hasOxygen` are what the world is GIVEN;
+what it keeps is derived, once, when the world is created. An oxygen world takes Earth's mix at the
+stated total. Any other world starts from what a rocky body outgasses (mostly carbon dioxide, some
+nitrogen) — or, with `<GasGiant>true</GasGiant>`, from what a giant captures (hydrogen, helium,
+methane) — and loses each gas its gravity cannot hold against its temperature; a rocky world colder
+than a gas's boiling point has that gas frozen onto the ground. A world that loses or freezes every gas
+is airless whatever density it stated. After creation the world's own saved air is the authority:
+editing these two elements does not change a world that already exists.
 
 **Gas giant versus surface.** `<GasGiant>true</GasGiant>` makes the world surfaceless. It is then not
 a landing target however else it is configured, `laserDrillOres` on it is ignored, and only `<gas>`
@@ -715,11 +724,15 @@ A single authored system, no procedural galaxy:
     <planet name="Earth" DIMID="0">
       <orbitalDistance>100</orbitalDistance>
       <orbitalTheta>0</orbitalTheta>
+      <mass>1.0</mass>
+      <radius>1.0</radius>
       <gravitationalMultiplier>100</gravitationalMultiplier>
       <atmosphereDensity>100</atmosphereDensity>
       <hasOxygen>true</hasOxygen>
       <planet name="Luna" DIMID="1">
         <orbitalDistance>30</orbitalDistance>
+        <mass>0.0123</mass>
+        <radius>0.2727</radius>
         <gravitationalMultiplier>16</gravitationalMultiplier>
         <atmosphereDensity>0</atmosphereDensity>
         <hasOxygen>false</hasOxygen>
