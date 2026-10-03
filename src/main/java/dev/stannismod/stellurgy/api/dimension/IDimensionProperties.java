@@ -44,18 +44,17 @@ public interface IDimensionProperties {
     IDimensionProperties getParentProperties();
 
     /**
-     * Range 0 < value <= 200
-     *
-     * @return if the planet is a moon, then the distance from the host planet where the earth's moon is 100, higher is farther, if planet, distance from the star, 100 is earthlike, higher value is father
+     * @return the distance from what this body orbits — its planet for a moon, its star for a planet —
+     * in units of 100 km (1 495 979 to the AU; our Moon sits at 3 844)
      */
-    int getParentOrbitalDistance();
+    long getParentOrbitalDistance();
 
-    void setParentOrbitalDistance(int distance);
+    void setParentOrbitalDistance(long distance);
 
     /**
      * @return if a planet, the same as getParentOrbitalDistance(), if a moon, the moon's distance from the host star
      */
-    int getSolarOrbitalDistance();
+    long getSolarOrbitalDistance();
 
     /**
      * @return true if the planet has moons
@@ -199,9 +198,9 @@ public interface IDimensionProperties {
     double getOrbitTheta();
 
     /**
-     * @return distance of the planet from sun or moon in the range 0 to 200
+     * @return the same as {@link #getParentOrbitalDistance()}
      */
-    int getOrbitalDist();
+    long getOrbitalDist();
 
     /**
      * @return temperature of the planet in Kelvin

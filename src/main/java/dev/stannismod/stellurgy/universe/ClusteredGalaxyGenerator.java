@@ -84,8 +84,9 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
     private static final int ID_SLOTS_PER_SYSTEM = 1 + COMPANION_COUNT_WEIGHTS.length;
 
     /**
-     * Separation band for a companion, in orbital-distance units — 0.01 AU to 2 000 AU, drawn
-     * log-uniformly, which is roughly how real separations are distributed over that range.
+     * Separation band for a companion, in orbital-distance units — one cell's orbit (about 0.05 AU)
+     * to 2 000 AU, drawn log-uniformly, which is roughly how real separations are distributed over
+     * that range. The ceiling is written as the quantity it is.
      *
      * <p>The floor IS one cell's worth of orbit ({@link AstronomicalBodyHelper#MIN_ADDRESSABLE_ORBIT_UNITS}),
      * so a companion always gets a cell of its own to be addressed by — derived rather than written
@@ -97,7 +98,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      */
     private static final int COMPANION_MIN_SEPARATION =
             AstronomicalBodyHelper.MIN_ADDRESSABLE_ORBIT_UNITS;
-    private static final int COMPANION_MAX_SEPARATION = 200_000;
+    private static final long COMPANION_MAX_SEPARATION =
+            Math.round(2_000d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
     /**
      * A retinue cannot survive inside a companion's orbit, nor a companion inside the retinue's: a
      * body between roughly a third of the separation and three times it is on an unstable orbit. So a
@@ -498,8 +500,10 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             moons = MAX_MOONS_ROCKY;
         }
         CellFrame frame = CellFrame.staticAt(cell);
+        long tightestMoon = tightestMoonOffset(seed, cell, moons, profile.radiusEarths(),
+                SALT_ROGUE_MOONRAD);
         for (int j = 1; j <= moons; j++) {
-            int moonOrbit = moonOrbitUnits(profile.radiusEarths(),
+            long moonOrbit = moonOrbitUnits(profile.radiusEarths(),
                     CellHash.norm(CellHash.ofBody(seed, cell, j, SALT_ROGUE_MOONRAD)));
             double theta = CellHash.norm(CellHash.ofBody(seed, cell, j, SALT_ROGUE_MOONANG))
                     * 2d * Math.PI;
@@ -507,7 +511,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
                     * AstronomicalBodyHelper.getMoonOrbitalPeriod(moonOrbit,
                             (float) Math.max(0.05d, profile.massEarths()));
             BodyEphemeris law = BodyEphemeris.orbit(moonOrbit, theta, 0d, false, periodTicks,
-                    SystemContent.MOON_UNIT_BLOCKS);
+                    SystemContent.ORBIT_UNIT_BLOCKS);
             // A moon of a rogue is starless too, so it is derived the same way its parent was, one
             // variant along — never through the star-lit law with a star that is not there.
             BodyProfile moonProfile = derivation.deriveRogue(seed, cell, j, giantFraction);
@@ -515,7 +519,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             // realized region alone (ZoneScale), which is the same rule with the first term absent.
             // Its moons therefore get their own cells exactly as a star-lit planet's do.
             bodies.add(new SystemBody(
-                    SystemContent.moonCellIn(rogue, null, law, systemId, Constants.INVALID_PLANET),
+                    SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,
+                            Constants.INVALID_PLANET),
                     CellFrame.within(frame, law), BodyEphemeris.STATIC, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, systemId, SystemBody.ORBIT_UNKNOWN)
                     .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
@@ -544,8 +549,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         // zone in the system is sized against this body's mass, so a missing one is not a cosmetic
         // gap — it is every moon in the system losing its own cell.
         SystemBody primary = primaryStarBody(cell, star, starId);
-        int outermostOrbit = 0;
-        int innermostGiantOrbit = 0;
+        long outermostOrbit = 0;
+        long innermostGiantOrbit = 0;
         for (int i = 0; i < count; i++) {
             // The ORBIT is drawn first and the cell follows from it, rather than the other way round:
             // a body's physics is derived from its orbit, so letting the placement pick the distance
@@ -556,7 +561,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             // moved it inward, which is the one thing this whole seam exists to prevent: a world's
             // distance is its star's business, and a system squeezed by its neighbours holds fewer
             // worlds rather than the same worlds at the wrong distances.
-            int orbit = derivation.orbitalDistanceOf(seed, cell, i, count, star);
+            long orbit = derivation.orbitalDistanceOf(seed, cell, i, count, star);
             if (orbit > outerBound) {
                 continue; // outside this system's clear space — a bound of the layout, not a failure
             }
@@ -597,7 +602,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         // An inner belt is DERIVED from a giant and never rolled: it is material a giant's resonances
         // stopped from accreting, so it belongs in the gap inside one and a system with no giant has none.
         if (innermostGiantOrbit > 0) {
-            addBelt(bodies, seed, cell, (int) (innermostGiantOrbit / INNER_BELT_RESONANCE), star, lattice,
+            addBelt(bodies, seed, cell, (long) (innermostGiantOrbit / INNER_BELT_RESONANCE), star, lattice,
                     starId, taken, count + 1);
         }
         // The outer belt is MANDATORY on every system — the Kuiper analogue, and the reason every system
@@ -609,7 +614,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         // it is bounded like everything else rather than being quietly dropped.
         double outerBelt = Math.max(outermostOrbit * OUTER_BELT_FACTOR,
                 derivation.innerOrbit(star) * 2d);
-        addBelt(bodies, seed, cell, (int) Math.min(outerBelt, outerBound), star, lattice, starId, taken,
+        addBelt(bodies, seed, cell, (long) Math.min(outerBelt, outerBound), star, lattice, starId, taken,
                 count + 2);
     }
 
@@ -679,7 +684,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      * is dropped: a neighbourhood holds what it holds, and inventing a second occupant for a cell is the
      * one outcome that is worse than a smaller system.</p>
      */
-    private static Seat seatBody(long seed, GalacticCoord anchor, int index, int orbit,
+    private static Seat seatBody(long seed, GalacticCoord anchor, int index, long orbit,
                                  StellarBody star, Lattice lattice, Set<String> taken) {
         double baseAngle = CellHash.norm(CellHash.ofBody(seed, anchor, index, SALT_BODYANG)) * 2d * Math.PI;
         // Out-of-plane displacement lives in the LAW as an inclination, so a body's height above the
@@ -693,11 +698,11 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
     }
 
     /** Walk the ring from {@code baseAngle} until a free cell turns up, or give up. */
-    private static Seat claimSeat(GalacticCoord anchor, Lattice lattice, Set<String> taken, int orbit,
+    private static Seat claimSeat(GalacticCoord anchor, Lattice lattice, Set<String> taken, long orbit,
                                   double baseAngle, double phiDegrees, double periodTicks) {
         for (int attempt = 0; attempt < NUDGE_ATTEMPTS; attempt++) {
             BodyEphemeris law = BodyEphemeris.orbit(orbit, baseAngle + attempt * NUDGE_ANGLE,
-                    phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT);
+                    phiDegrees, false, periodTicks, AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
             BlockDelta at0 = law.offsetAt(SystemContent.NAME_TICK);
             // The body's address is its OWN cell's centre (zone content sits near the cell centre),
             // box-clamped into the anchor's super-cell so member attribution stays exact at ANY
@@ -723,10 +728,10 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
     }
 
     /** Append an asteroid belt at {@code orbit}, if the neighbourhood still has a cell for one. */
-    private static void addBelt(List<SystemBody> bodies, long seed, GalacticCoord anchor, int orbit,
+    private static void addBelt(List<SystemBody> bodies, long seed, GalacticCoord anchor, long orbit,
                                 StellarBody star, Lattice lattice, int starId, Set<String> taken,
                                 int index) {
-        int clamped = Math.max(1, orbit);
+        long clamped = Math.max(1L, orbit);
         Seat seat = seatBody(seed, anchor, index, clamped, star, lattice, taken);
         if (seat != null) {
             // A belt is centred on the star it rings, so as a whole it does not travel round it. Its
@@ -748,22 +753,59 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      */
 
     /**
-     * A moon's orbit, in {@link SystemContent#MOON_UNIT_BLOCKS} units, drawn as a multiple of its
+     * How far the INNERMOST of {@code moons} drawn moons sits from its parent, in blocks — the
+     * number that decides how finely the parent's zone is divided
+     * ({@link dev.stannismod.stellurgy.space.ZoneScale#cellsAcrossZone}).
+     *
+     * <p>A PRE-PASS, redrawing the same orbits the loop below will draw, because the lattice a name
+     * is derived against has to be settled before the first sibling is named. Computing it as the
+     * loop went would name the first moon against a lattice the last one then changes — a name that
+     * moves, which is the one thing a name may not do. The draw is a pure hash, so redrawing it
+     * costs a hash per moon and cannot disagree with the loop.</p>
+     *
+     * <p>{@code 0} when there are no moons: nothing needs naming apart, so the zone is ONE cell.</p>
+     */
+    private long tightestMoonOffset(long seed, GalacticCoord parent, int moons,
+                                    double parentRadiusEarths, long salt) {
+        long tightest = 0L;
+        for (int j = 1; j <= moons; j++) {
+            long offset = (long) moonOrbitUnits(parentRadiusEarths,
+                    CellHash.norm(CellHash.ofBody(seed, parent, j, salt)))
+                    * SystemContent.ORBIT_UNIT_BLOCKS;
+            if (offset > 0L && (tightest == 0L || offset < tightest)) {
+                tightest = offset;
+            }
+        }
+        return tightest;
+    }
+
+    /**
+     * A moon's orbit, in {@link SystemContent#ORBIT_UNIT_BLOCKS} units, drawn as a multiple of its
      * PARENT's radius.
      *
      * @param parentRadiusEarths the parent's radius; a body with none stated falls back to one Earth,
      *                           which is what an unstated bulk describes everywhere else in this layer
      * @param u                  the draw, in [0, 1)
      */
-    private static int moonOrbitUnits(double parentRadiusEarths, double u) {
+    private static long moonOrbitUnits(double parentRadiusEarths, double u) {
         double radiusBlocks = Math.max(0.05d, parentRadiusEarths) * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
         double factor = MOON_MIN_PARENT_RADII + u * (MOON_MAX_PARENT_RADII - MOON_MIN_PARENT_RADII);
-        long units = Math.round(radiusBlocks * factor / (double) SystemContent.MOON_UNIT_BLOCKS);
-        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, units));
+        long units = Math.round(radiusBlocks * factor / (double) SystemContent.ORBIT_UNIT_BLOCKS);
+        return Math.max(1L, units);
+    }
+
+    /**
+     * The orbit of moon {@code index} (from 1) of the planet named {@code parent}, in orbital-distance
+     * units — the draw and the law every procedural moon is laid on, for a caller that makes a moon by
+     * hand and must place it the way the generator would.
+     */
+    public static long moonOrbitOf(long seed, GalacticCoord parent, int index, double parentRadiusEarths) {
+        return moonOrbitUnits(parentRadiusEarths,
+                CellHash.norm(CellHash.ofBody(seed, parent, index, SALT_MOONRAD)));
     }
 
     private void addMoons(List<SystemBody> bodies, long seed, GalacticCoord anchor, SystemBody parentBody,
-                          SystemBody primary, int parentOrbit, StellarBody star, int starId,
+                          SystemBody primary, long parentOrbit, StellarBody star, int starId,
                           BodyProfile parentProfile) {
         GalacticCoord parent = parentBody.name();
         CellFrame parentFrame = parentBody.frame();
@@ -781,14 +823,15 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         double parentMass = parentProfile.massEarths() > 0d
                 ? parentProfile.massEarths()
                 : Math.max(0.05d, parentProfile.gravityPercent() / 100d);
+        long tightestMoon = tightestMoonOffset(seed, parent, moons, parentProfile.radiusEarths(),
+                SALT_MOONRAD);
         for (int j = 1; j <= moons; j++) {
-            int moonOrbit = moonOrbitUnits(parentProfile.radiusEarths(),
-                    CellHash.norm(CellHash.ofBody(seed, parent, j, SALT_MOONRAD)));
+            long moonOrbit = moonOrbitOf(seed, parent, j, parentProfile.radiusEarths());
             double theta = CellHash.norm(CellHash.ofBody(seed, parent, j, SALT_MOONANG)) * 2d * Math.PI;
             double periodTicks = AstronomicalBodyHelper.TICKS_PER_DAY
                     * AstronomicalBodyHelper.getMoonOrbitalPeriod(moonOrbit, (float) parentMass);
             BodyEphemeris law = BodyEphemeris.orbit(moonOrbit, theta, 0d, false, periodTicks,
-                    SystemContent.MOON_UNIT_BLOCKS);
+                    SystemContent.ORBIT_UNIT_BLOCKS);
             // A moon gets its OWN cell inside its parent's ZONE, and its frame is NESTED in the
             // parent's: the moon's cell rides the moon, which rides the planet, which rides the star.
             // It used to share the parent's name and ride the parent's frame directly, which made a
@@ -799,7 +842,8 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
             BodyProfile moonProfile = derivation.derive(seed, anchor, parent, j, star, true,
                     parentOrbit);
             bodies.add(new SystemBody(
-                    SystemContent.moonCellIn(parentBody, primary, law, starId, Constants.INVALID_PLANET),
+                    SystemContent.moonCellIn(parentBody, primary, law, tightestMoon, starId,
+                            Constants.INVALID_PLANET),
                     CellFrame.within(parentFrame, law), BodyEphemeris.STATIC, SystemBodyKind.MOON,
                     Constants.INVALID_PLANET, starId, parentOrbit)
                     .withBulk(moonProfile.massEarths(), moonProfile.radiusEarths()));
@@ -1465,10 +1509,10 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      * companions inward had brightened the system fivefold and widened the very band being avoided.
      * The dependency runs one way instead — stars first, and the retinue accommodates them.</p>
      */
-    private static int drawSeparation(double u) {
+    private static long drawSeparation(double u) {
         double separation = COMPANION_MIN_SEPARATION
                 * Math.pow((double) COMPANION_MAX_SEPARATION / COMPANION_MIN_SEPARATION, u);
-        return (int) Math.max(COMPANION_MIN_SEPARATION,
+        return Math.max(COMPANION_MIN_SEPARATION,
                 Math.min(UniverseScale.MAX_NAMED_ORBIT_UNITS, Math.round(separation)));
     }
 
@@ -1477,7 +1521,7 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
      * of a companion's separation and three times it, where neither a circumbinary nor a satellite
      * orbit is stable.
      */
-    private static boolean orbitIsStableAmong(Iterable<StellarBody> companions, int orbit) {
+    private static boolean orbitIsStableAmong(Iterable<StellarBody> companions, long orbit) {
         for (StellarBody companion : companions) {
             double separation = companion.getOrbitalDistance();
             if (orbit > separation / STABILITY_FACTOR && orbit < separation * STABILITY_FACTOR) {

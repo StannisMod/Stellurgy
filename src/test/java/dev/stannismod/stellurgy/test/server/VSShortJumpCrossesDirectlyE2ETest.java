@@ -7,7 +7,6 @@ import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
-import dev.stannismod.stellurgy.space.ShipEntryController;
 
 import org.junit.Test;
 
@@ -101,9 +100,15 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
      * same centre distance the trigger compares. A cell with no body in it would make both trivially
      * true, so the body being there is required first.</p>
      *
-     * <p>red-witnessed: with {@code SpaceSubsystem}'s direct crosser passing the raw {@code target}
-     * to {@code requestDirectJump}, this failed with "Nearest descend-target centre: 0" — the ship
+     * <p>red-witnessed: with {@code SpaceSubsystem#SpaceSubsystem} at
+     * {@code arrivalStandoff(shipId, target, useClock.getAsLong())} — the direct crosser's argument to
+     * {@code requestDirectJump} — replaced by the raw {@code target}, this failed with "Nearest descend-target centre: 0" — the ship
      * SETTLED in cell 19_0_0 at bearing [0,0,0] from the planet; 2026-09-23.</p>
+     *
+     * <p>red-witnessed: 2026-10-01, with {@code SpaceSubsystem#arrivalStandoff} at
+     * {@code clearance = Math.max(clearance, DescentShell.radiusAround(body))} and its ring line both
+     * dropped — the flat 1 024 ring the standoff used before it took the bodies' shells — this fails
+     * with "Tightest body … "distance":1023,"boundaryDistance":0,"shellRadius":25913".</p>
      */
     @Test
     public void aShortJumpAtABodyArrivesOnItsStandoffRingAndStaysInSpace() throws Exception {
@@ -140,23 +145,30 @@ public class VSShortJumpCrossesDirectlyE2ETest extends AbstractSharedServerTest 
                         + events.since(jumpMark, "descent_requested") + " | arrival=" + arrived
                         + " | bodies=" + bodies,
                 row != null);
-        long nearest = Long.MAX_VALUE;
+        // The margin by which the ship clears each descend-target body's OWN descent shell — the
+        // boundary the arrival standoff is built to stand outside (it takes the widest shell of the
+        // target cell's bodies as its clearance). A flat radius was compared here until 2026-10-01,
+        // and the standoff then sat at 1 024 blocks inside an Earth shell of 25 913 unseen.
+        long tightestMargin = Long.MAX_VALUE;
+        String tightestBody = null;
         int descendTargets = 0;
         for (String body : Reply.of("one ship's cell", row).objectArray("cellBodies")) {
             Reply b = Reply.of("one cell body", body);
             if (b.bool("descendTarget")) {
                 descendTargets++;
-                nearest = Math.min(nearest, (long) b.number("distance"));
+                long margin = (long) b.number("distance") - (long) b.number("shellRadius");
+                if (margin < tightestMargin) {
+                    tightestMargin = margin;
+                    tightestBody = body;
+                }
             }
         }
-        assertTrue("ARRANGEMENT: the cell the jump ended in must hold the body it was aimed at, or"
-                        + " nothing here could have been stood off from: " + row,
-                descendTargets > 0);
-        assertTrue("a short jump aimed at a body must come out OFF it — outside the "
-                        + ShipEntryController.DESCENT_RADIUS_BLOCKS + "-block descent radius — or the"
-                        + " flight computer takes the ship down with nobody asking. Nearest"
-                        + " descend-target centre: " + nearest + " | row=" + row,
-                nearest > ShipEntryController.DESCENT_RADIUS_BLOCKS);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the cell the jump ended in must hold the body it was aimed at, or nothing here could"
+                        + " have been stood off from: " + row, descendTargets > 0);
+        assertTrue("a short jump aimed at a body must come out OFF it — outside that body's own descent"
+                        + " shell. Tightest body (distance and shellRadius): " + tightestBody
+                        + " | row=" + row, tightestMargin > 0);
     }
 
     /**

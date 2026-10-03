@@ -142,7 +142,7 @@ public class SpawnPointReachesClientE2ETest {
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
                 + "            <gravitationalMultiplier>100</gravitationalMultiplier>\n"
-                + "            <orbitalDistance>100</orbitalDistance>\n"
+                + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
                 + "            <orbitalTheta>0</orbitalTheta>\n"
                 + "            <orbitalPhi>0</orbitalPhi>\n"
                 + "            <retrograde>false</retrograde>\n"
@@ -205,8 +205,10 @@ public class SpawnPointReachesClientE2ETest {
      * rather than at a placeholder left over from a freshly constructed client
      * world.
      *
-     * <p>red-witnessed: with {@code MixinPlayerList} cancelling {@code updateTimeAndWeatherForPlayer}
-     * at HEAD — the pre-fix shape, whose copy dropped vanilla's spawn packet: "the client must be TOLD
+     * <p>red-witnessed: taken on the pre-fix form, with {@code MixinPlayerList} cancelling
+     * {@code updateTimeAndWeatherForPlayer} for a copy that dropped vanilla's spawn packet; the mixin now
+     * stands as {@code MixinPlayerList#rainFlagInsteadOfLerpedStrength} at
+     * {@code return world.getWorldInfo().isRaining()}, redirecting one call instead of replacing the method: "the client must be TOLD
      * the world spawn — no `client_spawn_set` carrying x = -2048 …" at the wait after the transfer,
      * with the positive control before it green, 2026-09-28. The lines the wait rewrite touched are
      * an arrangement read, the probe's own silence and the client's dimension.</p>

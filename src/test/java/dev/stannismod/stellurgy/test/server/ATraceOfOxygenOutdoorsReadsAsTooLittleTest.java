@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.test.Reply;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -59,7 +60,7 @@ public class ATraceOfOxygenOutdoorsReadsAsTooLittleTest {
                 "            <hasOxygen>false</hasOxygen>\n" +
                 "            <mass>1.0</mass>\n" +
                 "            <radius>1.0</radius>\n" +
-                "            <orbitalDistance>100</orbitalDistance>\n" +
+                "            <orbitalDistance>" + AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n" +
                 "            <atmosphereDensity>100</atmosphereDensity>\n" +
                 "        </planet>\n" +
                 "    </star>\n" +

@@ -188,12 +188,12 @@ public final class HeatEnvironment {
     }
 
     /** The star's distance in the units every stellar formula in this mod is written in. */
-    private static int orbitalUnitsTo(AbsolutePos observer, SystemBody star, long tick) {
+    private static long orbitalUnitsTo(AbsolutePos observer, SystemBody star, long tick) {
         double blocks = observer.distanceTo(star.absoluteAt(tick));
         long units = Math.round(blocks / SystemContent.ORBIT_UNIT_BLOCKS);
         // Never zero: the brightness formula divides by the square of this, and a ship that has flown
         // into the star is a case for star contact rather than for an infinity here.
-        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, units));
+        return Math.max(1L, units);
     }
 
     /**

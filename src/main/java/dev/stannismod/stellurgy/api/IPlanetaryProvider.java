@@ -50,11 +50,10 @@ public interface IPlanetaryProvider {
     int getWetness();
 
     /**
-     * Earth to moon is 100
-     *
-     * @return Distance to parent body, used in maps and fuel consumption calculations
+     * @return distance to the parent body in units of 100 km (Earth to its moon is 3 844), used in
+     * maps and fuel consumption calculations
      */
-    int getOrbitalDistance(BlockPos pos);
+    long getOrbitalDistance(BlockPos pos);
 
     /**
      * @return if the dimension is a planet vs spacecraft etc

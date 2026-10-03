@@ -58,7 +58,7 @@ So: edit the **template**, not the live copy, and keep the template under versio
 
 | quantity | unit | notes |
 |---|---|---|
-| **orbital distance** | `100` = 1 AU | Same unit for a planet round its star and for a companion star round its primary. |
+| **orbital distance** | 100 km — `1495979` = 1 AU, `3844` = our Moon's distance | ONE unit for a planet round its star, a moon round its planet and a companion star round its primary. A whole number, with no upper bound. |
 | **orbital angle** | DEGREES | `orbitalTheta` on a planet and on a companion alike. |
 | **orbital inclination** | DEGREES | `orbitalPhi`. Tilts the orbit; it does not enlarge it. |
 | **star temperature** | `100` = Sol | Multiply by 58 for Kelvin. |
@@ -72,8 +72,8 @@ So: edit the **template**, not the live copy, and keep the template under versio
 | **star map position** | arbitrary map units | `x` / `y` on `<star>`; affects the star-selector GUI only. |
 | **galactic anchor** | cell indices | `"sectorX,sectorY,sectorZ"`, GALAXY-LOCAL (see §5). One cell is 32 000 000 blocks. |
 
-**The chart scale.** One orbital-distance unit is **5 983 914 blocks**, i.e. one AU is
-149 597 870 700 m at 250 m per block. This is the one law that turns an orbit into a place, and it is
+**The chart scale.** One orbital-distance unit is 100 km, which is **400 blocks** at 250 m per block,
+so one AU (149 597 870 700 m) is 1 495 979 units or about 598 million blocks. This is the one law that turns an orbit into a place, and it is
 the same for authored and procedural systems. Every derived number — insolation, equilibrium
 temperature, orbital period, flight time — comes from the orbital distance, so a body's stated
 distance and where a ship actually finds it are the same statement.
@@ -344,7 +344,7 @@ redistributed among the remaining options. A type all of whose options are unava
 | `name` | — | `<primary>-<n>` | Display name. **Not written back** on save. |
 | `temp` | `100` = Sol | `100` | |
 | `size` | solar radii | `1.0` | |
-| `orbitalDistance` | `100` = 1 AU | `5` (0.05 AU) | How far this star orbits its primary. |
+| `orbitalDistance` | 100 km (`1495979` = 1 AU) | `74799` (0.05 AU) | How far this star orbits its primary. |
 | `orbitalTheta` | degrees | spread automatically | Its angle on that orbit. Companions with no stated angle are spread apart rather than stacked. |
 | `blackHole`, `diskAngle` | — | — | As above. |
 
@@ -501,7 +501,7 @@ Physical:
 
 | element | unit | notes |
 |---|---|---|
-| `orbitalDistance` | `100` = 1 AU | Clamped to `1 .. Integer.MAX_VALUE`. |
+| `orbitalDistance` | 100 km (`1495979` = 1 AU; a moon's from its parent, our Moon `3844`) | At least `1`; no upper bound. |
 | `orbitalTheta` | degrees | Angle at time zero. Fractional degrees are kept. |
 | `orbitalPhi` | degrees | Inclination. Taken modulo 360. |
 | `retrograde` | boolean | Orbits the other way. |
@@ -722,7 +722,7 @@ A single authored system, no procedural galaxy:
 <galaxy>
   <star name="Sol" temp="100" size="1.0" numPlanets="0" numGasGiants="0" galacticCoord="0,0,0">
     <planet name="Earth" DIMID="0">
-      <orbitalDistance>100</orbitalDistance>
+      <orbitalDistance>1495979</orbitalDistance>
       <orbitalTheta>0</orbitalTheta>
       <mass>1.0</mass>
       <radius>1.0</radius>
@@ -730,7 +730,7 @@ A single authored system, no procedural galaxy:
       <atmosphereDensity>100</atmosphereDensity>
       <hasOxygen>true</hasOxygen>
       <planet name="Luna" DIMID="1">
-        <orbitalDistance>30</orbitalDistance>
+        <orbitalDistance>3844</orbitalDistance>
         <mass>0.0123</mass>
         <radius>0.2727</radius>
         <gravitationalMultiplier>16</gravitationalMultiplier>
@@ -746,16 +746,16 @@ A wide binary whose companion carries a world of its own:
 
 ```xml
 <star name="Alpha" temp="110" size="1.1" numPlanets="0" numGasGiants="0">
-  <star name="Beta" temp="90" size="0.9" orbitalDistance="2300" orbitalTheta="45"/>
+  <star name="Beta" temp="90" size="0.9" orbitalDistance="34407517" orbitalTheta="45"/>
   <planet name="Alpha I">
-    <orbitalDistance>120</orbitalDistance>
+    <orbitalDistance>1795175</orbitalDistance>
     <mass>1.0</mass>
     <radius>1.0</radius>
   </planet>
 </star>
 ```
 
-`Alpha I` is lit by both stars, with `Beta`'s contribution falling off over its own 23 AU.
+`Alpha I`, at 1.2 AU, is lit by both stars, with `Beta`'s contribution falling off over its own 23 AU.
 
 A procedural galaxy with two archetypes and one type:
 
@@ -797,6 +797,6 @@ A procedural galaxy with two archetypes and one type:
 ## 12. External tools
 
 A community editor for building a catalogue visually:
-<https://github.com/DaIsimsiz/planetDefs-Builder/releases>. It predates the fields introduced by the
-3.0.0 line — `mass`, `radius`, `metallicity`, `terrainSource`, `<galaxyGen>` and `<planetType>` — so
+<https://github.com/DaIsimsiz/planetDefs-Builder/releases>. It predates Stellurgy — the 100 km distance
+unit (§3) and the fields `mass`, `radius`, `metallicity`, `terrainSource`, `<galaxyGen>` and `<planetType>` — so
 check its output against §7 before shipping it.

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -9,11 +10,12 @@ import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.space.AbsolutePos;
+import dev.stannismod.stellurgy.space.BlockDelta;
 import dev.stannismod.stellurgy.space.DescentShell;
 import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.universe.SystemBody;
-import dev.stannismod.stellurgy.universe.SystemContent;
+import dev.stannismod.stellurgy.universe.UniverseRegistry;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -42,8 +44,14 @@ public class ParkedCraftKeepsStationTest {
      *
      * <p>Both are the test's own sensitivity bars on the ARRANGEMENT: keeping station with a body
      * that did not move costs nothing, so a leg run against a stationary body proves nothing about
-     * station-keeping. The planet's bar is ten thousand blocks and the moon's a hundred
-     * thousand.</p>
+     * station-keeping.</p>
+     *
+     * <p><b>What they have to clear, measured 2026-09-30</b>: the drift verdict's tolerance is one
+     * block, and over this window the planet travels 6.52E7 blocks about its star and the moon
+     * about 2.9E5 about its planet (both printed by the legs). A craft carried by the wrong frame
+     * drifts by that relative travel — the moon leg's pre-fix red read 287 930 — so any bar far
+     * above one block and far below the measured travel discriminates; these sit two to four orders
+     * of magnitude inside that span on each side. They are sensitivity bars, not tuned values.</p>
      */
     private static final double PLANET_TRAVELLED_BLOCKS = 10_000d;
     /** @see #PLANET_TRAVELLED_BLOCKS */
@@ -74,11 +82,16 @@ public class ParkedCraftKeepsStationTest {
      * not a carry and not a parked state: the ship's address names a cell, the cell's origin is its
      * primary's position at the tick, and a constant address therefore tracks the primary for
      * free.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code SystemBody#definesFrame} at {@code return kind == SystemBodyKind.STAR || kind == SystemBodyKind.PLANET} no longer counting a PLANET,
+     * this fails with "…it was 25913.0 blocks out and is now 6.524345703726182E7 (drift
+     * 6.521754403726182E7), while the planet itself moved 6.524203927239168E7" — the planet left and
+     * the address stayed.</p>
      */
     @Test
     public void aCraftParkedBesideAPlanetStaysBesideIt() {
-        StellarBody star = solWithEarthAndLuna();
-        SystemBody earth = bodyOf(SystemContent.bodiesOf(star, GalacticCoord.ORIGIN), EARTH_DIM);
+        UniverseRegistry reg = registryWithEarthAndLuna();
+        SystemBody earth = bodyOf(reg.systemBodiesAt(GalacticCoord.ORIGIN), EARTH_DIM);
         assertNotNull("the fixture must produce the planet", earth);
 
         // ARRANGEMENT: the planet must actually move over the window, or "he stayed with it" is a
@@ -88,9 +101,9 @@ public class ParkedCraftKeepsStationTest {
                         + "station with it costs nothing (travelled " + planetTravel + " blocks)",
                 planetTravel > PLANET_TRAVELLED_BLOCKS);
 
-        GalacticCoord parked = parkedBeside(earth, 0L);
-        double at0 = rangeFrom(earth, parked, 0L);
-        double atEnd = rangeFrom(earth, parked, ABANDONED_TICKS);
+        GalacticCoord parked = parkedBeside(reg, earth, 0L);
+        double at0 = rangeFrom(reg, earth, parked, 0L);
+        double atEnd = rangeFrom(reg, earth, parked, ABANDONED_TICKS);
 
         System.out.println("[parked-craft] planet: travel=" + planetTravel
                 + " range@0=" + at0 + " range@" + ABANDONED_TICKS + "=" + atEnd
@@ -108,107 +121,97 @@ public class ParkedCraftKeepsStationTest {
     }
 
     /**
-     * A craft addressed INSIDE a moon's own cell keeps station with the moon — the same contract as
-     * the planet leg, one level down, and the half of it that has landed.
+     * <b>THE ACCEPTANCE: a craft parked one DESCENT SHELL out from a moon is exactly as far from it
+     * a day later.</b>
      *
-     * <p>It did not hold at all before: while a moon shared its parent's cell it could not be that
-     * cell's primary, so a moon's neighbourhood was no frame and nothing carried what was parked in
-     * it. Measured over this same window, a craft one descent shell out from Luna ended
-     * <b>294 996</b> blocks away against a shell of 7 066 — 42 shells, in 0.83 of a day. The craft
-     * never moved; its cell was riding Earth while the moon went round.</p>
+     * <p>The number to beat was measured before any of this: <b>7 066 blocks became 294 996</b> over
+     * this same window — 42 descent shells, in 0.83 of a day — while the identical craft beside a
+     * PLANET drifted zero. A moon shared its parent's cell, so it could not be that cell's primary;
+     * its neighbourhood was no frame and nothing carried what was parked in it. The craft never
+     * moved. Its cell was riding Earth while the moon went round.</p>
      *
-     * <p>What changed is not a carry and not a velocity: the moon has a CELL OF ITS OWN inside its
-     * parent's zone, and that cell rides the moon. Station-keeping therefore costs nothing at all,
-     * which is why the substrate's speed ceiling never enters — a craft co-moving with Luna would
-     * have had to hold 294.7 blocks/s against a freeze at 223.6, and that arithmetic is what ruled
-     * out carrying the craft instead of its cell.</p>
+     * <p>What closed it is not a carry and not a velocity: the moon has a CELL OF ITS OWN inside its
+     * parent's zone, and that cell rides the moon. Station-keeping costs nothing at all, which is
+     * why the substrate's speed ceiling never enters — a craft co-moving with Luna would have had to
+     * hold 294.7 blocks/s against a freeze at 223.6, and that arithmetic is what ruled out carrying
+     * the craft instead of its cell.</p>
+     *
+     * <p><b>It took two goes, and the second one is worth recording.</b> Giving the moon a cell was
+     * not enough: the zone lattice was 1024 cells across, so Earth's cell came out 7 224 blocks
+     * against Luna's own 7 066-block shell and the craft fell into the NEXT cell — carried by Earth
+     * again, one level down, by the fix itself. This test spent a commit asserting that gap and
+     * saying a coarser lattice was not the answer. It was: the count is now derived per body, and
+     * Earth's zone cell measured 1 849 294 blocks on 2026-09-29 (this test prints it), so the craft
+     * is inside the moon's cell with room to spare.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code SystemBody#definesFrame} at {@code || kind == SystemBodyKind.ROGUE_PLANET || kind == SystemBodyKind.MOON} no longer counting a MOON — the
+     * fix this acceptance is named for — this fails with "…it was 7066.0 blocks out and is now
+     * 294995.9100682584 (drift 287929.9100682584), against a shell of 7066": the pre-fix number,
+     * verbatim. <b>The version of this test before that date stayed GREEN on the same inversion</b>
+     * (both methods PASSED, run the same day): it resolved the parked address through
+     * {@code body.frame()}, a frame the test chose, instead of through {@code UniverseRegistry.originAt}
+     * as production does. Re-run 2026-09-30 after the arrangement began measuring the moon's travel
+     * RELATIVE to its planet: same verdict and drift, "while the moon itself travelled
+     * 294235.96…" — the drift is that relative travel, less the start-to-end chord's curvature.</p>
      */
     @Test
-    public void aCraftInsideAMoonsOwnCellKeepsStationWithIt() {
-        StellarBody star = solWithEarthAndLuna();
-        List<SystemBody> bodies = SystemContent.bodiesOf(star, GalacticCoord.ORIGIN);
-        SystemBody luna = bodyOf(bodies, LUNA_DIM);
+    public void aCraftParkedOneDescentShellOutFromAMoonKeepsStationWithIt() {
+        UniverseRegistry reg = registryWithEarthAndLuna();
+        SystemBody luna = bodyOf(reg.systemBodiesAt(GalacticCoord.ORIGIN), LUNA_DIM);
         assertNotNull("the fixture must produce the moon", luna);
 
-        // ARRANGEMENT: the moon must actually TRAVEL over the window, or a craft that stayed with it
-        // proves nothing. The reading is absolute, because what the moon must not do any more is
-        // move relative to its own cell — that is the thing being asserted, not the arrangement.
-        double moonTravel = luna.absoluteAt(0L).minus(luna.absoluteAt(ABANDONED_TICKS)).length();
-        assertTrue("the moon must move over the window, or keeping station with it is vacuous "
-                        + "(travelled " + moonTravel + " blocks)", moonTravel > MOON_TRAVELLED_BLOCKS);
+        SystemBody earth = bodyOf(reg.systemBodiesAt(GalacticCoord.ORIGIN), EARTH_DIM);
+        assertNotNull("the fixture must produce the planet", earth);
 
-        // A quarter of the cell out, which is a distance the moon's own cell can hold. One descent
-        // shell out cannot be used here and the leg below is why.
-        long standOff = luna.name().cellBlocks() / 4L;
-        GalacticCoord parked = luna.name().cellCentre().plusLocal(standOff, 0L, 0L);
-        assertTrue("arrangement: the craft is inside the moon's own cell", parked.sameCell(luna.name()));
+        // ARRANGEMENT: the moon must travel ROUND ITS PLANET over the window — measured relative to
+        // the planet, because the planet's frame is the one a mis-carried craft would ride. It was
+        // the moon's ABSOLUTE travel, 6.55E7 blocks, of which 6.52E7 is Earth's own orbit: a moon
+        // that never went round its planet would have passed that bar on Earth's motion alone, and a
+        // craft riding Earth's frame beside it would then keep station for the wrong reason.
+        BlockDelta at0FromEarth = luna.absoluteAt(0L).minus(earth.absoluteAt(0L));
+        BlockDelta atEndFromEarth = luna.absoluteAt(ABANDONED_TICKS)
+                .minus(earth.absoluteAt(ABANDONED_TICKS));
+        double moonTravel = Math.sqrt(sq(atEndFromEarth.dx() - at0FromEarth.dx())
+                + sq(atEndFromEarth.dy() - at0FromEarth.dy())
+                + sq(atEndFromEarth.dz() - at0FromEarth.dz()));
+        assertTrue("the moon must move round its planet over the window, or keeping station with it "
+                        + "is vacuous (travelled " + moonTravel + " blocks relative to the planet)",
+                moonTravel > MOON_TRAVELLED_BLOCKS);
 
-        double at0 = rangeFrom(luna, parked, 0L);
-        double atEnd = rangeFrom(luna, parked, ABANDONED_TICKS);
+        long shell = DescentShell.radiusAround(luna);
+        GalacticCoord parked = parkedBeside(reg, luna, 0L);
+        // ARRANGEMENT, and it is the half that was missing for a whole commit: one descent shell out
+        // has to be an address INSIDE the moon's own cell. It is a property of the lattice, not of
+        // the flight, so a craft can never reach it by flying and the test would be measuring the
+        // wrong body's frame without ever saying so.
+        assertTrue("a craft one descent shell (" + shell + ") out from the moon must be inside the "
+                        + "moon's OWN cell (" + luna.name() + "), or its address rides the PARENT "
+                        + "however well the rest of the machinery works — got " + parked,
+                parked.sameCell(luna.name()));
 
-        System.out.println("[parked-craft] moon: travel=" + moonTravel + " standOff=" + standOff
-                + " range@0=" + at0 + " range@" + ABANDONED_TICKS + "=" + atEnd
+        double at0 = rangeFrom(reg, luna, parked, 0L);
+        double atEnd = rangeFrom(reg, luna, parked, ABANDONED_TICKS);
+
+        System.out.println("[parked-craft] moon: travelRoundPlanet=" + moonTravel + " shell=" + shell
                 + " cell=" + luna.name().cellBlocks()
-                + " shell=" + DescentShell.radiusAround(luna));
+                + " range@0=" + at0 + " range@" + ABANDONED_TICKS + "=" + atEnd);
 
         // The same bound as the planet leg, and deliberately the same one: a craft keeping station
         // has the range it started with, whatever that range was. "Still inside the shell" would
-        // pass a craft that had drifted a whole shell inward.
-        assertTrue("a craft inside a moon's cell must still be exactly as far from it after "
-                        + ABANDONED_TICKS + " ticks: it was " + at0 + " blocks out and is now "
-                        + atEnd + " (drift " + Math.abs(atEnd - at0) + "), while the moon itself "
-                        + "travelled " + moonTravel,
+        // pass a craft that had drifted a whole shell inward and fail one parked exactly on it.
+        assertTrue("a craft parked one descent shell out from a moon must still be exactly as far "
+                        + "from it after " + ABANDONED_TICKS + " ticks: it was " + at0
+                        + " blocks out and is now " + atEnd + " (drift " + Math.abs(atEnd - at0)
+                        + "), against a shell of " + shell + ", while the moon itself travelled "
+                        + moonTravel,
                 Math.abs(atEnd - at0) < 1d);
-    }
-
-    /**
-     * A craft parked one DESCENT SHELL out from a moon is <b>not</b> addressed inside that moon's
-     * cell — so the acceptance for this mechanic, stated in shells, is not met yet.
-     *
-     * <p><b>This asserts the remaining gap, deliberately</b>, the way the moon leg above used to
-     * assert the whole defect. Measured on the real Earth/Luna fixture: a cell of Earth's zone is
-     * <b>7 224</b> blocks across — one 1024th of Earth's sphere of influence, which is the lattice
-     * that lets a moon be named apart from its planet at all — while Luna's own descent shell is
-     * <b>7 066</b>. The shell is nearly two cells wide, so a craft at the shell sits in a
-     * NEIGHBOURING cell of Earth's zone, and that cell rides Earth.</p>
-     *
-     * <p>The design does not answer this with a coarser lattice, which would put Saturn's inner moons
-     * back into one address: it answers that the craft is inside LUNA's sphere of influence (264 000
-     * blocks, 37 shells) and must therefore be addressed in LUNA's OWN zone, whose cells are ~516
-     * blocks. That is the craft-addressing half of the task — membership by sphere rather than by
-     * lattice cube — and until it lands, "one descent shell out" is an address in the parent's zone.</p>
-     *
-     * <p>When it lands, this assertion is the one that must be turned round: a craft at the shell is
-     * inside the moon's zone and keeps station. Written so the flip has to be deliberate rather than
-     * a quietly widened bound.</p>
-     */
-    @Test
-    public void aCraftOneDescentShellOutFromAMoonIsNotYetAddressedInsideItsZone() {
-        StellarBody star = solWithEarthAndLuna();
-        List<SystemBody> bodies = SystemContent.bodiesOf(star, GalacticCoord.ORIGIN);
-        SystemBody luna = bodyOf(bodies, LUNA_DIM);
-        assertNotNull("the fixture must produce the moon", luna);
-
-        long shell = DescentShell.radiusAround(luna);
-        long cell = luna.name().cellBlocks();
-        GalacticCoord parked = parkedBeside(luna, 0L);
-
-        System.out.println("[parked-craft] moon shell vs cell: shell=" + shell + " cell=" + cell
-                + " moon=" + luna.name() + " parked=" + parked);
-
-        assertTrue("KNOWN, the craft-addressing half of this mechanic is unimplemented: a moon's descent "
-                        + "shell (" + shell + " blocks) is wider than half a cell of its parent's "
-                        + "zone (" + cell + " blocks across), so a craft parked at the shell falls "
-                        + "into a neighbouring cell — " + parked + " against the moon's "
-                        + luna.name() + " — which rides the PARENT. Membership by sphere of "
-                        + "influence is what closes it; a coarser lattice is not.",
-                !parked.sameCell(luna.name()));
     }
 
     // ---- fixture ------------------------------------------------------------------------------
 
     private static final int EARTH_DIM = 790;
     private static final int LUNA_DIM = 791;
+    private static final int STAR_ID = 4260;
 
     /**
      * Earth and Luna at their real bulk and separation, around a Sol-mass star.
@@ -217,14 +220,18 @@ public class ParkedCraftKeepsStationTest {
      * behind is the moon's own orbital speed, and a fixture moon on an invented orbit would answer
      * about itself rather than about the system every player meets first.</p>
      */
-    private static StellarBody solWithEarthAndLuna() {
+    private static UniverseRegistry registryWithEarthAndLuna() {
         StellarBody star = new StellarBody();
-        star.setId(4260);
+        star.setId(STAR_ID);
         star.setName("Sol");
         star.setSize(1f);
 
         DimensionProperties earth = new DimensionProperties(EARTH_DIM);
-        earth.orbitalDist = 100;
+        // ONE AU, stated as one. It read 100 while a distance unit was a hundredth of an AU; at
+        // the 10 000 km that literal now means, Earth sits inside its own star, its sphere of
+        // influence collapses and so does the zone cell derived from it (494 blocks, measured).
+        earth.orbitalDist =
+                dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         earth.baseOrbitTheta = 0.0;
         earth.orbitTheta = 0.0;
         earth.orbitalPhi = 0;
@@ -242,26 +249,46 @@ public class ParkedCraftKeepsStationTest {
         DimensionManager.getInstance().setDimProperties(LUNA_DIM, luna);
         earth.setStar(star);
         luna.setParentPlanet(earth);
-        return star;
+
+        // The registry that NAMES these bodies and says which frame each cell rides — the same
+        // resolution production does, rather than a list of bodies whose frames the test picks.
+        UniverseRegistry reg = new UniverseRegistry();
+        reg.place(GalacticCoord.ORIGIN, STAR_ID);
+        UniverseRegistry.setStarLookup(id -> id == STAR_ID ? star : null);
+        return reg;
     }
 
-    /** A craft holding station one descent shell out from {@code body} at {@code tick}, as an address. */
-    private static GalacticCoord parkedBeside(SystemBody body, long tick) {
-        AbsolutePos at = body.absoluteAt(tick);
-        AbsolutePos origin = body.frame().originAt(tick);
-        // The craft's address is its CELL plus an offset inside it; the offset it holds is wherever
-        // it was when it stopped, expressed in that cell.
-        return body.name().cellCentre().plusLocal(
-                at.localX() - origin.localX() + DescentShell.radiusAround(body),
-                at.localY() - origin.localY(),
-                at.localZ() - origin.localZ());
+    @After
+    public void unwireTheStarLookup() {
+        UniverseRegistry.setStarLookup(null);
     }
 
-    /** How far {@code parked} is from {@code body} at {@code tick}, both resolved at that tick. */
-    private static double rangeFrom(SystemBody body, GalacticCoord parked, long tick) {
-        AbsolutePos craft = body.frame().originAt(tick)
+    /**
+     * A craft holding station one descent shell out from {@code body} at {@code tick}, as an address:
+     * the body's own cell, with the offset measured from the origin production says that cell has.
+     *
+     * <p>Through {@code UniverseRegistry.originAt} and not through {@code body.frame()}: which frame
+     * a cell rides is exactly what is under test, and a test that picks the frame itself measures
+     * its own choice.</p>
+     */
+    private static GalacticCoord parkedBeside(UniverseRegistry reg, SystemBody body, long tick) {
+        GalacticCoord cell = body.name().cellCentre();
+        dev.stannismod.stellurgy.space.BlockDelta off = body.absoluteAt(tick)
+                .plus(DescentShell.radiusAround(body), 0L, 0L)
+                .minus(reg.originAt(cell, tick));
+        return cell.plusLocal(off.dx(), off.dy(), off.dz());
+    }
+
+    /** How far {@code parked} is from {@code body} at {@code tick}, the address resolved as production does. */
+    private static double rangeFrom(UniverseRegistry reg, SystemBody body, GalacticCoord parked,
+                                    long tick) {
+        AbsolutePos craft = reg.originAt(parked.cellCentre(), tick)
                 .plus(parked.localX(), parked.localY(), parked.localZ());
         return craft.distanceTo(body.absoluteAt(tick));
+    }
+
+    private static double sq(long v) {
+        return (double) v * v;
     }
 
     private static SystemBody bodyOf(List<SystemBody> bodies, int dimId) {

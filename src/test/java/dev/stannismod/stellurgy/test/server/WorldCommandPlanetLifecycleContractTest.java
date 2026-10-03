@@ -60,6 +60,68 @@ public class WorldCommandPlanetLifecycleContractTest extends AbstractSharedServe
         }
     }
 
+    /**
+     * A moon made by {@code planet generate <parent> moon <name>} orbits its PARENT — above the
+     * parent's surface and inside the parent's sphere of influence, the region in which a craft is
+     * described against the parent at all. A moon outside that sphere is not a moon of anything: no
+     * frame would ever carry a craft to it.
+     *
+     * <p>The sphere is the game's own law ({@code ReferenceFrames.soiRadius}) over the parent's orbit
+     * and mass and its star's mass, all read from the running server. The parent is a planet this
+     * method generates itself, so its bulk is the derivation's and not whatever another method of this
+     * group left on a shared world; both are printed.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, on the code as it stood before the fix — {@code PlanetGenerateCommand#execute}
+     * at {@code orbit = dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator.moonOrbitOf(seed, anchor,}
+     * written as the star-level {@code derivation.orbitalDistanceOf(…)} for a moon too: "a generated moon
+     * at 2.7574061E7 units must orbit above its parent's surface (145.4505985111664) and inside the
+     * parent's sphere of influence (356579.08867974044)".</p>
+     */
+    @Test
+    public void aGeneratedMoonOrbitsInsideItsParentsSphereOfInfluence() throws Exception {
+        Set<Integer> before = dimIds();
+        exec("ar planet generate 0 GenTestParent");
+        Set<Integer> made = dimIds();
+        made.removeAll(before);
+        try {
+            dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                    "planet generate must add exactly one parent planet — diff was " + made, made.size() == 1);
+            int parentDim = made.iterator().next();
+            Set<Integer> beforeMoon = dimIds();
+            exec("ar planet generate " + parentDim + " moon GenTestMoon");
+            Set<Integer> moonDiff = dimIds();
+            moonDiff.removeAll(beforeMoon);
+            made.addAll(moonDiff);
+            dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                    "planet generate … moon must add exactly one dim — diff was " + moonDiff, moonDiff.size() == 1);
+            int moonDim = moonDiff.iterator().next();
+
+            Reply parent = Reply.of(exec("stellurgytest planet info " + parentDim));
+            Reply moon = Reply.of(exec("stellurgytest planet info " + moonDim));
+            Reply star = Reply.of(exec("stellurgytest star get " + parent.integer("starId")));
+            dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                    "the generated body must be a moon of the generated planet: " + moon,
+                    moon.integer("parent") == parentDim);
+
+            double soi = dev.stannismod.stellurgy.space.ReferenceFrames.soiRadius(
+                    Double.parseDouble(parent.text("orbitalDistance")), Double.parseDouble(parent.text("mass")),
+                    Double.parseDouble(star.text("massEarths")));
+            double surface = Double.parseDouble(parent.text("radius"))
+                    * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS
+                    / dev.stannismod.stellurgy.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
+            dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                    "the parent must have a sphere of influence wider than itself (surface " + surface
+                            + ", sphere " + soi + "): " + parent + " / " + star, soi > surface);
+
+            double orbit = Double.parseDouble(moon.text("orbitalDistance"));
+            assertTrue("a generated moon at " + orbit + " units must orbit above its parent's surface ("
+                    + surface + ") and inside the parent's sphere of influence (" + soi + "): " + moon
+                    + " / parent " + parent, orbit > surface && orbit < soi);
+        } finally {
+            for (Integer id : made) exec("ar planet delete " + id);
+        }
+    }
+
     @Test
     public void planetGenerateNamesNewDimensionFromArg() throws Exception {
         Set<Integer> before = dimIds();

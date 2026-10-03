@@ -58,7 +58,7 @@ public class DimensionPropertiesTest {
     private static DimensionProperties earthLike() {
         DimensionProperties props = new DimensionProperties(9001, "TestEarthLike");
         props.gravitationalMultiplier = 1.0f;
-        props.orbitalDist = 100;
+        props.orbitalDist = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         props.rotationalPeriod = 24000;
         props.skyColor = new float[]{0.5f, 0.7f, 1.0f};
         props.fogColor = new float[]{0.6f, 0.6f, 0.6f};
@@ -67,13 +67,19 @@ public class DimensionPropertiesTest {
         return props;
     }
 
+    /**
+     * A fresh dimension's defaults, including an orbit of one AU in today's distance unit.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code DimensionProperties#resetProperties} at {@code orbitalDist = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} defaulting the orbit to the old
+     * {@code 100} ("1 AU = 100"), this fails with "expected:&lt;1495979&gt; but was:&lt;100&gt;".</p>
+     */
     @Test
     public void dimensionPropertiesDefaultsAreStable() {
         DimensionProperties props = new DimensionProperties(42);
 
         assertEquals("Temp", props.getName());
         assertEquals(1.0f, props.getGravitationalMultiplier(), 1e-6);
-        assertEquals(100, props.orbitalDist);
+        assertEquals(dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU, props.orbitalDist);
         assertEquals(24000, props.rotationalPeriod);
         assertEquals(63, props.getSeaLevel());
         assertTrue(props.hasOxygen());
@@ -88,6 +94,14 @@ public class DimensionPropertiesTest {
         assertNotNull(props.sunriseSunsetColors);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, taken on the pre-long form (the write was then
+     * {@code setInteger}), with {@code DimensionProperties#writeToNBT} at
+     * {@code nbt.setLong("orbitalDist", orbitalDist)} writing {@code orbitalDist} through a
+     * {@code (short)} cast, this fails with "expected:&lt;1495979&gt; but was:&lt;-11349&gt;". At the
+     * old one-AU value of {@code 100} the same truncation would pass: the new fixture is what makes
+     * a narrowed write visible.
+     */
     @Test
     public void nbtRoundTripPreservesPlanetIdentity() {
         DimensionProperties original = earthLike();
@@ -486,5 +500,125 @@ public class DimensionPropertiesTest {
         // Default density from resetProperties = 100.
         assertEquals(100, restored.getAtmosphereDensity());
         assertEquals(24000, restored.rotationalPeriod);
+    }
+
+    /**
+     * The free-flight map lays a planet out 10 000 map units per AU from its star, along its orbital
+     * angle. That is 100 per distance unit as it was laid out before the unit became a length — then
+     * a unit was a hundredth of an AU — and the rocket's free-flight capture, gravity and landing
+     * radii, and the solar view, are all measured on this map.
+     *
+     * <p>Acceptance, stated before the code: a planet two AU out (not the default one AU a body takes
+     * when nothing states its orbit) stands at (20 000, 0) at angle 0 and at (0, 20 000) at a quarter
+     * turn, within the rounding of {@code cos(PI / 2)}. Read raw, it stands 14 960 times further.</p>
+     *
+     * <p>What this does not see: a MOON's placement, which has a law of its own — see
+     * {@link #theFreeFlightMapLaysAMoonOutAsItDidWhenLunaStoodAt150}.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code DimensionProperties#getSpacePosition} at {@code : orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} — the planet
+     * radius — back on {@code 100f * orbitalDist}: "(x, z) at angle 0, then at a quarter turn:
+     * [2.99195808E8, 0.0, 1.8320459429275304E-8, 2.99195808E8]: arrays first differed at element [0];
+     * expected:&lt;20000.0&gt; but was:&lt;2.99195808E8&gt;" — both placements wrong, one verdict.</p>
+     */
+    @Test
+    public void theFreeFlightMapLaysAPlanetOutTenThousandUnitsPerAu() {
+        DimensionProperties planet = new DimensionProperties(9002, "TwoAuOut");
+        planet.setStar(new dev.stannismod.stellurgy.api.dimension.solar.StellarBody());
+        planet.orbitalDist = 2L * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+
+        planet.orbitTheta = 0d;
+        dev.stannismod.stellurgy.util.SpacePosition atZero = planet.getSpacePosition();
+        planet.orbitTheta = Math.PI / 2;
+        dev.stannismod.stellurgy.util.SpacePosition atQuarter = planet.getSpacePosition();
+
+        // One verdict over both placements. The radius is exact (2.0 AU x 10 000); the only inexact
+        // term is Math.cos(PI / 2) = 6.1e-17, which puts x at 1.2e-12 — so 1e-9 is slack for that
+        // rounding and for nothing else.
+        double[] expected = {20_000d, 0d, 0d, 20_000d};
+        double[] actual = {atZero.x, atZero.z, atQuarter.x, atQuarter.z};
+        org.junit.Assert.assertArrayEquals("(x, z) at angle 0, then at a quarter turn: "
+                + java.util.Arrays.toString(actual), expected, actual, 1e-9);
+    }
+
+    /**
+     * The free-flight map lays a moon out about its planet as it laid one out while Luna stood at
+     * 150: {@code 75} map units per moon-view unit plus {@code 100}, the moon-view distance being 150
+     * for a moon at Luna's distance and in proportion for any other. The rocket's moon capture and
+     * landing are measured on this map.
+     *
+     * <p>Acceptance, stated before the code: a moon at twice Luna's distance (7 688 units, not
+     * Luna's own, so a law that drew every moon as Luna is told apart) stands at the moon-view 300,
+     * so at (22 600, 0) at angle 0 and (0, 22 600) at a quarter turn, within the rounding of
+     * {@code cos(PI / 2)}. Read raw, it stands at 576 700.</p>
+     *
+     * <p>What this does not see: the rocket reading the map — its capture radius is the moon's own
+     * render size, compared against this position.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code DimensionProperties#getSpacePosition} at
+     * {@code ? MOON_SPACE_MAP_UNITS_PER_VIEW_UNIT * AstronomicalBodyHelper.moonViewUnits(orbitalDist)}
+     * back on the raw distance ({@code 75f * orbitalDist}), this fails with "(x, z) at angle 0, then
+     * at a quarter turn: [576700.0, 0.0, 3.531269045341393E-11, 576700.0]: arrays first differed at
+     * element [0]; expected:&lt;22600.0&gt; but was:&lt;576700.0&gt;"; and with
+     * {@code AstronomicalBodyHelper#moonViewUnits} at
+     * {@code return MOON_VIEW_UNITS_AT_LUNA * (orbitalDistance / (double) MOON_REFERENCE_UNITS)}
+     * replaced by {@code return MOON_VIEW_UNITS_AT_LUNA} (every moon laid out as Luna), with
+     * "… expected:&lt;22600.0&gt; but was:&lt;11350.0&gt;".</p>
+     */
+    @Test
+    public void theFreeFlightMapLaysAMoonOutAsItDidWhenLunaStoodAt150() {
+        DimensionProperties parent = new DimensionProperties(9210, "MapParent");
+        DimensionProperties moon = new DimensionProperties(9211, "TwiceLunaOut");
+        moon.setParentPlanet(parent);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged("the body must be a moon for the moon layout to apply", moon.isMoon());
+        moon.orbitalDist = 2L * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS;
+
+        moon.orbitTheta = 0d;
+        dev.stannismod.stellurgy.util.SpacePosition atZero = moon.getSpacePosition();
+        moon.orbitTheta = Math.PI / 2;
+        dev.stannismod.stellurgy.util.SpacePosition atQuarter = moon.getSpacePosition();
+
+        // 75 x 300 + 100, exact. The only inexact term is Math.cos(PI / 2) = 6.1e-17, which puts x at
+        // 1.4e-12 — so 1e-9 is slack for that rounding and for nothing else.
+        double[] expected = {22_600d, 0d, 0d, 22_600d};
+        double[] actual = {atZero.x, atZero.z, atQuarter.x, atQuarter.z};
+        org.junit.Assert.assertArrayEquals("(x, z) at angle 0, then at a quarter turn: "
+                + java.util.Arrays.toString(actual), expected, actual, 1e-9);
+    }
+
+    /**
+     * A companion star and a planet at the SAME orbital distance land at the same radius on the
+     * free-flight map — the joint between {@code StellarBody#getSpacePosition} and
+     * {@code DimensionProperties#getSpacePosition}, which carry one field in one unit and so must lay
+     * it out by one law. Five AU: neither a default nor a value either law special-cases.
+     *
+     * <p>red-witnessed: 2026-09-30, on the code as it stood before the fix — {@code StellarBody#getSpacePosition}
+     * at {@code position.x = offset[0] * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.SPACE_MAP_UNITS_PER_AU}
+     * multiplying by a private 100 per AU instead: "a companion at 5 AU (500.0) and a planet at 5 AU
+     * (50000.0) must stand at one radius expected:&lt;50000.0&gt; but was:&lt;500.0&gt;".</p>
+     */
+    @Test
+    public void aCompanionAndAPlanetAtOneDistanceLandAtOneRadiusOnTheMap() {
+        long fiveAu = 5L * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+
+        dev.stannismod.stellurgy.api.dimension.solar.StellarBody primary =
+                new dev.stannismod.stellurgy.api.dimension.solar.StellarBody();
+        dev.stannismod.stellurgy.api.dimension.solar.StellarBody companion =
+                new dev.stannismod.stellurgy.api.dimension.solar.StellarBody();
+        companion.setOrbitalDistance(fiveAu);
+        companion.setBaseTheta(0d);
+        primary.addSubStar(companion);
+        double companionRadius = Math.sqrt(
+                companion.getSpacePosition().distanceToSpacePosition2(primary.getSpacePosition()));
+
+        DimensionProperties planet = new DimensionProperties(-7501);
+        planet.orbitalDist = fiveAu;
+        planet.orbitTheta = 0d;
+        double planetRadius = Math.sqrt(planet.getSpacePosition()
+                .distanceToSpacePosition2(new dev.stannismod.stellurgy.util.SpacePosition()));
+
+        // Slack: two double products of the same five-AU quantity, rounded independently.
+        assertEquals("a companion at 5 AU (" + companionRadius + ") and a planet at 5 AU ("
+                + planetRadius + ") must stand at one radius", planetRadius, companionRadius,
+                planetRadius * 1e-12);
     }
 }

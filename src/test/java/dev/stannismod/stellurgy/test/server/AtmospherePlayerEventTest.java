@@ -89,7 +89,7 @@ public class AtmospherePlayerEventTest {
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
                 + "            <gravitationalMultiplier>100</gravitationalMultiplier>\n"
-                + "            <orbitalDistance>100</orbitalDistance>\n"
+                + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
                 + "            <orbitalTheta>0</orbitalTheta>\n"
                 + "            <orbitalPhi>0</orbitalPhi>\n"
                 + "            <retrograde>false</retrograde>\n"
@@ -156,6 +156,12 @@ public class AtmospherePlayerEventTest {
      * VACUUM for dimension 0, this reads {@code breathable=false}, 2026-09-28. Removing the handler's own
      * dimension check instead stays GREEN — no other world's handler exists in this scenario to
      * answer for the overworld.</p>
+     *
+     * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType(Entity)} at
+     * {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}
+     * answering VACUUM for dimension 0: "overworld baseline: cache must be empty or non-Stellurgy;
+     * hasCached=true atmos=vacuum", 2026-09-28 (taken on the other line of this test before the two
+     * were merged).</p>
      */
     @Test
     public void aPlayerInTheOverworldResolvesBreathableAir() throws Exception {

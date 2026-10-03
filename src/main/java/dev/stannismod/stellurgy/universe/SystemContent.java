@@ -26,7 +26,7 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
  * Derives the addressable {@link SystemBody} content of an AUTHORED system (a catalogued {@link StellarBody})
  * from its planets/moons (universe-model.md &sect;2 amendment A#1a + &sect;4). A system is an anchored
  * NEIGHBOURHOOD of cells: the star sits at the anchor cell's centre; every planet/belt gets its <b>own cell</b>
- * at a sector offset scaled from its orbital position ({@link #ORBIT_UNIT_BLOCKS blocks per orbit-unit}),
+ * at a sector offset scaled from its orbital position ({@link #ORBIT_UNIT_BLOCKS blocks per unit}),
  * snapped to that cell's centre (zone content sits near the cell centre); a moon gets its own cell
  * inside its parent's ZONE, named in that zone's lattice ({@link ZoneScale}). Inter-body space is
  * cells of void.
@@ -47,20 +47,34 @@ public final class SystemContent {
 
     /**
      * Blocks per unit of {@code DimensionProperties} orbital distance — the chart metric's own
-     * conversion, shared with the procedural generator so that one orbital distance means one distance
-     * in both families.
-     * <p>
-     * Public because it is also the only bridge between the two distance vocabularies in this mod — the
-     * blocks a cell measures in, and the orbital units every stellar formula is written in. Anything
-     * that has a block distance to a star and wants a physical quantity out of it converts here rather
-     * than inventing a second scale that would drift from where the system was actually placed.
+     * conversion, shared with the procedural generator so that one orbital distance means one
+     * distance in both families AND at both LEVELS.
+     *
+     * <p>There used to be a second one beside it, {@code MOON_UNIT_BLOCKS = 200}, for a moon's
+     * distance from its planet — <b>a factor of 29 920 between two units for the same quantity</b>.
+     * Neither was arithmetically wrong; what was wrong is that the field meant a different LENGTH
+     * depending on which level had written it, so a reader that did not know the level was wrong by
+     * that factor. {@code ReferenceFrames.soiRadiusBlocks} takes a live block displacement rather
+     * than reading the field, and says so, for exactly this reason.</p>
+     *
+     * <p>Public because it is also the only bridge between the two distance vocabularies in this mod —
+     * the blocks a cell measures in, and the orbital units every stellar formula is written in.
+     * Anything that has a block distance to a star and wants a physical quantity out of it converts
+     * here rather than inventing a second scale that would drift from where the system was placed.</p>
      */
-    public static final long ORBIT_UNIT_BLOCKS = AstronomicalBodyHelper.BLOCKS_PER_ORBIT_UNIT;
-    /** Blocks per unit of a moon's (parent-relative) orbital distance — moons cluster near their planet. */
-    static final long MOON_UNIT_BLOCKS = 200L;
+    public static final long ORBIT_UNIT_BLOCKS = AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT;
 
-    /** The floor an authored moon is lifted to, in parent radii — see {@link #moonLawOf}. */
-    static final double MOON_MIN_PARENT_RADII = 2.5d;
+    /**
+     * The floor an authored moon is lifted to, in parent radii — see {@link #moonLawOf}.
+     *
+     * <p>PUBLIC because it is half of a window, not a private tuning knob. A zone's lattice has to
+     * be coarse enough that a body's own descent shell (1.0157 radii) fits in its own cell and fine
+     * enough that a moon at THIS floor still lands on an index of its own, so the two numbers
+     * together decide whether any lattice can satisfy both — a factor of 2.46, against a
+     * power-of-two step of 2.0. Lowering this closes that window, and the thing that notices must
+     * be able to read it rather than repeat it.</p>
+     */
+    public static final double MOON_MIN_PARENT_RADII = 2.5d;
     /** Cells kept clear of the super-cell faces when clamping a body cell into its system's box. */
     static final int BOX_MARGIN_CELLS = 2;
 
@@ -178,6 +192,11 @@ public final class SystemContent {
                     planet.getOrbitalDist(), planet.getRadius(), planet.getOrbitalMass());
             bodies.add(planetBody);
 
+            // The lattice of a planet's zone is decided by its INNERMOST moon, so it is settled
+            // before any moon is named — a name derived against a lattice that a later sibling then
+            // changes is a name that moves, which is the one thing a name may not do.
+            long tightestMoon = tightestMoonOffsetOf(planet);
+
             for (int moonId : planet.getChildPlanets()) {
                 DimensionProperties moon = DimensionManager.getInstance().getDimensionProperties(moonId);
                 if (moon == null) {
@@ -193,8 +212,8 @@ public final class SystemContent {
                 // planet is; how far it sits from the planet is in its frame's law, which is what
                 // positions it. Same convention as the procedural side.
                 bodies.add(new SystemBody(
-                        moonNameOf(moon, planetBody, starBody, moonLaw, anchor, minSpacingCells,
-                                starId, names),
+                        moonNameOf(moon, planetBody, starBody, moonLaw, tightestMoon, anchor,
+                                minSpacingCells, starId, names),
                         CellFrame.within(planetFrame, moonLaw), BodyEphemeris.STATIC,
                         kindOf(moon, SystemBodyKind.MOON), moon.getId(), starId,
                         planet.getOrbitalDist(), moon.getRadius(), moon.getOrbitalMass()));
@@ -216,18 +235,46 @@ public final class SystemContent {
                 planet.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS);
     }
 
+    /**
+     * How far {@code planet}'s INNERMOST moon sits from it at {@link #NAME_TICK}, in blocks — the
+     * number that decides how finely its zone is divided ({@link ZoneScale#cellsAcrossZone}).
+     *
+     * <p>{@code 0} for a planet with no moons, which is not an absence to work around: nothing needs
+     * naming apart, so the zone is ONE cell and the lattice coincides with the sphere of influence.
+     * That is the case almost every body in the game is in.</p>
+     *
+     * <p>Computed over the WHOLE moon set before any of them is named, because the lattice a name is
+     * derived against must not depend on the order the siblings are walked in, and must not change
+     * when a later sibling is reached. A recorded name survives a lattice change; a freshly derived
+     * one would not, and the two would then disagree about the same body.</p>
+     */
+    private static long tightestMoonOffsetOf(DimensionProperties planet) {
+        long tightest = 0L;
+        for (int moonId : planet.getChildPlanets()) {
+            DimensionProperties moon = DimensionManager.getInstance().getDimensionProperties(moonId);
+            if (moon == null) {
+                continue;
+            }
+            long offset = Math.round(moonLawOf(moon, planet).offsetAt(NAME_TICK).length());
+            if (offset > 0L && (tightest == 0L || offset < tightest)) {
+                tightest = offset;
+            }
+        }
+        return tightest;
+    }
+
     /** A moon's orbital law about its PARENT — its offset inside the shared cell, live at every tick. */
     private static BodyEphemeris moonLawOf(DimensionProperties moon, DimensionProperties parent) {
         // A FLOOR rather than a replacement: an authored pack keeps the spacing it wrote, unless what
         // it wrote would put the moon inside its parent. That became possible only when bodies got a
         // real radius — an Earth is 25 513 blocks across, so an authored orbit of 100 units (20 000
         // blocks) is under the surface. The pack's intent is kept where it is expressible.
-        int authored = moon.getOrbitalDist();
+        long authored = moon.getOrbitalDist();
         double parentRadiusBlocks = Math.max(0.05d, parent.getRadius())
                 * AstronomicalBodyHelper.EARTH_RADIUS_BLOCKS;
         long floorUnits = Math.round(parentRadiusBlocks * MOON_MIN_PARENT_RADII
-                / (double) MOON_UNIT_BLOCKS);
-        int orbit = (int) Math.max(authored, Math.max(1L, Math.min(Integer.MAX_VALUE, floorUnits)));
+                / (double) ORBIT_UNIT_BLOCKS);
+        long orbit = Math.max(authored, Math.max(1L, floorUnits));
         // THE PERIOD OF THE ORBIT THE MOON IS PUT ON, which is the floored one. This used to be
         // derived from the AUTHORED distance and handed to an ephemeris built with the floored one,
         // so a lifted moon turned at the angular rate of an orbit it is not on — a radius and a
@@ -237,7 +284,7 @@ public final class SystemContent {
         double periodTicks = TICKS_PER_DAY * AstronomicalBodyHelper.getMoonOrbitalPeriod(
                 orbit, (float) parent.getOrbitalMass());
         return BodyEphemeris.orbit(orbit, moon.baseOrbitTheta, moon.orbitalPhi,
-                moon.isRetrograde, periodTicks, MOON_UNIT_BLOCKS);
+                moon.isRetrograde, periodTicks, ORBIT_UNIT_BLOCKS);
     }
 
     /**
@@ -280,9 +327,10 @@ public final class SystemContent {
      */
     private static GalacticCoord moonNameOf(DimensionProperties moon, SystemBody parent,
                                             SystemBody primary, BodyEphemeris moonLaw,
-                                            GalacticCoord anchor, int minSpacingCells, int starId,
-                                            CellNames names) {
-        GalacticCoord derived = moonCellIn(parent, primary, moonLaw, starId, moon.getId());
+                                            long tightestMoonOffsetBlocks, GalacticCoord anchor,
+                                            int minSpacingCells, int starId, CellNames names) {
+        GalacticCoord derived = moonCellIn(parent, primary, moonLaw, tightestMoonOffsetBlocks,
+                starId, moon.getId());
         return names == null ? derived
                 : names.nameFor(moon.getId(), starId, anchor, minSpacingCells, derived);
     }
@@ -296,9 +344,9 @@ public final class SystemContent {
      * because this derivation runs on every query.</p>
      */
     static GalacticCoord moonCellIn(SystemBody parent, SystemBody primary, BodyEphemeris moonLaw,
-                                    int starId, int moonDimId) {
+                                    long tightestMoonOffsetBlocks, int starId, int moonDimId) {
         GalacticCoord derived = ZoneScale.cellWithin(parent, primary, moonLaw.offsetAt(NAME_TICK),
-                NAME_TICK);
+                tightestMoonOffsetBlocks, NAME_TICK);
         if (derived != null) {
             return derived;
         }

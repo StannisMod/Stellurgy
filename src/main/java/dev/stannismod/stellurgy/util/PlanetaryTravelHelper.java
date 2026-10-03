@@ -60,16 +60,14 @@ public class PlanetaryTravelHelper {
      * @return double for the burn length needed to reach this particular destination
      */
     public static double getBodyDistanceMultiplier(int currentDimensionID, int destinationDimensionID, boolean toAsteroids) {
-        //Check the orbital distance of the moon or planet we're going to
-        //This gives us a ratio of how far it is compared to the default of 100
         double bodyDistanceMultiplier = 1.0d;
         IDimensionProperties destinationProperties = DimensionManager.getInstance().getDimensionProperties(destinationDimensionID);
         if (destinationProperties.isMoon()) {
-            bodyDistanceMultiplier = destinationProperties.getOrbitalDist() / 100d;
+            bodyDistanceMultiplier = moonBurnMultiplier(destinationProperties);
         } else {
             for (int moonDimID : destinationProperties.getChildPlanets()) {
                 if (currentDimensionID == moonDimID) {
-                    bodyDistanceMultiplier = DimensionManager.getInstance().getDimensionProperties(moonDimID).getOrbitalDist() / 100d;
+                    bodyDistanceMultiplier = moonBurnMultiplier(DimensionManager.getInstance().getDimensionProperties(moonDimID));
                 }
             }
         }
@@ -78,6 +76,18 @@ public class PlanetaryTravelHelper {
             bodyDistanceMultiplier = StellurgyConfiguration.getCurrentConfig().asteroidTBIBurnMult;
         }
         return bodyDistanceMultiplier;
+    }
+
+    /**
+     * Moon-view units at which a trip between a planet and its moon takes one base burn: 100, as a
+     * moon's raw distance was read while Luna stood at 150, so a trip to Luna is 1.5 base burns
+     * again (see {@link AstronomicalBodyHelper#MOON_VIEW_UNITS_AT_LUNA}).
+     */
+    private static final double MOON_VIEW_UNITS_PER_BASE_BURN = 100d;
+
+    /** The burn multiplier for a trip between {@code moon} and its planet, either way. */
+    private static double moonBurnMultiplier(IDimensionProperties moon) {
+        return AstronomicalBodyHelper.moonViewUnits(moon.getOrbitalDist()) / MOON_VIEW_UNITS_PER_BASE_BURN;
     }
 
     /**

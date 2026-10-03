@@ -83,7 +83,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
      */
     public static final int MAX_ATM_PRESSURE = Integer.MAX_VALUE / 1000;
     public static final int MIN_ATM_PRESSURE = 0;
-    public static final int MAX_DISTANCE = Integer.MAX_VALUE;
     public static final int MIN_DISTANCE = 1;
     public static final int MAX_GRAVITY = 400;
     public static final int MIN_GRAVITY = 0;
@@ -113,7 +112,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public float[] fogColor;
     public float[] ringColor;
     public float gravitationalMultiplier;
-    public int orbitalDist;
+    public long orbitalDist;
     public boolean colorOverride;
     //Used in solar panels
     public double peakInsolationMultiplier;
@@ -567,9 +566,11 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         ringColor = new float[]{.4f, .4f, .7f};
         gravitationalMultiplier = 1;
         rotationalPeriod = DEFAULT_ROTATIONAL_PERIOD;
-        orbitalDist = 100;
+        // One AU. The two 100s that used to sit here were NOT the same quantity — a distance
+        // and an atmosphere density — and only one of them is a distance unit.
+        orbitalDist = dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         // Sea-level Earth air: what this constructor has always meant by a world nobody described —
-        // a pressure of 100 with oxygen — now stated as the gases it is made of.
+        // one atmosphere with oxygen — now stated as the gases it is made of.
         air = AirState.earthLike();
         originalAtmosphereDensity = getAtmosphereDensity();
         childPlanets = new HashSet<>();
@@ -1028,16 +1029,15 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
     /**
-     * Range 0 < value <= 200
-     *
-     * @return if the planet is a moon, then the distance from the host planet where the earth's moon is 100, higher is farther, if planet, distance from the star, 100 is earthlike, higher value is father
+     * @return the distance from what this body orbits — its planet for a moon, its star for a planet —
+     * in {@code AstronomicalBodyHelper.METRES_PER_DISTANCE_UNIT} units
      */
-    public int getParentOrbitalDistance() {
+    public long getParentOrbitalDistance() {
         return orbitalDist;
     }
 
     @Override
-    public void setParentOrbitalDistance(int distance) {
+    public void setParentOrbitalDistance(long distance) {
         this.orbitalDist = distance;
 
     }
@@ -1045,7 +1045,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     /**
      * @return if a planet, the same as getParentOrbitalDistance(), if a moon, the moon's distance from the host star
      */
-    public int getSolarOrbitalDistance() {
+    public long getSolarOrbitalDistance() {
         if (this.isStar()) {
             return 1;
         }
@@ -1839,7 +1839,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             // No global add on load any more. What a beacon taught is held by the bodies it taught,
             // in their own saved known-sets, so re-announcing this place to the whole game at every
             // load would put back exactly the reach the scoping removed. A world whose beacons
-            // predate the local sets simply has nothing recorded - 3.0.0 carries no old saves.
+            // predate the local sets simply has nothing recorded - 0.1.0 carries no old saves.
         } else
             beaconLocations.clear();
 
@@ -2089,7 +2089,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         metallicity = nbt.hasKey("metallicity") ? nbt.getDouble("metallicity") : 1d;
         scaledOreCache = null;
         scaledOreCacheFor = Double.NaN;
-        orbitalDist = nbt.getInteger("orbitalDist");
+        orbitalDist = nbt.getLong("orbitalDist");
         orbitTheta = nbt.getDouble("orbitTheta");
         baseOrbitTheta = nbt.getDouble("baseOrbitTheta");
         orbitalPhi = nbt.getDouble("orbitPhi");
@@ -2541,7 +2541,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         if (metallicity != 1d) {
             nbt.setDouble("metallicity", metallicity);
         }
-        nbt.setInteger("orbitalDist", orbitalDist);
+        nbt.setLong("orbitalDist", orbitalDist);
         nbt.setDouble("orbitTheta", orbitTheta);
         nbt.setDouble("baseOrbitTheta", baseOrbitTheta);
         nbt.setDouble("orbitPhi", orbitalPhi);
@@ -2779,7 +2779,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
     @Override
-    public int getOrbitalDist() {
+    public long getOrbitalDist() {
         return orbitalDist;
     }
 
@@ -2972,11 +2972,21 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         return (float) Math.max(r > 0d ? r : 1d, 0.5d);
     }
 
+    /**
+     * Free-flight map units per moon-view unit, for a moon about its planet: 75, as a moon's raw
+     * distance was laid out while Luna stood at 150, so Luna stands where she stood then (see
+     * {@link AstronomicalBodyHelper#MOON_VIEW_UNITS_AT_LUNA}).
+     */
+    private static final double MOON_SPACE_MAP_UNITS_PER_VIEW_UNIT = 75d;
+    /**
+     * The map units every moon's free-flight radius carries on top of its distance, whatever the
+     * distance — the constant term of that layout, unchanged from when Luna stood at 150.
+     */
+    private static final double MOON_SPACE_MAP_OFFSET = 100d;
+
     // Relative to parent
     @Override
     public SpacePosition getSpacePosition() {
-        float distanceMultiplier = isMoon() ? 75f : 100f;
-
         SpacePosition spacePosition = new SpacePosition();
         spacePosition.star = getStar();
         spacePosition.world = this;
@@ -2985,7 +2995,12 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         spacePosition.roll = 0;
         spacePosition.yaw = 0;
 
-        spacePosition = spacePosition.getFromSpherical(distanceMultiplier * orbitalDist + (isMoon() ? 100 : 0), orbitTheta);
+        double radius = isMoon()
+                ? MOON_SPACE_MAP_UNITS_PER_VIEW_UNIT * AstronomicalBodyHelper.moonViewUnits(orbitalDist)
+                        + MOON_SPACE_MAP_OFFSET
+                : orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU
+                        * AstronomicalBodyHelper.SPACE_MAP_UNITS_PER_AU;
+        spacePosition = spacePosition.getFromSpherical(radius, orbitTheta);
 
         return spacePosition;
     }

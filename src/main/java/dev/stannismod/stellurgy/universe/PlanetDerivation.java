@@ -203,7 +203,7 @@ public final class PlanetDerivation {
      * {@link #REFERENCE_TEMPERATURE_K}. One AU for Sol by construction; a tenth of that for a cool red
      * dwarf; a dozen AU for a hot blue giant.
      */
-    public static int referenceDistance(StellarBody star) {
+    public static long referenceDistance(StellarBody star) {
         if (star == null) {
             return AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         }
@@ -215,7 +215,13 @@ public final class PlanetDerivation {
         }
         double ratio = atOneAu / REFERENCE_TEMPERATURE_K;
         double ref = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU * ratio * ratio;
-        return (int) clamp(ref, DimensionProperties.MIN_DISTANCE, 100_000d);
+        // A THOUSAND AU, stated as one. The bound read 100 000, which was a thousand AU while a
+        // distance unit was a hundredth of one — and 0.067 AU once the unit became a length, so
+        // every star from a red dwarf to a blue giant saturated at the same reference distance and
+        // their zones came out identical. A bound on a physical quantity is written as that
+        // quantity.
+        return (long) clamp(ref, DimensionProperties.MIN_DISTANCE,
+                1_000d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
     }
 
     /**
@@ -232,8 +238,8 @@ public final class PlanetDerivation {
      * bent to fit a neighbourhood is a world whose climate, insolation and year all describe a place
      * it is not standing.</p>
      */
-    public static int orbitalDistanceOf(long seed, GalacticCoord anchor, int index, int count,
-                                        StellarBody star) {
+    public static long orbitalDistanceOf(long seed, GalacticCoord anchor, int index, int count,
+                                         StellarBody star) {
         double lo = innerOrbit(star);
         double hi = outerOrbit(star);
         int slots = Math.max(1, count);
@@ -241,7 +247,11 @@ public final class PlanetDerivation {
                 - 0.5d);
         double f = (Math.min(index, slots - 1) + 0.5d + jitter) / slots;
         double distance = lo * Math.pow(hi / lo, clamp(f, 0d, 1d));
-        return (int) clamp(distance, DimensionProperties.MIN_DISTANCE, 1_000_000d);
+        // No upper bound. It read 1 000 000, which meant 10 000 AU while a distance unit was a
+        // hundredth of one, and the change of unit turned it into a 0.67 AU cap on every procedural
+        // orbit in the galaxy without a line of it moving. What bounds a generated orbit is the
+        // system's own clear space, applied by the caller.
+        return (long) Math.max(DimensionProperties.MIN_DISTANCE, distance);
     }
 
     /**
@@ -273,12 +283,12 @@ public final class PlanetDerivation {
     // callerless, because the next caller would be re-introducing the second scale it existed to serve.
 
     /** The bare (no-atmosphere) equilibrium temperature at a distance — the zoning reading. */
-    public static int bareTemperature(StellarBody star, int orbitalDistance) {
-        return AstronomicalBodyHelper.getAverageTemperature(star, Math.max(1, orbitalDistance), 0);
+    public static int bareTemperature(StellarBody star, long orbitalDistance) {
+        return AstronomicalBodyHelper.getAverageTemperature(star, Math.max(1L, orbitalDistance), 0);
     }
 
     /** Whether a body this close to this star keeps one face to it. */
-    public static boolean tidallyLockedAt(StellarBody star, int orbitalDistance) {
+    public static boolean tidallyLockedAt(StellarBody star, long orbitalDistance) {
         if (star == null) {
             return false;
         }
@@ -316,7 +326,7 @@ public final class PlanetDerivation {
      *                        PARENT's, because what a moon's climate depends on is where the parent is
      */
     public static BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
-                                     StellarBody star, boolean moon, int orbitalDistance) {
+                                     StellarBody star, boolean moon, long orbitalDistance) {
         GalacticCoord key = bodyCell.cellCentre();
         double metallicity = metallicityOf(seed, anchor);
         int bareTemp = bareTemperature(star, orbitalDistance);
@@ -335,7 +345,7 @@ public final class PlanetDerivation {
         // While this was a single neutral-albedo reading, the derivation and the dimension model
         // answered one question with two numbers: a `greenhouse` world (albedo 0.75) was reported
         // 22.7 % warmer than it turned out to be and an `ice` world 13 %.
-        final int orbit = Math.max(1, orbitalDistance);
+        final long orbit = Math.max(1L, orbitalDistance);
         DoubleToIntFunction temperatureForAlbedo =
                 albedo -> AstronomicalBodyHelper.getAverageTemperature(star, orbit, pressure, albedo);
 

@@ -88,10 +88,24 @@ public class PlanetGenerateCommand extends StellurgyCommand {
         GalacticCoord anchor = GalacticCoord.ofSectorLocal(starId, 0L, 0L, 0L, 0L, 0L);
         dev.stannismod.stellurgy.universe.IBodyDerivation derivation =
                 dev.stannismod.stellurgy.universe.UniverseRegistry.getGenerator().derivation();
-        int orbit = derivation.orbitalDistanceOf(server.getWorld(0).getSeed(), anchor, index,
-                Math.max(1, index + 1), star);
-        BodyProfile profile = derivation.derive(server.getWorld(0).getSeed(), anchor, anchor,
-                index, star, moon, orbit);
+        long seed = server.getWorld(0).getSeed();
+        long orbit;
+        BodyProfile profile;
+        if (moon) {
+            // Placed and derived the way the generator makes every procedural moon: its orbit is drawn
+            // about the PARENT by the moon law, and its climate is derived at the parent's distance
+            // from the star, because that is where the moon is. It used to take a STAR-level orbit
+            // into the moon's own field — a "moon" many AU from its planet, outside anything a frame
+            // could hand a craft to.
+            int moonIndex = parent.getChildPlanets().size() + 1;
+            profile = derivation.derive(seed, anchor, anchor, moonIndex, star, true,
+                    parent.getSolarOrbitalDistance());
+            orbit = dev.stannismod.stellurgy.universe.ClusteredGalaxyGenerator.moonOrbitOf(seed, anchor,
+                    moonIndex, parent.getRadius());
+        } else {
+            orbit = derivation.orbitalDistanceOf(seed, anchor, index, Math.max(1, index + 1), star);
+            profile = derivation.derive(seed, anchor, anchor, index, star, false, orbit);
+        }
 
         int dimId = DimensionManager.getInstance().getNextFreeDim(2);
         DimensionProperties props = new DimensionProperties(dimId);

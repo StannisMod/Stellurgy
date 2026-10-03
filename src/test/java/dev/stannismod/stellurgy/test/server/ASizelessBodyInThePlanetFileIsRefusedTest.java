@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 import org.junit.After;
@@ -59,7 +60,7 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest {
                 "          isBlackHole=\"false\" diskAngle=\"70\" numPlanets=\"0\" numGasGiants=\"0\">\n" +
                 "        <planet name=\"Earth\" DIMID=\"" + OVERWORLD_DIM + "\">\n" +
                 "            <gravitationalMultiplier>100</gravitationalMultiplier>\n" +
-                "            <orbitalDistance>100</orbitalDistance>\n" +
+                "            <orbitalDistance>" + AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n" +
                 "            <atmosphereDensity>100</atmosphereDensity>\n" +
                 "        </planet>\n" +
                 planet("Sizeless", SIZELESS_DIM, "") +
@@ -78,7 +79,8 @@ public class ASizelessBodyInThePlanetFileIsRefusedTest {
      */
     private static String planet(String name, int dim, String bulk) {
         return "        <planet name=\"" + name + "\" DIMID=\"" + dim + "\">\n" +
-                "            <orbitalDistance>140</orbitalDistance>\n" +
+                "            <orbitalDistance>" + 14 * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU / 10
+                        + "</orbitalDistance>\n" +
                 bulk +
                 "            <atmosphereDensity>0</atmosphereDensity>\n" +
                 "        </planet>\n";

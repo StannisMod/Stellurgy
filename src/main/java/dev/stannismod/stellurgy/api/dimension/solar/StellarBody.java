@@ -21,22 +21,16 @@ public class StellarBody {
     private static final double MAIN_SEQUENCE_MASS_EXPONENT = 1.25d;
 
     /**
-     * How far a companion orbits its primary when nothing has said — in the same distance units a
-     * planet's orbit is in (100 = 1 AU), so this is 0.05 AU: a close pair, the kind that reads as two
-     * suns in one sky rather than as a second star elsewhere in the system.
+     * How far a companion orbits its primary when nothing has said, in the distance units a planet's
+     * orbit is in — written as 0.05 AU: a close pair, the kind that reads as two suns in one sky rather
+     * than as a second star elsewhere in the system.
      *
      * <p>The field this replaces was an ANGLE with the same default of 5, applied to the sky as a
      * tilt. An angle cannot say where a companion is — only how far off the primary it looks from one
      * particular world — so nothing could place it, light a planet by it, or let it move.</p>
      */
-    public static final int DEFAULT_COMPANION_ORBIT = 5;
-
-    /**
-     * Solar-map units per AU — the multiplier {@code DimensionProperties.getSpacePosition} lays a
-     * planet out with (100 map units per 100 distance units, i.e. per AU). Stated here so a star and
-     * a planet at the same orbital distance land at the same place on one map.
-     */
-    private static final double PLANET_MAP_UNITS_PER_AU = 100d;
+    public static final long DEFAULT_COMPANION_ORBIT = Math.round(
+            0.05d * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
 
     /** Sentinel for {@link #baseTheta}: nobody has stated one, so binding picks a phase. */
     private static final double THETA_UNSTATED = Double.NaN;
@@ -52,8 +46,8 @@ public class StellarBody {
     private float mass = MASS_UNSET;
     String name;
     short posX, posZ;
-    /** This star's orbit about its primary, in distance units (100 = 1 AU). Zero for a primary. */
-    private int orbitalDistance;
+    /** This star's orbit about its primary, in distance units (a planet's; see AstronomicalBodyHelper). */
+    private long orbitalDistance;
     /** Its angle on that orbit at tick zero, in radians; {@link #THETA_UNSTATED} until bound. */
     private double baseTheta = THETA_UNSTATED;
     StellarBody parentStar;
@@ -134,14 +128,14 @@ public class StellarBody {
     }
 
     /**
-     * How far this star orbits its primary, in distance units (100 = 1 AU) — the same field a planet
-     * carries, meaning the same thing. Zero, and meaningless, for a star that is nobody's companion.
+     * How far this star orbits its primary, in distance units — the same field a planet carries,
+     * meaning the same thing ({@code AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} to the AU). Zero, and meaningless, for a star that is nobody's companion.
      */
-    public int getOrbitalDistance() {
+    public long getOrbitalDistance() {
         return orbitalDistance;
     }
 
-    public void setOrbitalDistance(int distanceUnits) {
+    public void setOrbitalDistance(long distanceUnits) {
         this.orbitalDistance = Math.max(0, distanceUnits);
     }
 
@@ -167,7 +161,8 @@ public class StellarBody {
             return new double[] {0d, 0d};
         }
         double[] parent = parentStar.offsetFromSystemAu();
-        double a = orbitalDistance / 100d; // 100 distance units to the AU
+        double a = orbitalDistance
+                / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         double theta = getBaseTheta();
         return new double[] {parent[0] + a * Math.cos(theta), parent[1] + a * Math.sin(theta)};
     }
@@ -190,7 +185,7 @@ public class StellarBody {
      * wide one puts its companion somewhere else in the sky entirely — which is the difference the
      * old constant tilt could not express.</p>
      */
-    public float apparentSeparationDegrees(int observerOrbitalDistance) {
+    public float apparentSeparationDegrees(long observerOrbitalDistance) {
         if (parentStar == null || orbitalDistance <= 0 || observerOrbitalDistance <= 0) {
             return 0f;
         }
@@ -385,7 +380,7 @@ public class StellarBody {
         if (mass > MASS_UNSET) {
             nbt.setFloat("mass", mass);
         }
-        nbt.setInteger("companionOrbit", orbitalDistance);
+        nbt.setLong("companionOrbit", orbitalDistance);
         nbt.setDouble("companionTheta", getBaseTheta());
         nbt.setBoolean("isBlackHole", isBlackHole);
         nbt.setFloat("diskAngle", diskAngle);
@@ -417,7 +412,7 @@ public class StellarBody {
         mass = nbt.hasKey("mass") ? nbt.getFloat("mass") : MASS_UNSET;
 
         if (nbt.hasKey("companionOrbit"))
-            orbitalDistance = nbt.getInteger("companionOrbit");
+            orbitalDistance = nbt.getLong("companionOrbit");
         baseTheta = nbt.hasKey("companionTheta") ? nbt.getDouble("companionTheta") : THETA_UNSTATED;
 
         subStars.clear();
@@ -447,8 +442,8 @@ public class StellarBody {
         SpacePosition position = new SpacePosition();
         position.star = this;
         double[] offset = offsetFromSystemAu();
-        position.x = offset[0] * PLANET_MAP_UNITS_PER_AU;
-        position.z = offset[1] * PLANET_MAP_UNITS_PER_AU;
+        position.x = offset[0] * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.SPACE_MAP_UNITS_PER_AU;
+        position.z = offset[1] * dev.stannismod.stellurgy.util.AstronomicalBodyHelper.SPACE_MAP_UNITS_PER_AU;
         return position;
     }
 }

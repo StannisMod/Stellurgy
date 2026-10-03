@@ -715,7 +715,7 @@ public class XMLPlanetLoader {
                 nodeSubStar.setAttribute(ATTR_BLACKHOLE_DISK_ANGLE, Float.toString(star2.diskAngle));
                 nodeSubStar.setAttribute(ATTR_TEMP, Integer.toString(star2.getTemperature()));
                 nodeSubStar.setAttribute(ATTR_SIZE, Float.toString(star2.getSize()));
-                nodeSubStar.setAttribute(ATTR_COMPANION_ORBIT, Integer.toString(star2.getOrbitalDistance()));
+                nodeSubStar.setAttribute(ATTR_COMPANION_ORBIT, Long.toString(star2.getOrbitalDistance()));
                 nodeSubStar.setAttribute(ATTR_COMPANION_THETA,
                         Double.toString(Math.toDegrees(star2.getBaseTheta())));
                 nodeStar.appendChild(nodeSubStar);
@@ -780,6 +780,12 @@ public class XMLPlanetLoader {
 
     private static Node createTextNode(Document doc, String nodeName, int nodeText) {
         return createTextNode(doc, nodeName, Integer.toString(nodeText));
+    }
+
+    // Without it a long resolves to the double overload and writes "1495979.0", which the integer
+    // reader then rejects.
+    private static Node createTextNode(Document doc, String nodeName, long nodeText) {
+        return createTextNode(doc, nodeName, Long.toString(nodeText));
     }
 
     private static Node createTextNode(Document doc, String nodeName, String nodeText) {
@@ -1267,7 +1273,7 @@ public class XMLPlanetLoader {
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_DISTANCE)) {
 
                 try {
-                    properties.orbitalDist = Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()), DimensionProperties.MIN_DISTANCE), DimensionProperties.MAX_DISTANCE);
+                    properties.orbitalDist = Math.max(Long.parseLong(planetPropertyNode.getTextContent()), DimensionProperties.MIN_DISTANCE);
                 } catch (NumberFormatException e) {
                     Stellurgy.logger.warn("Invalid orbitalDist specified"); //TODO: more detailed error msg
                 }
@@ -1755,7 +1761,7 @@ public class XMLPlanetLoader {
             nameNode = planetNode.getAttributes().getNamedItem(ATTR_COMPANION_ORBIT);
             if (nameNode != null && !nameNode.getNodeValue().isEmpty()) {
                 try {
-                    star.setOrbitalDistance(Integer.parseInt(nameNode.getNodeValue()));
+                    star.setOrbitalDistance(Long.parseLong(nameNode.getNodeValue()));
                 } catch (NumberFormatException e) {
                     Stellurgy.logger.warn("Error Reading star " + star.getName());
                 }

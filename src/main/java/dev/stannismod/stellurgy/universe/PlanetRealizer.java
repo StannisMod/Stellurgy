@@ -228,7 +228,6 @@ public final class PlanetRealizer {
                     bodyCell.cellKey());
             return Constants.INVALID_PLANET;
         }
-        star.addPlanet(props);
         if (!registry.realizeBody(bodyCell, variant, dimId)) {
             LOGGER.error("[UNIVERSE] realized dimension {} for {} but the body could not be rewritten - "
                     + "the world exists and nothing points at it", dimId, bodyCell.cellKey());
@@ -249,7 +248,6 @@ public final class PlanetRealizer {
                                                    SystemBody body, SystemBody parentBody) {
         DimensionProperties props = new DimensionProperties(dimId);
         props.setName(star.getName() + " " + dimId);
-        props.setStar(star);
 
         props.orbitalDist = Math.max(DimensionProperties.MIN_DISTANCE, profile.orbitalDistance());
         // A MOON must be realized as a moon. Without this it became a planet standing at its parent's
@@ -266,7 +264,7 @@ public final class PlanetRealizer {
             DimensionProperties parentProps =
                     DimensionManager.getInstance().getDimensionProperties(parentBody.dimId());
             if (parentProps != null) {
-                int localOrbit = (int) Math.round(body.frame().law().distUnits());
+                long localOrbit = Math.round(body.frame().law().distUnits());
                 props.orbitalDist = Math.max(DimensionProperties.MIN_DISTANCE, localOrbit);
                 props.setParentPlanet(parentProps);
             } else {
@@ -274,6 +272,9 @@ public final class PlanetRealizer {
                         body.name().cellKey(), parentBody.dimId());
             }
         }
+        // AFTER the parent, because setStar lists the body among the star's planets unless it is
+        // already a moon. Bound first, a moon was listed under its star as well as under its planet.
+        props.setStar(star);
         // The orbital angle is taken from the body's own law, so the planet the sky shows and the
         // planet the orbital elements describe are in the same place. A body's own law is the law
         // its CELL rides, at every level: a planet's cell rides the planet round its star and a
