@@ -1069,14 +1069,22 @@ public class TileObservatory extends TileMultiPowerConsumer implements IModularI
         return lastScanDiscoveries;
     }
 
-    /** Where this observatory stands, in galactic terms, or {@code null} if its world has no address. */
+    /**
+     * Where this observatory stands, in galactic terms, or {@code null} if its world has no address.
+     *
+     * <p>The GALACTIC cell, not the body's own address: a moon is named inside its planet's zone, on
+     * a lattice four orders of magnitude finer, and a survey walks star territories in the galactic
+     * one. Read as galactic, a moon's sector triple points at an unrelated patch of sky, and its
+     * static distance to a star's anchor is refused outright.</p>
+     */
     @Nullable
     public GalacticCoord scanOrigin() {
         UniverseRegistry registry = UniverseRegistry.get(world);
         if (registry == null) {
             return null;
         }
-        return registry.coordForPlanet(world.provider.getDimension()).orElse(null);
+        return registry.coordForPlanet(world.provider.getDimension())
+                .map(GalacticCoord::galacticCell).orElse(null);
     }
 
     /**

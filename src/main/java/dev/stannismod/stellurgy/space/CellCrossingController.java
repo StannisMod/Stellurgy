@@ -81,6 +81,33 @@ public final class CellCrossingController {
         }
     }
 
+    /**
+     * Where a craft BELONGS, given where it is — the whole membership question behind one call.
+     *
+     * <p>Answers the address the craft should now hold, or {@code null} to leave it where it is.
+     * Inside a ZONE that is decided by spheres: a craft past its zone's sphere belongs in the
+     * parent's lattice, one inside a child's belongs in that child's zone, and between the two
+     * thresholds it stays. A GALACTIC cell has no sphere of its own: its outward boundary stays the
+     * cube, and only the inward question is asked — a craft in a planet's own cell that flies into a
+     * moon's sphere belongs in that moon's zone.</p>
+     *
+     * <p><b>The whole address and not merely the cell</b>, because a craft is not at a cell's
+     * centre: an answer that dropped the in-cell remainder would teleport it by up to half a cell
+     * at the instant it crossed a sphere.</p>
+     *
+     * <p>A SEAM rather than a registry reference, for the reason the entry controller takes one:
+     * this class is arithmetic plus a crossing and must stay drivable without a server standing
+     * behind it. It also has to be the SAME call that arms the carry and aims it — a seam that only
+     * said "you have left" could arm a departure it could not point anywhere, which is exactly how
+     * one came to be aimed at the cell it was leaving.</p>
+     */
+    public interface ZoneMembership {
+        GalacticCoord reAddress(GalacticCoord craftCoord, long tick);
+    }
+
+    /** The reading for a caller with no universe to ask: no zones, so the cube decides. */
+    public static final ZoneMembership NO_ZONES = (craftCoord, tick) -> null;
+
     private final SpaceManager space;
     private final ShipLedger ledger;
     private final ShipCrossingService crossing;
@@ -97,15 +124,22 @@ public final class CellCrossingController {
         return crossing;
     }
     private final LongSupplier clock;
+    private final ZoneMembership zones;
     private final Map<UUID, Long> retryAfter = new HashMap<>();
     private int laneCounter;
 
     public CellCrossingController(SpaceManager space, ShipLedger ledger, ShipCrossingService.Ops ops,
                                   LongSupplier clock) {
+        this(space, ledger, ops, clock, NO_ZONES);
+    }
+
+    public CellCrossingController(SpaceManager space, ShipLedger ledger, ShipCrossingService.Ops ops,
+                                  LongSupplier clock, ZoneMembership zones) {
         this.space = space;
         this.ledger = ledger;
         this.crossing = new ShipCrossingService(ops);
         this.clock = clock;
+        this.zones = zones == null ? NO_ZONES : zones;
     }
 
     /**
@@ -128,16 +162,53 @@ public final class CellCrossingController {
             // an escape on every single crossing.
             return false;
         }
-        if (!CellSeam.shouldCarry(shipPos[0], shipPos[1], shipPos[2])) {
+        GalacticCoord destCoord = carryDestination(cell, shipPos);
+        if (destCoord == null) {
             return false;
         }
-        long now = clock.getAsLong();
         Long cooldown = retryAfter.get(shipId);
-        if (cooldown != null && now < cooldown) {
+        if (cooldown != null && clock.getAsLong() < cooldown) {
             return false;
         }
-        GalacticCoord destCoord = CellSeam.carriedCoord(cell, shipPos[0], shipPos[1], shipPos[2]);
         return cross(slotDim, afcPos, shipId, ledger.get(shipId).coord, destCoord, shipPos, Kind.SEAM);
+    }
+
+    /**
+     * Where a craft at {@code shipPos} in {@code cell} would be carried, or {@code null} when it stays
+     * where it is — the decision {@link #requestCarry} acts on, without the conditions that only
+     * gate WHEN it may act (a crossing already under way, an unsettled ledger row, a cooldown).
+     *
+     * <p>Public so an observer can ask the question the carry answers instead of a neighbouring one:
+     * inside a zone the boundary is a sphere, and the cube predicate beside it says "stays" for a
+     * craft this method carries.</p>
+     */
+    public GalacticCoord carryDestination(GalacticCoord cell, double[] shipPos) {
+        if (cell == null || shipPos == null) {
+            return null;
+        }
+        // INSIDE A ZONE THE BOUNDARY IS A SPHERE, and the cube is only what a slot world can hold.
+        // A body's influence ends at a radius, not at a plane, so a craft that has left the sphere
+        // has left the thing that carries it — whatever face it is nearest, and a craft that has
+        // entered a child's sphere belongs to that child. The cube stays the rule for the galactic
+        // lattice, which has no sphere: its extent IS the cube.
+        //
+        // The sphere is inscribed in the cell, so where both apply this fires FIRST and never later:
+        // a craft is never carried by the cube out of a zone it had not yet left.
+        GalacticCoord bySphere = zones.reAddress(
+                CellSeam.coordOfPose(cell, shipPos[0], shipPos[1], shipPos[2]), clock.getAsLong());
+        if (bySphere != null && bySphere.sameCell(cell)) {
+            bySphere = null; // it belongs where it already is; nothing to carry
+        }
+        // The SPHERE answer aims the carry when it armed it. Falling through to the cube's
+        // neighbour here would aim a sphere departure at a cube face it has not reached — and
+        // inside a zone that face is millions of blocks away, so `carriedCoord` steps no axis and
+        // hands back the cell the craft is leaving. The ship would then be cut and pasted into the
+        // same cell, every tick, for as long as it stayed outside the sphere.
+        if (bySphere != null) {
+            return bySphere;
+        }
+        return CellSeam.shouldCarry(shipPos[0], shipPos[1], shipPos[2])
+                ? CellSeam.carriedCoord(cell, shipPos[0], shipPos[1], shipPos[2]) : null;
     }
 
     /**

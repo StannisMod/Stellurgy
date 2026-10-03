@@ -203,13 +203,23 @@ public class VoidContentTest {
         assertTrue(viaMember.get().sameCell(anchor));
     }
 
+    /**
+     * A starless system is its world and the moons it kept — each moon named inside the rogue's own
+     * zone — and nothing else.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code ClusteredGalaxyGenerator#rogueBodiesFor} at {@code SystemContent.moonCellIn(rogue, null, law, tightestMoon, systemId,} naming a rogue's
+     * moon by the rogue's own cell (the shape before moons had cells of their own), this fails with
+     * "a rogue's moon is named in the rogue's own zone expected:&lt;81453062671_-27624664390_8507222761&gt;
+     * but was:&lt;null&gt;". The anchor is chosen to KEEP a moon, and the method asserts one was
+     * checked: on a moonless rogue the moon verdict ran on nothing.</p>
+     */
     @Test
     public void aStarlessSystemIsTheWorldItsMoonsAndNothingElse() {
         // No belt and no companion, and neither is an omission: a belt is material that never accreted
         // in a star's own well, and a companion is another star. What survives being thrown out of a
         // system is the world and whatever was held tightly enough to come with it.
         ClusteredGalaxyGenerator gen = gen();
-        GalacticCoord anchor = aRogueAnchor(gen);
+        GalacticCoord anchor = aRogueAnchor(gen, true);
         List<SystemBody> bodies = gen.bodiesFor(SEED, anchor);
 
         assertFalse("a rogue system must have bodies", bodies.isEmpty());
@@ -217,19 +227,32 @@ public class VoidContentTest {
                 bodies.get(0).kind());
         assertTrue(bodies.get(0).name().sameCell(anchor));
 
-        int framesDefined = 0;
+        int inTheRoguesZone = 0;
+        int moonsChecked = 0;
         for (SystemBody body : bodies) {
-            assertTrue("everything a rogue keeps shares its one cell", body.name().sameCell(anchor));
+            // Everything a rogue keeps is inside its ONE galactic cell — a moon by being named in
+            // the rogue's own ZONE, whose key is that cell. This used to read `sameCell(anchor)`,
+            // which was the same statement while a moon shared its parent's cell and became false
+            // when moons got cells of their own: a rogue has no primary and therefore no Laplace
+            // sphere, so its zone is bounded by the realized region alone, but it IS a zone.
+            assertTrue("everything a rogue keeps must be inside its one galactic cell, got "
+                            + body.name(), body.name().galacticCell().sameCell(anchor));
             assertTrue("nothing here is a star or a belt",
                     body.kind() == SystemBodyKind.ROGUE_PLANET || body.kind() == SystemBodyKind.MOON);
             assertFalse("a rogue is not a descend target yet, so neither is anything in its system",
                     body.isDescendTarget());
-            if (body.definesFrame()) {
-                framesDefined++;
+            if (body.kind() == SystemBodyKind.MOON) {
+                moonsChecked++;
+                assertEquals("a rogue's moon is named in the rogue's own zone",
+                        anchor.cellKey(), body.name().zone());
+            } else if (body.name().zone() == null) {
+                inTheRoguesZone++;
             }
         }
-        assertEquals("AT MOST ONE REAL BODY PER CELL holds for a rogue too, moons excepted",
-                1, framesDefined);
+        assertTrue("arrangement: the moon verdict above must have run on at least one moon, or it "
+                + "is green on an empty loop", moonsChecked > 0);
+        assertEquals("AT MOST ONE REAL BODY PER CELL: the rogue alone holds the galactic cell",
+                1, inTheRoguesZone);
         assertEquals("and it is deterministic", bodies, gen.bodiesFor(SEED, anchor));
     }
 
@@ -340,6 +363,15 @@ public class VoidContentTest {
      * silent skip here would make every test that uses it vacuous.</p>
      */
     private static GalacticCoord aRogueAnchor(ClusteredGalaxyGenerator gen) {
+        return aRogueAnchor(gen, false);
+    }
+
+    /**
+     * The first starless system in the sweep — and with {@code withAMoon}, the first that KEEPS a
+     * moon, for a scenario whose verdict is about moons. A rogue can hold none (the moon draw is a
+     * hash), and a moon verdict run on one would be green on an empty loop.
+     */
+    private static GalacticCoord aRogueAnchor(ClusteredGalaxyGenerator gen, boolean withAMoon) {
         Galaxy home = gen.galaxies().home(SEED);
         long x0 = xAt(home, 1.5d);
         for (long i = -6; i <= 6; i++) {
@@ -349,13 +381,24 @@ public class VoidContentTest {
                             cell(x0 + i * SPACING, home.centre().sectorY() + j * SPACING,
                                     home.centre().sectorZ() + k * SPACING));
                     if (anchor.isPresent()
-                            && !gen.systemAt(SEED, anchor.get()).get().star().isPresent()) {
+                            && !gen.systemAt(SEED, anchor.get()).get().star().isPresent()
+                            && (!withAMoon || keepsAMoon(gen, anchor.get()))) {
                         return anchor.get();
                     }
                 }
             }
         }
-        throw new AssertionError("no starless system anywhere in 13³ super-cells just outside the home "
-                + "galaxy - the void draw is not producing anything");
+        throw new AssertionError("no starless system" + (withAMoon ? " keeping a moon" : "")
+                + " anywhere in 13³ super-cells just outside the home galaxy - the void draw is not "
+                + "producing anything");
+    }
+
+    private static boolean keepsAMoon(ClusteredGalaxyGenerator gen, GalacticCoord anchor) {
+        for (SystemBody body : gen.bodiesFor(SEED, anchor)) {
+            if (body.kind() == SystemBodyKind.MOON) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -34,6 +34,16 @@ public class AstronomicalBodyHelperTest {
     /** Two ordinary stars, as a factor — the brightness a DIMMED pair must never reach. */
     private static final double TWO_ORDINARY_STARS = 2;
 
+    /**
+     * One astronomical unit, in the field's own units — every distance below is written against it.
+     *
+     * <p>They were literals: {@code 100} for an AU, {@code 50} for half of one. That was readable
+     * while a distance unit WAS a hundredth of an AU and became silently wrong the moment the unit
+     * became a length (100 km): {@code 50} then means 5 000 km, which is inside the star. Written
+     * against the constant, these cases say what they mean and survive the next change of unit.</p>
+     */
+    private static final int AU = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
+
     private static StellarBody sunLikeStar() {
         StellarBody star = new StellarBody();
         // Defaults: size=1.0, blackHole=false, subStars=[]. Set temperature to a Sol-like value.
@@ -41,27 +51,94 @@ public class AstronomicalBodyHelperTest {
         return star;
     }
 
+    /**
+     * A body's apparent size falls inversely with its distance, in AU.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getBodySizeMultiplier} at {@code return (float) DISTANCE_UNITS_PER_AU / orbitalDistance} back on the
+     * old distance unit ({@code 100 / d}, "1 AU = 100"), this fails at its first sample with
+     * "expected:&lt;1.0&gt; but was:&lt;6.684585969196633E-5&gt;".</p>
+     */
     @Test
     public void bodySizeMultiplierIsInverselyProportionalToDistance() {
         // At 100 distance (1 AU equivalent) the multiplier is 1.
-        assertEquals(1.0f, AstronomicalBodyHelper.getBodySizeMultiplier(100f), 1e-6);
+        assertEquals(1.0f, AstronomicalBodyHelper.getBodySizeMultiplier((float) (AU)), 1e-6);
         // Doubling the orbital distance halves the apparent size.
-        assertEquals(0.5f, AstronomicalBodyHelper.getBodySizeMultiplier(200f), 1e-6);
-        // Halving the distance doubles the apparent size.
-        assertEquals(2.0f, AstronomicalBodyHelper.getBodySizeMultiplier(50f), 1e-6);
+        assertEquals(0.5f, AstronomicalBodyHelper.getBodySizeMultiplier((float) (AU * 2)), 1e-6);
+        // Quartering the apparent size at four times the distance — the same inverse law from the
+        // other side. Sampled at a WHOLE number of AU, because a distance unit is 100 km and an AU
+        // is an odd number of them: half an AU is not expressible, and a pin written there measures
+        // the rounding rather than the law (it came back 2.0000014 against a bar of 1e-6).
+        assertEquals(0.25f, AstronomicalBodyHelper.getBodySizeMultiplier((float) (AU * 4)), 1e-6);
     }
 
+    /**
+     * The sky draws our Moon, and Earth from the Moon, at the size it drew them while Luna stood at
+     * 150 — {@code 100 / 150} — though her distance is now her real one.
+     *
+     * <p>Acceptance, stated before the code: a moon at {@code MOON_REFERENCE_UNITS} reads 2/3 within
+     * float rounding (1e-6). Through the planet law it reads 389; through the law as it stood before
+     * Luna's distance was corrected, 100 / 7 688.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getMoonSizeMultiplier} at
+     * {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}
+     * replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)} (the planet law the sky used),
+     * this fails with "a moon at Luna's distance must draw at 100/150
+     * expected:&lt;0.6666666865348816&gt; but was:&lt;389.1724853515625&gt;".</p>
+     */
+    @Test
+    public void theSkyDrawsLunaAtTheSizeItDrewHerWhenSheStoodAt150() {
+        assertEquals("a moon at Luna's distance must draw at 100/150", 100f / 150f,
+                AstronomicalBodyHelper.getMoonSizeMultiplier(AstronomicalBodyHelper.MOON_REFERENCE_UNITS),
+                1e-6);
+    }
+
+    /**
+     * Any other moon is drawn in proportion to its own distance, on the same reference: a moon at
+     * half Luna's distance stands at 75 on the moon-view scale and draws at {@code 100 / 75}.
+     *
+     * <p>Acceptance, stated before the code: a moon at {@code MOON_REFERENCE_UNITS / 2} (1 922 units,
+     * exact) reads 4/3 within 1e-6. A law that ignored the distance and drew every moon as Luna would
+     * read 2/3.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#moonViewUnits} at
+     * {@code return MOON_VIEW_UNITS_AT_LUNA * (orbitalDistance / (double) MOON_REFERENCE_UNITS)}
+     * replaced by {@code return MOON_VIEW_UNITS_AT_LUNA} (every moon read as Luna), this fails with
+     * "a moon at half Luna's distance must draw at 100/75 expected:&lt;1.3333333730697632&gt; but
+     * was:&lt;0.6666666865348816&gt;"; and with {@code AstronomicalBodyHelper#getMoonSizeMultiplier}
+     * at {@code return MOON_VIEW_UNITS_AT_BASE_SKY_SIZE / (float) moonViewUnits(moonOrbitalDistance)}
+     * replaced by {@code getBodySizeMultiplier(moonOrbitalDistance)}, with "expected:&lt;1.3333333730697632&gt;
+     * but was:&lt;778.344970703125&gt;".</p>
+     */
+    @Test
+    public void aMoonAtHalfLunasDistanceDrawsTwiceHerSize() {
+        assertEquals("a moon at half Luna's distance must draw at 100/75", 100f / 75f,
+                AstronomicalBodyHelper.getMoonSizeMultiplier(AstronomicalBodyHelper.MOON_REFERENCE_UNITS / 2),
+                1e-6);
+    }
+
+    /**
+     * One AU around one solar mass is the 48-day year.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
+     * distance unit ({@code a / 100}), this fails with "expected:&lt;48.0&gt; but
+     * was:&lt;8.782729013584356E7&gt;".</p>
+     */
     @Test
     public void orbitalPeriodAtEarthDistanceIsBaseline() {
         // At 100 distance and solarSize=1.0, the formula reduces to 48 days (one MC year).
-        assertEquals(48.0, AstronomicalBodyHelper.getOrbitalPeriod(100, 1.0f), 1e-9);
+        assertEquals(48.0, AstronomicalBodyHelper.getOrbitalPeriod(AU, 1.0f), 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} raising the
+     * distance to the power -3 instead of 3, this fails with "inner planet must orbit faster than
+     * Earth". (A distance-unit inversion leaves it green: it asserts an order.)
+     */
     @Test
     public void orbitalPeriodGrowsWithDistance() {
-        double inner = AstronomicalBodyHelper.getOrbitalPeriod(50, 1.0f);
-        double earth = AstronomicalBodyHelper.getOrbitalPeriod(100, 1.0f);
-        double outer = AstronomicalBodyHelper.getOrbitalPeriod(200, 1.0f);
+        double inner = AstronomicalBodyHelper.getOrbitalPeriod(AU * 50 / 100, 1.0f);
+        double earth = AstronomicalBodyHelper.getOrbitalPeriod(AU, 1.0f);
+        double outer = AstronomicalBodyHelper.getOrbitalPeriod(AU * 2, 1.0f);
 
         assertTrue("inner planet must orbit faster than Earth", inner < earth);
         assertTrue("outer planet must orbit slower than Earth", outer > earth);
@@ -81,32 +158,47 @@ public class AstronomicalBodyHelperTest {
                         AstronomicalBodyHelper.MOON_REFERENCE_UNITS, 1.0f), 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
+     * to the power -2 instead of 2, this fails with "brightness must drop with distance".
+     */
     @Test
     public void stellarBrightnessMonotonicWithDistance() {
         StellarBody star = sunLikeStar();
-        double atOneAu = AstronomicalBodyHelper.getStellarBrightness(star, 100);
-        double atTwoAu = AstronomicalBodyHelper.getStellarBrightness(star, 200);
-        double atHalfAu = AstronomicalBodyHelper.getStellarBrightness(star, 50);
+        double atOneAu = AstronomicalBodyHelper.getStellarBrightness(star, AU);
+        double atTwoAu = AstronomicalBodyHelper.getStellarBrightness(star, AU * 2);
+        double atHalfAu = AstronomicalBodyHelper.getStellarBrightness(star, AU * 50 / 100);
 
         assertTrue("brightness must drop with distance", atTwoAu < atOneAu);
         assertTrue("brightness must rise as we approach the star", atHalfAu > atOneAu);
     }
 
+    /**
+     * A sunlike star lights a world at one AU with brightness 1.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
+     * old distance unit ({@code d / 100}), this fails with "expected:&lt;1.0&gt; but
+     * was:&lt;4.468368725849103E-9&gt;".</p>
+     */
     @Test
     public void stellarBrightnessAtEarthBaselineEqualsOne() {
         // sunLike: size=1.0, temperature=100 -> normalized=1.0, distance=100 -> AU=1.
         // Formula reduces to (1.0 * (1 * 1) / 1) = 1.0.
-        assertEquals(1.0, AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), 100), 1e-9);
+        assertEquals(1.0, AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU), 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's
+     * luminosity by 1 instead of 0.25, this fails with "expected:&lt;0.25&gt; but was:&lt;1.0&gt;".
+     */
     @Test
     public void blackHoleStarReducesBrightness() {
         StellarBody star = sunLikeStar();
-        double normal = AstronomicalBodyHelper.getStellarBrightness(star, 100);
+        double normal = AstronomicalBodyHelper.getStellarBrightness(star, AU);
 
         StellarBody blackHole = sunLikeStar();
         blackHole.setBlackHole(true);
-        double dimmed = AstronomicalBodyHelper.getStellarBrightness(blackHole, 100);
+        double dimmed = AstronomicalBodyHelper.getStellarBrightness(blackHole, AU);
 
         // A black hole emits a quarter of what its size and temperature would otherwise give.
         assertEquals(normal * 0.25, dimmed, 1e-9);
@@ -115,10 +207,15 @@ public class AstronomicalBodyHelperTest {
     /**
      * Every star in a system lights the worlds in it. Before this was true, the companion list was
      * walked only to decide a boolean and no companion ever contributed a photon.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only
+     * the star the planet is bound to instead of its whole system, this fails with "two identical
+     * stars in the same place light a world twice as brightly expected:&lt;2.0&gt; but
+     * was:&lt;1.0&gt;". (A distance-unit inversion leaves it green: it asserts a ratio.)</p>
      */
     @Test
     public void everyStarInASystemContributesItsOwnLight() {
-        double alone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), 100);
+        double alone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU);
 
         StellarBody contactPair = sunLikeStar();
         StellarBody touching = sunLikeStar();
@@ -126,40 +223,62 @@ public class AstronomicalBodyHelperTest {
         contactPair.addSubStar(touching);
 
         assertEquals("two identical stars in the same place light a world twice as brightly",
-                2 * alone, AstronomicalBodyHelper.getStellarBrightness(contactPair, 100), 1e-9);
+                2 * alone, AstronomicalBodyHelper.getStellarBrightness(contactPair, AU), 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
+     * to the power -2 instead of 2, this fails with "a distant one adds only a little".
+     *
+     * <p>The fixture's distances are written as the quantities they are, through
+     * {@code DISTANCE_UNITS_PER_AU}. Until 2026-09-30 they were the bare {@code 5} and {@code 2_000} —
+     * hundredths of an AU, the unit {@code StellarBody.offsetFromSystemAu} also still divided by, so
+     * fixture and reader agreed and the test pinned a reader 14 960× wrong.</p>
+     *
+     * <p>red-witnessed: with {@code StellarBody#offsetFromSystemAu} at
+     * {@code / (double) dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU} back
+     * on {@code / 100d}: "a close
+     * companion nearly doubles the light", 2026-09-30.</p>
+     */
     @Test
     public void aCompanionsContributionFallsOffWithItsOwnDistance() {
         // The defect: every companion used to be fed the PRIMARY's distance, so a companion twenty AU
         // away warmed a world exactly as much as one sitting beside its star. A separation that costs
         // nothing is a separation the model does not really have.
-        double alone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), 100);
+        double alone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU);
 
         StellarBody close = sunLikeStar();
         StellarBody nearby = sunLikeStar();
-        nearby.setOrbitalDistance(5); // 0.05 AU
+        nearby.setOrbitalDistance((int) Math.round(0.05d * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU));
         close.addSubStar(nearby);
 
         StellarBody wide = sunLikeStar();
         StellarBody distant = sunLikeStar();
-        distant.setOrbitalDistance(2_000); // 20 AU, an Alpha-Centauri-like pair
+        // 20 AU, an Alpha-Centauri-like pair
+        distant.setOrbitalDistance(20 * AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
         wide.addSubStar(distant);
 
-        double closeBrightness = AstronomicalBodyHelper.getStellarBrightness(close, 100);
-        double wideBrightness = AstronomicalBodyHelper.getStellarBrightness(wide, 100);
+        double closeBrightness = AstronomicalBodyHelper.getStellarBrightness(close, AU);
+        double wideBrightness = AstronomicalBodyHelper.getStellarBrightness(wide, AU);
 
         assertTrue("a close companion nearly doubles the light", closeBrightness > CLOSE_COMPANION_FACTOR * alone);
         assertTrue("a distant one adds only a little", wideBrightness < DISTANT_COMPANION_FACTOR * alone);
         assertTrue("but it is never nothing", wideBrightness > alone);
     }
 
+    /**
+     * A world of the companion is lit by the primary too.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code for (StellarBody member : systemOf(star))} summing only
+     * the star the planet is bound to, this fails with "a world of the companion sees both stars
+     * expected:&lt;2.0&gt; but was:&lt;1.0&gt;".</p>
+     */
     @Test
     public void aWorldOfTheCompanionIsLitByThePrimaryToo() {
         // An S-type planet is a planet in a binary, not a planet with one sun that happens to have a
         // bright neighbour. The walk therefore starts at the system's root, not at the star the
         // planet is bound to.
-        double alone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), 100);
+        double alone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU);
 
         StellarBody primary = sunLikeStar();
         StellarBody companion = sunLikeStar();
@@ -167,7 +286,7 @@ public class AstronomicalBodyHelperTest {
         primary.addSubStar(companion);
 
         assertEquals("a world of the companion sees both stars", 2 * alone,
-                AstronomicalBodyHelper.getStellarBrightness(companion, 100), 1e-9);
+                AstronomicalBodyHelper.getStellarBrightness(companion, AU), 1e-9);
     }
 
     /**
@@ -177,21 +296,25 @@ public class AstronomicalBodyHelperTest {
      * which the luminosity was taken from the BLACK HOLE's own size and temperature at FULL strength —
      * so a black hole with a companion came out brighter than a bare one and lit by the wrong body,
      * while the companion contributed nothing.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code luminosity *= 0.25d} multiplying a black hole's
+     * luminosity by 1 instead of 0.25, this fails with "the hole stays dimmed: the pair is never as
+     * bright as two ordinary stars".</p>
      */
     @Test
     public void aCompanionDoesNotTurnABlackHoleBackIntoAStar() {
-        double sunAlone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), 100);
+        double sunAlone = AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU);
 
         StellarBody bareHole = sunLikeStar();
         bareHole.setBlackHole(true);
-        double holeAlone = AstronomicalBodyHelper.getStellarBrightness(bareHole, 100);
+        double holeAlone = AstronomicalBodyHelper.getStellarBrightness(bareHole, AU);
 
         StellarBody holeWithCompanion = sunLikeStar();
         holeWithCompanion.setBlackHole(true);
         StellarBody companion = sunLikeStar();
         companion.setOrbitalDistance(0); // separation is not what this test is about
         holeWithCompanion.addSubStar(companion);
-        double together = AstronomicalBodyHelper.getStellarBrightness(holeWithCompanion, 100);
+        double together = AstronomicalBodyHelper.getStellarBrightness(holeWithCompanion, AU);
 
         assertEquals("a black hole and its companion each light the world on their own terms",
                 holeAlone + sunAlone, together, 1e-9);
@@ -216,26 +339,40 @@ public class AstronomicalBodyHelperTest {
         assertEquals(1.0 / 1.5, halfFlux, 1e-9);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getAverageTemperature} at {@code return (int) (averageWithoutAtmosphere} dropping
+     * the atmosphere multiplier, this fails with "thicker atmosphere must imply higher surface
+     * temperature".
+     */
     @Test
     public void averageTemperatureIsThicknessSensitive() {
         StellarBody star = sunLikeStar();
-        int thinAtmosphereTemp = AstronomicalBodyHelper.getAverageTemperature(star, 100, 100);
-        int thickAtmosphereTemp = AstronomicalBodyHelper.getAverageTemperature(star, 100, 1600);
+        int thinAtmosphereTemp = AstronomicalBodyHelper.getAverageTemperature(star, AU, 100);
+        int thickAtmosphereTemp = AstronomicalBodyHelper.getAverageTemperature(star, AU, 1600);
 
         // A thick atmosphere heats the planet via the greenhouse multiplier in the formula.
         assertTrue("thicker atmosphere must imply higher surface temperature",
                 thickAtmosphereTemp > thinAtmosphereTemp);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
+     * to the power -2 instead of 2, this fails with "planet farther from the star must be cooler".
+     */
     @Test
     public void averageTemperatureIsDistanceSensitive() {
         StellarBody star = sunLikeStar();
-        int innerPlanet = AstronomicalBodyHelper.getAverageTemperature(star, 50, 100);
-        int outerPlanet = AstronomicalBodyHelper.getAverageTemperature(star, 200, 100);
+        int innerPlanet = AstronomicalBodyHelper.getAverageTemperature(star, AU * 50 / 100, 100);
+        int outerPlanet = AstronomicalBodyHelper.getAverageTemperature(star, AU * 2, 100);
 
         assertTrue("planet farther from the star must be cooler", outerPlanet < innerPlanet);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#fluxOf} at {@code return luminosity / Math.pow(orbitalRadiusAu, 2)} dividing by the distance
+     * to the power -2 instead of 2, this fails with "PLM at d=747989 was 0.44444410352775, expected
+     * within [2.2, 2.3]".
+     */
     @Test
     public void planetaryLightMultiplierWithinExpectedBounds() {
         // for a sun-like baseline, sweep across astronomical
@@ -243,7 +380,7 @@ public class AstronomicalBodyHelperTest {
         // a narrow band around the analytic value 1.5^log2(stellarBrightness).
         // The model collapses to PLM = 1.5^(2 * log2(100/d)) = (1.5)^(2*log2(100/d)).
         StellarBody star = sunLikeStar();
-        int[] distances = {50, 100, 200, 400};
+        int[] distances = {AU / 2, AU, AU * 2, AU * 4};
         double[] expectedMin = {2.20, 0.99, 0.440, 0.196};
         double[] expectedMax = {2.30, 1.01, 0.449, 0.199};
         for (int i = 0; i < distances.length; i++) {
@@ -276,53 +413,70 @@ public class AstronomicalBodyHelperTest {
      * 0.3 for every surface, so an ice world and a lava world at the same distance were the same
      * temperature — and the physical direction matters: more reflective means colder, which is what
      * keeps ice being ice.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
+     * old distance unit, this fails with "a darker surface absorbs more and runs hotter" — every
+     * temperature collapses to a couple of kelvin and the albedo stops making a difference.</p>
      */
     @Test
     public void albedoCoolsAWorldAndTheDefaultIsEarths() {
         StellarBody star = sunLikeStar();
-        int dark = AstronomicalBodyHelper.getAverageTemperature(star, 100, 0, 0.10d);
-        int earthLike = AstronomicalBodyHelper.getAverageTemperature(star, 100, 0, 0.30d);
-        int icy = AstronomicalBodyHelper.getAverageTemperature(star, 100, 0, 0.60d);
+        int dark = AstronomicalBodyHelper.getAverageTemperature(star, AU, 0, 0.10d);
+        int earthLike = AstronomicalBodyHelper.getAverageTemperature(star, AU, 0, 0.30d);
+        int icy = AstronomicalBodyHelper.getAverageTemperature(star, AU, 0, 0.60d);
 
         assertTrue("a darker surface absorbs more and runs hotter", dark > earthLike);
         assertTrue("a more reflective surface runs colder", icy < earthLike);
         assertEquals("the albedo-less form must still mean Earth's albedo",
-                AstronomicalBodyHelper.getAverageTemperature(star, 100, 0), earthLike);
+                AstronomicalBodyHelper.getAverageTemperature(star, AU, 0), earthLike);
     }
 
+    /**
+     * Kepler's third law, exactly: {@code P ∝ a^1.5 / sqrt(M)}.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
+     * distance unit ({@code a / 100}), this fails with "expected:&lt;384.0&gt; but
+     * was:&lt;7.026183210867485E8&gt;".</p>
+     */
     @Test
     public void orbitalPeriodFollowsTheThreeHalvesPowerLawExactly() {
         // Four times the distance is eight times the period.
-        assertEquals(384.0, AstronomicalBodyHelper.getOrbitalPeriod(400, 1.0f), 1e-9);
+        assertEquals(384.0, AstronomicalBodyHelper.getOrbitalPeriod(AU * 4, 1.0f), 1e-9);
         // A heavier star pulls the same distance into a shorter year, as sqrt(M) — Kepler's third law,
-        // P = 48 * a^1.5 / sqrt(M) = 48 * 1.5^1.5 / sqrt(2). The second argument is a MASS in solar
-        // masses; while it was read as a RADIUS this line expected 31.176914536239792, i.e. 1.5^1.5/2^1.5.
-        assertEquals(62.353829072479584, AstronomicalBodyHelper.getOrbitalPeriod(150, 2.0f), 1e-9);
+        // P = 48 * a^1.5 / sqrt(M) = 48 * 2^1.5 / sqrt(2) = 96 exactly. The second argument is a MASS
+        // in solar masses; while it was read as a RADIUS this line expected a different number
+        // entirely. Two AU rather than the 1.5 it used to sample, because an AU is an odd number of
+        // 100 km units and 1.5 of them rounds — which showed up as a mismatch in the eighth digit
+        // and would otherwise have been answered by widening the bar until the law stopped being pinned.
+        assertEquals(96.0, AstronomicalBodyHelper.getOrbitalPeriod(AU * 2, 2.0f), 1e-9);
     }
 
     /**
      * A star's year is set by its MASS. A star that states no mass supplies one from its radius through
      * the main-sequence relation, which is exact for Sol — and is emphatically not the radius itself.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
+     * distance unit, this fails with "expected:&lt;48.0&gt; but was:&lt;8.782729013584356E7&gt;".</p>
      */
     @Test
     public void aYearIsKeyedOnStellarMassAndAStarWithoutOneDerivesItFromItsRadius() {
         StellarBody sol = sunLikeStar(); // size 1.0
         assertEquals("Sol's mass and radius are both 1, so nothing can tell them apart here",
                 1.0, sol.getMass(), 1e-6);
-        assertEquals(48.0, AstronomicalBodyHelper.getOrbitalPeriod(100, sol.getMass()), 1e-9);
+        assertEquals(48.0, AstronomicalBodyHelper.getOrbitalPeriod(AU, sol.getMass()), 1e-9);
 
         StellarBody big = sunLikeStar();
         big.setSize(2.0f);
         // R = 2 gives M = 2^1.25 = 2.3784, so the year is 48/sqrt(2.3784) days. The mass is a float, so
         // the exact figure below carries that narrowing — deliberately, per this file's header.
         assertEquals(2.378414230005442, big.getMass(), 1e-6);
-        assertEquals(31.124149808586335, AstronomicalBodyHelper.getOrbitalPeriod(100, big.getMass()), 1e-9);
+        assertEquals(31.124149808586335, AstronomicalBodyHelper.getOrbitalPeriod(AU, big.getMass()), 1e-9);
         // A star two Sol-radii across is HEAVIER than two solar masses, so keying the year on its mass
         // gives a shorter year than substituting the radius would. Any star but Sol separates the two.
         assertTrue("a two-radius star masses more than two Suns", big.getMass() > big.getSize());
         assertTrue("so its year is shorter than a radius substitution gives",
-                AstronomicalBodyHelper.getOrbitalPeriod(100, big.getMass())
-                        < AstronomicalBodyHelper.getOrbitalPeriod(100, big.getSize()));
+                AstronomicalBodyHelper.getOrbitalPeriod(AU, big.getMass())
+                        < AstronomicalBodyHelper.getOrbitalPeriod(AU, big.getSize()));
 
         StellarBody stated = sunLikeStar();
         stated.setSize(2.0f);
@@ -343,45 +497,127 @@ public class AstronomicalBodyHelperTest {
                 AstronomicalBodyHelper.getMoonOrbitalPeriod(reference * 2f, 1.0f), 1e-9);
     }
 
+    /**
+     * One AU under one atmosphere is 287 K.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
+     * old distance unit, this fails with "expected:&lt;287&gt; but was:&lt;2&gt;".</p>
+     */
     @Test
     public void temperatureAtOneAuUnderOneAtmosphereIsPinned() {
         // 1 AU, one atmosphere: the radiative balance times the greenhouse term.
-        assertEquals(287, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), 100, 100));
+        assertEquals(287, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), AU, 100));
     }
 
+    /**
+     * A vacuum world at one AU gets the bare radiative balance, 255 K.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
+     * old distance unit, this fails with "expected:&lt;255&gt; but was:&lt;2&gt;".</p>
+     */
     @Test
     public void aVacuumWorldGetsTheBareRadiativeBalance() {
         // atmPressure 0 falls to the max(1, ...) floor — no greenhouse lift at all.
-        assertEquals(255, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), 100, 0));
+        assertEquals(255, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), AU, 0));
     }
 
+    /**
+     * Four AU under one atmosphere is 143 K.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
+     * old distance unit, this fails with "expected:&lt;143&gt; but was:&lt;1&gt;".</p>
+     */
     @Test
     public void temperatureAtFourAuIsPinned() {
-        assertEquals(143, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), 400, 100));
+        assertEquals(143, AstronomicalBodyHelper.getAverageTemperature(sunLikeStar(), AU * 4, 100));
     }
 
+    /**
+     * Brightness falls with the square of distance, exactly.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getStellarBrightness} at {@code float planetaryOrbitalRadius = orbitalDistance / (float) DISTANCE_UNITS_PER_AU} back on the
+     * old distance unit, this fails with "expected:&lt;0.25&gt; but was:&lt;1.1170921814622757E-9&gt;".</p>
+     */
     @Test
     public void brightnessFallsWithTheSquareOfDistanceExactly() {
-        assertEquals(0.25, AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), 200), 1e-9);
+        assertEquals(0.25, AstronomicalBodyHelper.getStellarBrightness(sunLikeStar(), AU * 2), 1e-9);
     }
 
     // The tick-taking overloads of the theta helpers do NOT touch the mod proxy — only the no-arg
     // forms do, which is what the class note above excludes. They carry the same law, so the wrap
     // is checkable here as well as in the integration test.
 
+    /**
+     * The orbital angle wraps once per period.
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code AstronomicalBodyHelper#getOrbitalPeriod} at {@code * Math.pow(Math.pow(orbitalDistance / (double) DISTANCE_UNITS_PER_AU, 3) / starMassSolar, 0.5d)} back on the old
+     * distance unit, this fails with "expected:&lt;1.5707963267948966&gt; but
+     * was:&lt;8.584828652863555E-7&gt;".</p>
+     */
     @Test
     public void orbitalThetaWrapsOncePerPeriod() {
         long periodTicks = (long) (48.0 * 24000.0);
-        assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(100, 1.0f, 0L), 1e-9);
+        assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(AU, 1.0f, 0L), 1e-9);
         assertEquals(Math.PI / 2.0,
-                AstronomicalBodyHelper.getOrbitalThetaAt(100, 1.0f, periodTicks / 4L), 1e-9);
-        assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(100, 1.0f, periodTicks), 1e-9);
+                AstronomicalBodyHelper.getOrbitalThetaAt(AU, 1.0f, periodTicks / 4L), 1e-9);
+        assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(AU, 1.0f, periodTicks), 1e-9);
     }
 
+    /**
+     * A degenerate orbit answers a real angle, never NaN.
+     *
+     * <p>The ZERO-DISTANCE legs are the ones the guards exist for: a period of 0 makes
+     * {@code tick % period} NaN. The massless-parent leg is a different claim — a moon of a body with
+     * no mass never moves, because its period is {@code Infinity} — and the guard is NOT what holds
+     * it: {@code tick % Infinity / Infinity} is already 0 (measured 2026-09-29: with the moon guard
+     * removed, that leg stayed green).</p>
+     *
+     * <p>red-witnessed: 2026-09-29, twice. With the guard in
+     * {@code AstronomicalBodyHelper#getMoonOrbitalThetaAt} at {@code * getMoonOrbitalPeriod(orbitalDistance, parentMassEarths)} removed, this fails with "a moon at zero
+     * distance has a zero period, and must not answer NaN expected:&lt;0.0&gt; but
+     * was:&lt;NaN&gt;". With {@code AstronomicalBodyHelper#getMoonOrbitalPeriod} at {@code * Math.pow(Math.pow((orbitalDistance / (double) MOON_REFERENCE_UNITS), 3) / planetaryMass, 0.5d)} flooring the parent's
+     * mass at 0.05, it fails at the massless leg with "expected:&lt;0.0&gt; but
+     * was:&lt;3.4454888921967097E-6&gt;" — a finite period, predicted before the run at about
+     * 3.5e-6.</p>
+     */
     @Test
     public void aDegenerateOrbitStaysAddressableRatherThanNaN() {
         assertEquals(0.0, AstronomicalBodyHelper.getOrbitalThetaAt(0, 1.0f, 12345L), 1e-9);
-        assertEquals(0.0, AstronomicalBodyHelper.getMoonOrbitalThetaAt(100, 0f, 12345L), 1e-9);
+        assertEquals("a moon at zero distance has a zero period, and must not answer NaN", 0.0,
+                AstronomicalBodyHelper.getMoonOrbitalThetaAt(0, 1.0f, 12345L), 1e-9);
+        assertEquals(0.0, AstronomicalBodyHelper.getMoonOrbitalThetaAt(AU, 0f, 12345L), 1e-9);
+    }
+
+    /**
+     * The low-orbit views size a body by a HEIGHT — a station's altitude, the 190 a station sky puts
+     * its sun at, the player's height above the horizon — and draw it as they did before the
+     * distance unit became a length: base size at a height of 100, inversely with height.
+     *
+     * <p>Acceptance, stated before the code: 1 at 100, 100/190 at the station sky's sun height, and
+     * 0.5 at 200. The numbers are the pre-change law {@code 100 / h}, which is what these views drew
+     * while {@code getBodySizeMultiplier}'s numerator was 100; that numerator is now
+     * {@link AstronomicalBodyHelper#DISTANCE_UNITS_PER_AU}, which no height is in.</p>
+     *
+     * <p>What this does not see: that the renderers call this law. They are client GL code and no
+     * tier here reads a drawn size.</p>
+     *
+     * <p>red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getSizeMultiplierAtHeight} at {@code return REFERENCE_VIEW_HEIGHT / height}
+     * returning {@code getBodySizeMultiplier(height)} — the form the views used before this change:
+     * "size at heights 100, 190, 200: [14959.79, 7873.5737, 7479.895]: arrays first differed at
+     * element [0]; expected:&lt;1.0&gt; but was:&lt;14959.79&gt;" — all three samples wrong, one
+     * verdict.</p>
+     */
+    @Test
+    public void aLowOrbitViewSizesABodyByHeightNotByTheDistanceUnit() {
+        // One verdict over the three samples. The slack is ZERO: the law is one float division,
+        // 100f / h, and each expected value is that same division (or exact in float).
+        float[] expected = {1.0f, 100f / 190f, 0.5f};
+        float[] actual = {
+                AstronomicalBodyHelper.getSizeMultiplierAtHeight(100f),
+                AstronomicalBodyHelper.getSizeMultiplierAtHeight(190f),
+                AstronomicalBodyHelper.getSizeMultiplierAtHeight(200f)};
+        org.junit.Assert.assertArrayEquals("size at heights 100, 190, 200: "
+                + java.util.Arrays.toString(actual), expected, actual, 0f);
     }
 
 }

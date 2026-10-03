@@ -87,7 +87,7 @@ public class PlanetWeatherGateTest {
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
                 + "            <gravitationalMultiplier>100</gravitationalMultiplier>\n"
-                + "            <orbitalDistance>100</orbitalDistance>\n"
+                + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
                 + "            <orbitalTheta>0</orbitalTheta>\n"
                 + "            <orbitalPhi>0</orbitalPhi>\n"
                 + "            <retrograde>false</retrograde>\n"

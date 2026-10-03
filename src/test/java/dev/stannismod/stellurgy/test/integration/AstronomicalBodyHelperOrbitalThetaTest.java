@@ -58,12 +58,19 @@ public class AstronomicalBodyHelperOrbitalThetaTest {
         proxyField.set(null, originalProxy);
     }
 
+    /**
+     * red-witnessed: 2026-09-30, with {@code AstronomicalBodyHelper#getOrbitalThetaAt} at {@code return ((worldTick % periodTicks) / periodTicks) * (2d * Math.PI)} dropping the
+     * modulo by the period, this fails at the one-orbit wrap with "expected:&lt;0.0&gt; but
+     * was:&lt;6.283185307179586&gt;".
+     */
     @Test
     public void orbitalAngleWrapsCorrectly() {
         // Earth-baseline orbit: distance=100, solarSize=1.0 -> period=48 (per
         // AstronomicalBodyHelper.getOrbitalPeriod docs). One full orbit takes
         // 24000 * 48 = 1_152_000 world ticks.
-        final int distance = 100;
+        // One AU. The comment above still describes the case; only the unit it is written in
+        // has changed, from a hundredth of an AU to a length of 100 km.
+        final int distance = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU;
         final float solarSize = 1.0f;
         final double period = AstronomicalBodyHelper.getOrbitalPeriod(distance, solarSize);
         final long oneOrbitTicks = (long) (24000d * period);

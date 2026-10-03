@@ -22,7 +22,7 @@ public final class BodyProfile {
     private final SystemBodyKind kind;
     private final String typeName;
     private final PlanetTypePreset preset;
-    private final int orbitalDistance;
+    private final long orbitalDistance;
     private final double massEarths;
     private final double radiusEarths;
     private final int gravityPercent;
@@ -35,7 +35,7 @@ public final class BodyProfile {
     private final TerrainOption terrain;
     private final int rotationalPeriodTicks;
 
-    public BodyProfile(SystemBodyKind kind, String typeName, PlanetTypePreset preset, int orbitalDistance,
+    public BodyProfile(SystemBodyKind kind, String typeName, PlanetTypePreset preset, long orbitalDistance,
                        double massEarths, double radiusEarths, int gravityPercent, int pressure,
                        int temperatureKelvin, boolean hasOxygen, boolean tidallyLocked, boolean hasRings,
                        double metallicity, TerrainOption terrain, int rotationalPeriodTicks) {
@@ -71,8 +71,8 @@ public final class BodyProfile {
         return preset;
     }
 
-    /** Orbital radius in Stellurgy distance units (100 = 1 AU). */
-    public int orbitalDistance() {
+    /** Orbital radius in Stellurgy distance units (100 km each). */
+    public long orbitalDistance() {
         return orbitalDistance;
     }
 

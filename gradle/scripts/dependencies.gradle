@@ -119,7 +119,7 @@ dependencies {
 
     // Valkyrien Skies physics engine — its source is vendored as a subtree under
     // valkyrienskies/ and compiled into Stellurgy's main source set (VS is now a mandatory
-    // part of Stellurgy — the 3.0.0 "own the physics stack" call). The libraries below were
+    // part of Stellurgy — the 0.1.0 "own the physics stack" call). The libraries below were
     // previously shaded inside the VS jar; here they are ordinary compile+runtime
     // dependencies. Mixin itself comes from MixinBooter (declared in build.gradle),
     // so it is deliberately NOT re-declared here.

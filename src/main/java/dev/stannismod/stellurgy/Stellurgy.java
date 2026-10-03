@@ -600,7 +600,7 @@ public class Stellurgy {
         //written as the tile's NBT "id" into every saved chunk and into packed rockets and
         //stations (StorageChunk); a mismatch drops the tile silently on load — the block
         //survives, its network id, mode and priority do not.
-        //TODO(3.0.0): rename to StellurgyTransceiver only behind a compat alias that keeps the old id
+        //TODO(0.1.0): rename to StellurgyTransceiver only behind a compat alias that keeps the old id
         //readable — MissingMappings covers Forge registries, not TileEntity.REGISTRY.
         GameRegistry.registerTileEntity(TileWirelessTransceiver.class, "StellurgyTransciever");
         GameRegistry.registerTileEntity(TileBlackHoleGenerator.class, "ARblackholegenerator");
@@ -1015,7 +1015,7 @@ public class Stellurgy {
         //level.dat registry snapshot; respelling it drops every placed transceiver and every
         //ItemBlock in storage. Blockstate, block/item models and the recipe result are keyed
         //off this string as well and must move with it.
-        //TODO(3.0.0): rename to wirelessTransceiver, but only together with a
+        //TODO(0.1.0): rename to wirelessTransceiver, but only together with a
         //RegistryEvent.MissingMappings remap of the old name. See CHANGELOG.
         LibVulpesBlocks.registerBlock(StellurgyBlocks.blockTransciever.setRegistryName("wirelessTransciever"));
         //Multiblock machines
