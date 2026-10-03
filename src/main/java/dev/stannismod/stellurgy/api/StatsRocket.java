@@ -93,9 +93,9 @@ public class StatsRocket {
 
     public static StatsRocket createFromNBT(NBTTagCompound nbt) {
         if (nbt.hasKey(TAGNAME)) {
-            NBTTagCompound stats = nbt.getCompoundTag(TAGNAME);
+            // readFromNBT finds the stats compound under TAGNAME itself, as writeToNBT nests it
             StatsRocket statsRocket = new StatsRocket();
-            statsRocket.readFromNBT(stats);
+            statsRocket.readFromNBT(nbt);
             return statsRocket;
         }
 

@@ -7872,6 +7872,32 @@ public class TestProbeCommand extends CommandBase {
             handleRocketLaunch(server, sender, args);
             return;
         }
+        if ("stats-from-nbt".equalsIgnoreCase(args[0]) && args.length >= 2) {
+            // /stellurgytest rocket stats-from-nbt <entityId> — the PUBLIC factory
+            // StatsRocket.createFromNBT, fed exactly what the rocket's own stats write.
+            // The rocket's stats are written by StatsRocket.writeToNBT (the production writer),
+            // that compound is handed to StatsRocket.createFromNBT (the API factory a dependent
+            // mod reads stats through), and what the factory returned is written again by the
+            // same writer. Both compounds are reported as their NBT text so the caller compares
+            // what went in with what came out; the verb computes no verdict of its own. Nothing
+            // inside Stellurgy calls the factory, so this verb is the only thing that exercises it.
+            int entityId = parseIntOr(args[1], Integer.MIN_VALUE);
+            EntityRocket rocket = findRocket(server, entityId);
+            if (rocket == null) {
+                send(sender, "{\"error\":\"rocket not found\",\"entityId\":" + entityId + "}");
+                return;
+            }
+            net.minecraft.nbt.NBTTagCompound written = new net.minecraft.nbt.NBTTagCompound();
+            rocket.stats.writeToNBT(written);
+            dev.stannismod.stellurgy.api.StatsRocket restored =
+                    dev.stannismod.stellurgy.api.StatsRocket.createFromNBT(written);
+            net.minecraft.nbt.NBTTagCompound rewritten = new net.minecraft.nbt.NBTTagCompound();
+            restored.writeToNBT(rewritten);
+            send(sender, "{\"ok\":true,\"entityId\":" + entityId
+                    + ",\"written\":\"" + escapeJson(written.toString())
+                    + "\",\"rewritten\":\"" + escapeJson(rewritten.toString()) + "\"}");
+            return;
+        }
         if ("fuel".equalsIgnoreCase(args[0]) && args.length >= 2) {
             // /stellurgytest rocket fuel <entityId> — exposes stats.getFuelAmount /
             // getFuelCapacity per FuelType + primary rocket fuel type.
@@ -13015,6 +13041,10 @@ public class TestProbeCommand extends CommandBase {
                     // the multiplier alone, which is the only way to show the multiplier is applied
                     // to the thrust the gate compares.
                     "rocketThrustMultiplier",
+                    // Whether the flight model weighs a rocket by the gravity of the body it stands
+                    // on. A launch-gate test reads it as a premise: the gate and the flight model
+                    // can only be asked to agree about local gravity while the model applies it.
+                    "gravityAffectsFuel",
                     "partsWearSystem",
                     "increaseWearIntensityProb",
                     "enableCustomPlanetWeather",
@@ -13230,7 +13260,19 @@ public class TestProbeCommand extends CommandBase {
                 dims.append(attached.get(i).getId());
             }
             dims.append(']');
+            // The BODY the star holds under each id, by name, beside the ids above. The star keys its
+            // bodies by dimension id, so it can hold a different body under an id than the
+            // dimension registry does — and the id alone cannot show that.
+            StringBuilder bodies = new StringBuilder("[");
+            for (int i = 0; attached != null && i < attached.size(); i++) {
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("dim", attached.get(i).getId());
+                body.put("name", attached.get(i).getName());
+                bodies.append(i > 0 ? "," : "").append(jsonMap(body));
+            }
+            bodies.append(']');
             send(sender, "{\"ok\":true,\"id\":" + id
+                    + ",\"planetBodies\":" + bodies
                     + ",\"isBlackHole\":" + star.isBlackHole()
                     + ",\"planets\":" + (attached == null ? 0 : attached.size())
                     + ",\"numPlanets\":" + star.getNumPlanets()

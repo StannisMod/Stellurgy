@@ -186,6 +186,14 @@ public class XMLPlanetLoader {
     private int starId;
     private int offset;
 
+    /**
+     * Every dimension id this parse may not hand to a body that states none: each id a {@code <planet>}
+     * of the file states, collected before any body is read, and each id already given out in this
+     * parse. Without the first half the allocator, which asks only what is REGISTERED, cannot see an id
+     * written further down the file — nothing in it is registered until the whole file has been read.
+     */
+    private final Set<Integer> claimedDims = new HashSet<>();
+
     private HashMap<StellarBody, Integer> maxPlanetNumber = new HashMap<>();
     private HashMap<StellarBody, Integer> maxGasPlanetNumber = new HashMap<>();
 
@@ -1071,12 +1079,59 @@ public class XMLPlanetLoader {
         return maxGasPlanetNumber.get(body);
     }
 
+    /** Whether this {@code <planet>} element carries a non-empty {@code DIMID} attribute of its own. */
+    private static boolean statesADimId(Node planetNode) {
+        String stated = attr(planetNode, ATTR_DIMID);
+        return stated != null && !stated.isEmpty();
+    }
+
+    /**
+     * Every id a {@code <planet>} below {@code node} states, at any depth — a moon's included, and an
+     * element of any letter case, since the reader matches {@code planet} without regard to case. A
+     * value that is not an integer reserves nothing: its body is dropped when it is read.
+     */
+    private void claimStatedDims(Node node) {
+        NodeList children = node.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child.getNodeType() != Node.ELEMENT_NODE) {
+                continue;
+            }
+            if (ELEMENT_PLANET.equalsIgnoreCase(child.getNodeName()) && statesADimId(child)) {
+                try {
+                    claimedDims.add(Integer.parseInt(attr(child, ATTR_DIMID)));
+                } catch (NumberFormatException notAnId) {
+                    // reserves nothing — readPlanetFromNode warns and drops this body
+                }
+            }
+            claimStatedDims(child);
+        }
+    }
+
+    /**
+     * The lowest id from the parse's cursor that nothing holds: not Forge, not the registry, not a
+     * {@code DIMID} anywhere in the file, and not an id this parse already gave out. {@code
+     * INVALID_PLANET} when the allocator's range is exhausted, as {@code getNextFreeDim} answers.
+     */
+    private int allocateUnstatedDim() {
+        int id = DimensionManager.getInstance().getNextFreeDim(offset);
+        while (id != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET && claimedDims.contains(id)) {
+            id = DimensionManager.getInstance().getNextFreeDim(id + 1);
+        }
+        if (id != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET) {
+            claimedDims.add(id);
+        }
+        return id;
+    }
+
     private List<DimensionProperties> readPlanetFromNode(Node planetNode, StellarBody star) {
         List<DimensionProperties> list = new ArrayList<>();
         Node planetPropertyNode = planetNode.getFirstChild();
 
 
-        DimensionProperties properties = new DimensionProperties(DimensionManager.getInstance().getNextFreeDim(offset));
+        // A body that states its id takes that id below; only a body that states none is given one.
+        DimensionProperties properties = new DimensionProperties(statesADimId(planetNode)
+                ? dev.stannismod.stellurgy.api.Constants.INVALID_PLANET : allocateUnstatedDim());
         list.add(properties);
         offset++;//Increment for dealing with child planets
 
@@ -1783,6 +1838,8 @@ public class XMLPlanetLoader {
         //Yes it's hacky but that's another reason why it's private
 
         offset = DimensionManager.getInstance().getDimOffset();
+        claimedDims.clear();
+        claimStatedDims(galaxyNodes.item(0));
         while (masterNode != null) {
             if (masterNode.getNodeName().equalsIgnoreCase(ELEMENT_GALAXYGEN)) {
                 coupling.galaxyGenConfig = readGalaxyGen(masterNode);

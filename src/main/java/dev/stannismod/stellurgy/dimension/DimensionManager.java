@@ -921,6 +921,10 @@ public class DimensionManager implements IGalaxy {
 
         //Register hard coded dimensions
         Map<Integer, IDimensionProperties> loadedPlanets = loadDimensions(dev.stannismod.stellurgy.dimension.DimensionManager.workingPath);
+        // Bodies of the file whose id another body already holds. Identity, not equality: the question
+        // is "this object", and two refused bodies may carry the same id.
+        java.util.Set<DimensionProperties> refusedBodies =
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         if (loadedPlanets.isEmpty()) {
             int numRandomGeneratedPlanets = 9;
             int numRandomGeneratedGasGiants = 1;
@@ -933,7 +937,18 @@ public class DimensionManager implements IGalaxy {
                 }
 
                 for (DimensionProperties properties : dimCouplingList.dims) {
-                    this.registerDimNoUpdate(properties, properties.isNativeDimension);
+                    if (!this.registerDimNoUpdate(properties, properties.isNativeDimension)) {
+                        // Refused: the id is held. Binding the body to its star anyway would put it in
+                        // the star's id-keyed map OVER the holder, so the registry and the star would
+                        // each name a different body under one id.
+                        DimensionProperties holder = dimensionList.get(properties.getId());
+                        logger.warn("planetDefs.xml: body '" + properties.getName() + "' is not loaded:"
+                                + " dimension " + properties.getId() + " is already held by '"
+                                + (holder == null ? "?" : holder.getName()) + "'. Give it a DIMID no"
+                                + " other body states, or none at all.");
+                        refusedBodies.add(properties);
+                        continue;
+                    }
                     properties.setStar(properties.getStarId());
                 }
 
@@ -1097,6 +1112,11 @@ public class DimensionManager implements IGalaxy {
             }
 
             for (DimensionProperties properties : dimCouplingList.dims) {
+                // A body refused above is not loaded at all: nothing below may register it, nor pour
+                // its ore table into the body that holds its id.
+                if (refusedBodies.contains(properties)) {
+                    continue;
+                }
 
                 //Register dimensions loaded by other mods if not already loaded
                 if (!properties.isNativeDimension && properties.getStar() != null && !this.isDimensionCreated(properties.getId())) {

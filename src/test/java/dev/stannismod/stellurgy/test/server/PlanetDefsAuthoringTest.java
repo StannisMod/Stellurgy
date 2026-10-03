@@ -69,9 +69,24 @@ public class PlanetDefsAuthoringTest {
     private static final int STATES_NO_WEATHER = 9609;
     private static final int STATES_A_WEATHER_LENGTH = 9610;
 
+    /**
+     * The id a body written AFTER the unnumbered one states: the lowest id the allocator may hand
+     * out, which is the configured {@code minDimension} at its shipped default. Measured 2026-10-02
+     * in this world before that body was added: the unnumbered body was allocated exactly this id
+     * ({@code stellurgyDimensions:[9601,9602,2,…]}, {@code logs/repin-b-inv1.log}).
+     */
+    private static final int FIRST_FREE = new dev.stannismod.stellurgy.api.StellurgyConfiguration().minDimension;
+    private static final String STATES_THE_FIRST_FREE_ID = "StatesTheFirstFreeId";
+
+    /** The id two bodies of the file state: the earlier holds it, the later must be refused. */
+    private static final int HELD_TWICE = 9611;
+    private static final String HOLDS_THE_ID = "HoldsTheId";
+    private static final String STATES_THE_SAME_ID = "StatesTheSameId";
+
     /** Every DIMID this file states — the ids the allocator must NOT hand the unnumbered body. */
     private static final int[] AUTHORED_DIMS = {PRIMUS, PRIMUS_MOON, HEAVY, LIGHT, DRILLER,
-            DRILLER_UNRESOLVED, MOD_TERRAIN, BOGUS_TERRAIN, STATES_NO_WEATHER, STATES_A_WEATHER_LENGTH};
+            DRILLER_UNRESOLVED, MOD_TERRAIN, BOGUS_TERRAIN, STATES_NO_WEATHER, STATES_A_WEATHER_LENGTH,
+            FIRST_FREE, HELD_TWICE};
 
     private static final String UNNUMBERED = "Unnumbered";
 
@@ -148,6 +163,14 @@ public class PlanetDefsAuthoringTest {
                 // aPlanetThatStatesNoDimensionIsGivenAFreeOne
                 + "        <planet name=\"" + UNNUMBERED + "\">\n"
                 + "        </planet>\n"
+                // ...and, AFTER it, a body stating the id the allocator hands out first.
+                + "        <planet name=\"" + STATES_THE_FIRST_FREE_ID + "\" DIMID=\"" + FIRST_FREE + "\">\n"
+                + "        </planet>\n"
+                // aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar: one id stated twice.
+                + "        <planet name=\"" + HOLDS_THE_ID + "\" DIMID=\"" + HELD_TWICE + "\">\n"
+                + "        </planet>\n"
+                + "        <planet name=\"" + STATES_THE_SAME_ID + "\" DIMID=\"" + HELD_TWICE + "\">\n"
+                + "        </planet>\n"
                 // atmosphereAndGravityOutsideTheirRangeAreClampedIntoIt
                 + "        <planet name=\"Heavy\" DIMID=\"" + HEAVY + "\">\n"
                 + "            <atmosphereDensity>5000</atmosphereDensity>\n"
@@ -219,35 +242,122 @@ public class PlanetDefsAuthoringTest {
 
     /**
      * A body the pack gave no {@code DIMID} still becomes a world: the loader takes a FREE dimension
-     * for it — a real id, not one of vanilla's three and not one another body of the same file
-     * states — rather than dropping it or registering it under the invalid sentinel.
+     * for it — a real id, not one of vanilla's three and not one ANOTHER BODY OF THE SAME FILE states,
+     * wherever in the file that body is written — rather than dropping it or registering it under
+     * the invalid sentinel. And the body that does state an id keeps it: it is a world under that id,
+     * and the star lists exactly one body there.
      *
-     * <p>red-witnessed: 2026-10-02, with {@code XMLPlanetLoader#readPlanetFromNode} at
-     * {@code new DimensionProperties(DimensionManager.getInstance().getNextFreeDim(offset))} given
-     * {@code Constants.INVALID_PLANET} instead of the allocator's answer, this fails with
-     * {@code itsIdTakenByAnother=true} — the body was registered, as a world, under the sentinel.</p>
+     * <p>The file writes the unnumbered body BEFORE {@code StatesTheFirstFreeId}, which states the id
+     * the allocator hands out first — the order in which the shipped loader gave that id away. This is
+     * the regression guard for that defect: one id names one body in the registry and the star alike,
+     * a stated id is honoured, and an allocated id is never a stated one.</p>
+     *
+     * <p>red-witnessed: 2026-10-03, with {@code XMLPlanetLoader#readPlanetFromNode} at
+     * {@code statesADimId(planetNode)} put back to the shipped allocation — every body allocated
+     * {@code getNextFreeDim(offset)} at parse time, before the file's stated ids were known — this
+     * fails with {@code itsIdTakenByAnother=true}, {@code ownerOf2=Unnumbered} and
+     * {@code StatesTheFirstFreeId.dims=[]}. On the shipped tree, before the fix, it failed on
+     * production as it stood (2026-10-02, {@code logs/bugs-b-repro3.log}).</p>
      */
     @Test
     public void aPlanetThatStatesNoDimensionIsGivenAFreeOne() throws Exception {
         Reply named = probe("stellurgytest planet named " + UNNUMBERED);
         int[] ids = named.intArray("dims");
+        Reply stated = probe("stellurgytest planet named " + STATES_THE_FIRST_FREE_ID);
+        Reply owner = probe("stellurgytest planet authored " + FIRST_FREE);
+        Reply sol = probe("stellurgytest star get " + STAR_SOL);
         DimList dims = dims();
         // Vanilla's own three ids (overworld 0, nether -1, end 1) and the loader's invalid sentinel
         // are never free; the file's stated ids belong to other bodies.
         List<Integer> taken = new ArrayList<>(Arrays.asList(0, -1, 1, Constants.INVALID_PLANET));
-        for (int stated : AUTHORED_DIMS) {
-            taken.add(stated);
+        for (int statedDim : AUTHORED_DIMS) {
+            taken.add(statedDim);
+        }
+        List<String> solUnderFirstFree = new ArrayList<>();
+        List<Integer> solDimsOfUnnumbered = new ArrayList<>();
+        for (String element : sol.objectArray("planetBodies")) {
+            Reply body = Reply.of("star planetBodies", element);
+            // the producer always writes `dim` and `name` on every planetBodies element, so a
+            // refusal here is a broken probe, never a reading of the world.
+            if (body.integer("dim") == FIRST_FREE) {
+                solUnderFirstFree.add(body.text("name"));
+            }
+            // (the producer always writes `name` too — the same reason as above)
+            if (UNNUMBERED.equals(body.text("name"))) {
+                solDimsOfUnnumbered.add(body.integer("dim"));
+            }
         }
         Map<String, String> expected = new LinkedHashMap<>();
         expected.put("bodiesNamedUnnumbered", "1");
         expected.put("itsIdTakenByAnother", "false");
         expected.put("itsIdRegisteredAsAWorld", "true");
+        expected.put("StatesTheFirstFreeId.dims", Arrays.toString(new int[]{FIRST_FREE}));
+        expected.put("ownerOf" + FIRST_FREE, STATES_THE_FIRST_FREE_ID);
+        expected.put("Sol.bodiesUnder" + FIRST_FREE, Arrays.asList(STATES_THE_FIRST_FREE_ID).toString());
+        expected.put("Sol.listsUnnumberedUnder", Arrays.toString(ids));
         Map<String, String> actual = new LinkedHashMap<>();
         actual.put("bodiesNamedUnnumbered", String.valueOf(ids.length));
         actual.put("itsIdTakenByAnother", ids.length == 1 ? String.valueOf(taken.contains(ids[0])) : "n/a");
         actual.put("itsIdRegisteredAsAWorld", ids.length == 1 ? String.valueOf(dims.holds(ids[0])) : "n/a");
-        assertEquals("a body the pack gave no DIMID must be ONE world under an id nothing else holds"
-                + " (taken: " + taken + "): " + named + " / " + dims, expected, actual);
+        actual.put("StatesTheFirstFreeId.dims", Arrays.toString(stated.intArray("dims")));
+        // absence is the answer for `name`: an id that holds no body replies found:false with no
+        // name, and the verdict must show that beside the other fields rather than refuse first.
+        actual.put("ownerOf" + FIRST_FREE, owner.textOr("name", "nobody"));
+        actual.put("Sol.bodiesUnder" + FIRST_FREE, solUnderFirstFree.toString());
+        actual.put("Sol.listsUnnumberedUnder", solDimsOfUnnumbered.toString());
+        assertEquals("a body the pack gave no DIMID must be ONE world under an id no other body states,"
+                + " and the body stating id " + FIRST_FREE + " must own it (taken: " + taken + "): "
+                + named + " / " + stated + " / " + owner + " / " + sol + " / " + dims, expected, actual);
+    }
+
+    /**
+     * Two bodies of one file state the same {@code DIMID}: the EARLIER holds it, the later is not
+     * loaded — registered under no id and bound to no star — and the world loads around it. Before
+     * this was decided the later body was refused by the registry and still bound to its star, whose
+     * id-keyed map then held IT under the id while the registry held the other.
+     *
+     * <p>The WARN naming both bodies is part of the clause and is NOT asserted: a log line is never a
+     * test's source.</p>
+     *
+     * <p>red-witnessed: 2026-10-03, with {@code DimensionManager#createAndLoadDimensions} at
+     * {@code if (!this.registerDimNoUpdate(properties, properties.isNativeDimension))} put back to the
+     * shipped unchecked call (its refusal branch and the later {@code refusedBodies.contains(properties)}
+     * skip removed), this fails with {@code Sol.bodiesUnder9611=[StatesTheSameId]}.</p>
+     */
+    @Test
+    public void aSecondBodyStatingAHeldIdIsRefusedAndNotBoundToItsStar() throws Exception {
+        Reply owner = probe("stellurgytest planet authored " + HELD_TWICE);
+        Reply second = probe("stellurgytest planet named " + STATES_THE_SAME_ID);
+        Reply sol = probe("stellurgytest star get " + STAR_SOL);
+        List<String> solUnderHeld = new ArrayList<>();
+        List<Integer> solDimsOfSecond = new ArrayList<>();
+        for (String element : sol.objectArray("planetBodies")) {
+            Reply body = Reply.of("star planetBodies", element);
+            // the producer always writes `dim` and `name` on every planetBodies element, so a
+            // refusal here is a broken probe, never a reading of the world.
+            if (body.integer("dim") == HELD_TWICE) {
+                solUnderHeld.add(body.text("name"));
+            }
+            // (the producer always writes `name` too — the same reason as above)
+            if (STATES_THE_SAME_ID.equals(body.text("name"))) {
+                solDimsOfSecond.add(body.integer("dim"));
+            }
+        }
+        Map<String, String> expected = new LinkedHashMap<>();
+        expected.put("ownerOf" + HELD_TWICE, HOLDS_THE_ID);
+        expected.put("StatesTheSameId.dims", "[]");
+        expected.put("Sol.bodiesUnder" + HELD_TWICE, Arrays.asList(HOLDS_THE_ID).toString());
+        expected.put("Sol.listsStatesTheSameIdUnder", "[]");
+        Map<String, String> actual = new LinkedHashMap<>();
+        // absence is the answer for `name`: an id that holds no body replies found:false with no
+        // name, and the verdict must show that beside the other fields rather than refuse first.
+        actual.put("ownerOf" + HELD_TWICE, owner.textOr("name", "nobody"));
+        actual.put("StatesTheSameId.dims", Arrays.toString(second.intArray("dims")));
+        actual.put("Sol.bodiesUnder" + HELD_TWICE, solUnderHeld.toString());
+        actual.put("Sol.listsStatesTheSameIdUnder", solDimsOfSecond.toString());
+        assertEquals("the earlier of two bodies stating " + HELD_TWICE + " must hold it, and the later"
+                + " be loaded nowhere — not even into its star: " + owner + " / " + second + " / " + sol,
+                expected, actual);
     }
 
     /**
