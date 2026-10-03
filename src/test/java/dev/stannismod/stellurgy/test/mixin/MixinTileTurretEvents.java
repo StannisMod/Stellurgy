@@ -10,7 +10,6 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.weapon.GunSpec;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
 import dev.stannismod.stellurgy.tile.weapon.TileTurret;
@@ -169,7 +168,6 @@ public abstract class MixinTileTurretEvents {
                 + ",\"drive\":\"" + self.getMechanism().getDriveState().name() + "\""
                 + ",\"operable\":" + self.getSpec().isOperable()
                 + ",\"energy\":" + self.getEnergyStored()
-                + ",\"weapons\":" + StellurgyConfiguration.getCurrentConfig().enableWeapons
                 + ",\"friendly\":" + targetIsFriendly()
                 + ",\"locked\":" + isLockedWellEnoughToFire()
                 + ",\"cooldown\":" + fireCooldown
@@ -214,9 +212,7 @@ public abstract class MixinTileTurretEvents {
             return;
         }
         TestTrace.instrument(self.getWorld(), BEAM_INSTRUMENT);
-        boolean weapons = StellurgyConfiguration.getCurrentConfig().enableWeapons;
-        String key = cir.getReturnValue() + "/" + wantsToFire + "/" + weapons + "/"
-                + self.isBeamRecharging();
+        String key = cir.getReturnValue() + "/" + wantsToFire + "/" + self.isBeamRecharging();
         if (key.equals(stellurgyTest$lastBeam)) {
             return;
         }
@@ -224,7 +220,6 @@ public abstract class MixinTileTurretEvents {
         TestTrace.record(self.getWorld(), "turret_beam", stellurgyTest$pos(self.getPos())
                 + ",\"lit\":" + cir.getReturnValue()
                 + ",\"wanted\":" + wantsToFire
-                + ",\"weapons\":" + weapons
                 + ",\"recharging\":" + self.isBeamRecharging()
                 + ",\"energy\":" + self.getEnergyStored());
     }

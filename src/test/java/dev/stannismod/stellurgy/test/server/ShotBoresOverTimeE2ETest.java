@@ -130,9 +130,8 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
 
         int budget = budgetForBlocks(narrowX, 3.5D);
         long fired = events.markInstrumented();
-        // Given a lifetime inside the wait: a round too poor to buy a stage across its face LODGES in
-        // it and lives out its lifetime there (measured on the wide round of this scenario,
-        // 2026-09-29), so its ending is the expiry — a record that must come before the deadline.
+        // Given a lifetime inside the wait, so that whichever way a round ends — stopped by its wall,
+        // or by expiry — the record comes before the deadline.
         long narrow = fire(narrowX - 3.5D, BORE_SPEED, budget, 0.25D, Weapons.ROUND_LIFETIME_TICKS);
         long wide = fire(wideX - 3.5D, BORE_SPEED, budget, 0.75D, Weapons.ROUND_LIFETIME_TICKS);
         assertTrue("both rounds must be admitted or the comparison is about one of them: " + narrow
@@ -234,26 +233,37 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
      * 2.0)".</p>
      */
     /**
-     * A round too poor to buy even one stage crosses the block and comes out of the far side.
+     * A round too poor to buy even one stage of the block it meets is stopped by it: the armour holds.
+     * It does the block no damage, it does not get into it, and it does not come out of the far side.
      *
-     * <p>A stage is bought whole or not at all, so such a round pays nothing and loses nothing: it
-     * spends 1 / speed ticks inside the block and then leaves it. The leaving is what this pins. The
-     * damage walk reports how far a body got, and for one that came out of the far side that is where
-     * it LEFT — a walk that reported where it had entered the last solid slice told a round resuming
-     * inside a block that it had got nowhere, so the substrate advanced it by nothing, met the same
-     * block again, and the round stayed in it for good.</p>
+     * <p>A stage is bought whole or not at all, so such a round has nothing to push the block aside
+     * with. Before the maintainer's ruling of 2026-10-03 it paid nothing and lost nothing and crossed
+     * the block at the speed it arrived with — the poorer the round, the cleaner it went through.</p>
      *
      * <p>The column is four blocks tall because a round fired level in the overworld falls as it
-     * crosses (under a block and a quarter over its ten ticks inside), and the verdict is on X alone,
-     * which gravity does not touch: past the column's far face, whatever ended the round afterwards.</p>
+     * flies, and the verdict is on X alone, which gravity does not touch. The round's lifetime is
+     * three blocks of travel against the one block it has to cover to reach the column, so a round
+     * that went through instead ends in open air past the far face, by expiry.</p>
      *
-     * <p>red-witnessed: with {@code Walk#exitedFarSide} at {@code result.distanceWalked = lastSolidExitDistance;} removed, so reporting the distance to
-     * where the last solid slice was ENTERED (its shape before this fix), this fails with "a round with
-     * half a stage's worth never came out of the far side of a one-block column (ended at x
-     * 1600.8047999999283, far face at 1601)" (2026-09-30).</p>
+     * <p>red-witnessed: with {@code Walk#armourHeld} at
+     * {@code return world.isBlockLoaded(axis) && isStructure(world, axis, world.getBlockState(axis));}
+     * answering false (the pass-through shape this replaces), this fails with "a round with half a
+     * stage's worth was not stopped at the near face of a one-block column: it ended 2.000099997018424
+     * blocks past that face (more than half its 0.2-a-tick travel either way; the far face is 1 past):
+     * the armour did not hold | {...ended:EXPIRED...}" (2026-10-03).</p>
+     *
+     * <p>red-witnessed: with {@code ShotSubstrate#step} at {@code return ShotEndReason.STRUCTURE_IMPACT;}
+     * (the come-to-rest return after {@code contact.result.isStopped()}) answering EXPIRED, this fails
+     * at "the round ended at the column, but not by meeting it: {...reason:EXPIRED} expected:&lt;[STRUCTURE_IMPACT]&gt;
+     * but was:&lt;[EXPIRED]&gt;" (2026-10-03).</p>
+     *
+     * <p>red-witnessed: with {@code StructureDamageEngine#spendInto} at
+     * {@code while (stage < maxStage && left >= stageCost)} buying a stage for half its price
+     * ({@code left * 2 >= stageCost}), this fails at "a round that could not afford a stage damaged the
+     * block anyway: {...stage:1...} expected:&lt;0&gt; but was:&lt;1&gt;" (2026-10-03).</p>
      */
     @Test
-    public void aRoundTooPoorForAStageComesOutOfTheFarSide() throws Exception {
+    public void aRoundTooPoorForAStageIsStoppedByTheBlockItMeets() throws Exception {
         int colX = 1600;
         prepare(colX);
         ask("stellurgytest fill " + DIM + " " + colX + " " + (Y - 2) + " " + Z + " " + colX + " " + (Y + 1) + " " + Z
@@ -266,13 +276,24 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
         long fired = events.markInstrumented();
         long id = fire(colX - 1.0D, speed, stageCost / 2, 0.25D, lifetime);
         assertTrue("the substrate refused the shot", id >= 0);
-        events.awaitRecordWithField(fired, "shot_ended", "shot", id,
+        String ended = events.awaitRecordWithField(fired, "shot_ended", "shot", id,
                 "the round never ended within its own lifetime", lifetime + 40);
 
         Reply end = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the ended round");
-        assertTrue("a round with half a stage's worth never came out of the far side of a one-block column"
-                + " (ended at x " + end.number("endX") + ", far face at " + (colX + 1) + "): " + end,
-                end.number("endX") > colX + 1);
+        System.out.println("FIXTURE armour-holds: stageCost=" + stageCost + " energy=" + (stageCost / 2)
+                + " ended=" + ended + " read=" + end);
+        // How far past the column's near face the round ended, along its own direction of travel (+X):
+        // positive is inside the column or beyond it, negative is short of it. A round that got into
+        // the block at all stands a whole tick's travel (its speed) past the face, and one that came
+        // out of the far side stands more than a block past it, so "within half a tick's travel of the
+        // face, on either side" is the stop at the face and nothing else.
+        double pastNearFace = end.number("endX") - colX;
+        assertTrue("a round with half a stage's worth was not stopped at the near face of a one-block"
+                + " column: it ended " + pastNearFace + " blocks past that face (more than half its "
+                + speed + "-a-tick travel either way; the far face is 1 past): the armour did not hold | "
+                + end + " | " + ended, Math.abs(pastNearFace) <= speed / 2);
+        assertEquals("the round ended at the column, but not by meeting it: " + ended,
+                "STRUCTURE_IMPACT", Events.text(ended, "reason"));
         Reply column = stageAt(colX);
         assertEquals("a round that could not afford a stage damaged the block anyway: " + column, 0,
                 column.integer("stage"));

@@ -389,6 +389,13 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     private void clearSite(int minX, int maxX) throws Exception {
         Reply.of(exec("stellurgytest chunk warmup " + DIM + " " + (minX >> 4) + " " + ((Z - 8) >> 4) + " "
                 + (maxX >> 4) + " " + ((Z + 8) >> 4))).requireOk("warm the site's chunks");
+        // A lid first, then the clearing under it: the site lies under sand, and a cleared column with
+        // sand above it fills again before the first shot (measured 2026-10-03: a sand block at
+        // 1268,64,828, two blocks in front of the cable, stopped every round aimed at it). Until
+        // kinetic rounds too poor for a stage were stopped by what they met, they passed through
+        // that sand unseen.
+        Reply.of(exec("stellurgytest fill " + DIM + " " + minX + " " + (Y + 7) + " " + (Z - 6) + " " + maxX
+                + " " + (Y + 7) + " " + (Z + 6) + " minecraft:stone")).requireOk("roof the site");
         Reply.of(exec("stellurgytest fill " + DIM + " " + minX + " " + (Y - 2) + " " + (Z - 6) + " " + maxX
                 + " " + (Y + 6) + " " + (Z + 6) + " minecraft:air")).requireOk("clear the site");
     }

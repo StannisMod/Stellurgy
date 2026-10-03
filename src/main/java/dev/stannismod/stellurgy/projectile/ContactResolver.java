@@ -205,7 +205,9 @@ public final class ContactResolver {
      * travelled this tick, so boring through a hull is a thing that happens over several ticks rather
      * than an event resolved in the tick it began. What comes back is the budget the walk could not
      * spend, and that is what the body carries on with: a round that ran out inside the armour is
-     * stopped, and one that still has something left keeps going.</p>
+     * stopped, and one that still has something left keeps going. A round whose share cannot buy the
+     * next stage of the block in front of it is stopped too, at that block's face: the walk hands
+     * back nothing, because a body with mass does not get past a plate it could not take out.</p>
      *
      * <p>The body's cross-section rides along, because the material resists with a pressure: the same
      * energy behind a wider face buys less depth. At the reference cross-section the price is what it

@@ -285,6 +285,10 @@ public final class StructureDamageEngine {
             // not what is left part way through it: the blocks of one layer are met at once, so
             // charging the second against the first's leavings would make their listed order matter.
             int poolAtLayer = result.budgetLeft;
+            // Whether the block at the centre was left standing because the body's share could not
+            // pay for its next stage — the one refusal that stops a body with mass. A block a guard
+            // would not let go of is not refused on price, and is not this question.
+            boolean axisRefusedOnPrice = false;
             for (int i = 0; i < layer.blocks.size(); i++) {
                 BlockPos pos = layer.blocks.get(i);
                 if (!world.isBlockLoaded(pos)) {
@@ -310,15 +314,52 @@ public final class StructureDamageEngine {
                 // Priced against the area THIS block is under, not the whole body: it is handed a
                 // share of the budget, so charging it for the entire cross-section would take the
                 // width out of the round twice and leave a wide shot feebler than any physics says.
-                int spent = spendInto(world, pos, state, result,
-                        areaFactor * layer.shares.get(i), allowance, kind);
+                double blockArea = areaFactor * layer.shares.get(i);
+                int nextStageCost = stageCost(world, pos, blockArea, kind);
+                int spent = spendInto(world, pos, state, result, blockArea, allowance, kind);
                 result.budgetSpent += spent;
                 result.budgetLeft -= spent;
+                if (pos.equals(layer.axis)) {
+                    axisRefusedOnPrice = allowance - spent < nextStageCost
+                            && DamageState.getStage(world, pos) < DamageState.getMaxStage(world, pos);
+                }
             }
             if (result.budgetLeft <= 0) {
                 return decide(DamageOutcome.ABSORBED, StopReason.BUDGET_EXHAUSTED, null);
             }
+            if (axisRefusedOnPrice && armourHeld(layer.axis)) {
+                // Whatever is left is stopped by the plate rather than carried through it: the walk
+                // ends at the face of the block that held, and nothing behind it is reached.
+                result.budgetSpent += result.budgetLeft;
+                result.budgetLeft = 0;
+                result.distanceWalked = layer.tEnter * reach;
+                return decide(DamageOutcome.ABSORBED, StopReason.ARMOUR_HELD, null);
+            }
             return false;
+        }
+
+        /**
+         * Did the block at the centre of the body stop it?
+         *
+         * <p>A body with mass gets past a block only by taking it out. Its price is bought a whole
+         * stage at a time, so a body whose share cannot buy the next stage of the block its centre
+         * meets has nothing to push that block aside with: it removes no material beyond the stages it
+         * could pay for, and it does not come out of the far side. Without this, such a body paid
+         * nothing and lost nothing, so it crossed any thickness of plate at the speed it arrived with —
+         * the poorer the round, the cleaner the x-ray.</p>
+         *
+         * <p>Asked after the whole layer has been offered its shares, so the blocks beside the centre
+         * are charged whatever order they were listed in, and only of a centre block this layer
+         * charged and left standing for want of its next stage's price. A block a guard would not
+         * release stands for another reason and keeps the behaviour it had. The thermal channel is not
+         * asked: whether a beam removes material at all is decided by its intensity threshold before
+         * any walk starts.</p>
+         */
+        private boolean armourHeld(BlockPos axis) {
+            if (WeightEngine.isThermalChannel(kind)) {
+                return false;
+            }
+            return world.isBlockLoaded(axis) && isStructure(world, axis, world.getBlockState(axis));
         }
 
         /** What one block of a layer may be charged: the pool times how much of the body covers it. */

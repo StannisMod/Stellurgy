@@ -551,7 +551,6 @@ public class TestProbeCommand extends CommandBase {
                     // is saving up", and the two are different answers a fire control needs to
                     // tell apart. beamPower is 0 for a gun that throws rounds.
                     + ",\"beamPower\":" + spec.getBeamPowerPerTick()
-                    + ",\"weaponsDisabled\":" + turret.isDisabledByConfig()
                     + ",\"beamLit\":" + turret.isBeamLit()
                     + ",\"beamRecharging\":" + turret.isBeamRecharging()
                     + ",\"yaw\":" + mount.getYaw()
@@ -13644,9 +13643,6 @@ public class TestProbeCommand extends CommandBase {
                     // off to pin that a valid rocket still assembles (no fuel-adequacy
                     // gate) — the regression the weight-system merge introduced.
                     "rocketRequireFuel",
-                    // enableWeapons: the off switch has to END what is in the air,
-                    // not suspend it, and only a test that flips it at runtime can see that.
-                    "enableWeapons",
                     // The telescope's reach and what a look costs in time, all read at scan START,
                     // so flipping them at runtime is enough to exercise a short scan in a test
                     // without waiting out a production-length observation.

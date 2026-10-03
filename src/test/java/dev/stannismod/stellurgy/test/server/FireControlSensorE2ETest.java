@@ -60,9 +60,10 @@ public class FireControlSensorE2ETest extends AbstractSharedServerTest {
      * so the moment acquisition is switched off — which is what says the sensor is the reason.
      *
      * <p>red-witnessed: with {@code enableFireControlSensor} taken out of the sensor's gate
-     * ({@code TileFireControlSensor#update} at {@code if (!StellurgyConfiguration.getCurrentConfig().enableWeapons}), this fails at "the sensor went on running with
-     * acquisition switched off — no `sensor_gate_refused` carrying pos = 9401,80,9400 and weapons = true
-     * and sensor = false was recorded within 600 ticks" (2026-09-30). The off window's "fired at
+     * ({@code TileFireControlSensor#update} at {@code if (!StellurgyConfiguration.getCurrentConfig().enableFireControlSensor)}), this fails at "the sensor went on running with
+     * acquisition switched off — no `sensor_gate_refused` carrying pos = 9401,80,9400 and sensor = false
+     * was recorded within 600 ticks" (re-taken 2026-10-03 after the war switch was removed from the same
+     * gate, with the condition made never-true at run time). The off window's "fired at
      * something nobody named it" is downstream of that link and was not reached by it: a round in the
      * window needs an acquisition, which needs a sweep past a gate the link proves refused.</p>
      *
@@ -96,11 +97,11 @@ public class FireControlSensorE2ETest extends AbstractSharedServerTest {
         charge(base);
         // The sensor's own gate says it refused: switched off is a decision production takes in the
         // sensor's tick, before any sweep, and the refusal is the record this waits on. It names the
-        // flag it read, so a refusal for the master switch cannot stand in for this one.
+        // flag it read.
         events.awaitRecordWithFields(off, "sensor_gate_refused",
                 "the sensor went on running with acquisition switched off — the config flag does not"
                         + " disable the mechanic", Weapons.SUBJECT_TICKS,
-                "pos", Weapons.at(base + 1, Y, Z), "weapons", "true", "sensor", "false");
+                "pos", Weapons.at(base + 1, Y, Z), "sensor", "false");
         Reply silent = read(base);
         assertTrue("a battery with acquisition disabled is holding a contact anyway: " + silent,
                 !silent.bool("acquired"));
@@ -142,7 +143,12 @@ public class FireControlSensorE2ETest extends AbstractSharedServerTest {
      *       alone, held well enough to shoot at: {...permitted:true...locked:true,cooldown:0,heat:0...}".</li>
      *   <li>the lock conjunct deleted from {@code TileTurret.canFireNow} ({@code TileTurret.java:441}):
      *       fails at "the battery was permitted to fire on a contact it cannot hold, with the lock the
-     *       only input against it ... {...permitted:true...locked:false,cooldown:0,heat:0...}".</li>
+     *       only input against it ... {...permitted:true...locked:false,cooldown:0,heat:0...}".
+     *       Re-taken 2026-10-03, after the war switch left both the record and the decision filter
+     *       {@code onlyTheLockOpen}: with {@code TileTurret#canFireNow} at
+     *       {@code && isLockedWellEnoughToFire()} deleted, it fails at the same verdict on
+     *       "{...permitted:true,drive:WORKING,operable:true,energy:20000,friendly:false,locked:false,
+     *       cooldown:0,heat:0,caller:auto}".</li>
      *   <li>{@code TileFireControlSensor.isEmitting} ({@code TileFireControlSensor.java:297}) answering
      *       false: fails at "an actively illuminating sensor must be emitting ... {...mode:ACTIVE,
      *       emitting:false}".</li>
@@ -178,7 +184,7 @@ public class FireControlSensorE2ETest extends AbstractSharedServerTest {
                 "false", Events.text(firstHeard, "locked"));
 
         // The gun follows the contact and asks the fire question on it. The decision that counts is
-        // one taken with every OTHER input to it satisfied — the war on, no friend, the gun whole,
+        // one taken with every OTHER input to it satisfied — no friend, the gun whole,
         // its drive working, no cooldown, no heat, and a charge worth a shot — because any of those
         // refusing would make "not permitted" true whatever the lock gate says. The record carries
         // each of them, so the arrangement is read off the decision itself rather than assumed.
@@ -221,7 +227,7 @@ public class FireControlSensorE2ETest extends AbstractSharedServerTest {
 
     /**
      * The automatic fire decisions of the gun at {@code (gx, Y, Z)} taken with every input other than
-     * the lock satisfied, oldest first. The inputs are the record's own fields: the war switch, the
+     * the lock satisfied, oldest first. The inputs are the record's own fields: the
      * friend-or-foe answer, the build, the drive, the raw cooldown and heat of a gun that has not fired
      * yet, and a charge of at least one shot's price (the gun's own {@code energyPerShot}).
      */
@@ -274,7 +280,7 @@ public class FireControlSensorE2ETest extends AbstractSharedServerTest {
     private static java.util.List<String> onlyTheLockOpen(String reply, int gx, int perShot) {
         java.util.List<String> out = new java.util.ArrayList<>();
         for (String decision : Events.recordsWhereAll(reply, "pos", Weapons.at(gx, Y, Z), "caller", "auto",
-                "weapons", "true", "friendly", "false", "operable", "true", "drive", "WORKING",
+                "friendly", "false", "operable", "true", "drive", "WORKING",
                 "cooldown", "0", "heat", "0")) {
             if (Events.number(decision, "energy") >= perShot) {
                 out.add(decision);

@@ -39,5 +39,14 @@ public enum StopReason {
      * This impact identity was applied already and was refused a second time. Zero spend, nothing
      * touched. A retrying caller sees its own earlier success, not a new one.
      */
-    DUPLICATE_IMPACT
+    DUPLICATE_IMPACT,
+
+    /**
+     * A body with mass met a block it could not take out — its share would not buy that block's next
+     * stage — and the block stopped it. Pairs with {@link DamageOutcome#ABSORBED}: the walk ends at
+     * that block's face, what was left of the budget goes nowhere, and no material is removed beyond
+     * the stages already paid for. Distinct from {@link #BUDGET_EXHAUSTED} because the budget did not
+     * run out; it was refused.
+     */
+    ARMOUR_HELD
 }

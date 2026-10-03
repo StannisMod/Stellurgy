@@ -66,9 +66,8 @@ public abstract class MixinTileFireControlSensorEvents {
 
     /**
      * {@code sensor_gate_refused}: the sensor's tick met its switch gate and was turned back — the
-     * master war switch or the acquisition flag off — at the one assignment that gate makes (the
-     * contact list emptied), before any sweep, payment or network registration. Carries the two flags
-     * as production read them. EDGE-ONLY per sensor: written on the first refusing tick after a tick
+     * acquisition flag off — at the one assignment that gate makes (the contact list emptied), before
+     * any sweep, payment or network registration. Carries the flag as production read it. EDGE-ONLY per sensor: written on the first refusing tick after a tick
      * that passed the gate (or after the sensor's first tick), and SILENT for every refusing tick after
      * that — a reader waits for the edge from a mark taken while the sensor was still running.
      */
@@ -84,7 +83,6 @@ public abstract class MixinTileFireControlSensorEvents {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
         TestTrace.record(self.getWorld(), "sensor_gate_refused", "\"pos\":\"" + self.getPos().getX() + ","
                 + self.getPos().getY() + "," + self.getPos().getZ() + "\""
-                + ",\"weapons\":" + config.enableWeapons
                 + ",\"sensor\":" + config.enableFireControlSensor);
     }
 

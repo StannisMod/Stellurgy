@@ -250,10 +250,7 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
      */
     private boolean burnOneTick(boolean wantsToFire, String shipId) {
         int perTick = spec.getBeamPowerPerTick();
-        if (!wantsToFire || perTick <= 0 || !StellurgyConfiguration.getCurrentConfig().enableWeapons) {
-            // Asked here as well as under the muzzle: the emission itself refuses with the war off,
-            // but a gun that called it anyway would still pay the tick's energy and heat for a beam
-            // that never existed.
+        if (!wantsToFire || perTick <= 0) {
             return false;
         }
         if (heat >= spec.getHeatCapacity()) {
@@ -330,17 +327,6 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
      * beam is: there is no register of live beams to look one up in.
      */
     private final BeamReplication.Channel beamChannel = new BeamReplication.Channel();
-
-    /**
-     * Is this gun mute because the server has combat switched off?
-     *
-     * <p>A distinct answer beside "holding fire" and "nothing left to fire with", for the same
-     * reason those two are distinct: a gun that is disabled and a gun that is broken look identical
-     * from outside, and the old switch made every gun on the server look broken.</p>
-     */
-    public boolean isDisabledByConfig() {
-        return !StellurgyConfiguration.getCurrentConfig().enableWeapons;
-    }
 
     /** Is this gun burning right now? */
     public boolean isBeamLit() {
@@ -435,8 +421,7 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
 
     /** Everything that must be true before a round leaves, other than pointing the right way. */
     private boolean canFireNow() {
-        return StellurgyConfiguration.getCurrentConfig().enableWeapons
-                && !targetIsFriendly()
+        return !targetIsFriendly()
                 && isLockedWellEnoughToFire()
                 && spec.isOperable()
                 && mechanism.getDriveState().permitsFiring()

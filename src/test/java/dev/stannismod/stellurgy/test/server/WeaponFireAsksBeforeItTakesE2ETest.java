@@ -9,12 +9,10 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Two promises a server owner has to be able to rely on, neither of which the mechanic made on its
- * own.
+ * A promise a server owner has to be able to rely on, which the mechanic did not make on its own.
  *
  * <h3>A weapon asks before it takes a block</h3>
  * <p>Every protection system on this version - claims, regions, an admin's own listener - works by
@@ -22,11 +20,6 @@ import static org.junit.Assert.assertTrue;
  * them, so a turret was a way around the claim system rather than a weapon in it. What is pinned
  * here is the refusal: a guarded block that is fired on keeps standing, and the same block
  * unguarded does not.</p>
- *
- * <h3>An off switch ends what is in the air</h3>
- * <p>The shot registry is world-saved data. A switch that stopped stepping rounds without ending
- * them left them in the save, to resume whenever it was switched back on - a pause wearing the name
- * of an off switch.</p>
  */
 public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest {
 
@@ -74,46 +67,6 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
                     !gone(subjectStage));
         } finally {
             ask("stellurgytest damage unguard-all").requireOk("drop the guard");
-        }
-    }
-
-    /**
-     * red-witnessed: with {@code endWhatWasStillInTheAir} no longer called from
-     * {@code ShotSubstrate.tick}'s switched-off branch ({@code ShotSubstrate#tick} at {@code endWhatWasStillInTheAir(world);}), this fails at
-     * "a round left in the air when the substrate was switched off is still in the registry"
-     * (2026-09-29).
-     *
-     * <p>red-witnessed: with {@code ShotSubstrate#endWhatWasStillInTheAir} at {@code registry.end(shot.getId(), ShotEndReason.SUBSTRATE_DISABLED, endedAt);} ending those rounds as EXPIRED, this fails
-     * at "the round ended, but for the wrong reason ... {...reason:EXPIRED} expected:&lt;[SUBSTRATE_DISABL]ED&gt;"
-     * (2026-09-30).</p>
-     */
-    @Test
-    public void switchingTheSubstrateOffEndsTheRoundsAlreadyInTheAir() throws Exception {
-        prepare();
-        try {
-            // Straight up, with a long life: it will still be flying when the switch is thrown.
-            long fired = events.markInstrumented();
-            Reply launched = ask("stellurgytest shot fire " + DIM + " " + (X + 20) + " " + Y + " " + Z
-                    + " 0 4 0 2000 400").requireOk("fire a round");
-            long id = launched.longInteger("id");
-            assertTrue("the launch was refused, so there is nothing in the air to end: " + launched,
-                    id >= 0L);
-            Reply inAir = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the round");
-            assertTrue("the round was not in the air right after it was fired: " + inAir,
-                    inAir.bool("present"));
-
-            ask("stellurgytest config set enableWeapons false").requireOk("switch the substrate off");
-            String ended = Weapons.awaitShotEnded(events, fired, id, "a round left in the air when the"
-                    + " substrate was switched off is still in the registry: the switch suspends the"
-                    + " mechanic instead of ending it, and the round is written back into the save on"
-                    + " every tick that follows");
-            assertEquals("the round ended, but for the wrong reason - it should say the substrate was"
-                    + " switched off under it: " + ended, "SUBSTRATE_DISABLED", Events.text(ended, "reason"));
-            Reply after = ask("stellurgytest shot read " + DIM + " " + id).requireOk("read the round");
-            assertTrue("the registry still holds a round it announced as ended: " + after,
-                    !after.bool("present"));
-        } finally {
-            ask("stellurgytest config set enableWeapons true").requireOk("switch the substrate back on");
         }
     }
 

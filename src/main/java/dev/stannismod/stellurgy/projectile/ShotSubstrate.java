@@ -64,12 +64,11 @@ public final class ShotSubstrate {
 
     /**
      * Admit a shot into {@code world} and answer its id, or {@code -1} when it was refused — the
-     * substrate is switched off, the world is a client's, or that world is already carrying as many
-     * shots as it is allowed. A weapon that fired and got {@code -1} did not fire.
+     * world is a client's, or that world is already carrying as many shots as it is allowed. A
+     * weapon that fired and got {@code -1} did not fire.
      */
     public static long launch(World world, ShotSpec spec) {
-        if (world == null || world.isRemote || spec == null
-                || !StellurgyConfiguration.getCurrentConfig().enableWeapons) {
+        if (world == null || world.isRemote || spec == null) {
             return -1L;
         }
         long id = ShotRegistry.get(world).add(spec, StellurgyConfiguration.getCurrentConfig().maxShotsPerWorld);
@@ -139,10 +138,6 @@ public final class ShotSubstrate {
         if (world == null || world.isRemote) {
             return;
         }
-        if (!StellurgyConfiguration.getCurrentConfig().enableWeapons) {
-            endWhatWasStillInTheAir(world);
-            return;
-        }
         ShotRegistry registry = ShotRegistry.get(world);
         if (registry.count() == 0) {
             return;
@@ -158,30 +153,6 @@ public final class ShotSubstrate {
                 registry.end(shot.getId(), end, endedAt);
                 ShotReplication.announceEnd(world, shot.getId(), endedAt, end);
             }
-        }
-        registry.markDirty();
-    }
-
-    /**
-     * Empty this world's registry when the substrate is switched off.
-     *
-     * <p><b>Off has to mean gone, not paused.</b> The registry is world-saved data, so a round left
-     * sitting in it is written back on every save that follows, and switching the flag on again — a
-     * month later, on a world that has moved on — resumes it from wherever it was. A config flag
-     * that suspends its mechanic instead of ending it is not a way to turn the mechanic off.</p>
-     *
-     * <p>Ended one by one through the same path everything else uses, so the clients that were told
-     * about these rounds are told they are over rather than left drawing them until they age out.</p>
-     */
-    private static void endWhatWasStillInTheAir(World world) {
-        ShotRegistry registry = ShotRegistry.get(world);
-        if (registry.count() == 0) {
-            return;
-        }
-        for (Shot shot : registry.snapshot()) {
-            Vec3d endedAt = ShotFrame.worldPosition(world, shot);
-            registry.end(shot.getId(), ShotEndReason.SUBSTRATE_DISABLED, endedAt);
-            ShotReplication.announceEnd(world, shot.getId(), endedAt, ShotEndReason.SUBSTRATE_DISABLED);
         }
         registry.markDirty();
     }

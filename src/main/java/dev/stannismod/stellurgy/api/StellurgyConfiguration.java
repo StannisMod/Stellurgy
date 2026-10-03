@@ -443,29 +443,6 @@ public class StellurgyConfiguration {
     @ConfigProperty(needsSync = true)
     public int repairWelderCapacity = 100000;
     /**
-     * Whether the war exists: whether a weapon fires, a sensor acquires, and weapon fire damages
-     * anything.
-     *
-     * <h3>One key, because a pack asks one question</h3>
-     * <p>What a server owner wants to decide is "is there combat here", and the answer has to cover
-     * every weapon family at once. The key this replaced gated the shot registry alone, which left a
-     * held beam burning hulls with the war "off" — a switch that covers half a mechanic is worse than
-     * none, because it reads as a promise.</p>
-     *
-     * <h3>OFF is reversible, and that bounds what it may do</h3>
-     * <p>It is meant to be thrown on a world that has already been fought over, and thrown back later
-     * on the same save. So OFF destroys nothing a later ON would need: guns keep their builds,
-     * buffers and targets, damage records stay on the blocks that carry them, repair keeps working,
-     * and shields — which defend against more than weapons — are untouched. The one thing it ends is
-     * flights, because a round left in the registry is written back into the save forever and would
-     * resume months later into a world that has moved on.</p>
-     *
-     * <p>A gun that is off SAYS so rather than falling silent: "the war is off" is a distinct answer
-     * beside "holding fire" and "nothing left to fire with".</p>
-     */
-    @ConfigProperty(needsSync = true)
-    public boolean enableWeapons = true;
-    /**
      * Below this speed, in blocks per tick, a shot mirrored off a shield is ended at the shell rather
      * than left alive. A body deflected to nearly nothing has to be somewhere if it is an entity; a
      * record does not, and a cloud of near-motionless rounds loitering against a shell is both a
@@ -862,7 +839,6 @@ public class StellurgyConfiguration {
         stellurgyConfig.wearTankLeakChanceMax = config.get(ROCKET, "wearTankLeakChanceMax", 0.5, "Chance (0..1) that a fully-worn fuel tank carrying fuel/oxidizer leaks at launch. Scaled by the tank's wear stage. A leak both bleeds fuel and adds to the launch failure (explosion) probability").getDouble();
         stellurgyConfig.wearTankLeakFuelLoss = config.get(ROCKET, "wearTankLeakFuelLoss", 0.25, "Fraction of a fuel type's loaded fuel lost when a worn tank of that type leaks at launch").getDouble();
         stellurgyConfig.wearSeatBlockStageFraction = config.get(ROCKET, "wearSeatBlockStageFraction", 0.7, "Wear fraction (0..1 of max stage) at or above which a worn seat blocks a CREWED launch. Uncrewed/automated rockets ignore seat wear").getDouble();
-        stellurgyConfig.enableWeapons = config.get(WEAPONS, "enableWeapons", true, "Whether combat exists on this server: whether guns fire (thrown rounds and held beams alike), whether sensors acquire targets, and whether weapon fire damages anything. Safe to switch off and back on again on a live world - guns keep their builds, buffers and targets, damage already done stays on the blocks that carry it, repair keeps working, and shields are unaffected. The only thing ending is the rounds still in the air, which would otherwise sit in the save waiting to resume. A gun with combat off reports itself disabled rather than silently doing nothing").getBoolean();
         stellurgyConfig.shotReflectionSpeedFloor = config.get(WEAPONS, "shotReflectionSpeedFloor", 0.05, "Speed in blocks per tick below which a shot deflected by a shield is ended at the shell instead of continuing. Prevents near-motionless rounds loitering against a shield", 0.0, Double.MAX_VALUE).getDouble();
         stellurgyConfig.shotPenetrationSpeedFloor = config.get(WEAPONS, "shotPenetrationSpeedFloor", 0.05, "Speed in blocks per tick below which a round boring through a hull is treated as having come to rest inside it. Penetration costs a round its speed, and without a floor a spent one creeps forward forever", 0.0, Double.MAX_VALUE).getDouble();
         stellurgyConfig.shotBodyRadiusCap = config.get(WEAPONS, "shotBodyRadiusCap", 2.0, "The widest a shot's body is treated as when it sweeps its way through blocks, in blocks. A body sweeps a cylinder rather than a line and the work one step does grows with the square of its width, so this bounds what an absurd calibre can cost the server. The declared cross-section still prices the shot; only the geometry is capped", 0.0, 8.0).getDouble();

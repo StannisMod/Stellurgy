@@ -5,6 +5,8 @@ import org.junit.Test;
 import java.util.List;
 import dev.stannismod.stellurgy.test.Reply;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -90,6 +92,66 @@ public class StructuralDamageContractTest extends AbstractSharedServerTest {
                 + result, Reply.of(result).bool("hasExit"));
         assertTrue("the pane survived a budget that should have taken it:\n" + result,
                 readLong(result, "destroyed") > 0);
+    }
+
+    /**
+     * A kinetic impact that cannot buy the next stage of the block it has reached is stopped by that
+     * block: what it paid for is real damage, and what it has left goes nowhere — it is neither
+     * handed back nor carried through the block that held. Maintainer ruling 2026-10-03, verbatim:
+     * "По кинетике без порога - такой снаряд не должен делать повреждения. Будем считать, что "броня
+     * держит"" (a kinetic round below the threshold does no damage; the armour holds).
+     *
+     * <p>The budget is one whole block and a stage and a half of the next, priced by the wall itself:
+     * the first block goes, and the second takes the one stage that was paid for and holds. That the
+     * block behind it is not reached is read as the remainder going nowhere ({@code left == 0}), not
+     * off the third block's stage: half a stage cannot stage it under either law, so that read could
+     * not fail.</p>
+     *
+     * <p>red-witnessed: with {@code Walk#armourHeld} at
+     * {@code return world.isBlockLoaded(axis) && isStructure(world, axis, world.getBlockState(axis));}
+     * answering false, this fails with "the remainder of an impact that could not buy the next stage
+     * was handed back or carried on ... {...outcome:EXITED, stopReason:EXITED_FAR_SIDE, spent:1250,
+     * left:125, staged:1, destroyed:1, depth:3...} expected:&lt;0&gt; but was:&lt;125&gt;" (2026-10-03).</p>
+     *
+     * <p>red-witnessed: with {@code Walk#visit} at
+     * {@code return decide(DamageOutcome.ABSORBED, StopReason.ARMOUR_HELD, null);} deciding
+     * {@code BUDGET_EXHAUSTED} instead, this fails at "an impact stopped by a block reported a different
+     * reason: {...outcome:ABSORBED, stopReason:BUDGET_EXHAUSTED, spent:1375, left:0...}" (2026-10-03).</p>
+     *
+     * <p>red-witnessed: with {@code StructureDamageEngine#spendInto} at
+     * {@code if (!mayRemove(world, pos, state))} taken for every block that reaches its last stage (so
+     * nothing is ever removed), this fails at "the stages the impact paid for were not all taken (one
+     * whole block, then one stage of the next): {...stopReason:ARMOUR_HELD, spent:1375, left:0,
+     * staged:2, destroyed:0...}" (2026-10-03).</p>
+     *
+     * <p>red-witnessed: with {@code Walk#visit} at
+     * {@code result.distanceWalked = layer.tEnter * reach;} followed by the held block's stage being set
+     * back to 0 before the walk ends, this fails at "the block that held was not left with the one stage
+     * that was paid for: {...stopReason:ARMOUR_HELD...staged:1...} ... {...stage:0...}" (2026-10-03).</p>
+     */
+    @Test
+    public void aKineticImpactThatCannotBuyTheNextStageIsHeldByTheBlock() throws Exception {
+        int x = 1200, z = 1340;
+        buildWall("minecraft:stone", x, z, 3);
+        clearImpactMemory();
+
+        String probe = stage(x, z);
+        long stageCost = readLong(probe, "stageCost");
+        long maxStage = readLong(probe, "maxStage");
+        requireArranged("the wall has fewer than two stages, so no budget lands part-way into a block: "
+                + probe, maxStage > 1 && stageCost > 1);
+        int budget = (int) (stageCost * maxStage + stageCost + stageCost / 2);
+
+        String result = impact(x - 2.5D, z + 0.5D, 1, 0, 0, budget, "KINETIC", 9020);
+        assertEquals("the remainder of an impact that could not buy the next stage was handed back"
+                + " or carried on, so the block it could not take out did not stop it:\n" + result,
+                0L, readLong(result, "left"));
+        assertEquals("an impact stopped by a block reported a different reason:\n" + result,
+                "ARMOUR_HELD", Reply.of(result).text("stopReason"));
+        assertEquals("the stages the impact paid for were not all taken (one whole block, then one"
+                + " stage of the next):\n" + result, 1L, readLong(result, "destroyed"));
+        assertEquals("the block that held was not left with the one stage that was paid for:\n"
+                + result + "\n" + stage(x + 1, z), 1L, readLong(stage(x + 1, z), "stage"));
     }
 
     /**

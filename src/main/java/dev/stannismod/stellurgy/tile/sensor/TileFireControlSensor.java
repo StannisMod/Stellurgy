@@ -125,11 +125,7 @@ public class TileFireControlSensor extends TileEntity implements ITickable, ISub
             // would be measured from the wrong point. Waiting is the only correct behaviour.
             return;
         }
-        if (!StellurgyConfiguration.getCurrentConfig().enableWeapons
-                || !StellurgyConfiguration.getCurrentConfig().enableFireControlSensor) {
-            // Two gates, one behaviour. The master says whether there is a war at all; the narrower
-            // one says whether batteries find their own targets in it. A pack may want the second
-            // without the first being in question, which is why both survive.
+        if (!StellurgyConfiguration.getCurrentConfig().enableFireControlSensor) {
             // Switched off means OFF: no acquisition, nothing published, no power drawn and not even
             // a place in the network — a disabled sensor is not a node that quietly keeps its buffer
             // topped up. Anything it had already published expires on its own.

@@ -98,9 +98,8 @@ public class ASensorAboardAShipE2ETest extends AbstractSharedServerTest {
      */
     @Test
     public void aSensorOnAShipHoldsWhatIsOffItAndNeverItsOwnDeck() throws Exception {
-        // The sensor's update refuses to sweep unless both switches are on
-        // (TileFireControlSensor.update); the test rests on them, so it states them.
-        config("enableWeapons", "true");
+        // The sensor's update refuses to sweep unless its switch is on
+        // (TileFireControlSensor.update); the test rests on it, so it states it.
         config("enableFireControlSensor", "true");
         double radius = Double.parseDouble(configText("fireControlSensorRadius"));
         int sweepInterval = Integer.parseInt(configText("fireControlSensorScanIntervalTicks"));

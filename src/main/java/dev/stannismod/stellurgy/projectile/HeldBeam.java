@@ -5,7 +5,6 @@ import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeResult;
 import dev.stannismod.stellurgy.affs.world.shield.ShieldStrikeService;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.damage.ImpactKind;
 import dev.stannismod.stellurgy.api.damage.TravellingBody;
 import dev.stannismod.stellurgy.damage.ImpactKindMapping;
@@ -96,12 +95,7 @@ public final class HeldBeam {
     public static Emission emit(World world, Vec3d muzzle, Vec3d direction, double reach,
                                 int powerThisTick, ImpactKind kind, double radius, String hullId) {
         if (world == null || world.isRemote || muzzle == null || direction == null
-                || powerThisTick <= 0 || reach <= 0.0D
-                || !StellurgyConfiguration.getCurrentConfig().enableWeapons) {
-            // The war switch is asked HERE and not only where a round is admitted. A held beam has no
-            // record and never passes through the registry, so a gate on the registry alone let a
-            // beam turret keep burning hulls on a server that had switched combat off - a switch
-            // covering half a mechanic, which reads as a promise and is worse than none.
+                || powerThisTick <= 0 || reach <= 0.0D) {
             return ended(muzzle, muzzle, 0.0D, Math.max(0, powerThisTick));
         }
         double length = direction.lengthVector();
