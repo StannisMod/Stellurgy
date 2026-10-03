@@ -9,6 +9,7 @@ import org.junit.Test;
 
 import net.minecraft.util.math.BlockPos;
 
+import dev.stannismod.stellurgy.space.AbsolutePos;
 import dev.stannismod.stellurgy.space.CrewTransfer;
 import dev.stannismod.stellurgy.space.DescentController;
 import dev.stannismod.stellurgy.space.GalacticCoord;
@@ -20,11 +21,17 @@ import dev.stannismod.stellurgy.space.SpaceManager;
 import dev.stannismod.stellurgy.space.SpaceSubsystem;
 import dev.stannismod.stellurgy.space.TerrainHeightFinder;
 import dev.stannismod.stellurgy.space.VSDescentPasteResolver;
+import dev.stannismod.stellurgy.universe.BodyEphemeris;
+import dev.stannismod.stellurgy.universe.CellFrame;
+import dev.stannismod.stellurgy.universe.SystemBody;
+import dev.stannismod.stellurgy.universe.SystemBodyKind;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -438,5 +445,163 @@ public class DescentControllerTest {
                 DescentController.shouldTriggerDescent(true, r + 1.0, r));
         assertFalse("never from a planet-side world",
                 DescentController.shouldTriggerDescent(false, 0.0, r));
+    }
+
+    /**
+     * <b>A craft that has closed on a MOON finds it, from a different cell.</b>
+     *
+     * <p>This test fails if production breaks the contract that <b>the descent trigger sees a body a
+     * craft has physically closed on, whatever cell that body is named in.</b> It is the pin whose
+     * absence let the trigger die: a moon has a cell of its own inside its parent's zone, so it is
+     * never in the craft's cell, and a candidate list filtered by the craft's cell could not hold
+     * one. Flying to a moon then did nothing — no descent, no refusal, and no line in the log,
+     * because the check that would have said something was the one that could not see the body.
+     * Every tier stayed green over it: they all ask the registry which bodies are somewhere, and
+     * none of them puts a craft next to a moon and asks what the trigger makes of it.</p>
+     *
+     * <p>The craft is placed in EARTH's cell, one third of a descent radius from Luna, at a tick
+     * where Luna is a long way from its parent — so a reading that took the two as sharing a frame,
+     * or that compared cell names, gets the wrong answer rather than an unlucky one.</p>
+     *
+     * <p>red-witnessed: 2026-09-29, with {@code DescentController#nearestDescentTarget} at {@code double distance = craftAt.distanceTo(body.absoluteAt(tick))} measuring to
+     * each body's position at tick 0 instead of at the tick asked, this fails with "a craft a third of
+     * a descent radius from a moon must find the MOON … was not:&lt;null&gt;". That inversion breaks
+     * the reading of a body's LIVE position. The other half of the defect this test is named for —
+     * a candidate list drawn from the craft's own cell — lives in the caller,
+     * {@code TileAdvancedFlightComputer#descendTargetsIn} at {@code for (dev.stannismod.stellurgy.universe.SystemBody b : reg.skyBodiesAt(shipCoord))}, and NO test pins that call:
+     * {@code SystemContentTest} witnesses {@code skyBodiesAt} itself, not which read the caller makes.</p>
+     */
+    @Test
+    public void aCraftClosedOnAMoonFindsItEvenThoughItIsInAnotherCell() {
+        long r = ShipEntryController.DESCENT_RADIUS_BLOCKS;
+        long tick = (long) (LUNA_PERIOD_TICKS / 4d); // a quarter turn: Luna is off Earth's own axis
+
+        SystemBody earth = earth();
+        SystemBody luna = luna();
+        List<SystemBody> system = java.util.Arrays.asList(sol(), earth, luna);
+
+        // ARRANGEMENT, stated as measurement rather than assumed: the two bodies really are in
+        // different cells, and Luna really is far enough from Earth that "near Luna" and "near
+        // Earth" cannot be the same place.
+        assertNotEquals("arrangement: the moon must not be in its parent's cell",
+                earth.name().cellKey(), luna.name().cellKey());
+        double separation = earth.absoluteAt(tick).distanceTo(luna.absoluteAt(tick));
+        assertTrue("arrangement: the moon must be well outside a descent radius of its parent "
+                + "(separation " + separation + ", radius " + r + ")", separation > r * 4d);
+
+        AbsolutePos nearLuna = luna.absoluteAt(tick).plus(r / 3L, 0L, 0L);
+        assertSame("a craft a third of a descent radius from a moon must find the MOON",
+                luna, DescentController.nearestDescentTarget(system, nearLuna, tick, r));
+
+        AbsolutePos nearEarth = earth.absoluteAt(tick).plus(r / 3L, 0L, 0L);
+        assertSame("and one beside the planet must still find the PLANET",
+                earth, DescentController.nearestDescentTarget(system, nearEarth, tick, r));
+
+        // The negative leg, without which "it found something" is satisfiable by a method that
+        // always answers with the first candidate.
+        AbsolutePos outside = luna.absoluteAt(tick).plus(r * 3L, 0L, 0L);
+        assertTrue("arrangement: the far point must be out of range of the planet as well",
+                outside.distanceTo(earth.absoluteAt(tick)) > r);
+        assertNull("nothing is in range out there",
+                DescentController.nearestDescentTarget(system, outside, tick, r));
+    }
+
+    /**
+     * Between a moon and its planet, both in range, the NEAREST one is chosen.
+     *
+     * <p>Not a tidiness clause: the two overlap for real — a moon orbits at a few parent radii and
+     * both descent shells reach out from their own bodies — so "whichever the candidate list
+     * happened to hold first" is a landing site decided by iteration order, and the list's order is
+     * the registry's, which no pilot can see.</p>
+     *
+     * <p>red-witnessed: 2026-09-30 (re-run after the radius was widened off the threshold and both
+     * candidates were asserted in range), with {@code DescentController#nearestDescentTarget} at {@code if (!shouldTriggerDescent(true, distance, radiusBlocks) || distance >= nearestDistance)} keeping
+     * the FIRST in-range candidate instead of the nearer one, this fails with "beside the moon, the
+     * moon expected same:&lt;SystemBody[MOON …]&gt; was not:&lt;SystemBody[PLANET …]&gt;".</p>
+     */
+    @Test
+    public void withAMoonAndItsPlanetBothInRangeTheNearestWins() {
+        SystemBody earth = earth();
+        SystemBody luna = luna();
+        long tick = 0L;
+        List<SystemBody> system = java.util.Arrays.asList(sol(), earth, luna);
+
+        double separation = earth.absoluteAt(tick).distanceTo(luna.absoluteAt(tick));
+        // A radius that holds both from EITHER probe point, with room to spare. It was
+        // `separation + 1000`, and the probe beside the moon — 1 000 blocks further out along the
+        // same axis — then stood exactly on the planet's threshold, in range or not by a rounding.
+        long wide = (long) (separation * 2d);
+
+        AbsolutePos justOffLuna = luna.absoluteAt(tick).plus(1_000L, 0L, 0L);
+        AbsolutePos justOffEarth = earth.absoluteAt(tick).plus(1_000L, 0L, 0L);
+        // ARRANGEMENT, as the quantity the threshold compares: both bodies are in range of both
+        // probes, so each answer below is a CHOICE between two candidates, not the only one left.
+        assertTrue("arrangement: beside the moon, the planet must be in range too",
+                justOffLuna.distanceTo(earth.absoluteAt(tick)) < wide);
+        assertTrue("arrangement: beside the planet, the moon must be in range too",
+                justOffEarth.distanceTo(luna.absoluteAt(tick)) < wide);
+
+        assertSame("beside the moon, the moon", luna,
+                DescentController.nearestDescentTarget(system, justOffLuna, tick, wide));
+
+        assertSame("beside the planet, the planet", earth,
+                DescentController.nearestDescentTarget(system, justOffEarth, tick, wide));
+
+        // A body nobody can stand on is never the answer, however near: the star is at the anchor
+        // and this radius reaches it.
+        AbsolutePos atTheAnchor = sol().absoluteAt(tick);
+        assertNull("a star is not a descent target at any distance",
+                DescentController.nearestDescentTarget(
+                        java.util.Collections.singletonList(sol()), atTheAnchor, tick, wide));
+    }
+
+    // ---- fixture: Sol, Earth and Luna, built the way SystemContent builds them -----------------
+
+    private static final GalacticCoord ANCHOR = GalacticCoord.ORIGIN;
+    private static final double EARTH_PERIOD_TICKS = 365.25d * 24_000d;
+    private static final double LUNA_PERIOD_TICKS =
+            dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DAYS_PER_LUNAR_MONTH * 24_000d;
+    private static final double SOL_MASS_EARTHS =
+            dev.stannismod.stellurgy.util.AstronomicalBodyHelper.EARTH_MASSES_PER_SOLAR_MASS;
+
+    private static SystemBody sol() {
+        return SystemBody.fixedAt(ANCHOR, SystemBodyKind.STAR,
+                dev.stannismod.stellurgy.api.Constants.INVALID_PLANET, 1)
+                .withBulk(SOL_MASS_EARTHS, 109.17d);
+    }
+
+    private static BodyEphemeris earthOrbit() {
+        return BodyEphemeris.orbit(
+                dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU,
+                0d, 0d, false, EARTH_PERIOD_TICKS,
+                dev.stannismod.stellurgy.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
+    }
+
+    /** Earth: its own galactic cell, riding its orbit, standing still inside that cell. */
+    private static SystemBody earth() {
+        return new SystemBody(ANCHOR, CellFrame.of(AbsolutePos.ofCellName(ANCHOR), earthOrbit()),
+                BodyEphemeris.STATIC, SystemBodyKind.PLANET, 1, 1, 100, 1d, 1d);
+    }
+
+    /**
+     * Luna: a cell of its OWN inside Earth's zone, its frame nested in Earth's, standing still
+     * inside that cell — the shape production builds, which is the whole subject here.
+     */
+    private static SystemBody luna() {
+        BodyEphemeris moonOrbit = BodyEphemeris.orbit(
+                dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS,
+                0d, 0d, false, LUNA_PERIOD_TICKS,
+                dev.stannismod.stellurgy.util.AstronomicalBodyHelper.BLOCKS_PER_DISTANCE_UNIT);
+        long zoneCell = dev.stannismod.stellurgy.space.ZoneScale.cellBlocks(earth(), sol(),
+                Math.round(moonOrbit.offsetAt(0L).length()), 0L);
+        dev.stannismod.stellurgy.space.BlockDelta at0 = moonOrbit.offsetAt(0L);
+        GalacticCoord name = GalacticCoord.inZone(ANCHOR.cellKey(), zoneCell,
+                dev.stannismod.stellurgy.space.ZoneScale.cellIndex(at0.dx(), zoneCell),
+                dev.stannismod.stellurgy.space.ZoneScale.cellIndex(at0.dy(), zoneCell),
+                dev.stannismod.stellurgy.space.ZoneScale.cellIndex(at0.dz(), zoneCell),
+                0L, 0L, 0L);
+        return new SystemBody(name,
+                CellFrame.within(CellFrame.of(AbsolutePos.ofCellName(ANCHOR), earthOrbit()), moonOrbit),
+                BodyEphemeris.STATIC, SystemBodyKind.MOON, 2, 1, 100, 0.2727d, 0.0123d);
     }
 }

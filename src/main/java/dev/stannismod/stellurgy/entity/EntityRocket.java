@@ -341,7 +341,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             if (props == null) return 50;
 
             if (id == 0) return Math.max(1, props.getAtmosphereDensity() / 16);
-            if (id == 1) return Math.max(1, props.orbitalDist / 16);
+            if (id == 1) return Math.max(1, dev.stannismod.stellurgy.tile.multiblock.TilePlanetSelector.distanceGauge(props));
             if (id == 2) return Math.max(1, (int)(props.gravitationalMultiplier * 50));
             return 1;
         }

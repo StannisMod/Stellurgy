@@ -12,6 +12,7 @@ import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.modules.ModulePlanetSelector;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.util.ITilePlanetSystemSelectable;
 import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
@@ -29,6 +30,31 @@ import java.util.List;
 public class TilePlanetSelector extends TilePointer implements ISelectionNotify, IModularInventory, IProgressBar, INetworkMachine {
 
     public static final int certaintyDataValue = 5000;
+    /**
+     * The distance gauge's reading per AU, in hundredths of the bar. It is the raw unit over 16 as it
+     * was drawn while a distance unit was a hundredth of an AU, so Earth reads 6; read raw after the
+     * unit became a length of 100 km, Earth read 93 498 and the gauge meant nothing.
+     */
+    private static final double DISTANCE_GAUGE_PER_AU = 100d / 16;
+    /**
+     * The gauge's reading per moon-view unit, for a moon: the raw unit over 16 as it was drawn while
+     * Luna stood at 150, so Luna reads 9 as she did then (see
+     * {@link AstronomicalBodyHelper#MOON_VIEW_UNITS_AT_LUNA}). Read through the planet law, a moon
+     * reads 0.
+     */
+    private static final double DISTANCE_GAUGE_PER_MOON_VIEW_UNIT = 1d / 16;
+    /**
+     * What a planet selector's distance gauge reads for a body, in hundredths of the bar — a planet's
+     * distance from its star, a moon's from its planet. The rocket's own planet selector draws the
+     * same gauge, so both read it here.
+     */
+    public static int distanceGauge(DimensionProperties body) {
+        if (body.isMoon()) {
+            return (int) (AstronomicalBodyHelper.moonViewUnits(body.orbitalDist) * DISTANCE_GAUGE_PER_MOON_VIEW_UNIT);
+        }
+        return (int) (body.orbitalDist / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU
+                * DISTANCE_GAUGE_PER_AU);
+    }
     protected ModulePlanetSelector container;
     DimensionProperties dimCache;
 
@@ -142,7 +168,7 @@ public class TilePlanetSelector extends TilePointer implements ISelectionNotify,
         if (id == 0)
             return dimCache.getAtmosphereDensity() / 16;
         else if (id == 1)
-            return dimCache.orbitalDist / 16;
+            return distanceGauge(dimCache);
         else //if(id == 2)
             return (int) (dimCache.gravitationalMultiplier * 50);
     }

@@ -199,7 +199,7 @@ public class ShipLedgerDataTest {
     }
 
     /**
-     * A save with no clock in it reads back as tick zero — the pre-3.0.0 / brand-new-world case.
+     * A save with no clock in it reads back as tick zero — the pre-0.1.0 / brand-new-world case.
      *
      * <p>This is the READ side of the schema, not a field default: it goes through the same
      * {@code readFromNBT} a world on disk does, against NBT that genuinely lacks the key. The store

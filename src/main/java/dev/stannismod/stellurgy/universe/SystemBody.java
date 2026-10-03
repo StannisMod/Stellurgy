@@ -40,7 +40,7 @@ public final class SystemBody {
 
 
     /** Sentinel for {@link #orbitalDistance()}: this body has no orbit of its own (a star, a POI). */
-    public static final int ORBIT_UNKNOWN = 0;
+    public static final long ORBIT_UNKNOWN = 0L;
 
     /**
      * Sentinel for {@link #radiusEarths()}: this body has no radius of its own — a belt, a POI,
@@ -67,7 +67,7 @@ public final class SystemBody {
     private final SystemBodyKind kind;
     private final int dimId;
     private final int starId;
-    private final int orbitalDistance;
+    private final long orbitalDistance;
     /** This body's own radius in EARTH radii, or {@link #RADIUS_UNKNOWN}. See {@link #radiusEarths()}. */
     private final double radiusEarths;
     /** This body's own mass in EARTH masses, or {@link #MASS_UNKNOWN}. See {@link #massEarths()}. */
@@ -97,7 +97,7 @@ public final class SystemBody {
 
     /** The same, carrying the body's orbital radius — see {@link #orbitalDistance()}. */
     public static SystemBody fixedAt(GalacticCoord address, SystemBodyKind kind, int dimId, int starId,
-                                     int orbitalDistance) {
+                                     long orbitalDistance) {
         return new SystemBody(requireAddress(address).cellCentre(), CellFrame.staticAt(address),
                 BodyEphemeris.fixed(address.localX(), address.localY(), address.localZ()),
                 kind, dimId, starId, orbitalDistance);
@@ -109,19 +109,19 @@ public final class SystemBody {
     }
 
     public SystemBody(GalacticCoord name, CellFrame frame, BodyEphemeris offsetLaw,
-                      SystemBodyKind kind, int dimId, int starId, int orbitalDistance) {
+                      SystemBodyKind kind, int dimId, int starId, long orbitalDistance) {
         this(name, frame, offsetLaw, kind, dimId, starId, orbitalDistance, RADIUS_UNKNOWN);
     }
 
     public SystemBody(GalacticCoord name, CellFrame frame, BodyEphemeris offsetLaw,
-                      SystemBodyKind kind, int dimId, int starId, int orbitalDistance,
+                      SystemBodyKind kind, int dimId, int starId, long orbitalDistance,
                       double radiusEarths) {
         this(name, frame, offsetLaw, kind, dimId, starId, orbitalDistance, radiusEarths,
                 MASS_UNKNOWN);
     }
 
     public SystemBody(GalacticCoord name, CellFrame frame, BodyEphemeris offsetLaw,
-                      SystemBodyKind kind, int dimId, int starId, int orbitalDistance,
+                      SystemBodyKind kind, int dimId, int starId, long orbitalDistance,
                       double radiusEarths, double massEarths) {
         if (name == null) {
             throw new NullPointerException("name");
@@ -279,7 +279,7 @@ public final class SystemBody {
     }
 
     /**
-     * How far this body orbits its primary, in Stellurgy distance units (100 = 1 AU), or
+     * How far this body orbits its primary, in Stellurgy distance units (100 km each), or
      * {@link #ORBIT_UNKNOWN} for a body with no orbit of its own.
      *
      * <p>It travels WITH the body rather than being recomputed from the body's cell, because a cell is
@@ -288,7 +288,7 @@ public final class SystemBody {
      * placement arithmetic, so a tuning change to the layout would silently re-climate every world in
      * the galaxy.</p>
      */
-    public int orbitalDistance() {
+    public long orbitalDistance() {
         return orbitalDistance;
     }
 
@@ -346,7 +346,7 @@ public final class SystemBody {
         nbt.setInteger("dimId", dimId);
         nbt.setInteger("starId", starId);
         if (orbitalDistance != ORBIT_UNKNOWN) {
-            nbt.setInteger("orbitalDist", orbitalDistance);
+            nbt.setLong("orbitalDist", orbitalDistance);
         }
         if (radiusEarths != RADIUS_UNKNOWN) {
             nbt.setDouble("radiusEarths", radiusEarths);
@@ -368,7 +368,7 @@ public final class SystemBody {
                 kind,
                 nbt.hasKey("dimId") ? nbt.getInteger("dimId") : Constants.INVALID_PLANET,
                 nbt.getInteger("starId"),
-                nbt.getInteger("orbitalDist"),
+                nbt.getLong("orbitalDist"),
                 nbt.getDouble("radiusEarths"),
                 nbt.getDouble("massEarths"));
     }
@@ -396,7 +396,7 @@ public final class SystemBody {
         result = 31 * result + kind.hashCode();
         result = 31 * result + dimId;
         result = 31 * result + starId;
-        result = 31 * result + orbitalDistance;
+        result = 31 * result + Long.hashCode(orbitalDistance);
         result = 31 * result + Double.hashCode(radiusEarths);
         result = 31 * result + Double.hashCode(massEarths);
         result = 31 * result + offsetLaw.hashCode();

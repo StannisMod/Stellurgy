@@ -27,6 +27,7 @@ import dev.stannismod.stellurgy.event.RocketEventHandler;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.stations.SpaceObjectManager;
 import dev.stannismod.stellurgy.stations.SpaceStationObject;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.util.SpacePosition;
 import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
@@ -39,6 +40,11 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
 
 
     private final static double SIZE_SCALE = 0.01;
+    /**
+     * Solar-view map units per AU between a companion and its primary, before this view's own 4x
+     * scale: 40 per distance unit while a unit was a hundredth of an AU.
+     */
+    private static final double COMPANION_MAP_UNITS_PER_AU = 4_000d;
     private static WavefrontObject sphere;
 
     static {
@@ -648,7 +654,9 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
 
                     //Get substar separation for placement from the orbital distance of the substars
                     SpacePosition subStarSpacePosition =
-                            mainStarPos.getFromSpherical(40d * subStar.getOrbitalDistance(),
+                            mainStarPos.getFromSpherical(subStar.getOrbitalDistance()
+                                            / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU
+                                            * COMPANION_MAP_UNITS_PER_AU,
                                     subStar.getBaseTheta());
 
                     renderStar(subStar, subStarSpacePosition, playerPosition);
@@ -870,7 +878,17 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
         return axis;
     }
 
-    protected void drawStar(BufferBuilder buffer, StellarBody sun, DimensionProperties properties, int solarOrbitalDistance, float sunSize, Vec3d sunColor, float multiplier) {
+    /**
+     * The scale this view draws a sun at, by the observer's distance from it: 1.02 at one AU, and
+     * nothing at 2.02 AU. That is {@code (202 - d) / 100} as it drew while a distance unit was a
+     * hundredth of an AU; read raw after the unit became 100 km, it turned every sun inside out.
+     */
+    private static float sunScaleAt(long solarOrbitalDistance) {
+        return (float) (2.02d - solarOrbitalDistance / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU);
+    }
+
+    @Override
+    protected void drawStar(BufferBuilder buffer, StellarBody sun, DimensionProperties properties, long solarOrbitalDistance, float sunSize, Vec3d sunColor, float multiplier) {
         if (sun != null && sun.isBlackHole()) {
             GlStateManager.depthMask(true);
             GlStateManager.enableAlpha();
@@ -889,7 +907,7 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
             //Set sun color and distance
             GlStateManager.color((float) 1, (float) .5, (float) .4, 1f);
             buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-            float f10 = sunSize * 5f * (202 - solarOrbitalDistance) / 100f;
+            float f10 = sunSize * 5f * sunScaleAt(solarOrbitalDistance);
             //multiplier = 2;
             buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
             buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
@@ -911,7 +929,7 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
 
                 GlStateManager.color((float) 1, (float) .5, (float) .4, 1f);
                 buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                f10 = sunSize * 40f * (202 - solarOrbitalDistance) / 100f;
+                f10 = sunSize * 40f * sunScaleAt(solarOrbitalDistance);
                 buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
                 buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
                 buffer.pos(f10, 0.0D, f10).tex(1.0D, 1.0D).endVertex();
@@ -927,7 +945,7 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
 
                 GlStateManager.color((float) 0.8, (float) .7, (float) .4, 1f);
                 buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                f10 = sunSize * 30f * (202 - solarOrbitalDistance) / 100f;
+                f10 = sunSize * 30f * sunScaleAt(solarOrbitalDistance);
                 //multiplier = 2;
                 buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
                 buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
@@ -944,7 +962,7 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
 
                 GlStateManager.color((float) 0.2, (float) .4, (float) 1, 1f);
                 buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-                f10 = sunSize * 15f * (202 - solarOrbitalDistance) / 100f;
+                f10 = sunSize * 15f * sunScaleAt(solarOrbitalDistance);
                 //multiplier = 2;
                 buffer.pos(-f10, 0.0D, -f10).tex(0.0D, 0.0D).endVertex();
                 buffer.pos(f10, 0.0D, -f10).tex(1.0D, 0.0D).endVertex();
@@ -963,7 +981,7 @@ public class RenderSpaceTravelSky extends RenderPlanetarySky {
             //Set sun color and distance
             GlStateManager.color((float) sunColor.x, (float) sunColor.y, (float) sunColor.z, Math.min((multiplier) * 2f, 1f));
             buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
-            float f10 = sunSize * 30f * (202 - solarOrbitalDistance) / 100f;
+            float f10 = sunSize * 30f * sunScaleAt(solarOrbitalDistance);
             //multiplier = 2;
             buffer.pos(-f10, 100.0D, -f10).tex(0.0D, 0.0D).endVertex();
             buffer.pos(f10, 100.0D, -f10).tex(1.0D, 0.0D).endVertex();

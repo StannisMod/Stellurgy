@@ -80,6 +80,14 @@ public final class DimList {
         return false;
     }
 
+    /**
+     * The dimensions the mod's registry holds now and did not hold in {@code earlier} — what a
+     * command that registers a world (such as {@code planet generate}) added between two readings.
+     */
+    public int[] addedSince(DimList earlier) {
+        return java.util.Arrays.stream(registered()).filter(dim -> !earlier.holds(dim)).toArray();
+    }
+
     /** How many dimensions the mod's registry holds. */
     public int count() {
         return registered().length;

@@ -26,10 +26,10 @@ public interface IBodyDerivation {
     double metallicityOf(long seed, GalacticCoord anchor);
 
     /** The orbital distance a body of {@code star}'s system sits at, in Stellurgy distance units. */
-    int referenceDistance(StellarBody star);
+    long referenceDistance(StellarBody star);
 
     /** Where body {@code index} of {@code count} sits around {@code star}. */
-    int orbitalDistanceOf(long seed, GalacticCoord anchor, int index, int count, StellarBody star);
+    long orbitalDistanceOf(long seed, GalacticCoord anchor, int index, int count, StellarBody star);
 
     /** The innermost orbit a body may hold around {@code star}. */
     double innerOrbit(StellarBody star);
@@ -38,17 +38,17 @@ public interface IBodyDerivation {
     double outerOrbit(StellarBody star);
 
     /** The equilibrium temperature at {@code orbitalDistance}, before any atmosphere. */
-    int bareTemperature(StellarBody star, int orbitalDistance);
+    int bareTemperature(StellarBody star, long orbitalDistance);
 
     /** Whether a body at {@code orbitalDistance} keeps one face to its star. */
-    boolean tidallyLockedAt(StellarBody star, int orbitalDistance);
+    boolean tidallyLockedAt(StellarBody star, long orbitalDistance);
 
     /** Whether body {@code index} accreted enough hydrogen to be a giant. */
     boolean isGiantAt(long seed, GalacticCoord anchor, int index, int bareTemperatureK);
 
     /** The full profile of a body BOUND to a star. */
     BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
-                       StellarBody star, boolean moon, int orbitalDistance);
+                       StellarBody star, boolean moon, long orbitalDistance);
 
     /** The full profile of an UNBOUND body — no star, no orbit, no insolation. */
     BodyProfile deriveRogue(long seed, GalacticCoord bodyCell, int variant, double giantFraction);

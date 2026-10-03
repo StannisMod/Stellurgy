@@ -25,6 +25,7 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.inventory.IPlanetDefiner;
 import dev.stannismod.stellurgy.inventory.TextureResources;
+import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
 import dev.stannismod.stellurgy.libvulpes.inventory.GuiModular;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.*;
 import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
@@ -35,6 +36,20 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
 
 
     private static final int size = 2000;
+    /**
+     * Map pixels per AU of orbital distance at zoom 1, for a planet about its star and a companion
+     * about its primary. It is the scale this map was drawn at while a distance unit was a hundredth
+     * of an AU and one unit was one pixel, so a planet one AU out stands a hundred pixels beyond its
+     * star's disc. The unit later became a length of 100 km; that changed the representation, not
+     * the picture, and a raw unit read as a pixel put Earth 1.5 million pixels off a 2 000-pixel map.
+     */
+    private static final double MAP_PIXELS_PER_AU = 100d;
+    /**
+     * Map pixels per moon-view unit at zoom 1, for a moon about its planet in the planetary view: one,
+     * as a moon's raw distance was drawn while Luna stood at 150, so Luna stands where she stood then
+     * (see {@link AstronomicalBodyHelper#MOON_VIEW_UNITS_AT_LUNA}).
+     */
+    private static final double MAP_PIXELS_PER_MOON_VIEW_UNIT = 1d;
     private int topLevel;
     private ISelectionNotify hostTile;
     private int currentSystem, selectedSystem;
@@ -187,6 +202,12 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
         selectedSystem = id;
     }
 
+    /** A companion star's offset from its primary, in map pixels at zoom 1 — half the planet scale. */
+    private static double companionOrbitPixels(StellarBody companion) {
+        return companion.getOrbitalDistance() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU
+                * MAP_PIXELS_PER_AU * 0.5;
+    }
+
     @SideOnly(Side.CLIENT)
     private void renderGalaxyMap(IGalaxy galaxy, int posX, int posY, float distanceZoomMultiplier, float planetSizeMultiplier) {
         Collection<StellarBody> stars = galaxy.getStars();
@@ -208,10 +229,9 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
                     displaySize = (int) (planetSizeMultiplier * star2.getDisplayRadius());
 
                     int deltaX, deltaY;
-                    deltaX = (int) (star2.getOrbitalDistance()
-                            * Math.cos(star2.getBaseTheta()) * 0.5 * distanceZoomMultiplier);
-                    deltaY = (int) (star2.getOrbitalDistance()
-                            * Math.sin(star2.getBaseTheta()) * 0.5 * distanceZoomMultiplier);
+                    double companionPx = companionOrbitPixels(star2);
+                    deltaX = (int) (companionPx * Math.cos(star2.getBaseTheta()) * distanceZoomMultiplier);
+                    deltaY = (int) (companionPx * Math.sin(star2.getBaseTheta()) * distanceZoomMultiplier);
 
                     planetList.add(button = new ModuleButton(
                             offsetX + deltaX,
@@ -271,8 +291,9 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
                 displaySize = (int) (planetSizeMultiplier * star2.getDisplayRadius());
 
                 int deltaX, deltaY;
-                deltaX = (int) (star2.getOrbitalDistance() * Math.cos(star2.getBaseTheta()) * 0.5);
-                deltaY = (int) (star2.getOrbitalDistance() * Math.sin(star2.getBaseTheta()) * 0.5);
+                double companionPx = companionOrbitPixels(star2);
+                deltaX = (int) (companionPx * Math.cos(star2.getBaseTheta()));
+                deltaY = (int) (companionPx * Math.sin(star2.getBaseTheta()));
 
                 planetList.add(button = new ModuleButton(
                         offsetX + deltaX, offsetY + deltaY,
@@ -322,8 +343,11 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
             if (planetDefiner != null && !planetDefiner.isPlanetKnown(properties))
                 continue;
 
-            if (!properties.isMoon())
-                renderPlanets((DimensionProperties) properties, offsetX + displaySize / 2, offsetY + displaySize / 2, displaySize, distanceZoomMultiplier, planetSizeMultiplier);
+            if (!properties.isMoon()) {
+                double orbitPx = properties.getOrbitalDist() / (double) AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU
+                        * MAP_PIXELS_PER_AU * distanceZoomMultiplier;
+                renderPlanets((DimensionProperties) properties, offsetX + displaySize / 2, offsetY + displaySize / 2, displaySize, orbitPx, planetSizeMultiplier);
+            }
         }
 
         moduleList.addAll(planetList);
@@ -352,14 +376,16 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
             if (planetDefiner != null && !planetDefiner.isPlanetKnown(properties))
                 continue;
 
-            renderPlanets(properties, offsetX + displaySize / 2, offsetY + displaySize / 2, displaySize, distanceZoomMultiplier, planetSizeMultiplier);
+            renderPlanets(properties, offsetX + displaySize / 2, offsetY + displaySize / 2, displaySize,
+                    AstronomicalBodyHelper.moonViewUnits(properties.orbitalDist) * MAP_PIXELS_PER_MOON_VIEW_UNIT
+                            * distanceZoomMultiplier, planetSizeMultiplier);
         }
 
         moduleList.addAll(planetList);
     }
 
     @SideOnly(Side.CLIENT)
-    private void renderPlanets(DimensionProperties planet, int parentOffsetX, int parentOffsetY, int parentRadius, float distanceMultiplier, float planetSizeMultiplier) {
+    private void renderPlanets(DimensionProperties planet, int parentOffsetX, int parentOffsetY, int parentRadius, double orbitPx, float planetSizeMultiplier) {
 
         int displaySize = 0;
         if (Objects.equals(planet.customIcon, "void")){
@@ -370,8 +396,8 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
 
 
 
-        int offsetX = parentOffsetX + (int) (Math.cos(planet.orbitTheta) * ((planet.orbitalDist * distanceMultiplier) + parentRadius)) - displaySize / 2;
-        int offsetY = parentOffsetY + (int) (Math.sin(planet.orbitTheta) * ((planet.orbitalDist * distanceMultiplier) + parentRadius)) - displaySize / 2;
+        int offsetX = parentOffsetX + (int) (Math.cos(planet.orbitTheta) * (orbitPx + parentRadius)) - displaySize / 2;
+        int offsetY = parentOffsetY + (int) (Math.sin(planet.orbitTheta) * (orbitPx + parentRadius)) - displaySize / 2;
 
         ModuleButton button;
 

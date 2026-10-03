@@ -3827,6 +3827,7 @@ public class TestProbeCommand extends CommandBase {
      * a nearest-match. {@code system} has no tile subject and is dispatched before the lookup.</p>
      *
      * <pre>
+     *   /stellurgytest telescope starter &lt;dim&gt;
      *   /stellurgytest telescope system  &lt;sectorX&gt; &lt;sectorY&gt; &lt;sectorZ&gt; [name]
      *   /stellurgytest telescope place   &lt;dim&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt;
      *   /stellurgytest telescope crystal &lt;dim&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt;
@@ -3835,6 +3836,24 @@ public class TestProbeCommand extends CommandBase {
      * </pre>
      */
     private void handleTelescope(MinecraftServer server, ICommandSender sender, String[] args) {
+        // starter <dim>: what a brand-new crystal knows before any instrument has touched it, through
+        // the one entry production seeds by (the navigation computer calls ensureSeeded on insert).
+        // Here because it is the baseline every survey below is compared against.
+        if (args.length >= 2 && "starter".equalsIgnoreCase(args[0])) {
+            net.minecraft.world.WorldServer starterWorld = server.getWorld(parseIntOr(args[1], 0));
+            if (starterWorld == null) {
+                send(sender, "{\"error\":\"no such dim\"}");
+                return;
+            }
+            net.minecraft.item.ItemStack fresh = new net.minecraft.item.ItemStack(
+                    dev.stannismod.stellurgy.api.StellurgyItems.itemMemoryCrystal);
+            dev.stannismod.stellurgy.item.ItemMemoryCrystal.ensureSeeded(fresh, starterWorld);
+            send(sender, "{\"ok\":true,\"dim\":" + starterWorld.provider.getDimension()
+                    + ",\"addresses\":"
+                    + dev.stannismod.stellurgy.item.ItemMemoryCrystal.memoryOf(fresh).size()
+                    + ",\"crystalDims\":" + crystalDims(fresh) + "}");
+            return;
+        }
         if (args.length < 4) {
             send(sender, "{\"error\":\"usage: telescope system|place|crystal|scan|info ...\"}");
             return;
@@ -4033,7 +4052,8 @@ public class TestProbeCommand extends CommandBase {
                 // WHICH worlds the crystal holds, read without touching anything. A test that had to
                 // call `deposit` to find out would have deposited them, and could no longer show
                 // that pressing the button is what teaches this world.
-                .append(",\"crystalDims\":").append(crystalDims(scope))
+                .append(",\"crystalDims\":").append(crystalDims(scope.getStackInSlot(
+                        dev.stannismod.stellurgy.tile.multiblock.TileObservatory.SLOT_CRYSTAL)))
                 .append(",\"lastDiscoveries\":").append(scope.getLastScanDiscoveries())
                 // Where the OPERATOR has the instrument pointed — the tile's own pick, which is what
                 // a GUI click changes and what the next scan will use. Distinct from the region a
@@ -4098,10 +4118,8 @@ public class TestProbeCommand extends CommandBase {
         return dev.stannismod.stellurgy.item.ItemMemoryCrystal.memoryOf(stack).size();
     }
 
-    /** The dimensions the crystal in that slot names, as a JSON array. Reads nothing into anything. */
-    private String crystalDims(dev.stannismod.stellurgy.tile.multiblock.TileObservatory scope) {
-        net.minecraft.item.ItemStack stack = scope.getStackInSlot(
-                dev.stannismod.stellurgy.tile.multiblock.TileObservatory.SLOT_CRYSTAL);
+    /** The dimensions {@code stack} names, as a JSON array. Reads nothing into anything. */
+    private String crystalDims(net.minecraft.item.ItemStack stack) {
         if (!dev.stannismod.stellurgy.item.ItemMemoryCrystal.isCrystal(stack)) {
             return "[]";
         }
@@ -6433,12 +6451,18 @@ public class TestProbeCommand extends CommandBase {
                         + "computer\",\"shipId\":\"" + carryShip + "\"}");
                 return;
             }
-            boolean wouldCarry = dev.stannismod.stellurgy.space.CellSeam
-                    .shouldCarry(live[0], live[1], live[2]);
+            // The controller's own decision on this pose, asked BEFORE the carry acts on it. Not the
+            // cube predicate: inside a zone the boundary is a sphere, and the cube says "stays" for a
+            // craft the carry takes out of that zone.
+            dev.stannismod.stellurgy.space.GalacticCoord carryTo = seamCtl.carryDestination(
+                    carryRow.coord, new double[]{live[0], live[1], live[2]});
             boolean started = seamCtl.requestCarry(slotDim, afc, carryShip, carryRow.coord,
                     new double[]{live[0], live[1], live[2]});
             send(sender, "{\"ok\":true,\"started\":" + started
-                    + ",\"wouldCarry\":" + wouldCarry
+                    + ",\"wouldCarry\":" + (carryTo != null)
+                    + (carryTo == null ? ""
+                            : ",\"toCell\":\"" + carryTo.cellKey() + "\",\"toCellBlocks\":"
+                                    + carryTo.cellBlocks())
                     + ",\"shipId\":\"" + carryShip + "\""
                     + ",\"vsId\":\"" + carryHull + "\""
                     + ",\"fromCell\":\"" + carryRow.coord.cellKey() + "\""
@@ -6508,6 +6532,163 @@ public class TestProbeCommand extends CommandBase {
         // settled here. In BOTH forms the anchor block comes from the hull the durable id NAMES: the
         // ledger pose plus "the ship block nearest it" is a proximity lookup, and an arrival depth is
         // deterministic, so the resident answers it as readily as the newcomer.
+        // jump-key id <durableShipId> <cellKey> [slotDim] [speed] [lx ly lz]: the same jump, to a cell named by its
+        // KEY rather than by a galactic sector triple - which is the only way to aim at a cell inside a
+        // ZONE, where the triple is counted in the zone's own lattice and means nothing on its own.
+        //
+        // THE WIDTH IS RE-ATTACHED HERE, FROM THE REGISTRY, AND A FAILURE TO RESOLVE IT IS A REFUSAL.
+        // `fromCellKey` answers WIDTH_UNKNOWN by construction, and handing that to a crossing is the
+        // defect the seam contract exists to forbid: the arithmetic downstream multiplies by a width it
+        // does not have. A guessed width would not fail either - it would rename the cell.
+        // zone-sphere <zoneCellKey>: the sphere and the lattice of the zone whose own cell is that key -
+        // the radius a craft is carried OUT of it at, and the width its cells are named on. Read-only,
+        // and both are production's readings (`SpaceSubsystem.zoneSphereRadiusOf` /
+        // `latticeWidthOfZone`), because a test placing a craft against this boundary with a radius
+        // of its own would be testing its own arithmetic. `found:false` when no body stands there.
+        if (args.length >= 2 && "zone-sphere".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.space.GalacticCoord sphereCell =
+                    dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[1]);
+            if (sphereCell == null) {
+                send(sender, "{\"error\":\"unparsable cell key\",\"cellKey\":\"" + args[1] + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.UniverseRegistry sphereReg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            long sphereTick = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
+            java.util.OptionalLong radius = dev.stannismod.stellurgy.space.SpaceSubsystem
+                    .zoneSphereRadiusOf(sphereReg, sphereCell, sphereTick);
+            if (!radius.isPresent()) {
+                send(sender, "{\"ok\":true,\"found\":false,\"reason\":\"no body stands at this cell\""
+                        + ",\"cellKey\":\"" + args[1] + "\"}");
+                return;
+            }
+            // fromGalacticCell: where the zone's body stands, at this tick, in the frame of the GALACTIC
+            // cell its system's planet is named by — i.e. as a pose in that cell's slot world, whose
+            // origin is that cell's frame origin. A craft that entered space from the planet holds
+            // that cell, so this is where it must be put to stand beside the moon. Read through the
+            // registry's own frames, the same ones the crossing reads.
+            dev.stannismod.stellurgy.space.GalacticCoord galacticOfZone =
+                    sphereCell.galacticCell().cellCentre();
+            String fromGalactic = "null";
+            for (dev.stannismod.stellurgy.universe.SystemBody b : sphereReg.bodiesAt(sphereCell)) {
+                if (b.definesFrame()) {
+                    dev.stannismod.stellurgy.space.BlockDelta d = b.absoluteAt(sphereTick)
+                            .minus(sphereReg.originAt(galacticOfZone, sphereTick));
+                    fromGalactic = "[" + d.dx() + "," + d.dy() + "," + d.dz() + "]";
+                    break;
+                }
+            }
+            send(sender, "{\"ok\":true,\"found\":true,\"cellKey\":\"" + sphereCell.cellKey() + "\""
+                    + ",\"radius\":" + radius.getAsLong()
+                    + ",\"latticeBlocks\":" + dev.stannismod.stellurgy.space.SpaceSubsystem
+                            .latticeWidthOfZone(sphereReg, sphereCell, sphereTick)
+                    + ",\"galacticCell\":\"" + galacticOfZone.cellKey() + "\""
+                    + ",\"fromGalacticCell\":" + fromGalactic
+                    + ",\"tick\":" + sphereTick + "}");
+            return;
+        }
+        if (args.length >= 3 && "jump-key".equalsIgnoreCase(args[0])) {
+            dev.stannismod.stellurgy.space.SpaceSubsystem keyStack = liveStack();
+            if (keyStack == null) {
+                send(sender, "{\"error\":\"space subsystem not registered\"}");
+                return;
+            }
+            if (!"id".equalsIgnoreCase(args[1]) || args.length < 4) {
+                send(sender, "{\"error\":\"jump-key needs id <durableShipId> <cellKey> [slotDim] "
+                        + "[speed]\"}");
+                return;
+            }
+            java.util.UUID keyShip;
+            try {
+                keyShip = java.util.UUID.fromString(args[2]);
+            } catch (IllegalArgumentException notAUuid) {
+                send(sender, "{\"error\":\"jump-key needs a well-formed uuid\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.space.GalacticCoord keyCell =
+                    dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[3]);
+            if (keyCell == null) {
+                send(sender, "{\"error\":\"unparsable cell key\",\"cellKey\":\"" + args[3] + "\"}");
+                return;
+            }
+            dev.stannismod.stellurgy.universe.UniverseRegistry keyReg =
+                    dev.stannismod.stellurgy.universe.UniverseRegistry.get(server);
+            if (keyCell.zone() != null) {
+                // PRODUCTION's own reading of this zone's lattice, not a second derivation of it:
+                // the same call `zoneMembershipOf` addresses a craft on. It covers the childless
+                // zone (one cell spanning the sphere) that a registry lookup alone cannot answer.
+                long width = dev.stannismod.stellurgy.space.SpaceSubsystem.latticeWidthOfZone(
+                        keyReg, dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(keyCell.zone()),
+                        dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock());
+                if (width <= 0L) {
+                    send(sender, "{\"ok\":true,\"began\":false,\"reason\":\"no body stands at this key's "
+                            + "zone, so its lattice width cannot be re-attached - refused rather than "
+                            + "guessed, because a wrong width renames the cell instead of failing\""
+                            + ",\"cellKey\":\"" + args[3] + "\",\"zone\":\"" + keyCell.zone() + "\"}");
+                    return;
+                }
+                keyCell = keyCell.inLattice(width);
+            }
+            int keySlot = args.length > 4
+                    ? parseIntOr(args[4], sender.getEntityWorld().provider.getDimension())
+                    : sender.getEntityWorld().provider.getDimension();
+            long keySpeed = args.length > 5
+                    ? Math.max(1L, parseLongOr(args[5], 5_000_000L)) : 5_000_000L;
+            net.minecraft.world.WorldServer keyOrigin =
+                    net.minecraftforge.common.DimensionManager.getWorld(keySlot);
+            if (keyOrigin == null) {
+                send(sender, "{\"error\":\"origin cell world not loaded\",\"slotDim\":" + keySlot + "}");
+                return;
+            }
+            dev.stannismod.stellurgy.space.ShipLedger.Entry keyEntry = keyStack.ledger.get(keyShip);
+            if (keyEntry == null
+                    || keyEntry.state != dev.stannismod.stellurgy.space.ShipLedger.State.SETTLED
+                    || slotDimOfCell(keyEntry.coord) != keySlot) {
+                send(sender, "{\"ok\":true,\"began\":false,\"reason\":\"that ship is not settled in this "
+                        + "cell\",\"shipId\":\"" + keyShip + "\",\"ledgered\":" + (keyEntry != null)
+                        + ",\"state\":\"" + (keyEntry == null ? "" : keyEntry.state) + "\""
+                        + ",\"slotDim\":" + keySlot + "}");
+                return;
+            }
+            java.util.UUID keyHull = dev.stannismod.stellurgy.integration.vs.VSIntegration
+                    .shipUuidOfDurableId(keyOrigin, keyShip.toString());
+            net.minecraft.util.math.BlockPos keyAnchor = keyHull == null ? null
+                    : dev.stannismod.stellurgy.integration.vs.VSIntegration
+                            .shipBlockOf(keyOrigin, keyHull);
+            if (keyAnchor == null) {
+                send(sender, "{\"ok\":true,\"began\":false,\"reason\":\"no loaded hull carries that "
+                        + "ship's name\",\"shipId\":\"" + keyShip + "\",\"hullFound\":"
+                        + (keyHull != null) + "}");
+                return;
+            }
+            // The origin's local offsets are kept, exactly as the sector form keeps them: "jump to this
+            // cell" means the same spot inside it, not its local-(0,0,0) corner — unless the caller
+            // names the spot (`<lx> <ly> <lz>` after the speed). Inside a zone it usually must: a cell
+            // there rides a body, so an offset carried over from a planet's galactic cell (where the
+            // planet may stand millions of blocks off-centre) names a point outside the zone entirely,
+            // and the ship arrives in some far cell of it. Measured 2026-09-29: an offset of
+            // -14 152 822 put a jump aimed at a moon's zone into its cell -27_0_6.
+            boolean keyNamesSpot = args.length > 8;
+            long keyLx = keyNamesSpot ? parseLongOr(args[6], 0L) : keyEntry.coord.localX();
+            long keyLy = keyNamesSpot ? parseLongOr(args[7], 0L) : keyEntry.coord.localY();
+            long keyLz = keyNamesSpot ? parseLongOr(args[8], 0L) : keyEntry.coord.localZ();
+            dev.stannismod.stellurgy.space.GalacticCoord keyTarget = keyCell.zone() == null
+                    ? dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+                            keyCell.sectorX(), keyCell.sectorY(), keyCell.sectorZ(), keyLx, keyLy, keyLz)
+                    : dev.stannismod.stellurgy.space.GalacticCoord.inZone(
+                            keyCell.zone(), keyCell.cellBlocks(),
+                            keyCell.sectorX(), keyCell.sectorY(), keyCell.sectorZ(), keyLx, keyLy, keyLz);
+            boolean keyBegan = keyStack.transit.beginTransit(keyShip.toString(), keyEntry.coord,
+                    keySlot, keyAnchor, keyTarget, keySpeed);
+            send(sender, "{\"ok\":true,\"began\":" + keyBegan
+                    + ",\"shipId\":\"" + keyShip + "\""
+                    + ",\"fromCell\":\"" + keyEntry.coord.cellKey() + "\""
+                    + ",\"toCell\":\"" + keyTarget.cellKey() + "\""
+                    + ",\"toCellBlocks\":" + keyTarget.cellBlocks()
+                    + ",\"slotDim\":" + keySlot
+                    + ",\"inTransit\":" + keyStack.transit.inTransitCount() + "}");
+            return;
+        }
         if (args.length >= 4 && "jump".equalsIgnoreCase(args[0])) {
             dev.stannismod.stellurgy.space.SpaceSubsystem spaceStack = liveStack();
             if (spaceStack == null) {
@@ -6745,18 +6926,41 @@ public class TestProbeCommand extends CommandBase {
         // eternal and its position is a function of time (it rides its primary), and those are two different
         // numbers: reporting only the name makes "the body is still in its cell" unfalsifiable, since
         // a name that never moves would say that even for a frame that never moved either.
-        if (args.length >= 4 && "frame".equalsIgnoreCase(args[0])) {
-            dev.stannismod.stellurgy.space.GalacticCoord name =
-                    dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
+        // frame <cellKey>: the same, for a cell named by KEY — the only way to name a cell inside a
+        // zone, whose sector triple is counted in the zone's own lattice and means nothing alone.
+        // frame <cellKey> <relativeToKey>: also where it is RELATIVE to a second cell, both read at the
+        // one clock. Two separate calls straddle a tick, and a planet's heliocentric motion alone is
+        // thousands of blocks a tick, so a difference of two calls measures the call gap.
+        if ((args.length >= 4 || args.length == 2 || args.length == 3)
+                && "frame".equalsIgnoreCase(args[0])) {
+            boolean byKey = args.length <= 3;
+            dev.stannismod.stellurgy.space.GalacticCoord name = byKey
+                    ? dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[1])
+                    : dev.stannismod.stellurgy.space.GalacticCoord.ofSectorLocal(
                             parseIntOr(args[1], 0), parseIntOr(args[2], 0), parseIntOr(args[3], 0),
                             0L, 0L, 0L);
             long clock = dev.stannismod.stellurgy.space.SpaceSubsystem.spaceClock();
             dev.stannismod.stellurgy.space.AbsolutePos origin =
                     dev.stannismod.stellurgy.space.SpaceSubsystem.cellFrameOriginAt(name, clock);
-            send(sender, "{\"ok\":true,\"cellKey\":\"" + name.cellKey() + "\",\"clock\":" + clock
+            StringBuilder out = new StringBuilder("{\"ok\":true,\"cellKey\":\"" + name.cellKey()
+                    + "\",\"clock\":" + clock
                     + ",\"originSector\":[" + origin.sectorX() + "," + origin.sectorY() + ","
                     + origin.sectorZ() + "],\"originOffset\":[" + origin.localX() + ","
-                    + origin.localY() + "," + origin.localZ() + "]}");
+                    + origin.localY() + "," + origin.localZ() + "]");
+            if (args.length == 3) {
+                dev.stannismod.stellurgy.space.AbsolutePos other =
+                        dev.stannismod.stellurgy.space.SpaceSubsystem.cellFrameOriginAt(
+                                dev.stannismod.stellurgy.space.GalacticCoord.fromCellKey(args[2]), clock);
+                long cell = dev.stannismod.stellurgy.space.GalacticCoord.CELL;
+                out.append(",\"relativeTo\":\"").append(args[2]).append("\",\"relative\":[")
+                        .append((origin.sectorX() - other.sectorX()) * cell + origin.localX() - other.localX())
+                        .append(',')
+                        .append((origin.sectorY() - other.sectorY()) * cell + origin.localY() - other.localY())
+                        .append(',')
+                        .append((origin.sectorZ() - other.sectorZ()) * cell + origin.localZ() - other.localZ())
+                        .append(']');
+            }
+            send(sender, out.append('}').toString());
             return;
         }
         // forget-name <dimId>: drop the RECORDED cell name of a dimension, so the next query has to
@@ -8060,6 +8264,12 @@ public class TestProbeCommand extends CommandBase {
             info.put("dim", dim);
             info.put("name", props.getName());
             info.put("starId", props.getStarId());
+            // Whether the star OBJECT this body holds is the one registered under its starId. The id
+            // alone cannot say: a body bound to a private copy of its star reports the right id while
+            // every identity comparison (a warp's "same system", a star's own planet list) and every
+            // edit to the registered star passes it by.
+            info.put("starIsRegistered", props.getStar() != null
+                    && props.getStar() == DimensionManager.getInstance().getStar(props.getStarId()));
             info.put("parent", props.getParentPlanet());
             info.put("atmosphereDensity", props.getAtmosphereDensity());
             info.put("gravity", props.getGravitationalMultiplier());
@@ -8070,6 +8280,10 @@ public class TestProbeCommand extends CommandBase {
             info.put("mass", props.getMass());
             info.put("radius", props.getRadius());
             info.put("orbitalDistance", props.orbitalDist);
+            // The body's LIVE angle on its orbit, in radians — the field the orbit tick advances and
+            // every in-plane geometry (a warp's price, a map's placement) is computed from. Read at
+            // the moment of this reply; it moves every tick.
+            info.put("orbitTheta", props.orbitTheta);
             info.put("rotationalPeriod", props.rotationalPeriod);
             info.put("hasRings", props.hasRings);
             info.put("hasOxygen", props.hasOxygen);
@@ -13673,6 +13887,9 @@ public class TestProbeCommand extends CommandBase {
                     // draw a sky with a star and whatever was authored, and only this field says which
                     // of the two you are looking at.
                     + ",\"maxRetinue\":" + star.getMaxRetinueBodies()
+                    // In EARTH masses — the unit a body's mass is in, and so the one a sphere of
+                    // influence (a mass ratio) is computed in.
+                    + ",\"massEarths\":" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.starMassEarths(star)
                     + ",\"dimsNamingThisStar\":" + named
                     + ",\"planetDims\":" + dims
                     + ",\"name\":\"" + escapeJson(String.valueOf(star.getName())) + "\"}");
@@ -14454,6 +14671,10 @@ public class TestProbeCommand extends CommandBase {
                     DimensionProperties props = (DimensionProperties) cached;
                     info.put("selectedDim", props.getId());
                     info.put("selectedName", props.getName());
+                    // What the selector's distance gauge reads for the selection — the tile's own
+                    // IProgressBar total for the distance bar (id 1), in hundredths of the bar.
+                    info.put("distanceGauge",
+                            ((dev.stannismod.stellurgy.tile.multiblock.TilePlanetSelector) tile).getTotalProgress(1));
                 }
                 send(sender, jsonMap(info));
             } catch (ReflectiveOperationException e) {
@@ -19907,6 +20128,9 @@ public class TestProbeCommand extends CommandBase {
      * twin of the client bot's entity report (id + class + position), for comparing the two
      * sides entity by entity.
      *
+     * {@code /stellurgytest entity interact <dim> <entityId>} — right-clicks the entity with an empty
+     * main hand as a fake player, through {@code Entity#processInitialInteract}.
+     *
      * {@code /stellurgytest entity registry} — round-trips every modded entity through the
      * resolution a receiving client performs, and reports the ones that come back as a
      * DIFFERENT entity (see {@link #handleEntityRegistry}).
@@ -19973,6 +20197,31 @@ public class TestProbeCommand extends CommandBase {
                     + ",\"isDead\":" + entity.isDead
                     + ",\"motionY\":" + entity.motionY
                     + ",\"posY\":" + entity.posY + "}");
+            return;
+        }
+        if (args.length >= 3 && "interact".equalsIgnoreCase(args[0])) {
+            // entity interact <dim> <entityId> — a right-click on the entity with an empty main hand,
+            // by a fake player: the call vanilla makes for a player's right-click on an entity
+            // (Entity#processInitialInteract). For ARRANGING a state an entity's interaction leads to
+            // on a server with no real player; the reply says whether the entity consumed the click.
+            int dim = parseIntOr(args[1], Integer.MIN_VALUE);
+            int id = parseIntOr(args[2], -1);
+            net.minecraft.world.WorldServer world = server.getWorld(dim);
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\",\"dim\":" + dim + "}");
+                return;
+            }
+            net.minecraft.entity.Entity entity = world.getEntityByID(id);
+            if (entity == null) {
+                send(sender, "{\"error\":\"no such entity\",\"entityId\":" + id + "}");
+                return;
+            }
+            net.minecraftforge.common.util.FakePlayer player =
+                    net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(world);
+            boolean consumed = entity.processInitialInteract(player, net.minecraft.util.EnumHand.MAIN_HAND);
+            send(sender, "{\"ok\":true,\"entityId\":" + id
+                    + ",\"entityClass\":\"" + escapeJson(entity.getClass().getName()) + "\""
+                    + ",\"consumed\":" + consumed + "}");
             return;
         }
         if (args.length >= 6 && "near".equalsIgnoreCase(args[0])) {

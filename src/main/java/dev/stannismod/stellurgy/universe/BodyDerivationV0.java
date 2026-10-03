@@ -25,12 +25,12 @@ public final class BodyDerivationV0 implements IBodyDerivation {
     }
 
     @Override
-    public int referenceDistance(StellarBody star) {
+    public long referenceDistance(StellarBody star) {
         return PlanetDerivation.referenceDistance(star);
     }
 
     @Override
-    public int orbitalDistanceOf(long seed, GalacticCoord anchor, int index, int count,
+    public long orbitalDistanceOf(long seed, GalacticCoord anchor, int index, int count,
                                  StellarBody star) {
         return PlanetDerivation.orbitalDistanceOf(seed, anchor, index, count, star);
     }
@@ -46,12 +46,12 @@ public final class BodyDerivationV0 implements IBodyDerivation {
     }
 
     @Override
-    public int bareTemperature(StellarBody star, int orbitalDistance) {
+    public int bareTemperature(StellarBody star, long orbitalDistance) {
         return PlanetDerivation.bareTemperature(star, orbitalDistance);
     }
 
     @Override
-    public boolean tidallyLockedAt(StellarBody star, int orbitalDistance) {
+    public boolean tidallyLockedAt(StellarBody star, long orbitalDistance) {
         return PlanetDerivation.tidallyLockedAt(star, orbitalDistance);
     }
 
@@ -62,7 +62,7 @@ public final class BodyDerivationV0 implements IBodyDerivation {
 
     @Override
     public BodyProfile derive(long seed, GalacticCoord anchor, GalacticCoord bodyCell, int variant,
-                              StellarBody star, boolean moon, int orbitalDistance) {
+                              StellarBody star, boolean moon, long orbitalDistance) {
         return PlanetDerivation.derive(seed, anchor, bodyCell, variant, star, moon, orbitalDistance);
     }
 

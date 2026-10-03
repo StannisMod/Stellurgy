@@ -66,14 +66,14 @@ public class OverworldKeepsASizeWhenThePlanetFileStatesNoneTest {
                 "        <planet name=\"Earth\" DIMID=\"0\">\n" +
                 "            <isKnown>true</isKnown>\n" +
                 "            <gravitationalMultiplier>100</gravitationalMultiplier>\n" +
-                "            <orbitalDistance>100</orbitalDistance>\n" +
+                "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n" +
                 "            <atmosphereDensity>100</atmosphereDensity>\n" +
                 "            <planet name=\"Luna\" DIMID=\"" + MOON_DIM + "\">\n" +
                 "                <isKnown>false</isKnown>\n" +
                 "                <gravitationalMultiplier>16</gravitationalMultiplier>\n" +
                 "                <mass>" + MOON_MASS + "</mass>\n" +
                 "                <radius>" + MOON_RADIUS + "</radius>\n" +
-                "                <orbitalDistance>150</orbitalDistance>\n" +
+                "                <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS + "</orbitalDistance>\n" +
                 "                <atmosphereDensity>0</atmosphereDensity>\n" +
                 "            </planet>\n" +
                 "        </planet>\n" +
