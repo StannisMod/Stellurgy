@@ -3,8 +3,10 @@ package dev.stannismod.stellurgy.integration.vs;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.MoverType;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -26,7 +28,8 @@ import net.minecraft.world.World;
  * impulse survives whole, and neither the craft's own acceleration nor its turning leaks into the
  * velocity the entity has relative to its deck.</p>
  *
- * <p>Admits items and living bodies other than players, for now.</p>
+ * <p>Admits items and living bodies; a player only on the server, where his living update is run
+ * in the deck's frame from his network handler ({@link #updatePlayer}) and never moves him.</p>
  */
 public final class DeckFrameTick {
 
@@ -89,7 +92,9 @@ public final class DeckFrameTick {
      */
     public static void followShipPoses(World world) {
         for (Entity entity : world.loadedEntityList) {
-            if (!(entity instanceof DeckHeld) || entity.isDead || entity.isRiding()) {
+            // A player is where his client says he is; re-seating him here would be a second writer.
+            if (!(entity instanceof DeckHeld) || entity.isDead || entity.isRiding()
+                    || entity instanceof EntityPlayer) {
                 continue;
             }
             Episode episode = ((DeckHeld) entity).stellurgy$deckEpisode();
@@ -114,7 +119,207 @@ public final class DeckFrameTick {
      * movement is resolved, so every other mechanism that would move it must stand down.
      */
     public static boolean holds(Entity entity) {
-        return entity instanceof DeckHeld && ((DeckHeld) entity).stellurgy$deckEpisode() != null;
+        return episodeOf(entity) != null;
+    }
+
+    /** The craft whose deck holds {@code entity}, or {@code null} when none does. */
+    public static String heldShipId(Entity entity) {
+        Episode episode = episodeOf(entity);
+        return episode == null ? null : episode.shipId;
+    }
+
+    /**
+     * Where on its deck {@code entity} is held, in the craft's subspace, or {@code null} when no deck
+     * holds it or its first update in the deck's frame has not run yet.
+     */
+    public static double[] heldDeckPoint(Entity entity) {
+        Episode episode = episodeOf(entity);
+        return episode == null || !episode.held
+                ? null : new double[]{episode.localX, episode.localY, episode.localZ};
+    }
+
+    private static Episode episodeOf(Entity entity) {
+        return entity instanceof DeckHeld ? ((DeckHeld) entity).stellurgy$deckEpisode() : null;
+    }
+
+    /**
+     * Declare that the deck of {@code shipId} holds {@code entity} at subspace point
+     * {@code (subX, subY, subZ)}, at rest relative to that deck - the placement a crossing makes when
+     * it puts a carried body back down. Refused for a body the deck would not take.
+     *
+     * @return whether the deck now holds it
+     */
+    public static boolean holdAt(Entity entity, String shipId, double subX, double subY, double subZ) {
+        if (!(entity instanceof DeckHeld) || shipId == null || entity instanceof EntityPlayer
+                || !admissible(entity)) {
+            return false;
+        }
+        forgetPath(entity);
+        Episode episode = open(entity, shipId);
+        episode.localX = subX;
+        episode.localY = subY;
+        episode.localZ = subZ;
+        episode.held = true;
+        // At rest relative to the deck: no velocity of its own, and the world motion the caller left
+        // it (zero) counts as what the deck wrote, so none of it is taken for an impulse.
+        episode.writtenX = entity.motionX;
+        episode.writtenY = entity.motionY;
+        episode.writtenZ = entity.motionZ;
+        trace(entity, "hold ship=" + shipId);
+        return true;
+    }
+
+    /**
+     * Run a server player's living update in his deck's frame, if a deck holds him or takes him now.
+     *
+     * <p>A player's position is not the server's to move: his client resolves every step and sends
+     * the result, and the network handler puts him back where that result left him as soon as his
+     * update is over. So the deck point is taken from where the client says he is, every time, and
+     * what his update does to his position is thrown away here as it would be anyway. What the
+     * update in the deck's frame buys is everything ELSE it does: the handlers that read where he is
+     * read his place on the craft, and the travel resolver never takes him a second time.</p>
+     *
+     * <p>His velocity crosses by rotation alone, with no carry: on the server it is the network
+     * handler's record of how far his client moved him, and its length is what the speed check
+     * reads.</p>
+     *
+     * @return {@code true} when the update was run here and the caller must not run it again
+     */
+    public static boolean updatePlayer(EntityPlayerMP player) {
+        World world = player.world;
+        if (world == null || world.isRemote) {
+            return false;
+        }
+        DeckHeld slot = (DeckHeld) player;
+        Episode episode = slot.stellurgy$deckEpisode();
+        if (episode != null && player.capabilities.isFlying) {
+            // He took to the air on the deck: flight aboard is the travel resolver's, so the deck is
+            // handed over to it at the point he is at - opened there FIRST, so no instant exists in
+            // which nothing holds him - and this episode ends without a release.
+            double[] at = VSIntegration.toShipFrameFor(world, episode.shipId,
+                    player.posX, player.posY, player.posZ);
+            if (at != null) {
+                ShipFrameTravel.takeOverFlyer(player, episode.shipId, at);
+            }
+            slot.stellurgy$setDeckEpisode(null);
+            trace(player, "handOver flying");
+            return false;
+        }
+        if (episode != null && !admissible(player)) {
+            release(player, "excludedState");
+            return false;
+        }
+        // A hold that names ANOTHER craft for him outranks the episode this deck opened by where he
+        // stood: let go, and he is taken again, declared craft first.
+        String declared = DeckHold.heldShipId(player);
+        if (episode != null && declared != null && !declared.equals(episode.shipId)) {
+            release(player, "declaredElsewhere");
+            episode = null;
+        }
+        if (episode == null) {
+            String shipId = admissionFor(player);
+            if (shipId == null) {
+                return false;
+            }
+            trace(player, "admit ship=" + shipId);
+            episode = open(player, shipId);
+        }
+        String shipId = episode.shipId;
+        double[] local = VSIntegration.toShipFrameFor(world, shipId, player.posX, player.posY, player.posZ);
+        if (local != null) {
+            clearOfMappingNoise(player, local);
+        }
+        AxisAlignedBB stay = VSIntegration.subspaceStayRegion(world, shipId, STAY_REGION_MARGIN);
+        if (local == null || stay == null || !stay.contains(new Vec3d(local[0], local[1], local[2]))) {
+            release(player, local == null || stay == null ? "shipUnloaded" : "leftShipRegion");
+            return false;
+        }
+        if (!ShipFrameTravel.deckMayKeep(player, shipId, local)) {
+            release(player, "noDeckBelow");
+            return false;
+        }
+        double[] motion = VSIntegration.rotateToShipFrameFor(world, shipId,
+                player.motionX, player.motionY, player.motionZ);
+        if (motion == null) {
+            release(player, "shipUnloaded");
+            return false;
+        }
+        double worldX = player.posX, worldY = player.posY, worldZ = player.posZ;
+        double prevX = player.prevPosX, prevY = player.prevPosY, prevZ = player.prevPosZ;
+        episode.localX = local[0];
+        episode.localY = local[1];
+        episode.localZ = local[2];
+        episode.held = true;
+        episode.worldWritten = false;
+        episode.writing = true;
+        try {
+            player.setPosition(local[0], local[1], local[2]);
+            player.motionX = motion[0];
+            player.motionY = motion[1];
+            player.motionZ = motion[2];
+            try {
+                player.onUpdateEntity();
+            } finally {
+                double[] out = VSIntegration.rotateToWorldFrameFor(world, shipId,
+                        player.motionX, player.motionY, player.motionZ);
+                player.setPosition(worldX, worldY, worldZ);
+                if (out != null) {
+                    player.motionX = out[0];
+                    player.motionY = out[1];
+                    player.motionZ = out[2];
+                }
+                restorePrevious(player, prevX, prevY, prevZ);
+            }
+        } finally {
+            episode.writing = false;
+        }
+        VSIntegration.suppressShipDrag(player);
+        return true;
+    }
+
+    /**
+     * Replay a displacement of a body the deck holds, made from OUTSIDE its own update, against the
+     * deck's blocks in the deck's frame instead of the world's.
+     *
+     * <p>Only a player's own movement, for now: the server replays the step his client already took
+     * on the deck, and against the world's blocks and the craft's hull polygons that step collides
+     * with things that are not where the deck is. A push from a piston or a shulker is expressed in
+     * the frame of whatever pushes, which is not decided yet, and is left to the world.</p>
+     *
+     * @return {@code true} when the move was made here and the caller must not make it again
+     */
+    public static boolean moveHeld(Entity entity, MoverType type, double dx, double dy, double dz) {
+        Episode episode = episodeOf(entity);
+        if (episode == null || episode.writing || type != MoverType.PLAYER) {
+            return false;
+        }
+        World world = entity.world;
+        String shipId = episode.shipId;
+        double[] from = VSIntegration.toShipFrameFor(world, shipId, entity.posX, entity.posY, entity.posZ);
+        double[] to = VSIntegration.toShipFrameFor(world, shipId,
+                entity.posX + dx, entity.posY + dy, entity.posZ + dz);
+        if (from == null || to == null) {
+            return false;
+        }
+        clearOfMappingNoise(entity, from);
+        double worldX = entity.posX, worldY = entity.posY, worldZ = entity.posZ;
+        episode.writing = true;
+        try {
+            entity.setPosition(from[0], from[1], from[2]);
+            entity.move(type, to[0] - from[0], to[1] - from[1], to[2] - from[2]);
+            double[] out = VSIntegration.toWorldFrameFor(world, shipId, entity.posX, entity.posY, entity.posZ);
+            if (out == null) {
+                // The craft went away during the move: put the body back where the world had it and
+                // let the world make the step, rather than leave it standing in the shipyard.
+                entity.setPosition(worldX, worldY, worldZ);
+                trace(entity, "moveHeld shipGoneDuringMove");
+                return false;
+            }
+            entity.setPosition(out[0], out[1], out[2]);
+        } finally {
+            episode.writing = false;
+        }
+        return true;
     }
 
     /**
@@ -124,7 +329,9 @@ public final class DeckFrameTick {
      */
     public static boolean update(Entity entity) {
         World world = entity.world;
-        if (world == null || !(entity instanceof DeckHeld)) {
+        // A player's world-tick update is not his living update (that one runs from his network
+        // handler, see updatePlayer), so it is never the one moved into the deck's frame.
+        if (world == null || !(entity instanceof DeckHeld) || entity instanceof EntityPlayer) {
             return false;
         }
         DeckHeld slot = (DeckHeld) entity;
@@ -140,7 +347,7 @@ public final class DeckFrameTick {
             }
             trace(entity, "admit ship=" + shipId);
             forgetPath(entity);
-            episode = new Episode(shipId);
+            episode = open(entity, shipId);
             // A body arriving from the world moves with its real world velocity, of which the
             // craft's own motion at that point is the part the deck already accounts for: it enters
             // with no velocity of its own on the deck, and everything beyond the carry counts as
@@ -152,7 +359,6 @@ public final class DeckFrameTick {
                 episode.writtenY = v[1] * TICK_SECONDS;
                 episode.writtenZ = v[2] * TICK_SECONDS;
             }
-            slot.stellurgy$setDeckEpisode(episode);
         }
         String shipId = episode.shipId;
 
@@ -176,6 +382,11 @@ public final class DeckFrameTick {
         AxisAlignedBB stay = VSIntegration.subspaceStayRegion(world, shipId, STAY_REGION_MARGIN);
         if (local == null || stay == null || !stay.contains(new Vec3d(local[0], local[1], local[2]))) {
             release(entity, local == null || stay == null ? "shipUnloaded" : "leftShipRegion");
+            return false;
+        }
+        // Off the deck's edge, or out on the outer hull: the world's, not the deck's.
+        if (!ShipFrameTravel.deckMayKeep(entity, shipId, local)) {
+            release(entity, "noDeckBelow");
             return false;
         }
         // WHAT THE ENTITY IS DOING ON THE DECK: the velocity its last update left it, plus whatever the
@@ -350,11 +561,11 @@ public final class DeckFrameTick {
      * every update while holding it, so the two can never disagree.
      *
      * <p>A living body is the deck's in exactly the states the travel resolver would hold it in, by
-     * asking the resolver's own predicate, and only on the server, which simulates it; one that is
-     * riding or ridden belongs to its vehicle. A player's movement is his client's and is not
-     * admitted yet. An item in water or lava is left
-     * to the world - which states exclude a body that is not living is an open question, and this
-     * is only where the first admission put the line.</p>
+     * asking the resolver's own predicate, and only on the server; one that is riding or ridden
+     * belongs to its vehicle. A player is held on the server only, and not while he flies: flight
+     * aboard has no counterpart here yet and stays with the travel resolver. An item in water or lava
+     * is left to the world - which states exclude a body that is not living is an open question, and
+     * this is only where the first admission put the line.</p>
      */
     private static boolean admissible(Entity entity) {
         if (entity.isDead || entity.isBeingRidden()) {
@@ -363,17 +574,41 @@ public final class DeckFrameTick {
         if (entity instanceof EntityItem) {
             return !entity.isInWater() && !entity.isInLava();
         }
-        // Only where the body is simulated: a client moves a mob by interpolating toward the world
-        // positions the server sends, so its update run in the deck's frame would walk it toward a
-        // world point read as a deck point. Measured 2026-09-29: a cow carried on a rolled deck was
-        // never drawn by the client once its update ran here.
-        return entity instanceof EntityLivingBase && !(entity instanceof EntityPlayer)
-                && !entity.world.isRemote
+        if (entity instanceof EntityPlayer && ((EntityPlayer) entity).capabilities.isFlying) {
+            return false;
+        }
+        // Only on the server. A client moves a mob by interpolating toward the world positions the
+        // server sends, so its update run in the deck's frame would walk it toward a world point read
+        // as a deck point - measured 2026-09-29, a cow carried on a rolled deck was never drawn by the
+        // client once its update ran here; and a client's own player is still the travel resolver's.
+        return entity instanceof EntityLivingBase && !entity.world.isRemote
                 && !ShipFrameTravel.isExcludedFromCapture((EntityLivingBase) entity);
+    }
+
+    /**
+     * Seam: a deck has just taken {@code entity}, on craft {@code shipId}; {@code from} is the craft
+     * that held it the moment before, by either mechanism, or {@code null}. Empty in production -
+     * the test build records the edge here - and kept as a call because this is the one place that
+     * knows both the new holder and the old one at the instant they change.
+     */
+    private static void noteEntered(Entity entity, String shipId, String from) {
+    }
+
+    /** Seam: the deck frame is about to let {@code entity} go, for {@code reason}. Empty in production. */
+    private static void noteReleased(Entity entity, String reason) {
+    }
+
+    /** Open an episode on {@code shipId} for {@code entity}, announcing the edge. */
+    private static Episode open(Entity entity, String shipId) {
+        noteEntered(entity, shipId, ShipFrameTravel.capturedShipId(entity));
+        Episode episode = new Episode(shipId);
+        ((DeckHeld) entity).stellurgy$setDeckEpisode(episode);
+        return episode;
     }
 
     /** Stop holding {@code entity}; from its next update the world moves it again. */
     private static void release(Entity entity, String reason) {
+        noteReleased(entity, reason);
         ((DeckHeld) entity).stellurgy$setDeckEpisode(null);
         forgetPath(entity);
         trace(entity, "release " + reason);
@@ -400,7 +635,17 @@ public final class DeckFrameTick {
         }
         World world = entity.world;
         AxisAlignedBB box = entity.getEntityBoundingBox();
-        java.util.List<String> candidates = VSIntegration.shipIdsAt(world, entity.posX, entity.posY, entity.posZ);
+        java.util.List<String> candidates = new java.util.ArrayList<>(
+                VSIntegration.shipIdsAt(world, entity.posX, entity.posY, entity.posZ));
+        // A DECLARED craft is asked first, as the travel resolver asks it: an arrival or a relog has
+        // already said which craft this body belongs to, and where two hulls overlap a spatial pick
+        // and that declaration differ - measured 2026-09-30, a crew member arriving from hyperspace
+        // was taken by a hull that merely overlapped his, and the hold waiting for his own expired.
+        String declared = DeckHold.heldShipId(entity);
+        if (declared != null) {
+            candidates.remove(declared);
+            candidates.add(0, declared);
+        }
         if (!world.getCollisionBoxes(entity, new AxisAlignedBB(box.minX, box.minY - SUPPORT_PROBE,
                 box.minZ, box.maxX, box.minY, box.maxZ)).isEmpty()) {
             if (!candidates.isEmpty()) {

@@ -32,6 +32,12 @@ public abstract class MixinEntityShipLocalMove {
     private void stellurgy$shipLocalMove(MoverType type, double x, double y, double z,
                                                 CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
+        // A body a deck holds, moved from outside its own update: replayed against the deck's blocks
+        // in the deck's frame (for now a player's own step, which the server replays from his packet).
+        if (dev.stannismod.stellurgy.integration.vs.DeckFrameTick.moveHeld(self, type, x, y, z)) {
+            ci.cancel();
+            return;
+        }
         // A body whose movement ShipFrameTravel resolves must NEVER be moved through the world-frame
         // pipeline: vanilla collides its upright box against world blocks it is not standing on, and
         // the physics mod's injector (hooked behind us at this same point) collides it against hull

@@ -29,6 +29,7 @@
     "MixinVSShipCrosserEvents",
     "MixinLoginRestoreEvents",
     "MixinShipFrameTravelEvents",
+    "MixinDeckFrameTickEvents",
     "MixinShipAboardTagEvents",
     "MixinShipEntryControllerEvents",
     "MixinDescentControllerEvents",

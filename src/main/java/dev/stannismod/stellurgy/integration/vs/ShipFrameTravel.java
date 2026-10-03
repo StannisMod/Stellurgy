@@ -234,7 +234,10 @@ public final class ShipFrameTravel {
         // from where the body happens to stand during that update - in the shipyard, where every
         // test below would read the deck as world terrain and decline by coincidence.
         if (DeckFrameTick.holds(entity)) {
-            release(entity, "deckFrame");
+            // A HAND-OVER, not a release: the body is not let go, the deck's own frame has it. So
+            // the capture is dropped without release()'s drop record, which exists for a body handed
+            // to world gravity - and which read, to every observer of the deck, as the deck letting go.
+            STATE.remove(entity);
             return false;
         }
         // Vanilla's own gate on travel(): an entity whose movement this side does not simulate (a mob
@@ -531,6 +534,21 @@ public final class ShipFrameTravel {
      *  ends by naming the gate that ended it. Every path that stops resolving a tracked body goes
      *  through here - a silent gate leaves stale STATE behind and the camera/HUD keep acting on
      *  it. No-op for an untracked body. */
+    /**
+     * Take over a player the deck's own frame was holding and has stopped holding because he took
+     * to the air: creative flight aboard is this class's alone. A HAND-OVER, the reverse of the one in
+     * {@link #handles} - the same craft, at the deck point he is at, and no drop recorded.
+     */
+    static void takeOverFlyer(EntityLivingBase entity, String shipId, double[] local) {
+        double[] v = VSIntegration.shipVelocityAtPointFor(
+                entity.world, shipId, entity.posX, entity.posY, entity.posZ);
+        captureState(entity, shipId, local[0], local[1], local[2],
+                v == null ? 0.0 : v[0] * TICK_SECONDS,
+                v == null ? 0.0 : v[1] * TICK_SECONDS,
+                v == null ? 0.0 : v[2] * TICK_SECONDS);
+        logCapture(entity, shipId, local[0], local[1], local[2]);
+    }
+
     private static void release(Entity entity, String reason) {
         if (STATE.remove(entity) != null) {
             // Nothing durable is written here. The "this player is aboard ship X, at Y" record is
@@ -555,6 +573,9 @@ public final class ShipFrameTravel {
     public static double[] aboardShipFramePoint(Entity entity) {
         if (entity == null) {
             return null;
+        }
+        if (DeckFrameTick.holds(entity)) {
+            return DeckFrameTick.heldDeckPoint(entity);
         }
         ShipFrameState state = STATE.get(entity);
         return state == null || state.hullStand
@@ -854,10 +875,19 @@ public final class ShipFrameTravel {
      * <p>Unlike {@link #aboardShipId} this answers for a HULL-STAND capture too: a body clinging to
      * a hull's outer surface keeps world-frame semantics, but it is still held by a particular
      * craft, and a caller asking "is this my ship's capture" means both modes.</p>
+     *
+     * <p>This and the other "which deck holds it" questions here ({@link #aboardShipId},
+     * {@link #aboardShipFramePoint}, {@link #isResolvingAboard}) answer first for a body the deck's
+     * own frame holds ({@link DeckFrameTick}), which this class then does not resolve at all.
+     * {@link #isResolving} does not: it asks whether THIS class moves the body.</p>
      */
     public static String capturedShipId(Entity entity) {
         if (entity == null) {
             return null;
+        }
+        String deckHeld = DeckFrameTick.heldShipId(entity);
+        if (deckHeld != null) {
+            return deckHeld;
         }
         ShipFrameState state = STATE.get(entity);
         return state == null ? null : state.shipId;
@@ -890,6 +920,9 @@ public final class ShipFrameTravel {
     public static boolean isResolvingAboard(Entity entity) {
         if (entity == null) {
             return false;
+        }
+        if (DeckFrameTick.holds(entity)) {
+            return true;
         }
         ShipFrameState state = STATE.get(entity);
         return state != null && !state.hullStand;
@@ -924,6 +957,10 @@ public final class ShipFrameTravel {
     public static String aboardShipId(Entity entity) {
         if (entity == null) {
             return null;
+        }
+        String deckHeld = DeckFrameTick.heldShipId(entity);
+        if (deckHeld != null) {
+            return deckHeld;
         }
         ShipFrameState state = STATE.get(entity);
         return state == null || state.hullStand ? null : state.shipId;
@@ -965,11 +1002,38 @@ public final class ShipFrameTravel {
         // toss that will read as a clean number either way.
         m.put("containingShipIds", VSIntegration.shipIdsAt(
                 entity.world, entity.posX, entity.posY, entity.posZ));
+        // A body the deck's own frame holds is answered first, as every "which deck holds it"
+        // question here is: this class does not resolve it, and the capture fields below describe
+        // THAT hold - `heldBy` says which mechanism it is.
+        String deckHeld = DeckFrameTick.heldShipId(entity);
+        if (deckHeld != null) {
+            double[] point = DeckFrameTick.heldDeckPoint(entity);
+            double[] live = VSIntegration.toShipFrameFor(entity.world, deckHeld,
+                    entity.posX, entity.posY, entity.posZ);
+            m.put("alreadyTracked", true);
+            m.put("anchorShipId", deckHeld);
+            m.put("hullStand", false);
+            m.put("heldBy", "deckFrame");
+            m.put("shipFrameX", point == null ? null : point[0]);
+            m.put("shipFrameY", point == null ? null : point[1]);
+            m.put("shipFrameZ", point == null ? null : point[2]);
+            m.put("bodyShipFrameX", live == null ? null : live[0]);
+            m.put("bodyShipFrameY", live == null ? null : live[1]);
+            m.put("bodyShipFrameZ", live == null ? null : live[2]);
+            m.put("supportedByWorldTerrain", isSupportedByWorldTerrain(entity));
+            int shipObstacles = shipSupportObstacleCountFor(entity, deckHeld);
+            m.put("shipFrameResolved", shipObstacles >= 0);
+            m.put("shipSupportObstacles", shipObstacles);
+            m.put("supportedByShip", shipObstacles > 0);
+            m.put("verdict", true);
+            return m;
+        }
         ShipFrameState state = STATE.get(entity);
         boolean tracked = state != null;
         m.put("alreadyTracked", tracked);
         m.put("anchorShipId", tracked ? state.shipId : null);
         m.put("hullStand", tracked && state.hullStand);
+        m.put("heldBy", tracked ? "travelResolver" : null);
         // The body's committed position IN THE SHIP FRAME. Exposed because it is the only way to ask
         // "did this body move ALONG THE DECK" without an answer contaminated by the deck's own
         // motion: a world position has to be differenced against a separately-sampled ship pose, and
@@ -1097,8 +1161,7 @@ public final class ShipFrameTravel {
         // Absence is the honest answer instead: a body nobody has put on a deck has no ship frame to
         // be censused in, and a caller that gets null learns exactly that. It is a diagnostic, so the
         // cost of saying "I do not know" is a line in a probe reply.
-        ShipFrameState state = STATE.get(entity);
-        String shipId = state != null ? state.shipId : null;
+        String shipId = capturedShipId(entity);
         if (shipId == null) {
             return null;
         }
@@ -1128,7 +1191,9 @@ public final class ShipFrameTravel {
         Map<String, Object> m = new java.util.LinkedHashMap<>();
         m.put("isRemote", world.isRemote);
         m.put("shipId", shipId);
-        m.put("tracked", state != null);
+        // Always true by now - a body no deck holds returned null above; kept for its readers.
+        m.put("tracked", true);
+        m.put("heldBy", DeckFrameTick.holds(entity) ? "deckFrame" : "travelResolver");
         m.put("subPos", feet.getX() + "," + feet.getY() + "," + feet.getZ());
         m.put("chunkLoaded", world.isBlockLoaded(feet));
         m.put("nonAir", nonAir);
@@ -1336,6 +1401,23 @@ public final class ShipFrameTravel {
     private static boolean hasDeckBelowFor(Entity entity, String shipId) {
         return hasDeckBelowAt(entity, shipId, VSIntegration.toShipFrameFor(
                 entity.world, shipId, entity.posX, entity.posY, entity.posZ));
+    }
+
+    /**
+     * Whether a deck may go on holding {@code entity} at ship-frame point {@code local} of craft
+     * {@code shipId}: a floor within reach below it, or inside the craft's own block region under
+     * its roof. The same test this class keeps an aboard body by, shared so the deck's own frame lets
+     * go at exactly the same place - a body off the deck's edge, or out on the outer hull, is the
+     * world's (or the hull-stand's), not the deck's.
+     */
+    static boolean deckMayKeep(Entity entity, String shipId, double[] local) {
+        if (hasDeckBelowAt(entity, shipId, local)) {
+            return true;
+        }
+        AxisAlignedBB own = VSIntegration.subspaceStayRegion(entity.world, shipId, 0.0);
+        return own != null && local != null
+                && own.contains(new net.minecraft.util.math.Vec3d(local[0], local[1], local[2]))
+                && hasRoofAboveAt(entity, shipId, local);
     }
 
     /** As above, at an explicit ship-frame point (see {@link #gatePointOf}). */

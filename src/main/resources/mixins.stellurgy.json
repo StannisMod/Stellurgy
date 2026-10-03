@@ -15,6 +15,7 @@
     "MixinEntityShipLocalMove",
     "MixinEntityTrackerRiderSeesVehicle",
     "MixinNetHandlerDeckMovementBound",
+    "MixinNetHandlerPlayerDeckFrame",
     "MixinEntityPlayerInventoryAccess",
     "MixinEntityPlayerMPInventoryAccess",
     "MixinPlayerList",

@@ -33,6 +33,16 @@ import dev.stannismod.stellurgy.libvulpes.util.ZUtils.RedstoneState;
 import java.util.LinkedList;
 import java.util.List;
 
+/**
+ * An area gravity field: every entity within the radius is accelerated along the block faces the
+ * player selected, on world axes. Built for space stations.
+ *
+ * @deprecated Out of scope for crafts. A craft's deck already holds everything on it while the craft's
+ * artificial gravity is on, so on a craft this field would be a second gravity source for the same
+ * body. It is kept working as it is, and is to be reconnected when a craft's artificial gravity can be
+ * switched off - the feature this field belongs to - and not before.
+ */
+@Deprecated
 public class TileAreaGravityController extends TileMultiPowerConsumer implements ISliderBar, IGuiCallback {
 
     private static final Object[][][] structure = {

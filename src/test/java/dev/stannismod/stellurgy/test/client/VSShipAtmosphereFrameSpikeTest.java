@@ -47,10 +47,14 @@ import static org.junit.Assert.assertTrue;
  * ({@code blobSize=28} on the ground and aboard), so a ship's own blocks seal normally; the blob's
  * member cells are the ship's SUBSPACE addresses ({@code 5120005,129,51200} &rarr;
  * {@code PressurizedAir}), while the WORLD cell the same cabin occupies ({@code 5207,70,5203})
- * reports the dimension default, and a player standing inside that pressurised cabin resolves
- * {@code air} — against {@code PressurizedAir} for the identical cabin on the ground. The
- * assertions therefore pin the CURRENT behaviour: when the atmosphere gate learns to resolve in
- * the ship frame this test goes red and must be rewritten to the new contract.</p>
+ * reports the dimension default, and a player standing inside that pressurised cabin resolved
+ * {@code air} — against {@code PressurizedAir} for the identical cabin on the ground.</p>
+ *
+ * <p><b>What changed (2026-09-30).</b> A player the deck holds now has his living update run in the
+ * deck's frame, so the atmosphere gate reads him at his place IN the craft, where its sealed cabin
+ * is: RESULT-3 is now the contract a crew member breathes his own cabin's air. The blob itself is
+ * still keyed in the craft's addresses (RESULT-2), so a body NOT held by the deck - flying inside the
+ * cabin, say - still resolves the world default.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETest {
@@ -127,9 +131,14 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
      * sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…
      * \"blobSize\":0)", 2026-09-28. The two waits before it are arrangement links (the ship's id, the
      * ship usable).</p>
+     *
+     * <p>RESULT-3 red-witnessed: with the server player's living update run outside the deck's frame
+     * (the tree before {@code MixinNetHandlerPlayerDeckFrame}), the player inside the pressurised
+     * cabin resolved {@code air} - measured 2026-07-26 and again in every run of this method until
+     * 2026-09-30, when its assertion was the inverse of this one.</p>
      */
     @Test
-    public void aSealedShipCabinDoesNotReachItsOwnCrew_documentsKnownBug() throws Exception {
+    public void aSealedShipCabinReachesItsOwnCrew() throws Exception {
 
         // WHERE THIS SCENARIO STANDS IS ASKED FOR, NOT CHOSEN. Both structures come off the one
         // plot, so the 400-block separation below is the only spatial fact this class still states.
@@ -236,11 +245,10 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
         double[] wNow = toWorld(vx, vy, vz);
         String aboardCached = cachedAtmosphereWithPlayerAt(wNow[0], wNow[1], wNow[2]);
         System.out.println("[S1/ship] cachedForPlayerAboard=" + aboardCached);
-        assertTrue("RESULT-3: a player standing INSIDE the ship's pressurised cabin resolves "
-                        + aboardCached + " — the per-entity gate keys his WORLD position against "
-                        + "a SUBSPACE-keyed blob, so a sealed hull does not reach its own crew "
-                        + "(control, same cabin on the ground: " + ctrlCached + ")",
-                !"PressurizedAir".equalsIgnoreCase(aboardCached));
+        assertTrue("RESULT-3: a player standing INSIDE the ship's pressurised cabin must breathe it,"
+                        + " as he does the identical cabin on the ground (control: " + ctrlCached
+                        + "); he resolves " + aboardCached,
+                "PressurizedAir".equalsIgnoreCase(aboardCached));
     }
 
     // ── cabin construction / sealing ──────────────────────────────────────────────────────

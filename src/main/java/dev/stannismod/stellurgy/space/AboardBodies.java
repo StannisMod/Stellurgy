@@ -13,6 +13,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.WorldServer;
 
 import dev.stannismod.stellurgy.entity.EntityDummy;
+import dev.stannismod.stellurgy.integration.vs.DeckFrameTick;
 import dev.stannismod.stellurgy.integration.vs.ShipFrameTravel;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 
@@ -212,12 +213,12 @@ public final class AboardBodies {
             // because a craft keeps its cruise across a crossing by design. The deck then climbed
             // out from under the cargo, which reads afterwards as "the crossing dropped it".
             //
-            // The contact capture cannot cover this: it is keyed on deck SUPPORT and takes an
-            // EntityLivingBase, so an item — the commonest thing to be carrying — is never a
-            // candidate for it. A declared seed is the only path that reaches a non-living body,
-            // and it is the same one a dismount and an arrival already use.
-            boolean held = ShipFrameTravel.seedShipFrameCapture(
-                    restored, shipId, sub[0], sub[1], sub[2]);
+            // Declared to the deck's own frame, which takes items and mobs and lets them move on the
+            // deck from there. The travel resolver's seed is only for a body that frame refuses: the
+            // resolver re-seats every body it holds each tick and lets go only from a living body's
+            // own travel, so an item seeded to it stayed pinned where it was put down.
+            boolean held = DeckFrameTick.holdAt(restored, shipId, sub[0], sub[1], sub[2])
+                    || ShipFrameTravel.seedShipFrameCapture(restored, shipId, sub[0], sub[1], sub[2]);
             if (!held) {
                 // Placed but not held: say so rather than counting it as a clean carry. The body is
                 // where it should be THIS tick and will be left behind the moment the craft moves,
