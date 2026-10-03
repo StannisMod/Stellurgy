@@ -55,7 +55,7 @@ public final class HullSurvey {
         // Read BEFORE the walk: a block that changes during it bumps the count past this value, so
         // the next comparison sees a change and surveys again rather than keeping a stale answer.
         int revision = ship.getConstructionRevision();
-        ShipMassFrame mass = ShipHullMass.frameOf(world, shipUuid);
+        ShipMassFrame mass = new FlightComputerMassSource(world).massFrameOfPhysicsShip(shipUuid);
         IBlockPosSet blocks = ship.getBlockPositions();
         if (mass == null || blocks == null) {
             return null;

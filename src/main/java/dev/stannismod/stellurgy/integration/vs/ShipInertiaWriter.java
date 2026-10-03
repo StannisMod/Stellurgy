@@ -1,15 +1,11 @@
 package dev.stannismod.stellurgy.integration.vs;
 
-import java.util.UUID;
-
 import javax.annotation.Nullable;
 
-import net.minecraft.world.World;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.valkyrienskies.mod.common.ships.ShipData;
 import org.valkyrienskies.mod.common.ships.physics_data.ShipInertiaData;
 import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
 
@@ -31,7 +27,7 @@ import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
  *
  * <h2>Delta by default, recompute as the authority, disagreement REPORTED</h2>
  *
- * <p>{@link #apply} is the authority — a whole frame, computed from the hull, written as three fields
+ * <p>{@link #applyTo} is the authority — a whole frame, computed from the hull, written as three fields
  * together. {@link #compare} is the instrument that says whether the cheap incremental path has
  * drifted from it, and it <b>does not correct anything</b>. That is deliberate and it is the point:
  * a reconciliation that silently substitutes the right number turns a safety net into normal
@@ -65,26 +61,9 @@ public final class ShipInertiaWriter {
     private static final double CENTRE_TOLERANCE = 0.05;
 
     /**
-     * Write {@code frame} into the physics record of the craft named by {@code shipId}.
-     *
-     * <p>All three fields go together. Writing mass without the centre, or the centre without the
-     * tensor, leaves the engine integrating a body that never existed.</p>
-     *
-     * @return {@code true} when the record was written; {@code false} when this world holds no such
-     *         craft, which is a complete answer and not an error — an unnamed or unloaded craft has
-     *         no record to write, and the caller must not invent one
-     */
-    public static boolean apply(@Nullable World world, @Nullable UUID shipId,
-                                @Nullable ShipMassFrame frame) {
-        if (world == null || shipId == null || frame == null) {
-            return false;
-        }
-        ShipInertiaData record = recordOf(world, shipId);
-        return record != null && applyTo(record, frame, String.valueOf(shipId));
-    }
-
-    /**
-     * The write itself, against the record rather than against a world. Public because the rules it
+     * Write {@code frame} into {@code record}. All three fields go together: writing mass without the
+     * centre, or the centre without the tensor, leaves the engine integrating a body that never existed.
+     * Against the record rather than against a world, and public, because the rules it
      * enforces — all three fields together, a singular tensor refused — have to be reachable without a
      * running server: the record is a plain data holder, so a test can hold one, and a rule nothing can
      * exercise is a rule nothing keeps.
@@ -156,12 +135,6 @@ public final class ShipInertiaWriter {
                     + String.format("%+.2f%%", 100.0 * relativeMassError)
                     + "), centre off by " + String.format("%.4f", centreOffBlocks) + " blocks";
         }
-    }
-
-    @Nullable
-    private static ShipInertiaData recordOf(World world, UUID shipId) {
-        ShipData ship = VSBridge.shipDataByUuid(world, shipId);
-        return ship == null ? null : ship.getInertiaData();
     }
 
     /**

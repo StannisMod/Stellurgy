@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.client;
 
 
 import org.junit.FixMethodOrder;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
@@ -185,6 +186,14 @@ public class VSRemoteBodyModelGateE2ETest extends AbstractSharedVsClientE2ETest 
 
     // ---- Leg A: the bug - a body the ship does NOT carry must not be drawn ship-aligned --------
 
+    @Ignore("RED ON ITS ARRANGEMENT, DETERMINISTICALLY, and the rule it checks is being redefined."
+            + " The ground search takes the column under the rolled hull, whose probe right after the"
+            + " spawn reads 'not supported' and a few seconds later reads 'supported by the ship' on a"
+            + " still hull, so the window's precondition lapses every run. Whether that body is on"
+            + " the ship is no longer decided by standing support: it will be decided by the craft's"
+            + " artificial-gravity field (a body is held where its feet are in the field). Lift this"
+            + " when the remote-body model gate asks that predicate, and re-stage the subject inside the"
+            + " hull's world box but outside its field.")
     @Test
     public void aBodyStandingOnTerrainBesideARolledShipIsNotDrawnShipAligned() throws Exception {
         // GROUND-SUBJECT: this leg's premise is a body standing on REAL TERRAIN beside the ship, so

@@ -38,6 +38,10 @@ import dev.stannismod.stellurgy.ship.mass.ShipMassFrame;
  * that does not exist yet. Content and crew change with no block changing, so they are the business of
  * {@link #backgroundRound}, which the flight computer runs on its own cadence.</p>
  *
+ * <p><b>Which crafts.</b> The frame comes from {@link FlightComputerMassSource}, so only a craft that
+ * carries a flight computer is written. A hull without one keeps the physics engine's own mass: nothing
+ * steers it, and ships do not collide with each other, so nothing needs ours for it.</p>
+ *
  * <h2>Drift is reported, never corrected quietly, and never thrown</h2>
  *
  * <p>A disagreement on an assembly or a paste means a trigger is missing somewhere, and the repair is
@@ -72,7 +76,8 @@ public final class ShipMassTrigger {
     }
 
     private static void recompute(ShipLifecycleEvent.ShipNamed event) {
-        ShipMassFrame authority = ShipHullMass.frameOf(event.world, event.shipUuid);
+        ShipMassFrame authority =
+                new FlightComputerMassSource(event.world).massFrameOfPhysicsShip(event.shipUuid);
         if (authority == null) {
             return;
         }
@@ -109,7 +114,7 @@ public final class ShipMassTrigger {
      */
     public static void backgroundRound(net.minecraft.world.World world, java.util.UUID shipUuid) {
         try {
-            ShipMassFrame authority = ShipHullMass.frameOf(world, shipUuid);
+            ShipMassFrame authority = new FlightComputerMassSource(world).massFrameOfPhysicsShip(shipUuid);
             if (authority == null) {
                 return;
             }
