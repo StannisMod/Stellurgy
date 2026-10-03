@@ -2,7 +2,6 @@ package dev.stannismod.stellurgy.affs.world;
 
 import dev.stannismod.stellurgy.affs.te.TileEntityFieldGenerator;
 import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
@@ -18,34 +17,15 @@ public final class FieldSurfaceMath {
     private FieldSurfaceMath() {
     }
 
-    public static double shellDistance(FieldSource generator, Vec3d point) {
-        // Centre in WORLD coordinates (identity standalone, ship-transformed on a VS hull, §4.3). A
-        // sphere is rotation-invariant, so the shell distance stays a plain world-frame radial test.
-        Vec3d c = generator.getWorldCenter();
-        double dx = point.x - c.x;
-        double dy = point.y - c.y;
-        double dz = point.z - c.z;
-        double distanceToCenter = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        return Math.abs(distanceToCenter - generator.getRadius()) - FIELD_HALF_THICKNESS;
-    }
-
-    public static double compositeShellDistance(World world, Vec3d point) {
-        List<TileEntityFieldGenerator> generators = getActiveGenerators(world);
-        return compositeShellDistance(generators, point);
-    }
-
-    public static double compositeShellDistance(List<? extends FieldSource> generators, Vec3d point) {
-        if (generators.isEmpty()) {
-            return Double.POSITIVE_INFINITY;
-        }
-
-        double distance = shellDistance(generators.get(0), point);
-        for (int i = 1; i < generators.size(); i++) {
-            distance = smoothMin(distance, shellDistance(generators.get(i), point), SMOOTH_UNION_K);
-        }
-        return distance;
-    }
-
+    /**
+     * Signed distance from {@code point} to the VOLUME the field encloses: negative inside, positive
+     * in the gap outside, the per-emitter spheres blended by a smooth minimum so neighbouring emitters
+     * read as one body. This is the "is it under the shield" question.
+     *
+     * <p>The other question a shield is asked — "is this box touching the membrane" — is
+     * {@link #intersectsCompositeShell}. The two are different predicates and neither answers for the
+     * other: a block in the middle of a bubble is deep inside the volume and nowhere near the membrane.</p>
+     */
     public static double compositeHullDistance(List<? extends FieldSource> generators, Vec3d point) {
         if (generators.isEmpty()) {
             return Double.POSITIVE_INFINITY;
@@ -58,6 +38,12 @@ public final class FieldSurfaceMath {
         return distance;
     }
 
+    /**
+     * Does {@code box} touch the MEMBRANE — any one emitter's sphere surface, {@link #FIELD_THICKNESS}
+     * thick — rather than lie in the volume? It is what a body crossing the field meets. Each emitter's
+     * membrane is tested on its own, without the volume's smooth blend: a body deep inside a bubble
+     * answers {@code false} here and negative from {@link #compositeHullDistance}.
+     */
     public static boolean intersectsCompositeShell(World world, AxisAlignedBB box) {
         return intersectsCompositeShell(getActiveGenerators(world), box);
     }
@@ -69,15 +55,6 @@ public final class FieldSurfaceMath {
             }
         }
         return false;
-    }
-
-    public static boolean isInsideCompositeShell(World world, BlockPos pos) {
-        return isInsideCompositeShell(getActiveGenerators(world), pos);
-    }
-
-    public static boolean isInsideCompositeShell(List<? extends FieldSource> generators, BlockPos pos) {
-        Vec3d point = new Vec3d(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D);
-        return compositeShellDistance(generators, point) <= 0.0D;
     }
 
     /** The generators in {@code world} that are projecting a shell now. Empty for a client world. */

@@ -50,7 +50,6 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     private static final int CLIENT_SYNC_BASE_INTERVAL_TICKS = 20;
     private static final int CLIENT_SYNC_JITTER_TICKS = 10;
     private static final DamageSource SHIELD_COLLISION_DAMAGE = new DamageSource("affs.shield_collision");
-    private static final Map<UUID, PlayerLastSafePosition> PLAYER_LAST_SAFE_POSITIONS = new HashMap<>();
 
     // Coil capacity is read from config at construction (config is loaded in preInit, before any tile
     // is built). Small and fast: the field activates at shieldActivationThreshold of this capacity.
@@ -86,6 +85,16 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     private boolean fieldPowered = false;
     private int shieldReceivedThisTick = 0;
     private int shieldConsumedThisTick = 0;
+    /**
+     * Which side of THIS emitter's shell each player was last seen clear of it on: {@code true} outside,
+     * {@code false} inside. A player touching the membrane is held on the side recorded here.
+     *
+     * <p>Kept per emitter because the answer is per shell: a player standing inside one shield and
+     * outside its neighbour has a different side for each, and a single record per player made one
+     * shell's in/out decision out of whichever emitter wrote last. Not saved — it is the memory of a
+     * crossing in progress, and dies with the tile.</p>
+     */
+    private final Map<UUID, Boolean> playerOutsideShell = new HashMap<>();
 
     @Override
     public void update() {
@@ -447,20 +456,19 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         double outerRadiusSq = outerRadius * outerRadius;
 
         if (entity instanceof EntityPlayer) {
-            PlayerLastSafePosition safePosition = PLAYER_LAST_SAFE_POSITIONS.get(entity.getUniqueID());
             if (!intersectsShell) {
                 if (currentDistSq >= outerRadiusSq) {
-                    rememberPlayerSafePosition(entity, true);
+                    rememberPlayerSide(entity, true);
                 } else if (currentDistSq <= innerRadiusSq) {
-                    rememberPlayerSafePosition(entity, false);
+                    rememberPlayerSide(entity, false);
                 }
                 return false;
             }
 
-            if (safePosition != null && safePosition.dimension == world.provider.getDimension()) {
-                return safePosition.outside;
-            }
-            return true;
+            // A player this shell has never seen clear of it is held out: the membrane is a barrier
+            // against whoever it cannot place, not a door for them.
+            Boolean outside = playerOutsideShell.get(entity.getUniqueID());
+            return outside == null || outside;
         }
 
         if (!intersectsShell) {
@@ -570,7 +578,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         }
 
         if (entity instanceof EntityPlayer) {
-            rememberPlayerSafePosition(entity, true);
+            rememberPlayerSide(entity, true);
         }
 
         Vec3d touchPoint = fieldCenter.add(FieldSurfaceMath.scale(normal, getRadius() + FieldSurfaceMath.FIELD_HALF_THICKNESS));
@@ -827,21 +835,11 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         return fieldCenter.add(FieldSurfaceMath.scale(normal, getRadius() + FieldSurfaceMath.FIELD_HALF_THICKNESS));
     }
 
-    private void rememberPlayerSafePosition(Entity entity, boolean outside) {
+    private void rememberPlayerSide(Entity entity, boolean outside) {
         if (!(entity instanceof EntityPlayer) || entity.world == null || entity.world.isRemote) {
             return;
         }
-        UUID uuid = entity.getUniqueID();
-        PlayerLastSafePosition safePosition = PLAYER_LAST_SAFE_POSITIONS.get(uuid);
-        if (safePosition == null) {
-            safePosition = new PlayerLastSafePosition();
-            PLAYER_LAST_SAFE_POSITIONS.put(uuid, safePosition);
-        }
-        safePosition.dimension = entity.world.provider.getDimension();
-        safePosition.outside = outside;
-        safePosition.x = entity.posX;
-        safePosition.y = entity.posY;
-        safePosition.z = entity.posZ;
+        playerOutsideShell.put(entity.getUniqueID(), outside);
     }
 
     private void queueClientSync(boolean includeSnapshot) {
@@ -987,13 +985,5 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
 
     private static int clampTier(int tier) {
         return Math.max(0, Math.min(BlockFieldGenerator.TIER_COUNT - 1, tier));
-    }
-
-    private static final class PlayerLastSafePosition {
-        private int dimension;
-        private boolean outside;
-        private double x;
-        private double y;
-        private double z;
     }
 }

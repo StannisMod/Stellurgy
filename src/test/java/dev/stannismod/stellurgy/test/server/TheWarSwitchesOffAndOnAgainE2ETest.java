@@ -1,5 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
+import java.util.List;
+
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.Events;
@@ -7,6 +9,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.Weapons;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -31,7 +34,9 @@ import static org.junit.Assert.assertTrue;
  * <h3>Why ON again is the point</h3>
  * <p>The switch exists to be thrown on a world that has already been fought over and thrown back
  * later, so what OFF must NOT do is as load-bearing as what it does: damage already recorded stays,
- * and guns fire again afterwards without being rebuilt.</p>
+ * and guns fire again afterwards without being rebuilt. So the war is switched off a second time over
+ * a block carrying a stage of damage: the stage must still be there, and the welder — repair being
+ * the obvious reason to switch the war off — must still take it off.</p>
  */
 public class TheWarSwitchesOffAndOnAgainE2ETest extends AbstractSharedServerTest {
 
@@ -54,12 +59,27 @@ public class TheWarSwitchesOffAndOnAgainE2ETest extends AbstractSharedServerTest
      * PERMITTED to fire with the war switched off" on a decision reading
      * {@code permitted:true, weapons:false} (2026-09-29).</p>
      *
-     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with {@code TileTurret.isDisabledByConfig}
-     * ({@code TileTurret.java:343}) answering false, this fails at "a gun reports itself merely idle
+     * <p>red-witnessed, one inversion per verdict, 2026-09-30: with {@code TileTurret#isDisabledByConfig}
+     * at {@code return !StellurgyConfiguration.getCurrentConfig().enableWeapons;} answering false, this fails at "a gun reports itself merely idle
      * with combat switched off ... {...weaponsDisabled:false...}"; answering true, at "a gun still
      * reports itself disabled after the war was switched back on ... {...weaponsDisabled:true...}". That
      * method's only reader today is the probe's {@code turret read}, so these two verdicts pin what a
      * gun SAYS about the switch, not anything a player is shown.</p>
+     *
+     * <p>The second-off leg, one inversion per verdict, 2026-10-03:</p>
+     *
+     * <p>red-witnessed: with {@code ShotSubstrate#tick} at {@code endWhatWasStillInTheAir(world);} also
+     * clearing the world's damage records, this fails at "switching the war off erased damage already on
+     * the world: 9772,84,9903 carried stage 1 and with the war off it reads {...stage:0...}".</p>
+     *
+     * <p>red-witnessed: with {@code ItemRepairWelder#weld} at {@code if (stage <= 0)} followed by a
+     * refusal while {@code enableWeapons} is off, this fails at "the welder refused with the war switched
+     * off ... {...outcome:NO_CHARGE...}".</p>
+     *
+     * <p>red-witnessed: with {@code ItemRepairWelder#weld} at
+     * {@code DamageState.setStage(world, pos, stage - 1);} writing {@code stage} unchanged, this fails at
+     * "the weld with the war off did not take exactly one stage off ... {...outcome:REPAIRED,
+     * stageBefore:1, stageAfter:1...}".</p>
      */
     @Test
     public void withTheWarOffNeitherFamilyDamagesAnythingAndBothWorkAgainAfterwards() throws Exception {
@@ -148,6 +168,68 @@ public class TheWarSwitchesOffAndOnAgainE2ETest extends AbstractSharedServerTest
         assertTrue("the beam's wall was staged with the war off, so the beam is still declaring"
                 + " impacts: " + stage(beamWall),
                 Weapons.stagesSetAt(events, off, on, DIM, beamWall, Y, Z).isEmpty());
+
+        // And off AGAIN, now on a world that carries damage: what OFF must keep, and what it must
+        // still allow. The damaged block is one stage into an iron block beside the beam's line,
+        // declared through the damage engine with the war on — the beam itself takes an iron block
+        // from undamaged to destroyed in one write (measured 2026-10-03: from 0 to 4 of max 4), so it
+        // leaves nothing damaged-and-standing to keep. The record a declared stage writes is the one
+        // weapon fire writes.
+        int markedX = beamWall, markedZ = Z + 3;
+        int markedStage = stageOneBlock(markedX, markedZ);
+        long offAgain = events.mark();
+        try {
+            ask("stellurgytest config set enableWeapons false").requireOk("switch the war off again");
+            // The gun's own decision taken with the war off is the record that the switch has acted
+            // on this world: from here on nothing weapon-side writes a stage.
+            Weapons.awaitBeam(events, offAgain, BEAM_X, Y, Z,
+                    "the beam gun never took a tick with the war switched off again, so the reads below"
+                            + " would be of a world the switch had not reached",
+                    "wanted", "true", "weapons", "false");
+
+            Reply kept = stageAt(markedX, markedZ);
+            assertEquals("switching the war off erased damage already on the world: "
+                            + Weapons.at(markedX, Y, markedZ) + " carried stage " + markedStage
+                            + " and with the war off it reads " + kept,
+                    markedStage, kept.integer("stage"));
+
+            // Repair is not a weapon: with the war off the welder still takes a stage off. The tool is
+            // charged past its capacity (the item clamps to it) and carries a full stack of the block's
+            // material, so neither price — a fraction of the block's own recipe, and the per-stage
+            // charge — can be what refuses it. Measured 2026-10-03: one stage of an iron block cost 9
+            // ingots (64 -> 55 in the weld reply) and 2000 FE (100000 -> 98000).
+            Reply weld = ask("stellurgytest damage weld " + DIM + " " + markedX + " " + Y + " " + markedZ + " "
+                    + Integer.MAX_VALUE + " minecraft:iron_ingot 64").requireOk("weld with the war off");
+            System.out.println("FIXTURE war-switch: with the war off, stage read " + kept + "; weld " + weld);
+            assertEquals("the welder refused with the war switched off — repair is the reason to switch"
+                    + " the war off at all: " + weld, "REPAIRED", weld.text("outcome"));
+            assertEquals("the weld with the war off did not take exactly one stage off: " + weld,
+                    markedStage - 1, weld.integer("stageAfter"));
+        } finally {
+            ask("stellurgytest config set enableWeapons true").requireOk("restore the war switch");
+        }
+    }
+
+    /**
+     * Put an iron block at {@code (x, Y, z)} and declare one impact into it carrying exactly the price
+     * of one stage there ({@code stageCost}, read off the block itself); answers the stage it was left
+     * at, which must be a damaged block still standing.
+     */
+    private int stageOneBlock(int x, int z) throws Exception {
+        place("minecraft:iron_block", x, Y, z);
+        int stageCost = stageAt(x, z).integer("stageCost");
+        long declared = events.mark();
+        Reply impact = ask("stellurgytest damage impact " + DIM + " " + (x - 0.5D) + " " + (Y + 0.5D) + " "
+                + (z + 0.5D) + " 1 0 0 " + stageCost + " KINETIC");
+        requireArranged("the damage engine refused the impact: " + impact, impact.ok());
+        List<String> writes = Weapons.stagesSetAt(events, declared, DIM, x, Y, z);
+        System.out.println("FIXTURE war-switch: damaged block " + Weapons.at(x, Y, z) + " stageCost=" + stageCost
+                + " impact=" + impact + " stage write=" + writes);
+        requireArranged("one stage's worth of impact did not leave the block damaged and standing: "
+                + writes + " after " + impact, writes.size() == 1
+                && Events.number(writes.get(0), "to") > 0
+                && Events.number(writes.get(0), "to") < Events.number(writes.get(0), "max"));
+        return (int) Events.number(writes.get(0), "to");
     }
 
     // ---- driving
@@ -190,7 +272,11 @@ public class TheWarSwitchesOffAndOnAgainE2ETest extends AbstractSharedServerTest
     }
 
     private Reply stage(int x) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z);
+        return stageAt(x, Z);
+    }
+
+    private Reply stageAt(int x, int z) throws Exception {
+        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + z).requireOk("read the stage");
     }
 
     private void place(String block, int x, int y, int z) throws Exception {

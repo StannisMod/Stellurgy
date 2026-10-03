@@ -82,6 +82,7 @@
     "MixinDelayedActionBarEvents",
     "MixinEntityPlayerMPEvents",
     "MixinTileEntityFieldGeneratorEvents",
+    "MixinTileEntityFieldGeneratorMembraneEvents",
     "MixinForceFieldExplosionHandlerEvents",
     "MixinTilePilotSeatEvents",
     "MixinBlockPilotSeatEvents",
@@ -120,6 +121,7 @@
     "MixinClientBeamTrackerEvents",
     "MixinClientShotTrackerEvents",
     "MixinTileWeaponConsoleReadoutEvents",
+    "MixinPacketThreadUtilRespawnWindow",
     "MixinMinecraftSideTrace"
   ]
 }

@@ -23,18 +23,23 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  *       (the blast's centre, {@code x,y,z}), {@code candidates} (every block the blast would take, as
  *       {@code "x,y,z"}, before any emitter has taken anything out) and {@code emitters} — every
  *       emitter registered in the blast's world, each as {@code pos}, {@code powered} (the lit-ness
- *       the handler is about to ask) and {@code radius} (the radius it projects in its current
- *       condition). Read at the moment of the decision, so a reader's "lit and shrunk" is the state
- *       the decision was taken in, not one read a probe call earlier or later.</li>
- *   <li><b>{@code shield_explosion_decided}</b> — the RETURN of the same call: {@code at} and
+ *       the handler is about to ask), {@code radius} (the radius it projects in its current
+ *       condition) and {@code stored} (its coil). Read at the moment of the decision, so a reader's
+ *       "lit and shrunk" is the state the decision was taken in, not one read a probe call earlier or
+ *       later.</li>
+ *   <li><b>{@code shield_explosion_decided}</b> — the RETURN of the same call: {@code at},
  *       {@code destroyed}, the blocks still in the blast once every emitter has taken out what it
- *       protects. That removal is where production COMBINES the emitters, so a block that is absent
- *       here and present in {@code candidates} was saved by some emitter's decision.</li>
+ *       protects, and {@code emitters} again in the same shape. That removal is where production
+ *       COMBINES the emitters, so a block that is absent here and present in {@code candidates} was
+ *       saved by some emitter's decision; and an emitter's {@code stored} here against its value in
+ *       the heard record is what it paid, read inside ONE handler call — no tick runs between the two,
+ *       so no refill from the network can hide the debit.</li>
  * </ul>
  *
  * <p>Server log, filed against the blast's world. SILENT about a client world, and about every
  * Detonate subscriber other than this handler: a block another mod saves after it is still listed
- * in {@code destroyed}. Read by {@code ShieldDamageDegradesTest}.</p>
+ * in {@code destroyed}. Read by {@code ShieldDamageDegradesTest} and
+ * {@code ShieldImpactAbsorptionTest}.</p>
  */
 @Mixin(ForceFieldExplosionHandler.class)
 public abstract class MixinForceFieldExplosionHandlerEvents {
@@ -48,19 +53,9 @@ public abstract class MixinForceFieldExplosionHandlerEvents {
             return;
         }
         TestTrace.instrument(world, INSTRUMENT);
-        StringBuilder emitters = new StringBuilder();
-        for (TileEntityFieldGenerator emitter : TileEntityFieldGenerator.loadedIn(world)) {
-            if (emitters.length() > 0) {
-                emitters.append(',');
-            }
-            BlockPos pos = emitter.getPos();
-            emitters.append("{\"pos\":\"").append(pos.getX()).append(',').append(pos.getY()).append(',')
-                    .append(pos.getZ()).append("\",\"powered\":").append(emitter.isFieldPowered())
-                    .append(",\"radius\":").append(emitter.getRadius()).append('}');
-        }
         TestTrace.record(world, "shield_explosion_heard", stellurgyTest$at(event)
                 + ",\"candidates\":" + stellurgyTest$positions(event.getAffectedBlocks())
-                + ",\"emitters\":[" + emitters + "]");
+                + ",\"emitters\":" + stellurgyTest$emitters(world));
     }
 
     @Inject(method = "onExplosionDetonate", at = @At("RETURN"), require = 1, remap = false)
@@ -71,7 +66,25 @@ public abstract class MixinForceFieldExplosionHandlerEvents {
         }
         TestTrace.instrument(world, INSTRUMENT);
         TestTrace.record(world, "shield_explosion_decided", stellurgyTest$at(event)
-                + ",\"destroyed\":" + stellurgyTest$positions(event.getAffectedBlocks()));
+                + ",\"destroyed\":" + stellurgyTest$positions(event.getAffectedBlocks())
+                + ",\"emitters\":" + stellurgyTest$emitters(world));
+    }
+
+    /** Every emitter registered in {@code world}, as the decision sees it at this moment. */
+    @Unique
+    private static String stellurgyTest$emitters(World world) {
+        StringBuilder emitters = new StringBuilder("[");
+        for (TileEntityFieldGenerator emitter : TileEntityFieldGenerator.loadedIn(world)) {
+            if (emitters.length() > 1) {
+                emitters.append(',');
+            }
+            BlockPos pos = emitter.getPos();
+            emitters.append("{\"pos\":\"").append(pos.getX()).append(',').append(pos.getY()).append(',')
+                    .append(pos.getZ()).append("\",\"powered\":").append(emitter.isFieldPowered())
+                    .append(",\"radius\":").append(emitter.getRadius())
+                    .append(",\"stored\":").append(emitter.getEnergyStored()).append('}');
+        }
+        return emitters.append(']').toString();
     }
 
     @Unique
