@@ -1,11 +1,15 @@
 package dev.stannismod.stellurgy.network;
 
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
+import dev.stannismod.stellurgy.libvulpes.network.PacketChangeKeyState;
+import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketItemModifcation;
+import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -18,7 +22,8 @@ import java.util.Set;
  * shape as a duplicate entity spawn id, on a different space.</p>
  *
  * <p>The discriminator is allocated by the channel in registration order, so the ORDER of
- * {@link #PACKETS} is the wire format. Declaring the whole space as one list keeps that order in a
+ * {@link #declared} is the wire format — libVulpes' own packets included, at its head, where they
+ * were registered when libVulpes was a mod of its own. Declaring the whole space as one list keeps that order in a
  * single reviewable place, makes a duplicate impossible to miss, and keeps registration
  * unconditional -- a registration hidden behind a side or config check would allocate different
  * numbers on the two sides and mis-decode everything after it.</p>
@@ -29,8 +34,15 @@ import java.util.Set;
  */
 public final class PacketRegistry {
 
-    /** The space, in wire order. Appending is safe; inserting or reordering renumbers the tail. */
-    private static final Class<?>[] PACKETS = {
+    /**
+     * The space, in wire order. Appending is safe; inserting or reordering renumbers the tail. A fresh
+     * array per call: the list is a declaration, not state anyone may hold or change.
+     */
+    private static Class<?>[] declared() {
+        return new Class<?>[] {
+            PacketMachine.class,
+            PacketEntity.class,
+            PacketChangeKeyState.class,
             PacketDimInfo.class,
             PacketSatellite.class,
             PacketStellarInfo.class,
@@ -58,21 +70,24 @@ public final class PacketRegistry {
             PacketShotSpawn.class,
             PacketShotEnd.class,
             PacketBeamState.class,
-    };
+        };
+    }
 
     private PacketRegistry() {
     }
 
     /**
-     * Registers every declared packet, in declaration order. Validates the whole list first, so a
-     * duplicate fails before a single registration reaches the channel.
+     * Opens the channel with every declared packet, in declaration order. Validates the whole list
+     * first, so a duplicate fails before the channel exists.
      */
     public static void registerAll() {
-        verify(PACKETS);
-        PacketHandler channel = LibVulpes.instance.packets();
-        for (Class<?> packet : PACKETS) {
-            channel.addDiscriminator(packet.asSubclass(BasePacket.class));
+        Class<?>[] packets = declared();
+        verify(packets);
+        List<Class<? extends BasePacket>> typed = new ArrayList<>(packets.length);
+        for (Class<?> packet : packets) {
+            typed.add(packet.asSubclass(BasePacket.class));
         }
+        PacketHandler.openChannel(typed);
     }
 
     /**
@@ -82,8 +97,9 @@ public final class PacketRegistry {
      *         from an empty one.
      */
     public static int verifyDeclared() {
-        verify(PACKETS);
-        return PACKETS.length;
+        Class<?>[] packets = declared();
+        verify(packets);
+        return packets.length;
     }
 
     /**

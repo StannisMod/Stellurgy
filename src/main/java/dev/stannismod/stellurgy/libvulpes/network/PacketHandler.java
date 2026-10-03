@@ -21,113 +21,91 @@ import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleChannelHandlerWrapper;
 import net.minecraftforge.fml.relauncher.Side;
 import org.apache.logging.log4j.Level;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket.BasePacketHandlerClient;
 import dev.stannismod.stellurgy.libvulpes.network.BasePacket.BasePacketHandlerServer;
 
 import java.lang.reflect.Method;
 import java.util.EnumMap;
+import java.util.List;
 
 /**
- * The mod's network channel: its codec, the packet classes registered on it, and the pipes to send
- * through.
+ * The mod's network channel: opening it, and sending through it.
  *
- * <p>An instance IS the channel. Constructing one registers the channel with FML, which accepts a
- * name once per JVM and refuses it after — so the constructor is a lifecycle act and is called from
- * exactly one place, {@link LibVulpes#preInit}, which holds the result for the life of the process
- * (FML has no way to unregister a channel). Nothing happens at class load.</p>
- *
- * <p>The static {@code sendTo*} methods are a facade over that one channel, which is how the rest of
- * the mod sends; they hold no state and fail loudly before {@code preInit} has built it.</p>
+ * <p>Holds nothing. The channel is FML's: {@code NetworkRegistry} keeps it by name from the moment it
+ * is opened until the JVM exits and never lets it go, so a field here would only be a second copy of
+ * what FML already owns. Opening is one call over the whole ordered packet list, so the codec and the
+ * wire-id counter live exactly as long as that call; a second opening is refused by FML itself.</p>
  */
 public final class PacketHandler {
 
 	/** The channel's name on the wire; both sides must agree on it. */
 	public static final String CHANNEL = "libVulpes";
 
-	// Netty's own name generator for pipeline handlers, reached reflectively. Facts about the netty
-	// on the classpath, not state: resolved once, never written again.
-	private static final Class<?> defaultChannelPipeline;
-	private static final Method generateName;
-	static {
-		try
-		{
-			defaultChannelPipeline = Class.forName("io.netty.channel.DefaultChannelPipeline");
-			generateName = defaultChannelPipeline.getDeclaredMethod("generateName", ChannelHandler.class);
-			generateName.setAccessible(true);
+	private PacketHandler() {
+	}
+
+	/**
+	 * Registers the channel with FML and every packet class on it, numbered in list order — that order
+	 * IS the wire format. Called once, from the mod's pre-init; FML throws on a second call.
+	 */
+	public static void openChannel(List<Class<? extends BasePacket>> packets) {
+		Method generateName = pipelineNameGenerator();
+		Codec codec = new Codec();
+		EnumMap<Side, FMLEmbeddedChannel> channels = NetworkRegistry.INSTANCE.newChannel(CHANNEL, codec);
+		boolean physicalClient = FMLCommonHandler.instance().getSide().isClient();
+		for (int id = 0; id < packets.size(); id++) {
+			Class<? extends BasePacket> clazz = packets.get(id);
+			codec.addDiscriminator(id, clazz);
+			if (physicalClient) {
+				addHandlerAfterCodec(channels.get(Side.CLIENT), generateName,
+						new SimpleChannelHandlerWrapper<>(new BasePacketHandlerClient(), Side.CLIENT, clazz));
+			}
+			addHandlerAfterCodec(channels.get(Side.SERVER), generateName,
+					new SimpleChannelHandlerWrapper<>(new BasePacketHandlerServer(), Side.SERVER, clazz));
 		}
-		catch (Exception e)
-		{
+	}
+
+	private static <REQ extends IMessage, REPLY extends IMessage> void addHandlerAfterCodec(
+			FMLEmbeddedChannel channel, Method generateName, SimpleChannelHandlerWrapper<REQ, REPLY> handler) {
+		String codecName = channel.findChannelHandlerNameForType(Codec.class);
+		channel.pipeline().addAfter(codecName, generateName(generateName, channel.pipeline(), handler), handler);
+	}
+
+	/** Netty's own name generator for pipeline handlers, which it does not expose. */
+	private static Method pipelineNameGenerator() {
+		try {
+			Method method = Class.forName("io.netty.channel.DefaultChannelPipeline")
+					.getDeclaredMethod("generateName", ChannelHandler.class);
+			method.setAccessible(true);
+			return method;
+		} catch (Exception e) {
 			FMLLog.log(Level.FATAL, e, "What? Netty isn't installed, what magic is this?");
 			throw Throwables.propagate(e);
 		}
 	}
 
-	private final Codec codec = new Codec();
-	private final EnumMap<Side, FMLEmbeddedChannel> channels;
-	/** The next packet class's wire id: registration order IS the wire format. */
-	private int discriminatorNumber;
-
-	/** Registers the channel with FML. See the class comment for who may call this. */
-	public PacketHandler() {
-		channels = NetworkRegistry.INSTANCE.newChannel(CHANNEL, codec);
-	}
-
-	public void addDiscriminator(Class<? extends BasePacket> clazz) {
-		codec.addDiscriminator(discriminatorNumber, clazz);
-		discriminatorNumber++;
-
-		if(FMLCommonHandler.instance().getSide().isClient()) {
-			FMLEmbeddedChannel channel = channels.get(Side.CLIENT);
-			String type = channel.findChannelHandlerNameForType(Codec.class);
-			addClientHandlerAfter(channel, type, new BasePacketHandlerClient(), clazz);
+	private static String generateName(Method generateName, ChannelPipeline pipeline, ChannelHandler handler) {
+		try {
+			return (String) generateName.invoke(pipeline, handler);
+		} catch (Exception e) {
+			FMLLog.log(Level.FATAL, e, "It appears we somehow have a not-standard pipeline. Huh");
+			throw Throwables.propagate(e);
 		}
-		FMLEmbeddedChannel channel = channels.get(Side.SERVER);
-		String type = channel.findChannelHandlerNameForType(Codec.class);
-		addServerHandlerAfter(channel, type, new BasePacketHandlerServer(), clazz);
 	}
 
-	private <REQ extends IMessage, REPLY extends IMessage, NH extends INetHandler> void addServerHandlerAfter(FMLEmbeddedChannel channel, String type, IMessageHandler<? super REQ, ? extends REPLY> messageHandler, Class<REQ> requestType)
-    {
-        SimpleChannelHandlerWrapper<REQ, REPLY> handler = getHandlerWrapper(messageHandler, Side.SERVER, requestType);
-        channel.pipeline().addAfter(type, generateName(channel.pipeline(), handler), handler);
-    }
-
-    private <REQ extends IMessage, REPLY extends IMessage, NH extends INetHandler> void addClientHandlerAfter(FMLEmbeddedChannel channel, String type, IMessageHandler<? super REQ, ? extends REPLY> messageHandler, Class<REQ> requestType)
-    {
-        SimpleChannelHandlerWrapper<REQ, REPLY> handler = getHandlerWrapper(messageHandler, Side.CLIENT, requestType);
-        channel.pipeline().addAfter(type, generateName(channel.pipeline(), handler), handler);
-    }
-
-    private <REPLY extends IMessage, REQ extends IMessage> SimpleChannelHandlerWrapper<REQ, REPLY> getHandlerWrapper(IMessageHandler<? super REQ, ? extends REPLY> messageHandler, Side side, Class<REQ> requestType)
-    {
-        return new SimpleChannelHandlerWrapper<>(messageHandler, side, requestType);
-    }
-
-    private static String generateName(ChannelPipeline pipeline, ChannelHandler handler)
-    {
-        try
-        {
-            return (String)generateName.invoke(defaultChannelPipeline.cast(pipeline), handler);
-        }
-        catch (Exception e)
-        {
-            FMLLog.log(Level.FATAL, e, "It appears we somehow have a not-standard pipeline. Huh");
-            throw Throwables.propagate(e);
-        }
-    }
-
-	private FMLEmbeddedChannel side(Side side) {
-		return channels.get(side);
-	}
-
-	/** The one channel, as {@link LibVulpes#preInit} built it. */
-	private static PacketHandler channel() {
-		return LibVulpes.instance.packets();
+	/**
+	 * @throws IllegalStateException before {@link #openChannel} has run: nothing can be sent yet
+	 */
+	private static FMLEmbeddedChannel channel(Side side) {
+		FMLEmbeddedChannel channel = NetworkRegistry.INSTANCE.getChannel(CHANNEL, side);
+		if (channel == null) {
+			throw new IllegalStateException("the " + CHANNEL + " channel is not open: pre-init has not run");
+		}
+		return channel;
 	}
 
 	public static void sendToServer(BasePacket packet) {
-		FMLEmbeddedChannel channel = channel().side(Side.CLIENT);
+		FMLEmbeddedChannel channel = channel(Side.CLIENT);
 		channel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.TOSERVER);
 		channel.writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
@@ -139,27 +117,27 @@ public final class PacketHandler {
 	}
 
 	public static void sendToAll(BasePacket packet) {
-		FMLEmbeddedChannel channel = channel().side(Side.SERVER);
+		FMLEmbeddedChannel channel = channel(Side.SERVER);
 		channel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.ALL);
 		channel.writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
 	public static void sendToPlayer(BasePacket packet, EntityPlayer player) {
-		FMLEmbeddedChannel channel = channel().side(Side.SERVER);
+		FMLEmbeddedChannel channel = channel(Side.SERVER);
 		channel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.PLAYER);
 		channel.attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(player);
 		channel.writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
 	public static void sendToDispatcher(BasePacket packet, NetworkManager netman) {
-		FMLEmbeddedChannel channel = channel().side(Side.SERVER);
+		FMLEmbeddedChannel channel = channel(Side.SERVER);
 		channel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.DISPATCHER);
 		channel.attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(NetworkDispatcher.get(netman));
 		channel.writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
 	public static void sendToNearby(BasePacket packet,int dimId, int x, int y, int z, double dist) {
-		FMLEmbeddedChannel channel = channel().side(Side.SERVER);
+		FMLEmbeddedChannel channel = channel(Side.SERVER);
 		channel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(FMLOutboundHandler.OutboundTarget.ALLAROUNDPOINT);
 		channel.attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(new NetworkRegistry.TargetPoint(dimId, x, y, z,dist));
 		channel.writeAndFlush(packet).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);

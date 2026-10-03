@@ -50,10 +50,6 @@ import dev.stannismod.stellurgy.libvulpes.items.ItemBlockMeta;
 import dev.stannismod.stellurgy.libvulpes.items.ItemIngredient;
 import dev.stannismod.stellurgy.libvulpes.items.ItemLinker;
 import dev.stannismod.stellurgy.libvulpes.items.ItemProjector;
-import dev.stannismod.stellurgy.libvulpes.network.PacketChangeKeyState;
-import dev.stannismod.stellurgy.libvulpes.network.PacketEntity;
-import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
-import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
 import dev.stannismod.stellurgy.libvulpes.tile.TileInventoriedPointer;
 import dev.stannismod.stellurgy.libvulpes.tile.TilePointer;
@@ -134,23 +130,6 @@ public class LibVulpes {
 	 * {@code openGui} or {@code registerGuiHandler}; those take the host.
 	 */
 	public static final LibVulpes instance = new LibVulpes();
-
-	/**
-	 * The mod's network channel. OWNER: this object, for the process — built once, first thing in
-	 * {@link #preInit}, because building one registers it with FML, which never lets it go.
-	 */
-	private PacketHandler packets;
-
-	/**
-	 * @throws IllegalStateException before {@link #preInit} has built the channel: nothing can be
-	 *                               registered on it or sent through it yet
-	 */
-	public PacketHandler packets() {
-		if (packets == null) {
-			throw new IllegalStateException("libVulpes' network channel is not built: preInit has not run");
-		}
-		return packets;
-	}
 
 	public static void registerRecipeHandler(Class clazz, String fileName) {
 		userModifiableRecipes.put(clazz, fileName);
@@ -332,12 +311,6 @@ public class LibVulpes {
 	 */
 	public void preInit(FMLPreInitializationEvent event)
 	{
-		// First: every packet class, ours and the host's, registers on this channel, and the
-		// discriminators are numbered in that order.
-		if (packets != null) {
-			throw new IllegalStateException("libVulpes' channel is already registered: preInit ran twice");
-		}
-		packets = new PacketHandler();
 		createContent();
 		// Here, not at class-load, so the order against the host's own registry listeners is
 		// decided by the host's call order rather than by whenever this class happened to load.
@@ -401,11 +374,6 @@ public class LibVulpes {
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("Rutile", "pickaxe", 1, 0xbf936a, AllowedProducts.getProductByName("ORE").getFlagValue(), new String[] {"Rutile", "Titanium"}));
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("Aluminum", "pickaxe", 1, 0xb3e4dc, AllowedProducts.getProductByName("COIL").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue()));
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("Iridium", "pickaxe", 2, 0xdedcce, AllowedProducts.getProductByName("COIL").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue()));
-
-		//
-		packets.addDiscriminator(PacketMachine.class);
-		packets.addDiscriminator(PacketEntity.class);
-		packets.addDiscriminator(PacketChangeKeyState.class);
 	}
 
 	/**
