@@ -6417,11 +6417,15 @@ public class TestProbeCommand extends CommandBase {
                 return;
             }
             dev.stannismod.stellurgy.universe.GalacticAnchor declared = reg.declaredAnchorFor(starId);
+            // `cell`: where the registry PLACED the star — the absolute cell its system is anchored at,
+            // declared or fallback; null when it holds no placement for that id.
+            java.util.Optional<dev.stannismod.stellurgy.space.GalacticCoord> placed = reg.coordForSystem(starId);
+            String cell = placed.isPresent() ? "\"" + placed.get().cellKey() + "\"" : "null";
             if (declared == null) {
-                send(sender, "{\"starId\":" + starId + ",\"declared\":false}");
+                send(sender, "{\"starId\":" + starId + ",\"declared\":false,\"cell\":" + cell + "}");
                 return;
             }
-            send(sender, "{\"starId\":" + starId + ",\"declared\":true,\"galaxy\":\""
+            send(sender, "{\"starId\":" + starId + ",\"cell\":" + cell + ",\"declared\":true,\"galaxy\":\""
                     + escapeJson(declared.galaxy().toString()) + "\",\"local\":["
                     + declared.local().sectorX() + "," + declared.local().sectorY() + ","
                     + declared.local().sectorZ() + "]}");

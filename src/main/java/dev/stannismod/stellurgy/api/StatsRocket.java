@@ -188,12 +188,22 @@ public class StatsRocket {
         drillingPower = power;
     }
 
+    /**
+     * The gravity the flight model and the launch gate both weigh a rocket by, in standard
+     * gravities. Reading it through one method is what keeps the gate and the flight model from
+     * disagreeing about which body the rocket is on: {@code gravityAffectsFuel = false} pins both
+     * to one gee.
+     */
+    private static float effectiveGravityMultiplier(float gravitationalMultiplier) {
+        return StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel ? gravitationalMultiplier : 1f;
+    }
+
     public float getAcceleration(float gravitationalMultiplier) {
         float weight = getWeight();
         if (weight <= 0) {
             return 0;
         }
-        float N = getThrust() - (weight * ((StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel) ? gravitationalMultiplier : 1));
+        float N = getThrust() - (weight * effectiveGravityMultiplier(gravitationalMultiplier));
         return N / weight / 20f;
     }
 
@@ -203,29 +213,83 @@ public class StatsRocket {
         if (weight <= 0) {
             return 0;
         }
-        float N = getThrust() - (weight * ((StellurgyConfiguration.getCurrentConfig().gravityAffectsFuel) ? gravitationalMultiplier : 1));
+        float N = getThrust() - (weight * effectiveGravityMultiplier(gravitationalMultiplier));
         return N / weight / 20f;
     }
 
-    /** Thrust-to-weight ratio against the current wet weight (dry + fuel). 0 if weightless. */
-    public float getThrustToWeightRatio() {
+    /**
+     * Thrust-to-weight ratio against the current wet weight (dry + fuel) as it weighs on a body of
+     * the given gravity. 0 if weightless; on a body with no gravity at all any thrust is enough to
+     * leave it, so the ratio is infinite when there is thrust.
+     *
+     * @param gravitationalMultiplier gravity of the body the rocket stands on, in standard gravities
+     */
+    public float getThrustToWeightRatio(float gravitationalMultiplier) {
         float weight = getWeight();
         if (weight <= 0) {
             return 0;
         }
-        return getThrust() / weight;
+        float localWeight = weight * effectiveGravityMultiplier(gravitationalMultiplier);
+        if (localWeight <= 0) {
+            return getThrust() > 0 ? Float.POSITIVE_INFINITY : 0;
+        }
+        return getThrust() / localWeight;
     }
 
-    /** True if the rocket clears the configured minimum thrust-to-weight ratio to launch.
-     *  When the advanced weight system is disabled the weight-based launch gate is off
-     *  entirely (classic behaviour — no TWR check), so this returns true regardless of
-     *  thrust or weight. This is the single source of truth for weight-based launch
-     *  gating; callers must not re-derive the TWR check independently. */
-    public boolean canLaunch() {
+    /** True if the rocket clears the configured minimum thrust-to-weight ratio to launch from a
+     *  body of the given gravity; the boundary is inclusive. When the advanced weight system is
+     *  disabled the weight-based launch gate is off entirely (classic behaviour — no TWR check),
+     *  so this returns true regardless of thrust or weight. This is the single source of truth
+     *  for weight-based launch gating; callers must not re-derive the TWR check independently —
+     *  a caller that judges a craft before launch (an assembler) asks this on the stats it means
+     *  to judge.
+     *  @param gravitationalMultiplier gravity of the body being launched from, in standard
+     *                                 gravities — a light moon is easier to leave than Earth */
+    public boolean canLaunch(float gravitationalMultiplier) {
         if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
             return true;
         }
-        return getThrustToWeightRatio() >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR;
+        return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR;
+    }
+
+    /**
+     * A copy of these stats with every tank the craft has at its capacity — the craft as it will
+     * stand when fully fuelled. A tank that has not yet been given a fluid is filled with the
+     * heaviest fluid the fuel registry accepts for it, so a craft that clears the launch gate in
+     * this state clears it with whatever fuel it can be given.
+     */
+    public StatsRocket withTanksFull() {
+        StatsRocket full = copy();
+        for (FuelType type : FuelType.values()) {
+            full.setFuelAmount(type, getFuelCapacity(type));
+        }
+        if ("null".equals(full.fuelFluid)) {
+            FuelType fuelType = getFuelCapacity(FuelType.LIQUID_MONOPROPELLANT) > 0
+                    ? FuelType.LIQUID_MONOPROPELLANT : FuelType.LIQUID_BIPROPELLANT;
+            full.fuelFluid = heaviestFluidName(fuelType, full.fuelFluid);
+        }
+        if ("null".equals(full.oxidizerFluid)) {
+            full.oxidizerFluid = heaviestFluidName(FuelType.LIQUID_OXIDIZER, full.oxidizerFluid);
+        }
+        if ("null".equals(full.workingFluid)) {
+            full.workingFluid = heaviestFluidName(FuelType.NUCLEAR_WORKING_FLUID, full.workingFluid);
+        }
+        return full;
+    }
+
+    /** The name of the heaviest fluid the registry accepts as {@code type}, or {@code none} when it
+     *  accepts no fluid of that type — a tank no fluid fits stays as empty as it was. */
+    private static String heaviestFluidName(FuelType type, String none) {
+        String heaviest = none;
+        float heaviestPerMb = -1;
+        for (Fluid fluid : FuelRegistry.instance.getFluids(type)) {
+            float perMb = dev.stannismod.stellurgy.Stellurgy.weights().getWeight(fluid, 1);
+            if (perMb > heaviestPerMb) {
+                heaviestPerMb = perMb;
+                heaviest = fluid.getName();
+            }
+        }
+        return heaviest;
     }
 
     public List<Vector3F<Float>> getEngineLocations() {

@@ -1392,11 +1392,12 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
         if (isInOrbit()) return true;   // already at orbit
 
-        if (stats.getThrust() <= stats.getWeight()) return false;
-
         final DimensionProperties src = DimensionManager.getInstance()
                 .getDimensionProperties(this.world.provider.getDimension());
-        final float gSrc = Math.max(0.01f, src.getGravitationalMultiplier()); 
+        final float gSrc = Math.max(0.01f, src.getGravitationalMultiplier());
+
+        // Cannot even lift itself here, so no amount of fuel gets it to orbit.
+        if (stats.getThrustToWeightRatio(gSrc) <= 1f) return false;
         final double a = Math.max(0.0001d, stats.getAcceleration(gSrc));    
         final double h = Math.max(0.0, stats.orbitHeight - this.posY);
 
@@ -2841,7 +2842,9 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         }
 
 
-        if (!this.stats.canLaunch()) {
+        if (!this.stats.canLaunch(DimensionManager.getInstance()
+                .getDimensionProperties(this.world.provider.getDimension())
+                .getGravitationalMultiplier())) {
             setError("error.rocket.tooHeavy");
             return; // hard stop; no silent fall-through
         }

@@ -14,6 +14,20 @@ public class FuelRegistry {
     public static final FuelRegistry instance = new FuelRegistry();
 
     /**
+     * The fluids registered as fuel of {@code type}, in no particular order; empty when none is.
+     * A fresh list each call — changing it changes nothing here.
+     */
+    public java.util.List<Fluid> getFluids(@Nonnull FuelType type) {
+        java.util.List<Fluid> fluids = new java.util.ArrayList<>();
+        for (FuelEntry entry : type.fuels) {
+            if (entry.fuel instanceof Fluid) {
+                fluids.add((Fluid) entry.fuel);
+            }
+        }
+        return fluids;
+    }
+
+    /**
      * @param type       {@link FuelType} to register with
      * @param fluid      fluid to register
      * @param multiplier amount of fuel points 1mb is worth

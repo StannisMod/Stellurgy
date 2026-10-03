@@ -322,13 +322,23 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * {@code EntityRocket#launch} once; answer the one decision it recorded.
      */
     private static LaunchDecision launch(Events log, int rocket, int destination) throws Exception {
+        return launch(log, rocket, destination, true);
+    }
+
+    /**
+     * As above, saying whether the launch verb fills the tanks first. {@code false} launches the
+     * craft with whatever its tanks hold — a fresh craft's are empty — which is how a scenario reads
+     * the gate's ratio against the dry weight.
+     */
+    private static LaunchDecision launch(Events log, int rocket, int destination, boolean fillTanks)
+            throws Exception {
         String chip = exec("stellurgytest rocket set-destination " + rocket + " " + destination);
         Reply programmed = Reply.of("stellurgytest rocket set-destination", chip);
         requireArranged("the guidance computer must carry a chip for dimension " + destination
                 + " before the launch: " + chip,
                 programmed.ok() && String.valueOf(destination).equals(programmed.text("chipDim")));
         long mark = log.mark();
-        String fired = exec("stellurgytest rocket launch " + rocket + " true instant");
+        String fired = exec("stellurgytest rocket launch " + rocket + " " + fillTanks + " instant");
         requireArranged("the launch verb must reach EntityRocket.launch: " + fired,
                 Reply.of("stellurgytest rocket launch", fired).ok());
         String id = String.valueOf(rocket);
@@ -578,13 +588,14 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * gate compared that same ratio again.</p>
      *
      * red-witnessed: with {@code StatsRocket#canLaunch} at
-     * {@code return getThrustToWeightRatio() >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
+     * {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
      * given a tolerance (compared against {@code minLaunchTWR - 1e-3}), this fails at the
-     * just-above verdict with "expected:<error.rocket.tooHeavy> but was:<null>" (2026-10-02).
+     * just-above verdict, "a threshold one ulp above the craft's ratio must refuse it as too heavy"
+     * (re-taken 2026-10-03 on the gravity-taking gate; first taken 2026-10-02).
      * red-witnessed: with {@code StatsRocket#canLaunch} at
-     * {@code return getThrustToWeightRatio() >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
-     * made strict ({@code >} for {@code >=}), this fails at
-     * the at-the-threshold verdict, the craft refused with error.rocket.tooHeavy (2026-10-02).
+     * {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
+     * made strict ({@code >} for {@code >=}), this fails at the at-the-threshold verdict, "a ratio
+     * EQUAL to minLaunchTWR must be let go" (re-taken 2026-10-03).
      *
      * <p>That the gate compared the measured ratio again on the second and third calls is a premise
      * of the placement, not a verdict: a ratio that moved between calls means the threshold was set
@@ -644,12 +655,13 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * acceptance cannot be a craft the gate would have let go anyway.</p>
      *
      * red-witnessed: with {@code StatsRocket#canLaunch} at
-     * {@code return getThrustToWeightRatio() >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
-     * made to answer true, this fails at the system-on verdict with
-     * "expected:<error.rocket.tooHeavy> but was:<null>" (2026-10-02).
+     * {@code return getThrustToWeightRatio(gravitationalMultiplier) >= StellurgyConfiguration.getCurrentConfig().minLaunchTWR}
+     * made to answer true, this fails at the system-on verdict, "with the weight system on, a
+     * threshold no finite ratio reaches must refuse the craft as too heavy" (re-taken 2026-10-03).
      * red-witnessed: with {@code StatsRocket#canLaunch} at
      * {@code if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem)} never taken, this
-     * fails at the system-off verdict, the craft refused with error.rocket.tooHeavy (2026-10-02).
+     * fails at the system-off verdict, "with the weight system off the same craft, under the same
+     * threshold, must be let go" (re-taken 2026-10-03).
      */
     @Test
     public void turningTheWeightSystemOffLiftsTheWeightGate() throws Exception {
@@ -691,11 +703,12 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * red-witnessed: with {@code StatsRocket#getThrust} at
      * {@code (int) (thrust * StellurgyConfiguration.getCurrentConfig().rocketThrustMultiplier)} made
      * {@code thrust}, this fails at the doubled-thrust verdict with the gate reading the multiplier-1
-     * thrust again (2026-10-02).
-     * red-witnessed: with {@code StatsRocket#getThrustToWeightRatio} at {@code return getThrust() / weight}
-     * reading the raw {@code thrust} field instead, the doubled-thrust verdict holds and this fails at
-     * the let-go verdict, "with the thrust doubled the craft clears a threshold of 1.5x its
-     * multiplier-1 ratio and must be let go" (2026-10-02).
+     * thrust again (re-taken 2026-10-03).
+     * red-witnessed: with {@code StatsRocket#getThrustToWeightRatio} at
+     * {@code return getThrust() / localWeight} reading the raw {@code thrust} field instead, the
+     * doubled-thrust verdict holds and this fails at the let-go verdict, "with the thrust doubled the
+     * craft clears a threshold of 1.5x its multiplier-1 ratio and must be let go" (re-taken
+     * 2026-10-03).
      */
     @Test
     public void theThrustTheWeightGateComparesIsScaledByTheThrustMultiplier() throws Exception {
@@ -729,6 +742,210 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
                     + " multiplier-1 ratio and must be let go: " + atTwo.window, atTwo.launched);
         } finally {
             setConfig("rocketThrustMultiplier", multiplierWas);
+            setConfig("minLaunchTWR", minWas);
+            setConfig("advancedWeightSystem", weightSystemWas);
+        }
+    }
+
+    /**
+     * A craft standing on a low-gravity moon is judged by the weight gate against the weight it has
+     * THERE: a threshold its ratio clears at the moon's gravity but not at one gee lets it go.
+     * Born as the reproduction of a defect (the gate judged every craft at one gee); a regression
+     * guard since the gate takes the launch world's gravity.
+     *
+     * <p>This test fails if {@code StatsRocket#canLaunch} stops deciding on the craft's weight at the
+     * gravity the launch hands it, or if {@code EntityRocket#launch} stops handing it the gravity of
+     * the world the craft stands in. The flight model ({@code StatsRocket#getAcceleration}) weighs the
+     * craft the same way when {@code gravityAffectsFuel} is on, which is asserted as a premise. The
+     * craft stands on the overworld's moon; a first launch with the threshold at
+     * {@code Double.MAX_VALUE} is refused, and its gate record carries the raw thrust and weight.
+     * With the moon's gravity as {@code planet info} reports it, the test places the threshold midway
+     * between the craft's one-gee ratio and its ratio at that gravity — above the one, below the
+     * other for any {@code 0 < g < 1} (asserted) — never using the ratio the gate reports or the
+     * gravity the launch hands it, which are the decision under test.</p>
+     *
+     * <p>Server tier, and no client e2e: the decision is taken only on the server
+     * ({@code EntityRocket#launch} returns at once on the client), and what a seated pilot sees is
+     * the translated {@code error.rocket.tooHeavy} that the same server decision sends; a client
+     * would read the identical verdict one hop later. The high-gravity half of the defect (a craft
+     * passed that cannot climb) is not driven: the world has no authored body heavier than the
+     * overworld.</p>
+     *
+     * <p>Before the fix it failed at the verdict, the craft refused with {@code error.rocket.tooHeavy}
+     * at one gee (2026-10-02, {@code logs/bugs-a-repro-final.log}: ratio 13.986 against a threshold
+     * below the local ratio 84.25 on a body of g 0.166).</p>
+     *
+     * red-witnessed: with {@code StatsRocket#getThrustToWeightRatio} at
+     * {@code float localWeight = weight * effectiveGravityMultiplier(gravitationalMultiplier)} made
+     * {@code weight * 1f}, this fails at the verdict, the craft refused at one gee (2026-10-03,
+     * {@code logs/bugs-a-601-red1.log}).
+     * red-witnessed: with {@code EntityRocket#launch} at
+     * {@code this.stats.canLaunch(DimensionManager.getInstance()} handed {@code 1f} instead of the
+     * world's gravity, this fails at the verdict the same way (2026-10-03,
+     * {@code logs/bugs-a-601-red2.log}).
+     */
+    @Test
+    public void aCraftOnALowGravityMoonIsWeighedAtThatMoonsGravity() throws Exception {
+        String weightSystemWas = configValue("advancedWeightSystem");
+        String minWas = configValue("minLaunchTWR");
+        int luna = theOverworldsMoon();
+        Plot onLuna = plot().inDimension(luna);
+        try {
+            requireArranged("the flight model must weigh a craft by local gravity for the gate to be"
+                    + " asked to agree with it", Boolean.parseBoolean(configValue("gravityAffectsFuel")));
+            double gravity = planetInfo(luna).number("gravity");
+            requireArranged("the moon's gravity must be below one gee and above none, so that the"
+                    + " local ratio exceeds the one-gee ratio: " + gravity, gravity > 0 && gravity < 1);
+            Reply loaded = Reply.of("stellurgytest dim load", exec("stellurgytest dim load " + luna));
+            requireArranged("the moon's world must be loaded to stand a craft in: " + loaded,
+                    loaded.bool("loaded"));
+            setConfig("advancedWeightSystem", "true");
+            int rocket = rocketAt(onLuna.site(), "the craft is built on the moon and launched");
+            setConfig("minLaunchTWR", Double.toString(Double.MAX_VALUE));
+            Events log = serverLog();
+
+            LaunchDecision measured = launch(log, rocket, 0);
+            requireArranged("with the threshold at Double.MAX_VALUE the gate must refuse, and its"
+                    + " record is where the craft's ratio is read: " + measured.window,
+                    TOO_HEAVY.equals(measured.refusal) && measured.gate != null);
+            System.out.println("[launch-gate] on the moon (g=" + gravity + ") the gate compared "
+                    + measured.gate);
+            // The craft's ratio at one gee and at the moon's gravity, from the raw thrust and weight
+            // the record carries and the moon's gravity as the planet reports it — never from the
+            // ratio the gate reports, nor from the gravity the launch handed it: those two are the
+            // decision under test.
+            double thrust = measured.gateNumber("thrust");
+            double weight = measured.gateNumber("weight");
+            double oneGeeRatio = thrust / weight;
+            double localRatio = thrust / (weight * gravity);
+            double between = (oneGeeRatio + localRatio) / 2;
+            setConfig("minLaunchTWR", Double.toString(between));
+            LaunchDecision atBetween = launch(log, rocket, 0);
+            requireArranged("the gate must have been asked again about the same craft: "
+                    + atBetween.window, atBetween.gate != null);
+            assertTrue("a craft whose ratio at the moon's gravity (" + localRatio + ") clears"
+                    + " a threshold of " + between + " (its one-gee ratio is " + oneGeeRatio + ") must"
+                    + " be let go from the moon: " + atBetween.window, atBetween.launched);
+        } finally {
+            RocketList.clearFrom(RocketLaunchDepthTest::exec, luna);
+            setConfig("minLaunchTWR", minWas);
+            setConfig("advancedWeightSystem", weightSystemWas);
+        }
+    }
+
+    /**
+     * The assembler's refusal to build a craft for want of thrust and the launch's weight gate give
+     * ONE verdict about one craft, and it is the gate's verdict on the craft FULLY FUELLED at the
+     * gravity of the world it is assembled in: a craft that cannot launch full from here is refused
+     * as {@code NOENGINES}. Born as the reproduction of a defect (the assembler judged the craft dry,
+     * on its own copy of the gate); a regression guard since the assembler asks the gate.
+     *
+     * <p>This test fails if {@code TileRocketAssemblingMachine#canLaunchFullFromHere} stops asking
+     * {@code StatsRocket#canLaunch} of the craft with its tanks at capacity
+     * ({@code StatsRocket#withTanksFull}) at the assembler's own world's gravity. The two weights are
+     * measured on one craft from the gate's own records — with empty tanks, and fuelled the way a
+     * player does — and the threshold is set between the two ratios: the craft clears it dry and
+     * fails it full. A second, identical build then goes to the assembler, and the gate is asked
+     * about the fuelled first one. The first verdict is that the two agree; the second, that the
+     * assembler REFUSES — the maintainer's ruling for a craft that cannot launch full. The craft the
+     * assembler built at the start, at the shipped threshold, is the same build accepted: the
+     * refusal is about the threshold, not the build.</p>
+     *
+     * <p>Not driven: the boundary itself (a full ratio exactly at {@code minLaunchTWR}) — the
+     * assembler now asks the same inclusive comparison the launch does, so there is no second
+     * boundary left to disagree. Server tier, and no client e2e: both verdicts are server-side; the
+     * assembler GUI only displays the scan's status ("Not enough thrust!"), and the launch refusal
+     * is the translated {@code error.rocket.tooHeavy} the server sends.</p>
+     *
+     * <p>Before the fix it failed at the agreement verdict, the assembler having built the craft and
+     * the gate refusing it as too heavy (2026-10-02, {@code logs/bugs-a-repro-final.log}: dry ratio
+     * 13.986 (weight 7.15), wet ratio 7.605 (weight 13.15), threshold at their midpoint 10.795).</p>
+     *
+     * red-witnessed: with {@code TileRocketAssemblingMachine#canLaunchFullFromHere} at
+     * {@code return stats.withTanksFull().canLaunch(getGravityMultiplier())} asking the scanned
+     * stats as they are (tanks empty) instead, this fails at the refusal verdict,
+     * "expected:<[NOENGINES]> but was:<[ALREADY_ASSEMBLED]>" (2026-10-03,
+     * {@code logs/bugs-a-601-red4.log}).
+     * red-witnessed: NOT YET for the agreement verdict on the fixed form — once the refusal verdict
+     * above holds, it can only go red by a launch-side break the measured ratios do not see, and the
+     * one attempted, {@code EntityRocket#launch} at {@code this.stats.canLaunch(DimensionManager.getInstance()}
+     * handed {@code 0f}, let the measuring launches go and failed at the arrangement
+     * (2026-10-03, {@code logs/bugs-a-601-red5.log}). It was red on the pre-fix form, the defect
+     * itself (2026-10-02, {@code logs/bugs-a-repro-final.log}).
+     */
+    @Test
+    public void theAssemblerAndTheWeightGateGiveOneVerdictOnOneCraft() throws Exception {
+        String weightSystemWas = configValue("advancedWeightSystem");
+        String minWas = configValue("minLaunchTWR");
+        try {
+            int luna = theOverworldsMoon();
+            setConfig("advancedWeightSystem", "true");
+            int measuredCraft = rocketAt(site(), "the craft whose two ratios are measured");
+            setConfig("minLaunchTWR", Double.toString(Double.MAX_VALUE));
+            Events log = serverLog();
+
+            LaunchDecision dry = launch(log, measuredCraft, luna, false);
+
+            // Fuel the craft the way a player does — a fuelling station linked to it, holding the
+            // shipped monopropellant (`rocketfuel`, StellurgyConfiguration's default rocketFuels) —
+            // so its tanks hold a real fluid, which is what makes fuel weigh anything: the launch
+            // verb's own fill sets an amount but no fluid. Twenty clocked ticks are four of the
+            // station's throttled operations (OP_THROTTLE_TICKS = 5); how much they move does not
+            // matter, only that the fluid is chosen, and the wet ratio below is the check.
+            FixtureSite pad = site();
+            int[] station = {pad.x + 8, pad.y + 1, pad.z};
+            String at = " 0 " + station[0] + " " + station[1] + " " + station[2];
+            requireArranged("the fuelling station must be placed: ", Reply.of("stellurgytest place",
+                    exec("stellurgytest place" + at + " stellurgy:fuelingStation")).ok());
+            requireArranged("the station must take power: ", Reply.of("stellurgytest energy inject",
+                    exec("stellurgytest energy inject" + at + " 100000")).ok());
+            requireArranged("the station must take the fuel: ", Reply.of("stellurgytest fluid inject",
+                    exec("stellurgytest fluid inject" + at + " rocketfuel 8000")).ok());
+            Reply link = Reply.of("stellurgytest infra link",
+                    exec("stellurgytest infra link" + at + " " + measuredCraft));
+            requireArranged("the station must link to the craft: " + link, link.bool("linked"));
+            requireArranged("the station must run: ", Reply.of("stellurgytest tile force-tick-clock",
+                    exec("stellurgytest tile force-tick-clock" + at + " 20")).ok());
+
+            // Fill the tanks in a call of their own and launch WITHOUT the verb's fill: the verb's
+            // fill reaches the gate's weight only a tick later (measured 2026-10-02: the same craft
+            // weighed 7.40 on the launch that filled it and 13.15 on the next), so a ratio read on
+            // the filling launch would describe the tanks before the fill.
+            requireArranged("the tanks must fill: ", Reply.of("stellurgytest rocket fill-fuel",
+                    exec("stellurgytest rocket fill-fuel " + measuredCraft)).ok());
+            LaunchDecision wet = launch(log, measuredCraft, luna, false);
+            requireArranged("with the threshold at Double.MAX_VALUE the gate must refuse both times,"
+                    + " and its records carry the ratios: " + dry.window + " / " + wet.window,
+                    TOO_HEAVY.equals(dry.refusal) && TOO_HEAVY.equals(wet.refusal));
+            double dryRatio = dry.gateNumber("twr");
+            double wetRatio = wet.gateNumber("twr");
+            System.out.println("[launch-gate] dry " + dry.gate + " / wet " + wet.gate);
+            requireArranged("fuel must weigh something for the two weights to differ: dry "
+                    + dryRatio + ", wet " + wetRatio + "; tanks: "
+                    + exec("stellurgytest rocket fuel " + measuredCraft), wetRatio < dryRatio);
+
+            setConfig("minLaunchTWR", Double.toString((dryRatio + wetRatio) / 2));
+            String assemble = RocketFixture.assembleAt(
+                    plot().siteAt(Plot.FIXTURE_INSET + 16, Plot.FIXTURE_INSET),
+                    RocketLaunchDepthTest::exec, "simple", 0, 255 - site().y,
+                    "the identical craft the assembler judges at the new threshold");
+            Reply built = Reply.of("stellurgytest rocket assemble", assemble);
+            boolean assemblerBuilt = built.ok();
+            System.out.println("[launch-gate] assembler at the midpoint: " + assemble);
+            // The gate is asked about the MEASURED craft, which is the same build: asking it about the
+            // second one would need the assembler's consent first, and that consent is the other
+            // verdict under comparison.
+            LaunchDecision fuelled = launch(log, measuredCraft, luna, false);
+            requireArranged("the gate must have compared the same wet ratio at the new threshold: "
+                    + fuelled.window, fuelled.gate != null && fuelled.gateNumber("twr") == wetRatio);
+            assertEquals("a craft that cannot launch with its tanks full from the world it is"
+                    + " assembled in must be refused by the assembler as lacking thrust: " + assemble,
+                    "NOENGINES", built.text("status"));
+            assertEquals("the assembler (" + (assemblerBuilt ? "built it" : "refused it") + ") and the"
+                    + " launch gate with the tanks filled (" + (fuelled.launched ? "let it go"
+                    : "refused it as " + fuelled.refusal) + ") must give one verdict on one craft: "
+                    + assemble + " | " + fuelled.window, assemblerBuilt, fuelled.launched);
+        } finally {
             setConfig("minLaunchTWR", minWas);
             setConfig("advancedWeightSystem", weightSystemWas);
         }

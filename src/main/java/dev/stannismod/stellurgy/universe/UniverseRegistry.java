@@ -150,6 +150,9 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      */
     private transient Map<String, GalacticCoord> anchorsBySuper = null;
     private transient int anchorsBySuperSpacing = -1;
+    /** Super-cell &rarr; the AUTHORED anchors in it; see {@link #authoredBySuperIndex}. */
+    private transient Map<String, List<GalacticCoord>> authoredBySuper = null;
+    private transient int authoredBySuperSpacing = -1;
 
     // ─── The model in force for this save, re-resolved per load ───────────────
     //
@@ -316,7 +319,10 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         if (stored != null) {
             return Optional.of(stored);
         }
-        return generator.anchorAt(worldSeed, cell);
+        // A seat whose neighbourhood reaches an authored one is not a system (clearOfAuthored), so the
+        // cells it would have owned outside the authored box are void.
+        Optional<GalacticCoord> seat = generator.anchorAt(worldSeed, cell);
+        return seat.isPresent() && clearOfAuthored(seat.get()) ? seat : Optional.<GalacticCoord>empty();
     }
 
     /**
@@ -340,7 +346,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      */
     private GalacticCoord storedAnchorNear(GalacticCoord cell) {
         int s = generator.minSpacingCells();
-        long reach = Math.max(1L, s) / 2L;
+        long reach = neighbourhoodReach();
         Map<String, GalacticCoord> index = anchorsBySuperIndex();
         GalacticCoord best = null;
         double bestDistance = Double.MAX_VALUE;
@@ -362,6 +368,104 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             }
         }
         return best;
+    }
+
+    /**
+     * How far a STORED anchor's neighbourhood reaches on each axis, in sectors: half a territory — the
+     * box authored bodies are clamped into ({@code SystemContent}) and member cells attribute by.
+     */
+    private long neighbourhoodReach() {
+        return Math.max(1L, generator.minSpacingCells()) / 2L;
+    }
+
+    /**
+     * Whether the procedural seat {@code seat} stands as a system: whether its own neighbourhood stays
+     * clear of every AUTHORED one.
+     *
+     * <p>An authored star's pack says what is around it, and procedural content is not part of what it
+     * said — a seat whose neighbourhood reaches the authored box is therefore no system at all, for
+     * every question: attribution, a survey's territory, a region. The NEIGHBOURHOOD and not the seat
+     * alone, because a seat outside the box whose cells cross into it would hand the authored system
+     * its bodies.</p>
+     *
+     * <p>A PINNED procedural system is not authored and does not clear the field around it; it is what
+     * the generator put there, frozen.</p>
+     *
+     * <p>Every seat the generator hands out must be able to say what it owns
+     * ({@link IGalaxyGenerator#neighbourhoodOf}); one that cannot is a generator breaking its own
+     * contract, and is refused rather than guessed at.</p>
+     */
+    private boolean clearOfAuthored(GalacticCoord seat) {
+        List<GalacticCoord> near = authoredNear(seat);
+        if (near.isEmpty()) {
+            return true;
+        }
+        Optional<SectorBox> owns = generator.neighbourhoodOf(worldSeed, seat);
+        if (!owns.isPresent()) {
+            throw new IllegalStateException("generator " + generator.getClass().getName() + " handed out the"
+                    + " seat " + seat.cellKey() + " and cannot say which cells it owns");
+        }
+        long reach = neighbourhoodReach();
+        for (GalacticCoord authored : near) {
+            if (SectorBox.around(authored, reach).intersects(owns.get())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The authored anchors whose neighbourhood could reach {@code seat}'s territory: those in the 27
+     * territories around it. A generator's seat owns cells inside its own territory only, and an
+     * authored neighbourhood is half a territory to each side, so nothing farther can touch it.
+     */
+    private List<GalacticCoord> authoredNear(GalacticCoord seat) {
+        int s = generator.minSpacingCells();
+        Map<String, List<GalacticCoord>> index = authoredBySuperIndex();
+        if (index.isEmpty()) {
+            return Collections.emptyList();
+        }
+        GalacticCoord cell = seat.galacticCell().cellCentre();
+        List<GalacticCoord> out = new ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    List<GalacticCoord> here = index.get(neighbourSuperKey(cell, s, dx, dy, dz));
+                    if (here != null) {
+                        out.addAll(here);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Super-cell &rarr; every AUTHORED anchor in it: the stored placements that are not pins. Kept apart
+     * from {@link #anchorsBySuperIndex}, which holds one anchor per super-cell and pins as well — a
+     * pin sharing an authored anchor's super-cell must not hide the authored neighbourhood from the
+     * mask. Rebuilt lazily from the store, never persisted.
+     */
+    private Map<String, List<GalacticCoord>> authoredBySuperIndex() {
+        int s = generator.minSpacingCells();
+        if (authoredBySuper == null || authoredBySuperSpacing != s) {
+            Map<String, List<GalacticCoord>> index = new HashMap<>();
+            for (GalacticCoord anchor : byStar.values()) {
+                if (pinnedSystems.containsKey(anchor.cellKey())) {
+                    continue;
+                }
+                String key = superKey(anchor, s);
+                List<GalacticCoord> list = index.get(key);
+                if (list == null) {
+                    list = new ArrayList<>();
+                    index.put(key, list);
+                }
+                list.add(anchor);
+            }
+            authoredBySuper = index;
+            authoredBySuperSpacing = s;
+        }
+        return authoredBySuper;
     }
 
     private static boolean withinNeighbourhood(GalacticCoord cell, GalacticCoord anchor, long reach) {
@@ -429,9 +533,13 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * Every anchor seated in the star TERRITORY {@code cell} falls in — what one look of a survey
      * owes the direction it is pointed in (see {@link IGalaxyGenerator#anchorsInTerritory}).
      *
-     * <p>An authored or pinned anchor still wins over the whole territory, exactly as it does in
-     * {@link #anchorForCell}: a pack that placed a system there placed THE system there, and a
-     * procedural seat in the same cube would be a second answer to a question that has one.</p>
+     * <p>A look that lands inside a stored (authored or pinned) neighbourhood is answered by that
+     * system alone, exactly as {@link #anchorForCell} answers the cell. A look that lands outside one
+     * is answered by the generator's seats for its territory — less every seat whose neighbourhood
+     * reaches an authored one ({@link #clearOfAuthored}). Without that, the territory and the
+     * attribution disagreed: a seat inside an authored box was enumerated here as a system of its own,
+     * attributed there to the authored one, and a survey wrote the authored system once more at the
+     * seat's cell for every such seat.</p>
      */
     public List<GalacticCoord> anchorsInTerritory(GalacticCoord cell, int limit) {
         GalacticCoord c = cell.cellCentre();
@@ -442,7 +550,13 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         if (stored != null) {
             return Collections.singletonList(stored);
         }
-        return generator.anchorsInTerritory(worldSeed, c, limit);
+        List<GalacticCoord> seats = new ArrayList<>();
+        for (GalacticCoord seat : generator.anchorsInTerritory(worldSeed, c, limit)) {
+            if (clearOfAuthored(seat)) {
+                seats.add(seat);
+            }
+        }
+        return seats;
     }
 
     public OptionalInt starIdForCoord(GalacticCoord coord) {
@@ -459,7 +573,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         return byCell.containsKey(coord.cellCentre().cellKey());
     }
 
-    /** Every stored system whose cell falls inside the inclusive sector box, merged over the generator. */
+    /**
+     * Every system whose cell falls inside the inclusive sector box: the stored ones, merged over the
+     * generator's — less the generator seats whose neighbourhood reaches an authored one
+     * ({@link #clearOfAuthored}).
+     */
     public Map<GalacticCoord, PlanetarySystem> systemsInRegion(GalacticCoord min, GalacticCoord max) {
         // Normalise the box once (per axis) so the generator and the override scan see the same ordered
         // bounds — a real generator is entitled to assume min <= max.
@@ -471,7 +589,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 Math.max(min.sectorX(), max.sectorX()),
                 Math.max(min.sectorY(), max.sectorY()),
                 Math.max(min.sectorZ(), max.sectorZ()), 0L, 0L, 0L);
-        Map<GalacticCoord, PlanetarySystem> out = new HashMap<>(generator.systemsInRegion(worldSeed, lo, hi));
+        Map<GalacticCoord, PlanetarySystem> out = new HashMap<>();
+        for (Map.Entry<GalacticCoord, PlanetarySystem> seated : generator.systemsInRegion(worldSeed, lo, hi).entrySet()) {
+            if (clearOfAuthored(seated.getKey())) {
+                out.put(seated.getKey(), seated.getValue());
+            }
+        }
         for (Map.Entry<Integer, GalacticCoord> e : byStar.entrySet()) {
             GalacticCoord c = e.getValue();
             if (c.sectorX() >= lo.sectorX() && c.sectorX() <= hi.sectorX()
@@ -872,6 +995,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 ? PinnedSystem.ofStar(system.systemId(), system.star().get(), bodies)
                 : PinnedSystem.ofRogue(system.systemId(), system.name(), bodies);
         pinnedSystems.put(key, snapshot);
+        authoredBySuper = null; // a pin is not authored: an index built before this line would say it is
         markDirty();
         return true;
     }
@@ -1227,7 +1351,8 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         }
         byCell.put(key, starId);
         byStar.put(starId, cell);
-        anchorsBySuper = null; // derived index follows the store
+        anchorsBySuper = null; // derived indices follow the store
+        authoredBySuper = null;
         markDirty();
     }
 
@@ -1241,6 +1366,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         byStar.remove(id);
         pinnedSystems.remove(key);
         anchorsBySuper = null;
+        authoredBySuper = null;
         markDirty();
         return true;
     }
@@ -1704,6 +1830,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         pinnedSystems.clear();
         namesByDim.clear();
         anchorsBySuper = null;
+        authoredBySuper = null;
         anchorsSeeded = nbt.getBoolean("anchorsSeeded");
         // Read through hasKey, NEVER through the value alone. NBT answers 0 for an absent integer, and
         // 0 is a real version number — the alpha — so taking the default would report every stampless

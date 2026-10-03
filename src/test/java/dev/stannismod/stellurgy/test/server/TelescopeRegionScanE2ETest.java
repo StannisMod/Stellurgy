@@ -4,7 +4,11 @@ import dev.stannismod.stellurgy.test.GameTicks;
 
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import dev.stannismod.stellurgy.space.GalacticCoord;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.DimList;
 import dev.stannismod.stellurgy.test.Events;
@@ -1023,5 +1027,271 @@ public class TelescopeRegionScanE2ETest extends AbstractSharedServerTest {
         }
         ArrangementFailure.arrangementFailed("the stock universe must hold a moon of Earth");
         return EARTH;
+    }
+
+    // ── one system, one address ──────────────────────────────────────────────────────────────────
+
+    /**
+     * The passive radar's reach at the value the config loader ships ({@code StellurgyConfiguration},
+     * {@code telescopePassiveRadiusSteps}' default): the observatory's own territory and the
+     * twenty-six around it.
+     */
+    private static final int SHIPPED_RADAR_RADIUS = 1;
+
+    /**
+     * A survey writes a system onto the crystal ONCE: the local radar, run with the shipped settings
+     * through a procedural sky in which an authored system stands close enough to the edge of its
+     * territory that its neighbourhood reaches into the next one, leaves that system's address on the
+     * crystal and no record at any other cell under its name.
+     *
+     * <p>An authored system's neighbourhood is the box half a territory to each side of its anchor
+     * ({@code UniverseRegistry#storedAnchorNear}), and the pack's word on what stands there is the whole
+     * of it: no procedural seat whose own neighbourhood reaches that box is a system. A look whose own
+     * cell lies OUTSIDE the box is answered with the procedural seats of the look's territory
+     * ({@code UniverseRegistry#anchorsInTerritory}); if one of them reached into the box, every
+     * attribution query ({@code UniverseRegistry#anchorForCell}) would name the authored system for it,
+     * and a positions-only survey would write that seat's cell as an address labelled with the authored
+     * system ({@code TelescopeScan#characterise}): one system, two addresses, the second at a cell where
+     * nothing stands. Fails if {@code UniverseRegistry#anchorsInTerritory} stops dropping the seats
+     * {@code UniverseRegistry#clearOfAuthored} refuses.</p>
+     *
+     * <p>The arrangement is chosen from the procedural field as it stood BEFORE the system was seated,
+     * so it does not depend on how the disagreement is resolved: a seat {@code P} of a radar look's
+     * territory, the look's own cell more than half a territory from where the system will stand, and
+     * the system seated within half a territory of {@code P} and of the NEXT look along one axis — so
+     * the radar does look at the system itself, and the positive half of the verdict (its address is
+     * there) is measured in the same survey. The system is seated in that next look's territory, which
+     * no other look of the radar enumerates, so no seat the survey pins can share its super-cell; and
+     * {@code P} is nearer to it than to any other seat the survey could pin. {@code P} is read untouched
+     * (its own anchor, no stored override) before anything is seated, and the system's own look is
+     * read answering the system once it is.</p>
+     *
+     * <p>The HOME system is held to the same verdict, and needs no seating: it is authored, the
+     * observatory stands inside its neighbourhood, and every other look of the radar lands a whole
+     * territory out — outside a box only half a territory wide, in territories that box reaches into.
+     * Its arrangement is that geometry alone; whether the procedural field puts a seat in the overlap is
+     * the field's, which is why the seated system above carries the arrangement measured before the
+     * fact and the home system rides beside it. Measured 2026-10-02 on the first run: home 5 foreign.</p>
+     *
+     * <p>Positions only — the operator's toggle, pressed through the machine's own button handler —
+     * because a look that makes a system out writes its bodies, and the seat's bodies ARE the authored
+     * system's, which merge on the crystal: the defect shows only where an address is written. The
+     * aperture is the shipped one; the seated star's registration is measured where production
+     * computes it ({@code telescope sees}) and refused as an arrangement if it would not register.</p>
+     *
+     * <p>Sees the survey a running observatory performs and what its crystal holds; does NOT see the
+     * navigation console's listing of that crystal on a client, which renders the same records (no
+     * client decision is involved), nor an authored system written by a pack file rather than seated by
+     * the probe (the registry stores both through {@code UniverseRegistry#place}).</p>
+     *
+     * <p>red-witnessed: with {@code UniverseRegistry#anchorsInTerritory} at
+     * {@code if (clearOfAuthored(seat))} reading {@code if (true)}, this fails with
+     * "expected:&lt;seated=[0 home=0]&gt; but was:&lt;seated=[1 home=5]&gt;" (the same reading the tree
+     * gave before the mask existed, 2026-10-02); with {@code TelescopeScan#characterise} at
+     * {@code if (!namedSomething)} reading {@code if (false)}, with "must have written both addresses"
+     * ("expected:&lt;seated=[true home=tru]e&gt; but was:&lt;seated=[false home=fals]e&gt;") — one
+     * inversion per run, 2026-10-03.</p>
+     */
+    @Test
+    public void aSurveyWritesASystemOnceAndNoNeighbouringSeatUnderItsName() throws Exception {
+        FixtureSite site = site();
+        String radiusBefore = configured("telescopePassiveRadiusSteps");
+        proceduralSky();
+        try {
+            shippedInstrument();
+            configure("telescopePassiveRadiusSteps", SHIPPED_RADAR_RADIUS);
+            TelescopeReading idle = standObservatory(site);
+            long s = idle.stepCells;
+            int minSpacing = GalaxyGenConfig.defaults().minSpacing;
+            requireArranged("the radar must stride by the installed sky's territory (" + minSpacing
+                    + " cells), or its looks do not land one per territory: " + s, s == minSpacing);
+            // A system's neighbourhood: half a territory to each side of its anchor — the box
+            // UniverseRegistry#storedAnchorNear attributes by, which IGalaxyGenerator documents.
+            long reach = minSpacing / 2L;
+            long[] home = idle.originSectors();
+
+            // 1. The procedural field the radar will walk, read before anything is seated.
+            int r = SHIPPED_RADAR_RADIUS;
+            List<long[]> looks = new ArrayList<>();
+            List<int[]> lookIndex = new ArrayList<>();
+            List<List<long[]>> seatsOf = new ArrayList<>();
+            List<long[]> every = new ArrayList<>();
+            for (int i = -r; i <= r; i++) {
+                for (int j = -r; j <= r; j++) {
+                    for (int k = -r; k <= r; k++) {
+                        long[] look = {home[0] + i * s, home[1] + j * s, home[2] + k * s};
+                        List<long[]> seats = seatsOfLook(site, look);
+                        looks.add(look);
+                        lookIndex.add(new int[] {i, j, k});
+                        seatsOf.add(seats);
+                        every.addAll(seats);
+                    }
+                }
+            }
+            System.out.println("[one-address] " + every.size() + " seats across " + looks.size()
+                    + " radar looks; territory " + s + " cells, neighbourhood reach " + reach);
+
+            // 2. A seat P of some look's territory, and where to seat the system A.
+            long[] lookT = null;
+            long[] lookA = null;
+            long[] p = null;
+            long[] a = null;
+            search:
+            for (int t = 0; t < looks.size(); t++) {
+                long[] l = looks.get(t);
+                for (long[] seat : seatsOf.get(t)) {
+                    for (int axis = 0; axis < 3; axis++) {
+                        long d = seat[axis] - l[axis];
+                        int step = Long.signum(d);
+                        int next = lookIndex.get(t)[axis] + step;
+                        if (step == 0 || next < -r || next > r || !lateralWithin(seat, l, axis, reach)) {
+                            continue;
+                        }
+                        long[] l2 = l.clone();
+                        l2[axis] += step * s;
+                        // Far enough from P's own look that the look is outside A's box, and past
+                        // the face into the next territory.
+                        long boundary = step > 0 ? (Math.floorDiv(seat[axis], s) + 1L) * s
+                                : Math.floorDiv(seat[axis], s) * s - 1L;
+                        long delta = Math.max(Math.max(1L, reach + 1L - Math.abs(d)),
+                                Math.abs(boundary - seat[axis]));
+                        long[] seatA = seat.clone();
+                        seatA[axis] += step * delta;
+                        if (delta > reach || chebyshev(seatA, l) <= reach || chebyshev(seatA, l2) > reach
+                                || Math.floorDiv(seatA[axis], s) != Math.floorDiv(l2[axis], s)
+                                || !alone(seat, seatA, l, l2, seatsOf.get(t), every, reach)) {
+                            continue;
+                        }
+                        lookT = l;
+                        lookA = l2;
+                        p = seat;
+                        a = seatA;
+                        break search;
+                    }
+                }
+            }
+            requireArranged("the procedural field around the observatory must hold a seat close enough to"
+                    + " a territory face for a system seated past that face to reach it, with no other"
+                    + " seat nearer: " + every.size() + " seats read", p != null);
+            // `cell-info` writes anchor null for void, and absence is the answer there: a seat that
+            // answers anything but itself — void or another system — is not the field's own.
+            Reply seatP = cellInfo(p);
+            requireArranged("seat P must be the procedural field's own and nobody's member yet: " + seatP,
+                    key(p).equals(seatP.textOr("anchor", null)) && !seatP.bool("hasOverride"));
+            System.out.println("[one-address] seat P " + key(p) + " of the look at " + key(lookT)
+                    + "; system to stand at " + key(a) + ", looked at from " + key(lookA));
+
+            // 3. Seat the system, and measure that the radar will register it.
+            String seated = systemAt(a, "one-address", SUN_SIZE);
+            requireArranged("the system must be seated where it was chosen: " + seated, key(a).equals(seated));
+            // A null anchor (void) fails this as a mismatch, and absence is the answer that should.
+            requireArranged("the look beside it must find the seated system: " + cellInfo(lookA),
+                    seated.equals(cellInfo(lookA).textOr("anchor", null)));
+            Reply sky = photometry(site, lookA);
+            double magnitude = sky.element("systems", "anchor", seated).number("apparentMagnitude");
+            requireArranged("the shipped aperture must register the seated star: m=" + magnitude
+                    + " against " + sky.number("limit"), magnitude <= sky.number("limit"));
+            System.out.println("[one-address] seated star m=" + magnitude + " against limit "
+                    + sky.number("limit") + "; the look at P's territory reads " + photometry(site, lookT));
+
+            // 4. Positions only, and the radar.
+            Reply.of("stellurgytest telescope whole-system",
+                    exec("stellurgytest telescope whole-system " + at(site) + " false"))
+                    .requireOk("set the instrument to record positions only");
+            localRadar(site);
+
+            Reply held = recorded(site, a);
+            Reply homeHeld = recorded(site, home);
+            System.out.println("[one-address] the crystal's record of the seated system: " + held);
+            System.out.println("[one-address] the crystal's record of the home system: " + homeHeld);
+            assertEquals("the radar looked at the seated system and at the home system it stands in, and"
+                            + " must have written both addresses. Seated: " + held + " Home: " + homeHeld,
+                    "seated=true home=true",
+                    "seated=" + held.bool("atAnchor") + " home=" + homeHeld.bool("atAnchor"));
+            // Both counts in one verdict, so a red names every system that carries another cell.
+            assertEquals("one system is ONE address: no record at another cell may stand under its name"
+                            + " (seat " + key(p) + " lay in the seated system's neighbourhood). Seated: "
+                            + held + " Home: " + homeHeld,
+                    "seated=0 home=0",
+                    "seated=" + held.integer("foreign") + " home=" + homeHeld.integer("foreign"));
+        } finally {
+            configure("telescopePassiveRadiusSteps", radiusBefore);
+            releaseProceduralSky();
+            releaseChunks();
+        }
+    }
+
+    /** The seats the look at {@code look} enumerates, as production's detection stage lists them. */
+    private List<long[]> seatsOfLook(FixtureSite site, long[] look) throws Exception {
+        List<long[]> seats = new ArrayList<>();
+        for (String element : photometry(site, look).objectArray("systems")) {
+            seats.add(sectorsOf(Reply.of("stellurgytest telescope sees [systems]", element).text("anchor")));
+        }
+        return seats;
+    }
+
+    /** What the registry attributes the cell {@code sectors} to, and whether it holds a stored placement. */
+    private Reply cellInfo(long[] sectors) throws Exception {
+        return Reply.of("stellurgytest space cell-info",
+                exec("stellurgytest space cell-info " + key(sectors))).requireOk("read the cell " + key(sectors));
+    }
+
+    private static String key(long[] sectors) {
+        return GalacticCoord.ofSectorLocal(sectors[0], sectors[1], sectors[2], 0L, 0L, 0L).cellKey();
+    }
+
+    private static long[] sectorsOf(String cellKey) {
+        GalacticCoord c = GalacticCoord.fromCellKey(cellKey);
+        requireArranged("a seat must be named by a galactic cell key: " + cellKey, c != null);
+        return new long[] {c.sectorX(), c.sectorY(), c.sectorZ()};
+    }
+
+    private static long chebyshev(long[] u, long[] v) {
+        return Math.max(Math.abs(u[0] - v[0]), Math.max(Math.abs(u[1] - v[1]), Math.abs(u[2] - v[2])));
+    }
+
+    private static double distanceSq(long[] u, long[] v) {
+        double x = u[0] - v[0];
+        double y = u[1] - v[1];
+        double z = u[2] - v[2];
+        return x * x + y * y + z * z;
+    }
+
+    private static boolean lateralWithin(long[] seat, long[] look, int axis, long reach) {
+        for (int other = 0; other < 3; other++) {
+            if (other != axis && Math.abs(seat[other] - look[other]) > reach) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Whether no seat the radar could pin stands in the way of the arrangement: none nearer to
+     * {@code p} than the system at {@code a} is, none nearer to the system's own look {@code lookA}
+     * than the system is, and none outside {@code p}'s territory whose neighbourhood reaches
+     * {@code p}'s look (a pin there would answer that look instead of its territory).
+     */
+    private static boolean alone(long[] p, long[] a, long[] lookP, long[] lookA, List<long[]> territory,
+                                 List<long[]> every, long reach) {
+        for (long[] z : every) {
+            if (java.util.Arrays.equals(z, p)) {
+                continue;
+            }
+            if (chebyshev(z, p) <= reach && distanceSq(z, p) <= distanceSq(a, p)) {
+                return false;
+            }
+            if (chebyshev(z, lookA) <= reach && distanceSq(z, lookA) <= distanceSq(a, lookA)) {
+                return false;
+            }
+            boolean ownTerritory = false;
+            for (long[] mine : territory) {
+                ownTerritory |= java.util.Arrays.equals(mine, z);
+            }
+            if (!ownTerritory && chebyshev(z, lookP) <= reach) {
+                return false;
+            }
+        }
+        return true;
     }
 }

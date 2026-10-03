@@ -268,17 +268,18 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
         return stats.getThrust();
     }
 
-    public float getNeededThrust() {
-        // With the weight system off there is no TWR launch gate (see
-        // StatsRocket.canLaunch), so there is no thrust requirement to display.
-        if (!StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-            return 0;
-        }
-        return getWeight() * (float) StellurgyConfiguration.getCurrentConfig().minLaunchTWR;
+    /**
+     * The launch gate's own verdict on the craft this assembler last scanned, asked of the craft as
+     * it will stand when fully fuelled ({@code StatsRocket#withTanksFull}) at the gravity of the world
+     * it is being assembled in. A craft the assembler builds can therefore launch from here full.
+     */
+    public boolean canLaunchFullFromHere() {
+        return stats.withTanksFull().canLaunch(getGravityMultiplier());
     }
 
+    /** The thrust-to-weight ratio the launch gate judges here: tanks full, this world's gravity. */
     public float getThrustToWeightRatio() {
-        return stats.getThrustToWeightRatio();
+        return stats.withTanksFull().getThrustToWeightRatio(getGravityMultiplier());
     }
 
     public boolean hasEnoughFuel(@Nonnull FuelType fuelType) {
@@ -648,7 +649,7 @@ public class TileRocketAssemblingMachine extends TileEntityRFConsumer implements
                 // one somebody removed it from.
                 status = ErrorCodes.NOGUIDANCE;
 
-            } else if (getThrust() <= getNeededThrust()) {
+            } else if (getThrust() <= 0 || !canLaunchFullFromHere()) {
                 status = ErrorCodes.NOENGINES;
 
             } else if (StellurgyConfiguration.getCurrentConfig().rocketRequireFuel && thrustBipropellant > 0

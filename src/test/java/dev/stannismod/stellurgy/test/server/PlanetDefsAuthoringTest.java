@@ -83,10 +83,13 @@ public class PlanetDefsAuthoringTest {
     private static final String HOLDS_THE_ID = "HoldsTheId";
     private static final String STATES_THE_SAME_ID = "StatesTheSameId";
 
+    /** The one body the counted star declares by hand, beside the worlds its count asks for. */
+    private static final int COUNTED_DECLARED = 9612;
+
     /** Every DIMID this file states — the ids the allocator must NOT hand the unnumbered body. */
     private static final int[] AUTHORED_DIMS = {PRIMUS, PRIMUS_MOON, HEAVY, LIGHT, DRILLER,
             DRILLER_UNRESOLVED, MOD_TERRAIN, BOGUS_TERRAIN, STATES_NO_WEATHER, STATES_A_WEATHER_LENGTH,
-            FIRST_FREE, HELD_TWICE};
+            FIRST_FREE, HELD_TWICE, COUNTED_DECLARED};
 
     private static final String UNNUMBERED = "Unnumbered";
 
@@ -106,7 +109,12 @@ public class PlanetDefsAuthoringTest {
     /** The two stars, in the order the file states them; the loader numbers stars in that order. */
     private static final int STAR_SOL = 0;
     private static final int STAR_FARAWAY = 1;
+    private static final int STAR_COUNTED = 2;
     private static final String FARAWAY_GALAXY = "4,-1,2";
+
+    /** What the counted star's {@code numPlanets} and {@code numGasGiants} ask for, in the file. */
+    private static final int COUNTED_PLANETS = 2;
+    private static final int COUNTED_GAS_GIANTS = 1;
 
     private static Path workDir;
     private static RealDedicatedServerHarness harness;
@@ -208,6 +216,18 @@ public class PlanetDefsAuthoringTest {
                 + "    <star name=\"Faraway\" temp=\"80\" x=\"40\" y=\"40\" size=\"0.9\""
                 + " galacticCoord=\"3,0,5\" galaxy=\"" + FARAWAY_GALAXY + "\""
                 + " numPlanets=\"0\" numGasGiants=\"0\">\n"
+                + "    </star>\n"
+                // anAuthoredStarHoldsWhatItsPackDeclaresAndNothingElse: Faraway above is the bare star;
+                // this one declares one body by hand and asks for more by count. Its anchor is in the
+                // home galaxy, as Sol's is, so the reserved-galaxy list stays what its own test reads,
+                // and three territories out along X (the spacing this file leaves unstated), so its
+                // neighbourhood and Sol's are two and not one.
+                + "    <star name=\"Counted\" temp=\"90\" x=\"80\" y=\"80\" size=\"1.0\""
+                + " galacticCoord=\"" + (3L * GalaxyGenConfig.DEFAULT_MIN_SPACING) + ",0,0\""
+                + " numPlanets=\"" + COUNTED_PLANETS + "\""
+                + " numGasGiants=\"" + COUNTED_GAS_GIANTS + "\">\n"
+                + "        <planet name=\"CountedDeclared\" DIMID=\"" + COUNTED_DECLARED + "\">\n"
+                + "        </planet>\n"
                 + "    </star>\n"
                 + "</galaxy>\n";
     }
@@ -653,7 +673,95 @@ public class PlanetDefsAuthoringTest {
                 + " reserved: " + solAnchor + " / " + farAnchor + " / " + inForce, expected, actual);
     }
 
+    /**
+     * An authored star holds exactly what its pack declares: one written with no body and a count of
+     * zero is its star alone, and one written with a body and a count of N holds that body and N major
+     * worlds derived around it, with the moons and belts that derivation brings — nothing else is
+     * attributed to either. (Measured 2026-10-03 for this file's count of 3: 2 planets, 1 giant, 2
+     * moons, 2 belts.)
+     *
+     * <p>Fails if {@code UniverseRegistry#withDerivedRetinue} stops deriving exactly the count the
+     * star carries or starts deriving for a star that asked for none, or {@code DimensionManager}
+     * stops carrying {@code numPlanets + numGasGiants} as that count.</p>
+     *
+     * <p>Read where the registry answers it: the system the star's placed cell belongs to
+     * ({@code space cell-info} on the cell {@code space anchor} reports), by body. A derived world has no
+     * dimension until someone lands, so it is told from the declared body by its dimension.</p>
+     *
+     * <p>Does NOT see the procedural field around these stars, nor a derived world being realized.</p>
+     *
+     * <p>red-witnessed: 2026-10-03, three inversions, one run each: with
+     * {@code UniverseRegistry#withDerivedRetinue} at {@code if (asked <= 0 || generator == null)}
+     * always true, this fails with {@code Counted=… majors=0}; with
+     * {@code int asked = star.getMaxRetinueBodies();} reading {@code Math.max(1, …)}, with
+     * {@code Faraway=… majors=1}; with {@code DimensionManager#createAndLoadDimensions} at
+     * {@code int retinue = loader.getMaxNumPlanets(star) + loader.getMaxNumGasGiants(star);} dropping
+     * the giants, with {@code Counted=… majors=2}.</p>
+     */
+    @Test
+    public void anAuthoredStarHoldsWhatItsPackDeclaresAndNothingElse() throws Exception {
+        Reply counted = probe("stellurgytest star get " + STAR_COUNTED);
+        requireArranged("the counted star must hold the id the file's order gives it: " + counted,
+                counted.has("name") && "Counted".equals(counted.text("name")));
+
+        Map<String, String> expected = new LinkedHashMap<>();
+        expected.put("Faraway", composition(new int[0], 0));
+        expected.put("Counted", composition(new int[] {COUNTED_DECLARED},
+                COUNTED_PLANETS + COUNTED_GAS_GIANTS));
+        Map<String, String> actual = new LinkedHashMap<>();
+        Reply faraway = systemOf(STAR_FARAWAY);
+        Reply countedSystem = systemOf(STAR_COUNTED);
+        actual.put("Faraway", compositionOf(faraway));
+        actual.put("Counted", compositionOf(countedSystem));
+        assertEquals("an authored system holds its declared bodies and the count its pack asked for,"
+                + " nothing else: " + faraway + " / " + countedSystem, expected, actual);
+    }
+
     // ---- instruments -----------------------------------------------------------------------------
+
+    /** The system the registry anchors star {@code starId} at, as {@code space cell-info} reads it. */
+    private static Reply systemOf(int starId) throws Exception {
+        Reply anchor = probe("stellurgytest space anchor " + starId);
+        requireArranged("star " + starId + " must be placed somewhere: " + anchor, anchor.has("cell"));
+        return probe("stellurgytest space cell-info " + anchor.text("cell")).requireOk("read star "
+                + starId + "'s system");
+    }
+
+    /**
+     * One star, the declared bodies' dimensions, how many derived MAJOR worlds (a planet or a giant
+     * with no dimension yet), and whether everything else derived is what a derived world brings with
+     * it — its moons — or a belt the same derivation lays around the system.
+     */
+    private static String composition(int[] declaredDims, int derivedMajors) {
+        StringBuilder dims = new StringBuilder();
+        for (int dim : declaredDims) {
+            dims.append(dims.length() > 0 ? "," : "").append(dim);
+        }
+        return "stars=1 declared=[" + dims + "] majors=" + derivedMajors + " restIsMoonsAndBelts=true";
+    }
+
+    private static String compositionOf(Reply system) {
+        int stars = 0;
+        int majors = 0;
+        boolean restIsMoonsAndBelts = true;
+        StringBuilder dims = new StringBuilder();
+        for (String element : system.objectArray("bodies")) {
+            Reply body = Reply.of("cell-info [bodies]", element);
+            String kind = body.text("kind");
+            int dim = body.integer("dim");
+            if ("STAR".equals(kind)) {
+                stars++;
+            } else if (dim != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET) {
+                dims.append(dims.length() > 0 ? "," : "").append(dim);
+            } else if ("PLANET".equals(kind) || "GAS_GIANT".equals(kind)) {
+                majors++;
+            } else {
+                restIsMoonsAndBelts &= "MOON".equals(kind) || "ASTEROID_BELT".equals(kind);
+            }
+        }
+        return "stars=" + stars + " declared=[" + dims + "] majors=" + majors
+                + " restIsMoonsAndBelts=" + restIsMoonsAndBelts;
+    }
 
     private static Reply probe(String command) throws Exception {
         return Reply.of(command, String.join("\n", harness.client().execute(command)));

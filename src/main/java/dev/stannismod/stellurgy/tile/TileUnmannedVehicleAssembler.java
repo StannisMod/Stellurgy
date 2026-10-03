@@ -385,7 +385,7 @@ public class TileUnmannedVehicleAssembler extends TileRocketAssemblingMachine {
                     || (thrustMonopropellant > 0 && totalFuelUse > monopropellantfuelUse)
                     || (thrustNuclearTotalLimit > 0 && totalFuelUse > nuclearWorkingFluidUse))) {
                 status = ErrorCodes.COMBINEDTHRUST;
-            } else if (getThrust() <= getNeededThrust()) {
+            } else if (getThrust() <= 0 || !canLaunchFullFromHere()) {
                 status = ErrorCodes.NOENGINES;
             } else if (((int) stats.getStatTag("intakePower")) <= 0) {
                 status = ErrorCodes.NOINTAKE;

@@ -27,8 +27,9 @@ Consequence of (3), and it surprises everyone exactly once:
 - **Comments are lost.** The writer builds a new document; nothing in the file survives that the
   reader did not turn into model state.
 - **Unknown elements and attributes are lost**, because they were never read (see §2).
-- **`numPlanets` / `numGasGiants` are written back as `0`.** Random planets are generated once, at
-  first load, and become ordinary `<planet>` entries. They are not regenerated on later loads.
+- **`numPlanets` / `numGasGiants` are written back as one total.** The writer puts the sum into
+  `numPlanets` and writes `numGasGiants="0"`; nothing reads the split, so the total is what survives.
+  The derived worlds themselves are never written as `<planet>` entries (see §7, `<star>` attributes).
 - **A companion star loses its `name`.** The writer does not emit `name` for a nested `<star>`; it is
   regenerated as `<primary name>-<n>`.
 
@@ -328,14 +329,21 @@ redistributed among the remaining options. A type all of whose options are unava
 | `x`, `y` | map units | no | Position on the star-selector map. `y` is the map's Z. |
 | `galacticCoord` | `"sx,sy,sz"` | no | Explicit anchor, GALAXY-LOCAL — an offset from the declaration origin of the galaxy in `galaxy` (see §5). Malformed → warns and uses the origin. Absent → a deterministic fallback cell is assigned. |
 | `galaxy` | `home` or `"gx,gy,gz"` | no | Which galaxy `galacticCoord` is measured from. Default `home`, whose declaration origin IS the universe origin. Naming any other forces that lattice cell to hold a galaxy. |
-| `numPlanets` | count | **yes** | How many random planets to generate for this star at FIRST load. Missing → warning and none. |
-| `numGasGiants` | count | **yes** | The same for gas giants. |
+| `numPlanets` | count | **yes** | How many major worlds this star's derived retinue holds, beside its hand-written planets. Missing → warning and none. |
+| `numGasGiants` | count | **yes** | Added to `numPlanets`; the total is what counts. |
 | `blackHole` | boolean | no | This star is a black hole: a quarter of the light its size and temperature would otherwise give. |
 | `diskAngle` | degrees | no (default `70`) | Accretion-disc tilt, render only. |
 
-`numPlanets` / `numGasGiants` fire **once**, at the first load of a world. They are written back as
-`0`, so the generated planets become ordinary entries and are not regenerated. Hand-written
-`<planet>` children are additional to them, not instead of them.
+`numPlanets` + `numGasGiants` is a count read on **every** load, not spent once. It sizes the star's
+derived retinue: that many major worlds (with the moons and belts their derivation brings), derived
+from the world seed and the star's position, so the same worlds come back each load without being
+written into the file. Hand-written `<planet>` children are additional to them, not instead of them.
+A star with neither attribute holds its hand-written planets only — a bare `<star>` is a star alone.
+
+Derived worlds exist only when the file has a `<galaxyGen>`: without one there is no procedural
+generator to derive them, and the count changes nothing. The neighbourhood of a star you write is
+yours — no procedural system is seated in it, so a star you declare with seven planets holds those
+seven and its derived count, and nothing else.
 
 ### A nested `<star>` is a COMPANION
 

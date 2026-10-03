@@ -933,6 +933,26 @@ public final class ClusteredGalaxyGenerator implements IGalaxyGenerator {
         return seatForLattice(seed, latticeAt(seed, here.sectorX(), here.sectorY(), here.sectorZ()));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Here the seat's whole LATTICE cell: {@link #anchorAt} answers that seat for every cell of it,
+     * and {@code clampIntoLattice} keeps every body the system derives inside it. In a territory divided
+     * {@code k} ways that is a cube {@code minSpacing/k} on an edge, much smaller than the territory.</p>
+     */
+    @Override
+    public Optional<SectorBox> neighbourhoodOf(long seed, GalacticCoord seat) {
+        GalacticCoord here = galactic(seat);
+        Lattice lattice = latticeAt(seed, here.sectorX(), here.sectorY(), here.sectorZ());
+        Optional<GalacticCoord> seated = seatForLattice(seed, lattice);
+        if (!seated.isPresent() || !seated.get().sameCell(here)) {
+            return Optional.empty();
+        }
+        return Optional.of(SectorBox.between(lattice.lowX, lattice.lowY, lattice.lowZ,
+                lattice.lowX + lattice.edgeX - 1L, lattice.lowY + lattice.edgeY - 1L,
+                lattice.lowZ + lattice.edgeZ - 1L));
+    }
+
     @Override
     public List<GalacticCoord> anchorsInTerritory(long seed, GalacticCoord coord, int limit) {
         GalacticCoord cell = galactic(coord);
