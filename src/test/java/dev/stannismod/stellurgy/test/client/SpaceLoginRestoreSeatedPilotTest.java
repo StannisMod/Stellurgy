@@ -29,18 +29,18 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * before the climb, or standing on his own deck. Each leg logs him out, restarts the server under
  * him, and requires him back on his ship.
  *
- * <p>See {@link AbstractSpaceLoginRestoreClientTest} for why this contract can only be tested on a
- * real client, and for the fixture the three legs share.</p>
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every leg here stops the server and boots
+ * a new one over the same world root ({@code requireHeComesBackAboardHisShip}, and the standing leg's
+ * own boot 2), so none of them can share a running server. The relogs that need no restart run in
+ * {@code SpaceCellRelogGroupTest}.</p>
  *
- * <p><b>Why this is three classes rather than one.</b> The original
- * {@code SpaceLoginRestoreClientE2ETest} held all seven legs, and every one of them boots a server
- * and a client and then restarts the server — 1032.8 s measured 2026-08-07 at 8 forks, in ONE gradle
- * fork, which made this single class the wall-clock FLOOR of the whole non-VS client tier while
- * seven forks idled. Sharing a harness is not available here: the restart IS the subject. So the
- * legs were split across three classes instead, which is the same optimisation from the other end —
- * the tier's floor is its longest UNIT, and a unit nobody can shorten can still be divided.</p>
+ * <p>See {@link AbstractSpaceLoginRestoreClientTest} for why this contract can only be tested on a
+ * real client, and for the fixture the legs share. The legs were split across classes because every
+ * one of them pays two boots — the original single class was the wall-clock floor of the client tier,
+ * 1032.8 s at 8 forks in ONE gradle fork (2026-08-07) — and a unit nobody can shorten can still be
+ * divided.</p>
  */
-public class SpaceLoginRestoreSeatedPilotE2ETest extends AbstractSpaceLoginRestoreClientTest {
+public class SpaceLoginRestoreSeatedPilotTest extends AbstractSpaceLoginRestoreClientTest {
 
     /**
      * The pilot logs out seated on his ship and the server is restarted under him. He must come back

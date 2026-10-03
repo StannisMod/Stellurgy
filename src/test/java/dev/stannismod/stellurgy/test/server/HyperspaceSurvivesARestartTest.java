@@ -69,8 +69,12 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * snapshot when the lane came back empty, disposing of what no record claims — are pinned in
  * {@code testUnit} ({@code ShipTransitManagerTest}); this pins the physical half those decisions are
  * made about, across a real restart.</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject — the scenario boots a server, parks a hull
+ * mid-jump, stops it, and boots a second one over the same world root. A mechanics test (the jump is
+ * arranged by probes), not a player's path, hence no {@code E2E} in its name.</p>
  */
-public class HyperspaceSurvivesARestartE2ETest {
+public class HyperspaceSurvivesARestartTest {
 
     /**
      * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class

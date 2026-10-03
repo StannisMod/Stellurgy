@@ -1538,6 +1538,322 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("world<->subspace rotation round-trip must be exact (err=" + rotRt + ")", rotRt < FRAME_AGREEMENT_EPSILON);
     }
 
+    // ---- the surface a body stands on is the surface the renderer draws -----------------------
+    //
+    // A ship is DRAWN through the client's interpolated render transform, but every collision and
+    // standing computation for a resolved body maps through the GAME-TICK transform. When the two
+    // diverge (a hovering ship holding an attitude never stops moving), the surface the player collides
+    // with sits visibly beside the surface he sees — the playtest report: "I walk not on the blocks I
+    // see but about a block away from them". The observable is the client's `render_pose_skew` record,
+    // written at every commit: the distance between the committed world position (tick pose) and where
+    // the renderer draws the same subspace point, carrying the ship, the mode and the raw pair. Each leg
+    // opens a WINDOW and reads it once, so its maximum is over every sample production produced.
+
+    /** The steep inversion the hull leg needs, as deck-normal Y: the commanded ~160-degree roll settles
+     *  shy of a full turn, so this asks for what it can reach — past vertical. */
+    private static final double SKEW_STEEP_INVERSION_UP_Y = -0.3;
+    /** How long a teleport is given to reach the CLIENT and be applied there. */
+    private static final int SKEW_POS_LOOK_BUDGET_TICKS = 300;
+    /** Client ticks a dropped body is watched before "did he start falling" is read: several times the
+     *  three a free body needs to fall the 0.4 blocks the premise asks for. */
+    private static final int SKEW_FALL_WATCH_TICKS = 20;
+    /**
+     * How long the commanded ~160-degree roll is given, in ticks: the attitude hold slews at a 2.0 rad/s
+     * ceiling, ramping at 4.0 rad/s², so the 2.79 rad turn is about 45 ticks and the gate (up-Y below
+     * -0.3, past 107 degrees) is crossed inside 30. The hold KEEPS the attitude once reached, which is
+     * what makes a window safe here.
+     */
+    private static final int SKEW_ROLL_WINDOW_TICKS = 120;
+    /** The observation points behind the skew and hull-sweep records, asserted before a silence is read. */
+    private static final String SKEW_INSTRUMENT = "render_pose_skew_events";
+    private static final String SKEW_SOLID_INSTRUMENT = "hull_collision_solid_events";
+    /** The gap a player can feel as "standing beside the blocks I see": the contract bound. */
+    private static final double VISIBLE_SKEW = 0.35;
+
+    /**
+     * A body standing on a ship stands on the surface the renderer draws: parked (the control), and
+     * hull-standing on a hovering, inverted ship (the subject).
+     *
+     * <p>red-witnessed: with the hull-stand sweep's box ({@code ShipFrameTravel.hullStandTravel})
+     * centred on the SHIP's up rather than the world's — the subspace-aligned phantom: "the largest
+     * gap between the swept solid and the body's own box was 1.77 over 95 sweeps (… upY=-0.93)",
+     * 2026-09-28. The two lines the wait rewrite touched are arrangements (the drop point is air, the
+     * body starts falling).</p>
+     */
+    @Test
+    public void theSurfaceABodyStandsOnIsTheSurfaceTheRendererDraws() throws Exception {
+        final FixtureSite site = site();
+
+        // ---- Leg A (control): a PARKED ship's render transform converges onto its tick pose, so the
+        // skew of a body on its deck bounds the instrument's noise floor.
+        Events events = events();
+        double[] ship = buildShip(site);
+        long captureMark = events.markInstrumented();
+        exec("tp @a " + ship[0] + " " + (ship[1] + 4) + " " + ship[2] + " 0 0");
+        // `deck_entered` is an EDGE; the sample below needs the deck to be HOLDING him when the wait
+        // returns — the chain: the opening on this ship, later than the last release.
+        ShipIdentity.awaitCaptureHeldBy(events, captureMark, scenarioShipId,
+                "the client player must be TAKEN by THIS parked deck, and still held by it, before the"
+                        + " control window opens", DECK_LINK_BUDGET_TICKS);
+        DeckCapture parkedCapture = DeckCapture.read(this::exec);
+        assertTrue("the client player must be captured on the parked deck before sampling: "
+                + parkedCapture.raw(), parkedCapture.verdict);
+        parkedCapture.requireAnchoredOn(scenarioShipId,
+                "the client player must be captured on the parked deck this scenario built");
+        long restMark = clientEvents().mark();
+        double restCrossMax = 0.0;
+        StringBuilder restTrace = new StringBuilder();
+        // WINDOW: the MAXIMUM cross-side delta at rest — a difference between two rendered sides, which
+        // no record carries. What it cannot see: a spike between two samples, hence the log read after.
+        for (int i = 0; i < 5; i++) {
+            double cross = renderCrossSideDelta();
+            if (!Double.isNaN(cross)) restCrossMax = Math.max(restCrossMax, cross);
+            restTrace.append(String.format(java.util.Locale.ROOT, "[cross=%.4f] ", cross));
+            bot().waitTicks(6);
+        }
+        String restReply = clientEvents().since(restMark, "render_pose_skew");
+        Events.assertInstrumentRan(restReply, SKEW_INSTRUMENT,
+                "a body standing on the parked deck is committed against a pose at all");
+        RenderSkew rest = RenderSkew.of(restReply, null);
+        System.out.println("[poseskew] rest " + rest + " crossMax=" + restCrossMax + " :: " + restTrace);
+        assertTrue("the skew instrument must fire while standing on the parked deck: " + rest, rest.samples > 0);
+        assertTrue("on a PARKED ship the drawn pose must sit on the tick pose (control; " + rest + "): "
+                + restTrace, rest.max < VISIBLE_SKEW);
+
+        // ---- Leg B (subject): a ship HOVERING on an attitude hold, inverted, so the world-top is a
+        // hull-stand surface. The attitude is a physical value nobody publishes and the hold keeps it
+        // once reached, so the slew gets its ticks and is then measured: upBefore -> upY, both in the
+        // gate's message, says whether the hull never moved or was still slewing.
+        double h = Math.toRadians(160.0) / 2.0;
+        double upBefore = shipInfo().upY();
+        assertTrue("attitude hold must accept the past-vertical roll",
+                Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
+                        + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+        bot().waitTicks(SKEW_ROLL_WINDOW_TICKS);
+        ShipInfo info = shipInfo();
+        double upY = info.upY();
+        System.out.println("[poseskew] upY " + upBefore + " -> " + upY + " over " + SKEW_ROLL_WINDOW_TICKS
+                + " ticks (the gate is < " + SKEW_STEEP_INVERSION_UP_Y + ")");
+        assertTrue("the ship must reach the steep inversion before the hull leg (upY " + upBefore + " -> "
+                + upY + " over " + SKEW_ROLL_WINDOW_TICKS + " ticks of a commanded 160-degree roll): "
+                + info.raw(), upY < SKEW_STEEP_INVERSION_UP_Y);
+        // The drop point must be FREE AIR: the rolled ship sinks, so shipY+7 can land inside terrain.
+        // Ship blocks live in the shipyard subspace, so the fill removes world terrain only.
+        clearSkewDropColumn(info.x, info.y, info.z);
+        info = shipInfo(); // re-read after the fill, which ran on the server thread before it answered
+        double sx = info.x, sy = info.y, sz = info.z;
+        String dropBlock = exec("stellurgytest block at 0 " + (int) Math.floor(sx) + " "
+                + (int) Math.floor(sy + 7) + " " + (int) Math.floor(sz));
+        assertTrue("the drop point must be free air — otherwise this leg measures the ground rather than"
+                + " the hull: " + dropBlock + " ship=" + info.raw(), Reply.of(dropBlock).bool("isAir"));
+
+        // Two marks, one per side, both before the stimulus: the SERVER's for the hull-stand mode
+        // commit, the CLIENT's for the teleport's arrival.
+        long hullMark = events.markInstrumented();
+        long dropMark = clientEvents().mark();
+        exec("tp @a " + sx + " " + (sy + 7) + " " + sz + " 0 0");
+        clientEvents().await(dropMark, "client_pos_look_applied", "the drop teleport must be APPLIED"
+                + " on the client before its fall can be watched", SKEW_POS_LOOK_BUDGET_TICKS);
+        double preY = bot().reportState().get("playerY").getAsDouble();
+        long preTicks = bot().reportState().get("ticks").getAsLong();
+        // EXPERIMENT: the reading is DEFINED twenty client ticks after the placement was applied.
+        bot().waitTicks(SKEW_FALL_WATCH_TICKS);
+        double fallY = bot().reportState().get("playerY").getAsDouble();
+        // Excluded by construction: a client tick stall (waitTicks errors on its own timeout — the
+        // delta is printed so the proof travels with the red), a teleport that never landed (its
+        // record was awaited), the world's ground (the column was cleared and asserted air). What
+        // remains holding him up is the inverted hull or the deck capture — both the PRODUCT working.
+        long tickDelta = bot().reportState().get("ticks").getAsLong() - preTicks;
+        assertTrue("the teleported client must start falling before the hull leg. target=" + (sy + 7)
+                + " preY=" + preY + " y after " + SKEW_FALL_WATCH_TICKS + " client ticks=" + fallY
+                + " clientTicksElapsed=" + tickDelta + " (so this is NOT a tick stall) capture="
+                + exec("stellurgytest vs deck-capture"), Math.abs(fallY - preY) > 0.4);
+
+        // The hull-stand hold ENGAGING is a decision production commits in one place, awaited as the
+        // link it is. Filtered on mode "hull": the same commit names both modes.
+        String hullCommit;
+        try {
+            hullCommit = events.awaitField(hullMark, "deck_mode_committed", "mode", "hull",
+                    "the encounter must engage the HULL-STAND hold before sampling", DECK_LINK_BUDGET_TICKS);
+        } catch (AssertionError missed) {
+            throw new AssertionError(missed.getMessage() + " | the server gate says: "
+                    + exec("stellurgytest vs deck-capture") + " | client y="
+                    + bot().reportState().get("playerY").getAsDouble());
+        }
+        System.out.println("[poseskew] hull-stand committed :: " + hullCommit
+                + " | probe :: " + exec("stellurgytest vs deck-capture"));
+
+        // The mode travels ON each record, so the filter below is per SAMPLE.
+        long hullSkewMark = clientEvents().mark();
+        StringBuilder hullTrace = new StringBuilder();
+        double hullCrossMax = 0.0;
+        // WINDOW: the MAXIMUM cross-side delta over the hull-stand mode. What it cannot see: a spike
+        // inside one 13-tick gap.
+        for (int i = 0; i < 6; i++) {
+            double cross = renderCrossSideDelta();
+            if (!Double.isNaN(cross)) hullCrossMax = Math.max(hullCrossMax, cross);
+            hullTrace.append(String.format(java.util.Locale.ROOT, "[cross=%.4f y=%.2f] ",
+                    cross, bot().reportState().get("playerY").getAsDouble()));
+            bot().waitTicks(13);
+        }
+        String hullReply = clientEvents().since(hullSkewMark, "render_pose_skew");
+        Events.assertInstrumentRan(hullReply, SKEW_INSTRUMENT,
+                "a body on the inverted hull is committed against a pose at all");
+        RenderSkew hull = RenderSkew.of(hullReply, "hull");
+        // What SOLID each of those sweeps consumed, against the body's own world box — from records:
+        // the production static this used to read had become a literal 0.0 and could not fail.
+        String solidReply = clientEvents().since(hullSkewMark, "hull_collision_solid");
+        Events.assertInstrumentRan(solidReply, SKEW_SOLID_INSTRUMENT,
+                "the hull-stand sweep consumed the body's own world-upright volume");
+        int solidSweeps = 0;
+        double solidOffsetMax = 0.0;
+        String worstSolid = "(none)";
+        for (String record : Events.records(solidReply)) {
+            solidSweeps++;
+            double offset = Events.number(record, "offset");
+            // `>=` on the first sweep too: a healthy body measures exactly 0.0, and the narrative must
+            // still name one sample.
+            if (solidSweeps == 1 || offset > solidOffsetMax) {
+                solidOffsetMax = Math.max(solidOffsetMax, offset);
+                worstSolid = record;
+            }
+        }
+        System.out.println("[poseskew] hull " + hull + " crossMax=" + hullCrossMax + " restMax=" + rest.max
+                + " :: " + hullTrace);
+        System.out.println("[poseskew] hull solid sweeps=" + solidSweeps + " offsetMax=" + solidOffsetMax
+                + " worst=" + worstSolid);
+        System.out.println("[poseskew] hull ship-info=" + shipInfo());
+
+        // ---- Leg C (driver isolation, diagnostic): the same hull-stand configuration under SUSTAINED
+        // motion. The discriminating number is the CROSS-SIDE delta: one that scales with the commanded
+        // speed names the client pose LAG; a speed-independent one names a constant offset.
+        for (double climb : new double[]{0.6, 1.2}) {
+            assertTrue("velocity command must engage for the moving leg",
+                    Reply.of(exec("stellurgytest vs force-vel-by-id 0 " + scenarioShipId + " 0 " + climb + " 0"))
+                            .bool("commanded"));
+            long moveMark = clientEvents().mark();
+            double moveCrossMax = 0.0, moveCrossSum = 0.0;
+            int moveCrossN = 0;
+            StringBuilder moveTrace = new StringBuilder();
+            // WINDOW: the MAXIMUM and the MEAN cross-side delta under motion; a mean is not something
+            // one record can carry.
+            for (int i = 0; i < 8; i++) {
+                double cross = renderCrossSideDelta();
+                if (!Double.isNaN(cross)) {
+                    moveCrossMax = Math.max(moveCrossMax, cross);
+                    moveCrossSum += cross;
+                    moveCrossN++;
+                }
+                moveTrace.append(String.format(java.util.Locale.ROOT, "[cross=%.4f] ", cross));
+                bot().waitTicks(7);
+            }
+            RenderSkew moving = RenderSkew.of(clientEvents().since(moveMark, "render_pose_skew"), null);
+            System.out.println(String.format(java.util.Locale.ROOT,
+                    "[poseskew] moving climb=%.1f %s crossMax=%.4f crossMean=%.4f (n=%d) :: %s", climb, moving,
+                    moveCrossMax, moveCrossN == 0 ? -1.0 : moveCrossSum / moveCrossN, moveCrossN, moveTrace));
+            System.out.println("[poseskew] moving ship-info=" + shipInfo().raw());
+        }
+        exec("stellurgytest vs force-clear-by-id 0 " + scenarioShipId);
+
+        assertTrue("the skew instrument must fire in HULL mode (" + hull + "): " + hullTrace, hull.samples > 0);
+        assertTrue("a body hull-standing on a hovering ship must stand on the surface the renderer draws —"
+                + " render-vs-collision pose skew " + hull + " (control at rest=" + rest.max + ", bound="
+                + VISIBLE_SKEW + "): " + hullTrace, hull.max < VISIBLE_SKEW);
+        // A hull-stand body is a WORLD-upright capsule; a sweep colliding a SUBSPACE-aligned box puts
+        // every contact h*sin(tilt/2) from where the player sees himself (~1.77 blocks at ~160 degrees).
+        assertTrue("the hull sweep must be OBSERVED before its solid can be judged — no sweep was recorded"
+                + " in a window that committed " + hull.records + " hull poses", solidSweeps > 0);
+        assertTrue("a hull-stand body must collide as its real world-upright volume, not a subspace-aligned"
+                + " phantom displaced by h*sin(tilt/2) — the largest gap between the swept solid and the"
+                + " body's own box was " + solidOffsetMax + " over " + solidSweeps + " sweeps (visible bound="
+                + VISIBLE_SKEW + ", upY=" + upY + "); worst sweep: " + worstSolid, solidOffsetMax < VISIBLE_SKEW);
+    }
+
+    /**
+     * One cross-side pose sample: the CLIENT's latest committed world position, from the last commit
+     * RECORDED in a two-tick window, against the SERVER's mapping of the same subspace point through
+     * THIS ship's transform by id. On a ship moving at {@code v} it carries an error of roughly
+     * {@code v * 0.15 s}. NaN when the client committed nothing in the window, or the server cannot map
+     * the point.
+     */
+    private double renderCrossSideDelta() throws Exception {
+        long mark = clientEvents().mark();
+        // WINDOW: whatever the client committed in two of its own ticks; none is NaN, which every
+        // caller counts as "no signal".
+        bot().waitTicks(2);
+        String latest = Events.lastRecord(clientEvents().since(mark, "render_pose_skew"));
+        if (latest == null) {
+            return Double.NaN;
+        }
+        String tw = exec("stellurgytest vs to-world 0 id " + scenarioShipId + " " + Events.number(latest, "subX")
+                + " " + Events.number(latest, "subY") + " " + Events.number(latest, "subZ"));
+        if (!Reply.of(tw).ok()) {
+            return Double.NaN;
+        }
+        // absence is the answer: a mapping with no coordinate is no sample, NaN, which the callers skip.
+        double dx = Events.number(latest, "commitX") - Reply.of(tw).numberOr("worldX", Double.NaN);
+        double dy = Events.number(latest, "commitY") - Reply.of(tw).numberOr("worldY", Double.NaN);
+        double dz = Events.number(latest, "commitZ") - Reply.of(tw).numberOr("worldZ", Double.NaN);
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /**
+     * The render-pose skew samples of one window, folded: {@code records} is every commit, {@code samples}
+     * those in the kept mode with a render pose to compare against, {@code max} the largest gap among
+     * them. Kept apart because they fail differently — no records: the resolver never ran; records
+     * without samples: the mode never occurred; {@code drawn:false}: nothing to compare against.
+     */
+    private static final class RenderSkew {
+        final String mode;
+        final int records;
+        final int samples;
+        final int undrawn;
+        final double max;
+
+        private RenderSkew(String mode, int records, int samples, int undrawn, double max) {
+            this.mode = mode;
+            this.records = records;
+            this.samples = samples;
+            this.undrawn = undrawn;
+            this.max = max;
+        }
+
+        /** Fold a client {@code since} reply; {@code mode} filters to one resolution mode, or null keeps all. */
+        static RenderSkew of(String sinceReply, String mode) {
+            int records = 0, samples = 0, undrawn = 0;
+            double max = 0.0;
+            for (String record : Events.records(sinceReply)) {
+                records++;
+                if (mode != null && !mode.equals(Events.text(record, "mode"))) {
+                    continue;
+                }
+                double skew = Events.number(record, "skew");
+                if (Double.isNaN(skew)) {
+                    undrawn++;
+                    continue;
+                }
+                samples++;
+                max = Math.max(max, skew);
+            }
+            return new RenderSkew(mode, records, samples, undrawn, max);
+        }
+
+        @Override
+        public String toString() {
+            return String.format(java.util.Locale.ROOT, "mode=%s records=%d samples=%d undrawn=%d max=%.4f",
+                    mode == null ? "*" : mode, records, samples, undrawn, max);
+        }
+    }
+
+    /** Empty the WORLD terrain over the ship for the drop leg, from just above it to over the drop
+     *  point at {@code y+7}. Ship blocks live in the subspace, and nothing below the ship is touched. */
+    private void clearSkewDropColumn(double x, double y, double z) throws Exception {
+        int fx = (int) Math.floor(x), fy = (int) Math.floor(y), fz = (int) Math.floor(z);
+        String cleared = exec("stellurgytest fill 0 " + (fx - 8) + " " + (fy + 1) + " " + (fz - 8)
+                + " " + (fx + 8) + " " + (fy + 14) + " " + (fz + 8) + " minecraft:air");
+        assertTrue("the drop column must be cleared of world terrain: " + cleared, Reply.of(cleared).ok());
+    }
+
     // ---- helpers (self-contained, mirroring the other tier-2 e2e classes) ----------------------
 
     /** Build a ship at this base and wait for it to load with the client present; returns its world pos. */

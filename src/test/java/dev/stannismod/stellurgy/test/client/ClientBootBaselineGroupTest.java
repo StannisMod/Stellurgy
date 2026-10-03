@@ -14,8 +14,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Everything that is true of a booted client before any feature is exercised: the bridge answers,
- * the mod list agrees with itself, and the harness client is silent.
+ * Everything that is true of a booted client before any feature is exercised: the mod list agrees
+ * with itself, and a registered sound the server plays reaches the client.
  *
  * <h2>Why these three share one harness</h2>
  *
@@ -91,4 +91,58 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientE2ETest {
                 + "mismatch — phantom container?): " + idList, loaded, active);
     }
 
+    /**
+     * A declared Stellurgy sound the server plays reaches the real client's {@code SoundManager}.
+     *
+     * <p>The server plays {@code AudioRegistry.combustionRocket} at the player's feet through the
+     * {@code stellurgytest sound play} probe — the same {@code world.playSound} call the production
+     * sites use. Vanilla encodes the event's registry id into {@code SPacketSoundEffect}; the client
+     * decodes it and hands it to its {@code SoundManager}, which the harness records as
+     * {@code client_sound_played} — a LINK, awaited from a mark. An UNREGISTERED SoundEvent encodes as
+     * id -1, decodes to {@code null}, and the client's task executor swallows the NPE: the sound
+     * silently never plays. Nothing persistent changes, which is what keeps this in this group.</p>
+     *
+     * <p>red-witnessed: with {@code combustionRocket} left out of {@code AudioRegistry}'s registration
+     * ({@code AudioRegistry:43}): "combustionRocket must be present in ForgeRegistries at send time:
+     * … \"registered\":false", 2026-09-28. The probe's own reply answers {@code ok} whenever the
+     * {@code AudioRegistry} field resolves; the registration verdict right after it is the one that
+     * decides.</p>
+     */
+    @Test
+    public void serverPlayedStellurgySoundReachesClientSoundManager() throws Exception {
+        scenario().asserting("a sound the server plays reaches the client's sound manager");
+        // ResourceLocation lowercases paths in this MC build, so the client-side observation is
+        // all-lowercase regardless of the mixed-case sounds.json key.
+        final String combustion = "stellurgy:combustionrocket";
+        // A deadline for a discrete hand-off: the packet leaves on the tick the probe runs.
+        final int soundBudgetTicks = 100;
+
+        // PlaySoundEvent fires only once the client sound system initialised; without an audio
+        // device the recorder's seam is never reached and the silence below would be the host's.
+        boolean managerLoaded = bot().reportSounds().get("managerLoaded").getAsBoolean();
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the client sound system must be loaded (an audio device on this host) for a played"
+                        + " sound to be observable at all", managerLoaded);
+
+        // At the player's feet on his plot — the shared reset stood him there, inside the 16-block
+        // broadcast radius by construction.
+        int x = plot().centerX(), y = dev.stannismod.stellurgy.test.Plot.DEFAULT_Y + 1, z = plot().centerZ();
+        long soundMark = clientEvents().mark();
+        String played = exec("stellurgytest sound play 0 " + x + " " + y + " " + z + " combustionRocket");
+        assertTrue("sound play probe failed: " + played, Reply.of(played).ok());
+        assertTrue("combustionRocket must be present in ForgeRegistries at send time: " + played,
+                Reply.of(played).bool("registered"));
+
+        clientEvents().awaitField(soundMark, "client_sound_played", "location", combustion,
+                "a registered Stellurgy sound played by the server must reach the real client's"
+                        + " SoundManager (this type also carries vanilla ambience and music, so a"
+                        + " non-zero droppedByType entry for it means the ring turned over)",
+                soundBudgetTicks);
+
+        // The pre-fix symptom of an unresolvable sound was an NPE on the packet thread; a client that
+        // has left the world is the loud half of that.
+        JsonObject state = bot().reportState();
+        assertTrue("the client must still be in-world after the sound packet: " + state,
+                state.get("worldReady").getAsBoolean());
+    }
 }

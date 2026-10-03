@@ -2,16 +2,8 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -22,11 +14,10 @@ import static org.junit.Assert.assertTrue;
  * weather + per-planet time/sleep + wrapper install).
  *
  * <p>Two observable contracts, both pinned by lazily loading a planet under a
- * specific config and reading the probe's named {@code worldInfoClass} field
- *. The flag is flipped at runtime BEFORE
- * the fixture dim is ever loaded — wrapping is decided at dim load and is sticky
- * for the dim's lifetime, so the load order is what makes each case
- * deterministic.</p>
+ * specific config and reading the probe's named {@code worldInfoClass} field.
+ * The flag is flipped at runtime BEFORE the fixture dim is ever loaded — wrapping
+ * is decided at dim load and is sticky for the dim's lifetime, so the load order is
+ * what makes each case deterministic.</p>
  *
  * <ul>
  *   <li><b>OFF &rarr; vanilla.</b> With {@code perDimWorldInfo=false}, a freshly
@@ -40,52 +31,40 @@ import static org.junit.Assert.assertTrue;
  *       re-gated on the weather flag (the bug where turning weather off also
  *       killed per-dim time).</li>
  * </ul>
+ *
+ * <p>One server for the class. Because the decision is made at a dim's FIRST load and sticks, each
+ * scenario owns a planet of its own in the seeded {@link Galaxy} that nothing else ever loads, and
+ * puts both flags back as it read them.</p>
  */
-public class PerDimWorldInfoMasterToggleTest {
+@SeededWorld(PerDimWorldInfoMasterToggleTest.Galaxy.class)
+public class PerDimWorldInfoMasterToggleTest extends AbstractSharedServerTest {
 
-    private static final int FIXTURE_DIM = 9311;
+    /** First loaded with the master switch OFF. */
+    private static final int MASTER_OFF_DIM = 9311;
+    /** First loaded with the master ON and the weather sub-toggle OFF. */
+    private static final int WEATHER_OFF_DIM = 9312;
     /** The class a wrapped world reports; asked of the FIELD rather than matched in the
      *  reply, so a class name mentioned anywhere else cannot answer for it. */
     private static final String WORLD_INFO_CLASS = "worldInfoClass";
 
-    /**
-     * Whether the world a {@code dim time} reply is about carries Stellurgy's own {@code WorldInfo}.
-     *
-     * <p>Two probes answer {@code worldInfoClass} — {@code weather get} and {@code dim time} — and
-     * this helper used to be fed both, under a verb parameter. The {@code weather get} half is now
-     * {@link DimWeather#usesStellurgyWorldInfo()}; what is left is the clock probe, which owes a reader of
-     * its own and does not have one yet, so this stays and names the one verb it serves.</p>
-     */
-    private static boolean dimTimeIsWrapped(String reply) {
-        return Reply.of("stellurgytest dim time", reply).text(WORLD_INFO_CLASS)
-                .endsWith("StellurgyDimensionWorldInfo");
+    /** Two otherwise identical planets, one per scenario. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(GameDirSeed seed) {
+            seed.planetDefs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
+                    + planetXml("PerDimMasterPlanet", MASTER_OFF_DIM)
+                    + planetXml("PerDimWeatherOffPlanet", WEATHER_OFF_DIM)
+                    + "    </star>\n"
+                    + "</galaxy>\n", PerDimWorldInfoMasterToggleTest.class);
+        }
     }
 
-    /** One world's sky, refusing a world the probe could not bring up. */
-    private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(this::cmd, dim).requireDim(dim);
-    }
-
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
-
-    @Before
-    public void writePlanetFixture() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -Dforge.test.harness.enabled=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-perdim-master-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"1\" numGasGiants=\"0\">\n"
-                + "        <planet name=\"PerDimMasterPlanet\" DIMID=\"" + FIXTURE_DIM + "\">\n"
+    private static String planetXml(String name, int dim) {
+        return "        <planet name=\"" + name + "\" DIMID=\"" + dim + "\">\n"
                 + "            <isKnown>true</isKnown>\n"
                 + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
                 + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
@@ -100,63 +79,81 @@ public class PerDimWorldInfoMasterToggleTest {
                 + "            <generateCraters>false</generateCraters>\n"
                 + "            <generateCaves>true</generateCaves>\n"
                 + "            <generateVolcanos>false</generateVolcanos>\n"
-                + "        </planet>\n"
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+                + "        </planet>\n";
     }
 
-    @After
-    public void stopHarness() throws Exception {
-        if (harness != null) harness.close();
+    /**
+     * Whether the world a {@code dim time} reply is about carries Stellurgy's own {@code WorldInfo}.
+     * The clock probe owes a reader of its own and does not have one yet, so this stays and names the
+     * one verb it serves.
+     */
+    private static boolean dimTimeIsWrapped(String reply) {
+        return Reply.of("stellurgytest dim time", reply).text(WORLD_INFO_CLASS)
+                .endsWith("StellurgyDimensionWorldInfo");
     }
 
-    private String cmd(String c) throws Exception {
-        return String.join("\n", harness.client().execute(c));
+    /** One world's sky, refusing a world the probe could not bring up. */
+    private DimWeather weather(int dim) throws Exception {
+        return DimWeather.forDim(this::exec, dim).requireDim(dim);
     }
 
-    private void assertDimRegistered() throws Exception {
-        String dimList = cmd("stellurgytest dim list");
-        assertTrue("fixture dim not registered: " + dimList,
-                dimList.contains(String.valueOf(FIXTURE_DIM)));
+    private void assertDimRegistered(int dim) throws Exception {
+        String dimList = exec("stellurgytest dim list");
+        assertTrue("fixture dim " + dim + " not registered: " + dimList,
+                dimList.contains(String.valueOf(dim)));
+    }
+
+    /** A boolean config flag as the server holds it now, so a scenario can put it back. */
+    private String configValue(String key) throws Exception {
+        String resp = exec("stellurgytest config get " + key);
+        Reply reply = Reply.of(resp);
+        assertTrue("could not read config " + key + ": " + resp, reply.has("value"));
+        return reply.text("value");
     }
 
     @Test
     public void masterOffLeavesPlanetOnVanillaWorldInfo() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
-        assertDimRegistered();
+        assertDimRegistered(MASTER_OFF_DIM);
+        String masterBefore = configValue("perDimWorldInfo");
+        try {
+            // Master OFF before the dim is EVER loaded -> shouldWrap runtime-gates it
+            // out, so the first load keeps the vanilla DerivedWorldInfo.
+            assertTrue(Reply.of(exec("stellurgytest config set perDimWorldInfo false")).ok());
 
-        // Master OFF before the dim is EVER loaded -> shouldWrap runtime-gates it
-        // out, so the first load keeps the vanilla DerivedWorldInfo.
-        assertTrue(Reply.of(cmd("stellurgytest config set perDimWorldInfo false")).ok());
-
-        DimWeather info = weather(FIXTURE_DIM); // first load
-        assertFalse("with perDimWorldInfo OFF a freshly-loaded planet must NOT be "
-                + "wrapped (vanilla shared-overworld WorldInfo) — got " + info.raw(),
-                info.usesStellurgyWorldInfo());
+            DimWeather info = weather(MASTER_OFF_DIM); // first load
+            assertFalse("with perDimWorldInfo OFF a freshly-loaded planet must NOT be "
+                    + "wrapped (vanilla shared-overworld WorldInfo) — got " + info.raw(),
+                    info.usesStellurgyWorldInfo());
+        } finally {
+            exec("stellurgytest config set perDimWorldInfo " + masterBefore);
+        }
     }
 
     @Test
     public void weatherOffButMasterOnKeepsTheWrapperForPerDimTime() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
-        assertDimRegistered();
+        assertDimRegistered(WEATHER_OFF_DIM);
+        String masterBefore = configValue("perDimWorldInfo");
+        String weatherBefore = configValue("enableCustomPlanetWeather");
+        try {
+            // Master ON (the boot default, set explicitly) but the weather SUB-toggle OFF — the
+            // leak-fix contract: the wrapper that owns per-dim TIME must still install even though
+            // custom weather is disabled.
+            assertTrue(Reply.of(exec("stellurgytest config set perDimWorldInfo true")).ok());
+            assertTrue(Reply.of(exec("stellurgytest config set enableCustomPlanetWeather false")).ok());
 
-        // Master ON (boot default, set explicitly for clarity) but the weather
-        // SUB-toggle OFF — the leak-fix contract: the wrapper that owns per-dim
-        // TIME must still install even though custom weather is disabled.
-        assertTrue(Reply.of(cmd("stellurgytest config set perDimWorldInfo true")).ok());
-        assertTrue(Reply.of(cmd("stellurgytest config set enableCustomPlanetWeather false")).ok());
+            DimWeather info = weather(WEATHER_OFF_DIM); // first load
+            assertTrue("perDimWorldInfo ON + weather OFF must STILL wrap the planet "
+                    + "(per-dim time rides the wrapper) — got " + info.raw(),
+                    info.usesStellurgyWorldInfo());
 
-        DimWeather info = weather(FIXTURE_DIM); // first load
-        assertTrue("perDimWorldInfo ON + weather OFF must STILL wrap the planet "
-                + "(per-dim time rides the wrapper) — got " + info.raw(),
-                info.usesStellurgyWorldInfo());
-
-        // Tie the contract to TIME explicitly: the per-dim clock probe sees the
-        // wrapper with weather off (proves the time mechanism was not collateral
-        // damage of disabling weather).
-        String time = cmd("stellurgytest dim time " + FIXTURE_DIM);
-        assertTrue("dim-time probe must report the per-dim wrapper with weather "
-                + "OFF — got " + time, dimTimeIsWrapped(time));
+            // Tie the contract to TIME explicitly: the per-dim clock probe sees the wrapper with
+            // weather off (proves the time mechanism was not collateral damage of disabling weather).
+            String time = exec("stellurgytest dim time " + WEATHER_OFF_DIM);
+            assertTrue("dim-time probe must report the per-dim wrapper with weather "
+                    + "OFF — got " + time, dimTimeIsWrapped(time));
+        } finally {
+            exec("stellurgytest config set enableCustomPlanetWeather " + weatherBefore);
+            exec("stellurgytest config set perDimWorldInfo " + masterBefore);
+        }
     }
 }

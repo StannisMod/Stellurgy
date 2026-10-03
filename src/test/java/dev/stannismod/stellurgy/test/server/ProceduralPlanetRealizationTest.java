@@ -37,10 +37,16 @@ import static org.junit.Assert.assertTrue;
  *       descent target — the flag every downstream consumer reads.</li>
  * </ol>
  *
- * <p>Per-method harness on purpose: this installs a procedural generator, which is a JVM-global, and a
- * shared server would carry it into every class that ran after it.</p>
+ * <p>SEPARATE-BOOT: a global mutation that cannot be undone. Realizing a body pins its system and
+ * writes a dimension into it ({@code UniverseRegistry#realizeBody}), and nothing reverses either for
+ * the server's lifetime — there is no un-realize, and {@code UniverseRegistry#remove} drops a whole
+ * placement. Every scenario here installs the one seed measured to offer all four arrangements, and
+ * two of them assert as their CONTROL that the family they find holds no world yet; on a shared server
+ * a sibling that ran first has realized exactly that family (the sweeps find the same bodies), and the
+ * control would fail on order rather than on the code. The generator itself is NOT the reason: it is
+ * installed per server and restored by {@code gen-reset}.</p>
  */
-public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTest {
+public class ProceduralPlanetRealizationTest extends AbstractHeadlessServerTest {
 
     /**
      * A compact star spacing, and it has a floor: a system's bodies stand where their own orbits put
@@ -161,8 +167,9 @@ public class ProceduralPlanetRealizationE2ETest extends AbstractHeadlessServerTe
      * play: a moon orbits at a few parent radii, so it is often the nearer body when a ship closes on
      * the family.</p>
      *
-     * <p>What makes this an e2e and not a unit test: the corruption is in the DIMENSION the realizer
-     * writes, not in the registry's bookkeeping, so only a real server holds the thing that is wrong.</p>
+     * <p>Why this needs a running server and not a unit test: the corruption is in the DIMENSION the
+     * realizer writes, not in the registry's bookkeeping, so only a real server holds the thing that is
+     * wrong.</p>
      */
     @Test
     public void aMoonRealizedBeforeItsParentIsStillAMoon() throws Exception {

@@ -11,7 +11,6 @@ import org.junit.Assume;
 import org.junit.Before;
 import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.GameTicks;
 
 import org.junit.Test;
 
@@ -31,10 +30,15 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * universe for a test a write to a world the whole fork shares.</p>
  *
  * <h2>Why this test owns its server</h2>
- * One leg has to drive the OVERWORLD's clock eleven days forward, which is precisely the hammer the
- * change exists to remove from shared servers. Doing that on the shared harness would leave every
- * vanilla and third-party {@code totalTime % N} gate — day cycle, mob spawns, weather — jumped for
- * whichever class ran next. A throwaway world directory can be hammered; a shared one cannot.
+ * <p>SEPARATE-BOOT: two reasons, one per leg. {@link #neitherClockMovesTheOther} is a global mutation
+ * that cannot be undone: it drives the OVERWORLD's total time twenty million ticks FORWARD (a fresh
+ * world has no room to move it back), and winding it back afterwards would leave every tick scheduled
+ * inside the window twenty million ticks in the future of every class that ran next — unlike
+ * {@code AimAndArrivalShareOneClockTest}, which moves it BACK and then forward, so what was scheduled
+ * meanwhile merely falls due. {@link #theClockComesBackWhereItWasAfterAReboot} is a server restart that
+ * is the subject. The leg that only watches the clock run ({@code theClockAdvancesWithoutBeingTold})
+ * needs neither and runs in {@code AimAndArrivalShareOneClockTest}. Probe-driven, so no {@code E2E} in
+ * the name.</p>
  *
  * <h2>Why the divergence is authored rather than waited for</h2>
  * On a fresh world both counters start at zero and both advance once per tick, so they agree by
@@ -42,14 +46,7 @@ import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
  * simply IS the world clock. Every leg below therefore drives the two apart by a magnitude no
  * elapsed-time slack can cover, and asserts the split it created before concluding anything from it.
  */
-public class SpaceClockIsTheSubsystemsOwnE2ETest {
-
-    /**
-     * Ticks of the SERVER's own counter the space clock is watched across - the old 3 000 ms said in
-     * the units of the thing being watched. The two clocks are deliberately different: the wait is on
-     * one, the assertion is about the other.
-     */
-    private static final int OBSERVED_TICKS = 60;
+public class SpaceClockIsTheSubsystemsOwnTest {
 
     /**
      * How far a clock is driven in a leg: twenty million ticks, ~11.6 real days at 20 tps. Six orders
@@ -165,51 +162,6 @@ public class SpaceClockIsTheSubsystemsOwnE2ETest {
                         + ELAPSED_SLACK_TICKS + "). Every vanilla gate keyed on total time — the day"
                         + " cycle, mob spawns, weather — rides on this",
                 Math.abs(worldAfterSpaceMove - worldBefore) <= ELAPSED_SLACK_TICKS);
-    }
-
-    /**
-     * The clock advances on its own, at the tick rate, without anybody setting it.
-     *
-     * <p>Every other leg here moves a clock and then reads it, which a counter that only ever holds
-     * what it was last told would satisfy exactly. This is the leg that says the thing is a CLOCK: it
-     * touches nothing and requires the number to have grown by the time it looks again. It is also
-     * the direct witness for the defect the owned counter replaced — a subsystem reading a world that
-     * was not resolvable answered a frozen zero, forever, and nothing said so.</p>
-     *
-     * <p><b>The RATE is asserted too, and "it grew" would not cover it.</b> The counter is supposed
-     * to advance exactly once per server tick, which is what makes every persisted tick value keep
-     * its meaning; a second writer on the same event would run it at twice that and every "it moved"
-     * assertion in this class would still pass. The reference is the overworld's own total time,
-     * which vanilla advances once per tick — so the two DELTAS over the same window must match. That
-     * compares rates, not values: the clocks stay decoupled, which is what the leg above asserts.</p>
-     */
-    @Test
-    public void theClockAdvancesWithoutBeingTold() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(root, false);
-
-        String first = exec("stellurgytest space clock");
-        // WINDOW: both clocks are read on either side of a stretch of the SERVER's counter, and every
-        // assertion below is over the two deltas, naming both reads. Not circular: the stretch is
-        // measured on one counter and the claims are about two others. The rate check compares the
-        // two deltas over the SAME stretch, so its length — overshoot included — cancels out.
-        GameTicks.advance(harness.client(), GameTicks.server(), OBSERVED_TICKS);
-        String second = exec("stellurgytest space clock");
-
-        long spaceMoved = spaceClock(second) - spaceClock(first);
-        long worldMoved = worldClock(second) - worldClock(first);
-
-        assertTrue("the space clock must advance by itself — a counter that only holds what it was"
-                        + " last set to is not a clock, and a clock frozen at zero is the defect this"
-                        + " one replaced. moved=" + spaceMoved + " (" + first + " -> " + second + ")",
-                spaceMoved > 0L);
-        requireArranged("the reference clock must have moved too, or the rate check below"
-                        + " compares against a stopped server. overworld moved=" + worldMoved,
-                worldMoved > 0L);
-        assertTrue("...and it must advance ONCE per server tick, not twice: a second writer on the"
-                        + " server-tick event would double the rate and leave every other assertion"
-                        + " in this class green. Against the overworld's own once-per-tick counter"
-                        + " over the same window: space=" + spaceMoved + " world=" + worldMoved,
-                Math.abs(spaceMoved - worldMoved) <= Math.max(4L, worldMoved / 4L));
     }
 
     /**

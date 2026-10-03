@@ -1267,6 +1267,47 @@ public class MachineGuiClientGroupTest extends AbstractSharedClientE2ETest {
     // ── inventory-bypass mixin ────────────────────────────────────────────────
 
     /**
+     * Building the biome scanner's GUI off any space station does not throw on the client.
+     *
+     * <p>{@code TileBiomeScanner.getModules} runs on the client and asks
+     * {@code SpaceObjectManager.getSpaceStationFromBlockCoords(pos)} for the orbiting planet; off a
+     * station that lookup is null, and the deref crashed the client of a player opening the GUI. The
+     * branch is reached only while {@code suitable} holds — the column below the scanner all air.
+     * The overworld has no stations, so any overworld position is off-station.</p>
+     *
+     * <p>{@code getModules} is driven directly on the client's own tile through the bridge: the GUI
+     * opens only on a complete multiblock, and the scanner's structure needs an aluminium-oredict
+     * block only an external mod provides. What this does not see: the GUI being opened by a click.</p>
+     *
+     * <p>Everything the client must hold — the scanner and the cleared column — is changed BEFORE the
+     * teleport, and each command is its own round trip, so those block changes were flushed to the
+     * client on an earlier tick than the move; the client applying the move is the receipt for them.</p>
+     */
+    @Test
+    public void buildingScannerGuiOffStationDoesNotThrowOnClient() throws Exception {
+        int dim = plot().dim;
+        int x = plot().x(MACHINE_DX);
+        int z = plot().z(MACHINE_DZ);
+
+        scenario().arranging("place a biome scanner with an all-air column below it at " + x + "," + Y + "," + z);
+        warmupPlotChunks();
+        String place = exec("stellurgytest place " + dim + " " + x + " " + Y + " " + z + " stellurgy:biomeScanner");
+        scenario().requireArranged("scanner must place: " + place, Reply.of(place).bool("placed"));
+        exec("fill " + x + " 1 " + z + " " + x + " " + (Y - 1) + " " + z + " minecraft:air");
+
+        long standMark = clientEvents().mark();
+        exec("tp @a " + (x + 0.5) + " " + (Y + 2) + " " + (z + 0.5) + " 0 90");
+        awaitClientPlacedNear(standMark, x + 0.5, z + 0.5,
+                "the scanner and its cleared column reach the client before the move does");
+
+        scenario().asserting("building the scanner's GUI off-station does not throw on the client");
+        JsonObject res = bot().tileModulesThrows(x, Y, z);
+        assertFalse("building the biome-scanner GUI off-station must not throw on the client"
+                        + " (getModules must null-guard the absent space station): " + res,
+                res.get("threw").getAsBoolean());
+    }
+
+    /**
      * From {@code InventoryBypassRedirectE2ETest}. Live end-to-end pin for the
      * {@code MixinEntityPlayer(MP)InventoryAccess} {@code @Redirect}.
      *

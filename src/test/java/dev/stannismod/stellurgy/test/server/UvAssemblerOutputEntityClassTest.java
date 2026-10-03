@@ -7,12 +7,17 @@ import org.junit.Test;
 
 
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.MachineInfo;
+import dev.stannismod.stellurgy.test.Plot;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * output entity-class delta between the two assemblers.
+ * The two assemblers diverge: distinct tile classes, and distinct entity classes out of
+ * {@code assembleRocket()}.
  *
  * <p>The two assemblers spawn different entity types from
  * {@code assembleRocket()}:</p>
@@ -94,6 +99,43 @@ public class UvAssemblerOutputEntityClassTest extends AbstractSharedServerTest {
         assertTrue("UV assembler must spawn EntityStationDeployedRocket; got "
                         + entityClass,
                 entityClass.endsWith(".EntityStationDeployedRocket"));
+    }
+
+    /**
+     * The two assembler blocks register DIFFERENT tile classes at one probe surface, and placing the
+     * UV one beside the rocket one leaves the rocket one what it was. A change that consolidates
+     * them onto one class fires this.
+     */
+    @Test
+    public void rocketBuilderAndDeployableRocketBuilderReportDistinctTileClasses() throws Exception {
+        FixtureSite rocket = plot().siteAt(Plot.FIXTURE_INSET, Plot.FIXTURE_INSET);
+        FixtureSite uv = plot().siteAt(Plot.FIXTURE_INSET + 10, Plot.FIXTURE_INSET);
+        String rocketAt = " 0 " + rocket.x + " " + rocket.y + " " + rocket.z;
+        String uvAt = " 0 " + uv.x + " " + uv.y + " " + uv.z;
+
+        String placeRocket = exec("stellurgytest place" + rocketAt + " stellurgy:rocketBuilder");
+        assertTrue("rocketBuilder place failed: " + placeRocket, Reply.of(placeRocket).bool("placed"));
+        String rocketInfo = exec("stellurgytest machine info" + rocketAt);
+        assertEquals("rocketBuilder must report TileRocketAssemblingMachine: " + rocketInfo,
+                "TileRocketAssemblingMachine", MachineInfo.of(rocketInfo).tileSimpleName());
+
+        String placeUv = exec("stellurgytest place" + uvAt + " stellurgy:deployableRocketBuilder");
+        assertTrue("deployableRocketBuilder place failed: " + placeUv, Reply.of(placeUv).bool("placed"));
+        String uvInfo = exec("stellurgytest machine info" + uvAt);
+        assertEquals("deployableRocketBuilder must report TileUnmannedVehicleAssembler: " + uvInfo,
+                "TileUnmannedVehicleAssembler", MachineInfo.of(uvInfo).tileSimpleName());
+
+        // `stellurgytest machine info` reports a flat object with no `ok` field, so the reader is asked
+        // for the field by name and refuses a reply without it — two missing classes would be EQUAL.
+        String rocketClass = Reply.of("stellurgytest machine info", rocketInfo).text("tileClass");
+        String uvClass = Reply.of("stellurgytest machine info", uvInfo).text("tileClass");
+        assertNotEquals("rocket assembler and UV assembler must report different "
+                        + "tile classes; rocketInfo=" + rocketInfo + " uvInfo=" + uvInfo,
+                rocketClass, uvClass);
+
+        String rocketRefetch = exec("stellurgytest machine info" + rocketAt);
+        assertEquals("rocketBuilder must remain itself after UV placement: " + rocketRefetch,
+                "TileRocketAssemblingMachine", MachineInfo.of(rocketRefetch).tileSimpleName());
     }
 
     // ─── helpers ───────────────────────────────────────────────────────

@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.test.server;
 
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereNeedsSuit;
 import org.junit.Test;
 
@@ -20,24 +19,14 @@ import static org.junit.Assert.assertTrue;
  * depth coverage for the atmosphere detector, CO2 scrubber, gas charge pad,
  * the spacebreathing-enchant air-suit acceptance gate, and the torch-extinguish
  * config path.</p>
+ *
+ * <p>One server for the class. The two global mutations here are undone by the scenario that makes
+ * them: Earth's density is put back in a {@code finally}, and the {@code torchBlocks} list is cleared
+ * back to its shipped default (empty) in one. Every block stands on its scenario's own {@link #site()},
+ * in the open-air band; the small clears each scenario does are about a block's own neighbours — air
+ * on the detector's sample faces, a solid support under the torch.</p>
  */
-public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
-
-    /**
-     * The Y every block in this class is placed at: the open-air band, not terrain.
-     *
-     * <p>It was a hard-coded 70 until 2026-09-14, and nothing in this class ever wanted the ground.
-     * What 70 actually bought was whatever the pinned seed rolled at each plot — the surface on this
-     * seed runs y=64..99 across the sites in use, so a block at 70 stood in the open at one and
-     * inside rock at the next, and the per-scenario clears below turned the second into a pocket.
-     * A pocket happens to satisfy every assertion here, which is exactly why it could sit unnoticed:
-     * the landscape was never in the story. In the band there is nothing to be inside of.</p>
-     *
-     * <p>The small clears each scenario still does are NOT this; they are about a block's own
-     * neighbours — air on the detector's sample faces, a solid support under the torch — and they
-     * stay.</p>
-     */
-    private static final int SITE_Y = FixtureSite.OPEN_AIR_Y;
+public class AtmosphereOxygenSmokeTest extends AbstractSharedServerTest {
 
     @Test
     public void earthDensityZeroFlipsAtmosphereToVacuum() throws Exception {
@@ -76,7 +65,8 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void atmosphereDetectorReportsCurrentAtmosphereOnRedstone() throws Exception {
-        int bx = 1700, by = SITE_Y, bz = 1500;
+        FixtureSite s = site();
+        int bx = s.x, by = s.y, bz = s.z;
 
         // Clear neighbours so the detector's sample loop sees AIR (any opaque
         // block on any face would suppress the AIR branch). 3×3×3 air around
@@ -143,7 +133,8 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void co2ScrubberRemovesCo2InSealedRoom() throws Exception {
-        int bx = 1700, by = SITE_Y, bz = 1600;
+        FixtureSite s = site();
+        int bx = s.x, by = s.y, bz = s.z;
 
         // Clear neighbours so the place doesn't replace an arbitrary block.
         ok(client().execute("stellurgytest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
@@ -195,7 +186,8 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void gasChargePadFillsSuitTank() throws Exception {
-        int bx = 1700, by = SITE_Y, bz = 1700;
+        FixtureSite s = site();
+        int bx = s.x, by = s.y, bz = s.z;
 
         ok(client().execute("stellurgytest fill 0 " + (bx - 1) + " " + (by - 1) + " " + (bz - 1)
                 + " " + (bx + 1) + " " + (by + 1) + " " + (bz + 1) + " minecraft:air"));
@@ -281,7 +273,8 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void torchExtinguishesInLowOxygenConfig() throws Exception {
-        int bx = 1700, by = SITE_Y, bz = 1800;
+        FixtureSite s = site();
+        int bx = s.x, by = s.y, bz = s.z;
 
         // Clear neighbourhood so torch placement isn't refused for lack of a
         // valid floor block.
@@ -321,27 +314,25 @@ public class AtmosphereOxygenSmokeTest extends AbstractHeadlessServerTest {
         int sx = bx + 2;
         ok(client().execute("stellurgytest place 0 " + sx + " " + by + " " + bz + " minecraft:stone"));
 
-        // Clear any prior contents from previous test runs in the same JVM.
+        // The list ships empty, so clearing it is the restore — before and after, so neither a
+        // sibling's leftover nor this scenario's own entry outlives it.
         client().execute("stellurgytest atmosphere torch-block-clear");
+        try {
+            String addList = String.join("\n", client().execute(
+                    "stellurgytest atmosphere torch-block-add minecraft:stone"));
+            assertTrue("torch-block-add failed: " + addList, Reply.of(addList).ok());
 
-        String addList = String.join("\n", client().execute(
-                "stellurgytest atmosphere torch-block-add minecraft:stone"));
-        assertTrue("torch-block-add failed: " + addList,
-                Reply.of(addList).ok());
+            String exStone = String.join("\n", client().execute(
+                    "stellurgytest atmosphere extinguish-at 0 " + sx + " " + by + " " + bz));
+            assertTrue("extinguish-at on torchBlocks-listed block must drop — "
+                    + exStone, "dropped".equals(Reply.of(exStone).text("action")));
 
-        String exStone = String.join("\n", client().execute(
-                "stellurgytest atmosphere extinguish-at 0 " + sx + " " + by + " " + bz));
-        assertTrue("extinguish-at on torchBlocks-listed block must drop — "
-                + exStone, "dropped".equals(Reply.of(exStone).text("action")));
-
-        String postStone = String.join("\n", client().execute(
-                "stellurgytest block at 0 " + sx + " " + by + " " + bz));
-        assertTrue("post-drop position must be air: " + postStone,
-                Reply.of(postStone).bool("isAir"));
-
-        // Clean up the torchBlocks list so other tests don't see polluted
-        // config state.
-        client().execute("stellurgytest atmosphere torch-block-clear");
+            String postStone = String.join("\n", client().execute(
+                    "stellurgytest block at 0 " + sx + " " + by + " " + bz));
+            assertTrue("post-drop position must be air: " + postStone, Reply.of(postStone).bool("isAir"));
+        } finally {
+            client().execute("stellurgytest atmosphere torch-block-clear");
+        }
     }
 
     private void ok(java.util.List<String> response) {

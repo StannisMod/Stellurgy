@@ -492,6 +492,76 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
         }
     }
 
+    /**
+     * A VS ship in a space pool slot physically RE-LOADS as a live physics object after its slot is
+     * unloaded and rebound, with a real client present.
+     *
+     * <p>The riskiest path the server-tier data-survival test cannot reach: a synchronous world removal
+     * while VS has actually loaded the ship and is ticking its physics — headless cannot, since VS loads
+     * a ship only with an observer near it. Flow: assemble a ship in a fresh pool slot; the client
+     * enters the slot so VS loads it; the client leaves (a world with a player cannot unload); the slot
+     * is rebound (unload saves the ship, reload restores its cell); the client returns and the ship must
+     * load again. {@code vs-assemble} registers a fresh slot on every call, so nothing another scenario
+     * here built is in it.</p>
+     *
+     * <p>red-witnessed: with {@code SpaceSlotPool.unload} ({@code SpaceSlotPool:296}) saving nothing
+     * before the slot goes: "the ship must RE-LOAD live after the slot rebind — no `ship_usable`
+     * carrying dim = 14 was recorded within 300 ticks", 2026-09-28. The two verdicts before it are
+     * the arrangement's: the ship spawned, and it is in the pool world's registry.</p>
+     */
+    @Test
+    public void vsShipReloadsLiveAfterASlotRebind() throws Exception {
+        final int dimLinkBudgetTicks = 200;
+
+        scenario().arranging("assemble a VS ship in a fresh pool slot");
+        Events serverLog = events();
+        long spawnMark = serverLog.markInstrumented();
+        String asm = exec("stellurgytest space vs-assemble deep");
+        Reply assembled = Reply.of(asm);
+        assertTrue("vs-assemble must report a slot dim: " + asm, assembled.has("slot"));
+        int slot = assembled.integer("slot");
+        serverLog.await(spawnMark, "ship_spawned", "the assembled ship must be spawned by the"
+                + " substrate's queue before its registry can be asked about it", 200);
+        // absence is the answer: a reply with no count reads -1, which the assertion below refuses.
+        int queryable = Reply.of(exec("stellurgytest vs ship-count-all " + slot)).integerOr("count", -1);
+        assertTrue("a ship must be created in the pool world's registry: count-all=" + queryable, queryable >= 1);
+
+        scenario().measuring("the ship loads with the client on it");
+        int loaded = enterSlotOnShipAndAwaitLoad(serverLog, slot,
+                "the ship must LOAD (physics) with a client on it in the pool dim");
+        assertTrue("the ship must LOAD (physics) with a client on it in the pool dim: loaded=" + loaded,
+                loaded >= 1);
+
+        // The LEAVING is a dimension change, waited for as the client's own record of one: a world the
+        // client has not left still holds a player, and could not unload.
+        long leaveMark = clientEvents().mark();
+        exec("stellurgytest tp 0");
+        awaitClientDim(leaveMark, 0, "the client must actually LEAVE the pool dimension — a world with"
+                + " a player in it cannot unload, and the reload below is about an unloaded one");
+        assertTrue("slot must reload after the ship's world is unloaded",
+                Reply.of(exec("stellurgytest space reload " + slot + " deep")).bool("present"));
+
+        scenario().asserting("the ship re-loads live after the slot rebind");
+        int loadedAfter = enterSlotOnShipAndAwaitLoad(serverLog, slot, "the ship must RE-LOAD live after the slot rebind");
+        assertTrue("the ship must RE-LOAD live after the slot rebind: loadedAfter=" + loadedAfter, loadedAfter >= 1);
+        exec("stellurgytest tp 0");
+    }
+
+    /**
+     * Enter the pool slot on the ship (assembled around 0..2, 64..66) and wait for production's own
+     * record that a ship in it became USABLE ({@code ship_usable}, carrying the dimension), from a mark
+     * taken before the move. The slot is fresh and holds one ship, so the dimension names it. Then ONE
+     * read of the loaded count, for the caller's message.
+     */
+    private int enterSlotOnShipAndAwaitLoad(Events serverLog, int slot, String what) throws Exception {
+        long loadMark = serverLog.markInstrumented();
+        exec("stellurgytest tp " + slot);
+        exec("tp @a 1 68 1");
+        serverLog.awaitField(loadMark, "ship_usable", "dim", slot, what, 300);
+        // absence is the answer: a reply with no count reads -1, which every caller's assertion refuses.
+        return Reply.of(exec("stellurgytest vs ship-count " + slot)).integerOr("count", -1);
+    }
+
     private long clientClock() throws Exception {
         JsonObject answer = bot().invokeStaticChain(SERVER_VIEW, "current,clock,now");
         return Long.parseLong(answer.get("result").getAsString().trim());

@@ -1,7 +1,6 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import org.junit.Test;
 
 import dev.stannismod.stellurgy.test.DimList;
@@ -38,8 +37,13 @@ import static org.junit.Assert.assertTrue;
  * selector's distance gauge, and the holographic selector's projection radius.</p>
  *
  * <p>The full client GUI path lives in {@code client/MachineGuiClientGroupTest}.</p>
+ *
+ * <p>One server for the class. What a scenario here leaves behind is read by its siblings only as
+ * DATA they enumerate at run time — a planet {@code planet generate} added to Sol is one more planet
+ * the hologram's expected radii are computed over — and a projector's own bodies are told from any
+ * other projector's by id, never by distance.</p>
  */
-public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
+public class SelectorServerSmokeTest extends AbstractSharedServerTest {
 
     /**
      * The selector's distance gauge reads a planet's orbit at 6.25 hundredths of the bar per AU, so
@@ -63,7 +67,8 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void theDistanceGaugeReadsAnOrbitAtItsScalePerAu() throws Exception {
-        int x = 262, y = FixtureSite.OPEN_AIR_Y, z = 262;
+        FixtureSite s = site();
+        int x = s.x, y = s.y, z = s.z;
         String where = x + " " + y + " " + z;
         requireArranged("could not place planetSelector", Reply.of(String.join("\n", client().execute(
                 "stellurgytest place 0 " + where + " stellurgy:planetSelector"))).bool("placed"));
@@ -123,12 +128,10 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void theHologramProjectsAPlanetOneHologramBlockPerAu() throws Exception {
-        int x = 300, y = FixtureSite.OPEN_AIR_Y, z = 300;
-        requireArranged("could not place the holographic planet selector", Reply.of(String.join("\n",
-                client().execute("stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:planetHoloSelector")))
-                .bool("placed"));
-
+        FixtureSite s = site();
+        int x = s.x, y = s.y, z = s.z;
         DimList.Probe probe = command -> String.join("\n", client().execute(command));
+
         // What a PLANET reports as its parent — Earth is one — so a moon, which reports its planet,
         // is told apart; the projector draws the planets of its star, not their moons.
         int planetParent = Reply.of(probe.exec("stellurgytest planet info 0")).integer("parent");
@@ -148,24 +151,37 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
         java.util.Collections.sort(expectedRadii);
         double farthest = expectedRadii.get(expectedRadii.size() - 1);
 
-        Reply tick = Reply.of(probe.exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 20"));
-        requireArranged("the projector must tick: " + tick, tick.ok());
-
         // Searched far enough to FIND a planet the raw unit misplaces — twice the farthest planet's
         // radius times the factor a raw read is off by — so a misplaced planet is reported with its
         // radius rather than as an absence.
         double rawFactor = AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU / 100d;
         double reach = 2d * farthest * rawFactor;
         double centreX = x + 0.5, centreZ = z + 0.5;
-        String near = probe.exec("stellurgytest entity near 0 " + centreX + " " + (y + 1) + " " + centreZ
-                + " " + reach + " EntityUIPlanet");
-        String[] projected = Reply.of(near).objectArray("entities");
-        double[] radii = new double[projected.length];
-        for (int i = 0; i < projected.length; i++) {
-            Reply e = Reply.of(projected[i]);
-            radii[i] = Math.hypot(e.number("x") - centreX, e.number("z") - centreZ);
+        String projected = "stellurgytest entity near 0 " + centreX + " " + (y + 1) + " " + centreZ
+                + " " + reach + " EntityUIPlanet";
+
+        // That reach is thousands of blocks, so a projector a sibling scenario stood elsewhere on this
+        // server is inside it. Its bodies exist before this projector is placed, and are told apart by id.
+        java.util.Set<Integer> othersIds = new java.util.HashSet<>();
+        for (String entity : Reply.of(probe.exec(projected)).objectArray("entities")) {
+            // `entity near`: the producer always writes id for every entity it lists.
+            othersIds.add(Reply.of(entity).integer("id"));
         }
-        java.util.Arrays.sort(radii);
+        requireArranged("could not place the holographic planet selector", Reply.of(probe.exec(
+                "stellurgytest place 0 " + x + " " + y + " " + z + " stellurgy:planetHoloSelector")).bool("placed"));
+
+        Reply tick = Reply.of(probe.exec("stellurgytest tile force-tick 0 " + x + " " + y + " " + z + " 20"));
+        requireArranged("the projector must tick: " + tick, tick.ok());
+
+        String near = probe.exec(projected);
+        java.util.List<Double> own = new java.util.ArrayList<>();
+        for (String entity : Reply.of(near).objectArray("entities")) {
+            Reply e = Reply.of(entity);
+            if (!othersIds.contains(e.integer("id"))) {
+                own.add(Math.hypot(e.number("x") - centreX, e.number("z") - centreZ));
+            }
+        }
+        double[] radii = own.stream().mapToDouble(Double::doubleValue).sorted().toArray();
         double[] want = new double[expectedRadii.size()];
         for (int i = 0; i < want.length; i++) {
             want[i] = expectedRadii.get(i);
@@ -199,7 +215,8 @@ public class SelectorServerSmokeTest extends AbstractHeadlessServerTest {
      */
     @Test
     public void theDistanceGaugeReadsAMoonAsItReadLunaAt150() throws Exception {
-        int x = 274, y = FixtureSite.OPEN_AIR_Y, z = 274;
+        FixtureSite s = site();
+        int x = s.x, y = s.y, z = s.z;
         String where = x + " " + y + " " + z;
         requireArranged("could not place planetSelector", Reply.of(String.join("\n", client().execute(
                 "stellurgytest place 0 " + where + " stellurgy:planetSelector"))).bool("placed"));

@@ -7,7 +7,6 @@ import dev.stannismod.stellurgy.test.SubsystemStatus;
 import dev.stannismod.stellurgy.test.Reply;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.UUID;
 
 import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
 import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
@@ -21,7 +20,6 @@ import dev.stannismod.stellurgy.test.GameTicks;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -37,16 +35,17 @@ import static org.junit.Assert.assertTrue;
  * shipped world-save hook writes it, the process really exits, and the shipped server-started hook
  * on the SECOND boot is what has to bring the state back from disk.</p>
  *
- * <p>The subsystem normally stands down when it detects a test harness (the probes register their
- * own dimension pool, and two pools would fight over slot ids), so the world is pre-seeded with the
- * config flag that opts back in. That flag is the whole reason this test can exist.</p>
+ * <p>The production subsystem registers on a harness server like on any other
+ * ({@code SpaceSubsystem#shouldRegister} stands down only for a subsystem already built in the JVM),
+ * so no config is seeded. Nothing here touches physics — what is under test is the persistence of the
+ * server's record of where ships are, not a loaded ship.</p>
  *
- * <p>Nothing here touches physics — what is under test is the persistence of the server's record of
- * where ships are, not a loaded ship. It is nonetheless a test, because the
- * subsystem declines to register at all without Valkyrien Skies (no tier-2 ships to host means
- * nothing worth registering ten dimensions for), so the wiring under test would not exist.</p>
+ * <p>SEPARATE-BOOT: a server restart that is the subject — every scenario here boots a server, stops it,
+ * and boots a second one over the same world root. The two subsystem reads that need no restart (the
+ * pool registered twice, a ship the ledger never settled) run in {@code SystemBodiesFeedFollowsTheCellTest}.
+ * Probe-driven, so a mechanics test and not a player's path: no {@code E2E} in its name.</p>
  */
-public class SpaceRestartPersistenceE2ETest {
+public class SpaceRestartPersistenceTest {
 
     /**
      * The eviction announcements already made for this test's own logs. Per test INSTANCE: this class
@@ -419,36 +418,5 @@ public class SpaceRestartPersistenceE2ETest {
     private static int jsonInt(String json, String field) {
         assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
         return Reply.of(json).integer(field);
-    }
-
-    @Test
-    public void registeringThePoolASecondTimeReusesItInsteadOfMintingAnother() throws Exception {
-        // Dimension registration is JVM-global. A second pool would not merely waste ids: every slot
-        // already bound to a cell would keep its id while the subsystem started handing out different
-        // ones, so a ship's world and the pool's idea of that world would silently diverge.
-        harness = RealDedicatedServerHarness.startWith(root, false);
-
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
-        assertTrue("production subsystem must be live: " + status.raw(), status.registered);
-
-        String again = exec("stellurgytest space pool-idempotence");
-        assertTrue("re-registering must not grow the pool: " + again, (!Reply.of(again).bool("grew")));
-        assertTrue("and it must hand back the dimensions that already exist: " + again,
-                Reply.of(again).bool("returnedExisting"));
-    }
-
-    @Test
-    public void anUnknownShipIsReportedMissingRatherThanInvented() throws Exception {
-        // The witness for the test above: prove the probe can say "no". Without this, a ledger-get
-        // that answered "found" unconditionally would make the restart assertion pass on a subsystem
-        // that restored nothing at all.
-        harness = RealDedicatedServerHarness.startWith(root, false);
-
-        SubsystemStatus status = SubsystemStatus.read(this::exec);
-        assertTrue("production subsystem must be live: " + status.raw(), status.registered);
-
-        LedgerEntry missing = ledger(UUID.randomUUID().toString());
-        assertFalse("a ship that was never settled must read back as absent: " + missing.raw(),
-                missing.found);
     }
 }

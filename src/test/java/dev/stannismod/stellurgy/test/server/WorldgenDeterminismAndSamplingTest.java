@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
@@ -108,4 +109,54 @@ public class WorldgenDeterminismAndSamplingTest extends AbstractSharedServerTest
                 !(topYAllSame && biomeAllSame));
     }
 
+    /**
+     * With its planet's per-biome crater gate FALSE, {@code MapGenCrater} carves no crater.
+     *
+     * <p>{@code MapGenCrater.recursiveGenerate} (and {@code MapGenCraterSmall}) had the spawn
+     * condition {@code A || B && shouldCraterSpawn(...)}, which parses as {@code A || (B && gate)}: the
+     * gate was bypassed whenever the chunkX RNG disjunct matched, so craters spawned in biomes with no
+     * crater weight. The {@code worldgen crater-gate} probe drives the real generator on a
+     * stone-filled ChunkPrimer with the planet's gate forced false (one weight-0 entry, restored
+     * afterwards) and {@code chancePerChunk=1}, and counts excavated air.</p>
+     */
+    @Test
+    public void craterGateRejectsNonCraterBiome() throws Exception {
+        assertCraterGateRejects("");
+    }
+
+    /** The same gate in {@code MapGenCraterSmall}, which carried the same precedence bug. */
+    @Test
+    public void smallCraterGateRejectsNonCraterBiome() throws Exception {
+        assertCraterGateRejects("small");
+    }
+
+    private void assertCraterGateRejects(String generatorArg) throws Exception {
+        final int spaceDim = -2;
+        String list = String.join("\n", client().execute("stellurgytest dim list"));
+        int dim = Integer.MIN_VALUE;
+        for (int d : Reply.of("stellurgytest dim list", list).intArray(AR_DIMS_ARRAY_PATTERN)) {
+            if (d != 0 && d != -1 && d != spaceDim) {
+                dim = d;
+                break;
+            }
+        }
+        // A registered planet: the crater's ridge placement dereferences its biome and topBlock.
+        ArrangementFailure.requireArranged(
+                "a registered Stellurgy planet dim (valid biome/topBlock) is needed: " + list,
+                dim != Integer.MIN_VALUE);
+        client().execute("stellurgytest dim load " + dim);
+
+        String r = String.join("\n", client().execute(
+                ("stellurgytest worldgen crater-gate " + dim + " " + generatorArg).trim()));
+        Reply reply = Reply.of(r);
+        assertTrue("probe must run: " + r, reply.ok());
+        assertTrue("field `airBlocks` not found in: " + r, reply.has("airBlocks"));
+        int air = reply.integer("airBlocks");
+        assertTrue("with the per-biome crater gate FALSE, the fixed (A||B)&&gate carves NO "
+                        + "crater into the stone-filled chunk (0 excavated air). The buggy A||(B&&gate) "
+                        + "bypasses the gate when the chunkX disjunct matches and drills air holes (>0). "
+                        + "generator=" + (generatorArg.isEmpty() ? "crater" : generatorArg)
+                        + " got airBlocks=" + air + " in " + r,
+                air == 0);
+    }
 }

@@ -6,31 +6,166 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipInfo;
 
+import com.github.stannismod.forge.testing.client.RealClientHarness;
+import com.github.stannismod.forge.testing.junit.ClassScope;
+import com.github.stannismod.forge.testing.junit.ClassScopeRunner;
+import com.github.stannismod.forge.testing.junit.ScopedTest;
+import com.github.stannismod.forge.testing.junit.TestClassScope;
+import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
+import com.google.gson.JsonObject;
+import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import dev.stannismod.stellurgy.space.CellWorldMapper;
 import dev.stannismod.stellurgy.space.GalacticCoord;
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.PlayerPosition;
+import dev.stannismod.stellurgy.test.ShipReadiness;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 
 /**
- * Relogging while standing on a ship's deck — with no server restart — must not drag the crew member
- * along it, upright or inverted.
+ * A crew member's login into a space cell while the server keeps RUNNING: a plain relog, aboard his
+ * ship or orphaned from it. One server and one client for every scenario.
  *
- * <p>The measurement is a no-change control in the same run: the same body, on the same deck, over
- * the same window, with the relog absent. A deck is never perfectly still, so "he moved" is not an
- * observation about the relog until you know what he does when nothing is done to him.</p>
+ * <p>NEW-GROUP: the space subsystem's login restore across a relog WITHOUT a restart. Its arrangement —
+ * a ship flown into a cell through the real entry on-ramp, settled in the ledger — lives in
+ * {@link AbstractSpaceLoginRestoreClientTest}, which no shared client base can inherit; the planet-side
+ * relog group ({@code VSCrewRelogPersistenceTest}) has none of it. The scenarios whose subject is a
+ * SERVER RESTART stay on their own boots ({@code SpaceLoginRestoreSeatedPilotTest},
+ * {@code SpaceLoginRestoreRefusalTest}): a restart is the one thing a shared pair cannot do.</p>
  *
- * <p>See {@link AbstractSpaceLoginRestoreClientTest} for the shared fixture, and for why the class
- * was split into three.</p>
+ * <p><b>What one world costs, and how each scenario pays it back.</b> The entry flies every scenario's
+ * ship to the launch body's own cell, and the re-seat matches a seat by proximity with no ship-id
+ * filter, so a ship left in the cell is a second candidate. Each scenario therefore builds on its own
+ * launch site, counts the ledger as a delta, and ends by dismounting and releasing the player, forgetting
+ * its ship in the ledger and destroying it in the cell ({@link #releaseThisScenariosShipAndCrew}).</p>
  */
-public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreClientTest {
+@RunWith(ClassScopeRunner.class)
+@ClassScope(SpaceCellRelogGroupTest.RelogPair.class)
+public class SpaceCellRelogGroupTest extends AbstractSpaceLoginRestoreClientTest
+        implements ScopedTest<SpaceCellRelogGroupTest.RelogPair> {
+
+    /**
+     * This class run's server and client, booted by the first scenario that flies a ship and closed
+     * when the class run ends. Owned by the runner's run of the class; nothing static holds it.
+     */
+    public static final class RelogPair extends TestClassScope {
+        RealDedicatedServerHarness server;
+        RealClientHarness client;
+        /** How many launch sites this class run has handed out — each scenario builds on its own. */
+        int launchSitesIssued;
+
+        @Override
+        protected void open(Class<?> testClass) {
+            // Nothing yet: the first scenario boots the pair inside its arrangement.
+        }
+
+        @Override
+        protected void close() throws Exception {
+            Exception deferred = null;
+            if (client != null) {
+                try {
+                    client.close();
+                } catch (Exception e) {
+                    deferred = e;
+                }
+                client = null;
+            }
+            if (server != null) {
+                try {
+                    server.close();
+                } catch (Exception e) {
+                    if (deferred == null) deferred = e;
+                    else deferred.addSuppressed(e);
+                }
+                server = null;
+            }
+            if (deferred != null) {
+                throw deferred;
+            }
+        }
+    }
+
+    /** This class run's pair; handed over by the runner before any rule or {@code @Before}. */
+    private RelogPair pair;
+
+    /** The slot dimension this scenario's ship settled in, once its arrangement has run. */
+    private int scenarioSlotDim = Integer.MIN_VALUE;
+
+    @Override
+    public void attachScope(RelogPair scope) {
+        this.pair = scope;
+    }
+
+    @Override
+    protected void bringUpTheServer() throws Exception {
+        if (pair.server == null) {
+            super.bringUpTheServer();
+            pair.server = serverHarness;
+        } else {
+            serverHarness = pair.server;
+        }
+    }
+
+    @Override
+    protected void startClient() throws Exception {
+        if (pair.client == null) {
+            super.startClient();
+            pair.client = clientHarness;
+        } else {
+            clientHarness = pair.client;
+        }
+    }
+
+    /** The pair is the class run's, released by {@link RelogPair#close}; a scenario only lets go of it. */
+    @Override
+    protected void closeBoth() {
+        clientHarness = null;
+        serverHarness = null;
+    }
+
+    /** Each scenario on its own launch site, 300 blocks apart along X, so no two builds overlap. */
+    @Override
+    protected FixtureSite launchSite() {
+        return FixtureSite.openAir(LAUNCH_DIM, SRC_X + 300 * pair.launchSitesIssued++, SRC_Z);
+    }
+
+    @Override
+    protected int seatThePilotAboardHisShip() throws Exception {
+        scenarioSlotDim = super.seatThePilotAboardHisShip();
+        return scenarioSlotDim;
+    }
+
+    /**
+     * Give the next scenario a world with no ship of this one's in the cell and nothing binding the
+     * player: off any mount, released by production's own service, back in the overworld; this
+     * scenario's ship forgotten by the ledger and destroyed in its slot. Runs before the base's
+     * {@code @After}, while this instance still holds the pair.
+     */
+    @After
+    public void releaseThisScenariosShipAndCrew() throws Exception {
+        if (serverHarness == null) {
+            return; // the arrangement never brought the pair up, so there is nothing of this scenario's
+        }
+        exec("stellurgytest player dismount");
+        exec("stellurgytest player release");
+        if (arrangedShipId != null) {
+            exec("stellurgytest space ledger-forget " + arrangedShipId);
+        }
+        if (scenarioSlotDim != Integer.MIN_VALUE) {
+            ShipReadiness.clearCraftFrom(this::exec, scenarioSlotDim);
+        }
+        exec("stellurgytest tp " + OVERWORLD_DIM);
+    }
 
     /**
      * How far past vertical the hull must be before the relog leg means anything — deck-normal Y.
@@ -290,6 +425,71 @@ public class SpaceLoginRestoreDeckCrewE2ETest extends AbstractSpaceLoginRestoreC
                 slotDim, dim);
 
         requireHeIsNotDraggedAlongHisDeck(dim);
+    }
+
+    /**
+     * When the server genuinely has no record of a returning pilot's ship, the restore ORPHANS him on
+     * that ground and places him somewhere survivable — not silently stood up at his spawn point.
+     *
+     * <p>The subject is the RESTORE'S VERDICT — {@code login_restored} carrying {@code SHIP_UNKNOWN},
+     * production's own enum value at the one place the decision is made — and where it actually put
+     * him. One of four orphan causes, asked by name: {@code NO_TAG} and {@code CELL_UNAVAILABLE} land
+     * the player in the same place for different reasons, and a test that could not tell them apart
+     * would pass on a fixture that never wrote an aboard record.</p>
+     *
+     * <p><b>Why the ship is removed rather than the ledger damaged.</b> "The ledger has no such ship" is
+     * one verdict reached from several directions; removal is the one that is both production behaviour
+     * and arrangeable, so the arrangement asserts the ledger KNEW the ship first. <b>A relog is enough and
+     * is deliberate</b> — the decision is made when a player's save file is read, which a rejoin does as
+     * faithfully as a reboot, and it keeps the ship, the cell and the ledger in one server's lifetime.</p>
+     */
+    @Test
+    public void aPilotWhoseShipTheServerNoLongerKnowsIsOrphanedWhenHeComesBack() throws Exception {
+        // The restore's own name for "his aboard record names a ship the ledger does not have" —
+        // mirrors `LoginRestore.Reason`.
+        final String reasonShipUnknown = "SHIP_UNKNOWN";
+        // A deadline for a discrete decision production makes once per login — not a settle.
+        final int restoreVerdictBudgetTicks = 200;
+
+        seatThePilotAboardHisShip();
+
+        // The mark BEFORE the ship is taken away: a restore decided at any earlier point is outside the
+        // window and cannot satisfy the wait.
+        Events events = events();
+        long mark = events.markInstrumented();
+
+        String forgot = exec("stellurgytest space ledger-forget " + arrangedShipId);
+        assertTrue("arrangement: the ledger must have KNOWN this ship before being told to forget it - "
+                + "otherwise the login below is about a ship that never existed: " + forgot,
+                readBool(forgot, "wasKnown"));
+        assertFalse("arrangement: and it must not know it afterwards: " + forgot, readBool(forgot, "found"));
+
+        bot().reconnect();
+        bot().waitForWorld();
+
+        String restored = events.awaitField(mark, "login_restored", "reason", reasonShipUnknown,
+                "a pilot whose ship the server cannot find must be ORPHANED by the restore, on that"
+                        + " ground and not on some other, rather than silently appearing at his spawn"
+                        + " point", restoreVerdictBudgetTicks);
+        // absence is the answer: the claim is that NO record says he is aboard, so a window holding no
+        // such record is the pass this asserts.
+        assertFalse("...and the restore must not count him as aboard anything: " + restored,
+                Events.anyRecordHas(restored, "aboard", "true"));
+
+        // Placement is read from the SERVER: on this path the client can still be rendering the slot
+        // world it was in while the server has him in the overworld — a filed, pre-existing split of
+        // the orphan path that this test must not read as the placement being broken.
+        // `playerDimField` is quoted beside `playerDim` because they are maintained separately.
+        PlayerPosition serverPos = PlayerPosition.of(this::exec, BOT);
+        JsonObject riding = bot().reportRidingEntity();
+        assertEquals("the server must actually have placed him out of the cell, or the message is "
+                        + "describing something that did not happen: " + serverPos.raw()
+                        + " clientRiding=" + riding + " clientRenderedDim=" + clientDim(),
+                OVERWORLD_DIM, serverPos.dim);
+        assertEquals("and his persisted dimension field must agree, or the next login starts from a "
+                + "world he is not in: " + serverPos.raw(), OVERWORLD_DIM, serverPos.dimField);
+        assertFalse("and the client agrees he is riding nothing: " + riding + " server=" + serverPos,
+                riding.get("riding").getAsBoolean());
     }
 
     /**

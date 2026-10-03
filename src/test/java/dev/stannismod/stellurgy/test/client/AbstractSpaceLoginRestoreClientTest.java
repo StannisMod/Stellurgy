@@ -1256,18 +1256,16 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
      * oracles rather than a different experiment.</p>
      */
     protected int flyOneShipIntoItsCell() throws Exception {
-        serverHarness = RealDedicatedServerHarness.startWith(root, false);
+        bringUpTheServer();
 
         SubsystemStatus status = SubsystemStatus.read(this::exec);
         assertTrue("the production space subsystem must be live on boot 1 (that is what the seeded "
                 + "config opt-in is for) - without it this test would silently assert nothing: "
                 + status.raw(), status.registered);
-        // CONTROL (witness sensitivity): no ship is ledgered before the climb, so a ledgered ship
-        // afterwards is an observation about the entry and not about a pre-existing record.
-        assertEquals("no ship may be ledgered before the flight: " + status.raw(),
-                0, status.ledger);
-
-        // Headless: nothing holds a freshly assembled or freshly crossed ship loaded between calls.
+        // CONTROL (witness sensitivity): the ledger is counted BEFORE the climb, so a ledger that grew
+        // afterwards is an observation about the entry and not about a pre-existing record. A delta,
+        // because a server whose earlier scenario already settled a ship is a legitimate start.
+        int ledgerBefore = status.ledger;
 
         startClient();
         bot().waitForWorld();
@@ -1285,7 +1283,7 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         // Build a PILOTED tier-2 ship on the ground and assemble it with the real assembler - which
         // is what mints the durable ship id the aboard record and the ledger are both keyed by.
         Events events = events();
-        String coords = placeFixture(FixtureSite.openAir(LAUNCH_DIM, SRC_X, SRC_Z), VARIANT);
+        String coords = placeFixture(launchSite(), VARIANT);
         // The mark BEFORE the assembler is told, so the ship this arrangement is about cannot be
         // missed between two counts and cannot be confused with one that already existed.
         long assemblyMark = events.mark();
@@ -1333,8 +1331,8 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
                 RESTORE_LINK_BUDGET_TICKS);
         SubsystemStatus ledgerStatus = SubsystemStatus.read(this::exec);
         assertTrue("the settled ship must be countable in the subsystem's own ledger, not only in"
-                + " the record of the write: " + ledgerStatus.raw() + " | " + settledRecord,
-                ledgerStatus.ledger >= 1);
+                + " the record of the write (" + ledgerBefore + " before the climb): " + ledgerStatus.raw()
+                + " | " + settledRecord, ledgerStatus.ledger >= ledgerBefore + 1);
 
         // Find the slot the entry bound the cell to. Slot ids are minted per boot, so they are read
         // off the crossing's own records rather than known. An entry that ended up ABANDONED settles
@@ -1633,6 +1631,24 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
     // after it, which asks the same question and FAILS instead of disappearing. Removed 2026-09-22.
 
     // --- lifecycle ---------------------------------------------------------------------------------
+
+    /**
+     * Bring up the server this scenario's ship is flown on: a fresh JVM over this scenario's own world
+     * root. A class whose scenarios share one server across a plain relog overrides it to hand over
+     * the class run's server instead.
+     */
+    protected void bringUpTheServer() throws Exception {
+        serverHarness = RealDedicatedServerHarness.startWith(root, false);
+    }
+
+    /**
+     * Where the piloted ship is built before it is flown into space: one fixed open-air site, which a
+     * scenario owning its whole world can always use. A class whose scenarios share a world overrides
+     * it so each scenario builds on its own site.
+     */
+    protected FixtureSite launchSite() {
+        return FixtureSite.openAir(LAUNCH_DIM, SRC_X, SRC_Z);
+    }
 
     /** Start the client against the live server, never leaking the server JVM if the client fails. */
     protected void startClient() throws Exception {

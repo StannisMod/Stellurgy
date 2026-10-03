@@ -2,7 +2,10 @@ package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.LedgerEntry;
 import dev.stannismod.stellurgy.test.MaterializedCell;
+import dev.stannismod.stellurgy.test.NebulaSearch;
 import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.SkyNebulae;
+import dev.stannismod.stellurgy.test.SubsystemStatus;
 import org.junit.After;
 import org.junit.Test;
 
@@ -10,10 +13,12 @@ import dev.stannismod.stellurgy.universe.GalaxyGenConfig;
 
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * The sky feed of a slot cell belongs to the CELL, not to a ship's lifecycle stage.
+ * What a cell's sky is told about: the bodies around it, which belong to the CELL and not to a ship's
+ * lifecycle stage, and the clouds a generated galaxy seats around it (the scenarios at the end).
  *
  * <p>The render feed ({@code SystemBodiesProducer} &rarr; {@code PacketSystemBodiesSync} &rarr;
  * {@code BoundarySky}) is what tells a client which bodies to draw around a live cell. This test drives
@@ -144,6 +149,175 @@ public class SystemBodiesFeedFollowsTheCellTest extends AbstractSharedServerTest
                 slotDim, LedgerEntry.forShip(this::exec, shipId).slotDim());
         assertEquals("a cell's bodies must not vanish from its sky because a ship in it is mid-jump; "
                 + bodies, 1, feedBodyCount(bodies, slotDim));
+    }
+
+    // --- the subsystem's own bookkeeping: the slot pool and the ledger ------------------------------
+
+    /**
+     * Registering the slot pool a second time reuses it instead of minting another. Dimension
+     * registration is JVM-global: a second pool would leave every slot already bound to a cell on its
+     * id while the subsystem handed out different ones, and a ship's world and the pool's idea of it
+     * would silently diverge.
+     */
+    @Test
+    public void registeringThePoolASecondTimeReusesItInsteadOfMintingAnother() throws Exception {
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("production subsystem must be live: " + status.raw(), status.registered);
+
+        String again = exec("stellurgytest space pool-idempotence");
+        assertTrue("re-registering must not grow the pool: " + again, (!Reply.of(again).bool("grew")));
+        assertTrue("and it must hand back the dimensions that already exist: " + again,
+                Reply.of(again).bool("returnedExisting"));
+    }
+
+    /**
+     * The ledger says "no" for a ship it never settled — the witness for every restore pinned by
+     * {@code SpaceRestartPersistenceTest}: a ledger read that answered "found" unconditionally would
+     * make those pass on a subsystem that restored nothing.
+     */
+    @Test
+    public void anUnknownShipIsReportedMissingRatherThanInvented() throws Exception {
+        SubsystemStatus status = SubsystemStatus.read(this::exec);
+        assertTrue("production subsystem must be live: " + status.raw(), status.registered);
+
+        LedgerEntry missing = LedgerEntry.forShip(this::exec, java.util.UUID.randomUUID().toString());
+        assertFalse("a ship that was never settled must read back as absent: " + missing.raw(), missing.found);
+    }
+
+    // --- the clouds a cell's sky is told about ------------------------------------------------------
+    //
+    // The unit tier pins the geometry — which way a cloud lies, how big it looks, what is filtered out.
+    // These pin what that tier cannot see: that a real generator in a real world SEATS clouds, and that
+    // the reply a client would be sent is derived from that world's own seed. A generator is installed
+    // per server and parked; every scenario that installs one is paired with the reset below. The cloud
+    // walk stays at sector Y zero, millions of cells from the two feed cells above.
+
+    /** A dense galaxy so a bounded sweep finds a cluster, at the shipped star spacing. */
+    private static final String GEN_INSTALL = "stellurgytest space gen-install 0.9 8 987654321";
+
+    @After
+    public void restoreGenerator() throws Exception {
+        try {
+            exec("stellurgytest space gen-reset");
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** Install the dense procedural galaxy, refusing an install that did not happen. */
+    private void installDenseGalaxy() throws Exception {
+        String installed = exec(GEN_INSTALL);
+        assertTrue("the procedural generator must install: " + installed, Reply.of(installed).ok());
+    }
+
+    /** Walk out for a cell with a cloud in its sky, refusing a walk that found none. */
+    private NebulaSearch findACloud() throws Exception {
+        return NebulaSearch.walk(this::exec, 512, 64)
+                .requireFound("a dense galaxy must have a cloud somewhere in it");
+    }
+
+    /**
+     * A sight line THROUGH a found cloud's core, from two radii short of its centre to two radii past
+     * it along X, as {@code "near far"} coordinates. Built from where the generator says the cloud IS;
+     * the reader refuses an absent centre, which would build a zero-length line.
+     */
+    private static String[] lineThrough(NebulaSearch found) {
+        long radius = found.radiusCells();
+        return new String[]{
+                (found.centreX() - 2 * radius) + " " + found.centreY() + " " + found.centreZ(),
+                (found.centreX() + 2 * radius) + " " + found.centreY() + " " + found.centreZ()};
+    }
+
+    /** A decimal field of the {@code space extinction} reply, read by NAME. */
+    private static double decimal(String json, String name) {
+        return Reply.of("stellurgytest space extinction", json).number(name);
+    }
+
+    @Test
+    public void aGalaxyWithClustersInItHasCloudsToLookAt() throws Exception {
+        installDenseGalaxy();
+        SkyNebulae feed = SkyNebulae.at(this::exec, findACloud().sectorX(), 0, 0);
+        assertTrue("and that sky must hold the cloud the finder found: " + feed.raw(), feed.drawn >= 1);
+        // The claim is that a drawn cloud covers something, so it is about the value.
+        for (SkyNebulae.Cloud cloud : feed.clouds()) {
+            assertTrue("a cloud that is drawn must cover something of the sky: " + cloud.raw(),
+                    cloud.angularRadius > 0d);
+        }
+    }
+
+    /**
+     * An authored-only pack has no galaxies, so no clusters and no gas: a feed that produced a cloud
+     * here would be producing it from nothing.
+     */
+    @Test
+    public void withoutAProceduralGeneratorTheSkyIsEmptyRatherThanInvented() throws Exception {
+        String reset = exec("stellurgytest space gen-reset");
+        assertTrue("the default generator must be restorable: " + reset, Reply.of(reset).ok());
+
+        SkyNebulae feed = SkyNebulae.at(this::exec, 0, 0, 0);
+        assertEquals("a universe with no clusters must seat no clouds: " + feed.raw(), 0, feed.seated);
+        assertEquals("and must draw none: " + feed.raw(), 0, feed.drawn);
+    }
+
+    /**
+     * A real sight line through a real cloud crosses matter and dims; the same line with no generator,
+     * hence no clusters, dims nothing. What a survey does with the column is the telescope's own
+     * scenario ({@code TelescopeRegionScanServerTest}).
+     */
+    @Test
+    public void aRealCloudDimsWhatIsBehindItAndClearSpaceDoesNot() throws Exception {
+        installDenseGalaxy();
+        String[] line = lineThrough(findACloud());
+
+        String through = exec("stellurgytest space extinction " + line[0] + " " + line[1]);
+        assertTrue("the probe must answer for a real sight line: " + through, Reply.of(through).ok());
+        assertTrue("a line that reaches a cloud's neighbourhood must cross SOME matter: " + through,
+                decimal(through, "column") > 0d);
+        assertTrue("and the magnitudes must follow the column, not be invented: " + through,
+                decimal(through, "magnitudes") > 0d);
+
+        String reset = exec("stellurgytest space gen-reset");
+        assertTrue("the default generator must be restorable: " + reset, Reply.of(reset).ok());
+        String clear = exec("stellurgytest space extinction " + line[0] + " " + line[1]);
+        assertEquals("a universe with no clouds must dim nothing: " + clear, 0d,
+                decimal(clear, "magnitudes"), 1.0E-9d);
+    }
+
+    /**
+     * The concealment flag REMOVES its mechanic rather than softening it, and the reading it is judged
+     * against is unchanged either way. The threshold this server had is read off the first reply and
+     * put back.
+     */
+    @Test
+    public void theConcealmentThresholdCanBeTurnedOff() throws Exception {
+        installDenseGalaxy();
+        String[] line = lineThrough(findACloud());
+        String extinction = "stellurgytest space extinction " + line[0] + " " + line[1];
+        double threshold = decimal(exec(extinction), "threshold");
+        try {
+            exec("stellurgytest config set telescopeObscuredAtMagnitudes 0.0001");
+            String strict = exec(extinction);
+            assertTrue("at a threshold below the real reading the line must count as obscured: "
+                    + strict, Reply.of(strict).bool("obscured"));
+
+            exec("stellurgytest config set telescopeObscuredAtMagnitudes 0");
+            String off = exec(extinction);
+            assertTrue("with the mechanic off nothing is obscured: " + off, (!Reply.of(off).bool("obscured")));
+            assertTrue("and the dust itself is still measured — the flag removes the RULE, not the"
+                    + " physics: " + off, decimal(off, "magnitudes") > 0d);
+        } finally {
+            exec("stellurgytest config set telescopeObscuredAtMagnitudes " + threshold);
+        }
+    }
+
+    /**
+     * What is seated and what is drawn are reported side by side, so a working level-of-detail filter
+     * can be told from a generator that stopped seating.
+     */
+    @Test
+    public void whatIsSeatedAndWhatIsDrawnAreReportedSeparately() throws Exception {
+        installDenseGalaxy();
+        SkyNebulae feed = SkyNebulae.at(this::exec, findACloud().sectorX(), 0, 0);
+        assertTrue("what is drawn may never exceed what is seated: " + feed.raw(), feed.drawn <= feed.seated);
     }
 
     // --- helpers ---------------------------------------------------------------------------------

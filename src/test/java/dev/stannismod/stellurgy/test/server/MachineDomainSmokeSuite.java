@@ -592,6 +592,96 @@ public class MachineDomainSmokeSuite extends AbstractSharedServerTest {
                 "TileBlackHoleGenerator", postInfo.tileSimpleName());
     }
 
+    /** Every core processing machine has at least one registered recipe. */
+    @Test
+    public void recipesSummaryReportsNonZeroCounts() throws Exception {
+        String summary = join(client().execute("stellurgytest machine recipes-summary"));
+        assertTrue("recipes-summary errored: " + summary, !Reply.of(summary).has("error"));
+        String[] requiredMachines = {
+                "TileCuttingMachine", "TileElectricArcFurnace", "TileLathe",
+                "TileRollingMachine", "TileChemicalReactor",
+        };
+        Reply counts = Reply.of("stellurgytest machine recipes-summary", summary);
+        StringBuilder failures = new StringBuilder();
+        for (String name : requiredMachines) {
+            if (!counts.has(name)) { failures.append(name).append("=NOT_REPORTED;"); continue; }
+            if (counts.integer(name) <= 0) failures.append(name).append("=0;");
+        }
+        assertTrue("machine recipe counts: " + failures + " full=" + summary, failures.length() == 0);
+    }
+
+    /**
+     * A built, powered, enabled cutting machine turns its first registered recipe's ingredient into
+     * that recipe's output in the output hatch.
+     */
+    @Test
+    public void cuttingMachineRunsFirstRegisteredRecipe() throws Exception {
+        FixtureSite s = site();
+        int cx = s.x, cy = s.y, cz = s.z;
+        String fixture = join(client().execute(
+                "stellurgytest fixture machine cutting 0 " + cx + " " + cy + " " + cz));
+        assertTrue("fixture machine cutting failed: " + fixture, Reply.of(fixture).ok());
+
+        int[] ipm = Reply.of(fixture).blockPos("inputPos");
+        int[] opm = Reply.of(fixture).blockPos("outputPos");
+        int[] ppm = Reply.of(fixture).blockPos("powerPos");
+        assertTrue("fixture didn't return input/output/power positions: " + fixture,
+                ipm != null && opm != null && ppm != null);
+        String inPos = ipm[0] + " " + ipm[1] + " " + ipm[2];
+        String outPos = opm[0] + " " + opm[1] + " " + opm[2];
+        String pwrPos = ppm[0] + " " + ppm[1] + " " + ppm[2];
+
+        String complete = MachineRecipeEndToEndKit.tryComplete(client(), 0, cx, cy, cz);
+        assertTrue("multiblock not complete: " + complete, Reply.of(complete).bool("isComplete"));
+
+        String recipe = join(client().execute("stellurgytest machine recipe-info TileCuttingMachine 0"));
+        assertTrue("recipe-info errored: " + recipe, !Reply.of(recipe).has("error"));
+        Reply info = Reply.of("stellurgytest machine recipe-info", recipe);
+        String[] ingredients = info.objectArray("ingredients");
+        String[] outputs = info.objectArray("outputs");
+        assertTrue("recipe-info missing first ingredient: " + recipe, ingredients.length > 0);
+        assertTrue("recipe-info missing first output: " + recipe, outputs.length > 0);
+        Reply firstIngredient = Reply.of(ingredients[0]);
+        String ingredientItem = firstIngredient.text("item");
+        int ingredientCount = firstIngredient.integer("count");
+        // Meta matters: oredict ingredients like `bouleSilicon` resolve to a libVulpes meta-item at
+        // the material-specific meta, and filling without it inserts a variant no recipe matches.
+        int ingredientMeta = firstIngredient.integer("meta");
+        String expectedOutput = Reply.of(outputs[0]).text("item");
+
+        String hatchFill = join(client().execute("stellurgytest hatch fill 0 " + inPos + " 0 "
+                + ingredientItem + " " + ingredientCount + " " + ingredientMeta));
+        assertTrue("hatch fill failed: " + hatchFill, Reply.of(hatchFill).ok());
+        String inject = join(client().execute("stellurgytest energy inject 0 " + pwrPos + " 10000000"));
+        assertTrue("power inject failed: " + inject, Reply.of(inject).ok());
+        // libVulpes machines default to disabled until a player flips the GUI switch.
+        String enable = join(client().execute(
+                "stellurgytest machine set-enabled 0 " + cx + " " + cy + " " + cz + " true"));
+        assertTrue("machine set-enabled failed: " + enable,
+                Reply.of(enable).ok() && Reply.of(enable).bool("enabled"));
+
+        // Forced ticks in batches of 100, reading the hatch after each: a default cutting recipe
+        // takes ~100 ticks, and twelve batches is the test's own ceiling on how long it will drive.
+        String out = "n/a";
+        boolean found = false;
+        for (int batch = 0; batch < 12; batch++) {
+            String tick = join(client().execute(
+                    "stellurgytest tile force-tick 0 " + cx + " " + cy + " " + cz + " 100"));
+            assertTrue("force-tick failed: " + tick, Reply.of(tick).ok());
+            out = join(client().execute("stellurgytest hatch read 0 " + outPos));
+            assertTrue("hatch read errored: " + out, !Reply.of(out).has("error"));
+            // A search across batches: a list with no such element is the "not yet" this loop drives
+            // past, so absence is the answer and `element`'s refusal would end it on the first pass.
+            if (Reply.of("stellurgytest hatch read", out)
+                    .holdsElement("slots", "item", String.valueOf(expectedOutput))) {
+                found = true;
+                break;
+            }
+        }
+        assertTrue("expected output " + expectedOutput + " not in output hatch — recipe didn't complete:"
+                + " ingredient=" + ingredientItem + " last response=" + out, found);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private static String join(List<String> resp) {

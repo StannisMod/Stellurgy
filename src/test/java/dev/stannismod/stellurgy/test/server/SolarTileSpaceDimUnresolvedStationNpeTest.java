@@ -5,7 +5,9 @@ import org.junit.Test;
 
 import dev.stannismod.stellurgy.api.Constants;
 import dev.stannismod.stellurgy.test.ArrangementFailure;
+import dev.stannismod.stellurgy.test.EnergyStore;
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.StationInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -34,7 +36,9 @@ import static org.junit.Assert.assertTrue;
  * null station. The third creates two stations of its own — one with no resolved planet, one
  * orbiting the overworld — and stands its panels on the cells {@code SpaceObjectManager} gives
  * them, which are the cells nearest the grid's centre and nowhere near the off-station scenarios'
- * coordinates. Position-isolated per method.</p>
+ * coordinates. The fourth creates one station orbiting the overworld and reads a panel at its
+ * centre and one on its +X perimeter sliver. Position-isolated per method; the station cells all
+ * lie in the grid's first ring, thousands of blocks from the off-station coordinates.</p>
  */
 public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedServerTest {
 
@@ -167,6 +171,71 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
                 + tick, Reply.of("stellurgytest tile force-tick", tick).ok());
         assertEquals("a station with no resolved planet receives no sunlight, so its panel makes"
                 + " nothing (the control made " + controlStored + ")", 0, storedIn(unresolved));
+    }
+
+    /**
+     * A panel in the placement-reach sliver just past a station's +X confinement wall belongs to that
+     * station and makes power, like an identical panel at the station's centre.
+     *
+     * <p>Stations spawn at {@code 2*stationSize*gridX + stationSize/2} — a half-cell offset from the
+     * grid point. The reverse lookup in {@code SpaceObjectManager.getSpaceStationFromBlockCoords}
+     * formerly rounded {@code worldX/(2*stationSize)} without subtracting that offset, so the sliver
+     * (a position a real player reaches at the perimeter) mapped to the neighbouring grid cell and
+     * the panel read 0 RF on a real, powered station. Only X differs between the two panels.</p>
+     *
+     * <p>The sliver is asked of the reverse lookup DIRECTLY as well as through the panel's power: on
+     * this shared server a sibling scenario may have put a station orbiting the overworld into the
+     * neighbouring cell, and then a regressed lookup would still hand the panel sunlight.</p>
+     */
+    @Test
+    public void perimeterSliverSolarOnRealStationGeneratesPower() throws Exception {
+        client().execute("stellurgytest dim load " + SPACE_DIM);
+
+        Reply create = Reply.of("stellurgytest station create",
+                join(client().execute("stellurgytest station create 0")));
+        assertTrue("station must create: " + create, create.ok());
+        int stationId = create.integer("id");
+        String setParent = join(client().execute("stellurgytest station set-parent " + stationId + " 0"));
+        assertTrue("station set-parent must succeed: " + setParent, Reply.of(setParent).ok());
+
+        StationInfo info = StationInfo.byId(cmd -> join(client().execute(cmd)), stationId);
+        int spawnX = info.spawnX();
+        int spawnZ = info.spawnZ();
+        int gridX = Math.round(spawnX / 2048f);
+        int y = 200;
+        int sliverX = gridX * 2048 + 1024 + 4;
+
+        String atSliver = join(client().execute("stellurgytest station at " + sliverX + " " + y + " " + spawnZ));
+        assertEquals("the +X perimeter sliver (worldX=" + sliverX + ") must map back to its own station "
+                        + stationId + " — the reverse lookup subtracts the stationSize/2 spawn offset: " + atSliver,
+                String.valueOf(stationId), Reply.of("stellurgytest station at", atSliver).text("stationAtPos"));
+
+        long controlDelta = powerDeltaOver100Ticks(spawnX, y, spawnZ);
+        long sliverDelta = powerDeltaOver100Ticks(sliverX, y, spawnZ);
+        assertTrue("control solar at the station center must generate power (>0); got " + controlDelta
+                        + " (station=" + stationId + " spawn=" + spawnX + "," + spawnZ + " info=" + info.raw() + ")",
+                controlDelta > 0);
+        assertTrue("an identical solar panel on the +X perimeter sliver of the SAME real, powered station must"
+                        + " ALSO generate power (>0), worldX=" + sliverX + "; got " + sliverDelta,
+                sliverDelta > 0);
+    }
+
+    /** Place a solar generator, force-tick 100, return the energyStored delta. */
+    private long powerDeltaOver100Ticks(int x, int y, int z) throws Exception {
+        client().execute("stellurgytest fill " + SPACE_DIM + " " + (x - 2) + " " + (y - 2) + " " + (z - 2)
+                + " " + (x + 2) + " " + (y + 4) + " " + (z + 2) + " minecraft:air");
+        String place = join(client().execute("stellurgytest place " + SPACE_DIM + " " + x + " " + y + " " + z
+                + " stellurgy:solarGenerator"));
+        assertTrue("solar generator must place at " + x + "," + y + "," + z + ": " + place,
+                Reply.of(place).ok() || Reply.of(place).bool("placed"));
+        // Through the reader: a panel that is not there answers a well-formed absence, and a delta
+        // between two absences is zero — which is exactly the claim the caller makes.
+        long before = EnergyStore.at(cmd -> join(client().execute(cmd)), SPACE_DIM, x, y, z)
+                .requireEnergy("the placed panel must expose a store")
+                .stored();
+        String tick = join(client().execute("stellurgytest tile force-tick " + SPACE_DIM + " " + x + " " + y + " " + z + " 100"));
+        assertTrue("force-tick must not throw: " + tick, Reply.of(tick).ok());
+        return EnergyStore.at(cmd -> join(client().execute(cmd)), SPACE_DIM, x, y, z).stored() - before;
     }
 
     /**

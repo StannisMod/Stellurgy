@@ -14,7 +14,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * The player holds a Stellurgy item and right-clicks it. Six scenarios, one client.
+ * The player holds a Stellurgy item and right-clicks it. One client for every scenario; the last one
+ * goes on to press a button in the screen the right-click opened.
  *
  * <p>Every member drives the SAME production entry point — {@code Item#onItemRightClick} reached
  * through {@code ClientBot.useItem()} &rarr; {@code CPacketPlayerTryUseItem} — and differs only in
@@ -632,5 +633,106 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         JsonObject held = bot().reportPlayerItems().getAsJsonObject("held");
         assertEquals("stack must NOT be consumed on PASS; held=" + held,
                 1, held.get("count").getAsInt());
+    }
+
+    // ── space station chip: a button press must re-open its screen ────────────
+
+    /**
+     * Pressing a button in the Space-Station-Chip GUI re-opens it as {@code GuiModularFullScreen},
+     * where it used to dismiss it.
+     *
+     * <p>{@code ItemStationChip#useNetworkData} closes the screen and asks Forge to open the libVulpes
+     * id {@code MODULARFULLSCREEN} (ordinal 3) on Stellurgy's container. Stellurgy's gui handler used
+     * to answer null for every libVulpes id; Forge sends no gui packet for a null container, so the
+     * screen stayed shut with nothing logged anywhere — every press dismissed the GUI. The handler now
+     * delegates those ids to libVulpes' handler. Since libVulpes was folded into Stellurgy's container
+     * the initial sneak-right-click open reaches Stellurgy's handler too, on
+     * {@code MODULARCENTEREDFULLSCREEN} (ordinal 2), the id Stellurgy's ore-mapping GUI used to hold, so
+     * the first half also pins that the two id spaces do not collide.</p>
+     *
+     * <p>Each silence the old screen poll ran together is its own link: the use packet never reaching
+     * the server, the item opening nothing, the handler answering null, the client never displaying.</p>
+     */
+    @Test
+    public void chipButtonPressReopensGuiAsFullScreen() throws Exception {
+        // `GuiHandler.guiId.MODULARFULLSCREEN.ordinal()` — it travels in Forge's own OpenGui message,
+        // so it is the id the handler is ASKED about, not an internal name.
+        final int modularFullScreenId = 3;
+        final int leftShift = 42;
+        final String chip = "stellurgy:spacestationchip";
+
+        scenario().arranging("hand the player a space station chip");
+        long equipMark = clientEvents().mark();
+        String equip = exec("stellurgytest player equip-stationchip");
+        scenario().requireArranged("equip-stationchip must succeed: " + equip, Reply.of(equip).ok());
+        awaitHeld(equipMark, chip);
+        try {
+            chipOpensAndReopens(modularFullScreenId, leftShift);
+        } finally {
+            // Whatever screen the chip left open is closed here, and the close is waited for on the
+            // SERVER: the close travels as a client packet while the next scenario's equip is a server
+            // command, and an equip that lands while the server still holds the chip's container never
+            // reaches the client as a slot write (measured: six later scenarios, no `client_slot_set`).
+            long closeMark = events().mark();
+            bot().closeScreen();
+            events().await(closeMark, "container_closed", "closing the chip's screen must reach the SERVER"
+                    + " before the next scenario equips anything", LINK_BUDGET_TICKS);
+        }
+    }
+
+    private void chipOpensAndReopens(int modularFullScreenId, int leftShift) throws Exception {
+        scenario().measuring("sneak-right-click opens the chip's modular GUI");
+        Events events = events();
+        long openMark = events.mark();
+        long openOnClient = clientEvents().mark();
+        bot().setKey(leftShift, true);
+        try {
+            // The sneak is held across client ticks before the use, because the client publishes
+            // sneaking from its own tick; one connection delivers in order, so the server reads the
+            // sneak before the use packet that follows it.
+            bot().waitTicks(6);
+            bot().useItem();
+            events.assertChain(openMark, "a sneak-right-click with the chip in hand must REACH the"
+                            + " server and make it open the chip's own container", LINK_BUDGET_TICKS,
+                    "right_click_item", "container_opened");
+            clientEvents().awaitField(openOnClient, "client_gui_opened", "gui", "GuiModular",
+                    "the chip GUI must open on sneak-right-click, on the player's OWN screen — the"
+                            + " server answered the press, so what is missing is the client being"
+                            + " asked to display anything for it", LINK_BUDGET_TICKS);
+        } finally {
+            bot().setKey(leftShift, false);
+        }
+
+        // DELETE (button id 1): with the default selection it is a no-op except the unconditional
+        // re-open, so it isolates the re-open without mutating the landing list.
+        JsonObject buttons = bot().reportButtons();
+        com.google.gson.JsonArray arr = buttons.getAsJsonArray("buttons");
+        scenario().requireArranged("chip GUI must render buttons: " + buttons, arr != null && arr.size() > 0);
+
+        scenario().asserting("a button press re-opens the GUI as GuiModularFullScreen");
+        long pressMark = events.markInstrumented();
+        long pressOnClient = clientEvents().mark();
+        bot().clickButtonById(1);
+        // In the order production performs it, one server call stack: the packet reaches the item,
+        // the item asks Forge for a gui, Forge asks Stellurgy's handler, and only a non-null answer
+        // opens a container.
+        events.assertChain(pressMark, "pressing a chip button must reach the ITEM, make it ask for"
+                        + " the full-screen gui, and end in a container actually being opened", LINK_BUDGET_TICKS,
+                "chip_button_received", "gui_container_served", "container_opened");
+
+        // SILENCE-IS-THE-ANSWER: the chain just above required a gui_container_served after pressMark, so
+        // this window is non-empty; what is asserted is the content of records that are there.
+        String served = events.since(pressMark, "gui_container_served");
+        assertTrue("Stellurgy's gui handler must be ASKED for the libVulpes MODULARFULLSCREEN id the chip"
+                        + " re-opens on (id " + modularFullScreenId + "): " + served,
+                Events.anyRecordHas(served, "id", String.valueOf(modularFullScreenId)));
+        assertEquals("...and it must not answer NULL for it: Forge sends no gui packet for a null"
+                        + " container, so the screen stays shut with nothing logged. handlerAnswers=" + served,
+                0, Events.countRecords(served, "container", "null"));
+
+        // Matched on the exact `gui` field, so the centered GuiModular opened first cannot satisfy it.
+        clientEvents().awaitField(pressOnClient, "client_gui_opened", "gui", "GuiModularFullScreen",
+                "pressing a Space-Station-Chip button must re-open the GUI as GuiModularFullScreen;"
+                        + " what the handler answered: " + served, LINK_BUDGET_TICKS);
     }
 }

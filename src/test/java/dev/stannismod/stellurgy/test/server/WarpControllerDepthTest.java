@@ -362,4 +362,38 @@ public class WarpControllerDepthTest extends AbstractSharedServerTest {
         assertTrue("controller B must resolve to station " + b + ": " + stateB,
                 String.valueOf(b).equals(Reply.of(stateB).text("stationId")));
     }
+
+    /**
+     * Three stations completing their warp on the same tick all arrive, and the tick does not throw.
+     *
+     * <p>{@code SpaceObjectManager.onServerTick} iterated the warp orbit's list with a live for-each
+     * while {@code moveStationToBody} removed the arriving station from that same list: three or more
+     * same-tick arrivals threw a {@code ConcurrentModificationException} (with exactly two the
+     * LinkedList quietly drops the second). The fix iterates a snapshot. The
+     * {@code station warp-collision} probe creates its OWN three stations, puts them into the warp
+     * orbit with an elapsed transition and invokes the tick handler; {@code count} and
+     * {@code arrived} are about those three only, so sibling scenarios' stations cannot move them.</p>
+     */
+    @Test
+    public void threeStationsArrivingSameTickDoNotThrowConcurrentModification() throws Exception {
+        final int warpedStations = 3;
+        ok(client().execute("stellurgytest dim load " + SPACE_DIM));
+
+        String r = ok(client().execute("stellurgytest station warp-collision 0 " + warpedStations));
+        assertTrue("probe must run: " + r, Reply.of(r).ok());
+
+        Reply warped = Reply.of("stellurgytest station warp-collision", r);
+        assertTrue("no threw field in: " + r, warped.has("threw"));
+        assertTrue("three stations completing warp on the same tick must NOT throw — the fix "
+                        + "iterates a snapshot copy; the buggy live for-each threw "
+                        + "ConcurrentModificationException. Got: " + r,
+                "false".equals(warped.text("threw")));
+
+        int count = parseGroup("count", r, "count");
+        int arrived = parseGroup("arrived", r, "arrived");
+        assertTrue("all warped stations must arrive at the destination orbit (dim 0), proving the "
+                        + "loop processed EVERY station (the buggy loop aborted / dropped after the "
+                        + "first): arrived=" + arrived + " count=" + count + " in " + r,
+                count == warpedStations && arrived == count);
+    }
 }

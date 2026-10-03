@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.server;
 
 // migrated to AbstractSharedServerTest
 import dev.stannismod.stellurgy.test.DimInfo;
+import dev.stannismod.stellurgy.test.DimWeather;
 import dev.stannismod.stellurgy.test.Reply;
 import org.junit.Assume;
 import org.junit.Test;
@@ -75,6 +76,32 @@ public class PlanetDimensionLoadTest extends AbstractSharedServerTest {
                 + ", a6k=" + a6k + ")", a0, a6k, 0.0);
         assertNotEquals("celestial-angle did not change between t=6000 and t=12000 (a6k=" + a6k
                 + ", a12k=" + a12k + ")", a6k, a12k, 0.0);
+    }
+
+    /** The nether (-1) and the end (1) are not classified as Stellurgy planets. */
+    @Test
+    public void netherAndEndAreNotStellurgyPlanets() throws Exception {
+        DimInfo nether = DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), -1);
+        assertFalse("nether is mis-classified as a Stellurgy planet: " + nether.raw(), nether.stellurgyPlanet);
+        DimInfo end = DimInfo.forDim(cmd -> String.join("\n", client().execute(cmd)), 1);
+        assertFalse("end is mis-classified as a Stellurgy planet: " + end.raw(), end.stellurgyPlanet);
+    }
+
+    /**
+     * The overworld, the nether and the end keep their vanilla {@code DerivedWorldInfo}: the
+     * Stellurgy weather wrapper's policy ({@code PlanetWeatherManager#shouldWrap}) excludes them, so
+     * other mods reading weather on them see exactly what vanilla would show.
+     */
+    @Test
+    public void overworldAndVanillaDimsAreNotWrapped() throws Exception {
+        for (int dim : new int[]{0, -1, 1}) {
+            // The read refuses a world the probe could not bring up: a negated claim about a world
+            // that does not exist would otherwise pass while proving nothing.
+            DimWeather weather = DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
+                    .requireDim(dim);
+            assertFalse("dim " + dim + " must NOT have the Stellurgy weather wrapper installed: " + weather.raw(),
+                    weather.usesStellurgyWorldInfo());
+        }
     }
 
     private int firstNonOverworldStellurgyDimOrSkip() throws Exception {

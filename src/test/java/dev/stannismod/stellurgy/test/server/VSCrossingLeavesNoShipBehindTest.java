@@ -4,6 +4,7 @@ import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.ShipIdentity;
+import dev.stannismod.stellurgy.test.ShipReadiness;
 
 import org.junit.Test;
 
@@ -27,7 +28,8 @@ import static org.junit.Assert.assertTrue;
  * behind with nothing loaded to collect it is invisible to the first. Both are read on every crossing, so
  * neither leak can hide behind the counter that cannot see it. The unregistered-object half is what this
  * class is aimed at; the other half has its own arrangement in
- * {@link VSCrossingOutOfAnUnloadedSourceE2ETest}, because it needs the opposite starting state.</p>
+ * the unloaded-source scenarios at the end of this class, because it needs the opposite starting
+ * state.</p>
  *
  * <p><b>Measured as a delta, never against zero.</b> The server is shared across this class's methods, so
  * each crossing is measured against counts taken immediately before it.</p>
@@ -41,13 +43,12 @@ import static org.junit.Assert.assertTrue;
  * and "a ship is managed here" would be true before anything arrived. Every arrival check therefore
  * requires the resolved ship to actually be AT the destination.</p>
  *
- * <p><b>Why nothing here pumps {@code vs load-ships}.</b> It is not needed — a ship is created already
- * loaded, and {@code permaload} keeps it that way for the whole class (a test server holds it for
- * every class now, not just this one), so the loaded set fills itself. It is also not safe: pumping
- * a load while {@code permaload} holds crashes the dedicated server if any registered ship happens
- * to be unloaded, which a shared harness cannot rule out. <b>That hazard is now tier-wide</b>, since
- * the flag is held everywhere and seventeen sites pump loads; what keeps the one class whose ships
- * ARE registered-and-unloaded safe is that it turns the flag off for itself.</p>
+ * <p><b>Why the loaded-source legs never pump {@code vs load-ships}.</b> It is not needed — a ship is
+ * created already loaded, and {@code permaload} keeps it that way, so the loaded set fills itself.
+ * Only the unloaded-source scenario pumps, with {@code permaload} off for itself, because its arrival
+ * is dropped by the load controller before it can be read. (A pump while {@code permaload} holds used
+ * to kill the server when a registered ship was unloaded; that is pinned in
+ * {@code SpaceSlotVsShipPersistTest}.)</p>
  *
  * <p>Gated on the server's real VS presence; skips cleanly otherwise.</p>
  */
@@ -99,9 +100,199 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
     }
 
 
+    /**
+     * Every scenario's craft goes, so the next one starts in a dimension with no live ship: the
+     * unloaded-source scenarios below read both counters of the WHOLE dimension, and a hull a sibling
+     * left loaded would be in them.
+     */
     @org.junit.After
-    public void resetPermaload() throws Exception {
-        // Shared-harness state-leak contract: never leave "permanently loaded" set for a later method.
+    public void clearCraft() throws Exception {
+        ShipReadiness.clearCraftFrom(this::exec, 0);
+    }
+
+    // --- the unloaded source ------------------------------------------------------------------------
+    //
+    // The other way a crossing can leave a ship behind: the REGISTRY entry of a source that was not
+    // loaded when its blocks were cut. The legs above cover a loaded source, where a physics object is
+    // what can be stranded; here no physics object exists at all, so whatever collects a crossing's
+    // leftovers has to work without one. An entry left behind has no blocks and nothing loaded behind
+    // it, yet it answers position lookups in that world — the opening lookup of the next crossing out
+    // of the same place included — and it is persisted with the world.
+    //
+    // These scenarios turn permanent loading OFF for themselves and put it back when they end: a
+    // registered ship that is NOT loaded is their whole arrangement, and held loaded they would
+    // silently become copies of the legs above. Their counts are taken before anything asks the world
+    // to load a ship, because loading a leftover entry is itself what would collect it. They stand at
+    // their own base, apart from the legs above; a crossing hops 160 blocks, wider than an allocated plot.
+
+    private static final int UNLOADED_X = 7000, UNLOADED_Z = 7000;
+
+    /**
+     * <p>red-witnessed: only with all four of the source's collectors removed — the mark by name
+     * ({@code VSIntegration}'s {@code releaseShipIfNothingLoaded}), the same-world adoption
+     * ({@code VSBridge.adoptOwnRemnant}), the registry walk's blockless clause
+     * ({@code WorldServerShipManager.tick}) and the spawn drain's {@code dropOwnBlocklessRemnant}:
+     * "the cut source … was never collected — no `ship_removed` … within 200 ticks", 2026-09-28.
+     * Removing the mark alone, or the mark and the adoption, stays GREEN. So this pins the outcome,
+     * and cannot say which hand collected: the one this test was written for is not the only one.</p>
+     */
+    @Test
+    public void aCrossingOutOfAnUnloadedSourceLeavesNoRegistryEntry() throws Exception {
+        ShipReadiness.letShipsUnload(this::exec,
+                "this scenario's subject IS a registered ship nobody has loaded; held loaded, it would"
+                + " silently become a copy of the loaded-source legs");
+        try {
+            // Marked BEFORE the build, because the unload this scenario is built on happens INSIDE it —
+            // measured on the gate of 2026-09-22, where a mark taken afterwards saw no `ship_unloaded`
+            // for 200 ticks while the counters already read `loaded=0 registry=1`.
+            long unloadMark = events.mark();
+            String shipId = buildUnloadableShip();
+            awaitSourceUnloaded(unloadMark, shipId);
+
+            int registryBefore = queryableShips();
+            int loadedBefore = loadedShips();
+
+            // The crossing cuts the hull and pastes a new one under the identity it crossed with, so
+            // `shipId` is the SOURCE's removal — nothing removes the arrival. It is aimed by the physics
+            // id captured while the craft was loaded: translating the durable name now would force-load
+            // the ship and undo the arrangement.
+            long crossMark = events.mark();
+            String cross = exec("stellurgytest vs ship-repack 0 id " + shipId + " " + UNLOADED_X + " " + BUILD_Y
+                    + " " + UNLOADED_Z + " " + (UNLOADED_X + HOP) + " " + SKY_Y + " " + UNLOADED_Z);
+            assertTrue("the crossing itself failed, so this test measures nothing: " + cross,
+                    Reply.of(cross).ok());
+            // Two registry changes, both on later world ticks: the cut source collected, the paste
+            // registered when the spawn queue drains. Each linked by its own identity; neither loads.
+            events.awaitField(crossMark, "ship_removed", "vsShip", shipId,
+                    "a crossing out of an UNLOADED source left its registry entry behind — the cut source"
+                            + " " + shipId + " was never collected", WAIT_TICKS);
+            events.awaitField(crossMark, "ship_spawned", "stellurgyShip", durableShipId,
+                    "the crossed ship was never registered at the destination", WAIT_TICKS);
+            // The instrument that makes the OTHER outcome legible, proven to fire on this one: a queued
+            // spawn the physics mod refuses is reported only by the `ship_spawn_flood` record, which
+            // comes from a redirect declared `require = 0`.
+            String floods = events.since(crossMark, "ship_spawn_flood");
+            assertTrue("ARRANGEMENT: the arrival's spawn flood must be on the record, and accepted — a"
+                            + " missing one means the refusal instrument no longer weaves: " + floods,
+                    Events.anyRecordHasAll(floods, "refused", "false"));
+
+            int registryAfter = queryableShips();
+            int loadedAfter = loadedShips();
+
+            // Only now prove a ship arrived: after the reads, so the load pump stays out of them.
+            requireArrivedAt(crossMark, UNLOADED_X + HOP, SKY_Y);
+
+            assertEquals("a crossing out of an UNLOADED source left its registry entry behind: registered "
+                            + "ships went " + registryBefore + " -> " + registryAfter + " across a crossing "
+                            + "that moved a single ship (loaded " + loadedBefore + " -> " + loadedAfter + "). "
+                            + "An entry with no blocks and nothing loaded behind it still answers every "
+                            + "position lookup in this world, the next crossing out of this cell included, "
+                            + "and it is written to disk with the world.",
+                    registryBefore, registryAfter);
+        } finally {
+            ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
+        }
+    }
+
+    /**
+     * A blockless record nobody deregisters is COLLECTED by the manager's registry sweep, not merely
+     * avoided by the crossing's own hand call.
+     *
+     * <p><b>The garbage is PLANTED, and the plant is measured on its own call</b>: provoking it means
+     * cutting a loaded ship and unloading it inside one tick. The registry size taken inside the
+     * planting call proves a record was added; a count read afterwards is already post-collection.
+     * Nothing here loads a ship — loading a leftover entry is itself one of the things that collects it.</p>
+     */
+    @Test
+    public void aBlocklessRecordNobodyDeregisteredIsSweptFromTheRegistry() throws Exception {
+        ShipReadiness.letShipsUnload(this::exec,
+                "the planted record must stand in a world where nothing holds ships loaded");
+        try {
+            int registryBefore = queryableShips();
+
+            long plantMark = events.mark();
+            String planted = exec("stellurgytest vs strand-blockless-record 0 "
+                    + UNLOADED_X + " " + BUILD_Y + " " + UNLOADED_Z);
+            assertTrue("the fault injection itself failed, so this leg measures nothing: " + planted,
+                    Reply.of(planted).ok());
+            assertEquals("the plant must actually have put a record in the registry — read on the "
+                            + "planting call itself, before any tick could collect it. Without this the "
+                            + "assertion below is satisfied by a plant that never happened: " + planted,
+                    registryBefore + 1, extractInt(planted, "countAfterAdd"));
+
+            // Linked on the registry's own REMOVAL of the planted record, by its uuid — a count could
+            // not say WHICH entry went.
+            events.awaitField(plantMark, "ship_removed", "vsShip", Reply.of(planted).text("uuid"),
+                    "the manager's registry sweep never collected the planted blockless record;"
+                            + " registry went " + registryBefore + " -> " + queryableShips()
+                            + "; planted=" + planted, WAIT_TICKS);
+        } finally {
+            ShipReadiness.holdShipsLoaded(this::exec, "this scenario's opt-out ends with it");
+        }
+    }
+
+    /**
+     * Build the unloaded-source craft and answer its PHYSICS id, taken while it is still loaded: the
+     * durable->physics bridge repairs its index by reading flight computers, which force-loads the
+     * ship it is asked about, so resolving the id later would undo the arrangement it is needed for.
+     */
+    private String buildUnloadableShip() throws Exception {
+        long buildMark = events.mark();
+        String coords = placeFixture(FixtureSite.openAir(0, UNLOADED_X, UNLOADED_Z), "with-pilot-seat");
+        String asm = exec("stellurgytest rocket assemble 0 " + coords);
+        assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
+                (Reply.of(asm).integer("rocketCount") == 0));
+        durableShipId = ShipIdentity.nameFromAssembly(asm);
+        events.awaitField(buildMark, "ship_spawned", "stellurgyShip", durableShipId,
+                "the ship never entered VS's registry: " + counters(), WAIT_TICKS);
+        return ShipIdentity.physicsIdOf(this::exec, 0, durableShipId);
+    }
+
+    /**
+     * Wait for the craft to be UNLOADED — the substrate's own {@code unload()}, by physics id — and
+     * then read that it HOLDS: the mark precedes the build, so the window can contain a
+     * load/unload/load sequence, and a hull loaded now would let the crossing cut a loaded source.
+     */
+    private void awaitSourceUnloaded(long mark, String shipId) throws Exception {
+        events.awaitField(mark, "ship_unloaded", "vsShip", shipId,
+                "the source ship never unloaded, so this test would measure the loaded-source"
+                        + " arrangement instead of its own: " + counters(), WAIT_TICKS);
+        assertEquals("the source unloaded and was loaded again, so this is the loaded-source"
+                + " arrangement and not this scenario's: " + counters(), 0, loadedShips());
+    }
+
+    /**
+     * Wait for the crossing's arrival to be REGISTERED and then UNLOADED, pump a load, and read where
+     * it stands. Nothing holds ships loaded here, so a fresh hull is loaded by its spawn and dropped by
+     * the load controller straight after; the pump must follow that drop, and the read must follow the
+     * pump with nothing between — a hull is resident for about a tick after a load.
+     */
+    private void requireArrivedAt(long mark, int x, int y) throws Exception {
+        String spawned = events.awaitRecordWithField(mark, "ship_spawned", "stellurgyShip", durableShipId,
+                "the crossed ship was never registered at the destination: " + counters(), WAIT_TICKS);
+        final String arrivalKey = Events.text(spawned, "vsShip");
+        final double spawnedAt = Events.number(spawned, "seq");
+        events.awaitMatching(mark, "ship_unloaded",
+                seen -> {
+                    for (String r : Events.recordsWhere(seen, "vsShip", arrivalKey)) {
+                        if (Events.number(r, "seq") > spawnedAt) {
+                            return true;
+                        }
+                    }
+                    return false;
+                },
+                "naming the arrival " + arrivalKey + ", later than its registration",
+                "the arrival must be dropped by the load controller — nothing holds ships loaded in"
+                        + " this scenario — before a pump can load it for the read: " + counters(),
+                WAIT_TICKS);
+        exec("stellurgytest vs load-ships 0");
+        // READ INTO A LOCAL: Java evaluates an assertion's MESSAGE before its condition, and the
+        // message's probe calls would spend the tick the hull is resident (measured 2026-09-22).
+        boolean arrived = ShipIdentity.aLoadedShipIsAt(this::exec, 0, x, y, UNLOADED_Z, POSE_TOLERANCE);
+        assertTrue("the arrival was registered, dropped and pumped, but no loaded ship stands within "
+                        + POSE_TOLERANCE + " of " + x + "," + y + "," + UNLOADED_Z + ": " + counters()
+                        + " | loaded hulls now: " + exec("stellurgytest vs ships-loaded 0"),
+                arrived);
     }
 
     // --- the invariant ------------------------------------------------------------------------------

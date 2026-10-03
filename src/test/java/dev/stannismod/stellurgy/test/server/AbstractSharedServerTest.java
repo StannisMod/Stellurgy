@@ -68,8 +68,9 @@ import dev.stannismod.stellurgy.test.Reply;
  *       from each create response and not assume a specific id range.</li>
  *   <li><b>No state-leak between methods</b>: a method MUST NOT mutate
  *       state that another method reads as a precondition (e.g. setting
- *       atmosphere density to 0 leaks to all subsequent methods —
- *       {@link AtmosphereOxygenSmokeTest} stays on the per-method base).
+ *       atmosphere density to 0 leaks to all subsequent methods unless the
+ *       method puts it back in a {@code finally}, as
+ *       {@link AtmosphereOxygenSmokeTest} does).
  *       JUnit 4 does not guarantee method execution order.</li>
  *   <li><b>Probe-only mutations</b>: any direct world-state mutation must
  *       go through the {@code /stellurgytest} probe surface, never through

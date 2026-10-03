@@ -6,6 +6,7 @@ import org.junit.Test;
 
 
 import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.FluidStored;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
 import static org.junit.Assert.assertEquals;
@@ -62,6 +63,91 @@ public class RocketInfrastructureSmokeTest extends AbstractSharedServerTest {
                 "stellurgytest infra link 0 " + sx + " " + sy + " " + sz + " " + rocketId));
         assertTrue("re-link unexpectedly succeeded a second time: " + relink,
                 (!Reply.of(relink).bool("linked")));
+    }
+
+    /**
+     * A fueling station linked to an assembled rocket, holding rocket fuel and power, drains its tank
+     * into the rocket's {@code LIQUID_MONOPROPELLANT} when it ticks — both endpoints of the transfer
+     * move. Fails if the {@code addFuelAmount} dispatch, the fuel-fluid matching in
+     * {@code TileFuelingStation#performFunction}, or the {@code canPerformFunction} guard breaks.
+     */
+    @Test
+    public void stationDrainsTankAndRocketFuelRisesAfterLinkAndTick() throws Exception {
+        // The test's own bar on the ARRANGEMENT: a craft with no capacity or a station with an empty
+        // tank would make the transfer legs vacuous. A thousand millibuckets is a fraction of either.
+        final int ampleFuelMb = 1000;
+        final String stationFuel = "rocketfuel";
+
+        FixtureSite rocketSite = site();
+        // Eight blocks off the pad, within link reach; one above the pad's own Y.
+        int fx = rocketSite.x - 8, fy = rocketSite.y + 1, fz = rocketSite.z;
+        String at = " 0 " + fx + " " + fy + " " + fz;
+
+        String assemble = RocketFixture.assembleAt(rocketSite, cmd -> String.join("\n", client().execute(cmd)),
+                "simple", 2, 10, "the craft the fueling station fills stands in this volume");
+        Reply assembled = Reply.of("stellurgytest rocket assemble", assemble);
+        assertTrue("rocket assemble probe errored: " + assemble, assembled.ok()
+                && ("SUCCESS".equals(assembled.text("status"))
+                        || "ALREADY_ASSEMBLED".equals(assembled.text("status"))));
+        assertTrue("could not parse entityId: " + assemble, assembled.has(ENT_ID));
+        int rocketId = assembled.integer(ENT_ID);
+
+        String placeFs = exec("stellurgytest place" + at + " stellurgy:fuelingStation");
+        assertTrue("fuelingStation place failed: " + placeFs, Reply.of(placeFs).bool("placed"));
+
+        String preFuel = exec("stellurgytest rocket fuel " + rocketId);
+        Reply preMono = monoEntry(preFuel);
+        assertTrue("rocket fuel probe missing LIQUID_MONOPROPELLANT entry: " + preFuel, preMono != null);
+        int initialFuel = preMono.integer("amount");
+        int fuelCapacity = preMono.integer("capacity");
+        assertTrue("fresh rocket should have ample mono-propellant capacity: cap=" + fuelCapacity
+                + " response=" + preFuel, fuelCapacity > ampleFuelMb);
+
+        String link = exec("stellurgytest infra link" + at + " " + rocketId);
+        assertTrue("infra link failed: " + link, Reply.of(link).ok());
+
+        // rocketFuel is the canonical LIQUID_MONOPROPELLANT in StellurgyConfiguration.registerFuel.
+        // Forge's FluidRegistry stores names as registered; retry lower-cased before declaring the
+        // inject broken.
+        String inject = exec("stellurgytest fluid inject" + at + " rocketFuel 8000");
+        if (Reply.of("stellurgytest fluid inject", inject).refusedWith("fluid not registered")) {
+            inject = exec("stellurgytest fluid inject" + at + " rocketfuel 8000");
+        }
+        assertTrue("fluid inject failed: " + inject, Reply.of(inject).ok());
+        String energy = exec("stellurgytest energy inject" + at + " 100000");
+        assertTrue("energy inject failed: " + energy, Reply.of(energy).ok());
+
+        String preTank = exec("stellurgytest fluid stored" + at);
+        assertTrue("station must report fluid present: " + preTank, Reply.of(preTank).bool("hasFluid"));
+        // Summed across the station's tanks, asked by NAME: a station holding two fluids has two.
+        int initialTank = FluidStored.of(preTank).amountOf(stationFuel);
+        assertTrue("station tank must be at least " + ampleFuelMb + " mB before tick: " + initialTank
+                + " response=" + preTank, initialTank >= ampleFuelMb);
+
+        // The clock-advancing variant: TileFuelingStation gates the transfer on
+        // `worldTime % OP_THROTTLE_TICKS == 0`, so a frozen-clock force-tick would either never or
+        // always pass that gate depending on the start time.
+        String tick = exec("stellurgytest tile force-tick-clock" + at + " 200");
+        assertTrue("station force-tick errored: " + tick, Reply.of(tick).ok());
+
+        String postTank = exec("stellurgytest fluid stored" + at);
+        int finalTank = FluidStored.of(postTank).amountOf(stationFuel);
+        assertTrue("station tank must drop after fueling-station tick burst (initial=" + initialTank
+                + " final=" + finalTank + " response=" + postTank + ")", initialTank - finalTank > 0);
+
+        String postFuel = exec("stellurgytest rocket fuel " + rocketId);
+        Reply postMono = monoEntry(postFuel);
+        assertTrue("post-tick rocket fuel probe missing MONO entry: " + postFuel, postMono != null);
+        int finalFuel = postMono.integer("amount");
+        assertTrue("rocket LIQUID_MONOPROPELLANT must increase after station tick (initial=" + initialFuel
+                + " final=" + finalFuel + " response=" + postFuel + ")", finalFuel - initialFuel > 0);
+    }
+
+    /** The {@code LIQUID_MONOPROPELLANT} entry of a {@code rocket fuel} reply's {@code fuels} map, or null. */
+    private static Reply monoEntry(String fuelReply) {
+        String fuels = Reply.of("stellurgytest rocket fuel", fuelReply).object("fuels");
+        String entry = fuels == null ? null : Reply.of(fuels).object("LIQUID_MONOPROPELLANT");
+        return entry == null ? null : Reply.of(entry);
     }
 
     /**

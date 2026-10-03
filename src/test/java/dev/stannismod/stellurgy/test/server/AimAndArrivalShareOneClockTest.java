@@ -202,6 +202,40 @@ public class AimAndArrivalShareOneClockTest extends AbstractSharedServerTest {
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    /**
+     * The space clock advances on its own, ONCE per server tick, without anybody setting it.
+     *
+     * <p>Every leg that moves a clock and reads it back is satisfied by a counter that only holds what
+     * it was last told; this one touches nothing and requires the number to have grown — the direct
+     * witness for the defect the owned counter replaced, a subsystem reading an unresolvable world and
+     * answering a frozen zero. The RATE is asserted against the overworld's own once-per-tick counter
+     * over the same window: a second writer on the server-tick event would double it and leave every
+     * "it moved" assertion green. That compares deltas, not values, so the clocks stay decoupled.</p>
+     */
+    @Test
+    public void theClockAdvancesWithoutBeingTold() throws Exception {
+        // Ticks of the SERVER's own counter the clocks are watched across. The wait is on one counter
+        // and the claims are about two others, so this is not circular.
+        final int observedTicks = 60;
+        String first = exec("stellurgytest space clock");
+        // WINDOW: both clocks read on either side of the stretch; the rate check compares the two deltas
+        // over the SAME stretch, so its length — overshoot included — cancels out.
+        dev.stannismod.stellurgy.test.GameTicks.advance(client(),
+                dev.stannismod.stellurgy.test.GameTicks.server(), observedTicks);
+        String second = exec("stellurgytest space clock");
+
+        long spaceMoved = jsonLong(second, "spaceClock") - jsonLong(first, "spaceClock");
+        long worldMoved = jsonLong(second, "overworld") - jsonLong(first, "overworld");
+        assertTrue("the space clock must advance by itself — a counter that only holds what it was last"
+                        + " set to is not a clock. moved=" + spaceMoved + " (" + first + " -> " + second + ")",
+                spaceMoved > 0L);
+        requireArranged("the reference clock must have moved too, or the rate check below compares against"
+                + " a stopped server. overworld moved=" + worldMoved, worldMoved > 0L);
+        assertTrue("...and it must advance ONCE per server tick, not twice: against the overworld's own"
+                        + " once-per-tick counter over the same window: space=" + spaceMoved + " world=" + worldMoved,
+                Math.abs(spaceMoved - worldMoved) <= Math.max(4L, worldMoved / 4L));
+    }
+
     private static long jsonLong(String json, String field) {
         assertTrue("probe response carries no numeric \"" + field + "\": " + json, Reply.of(json).has(field));
         return Reply.of(json).integer(field);

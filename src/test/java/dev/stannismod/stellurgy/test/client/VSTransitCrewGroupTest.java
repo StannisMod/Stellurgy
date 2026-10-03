@@ -53,6 +53,11 @@ import static org.junit.Assert.assertTrue;
  * It is static because JUnit builds a fresh test instance per method while the client JVM keeps the
  * setting.</p>
  */
+@Ignore("FLAKY, by the maintainer's ruling of 2026-10-03: two client-tier runs reddened a DIFFERENT"
+        + " scenario each — the between-scenario release left an `aboard record` before"
+        + " aSeatedCrewMemberSurvivesAHyperspaceTransitStillRiding, then"
+        + " aJumpAnnouncesItselfInChatOnTheHudAndInTheSky failed alone. Not diagnosed. RE-ENABLE when the"
+        + " leak is found; the acceptance is this class green on a full client tier, twice.")
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSTransitCrewGroupTest extends AbstractSharedVsClientTest {
 

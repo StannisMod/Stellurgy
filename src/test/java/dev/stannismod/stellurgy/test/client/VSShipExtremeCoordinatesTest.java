@@ -67,7 +67,13 @@ import static org.junit.Assert.assertTrue;
  * the craft into a cell under a NEW identity between the two moves, and a second move landing on a
  * craft whose identity changed under it is a different question this leg does not ask. The SECOND
  * half of (3) — the pilot-key path after a dismount&rarr;re-seat across the map — is untested and
- * stays open, and so does the extreme-|X| precision leg it blocks.</p></p>
+ * stays open.</p>
+ *
+ * <p><b>Extreme |X|</b> is measured by the two legs at the end of the class, in the overworld at a
+ * Z below the physics mod's reserved quadrant: where a player delivery stops working, and whether a
+ * ship ASSEMBLED far from the origin loads, flies and is tracked by its client rider as at the origin.
+ * They assemble at the coordinate instead of relocating a ship to it, which is why (3) does not block
+ * them.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
@@ -478,6 +484,466 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
         assertTrue("[" + label + "] the CLIENT rider must track the server ship's climb (client="
                 + riderDelta + " server=" + serverDelta + "); server player: " + serverPlayer,
                 Math.abs(riderDelta - serverDelta) < RIDER_TRACKS_SHIP_BLOCKS);
+    }
+
+    // ─── extreme |X|: far from the origin, in the overworld ─────────────────────────────────────
+    //
+    // Both legs below stand at Z = FAR_ARENA_Z, below the physics mod's reserved shipyard quadrant
+    // (chunkX >= CHUNK_X_START - MAX_CHUNK_RADIUS && chunkZ >= -1599, i.e. Z >= -25,584): above that Z
+    // the quadrant's teleport veto swallows a far coordinate silently and a leg would measure the
+    // reservation instead of the coordinate. They are millions of blocks from every plot.
+
+    /** Below the reserved quadrant's Z edge, so the arena is ordinary world at every X. */
+    private static final int FAR_ARENA_Z = -100_000;
+    /** A deadline for each of a delivery's two records (the chunk, the placement) — not a settle. */
+    private static final int FAR_DELIVERY_LINK_BUDGET_TICKS = 200;
+    private static final double FAR_ARRIVAL_TOLERANCE = 1.0d;
+
+    /**
+     * Set server gamerules for one leg and answer what they were, so the leg can put them back: the
+     * server is shared with every other scenario here.
+     */
+    private java.util.Map<String, String> setGamerules(String... nameThenValue) throws Exception {
+        java.util.Map<String, String> before = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < nameThenValue.length; i += 2) {
+            String name = nameThenValue[i];
+            // Vanilla answers a bare `gamerule <name>` with "<name> = <value>".
+            String reply = exec("gamerule " + name).trim();
+            int eq = reply.lastIndexOf(" = ");
+            scenario().requireArranged("gamerule " + name + " must report its value: " + reply, eq >= 0);
+            before.put(name, reply.substring(eq + 3).trim());
+            exec("gamerule " + name + " " + nameThenValue[i + 1]);
+        }
+        return before;
+    }
+
+    private void restoreGamerules(java.util.Map<String, String> before) throws Exception {
+        for (java.util.Map.Entry<String, String> rule : before.entrySet()) {
+            exec("gamerule " + rule.getKey() + " " + rule.getValue());
+        }
+    }
+
+    /**
+     * SPIKE — where exactly a player DELIVERY to a far coordinate stops working, pinned against numbers
+     * predicted from the physics mod's own predicate, so the mechanism is proven rather than inferred.
+     *
+     * <p>The physics mod installs a cancellable {@code @Inject} at the HEAD of
+     * {@code NetHandlerPlayServer.setPlayerLocation} that cancels any teleport into its reserved
+     * shipyard quadrant: the command reports success, the mixin cancels, the player never moves.
+     * {@code isChunkInShipyard(cx, cz)} is {@code cx >= CHUNK_X_START - MAX_CHUNK_RADIUS && cz >=
+     * CHUNK_Z_START - MAX_CHUNK_RADIUS}, so four outcomes are decided before the run: one chunk under
+     * the X edge moves, the first reserved chunk does not, a coordinate deep inside does not, and the
+     * same X below the quadrant's Z edge moves again. A miss on ANY of the four falsifies the
+     * explanation. The edge is READ from the allocator: a test pinning a mechanism must be keyed to the
+     * mechanism's own constant, or it pins the day it was written.</p>
+     */
+    @Test
+    public void whereExactlyDoesADeliveryStopWorking() throws Exception {
+        java.util.Map<String, String> rules = setGamerules(
+                "sendCommandFeedback", "false", "logAdminCommands", "false");
+        try {
+            java.util.List<String> report = new java.util.ArrayList<>();
+            java.util.List<String> wrong = new java.util.ArrayList<>();
+            // The first reserved BLOCK X, straight out of the predicate the teleport is cancelled by.
+            final long edgeX = ((long) (org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator.CHUNK_X_START
+                    - org.valkyrienskies.mod.common.ships.chunk_claims.ShipChunkAllocator.MAX_CHUNK_RADIUS)) << 4;
+            // Deep inside the quadrant, derived so it stays inside whatever the edge becomes.
+            final long deepX = edgeX + 1_000_000L;
+            // {x, z, expectedToMove}
+            double[][] cases = {
+                    {edgeX - 16 + 0.5d, 0.5d, 1d},
+                    {edgeX + 0.5d, 0.5d, 0d},
+                    {deepX + 0.5d, 0.5d, 0d},
+                    {deepX + 0.5d, FAR_ARENA_Z + 0.5d, 1d},
+            };
+            for (double[] c : cases) {
+                boolean expectMove = c[2] != 0d;
+                String reply = exec("stellurgytest player far-tp " + farFmt(c[0]) + " 200 " + farFmt(c[1]));
+                double from = Reply.of(reply).number("fromX");
+                double to = Reply.of(reply).number("posX");
+                boolean moved = Math.abs(to - c[0]) < FAR_ARRIVAL_TOLERANCE;
+                boolean unchanged = Math.abs(to - from) < 1e-6d;
+                report.add("target=(" + farFmt(c[0]) + "," + farFmt(c[1]) + ")"
+                        + " chunk=(" + (((long) Math.floor(c[0])) >> 4) + "," + (((long) Math.floor(c[1])) >> 4) + ")"
+                        + " predicted=" + (expectMove ? "MOVES" : "CANCELLED")
+                        + " observed=" + (moved ? "MOVED" : unchanged ? "CANCELLED" : "ELSEWHERE(" + to + ")"));
+                if (moved != expectMove) {
+                    wrong.add(report.get(report.size() - 1));
+                }
+                // Park him back near the origin so the next case starts from a known place.
+                exec("stellurgytest player far-tp 0.5 200 0.5");
+                dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);
+            }
+
+            StringBuilder out = new StringBuilder("[SPIKE far-coordinate delivery boundary]\n");
+            for (String line : report) {
+                out.append("  ").append(line).append('\n');
+            }
+            System.out.println(out);
+            writeSpikeReport("far-coordinate-delivery-boundary.txt", out.toString());
+            assertTrue("the reserved-quadrant explanation predicts these four outcomes; it missed:\n" + out,
+                    wrong.isEmpty());
+        } finally {
+            restoreGamerules(rules);
+        }
+    }
+
+    /**
+     * SPIKE — does a tier-2 ship survive a far world COORDINATE the way a bare player does? The
+     * extreme-|X| leg the class javadoc names as open.
+     *
+     * <p>A ship's blocks live in the shipyard subspace while its pose lives in the world, bridged by a
+     * transform of its own, so a player measured clean out to 24M says nothing about a ship. The ship
+     * is ASSEMBLED at the coordinate rather than teleported to it: relocation sequences have findings
+     * of their own (above), and teleporting to |X| would run into them and produce a red that says
+     * nothing about the coordinate. The one relocation in the leg is the player's, through
+     * {@code far-tp}.</p>
+     *
+     * <p>Acceptance, stated before the run — the {@code x = 0} rung is the control, assembled and flown
+     * by the same commands; at every rung assembly produces a VS ship that LOADS, the pilot seat is
+     * findable and mountable, a real held vertical-up key lifts the server ship by more than one block,
+     * and the CLIENT-rendered rider tracks that climb within 3 blocks.</p>
+     *
+     * <p>red-witnessed: with {@code TileAdvancedFlightComputer.setPilotInput} discarding every input
+     * in the overworld: "the x=0 control failed - the instrument, not the coordinate: the vertical-up
+     * key did not lift the ship (serverLift=0.0000 …)", 2026-09-28. The waits each turn an expiry into
+     * that RUNG's verdict (spawn, id, load, riding), and the control assertion is where any of them at
+     * x=0 surfaces — the path this red went through.</p>
+     */
+    @Test
+    public void doesAShipAssembleLoadAndFlyFarFromTheOrigin() throws Exception {
+        // The control, then the ratified half-cell. 24M is not carried: one far rung is the question.
+        final int[] xLadder = {0, 16_000_000};
+        java.util.Map<String, String> rules = setGamerules(
+                "sendCommandFeedback", "false", "logAdminCommands", "false", "doMobSpawning", "false",
+                "doDaylightCycle", "false", "doWeatherCycle", "false");
+
+        java.util.Map<Integer, String> verdicts = new java.util.LinkedHashMap<>();
+        // Which ship answered for which rung: two rungs reporting one id measured one subject twice.
+        java.util.Map<Integer, String> shipIds = new java.util.LinkedHashMap<>();
+        java.util.List<String> report = new java.util.ArrayList<>();
+        java.util.List<String> inconclusive = new java.util.ArrayList<>();
+        StringBuilder out;
+        try {
+            for (int x : xLadder) {
+                String arrangement = arrangeFarRung(x);
+                if (arrangement != null) {
+                    inconclusive.add("x=" + x + " " + arrangement);
+                    continue;
+                }
+                Events rungLog = events();
+                long spawnMark = rungLog.markInstrumented();
+                String assemble = assembleFarFixture(x);
+                if (assemble == null) {
+                    inconclusive.add("x=" + x + " the fixture did not build or did not assemble"
+                            + " (arrangement, not the coordinate)");
+                    continue;
+                }
+                // absence is the answer: this SWEEPS coordinates and records a verdict per one, so a
+                // probe that answered nothing is this row's failure and not the end of the sweep.
+                if (!(Reply.of(assemble).integerOr("rocketCount", Integer.MIN_VALUE) == 0)) {
+                    verdicts.put(x, "the build did not route to a SHIP: " + farOneLine(assemble));
+                    continue;
+                }
+                String durableName = dev.stannismod.stellurgy.test.ShipIdentity.nameFromAssembly(assemble);
+                try {
+                    rungLog.awaitField(spawnMark, "ship_spawned", "stellurgyShip", durableName,
+                            "the rung's assembly must spawn a VS ship", 200);
+                } catch (AssertionError noSpawn) {
+                    verdicts.put(x, "assembly created no VS ship: " + farOneLine(noSpawn.getMessage()));
+                    continue;
+                }
+
+                // Put the pilot on the ship — the ONLY relocation in the leg. The mark precedes it:
+                // his arrival is what loads the ship.
+                long loadMark = rungLog.markInstrumented();
+                String delivery = deliverToFarRung(x);
+                if (delivery != null) {
+                    inconclusive.add("x=" + x + " " + delivery);
+                    continue;
+                }
+                String farShipId = dev.stannismod.stellurgy.test.ShipIdentity.awaitPhysicsIdOf(
+                        this::exec, rungLog, 0, durableName, 200);
+                try {
+                    rungLog.awaitMatching(loadMark, "ship_usable",
+                            usable -> dev.stannismod.stellurgy.test.ShipIdentity.endsUsable(usable,
+                                    rungLog.since(loadMark, "ship_unloaded"), farShipId, 0),
+                            "carrying ship " + farShipId + " in dim 0, later than every unload of it",
+                            "the rung's ship must LOAD with the client present", 200);
+                } catch (AssertionError neverLoaded) {
+                    verdicts.put(x, "the ship never LOADED with the client present: "
+                            + farOneLine(neverLoaded.getMessage()));
+                    continue;
+                }
+                String lastInfo = exec("stellurgytest vs ship-info 0 id " + farShipId);
+                if (!ShipInfo.isLoaded(lastInfo)) {
+                    verdicts.put(x, "the ship was usable and then not loaded at the next read: "
+                            + farOneLine(lastInfo));
+                    continue;
+                }
+                double y0 = ShipInfo.of(lastInfo).y;
+                if (shipIds.containsValue(farShipId)) {
+                    verdicts.put(x, "this rung's ship is the SAME ship a previous rung measured (id "
+                            + farShipId + ") - the ladder is measuring one subject twice");
+                    continue;
+                }
+                shipIds.put(x, farShipId);
+
+                // NAME the ship: the bare form takes the first loaded pilot seat, and at 16M it mounted
+                // the pilot onto the ORIGIN ship's seat.
+                SeatMount mountInfo = SeatMount.onShip(this::exec, 0, farShipId);
+                if (!mountInfo.seatFound) {
+                    verdicts.put(x, "the pilot seat was not findable: " + farOneLine(mountInfo.raw()));
+                    continue;
+                }
+                long mountMark = clientEvents().mark();
+                String mounted = exec("stellurgytest player mount-entity " + mountInfo.requireDummyId());
+                // absence is the answer, as above: one row's verdict, not the sweep's end.
+                if (!Reply.of(mounted).boolOr("mounted", false)) {
+                    verdicts.put(x, "the bot could not mount the seat dummy: " + farOneLine(mounted));
+                    continue;
+                }
+                // "mounted":true is the SERVER's word; the climb measures the CLIENT-rendered rider.
+                String riding = awaitFarRiding(mountInfo.requireDummyId(), mountMark);
+                if (riding != null) {
+                    verdicts.put(x, riding + " (server said " + farOneLine(mounted) + ")");
+                    continue;
+                }
+
+                String flight = farClimbLeg(farShipId, y0);
+                // The seat's own position is a SUBSPACE coordinate — the magnitude the ship's own math
+                // runs on, the only number that changes if the shipyard moves.
+                report.add("x=" + x + " ship=" + farShipId + " shipY0=" + farFmt(y0)
+                        + " subspaceSeatX=" + farFmt((double) mountInfo.seatX())
+                        + " subspaceSeatZ=" + farFmt((double) mountInfo.seatZ())
+                        + " " + flight);
+                verdicts.put(x, flight.startsWith("OK") ? null : flight);
+
+                exec("stellurgytest player dismount");
+                bot().waitTicks(10);
+            }
+        } finally {
+            // The report is the deliverable and worth MOST when the leg died mid-ladder, so it is
+            // emitted before anything can escape.
+            for (java.util.Map.Entry<Integer, String> e : verdicts.entrySet()) {
+                if (e.getValue() != null) {
+                    report.add("x=" + e.getKey() + " FAILED " + e.getValue());
+                }
+            }
+            StringBuilder built = new StringBuilder("[SPIKE far-coordinate VS ship]\n");
+            for (String line : report) {
+                built.append("  ").append(line).append('\n');
+            }
+            for (String line : inconclusive) {
+                built.append("  INCONCLUSIVE ").append(line).append('\n');
+            }
+            for (int x : xLadder) {
+                boolean listed = false;
+                for (String line : inconclusive) {
+                    listed |= line.startsWith("x=" + x + " ");
+                }
+                if (!verdicts.containsKey(x) && !listed) {
+                    built.append("  NOT REACHED x=").append(x).append('\n');
+                }
+            }
+            System.out.println(built);
+            writeSpikeReport("far-coordinate-ship.txt", built.toString());
+            out = built;
+            try {
+                exec("stellurgytest player dismount");
+            } catch (Exception ignored) {
+                // teardown must not mask the finding
+            }
+            restoreGamerules(rules);
+        }
+
+        // The control first and separately: a ship that will not fly at the ORIGIN makes every far
+        // reading meaningless, and that is an instrument failure, not a coordinate ceiling.
+        assertTrue("the x=0 control produced no measurement at all, so no far rung is evidence:\n" + out,
+                verdicts.containsKey(0));
+        assertTrue("the x=0 control failed - the instrument, not the coordinate: " + verdicts.get(0)
+                + "\n" + out, verdicts.get(0) == null);
+        java.util.List<String> failed = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<Integer, String> e : verdicts.entrySet()) {
+            if (e.getKey() != 0 && e.getValue() != null) {
+                failed.add("x=" + e.getKey() + ": " + e.getValue());
+            }
+        }
+        assertTrue("a ship does not behave at a far coordinate as it does at the origin: " + failed
+                + "\n" + out, failed.isEmpty());
+        assertTrue("no far rung was measured at all - the leg answered nothing:\n" + out, verdicts.size() > 1);
+    }
+
+    /**
+     * Waits until the CLIENT reports it is riding, and — if it never does — asks the three questions
+     * that decide WHICH thing failed: where the client thinks the player is, what entities it sees near
+     * him, and where the server holds the dummy.
+     *
+     * @return {@code null} once the client is riding, else the reason plus that diagnosis
+     */
+    private String awaitFarRiding(int dummyId, long clientMark) throws Exception {
+        final int ridingTicks = 120;
+        com.google.gson.JsonObject last;
+        try {
+            ClientEvents.awaitMounted(clientEvents(), clientMark, "the client must begin riding the seat dummy",
+                    ridingTicks);
+            last = bot().reportRidingEntity();
+            if (last.has("riding") && last.get("riding").getAsBoolean() && last.has("posY")) {
+                return null;
+            }
+        } catch (AssertionError never) {
+            last = bot().reportRidingEntity();
+        }
+        String clientState;
+        String clientEntities;
+        try {
+            clientState = String.valueOf(bot().reportState());
+            clientEntities = String.valueOf(bot().reportEntities("", 128d));
+        } catch (Exception e) {
+            clientState = "unreadable: " + e;
+            clientEntities = "unreadable";
+        }
+        return "the CLIENT never began riding the seat after " + ridingTicks + " ticks (last report: " + last + ")"
+                + " | client state: " + farOneLine(clientState)
+                + " | client sees near him: " + farOneLine(clientEntities)
+                + " | server holds the dummy at: " + farOneLine(exec("stellurgytest entity info 0 " + dummyId));
+    }
+
+    /**
+     * Hold the REAL vertical-up key: the SERVER ship must climb and the CLIENT-rendered rider climb
+     * with it. A transform that lost precision shows up as divergence between those two.
+     *
+     * @return {@code "OK ..."} with the numbers, or the reason it failed
+     */
+    private String farClimbLeg(String farShipId, double yBefore) throws Exception {
+        double riderYBefore = bot().reportRidingEntity().get("posY").getAsDouble();
+        PilotThrust.climb(bot(), events(), serverClient(), 0, PilotThrust.DOSE_TICKS,
+                "the spike pilot's held vertical key must reach his flight computer");
+        // EXPERIMENT: the comparison is DEFINED six client ticks after the cut. The tolerance is the
+        // spike's own and was not measured at this offset.
+        bot().waitTicks(6);
+        double serverDelta = farShipY(farShipId) - yBefore;
+        double riderDelta = bot().reportRidingEntity().get("posY").getAsDouble() - riderYBefore;
+        String numbers = "serverLift=" + farFmt(serverDelta) + " riderLift=" + farFmt(riderDelta)
+                + " divergence=" + farFmt(Math.abs(riderDelta - serverDelta));
+        if (!(serverDelta > 1.0d)) {
+            // A third witness separates "the seat glue died" from "the ship would not move".
+            return "the vertical-up key did not lift the ship (" + numbers + "); server player: "
+                    + farOneLine(exec("stellurgytest player health"));
+        }
+        if (Math.abs(riderDelta - serverDelta) >= 3.0d) {
+            return "the CLIENT rider did not track the server ship (" + numbers + ")";
+        }
+        return "OK " + numbers;
+    }
+
+    /** @return {@code null} once the rung's site is loaded and clear, else what is wrong with it */
+    private String arrangeFarRung(int x) throws Exception {
+        final int baseY = FixtureSite.OPEN_AIR_Y;
+        int cx1 = (x - 32) >> 4, cz1 = (FAR_ARENA_Z - 32) >> 4;
+        int cx2 = (x + 32) >> 4, cz2 = (FAR_ARENA_Z + 32) >> 4;
+        String warm = exec("stellurgytest chunk warmup 0 " + cx1 + " " + cz1 + " " + cx2 + " " + cz2);
+        if (!Reply.of(warm).ok()) {
+            return "chunk warmup failed: " + farOneLine(warm);
+        }
+        // A stone pad below and air above: 16M is ocean, and the fixture must not be built into water.
+        exec("stellurgytest fill 0 " + (x - 8) + " " + (baseY - 1) + " " + (FAR_ARENA_Z - 8) + " "
+                + (x + 12) + " " + (baseY - 1) + " " + (FAR_ARENA_Z + 12) + " minecraft:stone");
+        String clear = exec("stellurgytest fill 0 " + (x - 8) + " " + baseY + " " + (FAR_ARENA_Z - 8) + " "
+                + (x + 12) + " " + (baseY + 14) + " " + (FAR_ARENA_Z + 12) + " minecraft:air");
+        if (!Reply.of(clear).ok()) {
+            return "pre-clear failed: " + farOneLine(clear);
+        }
+        String pad = exec("stellurgytest block at 0 " + x + " " + (baseY - 1) + " " + FAR_ARENA_Z);
+        // The id, compared — `contains("stone")` also accepts cobblestone and sandstone.
+        if (!"minecraft:stone".equals(Reply.of(pad).text("block"))) {
+            return "the pad is not stone (" + farOneLine(pad) + ")";
+        }
+        return null;
+    }
+
+    /**
+     * DELIBERATELY NOT ON THE SHARED BUILDER: {@code RocketFixture} raises an arrangement failure when a
+     * fixture will not lay, and this leg's subject is WHERE the build stops working, so a refusal is the
+     * measurement and is recorded and walked past.
+     *
+     * @return the assemble reply, or {@code null} if the fixture itself never landed
+     */
+    private String assembleFarFixture(int x) throws Exception {
+        String fixture = exec("stellurgytest fixture rocket 0 " + x + " " + FixtureSite.OPEN_AIR_Y + " "
+                + FAR_ARENA_Z + " " + VARIANT);
+        if (!Reply.of(fixture).ok()) {
+            System.out.println("[SPIKE ship] fixture at x=" + x + " failed: " + farOneLine(fixture));
+            return null;
+        }
+        int[] bp = Reply.of(fixture).blockPos("builderPos");
+        if (bp == null) {
+            System.out.println("[SPIKE ship] fixture at x=" + x + " gave no builderPos: " + farOneLine(fixture));
+            return null;
+        }
+        return exec("stellurgytest rocket assemble 0 " + bp[0] + " " + bp[1] + " " + bp[2]);
+    }
+
+    /**
+     * Puts the pilot on the far rung's ship through the long-jump path: the chunk's arrival and the
+     * placement are the two named steps of {@link ClientEvents#placeOntoGroundItHolds}.
+     *
+     * @return {@code null} once he is there, or a reason string for the INCONCLUSIVE list
+     */
+    private String deliverToFarRung(int x) throws Exception {
+        final int deliveryY = FixtureSite.OPEN_AIR_Y + 6;
+        try {
+            ClientEvents.placeOntoGroundItHolds(bot(), clientEvents(), this::exec,
+                    "stellurgytest player far-tp " + farFmt(x + 0.5d) + " " + deliveryY + " "
+                            + farFmt(FAR_ARENA_Z + 0.5d),
+                    x + 0.5d, deliveryY, FAR_ARENA_Z + 0.5d,
+                    "the pilot must be delivered onto the rung's ship at x=" + x, FAR_DELIVERY_LINK_BUDGET_TICKS);
+        } catch (AssertionError notPlaced) {
+            return "the pilot was never placed at x=" + x + " - delivery, not the ship: "
+                    + farOneLine(notPlaced.getMessage());
+        }
+        // absence is the answer: a sweep row with no server position is that row's inconclusive.
+        double lastX = Reply.of(exec("stellurgytest player health")).numberOr("posX", Double.NaN);
+        if (Math.abs(lastX - (x + 0.5d)) < FAR_ARRIVAL_TOLERANCE) {
+            return null;
+        }
+        return "the pilot was placed and the server does not hold him there (server posX=" + lastX
+                + ", wanted " + (x + 0.5d) + ") - delivery, not the ship";
+    }
+
+    /**
+     * The far rung's ship's {@code posY}, BY ID — ONE read. By id, not by position: on a ladder of two
+     * ships 16M apart a nearest-ship lookup would answer a rung whose ship unloaded with the OTHER
+     * rung's ship, which looks exactly like a clean far-coordinate result.
+     */
+    private double farShipY(String farShipId) throws Exception {
+        String last = exec("stellurgytest vs ship-info 0 id " + farShipId);
+        if (ShipInfo.isLoaded(last)) {
+            double py = ShipInfo.of(last).y;
+            if (!Double.isNaN(py)) {
+                return py;
+            }
+        }
+        throw new AssertionError("the loaded ship did not report a posY at this read: " + last);
+    }
+
+    /** The report is the deliverable, so it also lands on disk and survives a truncated console. */
+    private static void writeSpikeReport(String name, String text) {
+        try {
+            java.nio.file.Path dir = java.nio.file.Paths.get("build", "spike-reports").toAbsolutePath();
+            java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Files.write(dir.resolve(name), text.getBytes("UTF-8"));
+        } catch (Exception e) {
+            System.out.println("[SPIKE] could not write the report file: " + e);
+        }
+    }
+
+    private static String farOneLine(String s) {
+        return s.replace((char) 10, ' ').replace((char) 13, ' ').trim();
+    }
+
+    private static String farFmt(double v) {
+        return String.format(java.util.Locale.ROOT, "%.4f", v);
     }
 
     /**

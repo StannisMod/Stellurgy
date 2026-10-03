@@ -18,7 +18,7 @@ import net.minecraftforge.common.DimensionManager;
  * server has stopped and started again — the id it lands on next boot is free to differ. Two things
  * follow, and both are load-bearing: a restored jump ADOPTS the hull standing in its lane instead of
  * pasting a copy at the far end, and every hull no record claims has to be collected at boot, or an
- * abandoned one would hold its lane for the life of the save. {@code HyperspaceSurvivesARestartE2ETest}
+ * abandoned one would hold its lane for the life of the save. {@code HyperspaceSurvivesARestartTest}
  * is the witness for both.</p>
  *
  * <p>Registered upfront by {@link #register()} (a cheap Forge map entry, mirroring the slot pool) with

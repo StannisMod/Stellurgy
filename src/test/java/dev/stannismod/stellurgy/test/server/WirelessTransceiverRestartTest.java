@@ -36,6 +36,10 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Mirrors the lifecycle pattern of {@code PersistenceRestartSmokeTest}
  * (per-method workDir, two harness instances).</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class WirelessTransceiverRestartTest {
 
