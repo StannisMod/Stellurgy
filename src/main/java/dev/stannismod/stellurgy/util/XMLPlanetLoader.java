@@ -17,6 +17,9 @@ import net.minecraftforge.oredict.OreDictionary;
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
 import dev.stannismod.stellurgy.Stellurgy;
+import dev.stannismod.stellurgy.atmosphere.AirState;
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
+import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.api.dimension.solar.IGalaxy;
@@ -142,6 +145,11 @@ public class XMLPlanetLoader {
     private static final String ELEMENT_PERIOD = "rotationalPeriod";
     private static final String ELEMENT_HASOXYGEN = "hasOxygen";
     private static final String ELEMENT_ATMDENSITY = "atmosphereDensity";
+    /** A body's air stated outright: {@code <gas name=… ppm=…/>} children, or {@code copyOf="<body>"}. */
+    private static final String ELEMENT_ATMOSPHERE = "atmosphere";
+    private static final String ATTR_GAS_NAME = "name";
+    private static final String ATTR_GAS_PPM = "ppm";
+    private static final String ATTR_COPY_OF = "copyOf";
     private static final String ELEMENT_SEALEVEL = "seaLevel";
     private static final String ELEMENT_ORBIT_HEIGHT = "orbitHeight";
     //private static final String ELEMENT_TARGETSEALEVEL = "targetseaLevel";
@@ -185,6 +193,25 @@ public class XMLPlanetLoader {
     private int currentNodeIndex;
     private int starId;
     private int offset;
+    /**
+     * Bodies whose air is a copy of another body's, resolved once the whole file has been read: the
+     * body named may come later in the file, or be another copy. Filled and drained by one
+     * {@link #readAllPlanets()}.
+     */
+    private final List<AtmosphereCopy> atmosphereCopies = new ArrayList<>();
+
+    /** One {@code <atmosphere copyOf=…/>}: who copies, from whom, and the star that warms it. */
+    private static final class AtmosphereCopy {
+        final DimensionProperties body;
+        final StellarBody star;
+        final String exemplar;
+
+        AtmosphereCopy(DimensionProperties body, StellarBody star, String exemplar) {
+            this.body = body;
+            this.star = star;
+            this.exemplar = exemplar;
+        }
+    }
 
     private HashMap<StellarBody, Integer> maxPlanetNumber = new HashMap<>();
     private HashMap<StellarBody, Integer> maxGasPlanetNumber = new HashMap<>();
@@ -1116,6 +1143,12 @@ public class XMLPlanetLoader {
         // planetDefs entry has always meant by saying nothing.
         boolean oxygenated = true;
         int statedDensity = 100;
+        // ...or the air itself, stated whole or named as a copy. Either one excludes the two
+        // elements above: a composition is the sum of its parts, so a total beside it is a second
+        // answer to the same question.
+        boolean totalStated = false;
+        AirState statedAir = null;
+        String airCopyOf = null;
 
         while (planetPropertyNode != null) {
             if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_FOGCOLOR)) {
@@ -1208,9 +1241,27 @@ public class XMLPlanetLoader {
                 } catch (NumberFormatException e) {
                     Stellurgy.logger.warn("Invalid sky color specified"); //TODO: more detailed error msg
                 }
-            } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_HASOXYGEN))
+            } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_HASOXYGEN)) {
                 oxygenated = Boolean.parseBoolean(planetPropertyNode.getTextContent());
-            else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_COLOR_OVERRIDE))
+                totalStated = true;
+            } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_ATMOSPHERE)) {
+                if (statedAir != null || airCopyOf != null) {
+                    throw new IllegalArgumentException("planet '" + properties.getName()
+                            + "' states <" + ELEMENT_ATMOSPHERE + "> twice");
+                }
+                Node copyOf = planetPropertyNode.getAttributes() == null ? null
+                        : planetPropertyNode.getAttributes().getNamedItem(ATTR_COPY_OF);
+                if (copyOf != null) {
+                    airCopyOf = copyOf.getNodeValue().trim();
+                    if (airCopyOf.isEmpty() || hasElementChildren(planetPropertyNode)) {
+                        throw new IllegalArgumentException("planet '" + properties.getName() + "': <"
+                                + ELEMENT_ATMOSPHERE + " " + ATTR_COPY_OF + "> names one body and states"
+                                + " no gases of its own");
+                    }
+                } else {
+                    statedAir = readComposition(planetPropertyNode, properties.getName());
+                }
+            } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_COLOR_OVERRIDE))
                 properties.colorOverride = Boolean.parseBoolean(planetPropertyNode.getTextContent());
             else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_SKYOVERRIDE))
                 properties.skyRenderOverride = Boolean.parseBoolean(planetPropertyNode.getTextContent());
@@ -1233,6 +1284,7 @@ public class XMLPlanetLoader {
 
                 try {
                     statedDensity = Math.min(Math.max(Integer.parseInt(planetPropertyNode.getTextContent()), DimensionProperties.MIN_ATM_PRESSURE), DimensionProperties.MAX_ATM_PRESSURE);
+                    totalStated = true;
                 } catch (NumberFormatException e) {
                     Stellurgy.logger.warn("Invalid atmosphereDensity specified"); //TODO: more detailed error msg
                 }
@@ -1624,6 +1676,11 @@ public class XMLPlanetLoader {
         // by its mass and size, and one rule for the whole file is simpler than a rule that depends on
         // which other elements happen to be present. Thrown, so the per-planet guard in
         // readAllPlanets names the star and skips this body rather than inventing a size for it.
+        if ((statedAir != null || airCopyOf != null) && totalStated) {
+            throw new IllegalArgumentException("planet '" + properties.getName() + "' states <"
+                    + ELEMENT_ATMOSPHERE + "> beside <" + ELEMENT_ATMDENSITY + "> or <" + ELEMENT_HASOXYGEN
+                    + ">; a stated composition is the whole answer, so state one or the other");
+        }
         if (!properties.hasBulkProperties()) {
             throw new IllegalArgumentException("planet '" + properties.getName() + "' states no <"
                     + ELEMENT_MASS + "> and <" + ELEMENT_RADIUS + ">; every planetDefs body must state both,"
@@ -1638,9 +1695,18 @@ public class XMLPlanetLoader {
         // the world would be born at the temperature of deep space. The albedo is the world's own, so
         // an authored planet and a derived one are warmed by the same law. The greenhouse term reads
         // the STATED total, as a derived world's does.
-        properties.setAverageTemp(AstronomicalBodyHelper.getAverageTemperature(star,
-                properties.getSolarOrbitalDistance(), statedDensity, properties.getAlbedo()));
-        properties.realizeAtmosphere(oxygenated, statedDensity);
+        if (statedAir != null) {
+            properties.setAverageTemp(AstronomicalBodyHelper.getAverageTemperature(star,
+                    properties.getSolarOrbitalDistance(), centiAtm(statedAir), properties.getAlbedo()));
+            properties.authorAtmosphere(statedAir);
+        } else if (airCopyOf != null) {
+            // Its air, and so its warmth, waits for the body it names: see resolveAtmosphereCopies.
+            atmosphereCopies.add(new AtmosphereCopy(properties, star, airCopyOf));
+        } else {
+            properties.setAverageTemp(AstronomicalBodyHelper.getAverageTemperature(star,
+                    properties.getSolarOrbitalDistance(), statedDensity, properties.getAlbedo()));
+            properties.realizeAtmosphere(oxygenated, statedDensity);
+        }
 
         //If no biomes are specified add some!
         if (properties.getBiomes().isEmpty())
@@ -1784,8 +1850,126 @@ public class XMLPlanetLoader {
         return star;
     }
 
+    /**
+     * The gases an {@code <atmosphere>} element states, each in parts per million of an atmosphere.
+     * Refuses an unknown gas, a repeated one, a missing or negative amount and any child that is not a
+     * gas: each is a typo whose silent reading would be a different world.
+     */
+    private static AirState readComposition(Node atmosphere, String planet) {
+        AirState air = AirState.vacuum();
+        Set<Gas> seen = new HashSet<>();
+        for (Node child = atmosphere.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child.getNodeType() != Node.ELEMENT_NODE) {
+                continue;
+            }
+            if (!child.getNodeName().equalsIgnoreCase(ELEMENT_GAS)) {
+                throw new IllegalArgumentException("planet '" + planet + "': <" + ELEMENT_ATMOSPHERE
+                        + "> holds only <" + ELEMENT_GAS + "> elements, not <" + child.getNodeName() + ">");
+            }
+            Node nameAttr = child.getAttributes().getNamedItem(ATTR_GAS_NAME);
+            Node ppmAttr = child.getAttributes().getNamedItem(ATTR_GAS_PPM);
+            Gas gas = nameAttr == null ? null : GasRegistry.byName(nameAttr.getNodeValue().trim());
+            if (gas == null) {
+                throw new IllegalArgumentException("planet '" + planet + "': no gas named '"
+                        + (nameAttr == null ? "" : nameAttr.getNodeValue()) + "'");
+            }
+            if (!seen.add(gas)) {
+                throw new IllegalArgumentException("planet '" + planet + "' states " + gas.name() + " twice");
+            }
+            long ppm;
+            try {
+                ppm = ppmAttr == null ? -1L : Long.parseLong(ppmAttr.getNodeValue().trim());
+            } catch (NumberFormatException e) {
+                ppm = -1L;
+            }
+            if (ppm < 0L) {
+                throw new IllegalArgumentException("planet '" + planet + "': " + gas.name()
+                        + " needs a " + ATTR_GAS_PPM + " of zero or more");
+            }
+            air.add(gas, ppm * AirState.PER_PPM, AirState.ambientKelvin());
+        }
+        return air;
+    }
+
+    private static boolean hasElementChildren(Node node) {
+        for (Node child = node.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child.getNodeType() == Node.ELEMENT_NODE) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A composition's total, in the density readout's unit (100 = 1 atm), rounded as the readout is. */
+    private static int centiAtm(AirState air) {
+        return (int) Math.min(Integer.MAX_VALUE,
+                Math.round(air.getTotalPressure() / (double) (AirState.ONE_ATM / 100L)));
+    }
+
+    /**
+     * Give every {@code copyOf} body the air of the body it names — once the whole file is read, so the
+     * name may point forward, and through other copies.
+     * <p>
+     * A name that matches no body, matches more than one, or leads back to itself refuses the WHOLE
+     * load: the error is only visible once every body is known, by which time a single body can no
+     * longer be taken out cleanly, and a load that went on would hand the copying body the air it
+     * started with — a default, not what its author wrote.
+     */
+    private void resolveAtmosphereCopies(DimensionPropertyCoupling coupling) {
+        Map<String, List<DimensionProperties>> byName = new HashMap<>();
+        for (DimensionProperties body : coupling.dims) {
+            byName.computeIfAbsent(body.getName(), k -> new ArrayList<>()).add(body);
+        }
+        Map<DimensionProperties, AtmosphereCopy> pending = new IdentityHashMap<>();
+        for (AtmosphereCopy copy : atmosphereCopies) {
+            if (coupling.dims.contains(copy.body)) {
+                pending.put(copy.body, copy);
+            }
+        }
+        Set<DimensionProperties> resolved = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (AtmosphereCopy copy : new ArrayList<>(pending.values())) {
+            resolveCopy(copy, byName, pending, resolved, new ArrayList<>());
+        }
+        atmosphereCopies.clear();
+    }
+
+    private static void resolveCopy(AtmosphereCopy copy, Map<String, List<DimensionProperties>> byName,
+                                    Map<DimensionProperties, AtmosphereCopy> pending,
+                                    Set<DimensionProperties> resolved, List<String> chain) {
+        if (resolved.contains(copy.body)) {
+            return;
+        }
+        String self = copy.body.getName();
+        if (chain.contains(self)) {
+            chain.add(self);
+            throw new RuntimeException("planetDefs: <" + ELEMENT_ATMOSPHERE + " " + ATTR_COPY_OF
+                    + "> runs in a circle: " + String.join(" -> ", chain));
+        }
+        chain.add(self);
+        List<DimensionProperties> named = byName.get(copy.exemplar);
+        if (named == null || named.isEmpty()) {
+            throw new RuntimeException("planetDefs: planet '" + self + "' copies the air of '"
+                    + copy.exemplar + "', and no body in the file has that name");
+        }
+        if (named.size() > 1) {
+            throw new RuntimeException("planetDefs: planet '" + self + "' copies the air of '"
+                    + copy.exemplar + "', and " + named.size() + " bodies in the file have that name");
+        }
+        DimensionProperties exemplar = named.get(0);
+        AtmosphereCopy exemplarCopy = pending.get(exemplar);
+        if (exemplarCopy != null) {
+            resolveCopy(exemplarCopy, byName, pending, resolved, chain);
+        }
+        AirState air = exemplar.getAir();
+        copy.body.setAverageTemp(AstronomicalBodyHelper.getAverageTemperature(copy.star,
+                copy.body.getSolarOrbitalDistance(), centiAtm(air), copy.body.getAlbedo()));
+        copy.body.authorAtmosphere(air);
+        resolved.add(copy.body);
+    }
+
     public DimensionPropertyCoupling readAllPlanets() {
         DimensionPropertyCoupling coupling = new DimensionPropertyCoupling();
+        atmosphereCopies.clear();
 
         NodeList galaxyNodes = doc.getElementsByTagName("galaxy");
         if (galaxyNodes.getLength() == 0) {
@@ -1867,6 +2051,7 @@ public class XMLPlanetLoader {
             coupling.galaxyGenConfig =
                     coupling.galaxyGenConfig.withReservedGalaxies(coupling.declaredGalaxies);
         }
+        resolveAtmosphereCopies(coupling);
         return coupling;
     }
 

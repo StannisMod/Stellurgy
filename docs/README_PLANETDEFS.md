@@ -679,6 +679,26 @@ than a gas's boiling point has that gas frozen onto the ground. A world that los
 is airless whatever density it stated. After creation the world's own saved air is the authority:
 editing these two elements does not change a world that already exists.
 
+**Stating the air instead.** A planet may say what its air IS rather than how dense it is:
+
+```xml
+<atmosphere>
+  <gas name="carbondioxide" ppm="965000"/>
+  <gas name="nitrogen" ppm="35000"/>
+</atmosphere>
+```
+
+Each `ppm` is parts per million of an atmosphere, so the total pressure is the sum (here exactly one
+atmosphere). Or it may copy another body of the same file: `<atmosphere copyOf="Venus"/>` — a COPY,
+taken once at load; the name may point forward, and may name another copy.
+
+- `<atmosphere>` replaces `atmosphereDensity` and `hasOxygen`; stating it beside either is an error,
+  because a composition is the whole answer and a total beside it is a second one.
+- An unknown gas name, a gas stated twice, a missing or negative `ppm`, or an element inside
+  `<atmosphere>` that is not a `<gas>` is an error for that planet (it is skipped, with its moons).
+- A `copyOf` that names no body, names a body two planets share, or leads back round to itself refuses
+  the WHOLE file — that is only visible once every body is read.
+
 **Gas giant versus surface.** `<GasGiant>true</GasGiant>` makes the world surfaceless. It is then not
 a landing target however else it is configured, `laserDrillOres` on it is ignored, and only `<gas>`
 entries can be harvested from it.

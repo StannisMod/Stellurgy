@@ -1150,6 +1150,20 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
     /**
+     * Give this world exactly the air its author stated — the creation door for an authored body,
+     * beside {@link #realizeAtmosphere} for a derived one. Authoring overrides derivation, so nothing
+     * about the body is consulted; the gases arrive at this world's temperature, so set that first.
+     */
+    public void authorAtmosphere(AirState stated) {
+        AirState authored = AirState.vacuum();
+        for (Map.Entry<Gas, Long> entry : stated.composition().entrySet()) {
+            authored.add(entry.getKey(), entry.getValue(), getAverageTemp());
+        }
+        air = authored;
+        originalAtmosphereDensity = getAtmosphereDensity();
+    }
+
+    /**
      * Put gas into this world's air — an exchange that moves real substance, so the pressure rises by
      * exactly what came in and a gas the air did not hold before is now part of it. The portion
      * arrives at this world's temperature.
