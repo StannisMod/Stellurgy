@@ -2,9 +2,9 @@ package dev.stannismod.stellurgy.test.unit;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
@@ -12,7 +12,6 @@ import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -25,30 +24,14 @@ import static org.junit.Assert.assertTrue;
  * heard of still resolves, with its shipped values, and is written into the file so the player can
  * see and edit it. A file written by an older version must not hide what was added since.</p>
  *
- * <p>The subject is the one table the game reads, at the one path it reads it from, so this class
- * works on that file and puts back whatever it found there, byte for byte, before it lets go.</p>
+ * <p>The file is one this test owns, in a folder of its own: {@link ThermalMaterials#load} reads the
+ * path it is given, so the merge is the same decision wherever the file lies, and the install's own
+ * table is never touched.</p>
  */
 public class ThermalTableFileTest {
 
-    /** Where the install's table lives, relative to the run; read through {@link ThermalMaterials#load}.
-     *  A constant: a {@link Path} is an immutable value. */
-    private static final Path TABLE = Paths.get("config", "advRocketry", "thermalMaterials.json");
-
-    private byte[] found;
-
-    @Before
-    public void keepWhatIsThere() throws Exception {
-        found = Files.exists(TABLE) ? Files.readAllBytes(TABLE) : null;
-    }
-
-    @After
-    public void putItBack() throws Exception {
-        if (found != null) {
-            Files.write(TABLE, found);
-        } else {
-            Files.deleteIfExists(TABLE);
-        }
-    }
+    @Rule
+    public TemporaryFolder folder = new TemporaryFolder();
 
     /**
      * <p>The shipped row is read the way the game gets it on a fresh install - a load with no file -
@@ -65,8 +48,8 @@ public class ThermalTableFileTest {
      */
     @Test
     public void aTableWrittenBeforeAMaterialShippedStillKnowsIt() throws Exception {
-        Files.deleteIfExists(TABLE);
-        ThermalMaterials fresh = ThermalMaterials.load(TABLE.toString());
+        Path table = folder.getRoot().toPath().resolve("thermalMaterials.json");
+        ThermalMaterials fresh = ThermalMaterials.load(table.toString());
         ThermalMaterial shippedWood = fresh.byName("wood");
         ThermalMaterial shippedIron = fresh.byName("iron");
         assertNotNull("premise: a fresh install must ship wood", shippedWood);
@@ -77,10 +60,10 @@ public class ThermalTableFileTest {
         int editedDensity = shippedIron.densityKgPerCubicMetre() + 1;
         int editedHeat = shippedIron.specificHeatJoulesPerKgKelvin() + 1;
         int editedCeiling = shippedIron.ceilingKelvin() + 1;
-        Files.write(TABLE, ("{\"materials\":{\"iron\":{\"density\":" + editedDensity
+        Files.write(table, ("{\"materials\":{\"iron\":{\"density\":" + editedDensity
                 + ",\"specificHeat\":" + editedHeat + ",\"ceilingKelvin\":" + editedCeiling + "}}}")
                 .getBytes(StandardCharsets.UTF_8));
-        ThermalMaterials older = ThermalMaterials.load(TABLE.toString());
+        ThermalMaterials older = ThermalMaterials.load(table.toString());
 
         ThermalMaterial wood = older.byName("wood");
         assertNotNull("a material the file predates must still resolve", wood);
@@ -96,7 +79,7 @@ public class ThermalTableFileTest {
         assertEquals("the file's specific heat", editedHeat, iron.specificHeatJoulesPerKgKelvin());
         assertEquals("the file's ceiling", editedCeiling, iron.ceilingKelvin());
 
-        String onDisk = new String(Files.readAllBytes(TABLE), StandardCharsets.UTF_8);
+        String onDisk = new String(Files.readAllBytes(table), StandardCharsets.UTF_8);
         JsonObject rows = new JsonParser().parse(onDisk).getAsJsonObject().getAsJsonObject("materials");
         assertTrue("the added material must be written into the file for the player to edit: "
                 + onDisk, rows.has("wood"));
