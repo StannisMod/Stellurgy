@@ -187,9 +187,6 @@ public class DiagonalBoreE2ETest extends AbstractSharedServerTest {
                 + (Y + 2) + " " + (Z + HALF) + " minecraft:stone").requireOk("build the target");
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

@@ -13,7 +13,6 @@ import dev.stannismod.stellurgy.test.RocketInfo;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * RocketEvent payload contract for external subscribers.
@@ -53,7 +52,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
     private final Events events =
-            new Events(cmd -> exec(cmd), ticks -> GameTicks.advanceWorld(client(), 0, ticks));
+            new Events(cmd -> exec(cmd), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static final String ENTITY_ID = "entityId";
     private static final String PRELAUNCH_ID = "preLaunchEntityId";
@@ -133,7 +132,8 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
      * references.</p>
      *
      * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
-     * ({@code EntityRocket:2153}) removed: "no `rocket_landed` carrying e = … was recorded within 100
+     * ({@code EntityRocket#onUpdate} at
+     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this))}) removed: "no `rocket_landed` carrying e = … was recorded within 100
      * ticks", 2026-09-28. The payload verdicts after it read the recorder's last landing and need no
      * inversion of their own to be reached: they are the same event's fields.</p>
      */
@@ -297,7 +297,7 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
      *  per-test because release-on-inhabited-chunks has been observed to
      *  stall the shared dedicated-server harness — each test picks a
      *  position-disjoint chunk via its own {@code CX_*} constant. */
-    private static void forceLoadChunksAround(int dim, int worldX, int worldZ) throws Exception {
+    private void forceLoadChunksAround(int dim, int worldX, int worldZ) throws Exception {
         int cx = worldX >> 4;
         int cz = worldZ >> 4;
         for (int dxc = -1; dxc <= 1; dxc++) {

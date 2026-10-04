@@ -44,13 +44,14 @@ public class TurretStandaloneE2ETest extends AbstractSharedServerTest {
      * there was not aboard anything, it assembled and ticked exactly as a gun on the ground should,
      * and the test reported that as production having stopped waiting. Where the shipyard IS belongs
      * to the allocator; what this test claims is only that a gun inside it does nothing.</p>
+     * A constant: an int.
      */
     private static final int SHIPYARD_X =
             (ShipChunkAllocator.CHUNK_X_START << 4) + 400;
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * red-witnessed: with {@code TileTurret#update} at {@code if (!onTarget || isHoldingFire() || !canFireNow())}'s automatic path made to return before
@@ -488,9 +489,6 @@ public class TurretStandaloneE2ETest extends AbstractSharedServerTest {
                 placed.bool("placed"));
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

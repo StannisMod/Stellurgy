@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.network;
 
-import dev.stannismod.stellurgy.integration.jei.StellurgyJeiPlugin;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -114,11 +113,10 @@ public class PacketDimInfo extends BasePacket {
     }
 
     @Override
+    @net.minecraftforge.fml.relauncher.SideOnly(net.minecraftforge.fml.relauncher.Side.CLIENT)
     public void executeClient(EntityPlayer thePlayer) {
         if (deleteDim) {
-            if (DimensionManager.getInstance().isDimensionCreated(dimNumber)) {
-                DimensionManager.getInstance().deleteDimension(dimNumber);
-            }
+            DimensionManager.getInstance().forgetDimension(dimNumber);
         } else {
             dimProperties = new DimensionProperties(dimNumber);
             dimProperties.readFromNBT(dimNBT);
@@ -146,12 +144,7 @@ public class PacketDimInfo extends BasePacket {
                 DimensionManager.getInstance().registerDimNoUpdate(dimProperties, true);
             }
         }
-        // Guard the JEI integration: touching StellurgyJeiPlugin (implements mezz.jei.api
-        // IModPlugin) loads JEI classes, which NoClassDefFoundErrors when JEI
-        // isn't installed. See issue #76.
-        if (net.minecraftforge.fml.common.Loader.isModLoaded("jei")) {
-            StellurgyJeiPlugin.requestGasGiantRefresh();
-        }
+        dev.stannismod.stellurgy.client.ServerView.current().galaxyChanged();
     }
 
     @Override

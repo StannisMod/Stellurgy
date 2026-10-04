@@ -47,7 +47,7 @@ public class PacketSpaceStationInfo extends BasePacket {
                 //spaceObject.getProperties().writeToNBT(nbt);
                 PacketBuffer packetBuffer = new PacketBuffer(out);
                 out.writeBoolean(false);
-                packetBuffer.writeString(SpaceObjectManager.getSpaceManager().getIdentifierFromClass(spaceObject.getClass()));
+                packetBuffer.writeString(SpaceObjectManager.getIdentifierFromClass(spaceObject.getClass()));
                 packetBuffer.writeCompoundTag(nbt);
 
                 packetBuffer.writeInt(spaceObject.getFuelAmount());
@@ -97,16 +97,14 @@ public class PacketSpaceStationInfo extends BasePacket {
     @Override
     public void executeClient(EntityPlayer thePlayer) {
         if (isBeingDeleted) {
-            if (DimensionManager.getInstance().isDimensionCreated(stationNumber)) {
-                DimensionManager.getInstance().deleteDimension(stationNumber);
-            }
+            SpaceObjectManager.getSpaceManager().forgetSpaceObject(stationNumber);
         } else {
             ISpaceObject spaceObject = SpaceObjectManager.getSpaceManager().getSpaceStation(stationNumber);
             this.spaceObject = (SpaceStationObject) spaceObject;
 
             //Station needs to be created
             if (spaceObject == null) {
-                ISpaceObject newSpaceObject = SpaceObjectManager.getSpaceManager().getNewSpaceObjectFromIdentifier(clazzId);
+                ISpaceObject newSpaceObject = SpaceObjectManager.getNewSpaceObjectFromIdentifier(clazzId);
                 newSpaceObject.readFromNbt(nbt);
                 newSpaceObject.setProperties(DimensionProperties.createFromNBT(stationNumber, nbt));
                 ((SpaceStationObject) newSpaceObject).setForwardDirection(EnumFacing.values()[direction]);

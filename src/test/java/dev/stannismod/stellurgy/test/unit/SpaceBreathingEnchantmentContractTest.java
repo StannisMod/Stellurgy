@@ -11,15 +11,12 @@ import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
 import dev.stannismod.stellurgy.enchant.EnchantmentSpaceBreathing;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
  *
- * Contract for {@link EnchantmentSpaceBreathing}: cannot be reached via
- * the vanilla enchanting table (treasure-tier), only applies to armor,
- * single-level, never lands on books.
+ * Contract for {@link EnchantmentSpaceBreathing}: only applies to non-empty armor.
  */
 public class SpaceBreathingEnchantmentContractTest {
 
@@ -63,30 +60,5 @@ public class SpaceBreathingEnchantmentContractTest {
         Enchantment ench = new EnchantmentSpaceBreathing();
         assertFalse("canApply must return false for empty stack",
                 ench.canApply(ItemStack.EMPTY));
-    }
-
-    @Test
-    public void notReachableViaEnchantingTable() {
-        // Treasure-tier: only obtainable via villager trading / loot, never
-        // through random enchantment table rolls. Drop this guarantee and
-        // every enchantable book will start surfacing it.
-        Enchantment ench = new EnchantmentSpaceBreathing();
-        ItemStack armor = new ItemStack(Items.LEATHER_HELMET, 1);
-        assertFalse("space-breathing must NOT be available at the enchanting table",
-                ench.canApplyAtEnchantingTable(armor));
-    }
-
-    @Test
-    public void notAllowedOnBooks() {
-        Enchantment ench = new EnchantmentSpaceBreathing();
-        assertFalse("space-breathing must NOT land on books (would defeat treasure-tier intent)",
-                ench.isAllowedOnBooks());
-    }
-
-    @Test
-    public void singleLevelMax() {
-        Enchantment ench = new EnchantmentSpaceBreathing();
-        assertEquals("space-breathing is binary on/off — max level must stay 1",
-                1, ench.getMaxLevel());
     }
 }

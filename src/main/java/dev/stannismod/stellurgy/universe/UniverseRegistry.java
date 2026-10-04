@@ -71,6 +71,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
 
     // A self-contained logger rather than Stellurgy.logger: loading the mod class triggers Forge
     // bootstrap (FluidRegistry.enableUniversalBucket), which would break pure unit tests of this registry.
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("Stellurgy|Universe");
 
     // ─── The override store (persisted) ───────────────────────────────────────
@@ -149,29 +150,77 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      */
     private transient Map<String, GalacticCoord> anchorsBySuper = null;
     private transient int anchorsBySuperSpacing = -1;
+    /** Super-cell &rarr; the AUTHORED anchors in it; see {@link #authoredBySuperIndex}. */
+    private transient Map<String, List<GalacticCoord>> authoredBySuper = null;
+    private transient int authoredBySuperSpacing = -1;
 
-    // ─── The SERVER's model state, and the seams that carry it ───────────────
+    // ─── The model in force for this save, re-resolved per load ───────────────
     //
-    // These were labelled "JVM-global seams" and behaved like it: every one of them belongs to the
-    // running server - the schema is the SAVE's, the seed is the SAVE's, the staged config is the
-    // pack this world loaded with - and none was ever released, so the load path compensated by
-    // overwriting them (the comment at the DimensionManager install site says so in as many words).
-    // They are released in onServerStopped now, so the next world starts from the ship default
-    // rather than from the last one's leftovers.
-    private static volatile IGalaxyGenerator generator = new EmptyGalaxyGenerator();
+    // This object is the SAVE's (the overworld's map storage), so it is built when a server loads its
+    // worlds and dropped with them: what is in force here belongs to that server and to nothing after
+    // it. None of it is persisted — the schema is re-resolved from the stamp on every load.
+    /** The generator in force; the shipped default (void between authored anchors) until {@link #populate}. */
+    private volatile IGalaxyGenerator generator = new EmptyGalaxyGenerator();
     // How a stored star-id resolves to its content object. Defaults to the legacy catalogue; overridable so
     // the forward coord->system path is unit-testable without booting DimensionManager, and so an addon can
     // supply fabricated systems.
-    private static volatile IntFunction<StellarBody> starLookup = UniverseRegistry::lookupCatalogueStar;
-    private static Map<Integer, GalacticAnchor> pendingAnchors = new HashMap<>();
+    private volatile IntFunction<StellarBody> starLookup = UniverseRegistry::lookupCatalogueStar;
+    /** The model {@link #populate} put in force for this save; null until it has run. */
+    private volatile UniverseSchema activeSchema = null;
+    /** The memory of what the galaxy this save belongs to has already reported; bound by {@link #get(World)}. */
+    private volatile ReportOnce reports = null;
+
     /**
-     * The pack's {@code <galaxyGen>} configuration for this session, staged while dimensions load and
-     * paired with the save's schema stamp at {@link #populate}. Null means the pack declares none.
+     * Bind the galaxy whose derivation this registry runs, by its report memory. Rebinding the same
+     * galaxy is a no-op; binding another is an error, because a registry belongs to one server.
+     * Production binds the server's galaxy in {@link #get(World)}; a test arranging a registry of its
+     * own binds one it owns.
      */
-    private static volatile GalaxyGenConfig packGalaxyConfig = null;
-    /** The model {@link #populate} put in force for this session; null until it has run. */
-    private static volatile UniverseSchema activeSchema = null;
-    private static boolean pendingReset = false;
+    public void bindReports(ReportOnce galaxyReports) {
+        if (galaxyReports == null) {
+            throw new NullPointerException("galaxyReports");
+        }
+        if (reports != null && reports != galaxyReports) {
+            throw new IllegalStateException("this universe registry is already bound to another galaxy");
+        }
+        reports = galaxyReports;
+    }
+
+    private ReportOnce reports() {
+        ReportOnce bound = reports;
+        if (bound == null) {
+            throw new IllegalStateException("no galaxy is bound to this universe registry; only a "
+                    + "registry reached through a server world has one");
+        }
+        return bound;
+    }
+
+    /** The world models this registry can open a save under; bound by {@link #get(World)}. */
+    private volatile UniverseSchemas schemas = null;
+
+    /**
+     * Bind the catalogue of world models this registry reconciles a save against. Production binds
+     * {@link UniverseSchemas#builtIn()} in {@link #get(World)}; a test builds a registry and binds the
+     * catalogue it needs. Rebinding the same catalogue is a no-op; another is an error.
+     */
+    public void bindSchemas(UniverseSchemas catalogue) {
+        if (catalogue == null) {
+            throw new NullPointerException("catalogue");
+        }
+        if (schemas != null && schemas != catalogue) {
+            throw new IllegalStateException("this universe registry is already bound to another schema catalogue");
+        }
+        schemas = catalogue;
+    }
+
+    /** The bound catalogue; a registry nobody bound has none, and says so. */
+    public UniverseSchemas schemas() {
+        UniverseSchemas bound = schemas;
+        if (bound == null) {
+            throw new IllegalStateException("no schema catalogue is bound to this universe registry");
+        }
+        return bound;
+    }
 
     /**
      * What each authored star was DECLARED as, keyed by star id — the galaxy-local form, kept so the
@@ -219,12 +268,22 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             return null;
         }
         WorldSavedData existing = storage.getOrLoadData(UniverseRegistry.class, STORAGE_KEY);
+        UniverseRegistry registry;
         if (existing instanceof UniverseRegistry) {
-            return (UniverseRegistry) existing;
+            registry = (UniverseRegistry) existing;
+        } else {
+            registry = new UniverseRegistry();
+            storage.setData(STORAGE_KEY, registry);
         }
-        UniverseRegistry fresh = new UniverseRegistry();
-        storage.setData(STORAGE_KEY, fresh);
-        return fresh;
+        if (registry.schemas == null) {
+            registry.bindSchemas(UniverseSchemas.builtIn());
+        }
+        // Bound here and not only at populate: worlds load, and may derive, before the server has
+        // finished starting.
+        if (world instanceof WorldServer) {
+            registry.bindReports(dev.stannismod.stellurgy.Stellurgy.serverState().dimensions.reports());
+        }
+        return registry;
     }
 
     // ─── Forward lookups (coord -> system) ─────────────────────────────────────
@@ -260,7 +319,10 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         if (stored != null) {
             return Optional.of(stored);
         }
-        return generator.anchorAt(worldSeed, cell);
+        // A seat whose neighbourhood reaches an authored one is not a system (clearOfAuthored), so the
+        // cells it would have owned outside the authored box are void.
+        Optional<GalacticCoord> seat = generator.anchorAt(worldSeed, cell);
+        return seat.isPresent() && clearOfAuthored(seat.get()) ? seat : Optional.<GalacticCoord>empty();
     }
 
     /**
@@ -284,7 +346,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      */
     private GalacticCoord storedAnchorNear(GalacticCoord cell) {
         int s = generator.minSpacingCells();
-        long reach = Math.max(1L, s) / 2L;
+        long reach = neighbourhoodReach();
         Map<String, GalacticCoord> index = anchorsBySuperIndex();
         GalacticCoord best = null;
         double bestDistance = Double.MAX_VALUE;
@@ -306,6 +368,104 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             }
         }
         return best;
+    }
+
+    /**
+     * How far a STORED anchor's neighbourhood reaches on each axis, in sectors: half a territory — the
+     * box authored bodies are clamped into ({@code SystemContent}) and member cells attribute by.
+     */
+    private long neighbourhoodReach() {
+        return Math.max(1L, generator.minSpacingCells()) / 2L;
+    }
+
+    /**
+     * Whether the procedural seat {@code seat} stands as a system: whether its own neighbourhood stays
+     * clear of every AUTHORED one.
+     *
+     * <p>An authored star's pack says what is around it, and procedural content is not part of what it
+     * said — a seat whose neighbourhood reaches the authored box is therefore no system at all, for
+     * every question: attribution, a survey's territory, a region. The NEIGHBOURHOOD and not the seat
+     * alone, because a seat outside the box whose cells cross into it would hand the authored system
+     * its bodies.</p>
+     *
+     * <p>A PINNED procedural system is not authored and does not clear the field around it; it is what
+     * the generator put there, frozen.</p>
+     *
+     * <p>Every seat the generator hands out must be able to say what it owns
+     * ({@link IGalaxyGenerator#neighbourhoodOf}); one that cannot is a generator breaking its own
+     * contract, and is refused rather than guessed at.</p>
+     */
+    private boolean clearOfAuthored(GalacticCoord seat) {
+        List<GalacticCoord> near = authoredNear(seat);
+        if (near.isEmpty()) {
+            return true;
+        }
+        Optional<SectorBox> owns = generator.neighbourhoodOf(worldSeed, seat);
+        if (!owns.isPresent()) {
+            throw new IllegalStateException("generator " + generator.getClass().getName() + " handed out the"
+                    + " seat " + seat.cellKey() + " and cannot say which cells it owns");
+        }
+        long reach = neighbourhoodReach();
+        for (GalacticCoord authored : near) {
+            if (SectorBox.around(authored, reach).intersects(owns.get())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The authored anchors whose neighbourhood could reach {@code seat}'s territory: those in the 27
+     * territories around it. A generator's seat owns cells inside its own territory only, and an
+     * authored neighbourhood is half a territory to each side, so nothing farther can touch it.
+     */
+    private List<GalacticCoord> authoredNear(GalacticCoord seat) {
+        int s = generator.minSpacingCells();
+        Map<String, List<GalacticCoord>> index = authoredBySuperIndex();
+        if (index.isEmpty()) {
+            return Collections.emptyList();
+        }
+        GalacticCoord cell = seat.galacticCell().cellCentre();
+        List<GalacticCoord> out = new ArrayList<>();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    List<GalacticCoord> here = index.get(neighbourSuperKey(cell, s, dx, dy, dz));
+                    if (here != null) {
+                        out.addAll(here);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Super-cell &rarr; every AUTHORED anchor in it: the stored placements that are not pins. Kept apart
+     * from {@link #anchorsBySuperIndex}, which holds one anchor per super-cell and pins as well — a
+     * pin sharing an authored anchor's super-cell must not hide the authored neighbourhood from the
+     * mask. Rebuilt lazily from the store, never persisted.
+     */
+    private Map<String, List<GalacticCoord>> authoredBySuperIndex() {
+        int s = generator.minSpacingCells();
+        if (authoredBySuper == null || authoredBySuperSpacing != s) {
+            Map<String, List<GalacticCoord>> index = new HashMap<>();
+            for (GalacticCoord anchor : byStar.values()) {
+                if (pinnedSystems.containsKey(anchor.cellKey())) {
+                    continue;
+                }
+                String key = superKey(anchor, s);
+                List<GalacticCoord> list = index.get(key);
+                if (list == null) {
+                    list = new ArrayList<>();
+                    index.put(key, list);
+                }
+                list.add(anchor);
+            }
+            authoredBySuper = index;
+            authoredBySuperSpacing = s;
+        }
+        return authoredBySuper;
     }
 
     private static boolean withinNeighbourhood(GalacticCoord cell, GalacticCoord anchor, long reach) {
@@ -373,9 +533,13 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * Every anchor seated in the star TERRITORY {@code cell} falls in — what one look of a survey
      * owes the direction it is pointed in (see {@link IGalaxyGenerator#anchorsInTerritory}).
      *
-     * <p>An authored or pinned anchor still wins over the whole territory, exactly as it does in
-     * {@link #anchorForCell}: a pack that placed a system there placed THE system there, and a
-     * procedural seat in the same cube would be a second answer to a question that has one.</p>
+     * <p>A look that lands inside a stored (authored or pinned) neighbourhood is answered by that
+     * system alone, exactly as {@link #anchorForCell} answers the cell. A look that lands outside one
+     * is answered by the generator's seats for its territory — less every seat whose neighbourhood
+     * reaches an authored one ({@link #clearOfAuthored}). Without that, the territory and the
+     * attribution disagreed: a seat inside an authored box was enumerated here as a system of its own,
+     * attributed there to the authored one, and a survey wrote the authored system once more at the
+     * seat's cell for every such seat.</p>
      */
     public List<GalacticCoord> anchorsInTerritory(GalacticCoord cell, int limit) {
         GalacticCoord c = cell.cellCentre();
@@ -386,7 +550,13 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         if (stored != null) {
             return Collections.singletonList(stored);
         }
-        return generator.anchorsInTerritory(worldSeed, c, limit);
+        List<GalacticCoord> seats = new ArrayList<>();
+        for (GalacticCoord seat : generator.anchorsInTerritory(worldSeed, c, limit)) {
+            if (clearOfAuthored(seat)) {
+                seats.add(seat);
+            }
+        }
+        return seats;
     }
 
     public OptionalInt starIdForCoord(GalacticCoord coord) {
@@ -403,7 +573,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         return byCell.containsKey(coord.cellCentre().cellKey());
     }
 
-    /** Every stored system whose cell falls inside the inclusive sector box, merged over the generator. */
+    /**
+     * Every system whose cell falls inside the inclusive sector box: the stored ones, merged over the
+     * generator's — less the generator seats whose neighbourhood reaches an authored one
+     * ({@link #clearOfAuthored}).
+     */
     public Map<GalacticCoord, PlanetarySystem> systemsInRegion(GalacticCoord min, GalacticCoord max) {
         // Normalise the box once (per axis) so the generator and the override scan see the same ordered
         // bounds — a real generator is entitled to assume min <= max.
@@ -415,7 +589,12 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 Math.max(min.sectorX(), max.sectorX()),
                 Math.max(min.sectorY(), max.sectorY()),
                 Math.max(min.sectorZ(), max.sectorZ()), 0L, 0L, 0L);
-        Map<GalacticCoord, PlanetarySystem> out = new HashMap<>(generator.systemsInRegion(worldSeed, lo, hi));
+        Map<GalacticCoord, PlanetarySystem> out = new HashMap<>();
+        for (Map.Entry<GalacticCoord, PlanetarySystem> seated : generator.systemsInRegion(worldSeed, lo, hi).entrySet()) {
+            if (clearOfAuthored(seated.getKey())) {
+                out.put(seated.getKey(), seated.getValue());
+            }
+        }
         for (Map.Entry<Integer, GalacticCoord> e : byStar.entrySet()) {
             GalacticCoord c = e.getValue();
             if (c.sectorX() >= lo.sectorX() && c.sectorX() <= hi.sectorX()
@@ -597,7 +776,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 return new ArrayList<SystemBody>();
             }
             List<SystemBody> authored = SystemContent.bodiesOf(star, anchor,
-                    generator.minSpacingCells(), this::durableName);
+                    generator.minSpacingCells(), this::durableName, reports());
             return withDerivedRetinue(anchor, star, id, authored);
         }
         return new ArrayList<>(generator.bodiesFor(worldSeed, anchor));
@@ -638,7 +817,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         RecordedName recorded = namesByDim.get(dimId);
         if (recorded != null) {
             if (recorded.starId != starId) {
-                if (SystemContent.reportOnce("nameReused:" + dimId + ':' + recorded.starId + "->" + starId)) {
+                if (reports().first("nameReused:" + dimId + ':' + recorded.starId + "->" + starId)) {
                     LOGGER.error("dimension id {} carries a cell name recorded for system {} but now "
                             + "belongs to system {} - the id was recycled. Re-deriving its name as {} "
                             + "(the stale one would have put this body in another system's "
@@ -646,7 +825,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                             dimId, recorded.starId, starId, derived.cellKey());
                 }
             } else if (!SystemContent.withinBoxOf(recorded.name, anchor, minSpacingCells)) {
-                if (SystemContent.reportOnce("nameEscaped:" + dimId + ':' + recorded.name.cellKey())) {
+                if (reports().first("nameEscaped:" + dimId + ':' + recorded.name.cellKey())) {
                     LOGGER.error("recorded cell name {} of dim {} is no longer inside system {}'s "
                             + "neighbourhood (anchor {}, spacing {}) - the anchor or the spacing moved "
                             + "under it. A name outside its own box attributes to no system: the body "
@@ -816,6 +995,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                 ? PinnedSystem.ofStar(system.systemId(), system.star().get(), bodies)
                 : PinnedSystem.ofRogue(system.systemId(), system.name(), bodies);
         pinnedSystems.put(key, snapshot);
+        authoredBySuper = null; // a pin is not authored: an index built before this line would say it is
         markDirty();
         return true;
     }
@@ -1058,7 +1238,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         // carries a planet's name at its star's cell, and a jump aimed at that entry flies to the
         // star; the entry path resolves launch coordinates through here too. Every production caller
         // already handles absence (`isPresent`, `orElse(null)`), so the empty is not a new burden.
-        if (SystemContent.reportOnce("unaddressable:" + props.getStarId() + ':' + props.getId())) {
+        if (reports().first("unaddressable:" + props.getStarId() + ':' + props.getId())) {
             LOGGER.error("dimension {} names star {} but that system's content does not account for "
                     + "it, so it has no cell to be addressed by. Answering EMPTY. Anything that needs "
                     + "to reach this body — the navigation crystal, a jump, an entry placement — must "
@@ -1171,7 +1351,8 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         }
         byCell.put(key, starId);
         byStar.put(starId, cell);
-        anchorsBySuper = null; // derived index follows the store
+        anchorsBySuper = null; // derived indices follow the store
+        authoredBySuper = null;
         markDirty();
     }
 
@@ -1185,6 +1366,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         byStar.remove(id);
         pinnedSystems.remove(key);
         anchorsBySuper = null;
+        authoredBySuper = null;
         markDirty();
         return true;
     }
@@ -1237,9 +1419,9 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      */
     private GalacticCoord resolveAnchor(GalacticAnchor anchor, int starId) {
         double guaranteed = generator.guaranteedAuthoredReachLy();
-        if (guaranteed > 0d && anchor.reachLy() > guaranteed) {
+        if (guaranteed > 0d && anchor.reachLy(generator.laws()) > guaranteed) {
             LOGGER.error("star " + starId + " is authored at " + anchor
-                    + ", which is " + (long) anchor.reachLy() + " light years from its galaxy's centre"
+                    + ", which is " + (long) anchor.reachLy(generator.laws()) + " light years from its galaxy's centre"
                     + " against a guaranteed radius of " + (long) guaranteed + ". On a seed whose"
                     + " galaxy comes out smaller than that, this system will sit in intergalactic"
                     + " space. Move it inside the guaranteed radius.");
@@ -1303,7 +1485,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * it is about to touch was generated by an ALPHA model that may be replaced rather than carried
      * forward.
      */
-    public static Optional<UniverseSchema> activeSchema() {
+    public Optional<UniverseSchema> activeSchema() {
         return Optional.ofNullable(activeSchema);
     }
 
@@ -1354,8 +1536,8 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     /** What THIS build's newest schema measures with — what a fresh world is stamped against. */
-    public static String currentLawsFingerprint() {
-        return lawsFingerprintOf(UniverseSchemas.current().laws());
+    public String currentLawsFingerprint() {
+        return lawsFingerprintOf(schemas().current().laws());
     }
 
     /**
@@ -1385,7 +1567,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     public UniverseSchema reconcileSchema(GalaxyGenConfig config) {
         String fingerprint = fingerprintOf(config);
         if (schemaVersion == UNSTAMPED) {
-            UniverseSchema schema = UniverseSchemas.current();
+            UniverseSchema schema = schemas().current();
             if (!byCell.isEmpty() || !pinnedSystems.isEmpty()) {
                 // A world with content but no stamp predates the stamp. Nothing records what generated
                 // it, so adopting the current model is the only move available — said out loud, because
@@ -1397,11 +1579,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
             stampSchema(schema.version(), fingerprint);
             return schema;
         }
-        Optional<UniverseSchema> saved = UniverseSchemas.of(schemaVersion);
+        Optional<UniverseSchema> saved = schemas().of(schemaVersion);
         if (!saved.isPresent()) {
             throw new UniverseSchemaMismatchException(
                     "This world was generated under universe schema " + schemaVersion
-                            + ", which this build does not carry (it has " + UniverseSchemas.released()
+                            + ", which this build does not carry (it has " + schemas().released()
                             + "). Install a build that carries schema " + schemaVersion
                             + " to open this world.");
         }
@@ -1431,7 +1613,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                         + "everything else is re-derived from here.", configFingerprint, fingerprint);
                 upgradeArmed = false;
                 stampSchema(UniverseSchemas.CURRENT, fingerprint);
-                return UniverseSchemas.current();
+                return schemas().current();
             }
             throw new UniverseSchemaMismatchException(
                     "The <galaxyGen> configuration has changed since this world was generated: it was "
@@ -1473,7 +1655,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
     }
 
     public UniverseSchema adoptSchema(GalaxyGenConfig config) {
-        UniverseSchema schema = UniverseSchemas.current();
+        UniverseSchema schema = schemas().current();
         stampSchema(schema.version(), fingerprintOf(config));
         return schema;
     }
@@ -1495,42 +1677,18 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         markDirty();
     }
 
-    // ─── Static staging + population (server lifecycle) ────────────────────────
+    // ─── Population (server lifecycle) ─────────────────────────────────────────
 
     /**
-     * Buffer XML-authored anchor coords parsed during {@code createAndLoadDimensions} (before worlds load, so
-     * the registry is not yet reachable). Drained by {@link #populate} once worlds are up.
-     */
-    public static void stageAnchors(Map<Integer, GalacticAnchor> anchors, boolean reset) {
-        pendingAnchors = (anchors == null) ? new HashMap<Integer, GalacticAnchor>() : new HashMap<>(anchors);
-        pendingReset = reset;
-    }
-
-    /**
-     * Hand over the pack's {@code <galaxyGen>} configuration, read while dimensions load — before the
-     * save is reachable, so before anything can know which model this world is owed.
+     * Server-start hook (call once worlds are loaded): bind the world seed, drain the anchors
+     * {@code galaxy}'s planet load staged, and give every remaining catalogued star a fallback coord.
+     * Idempotent across restarts.
      *
-     * <p>The pack states the KNOBS; the save states the VERSION. {@link #populate} puts the two together
-     * and installs the generator, which is why the generator is no longer built at the XML site: doing
-     * it there would make the pack the authority on a question that belongs to the world.
-     *
-     * <p>It is kept for the session rather than drained, because an upgrade run later needs the same
-     * configuration to stamp.
+     * <p>The pack states the KNOBS ({@code galaxy}'s {@code <galaxyGen>}); the save states the
+     * VERSION. This is where the two are put together and the generator installed — not at the XML
+     * site, which would make the pack the authority on a question that belongs to the world.</p>
      */
-    public static void stageGalaxyConfig(GalaxyGenConfig config) {
-        packGalaxyConfig = config;
-    }
-
-    /** The pack's {@code <galaxyGen>} configuration for this session, or {@code null} if it declares none. */
-    public static GalaxyGenConfig packGalaxyConfig() {
-        return packGalaxyConfig;
-    }
-
-    /**
-     * Server-start hook (call once worlds are loaded): bind the world seed, drain staged anchors, and give
-     * every remaining catalogued star a fallback coord. Idempotent across restarts.
-     */
-    public static void populate(MinecraftServer server) {
+    public static void populate(MinecraftServer server, DimensionManager galaxy) {
         UniverseRegistry reg = get(server);
         if (reg == null) {
             return;
@@ -1545,9 +1703,11 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         // Raise the world model from the SAVE and install its generator, BEFORE anything derives.
         // applyAnchors resolves declared positions through the generator, so an anchor placed under the
         // wrong model would be placed wrongly and then persisted.
+        GalaxyGenConfig packGalaxyConfig = galaxy.getPackGalaxyConfig();
         UniverseSchema schema = reg.reconcileSchema(packGalaxyConfig);
-        activeSchema = schema;
-        attachSchemaGenerator(schema.generator(packGalaxyConfig));
+        reg.activeSchema = schema;
+        reg.attachSchemaGenerator(schema.generator(packGalaxyConfig, galaxy.getPlanetTypes(),
+                galaxy.reports()));
         LOGGER.info("Universe schema {} ({}) in force, configuration {}", schema.version(),
                 schema.label(), reg.configFingerprint());
         if (!schema.isStable()) {
@@ -1559,15 +1719,15 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
                     + "are not guaranteed to be carried forward, and only what has already been seen is "
                     + "frozen. Do not start a world you intend to keep for years on it.", schema.label());
         }
-        reg.applyAnchors(pendingAnchors, pendingReset);
-        reg.assignFallbackCoords(DimensionManager.getInstance().getStars());
-        pendingAnchors = new HashMap<>();
-        pendingReset = false;
+        boolean reset = galaxy.drainStagedAnchorsReset();
+        reg.applyAnchors(galaxy.drainStagedAnchors(), reset);
+        reg.assignFallbackCoords(galaxy.getStars());
     }
 
     // ─── Generator seam ────────────────────────────────────────────────────────
 
-    public static IGalaxyGenerator getGenerator() {
+    /** The generator in force for this save. */
+    public IGalaxyGenerator generator() {
         return generator;
     }
 
@@ -1581,7 +1741,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * galaxy really is empty" the same answer to every caller. No production path ever passed null;
      * only tests and the probe's reset verb did, and they say {@link #detachGenerator()} now.</p>
      */
-    public static void attachGenerator(IGalaxyGenerator g) {
+    public void attachGenerator(IGalaxyGenerator g) {
         if (g == null) {
             throw new IllegalArgumentException(
                     "a generator must be supplied; use detachGenerator() to return to the ship default");
@@ -1599,7 +1759,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * been shown to be owed — which is exactly what the deleted provisional install did, in the
      * window between {@code serverAboutToStart} and {@code serverStarting}.</p>
      */
-    public static void attachSchemaGenerator(IGalaxyGenerator g) {
+    public void attachSchemaGenerator(IGalaxyGenerator g) {
         if (activeSchema == null) {
             throw new IllegalStateException("no world model is in force yet; a generator installed now"
                     + " would not be the one this save is owed");
@@ -1615,31 +1775,15 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
      * {@code <galaxyGen>} is owed — which is why returning to it is spelled out here rather than
      * reached by passing null to the setter.</p>
      */
-    public static void detachGenerator() {
+    public void detachGenerator() {
         generator = new EmptyGalaxyGenerator();
-    }
-
-    /**
-     * Release everything in this section that belonged to the server that has just stopped.
-     *
-     * <p>Called from the mod's {@code serverStopped}, beside the other subsystems that do the same.
-     * Without it the next world inherits the previous one's schema, staged pack configuration and
-     * generator until something happens to overwrite each — which is what the load path has been
-     * quietly relying on.</p>
-     */
-    public static void onServerStopped() {
-        detachGenerator();
-        activeSchema = null;
-        packGalaxyConfig = null;
-        pendingAnchors = new HashMap<>();
-        pendingReset = false;
     }
 
     /**
      * Override how a stored star-id resolves to its content object (defaults to the legacy catalogue).
      * Passing {@code null} restores the default. Used by tests and by addons supplying fabricated systems.
      */
-    public static void setStarLookup(IntFunction<StellarBody> lookup) {
+    public void setStarLookup(IntFunction<StellarBody> lookup) {
         starLookup = (lookup == null) ? UniverseRegistry::lookupCatalogueStar : lookup;
     }
 
@@ -1686,6 +1830,7 @@ public final class UniverseRegistry extends WorldSavedData implements CellFrames
         pinnedSystems.clear();
         namesByDim.clear();
         anchorsBySuper = null;
+        authoredBySuper = null;
         anchorsSeeded = nbt.getBoolean("anchorsSeeded");
         // Read through hasKey, NEVER through the value alone. NBT answers 0 for an absent integer, and
         // 0 is a real version number — the alpha — so taking the default would report every stampless

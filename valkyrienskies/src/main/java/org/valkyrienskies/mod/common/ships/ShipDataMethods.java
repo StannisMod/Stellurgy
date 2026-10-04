@@ -15,6 +15,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 @ParametersAreNonnullByDefault
 public final class ShipDataMethods {
     // Calculates the new center of mass and inertia matrices for ships after a block change.
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final IPhysicsObjectCenterOfMassProvider centerOfMassProvider = new BasicCenterOfMassProvider();
 
     /**

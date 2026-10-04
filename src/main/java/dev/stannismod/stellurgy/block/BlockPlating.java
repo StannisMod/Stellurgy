@@ -32,17 +32,23 @@ import dev.stannismod.stellurgy.api.damage.IContactResponder;
  */
 public abstract class BlockPlating extends Block implements IContactResponder {
 
-    /** The direction the plating is applied IN: it lies against the face on that side of its voxel. */
+    /** The direction the plating is applied IN: it lies against the face on that side of its voxel. Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyDirection FACING = PropertyDirection.create("facing");
 
     /** How thick a coating is, as a fraction of the block it clings to. */
     private static final double THICKNESS = 0.125D;
 
+    /** Effectively final, process lifetime: built once at class initialisation. An immutable box. */
     private static final AxisAlignedBB DOWN = new AxisAlignedBB(0, 0, 0, 1, THICKNESS, 1);
+    /** Effectively final, process lifetime: built once at class initialisation. An immutable box. */
     private static final AxisAlignedBB UP = new AxisAlignedBB(0, 1 - THICKNESS, 0, 1, 1, 1);
+    /** Effectively final, process lifetime: built once at class initialisation. An immutable box. */
     private static final AxisAlignedBB NORTH = new AxisAlignedBB(0, 0, 0, 1, 1, THICKNESS);
+    /** Effectively final, process lifetime: built once at class initialisation. An immutable box. */
     private static final AxisAlignedBB SOUTH = new AxisAlignedBB(0, 0, 1 - THICKNESS, 1, 1, 1);
+    /** Effectively final, process lifetime: built once at class initialisation. An immutable box. */
     private static final AxisAlignedBB WEST = new AxisAlignedBB(0, 0, 0, THICKNESS, 1, 1);
+    /** Effectively final, process lifetime: built once at class initialisation. An immutable box. */
     private static final AxisAlignedBB EAST = new AxisAlignedBB(1 - THICKNESS, 0, 0, 1, 1, 1);
 
     protected BlockPlating(Material material) {

@@ -50,7 +50,7 @@ public class SpaceSubsystemOwnershipTest {
     }
 
     /** The six services a subsystem owns. A static handing any of these out is a global back door. */
-    private static final List<Class<?>> SERVICES = Arrays.asList(
+    private final List<Class<?>> serviceTypes = Arrays.asList(
             SpaceManager.class, ShipLedger.class, ShipTransitManager.class,
             ShipEntryController.class, CellCrossingController.class, DescentController.class);
 
@@ -73,7 +73,7 @@ public class SpaceSubsystemOwnershipTest {
         for (Method m : SpaceSubsystem.class.getDeclaredMethods()) {
             if (Modifier.isStatic(m.getModifiers())
                     && m.getParameterTypes().length == 0
-                    && SERVICES.contains(m.getReturnType())) {
+                    && serviceTypes.contains(m.getReturnType())) {
                 offenders.add(m.getName() + "() -> " + m.getReturnType().getSimpleName());
             }
         }

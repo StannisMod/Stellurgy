@@ -18,9 +18,7 @@ public class Face {
 
     @SideOnly(Side.CLIENT)
     public void addFaceForRender(BufferBuilder tessellator, float textureOffset) {
-        if (faceNormal == null) {
-            faceNormal = this.calculateFaceNormal();
-        }
+        // faceNormal is set when the model is parsed (every face branch of WavefrontObject.parseFace).
 
         //tessellator.setNormal(faceNormal.x, faceNormal.y, faceNormal.z);
 

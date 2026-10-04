@@ -56,7 +56,9 @@ public final class ShipDamageService {
     private static final double LEAD_STEP = 0.5D;
 
     /**
-     * Recently applied impact identities → the tick they were applied on. Written only from here.
+     * Recently applied impact identities → the tick they were applied on. Written only from this
+     * service. One per running server, held by its {@code ServerState} and dropped with it, so no
+     * identity of one server is refused on the next.
      *
      * <p>Keyed by DIMENSION as well as identity. Identities are minted per world, so two worlds hand
      * out the same numbers as a matter of course; a memory shared between them would refuse a round
@@ -67,12 +69,20 @@ public final class ShipDamageService {
      * still refused for the next, so a test that reuses ids must call {@link #clearRecentImpacts()}
      * between them rather than assume a fresh service.</p>
      */
-    private static final Map<String, Long> RECENT_IMPACTS = new LinkedHashMap<String, Long>() {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
-            return size() > IMPACT_MEMORY_MAX;
-        }
-    };
+    public static final class ImpactMemory {
+
+        private final Map<String, Long> applied = new LinkedHashMap<String, Long>() {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                return size() > IMPACT_MEMORY_MAX;
+            }
+        };
+    }
+
+    /** The running server's impact memory. @throws IllegalStateException when no server is running */
+    private static Map<String, Long> recentImpacts() {
+        return dev.stannismod.stellurgy.Stellurgy.serverState().impactMemory.applied;
+    }
 
     /** One world's identity space, kept apart from every other world's. */
     private static String memoryKey(World world, long impactId) {
@@ -152,7 +162,7 @@ public final class ShipDamageService {
      * server hands it from one scenario to the next otherwise.
      */
     public static void clearRecentImpacts() {
-        RECENT_IMPACTS.clear();
+        recentImpacts().clear();
     }
 
     /**
@@ -161,12 +171,12 @@ public final class ShipDamageService {
      * is what separates a genuine retry from one caller's ids colliding with another's.
      */
     public static Long rememberedTickOf(World world, long impactId) {
-        return world == null ? null : RECENT_IMPACTS.get(memoryKey(world, impactId));
+        return world == null ? null : recentImpacts().get(memoryKey(world, impactId));
     }
 
     /** How many identities are currently remembered (diagnostics and tests). */
     public static int rememberedImpactCount() {
-        return RECENT_IMPACTS.size();
+        return recentImpacts().size();
     }
 
     /**
@@ -288,18 +298,18 @@ public final class ShipDamageService {
 
     private static boolean isDuplicate(World world, long impactId) {
         String key = memoryKey(world, impactId);
-        Long appliedAt = RECENT_IMPACTS.get(key);
+        Long appliedAt = recentImpacts().get(key);
         if (appliedAt == null) {
             return false;
         }
         if (world.getTotalWorldTime() - appliedAt > IMPACT_MEMORY_TICKS) {
-            RECENT_IMPACTS.remove(key);
+            recentImpacts().remove(key);
             return false;
         }
         return true;
     }
 
     private static void remember(World world, long impactId) {
-        RECENT_IMPACTS.put(memoryKey(world, impactId), world.getTotalWorldTime());
+        recentImpacts().put(memoryKey(world, impactId), world.getTotalWorldTime());
     }
 }

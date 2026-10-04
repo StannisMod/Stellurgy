@@ -182,11 +182,11 @@ public class TileTerraformingTerminal extends TileInventoriedRFConsumer implemen
                             try {
 
 
-                                TerraformingHelper t = DimensionProperties.proxylists.gethelper(world.provider.getDimension());
+                                TerraformingHelper t = TerraformingHelper.of(world);
 
                                 if (t == null) {
                                     DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()).load_terraforming_helper(false);
-                                    t = DimensionProperties.proxylists.gethelper(world.provider.getDimension());
+                                    t = TerraformingHelper.of(world);
                                 }
 
                                 BiomeProvider chunkmgr = t.chunkMgrTerraformed;

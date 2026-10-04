@@ -37,6 +37,7 @@ import net.minecraft.util.math.BlockPos;
  */
 public final class DescentController {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /** Ticks a ship waits after a refused/failed descent before the proximity check may re-fire. */

@@ -26,6 +26,7 @@ public enum TerrainSource {
 
     // A self-contained logger rather than Stellurgy.logger: loading the mod class triggers Forge
     // bootstrap, which would break pure unit tests of this enum.
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("Stellurgy|Terrain");
 
     /**

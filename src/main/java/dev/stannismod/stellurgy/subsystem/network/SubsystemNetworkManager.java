@@ -33,9 +33,9 @@ import java.util.TreeSet;
  *
  * <h3>One per running server</h3>
  * <p>An instance holds every network of one server session — which nodes exist and each world's
- * solved topology. The mod object builds one when a server is about to start, before the first world
- * loads and its tiles register, and drops it when that server has stopped; the next session gets a
- * fresh one. So a node, a console setting or a solved flow can never outlive the server it belonged
+ * solved topology. It is a field of the server's {@code ServerState}, built when a server is about to
+ * start, before the first world loads and its tiles register, and dropped with it when that server has
+ * stopped; the next session gets a fresh one. So a node, a console setting or a solved flow can never outlive the server it belonged
  * to, whether or not every world was unloaded cleanly on the way out. {@link SubsystemNetworkEvents}
  * drives it from the world tick and world unload.</p>
  */
@@ -47,7 +47,7 @@ public final class SubsystemNetworkManager {
 
     private final Map<SubsystemNetworkDomain, Map<Integer, WorldState>> worldStates = new HashMap<>();
 
-    /** Built by the mod object's server-lifecycle hooks, one per server session. */
+    /** Built by the server's {@code ServerState}, one per server session. */
     public SubsystemNetworkManager() {
     }
 

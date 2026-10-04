@@ -21,6 +21,7 @@
     "MixinShipVelocityAtPoint",
     "MixinDeckMovementBoundInputs",
     "MixinFlightComputerMotionSample",
+    "MixinPhysicsCalculationsMotionSample",
     "MixinPlayerPacketRubberBand",
     "MixinShipTransformUpdateDiag",
     "MixinTilePilotSeatDiag",
@@ -76,6 +77,7 @@
     "MixinVSBridgeEvents",
     "MixinBasicTeleporterEvents",
     "MixinEntityRocketEvents",
+    "MixinEntityRocketLaunchGate",
     "MixinItemAtmosphereAnalzerEvents",
     "MixinAtmosphereNeedsSuitEvents",
     "MixinAtmosphereChangeEvents",
@@ -89,6 +91,8 @@
     "MixinTilePilotSeatEvents",
     "MixinBlockPilotSeatEvents",
     "MixinMinecraftServerSideTrace",
+    "MixinMinecraftServerShipLoadHold",
+    "MixinShipLoadingHold",
     "MixinEntityTraceMemory"
   ],
   "client": [
@@ -101,7 +105,6 @@
     "MixinHullSweepInputs",
     "MixinShipVelocityAtPoint",
     "MixinBoundarySkyDiag",
-    "MixinClientProxyDiag",
     "MixinHyperspaceTunnelDiag",
     "MixinKeyBindingsMotionSample",
     "MixinKeyBindingsSeatGate",
@@ -110,6 +113,7 @@
     "MixinRocketEventHandlerViewState",
     "MixinShipFrameCameraEvents",
     "MixinDeckLookEvents",
+    "PilotInputAccessor",
     "MixinRocketEventHandlerCameraFrame",
     "MixinEntityRendererEyeProbe",
     "MixinNetHandlerPosLookCount",
@@ -124,6 +128,7 @@
     "MixinClientShotTrackerEvents",
     "MixinTileWeaponConsoleReadoutEvents",
     "MixinPacketThreadUtilRespawnWindow",
+    "MixinTestClientMuteEvents",
     "MixinMinecraftSideTrace"
   ]
 }

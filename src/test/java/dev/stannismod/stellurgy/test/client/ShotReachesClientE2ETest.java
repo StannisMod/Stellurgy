@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -32,6 +33,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShotReachesClientE2ETest extends AbstractClientE2ETest {
 
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
+
     /** Where the player stands for both halves. */
     private static final double PX = 8.5D, PY = 79.0D, PZ = 8.5D;
 
@@ -49,7 +53,7 @@ public class ShotReachesClientE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aRoundFiredNearbyIsDrawnByTheClientAndOneFiredFarAwayIsNot() throws Exception {
-        Events client = ClientEvents.of(bot());
+        Events client = ClientEvents.of(bot(), evictions);
         serverClient().execute("tp @a " + PX + " " + PY + " " + PZ);
 
         long mark = client.mark();
@@ -89,7 +93,7 @@ public class ShotReachesClientE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aRoundThatStopsNearbyIsToldToTheClientAsEnded() throws Exception {
-        Events client = ClientEvents.of(bot());
+        Events client = ClientEvents.of(bot(), evictions);
         serverClient().execute("tp @a " + PX + " " + PY + " " + PZ);
         int wallX = (int) Math.floor(PX + NEAR);
         int wallY = (int) Math.floor(PY), wallZ = (int) Math.floor(PZ) + 6;

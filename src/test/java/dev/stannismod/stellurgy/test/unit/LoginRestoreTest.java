@@ -29,13 +29,25 @@ import static org.junit.Assert.assertTrue;
  */
 public class LoginRestoreTest {
 
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID SHIP = UUID.fromString("00000000-0000-0000-0000-0000000000AA");
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID PLAYER = UUID.fromString("00000000-0000-0000-0000-0000000000BB");
 
-    /** Where the ledger says the ship is now. */
+    /**
+     * Where the ledger says the ship is now.
+     *
+     * <p>A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable
+     * reachable.</p>
+     */
     private static final GalacticCoord LEDGER_COORD =
             GalacticCoord.ofSectorLocal(9L, 0L, 3L, 0L, 0L, 0L);
-    /** Where the ship was when the player logged out — a different cell entirely. */
+    /**
+     * Where the ship was when the player logged out — a different cell entirely.
+     *
+     * <p>A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable
+     * reachable.</p>
+     */
     private static final GalacticCoord STALE_COORD =
             GalacticCoord.ofSectorLocal(1L, 0L, 1L, 0L, 0L, 0L);
 

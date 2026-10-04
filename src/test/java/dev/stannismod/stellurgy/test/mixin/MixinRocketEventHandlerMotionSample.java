@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.command.test.MotionTrace;
+import dev.stannismod.stellurgy.test.trace.SideTrace;
 import dev.stannismod.stellurgy.event.RocketEventHandler;
 
 /**
@@ -36,7 +36,7 @@ public abstract class MixinRocketEventHandlerMotionSample {
             // business and the only channel that can see it is this one, which is also the one
             // whose rate the box sets. Nothing asserts on it; it is here so the number is beside
             // the others when a reader is chasing something real.
-            MotionTrace.clientFrame(view.world == null ? -1L : view.world.getTotalWorldTime(),
+            SideTrace.client().motion().clientFrame(view.world == null ? -1L : view.world.getTotalWorldTime(),
                     eye.x, eye.y, eye.z, p);
         }
     }

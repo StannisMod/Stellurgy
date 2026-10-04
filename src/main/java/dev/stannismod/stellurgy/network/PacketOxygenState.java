@@ -21,8 +21,7 @@ public class PacketOxygenState extends BasePacket {
     @Override
     @SideOnly(Side.CLIENT)
     public void readClient(ByteBuf in) {
-        dev.stannismod.stellurgy.client.ClientAtmosphere.suffocatedAt(
-                Minecraft.getMinecraft().world.getTotalWorldTime());
+
     }
 
     @Override
@@ -31,8 +30,10 @@ public class PacketOxygenState extends BasePacket {
     }
 
     @Override
+    @SideOnly(Side.CLIENT)
     public void executeClient(EntityPlayer thePlayer) {
-
+        dev.stannismod.stellurgy.client.ClientAtmosphere.of(thePlayer.world)
+                .suffocatedAt(thePlayer.world.getTotalWorldTime());
     }
 
     @Override

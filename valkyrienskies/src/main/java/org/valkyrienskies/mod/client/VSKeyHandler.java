@@ -13,6 +13,9 @@ import org.valkyrienskies.mod.common.ValkyrienSkiesMod;
 import org.valkyrienskies.mod.common.network.MessagePlayerStoppedPiloting;
 import org.valkyrienskies.mod.common.piloting.IShipPilotClient;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class VSKeyHandler {
 
     private static final String VS_KEYBIND_IDENTIFIER = "Valkyrien Skies";
@@ -85,7 +88,7 @@ public class VSKeyHandler {
                 BlockPos pilotedPos = clientPilot.getPosBeingControlled();
                 MessagePlayerStoppedPiloting stopPilotingMessage = new MessagePlayerStoppedPiloting(
                     pilotedPos);
-                ValkyrienSkiesMod.controlNetwork.sendToServer(stopPilotingMessage);
+                dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.controlNetwork.sendToServer(stopPilotingMessage);
                 clientPilot.stopPilotingEverything();
             }
         }

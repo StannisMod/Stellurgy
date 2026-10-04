@@ -47,7 +47,7 @@ public class FireControlSensorE2ETest extends AbstractSharedServerTest {
     private static final int PARTS = 6;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** Each key this scenario has set, with the value it held before; emptied by {@link #restoreConfig}. */
     private final java.util.Map<String, String> configBefore = new java.util.LinkedHashMap<>();
@@ -410,9 +410,6 @@ public class FireControlSensorE2ETest extends AbstractSharedServerTest {
                 placed.bool("placed"));
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

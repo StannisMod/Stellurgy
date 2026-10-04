@@ -23,35 +23,36 @@ import dev.stannismod.stellurgy.network.EntityNetworkIds;
 @Mod.EventBusSubscriber(modid = ValkyrienSkiesMod.HOST_MOD_ID)
 public class RegisterEvents {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger logger = LogManager.getLogger(RegisterEvents.class);
 
     @SubscribeEvent
     public static void registerBlocks(@Nonnull final RegistryEvent.Register<Block> event) {
         logger.debug("Registering blocks");
-        Block[] blockArray = ValkyrienSkiesMod.BLOCKS.toArray(new Block[0]);
+        Block[] blockArray = dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.blocks.toArray(new Block[0]);
         event.getRegistry().registerAll(blockArray);
     }
 
     @SubscribeEvent
     public static void registerItems(@Nonnull final RegistryEvent.Register<Item> event) {
         logger.debug("Registering items");
-        event.getRegistry().registerAll(ValkyrienSkiesMod.ITEMS.toArray(new Item[0]));
+        event.getRegistry().registerAll(dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.items.toArray(new Item[0]));
     }
 
     @SubscribeEvent
     public static void registerRecipes(@Nonnull final RegistryEvent.Register<IRecipe> event) {
-        ValkyrienSkiesMod.INSTANCE.registerRecipes(event);
+        dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.registerRecipes(event);
     }
 
     @SubscribeEvent
     public static void onModelRegister(ModelRegistryEvent event) {
-        for (Item item : ValkyrienSkiesMod.ITEMS) {
+        for (Item item : dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.items) {
             if (item instanceof BaseModel) {
                 ((BaseModel) item).registerModels();
             }
         }
 
-        for (Block block : ValkyrienSkiesMod.BLOCKS) {
+        for (Block block : dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.blocks) {
             if (block instanceof BaseModel) {
                 ((BaseModel) block).registerModels();
             }

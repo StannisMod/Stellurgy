@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -28,6 +29,9 @@ import static org.junit.Assert.assertTrue;
  * <p>Gated by {@code forge.test.client.enabled=true}; auto-skips on headless CI.</p>
  */
 public class WeaponGuiButtonsReachTheServerE2ETest extends AbstractClientE2ETest {
+
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
 
     private static final int DIM = 0;
     /** This class's own site, clear of the other client scenarios. */
@@ -58,8 +62,8 @@ public class WeaponGuiButtonsReachTheServerE2ETest extends AbstractClientE2ETest
      */
     @Test
     public void theConsolesHoldFireButtonHoldsTheBatteryOnTheServer() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
-        Events client = ClientEvents.of(bot());
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events client = ClientEvents.of(bot(), evictions);
         prepareSite();
         int gunX = X + 3, consoleX = X + 4;
         long built = server.markInstrumented();
@@ -124,8 +128,8 @@ public class WeaponGuiButtonsReachTheServerE2ETest extends AbstractClientE2ETest
      */
     @Test
     public void theConsolesScreenShowsTheServersNetwork() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
-        Events client = ClientEvents.of(bot());
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events client = ClientEvents.of(bot(), evictions);
         prepareSite();
         int gunX = X + 3, consoleX = X + 4;
         long built = server.markInstrumented();
@@ -177,8 +181,8 @@ public class WeaponGuiButtonsReachTheServerE2ETest extends AbstractClientE2ETest
      */
     @Test
     public void theSensorsModeButtonSwitchesTheSensorOnTheServer() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
-        Events client = ClientEvents.of(bot());
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events client = ClientEvents.of(bot(), evictions);
         prepareSite();
         int sensorX = X + 7;
         long placed = server.markInstrumented();

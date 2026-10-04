@@ -33,7 +33,7 @@ import static org.junit.Assert.assertTrue;
  * {@code M1PlanetToPlanetMilestoneE2ETest} (leg 7b: a jump beside the moon is carried into its zone,
  * seated, and keeps station there).</p>
  *
- * <p>Inside a zone the seam is a sphere, not the cube face {@code VSShipCellSeamE2ETest} flies
+ * <p>Inside a zone the seam is a sphere, not the cube face {@code VSShipCellSeamTest} flies
  * through. The decision and the naming are pinned on the real solar arithmetic by
  * {@code ZoneCrossingAimsAtTheRightCellTest}; what nothing else shows is a REAL ship doing it: the
  * controller arming on the sphere for a craft its cube predicate calls "inside", the carry cutting and
@@ -332,8 +332,9 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
      * re-address every craft in the planet's cell, the craft's own computer carries it in the moment
      * after the entry paste (the class note) and the method fails in its ARRANGEMENT — "the throttle
      * could not be released — the craft's ledger row is now … @19_0_0.-7_0_-2" — before the control
-     * is asked. That null is witnessed on the same inversion by
-     * {@code ZoneCrossingAimsAtTheRightCellTest#aCraftInThePlanetsOwnCellOutsideEveryMoonsSphereIsLeftAlone}.</p>
+     * is asked. That null was witnessed on the same inversion by the integration-tier zone-crossing
+     * test's planet's-own-cell, outside-every-moon's-sphere case, which was removed on 2026-10-02 with
+     * the fast-tier tests that needed a running server; nothing in the tree witnesses it now.</p>
      */
     @Test
     public void aCraftFreshFromThePlanetFlownIntoItsMoonsSphereIsCarriedIntoTheMoonsZone()
@@ -744,9 +745,5 @@ public class VSShipZoneSphereCrossingTest extends AbstractSharedServerTest {
 
     /** This tier's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 }

@@ -34,7 +34,7 @@ public class ChunkManagerPlanet extends BiomeProvider {
         this.biomeCache = new BiomeCache(this);//new BiomeCacheExtended(this);
         //TODO: more biomes
         //TODO: remove rivers - why?
-        GenLayer[] agenlayer = initializeAllBiomeGenerators(seed, default1, str, properties);//GenLayer.initializeAllBiomeGenerators(seed, default1); //;
+        GenLayer[] agenlayer = initializeAllBiomeGenerators(seed, default1, str, properties, biomes);//GenLayer.initializeAllBiomeGenerators(seed, default1); //;
         agenlayer = getModdedBiomeGenerators(default1, seed, agenlayer);
         this.genBiomes = agenlayer[0];
         this.biomeIndexLayer = agenlayer[1];
@@ -49,28 +49,28 @@ public class ChunkManagerPlanet extends BiomeProvider {
     String str;
     DimensionProperties properties;
 
-    public ChunkManagerPlanet(long seed, WorldType default1, String str, DimensionProperties properties) {
+    private ChunkManagerPlanet(long seed, WorldType default1, String str, DimensionProperties properties, List<BiomeEntry> biomes) {
         this.seed = seed;
         this.default1 = default1;
         this.str = str;
         this.properties = properties;
+        // Before setup: the biome layer it builds holds this list for its whole life.
+        this.biomes = biomes;
 
         this.setup(seed, default1, str, properties);
     }
 
 
     public ChunkManagerPlanet(World world, String str, List<BiomeEntry> biomes) {
-        this(world.getSeed(), Stellurgy.planetWorldType, str, DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()));
         //Note: world MUST BE REGISTERED WITH THE DIMENSION MANAGER
-        //This is a mess!
-        this.biomes = biomes;
+        this(world.getSeed(), Stellurgy.instance.planetWorldType, str, DimensionManager.getInstance().getDimensionProperties(world.provider.getDimension()), biomes);
     }
 
     /**
      * the first array item is a linked list of the bioms, the second is the zoom function, the third is the same as the
      * first.
      */
-    public static GenLayer[] initializeAllBiomeGenerators(long seed, WorldType p_180781_2_, String p_180781_3_, DimensionProperties properties) {
+    public static GenLayer[] initializeAllBiomeGenerators(long seed, WorldType p_180781_2_, String p_180781_3_, DimensionProperties properties, List<BiomeEntry> biomes) {
         boolean hasRivers = properties.hasRivers();
 
         GenLayer genlayer = new GenLayerIsland(1L);
@@ -119,7 +119,9 @@ public class ChunkManagerPlanet extends BiomeProvider {
         //if(hasRivers) {
         GenLayerRiverInit genlayerriverinit = new GenLayerRiverInit(100L, lvt_8_1_);
         GenLayer lvt_10_1_ = GenLayerZoom.magnify(1000L, genlayerriverinit, 2);
-        GenLayer genlayerbiomeedge = p_180781_2_.getBiomeLayer(seed, genlayer4, chunkprovidersettings);
+        // Built here rather than through WorldType.getBiomeLayer: that hook cannot be handed the
+        // planet's biome list, and this method is the only place a planet layer stack is built.
+        GenLayer genlayerbiomeedge = GenLayerZoom.magnify(1000L, new GenLayerBiomePlanet(200L, genlayer4, biomes), 2);
         genlayerhills = new GenLayerHills(1000L, genlayerbiomeedge, lvt_10_1_);
         genlayer5 = GenLayerZoom.magnify(1000L, genlayerriverinit, 2);
         //}
@@ -182,7 +184,6 @@ public class ChunkManagerPlanet extends BiomeProvider {
 
     @Nonnull
     public Biome[] getBiomesForGeneration(@Nullable Biome[] biomes, int x, int z, int width, int height) {
-        GenLayerBiomePlanet.setupBiomesForUse(this.biomes);
         //return super.getBiomesForGeneration(p_76937_1_, p_76937_2_, p_76937_3_, p_76937_4_, p_76937_5_);
 
         IntCache.resetIntCache();
@@ -234,7 +235,6 @@ public class ChunkManagerPlanet extends BiomeProvider {
     @Nonnull
     public Biome[] getBiomes(@Nullable Biome[] listToReuse, int x, int z, int width, int length, boolean cacheFlag) {
 
-        GenLayerBiomePlanet.setupBiomesForUse(biomes);
         //return super.getBiomeGenAt(biomeGenBase, x, y, width, length, p_76931_6_);
 
         IntCache.resetIntCache();

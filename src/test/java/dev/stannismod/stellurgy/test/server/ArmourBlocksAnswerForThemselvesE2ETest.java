@@ -37,7 +37,7 @@ public class ArmourBlocksAnswerForThemselvesE2ETest extends AbstractSharedServer
     private static final double SPEED = 0.45D;
 
     private final Events events =
-            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * A mirror returns a beam and is SMASHED by a solid round, and the difference is the kind in the
@@ -304,11 +304,8 @@ public class ArmourBlocksAnswerForThemselvesE2ETest extends AbstractSharedServer
         return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane).requireOk("read a stage");
     }
 
-    private static String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
 
-    private static Reply ask(String command) throws Exception {
+    private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));
     }
 }

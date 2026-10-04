@@ -13,6 +13,7 @@ import org.lwjgl.opengl.GL11;
 
 public class FxErrorBlock extends Particle {
 
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	public static final ResourceLocation icon = new ResourceLocation("libvulpes:textures/fx/x.png");
 
 	public FxErrorBlock(World world, double x,

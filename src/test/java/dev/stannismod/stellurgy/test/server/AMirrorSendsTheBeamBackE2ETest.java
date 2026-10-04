@@ -40,7 +40,7 @@ public class AMirrorSendsTheBeamBackE2ETest extends AbstractSharedServerTest {
     private static final int FEED_EVERY_TICKS = 20;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * Hold a beam on a mirror and the gun is what the beam comes back to.
@@ -144,9 +144,6 @@ public class AMirrorSendsTheBeamBackE2ETest extends AbstractSharedServerTest {
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

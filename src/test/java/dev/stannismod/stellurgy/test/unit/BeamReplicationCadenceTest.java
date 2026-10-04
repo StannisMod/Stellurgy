@@ -26,8 +26,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class BeamReplicationCadenceTest {
 
+    /** A constant: a BlockPos is immutable. */
     private static final BlockPos GUN = new BlockPos(100, 70, 100);
-    /** A dark gun offers no line at all, which is the shape "not burning" has on the wire. */
+    /** A dark gun offers no line at all, which is the shape "not burning" has on the wire. A constant: the empty list is immutable. */
     private static final java.util.List<Vec3d> NO_LINE = java.util.Collections.emptyList();
 
     /** The ordinary beam: two points. A bent one would have more, and the cadence does not care. */
@@ -35,7 +36,9 @@ public class BeamReplicationCadenceTest {
         return java.util.Arrays.asList(from, to);
     }
 
+    /** A constant: a Vec3d is immutable. */
     private static final Vec3d MUZZLE = new Vec3d(100.5D, 74.0D, 100.5D);
+    /** A constant: a Vec3d is immutable. */
     private static final Vec3d TARGET = new Vec3d(140.5D, 74.0D, 100.5D);
 
     /** Any phase will do for the cadence claims; the spread of phases is its own test below. */

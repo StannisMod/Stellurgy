@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -37,6 +38,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class SensorFriendIsNeverAcquiredE2ETest extends AbstractClientE2ETest {
 
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
+
     /** The harness's single client always joins under this name. */
     private static final String PLAYER = "ForgeTestClient";
 
@@ -72,7 +76,7 @@ public class SensorFriendIsNeverAcquiredE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aPlayerCarryingTheCodeNeverBecomesAContactAndOneWhoIsNotDoes() throws Exception {
-        Events server = new Events(this::server, bot()::waitTicks);
+        Events server = new Events(this::server, bot()::waitTicks, evictions);
         // Built around the player rather than the player moved to it: a tp into a cleared site drops
         // him, and a battery tracking a falling target is a different experiment.
         Reply player = ask("stellurgytest player position-of " + PLAYER);

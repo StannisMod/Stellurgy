@@ -15,7 +15,7 @@ package dev.stannismod.stellurgy.api.projectile;
  */
 public final class ShotEnvironment {
 
-    /** Nothing acts. The path is a straight line — space, and the band ships fly in. */
+    /** Nothing acts. The path is a straight line — space, and the band ships fly in. Effectively final, process lifetime: built once at class initialisation. An immutable value. */
     public static final ShotEnvironment VACUUM = new ShotEnvironment(0.0D);
 
     private final double gravityPerTickSquared;

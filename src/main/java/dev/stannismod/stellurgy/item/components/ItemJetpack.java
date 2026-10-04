@@ -24,7 +24,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.StellurgyFluids;
 import dev.stannismod.stellurgy.api.StellurgyItems;
 import dev.stannismod.stellurgy.client.TooltipInjector;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
+import dev.stannismod.stellurgy.client.HudLayout;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
 import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
@@ -335,8 +335,8 @@ public class ItemJetpack extends Item implements IArmorComponent, IJetPack {
             Minecraft.getMinecraft().renderEngine.bindTexture(background);
             GL11.glColor3f(1f, 1f, 1f);
             int width = 83;
-            int screenX = RocketEventHandler.hydrogenBar.getRenderX();
-            int screenY = RocketEventHandler.hydrogenBar.getRenderY();
+            int screenX = HudLayout.hydrogenBarX(event.getResolution().getScaledWidth());
+            int screenY = HudLayout.hydrogenBarY(event.getResolution().getScaledHeight());
 
             //Draw BG
             gui.drawTexturedModalRect(screenX, screenY, 23, 34, width, 17);

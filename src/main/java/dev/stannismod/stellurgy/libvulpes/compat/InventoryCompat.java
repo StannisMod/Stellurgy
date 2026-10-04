@@ -9,6 +9,7 @@ import javax.annotation.Nonnull;
 
 public class InventoryCompat {
 
+	/** Effectively final, process lifetime: written only by InventoryCompat.initCompat. */
 	static boolean buildCraft_injectable;
 	
 	public static void initCompat() {

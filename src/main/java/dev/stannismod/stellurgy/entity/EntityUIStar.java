@@ -14,6 +14,7 @@ import dev.stannismod.stellurgy.tile.station.TileHolographicPlanetSelector;
 public class EntityUIStar extends EntityUIPlanet {
 
     public final static int starIDoffset = 10000;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     protected static final DataParameter<Integer> subStarData = EntityDataManager.createKey(EntityUIStar.class, DataSerializers.VARINT);
     private StellarBody star;
     private int subStar;

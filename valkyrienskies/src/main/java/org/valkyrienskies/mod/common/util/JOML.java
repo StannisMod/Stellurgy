@@ -15,6 +15,9 @@ import org.joml.Vector3fc;
 import org.joml.Vector3i;
 import org.joml.Vector3ic;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class JOML {
 
     public static final Vector3dc PITCH_AXISd = new Vector3d(1, 0, 0);

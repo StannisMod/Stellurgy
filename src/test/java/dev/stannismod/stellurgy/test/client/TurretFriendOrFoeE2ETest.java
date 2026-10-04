@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -28,6 +29,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class TurretFriendOrFoeE2ETest extends AbstractClientE2ETest {
 
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
+
     /** The harness's single client always joins under this name. */
     private static final String PLAYER = "ForgeTestClient";
 
@@ -44,7 +48,7 @@ public class TurretFriendOrFoeE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot() throws Exception {
-        Events server = new Events(this::server, bot()::waitTicks);
+        Events server = new Events(this::server, bot()::waitTicks, evictions);
         // Build the gun AROUND the player rather than teleporting the player to the gun. A tp into
         // a freshly cleared site drops him, and a gun tracking a falling target pins its elevation
         // arc and stops firing — which is indistinguishable from the refusal this test is about.

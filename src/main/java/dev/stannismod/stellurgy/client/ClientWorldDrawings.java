@@ -29,6 +29,7 @@ public final class ClientWorldDrawings implements ICapabilityProvider {
     @CapabilityInject(ClientWorldDrawings.class)
     private static Capability<ClientWorldDrawings> DRAWINGS = null;
 
+    /** Effectively final, process lifetime: built once at class initialisation. An immutable name. */
     private static final ResourceLocation KEY = new ResourceLocation("stellurgy", "client_drawings");
 
     private final ClientBeamTracker beams = new ClientBeamTracker();

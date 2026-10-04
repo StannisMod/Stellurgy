@@ -50,8 +50,7 @@ import java.util.regex.PatternSyntaxException;
  * Only steps 4-5 are scaled by {@code weightMaterialScale}; explicit overrides and Stellurgy
  * component values are intentional absolutes and are left untouched.
  */
-public enum WeightEngine {
-    INSTANCE("config/advRocketry/weights.json");
+public final class WeightEngine {
 
     // Stellurgy component defaults (kN) — heavy, purpose-built parts that should not fall back to material.
     private static final double TANK_WEIGHT = 0.2;
@@ -60,6 +59,7 @@ public enum WeightEngine {
     private static final double PRESSURE_TANK_WEIGHT = 5;
     private static final double SATELLITE_HATCH_WEIGHT = 5;
 
+    /** The tables' file, or {@code null} for an engine that is backed by none. */
     private final String file;
 
     // Persisted, player-editable tables.
@@ -92,13 +92,23 @@ public enum WeightEngine {
     private Map<String, Double> ablationIndividual = new HashMap<>();
     private Map<String, Double> ablationByRegex = new LinkedHashMap<>();
 
-    // Transient runtime caches (not persisted; cleared on load()).
-    private final Map<String, Float> resolvedItemCache = new HashMap<>();
-    private final Map<String, Pattern> compiledRegex = new HashMap<>();
+    /** Each regex column's patterns, compiled in the same order by {@link #compileRegex()} when the
+     *  tables are loaded; not persisted. */
+    private final Map<Pattern, Double> compiledRegex = new LinkedHashMap<>();
+    private final Map<Pattern, Double> compiledToughnessRegex = new LinkedHashMap<>();
+    private final Map<Pattern, Double> compiledAblationRegex = new LinkedHashMap<>();
 
-    WeightEngine(String file) {
+    /** An engine over the tables in {@code file}, seeding it with the defaults when it is absent. */
+    public WeightEngine(String file) {
         this.file = file;
         load();
+    }
+
+    /** An engine over the tables in {@code json} (the file's format), backed by no file. */
+    public static WeightEngine fromJson(String json) {
+        WeightEngine engine = new WeightEngine(null);
+        engine.read(new java.io.StringReader(json));
+        return engine;
     }
 
     private static double scale() {
@@ -113,28 +123,17 @@ public enum WeightEngine {
         return resolveUnitWeight(key, stack) * stack.getCount();
     }
 
-    /** Weight of a single item (count == 1), memoised by registry name. */
+    /** Weight of a single item (count == 1). */
     private float resolveUnitWeight(String key, ItemStack stack) {
-        Float cached = resolvedItemCache.get(key);
-        if (cached != null) {
-            return cached;
-        }
-
-        float weight;
         Double override = individual.get(key);
         if (override != null) {
-            weight = override.floatValue();
-        } else {
-            Double regex = matchRegex(key);
-            if (regex != null) {
-                weight = regex.floatValue();
-            } else {
-                weight = componentOrMaterialWeight(key, stack);
-            }
+            return override.floatValue();
         }
-
-        resolvedItemCache.put(key, weight);
-        return weight;
+        Double regex = matchRegex(key);
+        if (regex != null) {
+            return regex.floatValue();
+        }
+        return componentOrMaterialWeight(key, stack);
     }
 
     private float componentOrMaterialWeight(String key, ItemStack stack) {
@@ -166,23 +165,13 @@ public enum WeightEngine {
     }
 
     private Double matchRegex(String key) {
-        return matchRegex(byRegex, key);
+        return firstMatch(compiledRegex, key);
     }
 
-    /** First matching regex rule of {@code table}, or null. The compiled-pattern cache is shared:
-     *  the same pattern string means the same pattern whichever column it rules. */
-    private Double matchRegex(Map<String, Double> table, String key) {
-        for (Map.Entry<String, Double> e : table.entrySet()) {
-            Pattern p = compiledRegex.get(e.getKey());
-            if (p == null) {
-                try {
-                    p = Pattern.compile(e.getKey());
-                } catch (PatternSyntaxException ex) {
-                    continue;
-                }
-                compiledRegex.put(e.getKey(), p);
-            }
-            if (p.matcher(key).matches()) {
+    /** First matching rule of a compiled regex column, in the order the pack wrote it, or null. */
+    private static Double firstMatch(Map<Pattern, Double> compiled, String key) {
+        for (Map.Entry<Pattern, Double> e : compiled.entrySet()) {
+            if (e.getKey().matcher(key).matches()) {
                 return e.getValue();
             }
         }
@@ -210,7 +199,7 @@ public enum WeightEngine {
         if (override != null) {
             return override.floatValue();
         }
-        Double regex = matchRegex(toughnessByRegex, key);
+        Double regex = firstMatch(compiledToughnessRegex, key);
         if (regex != null) {
             return regex.floatValue();
         }
@@ -251,7 +240,7 @@ public enum WeightEngine {
             if (override != null) {
                 return override.floatValue();
             }
-            Double regex = matchRegex(ablationByRegex, key);
+            Double regex = firstMatch(compiledAblationRegex, key);
             if (regex != null) {
                 return regex.floatValue();
             }
@@ -286,6 +275,24 @@ public enum WeightEngine {
     /** Register an explicit per-registry-name ablation resistance (highest precedence). */
     public void setIndividualAblation(String registryName, double resistance) {
         ablationIndividual.put(registryName, resistance);
+    }
+
+    /** Compile every regex column in order; a pattern that does not compile matches nothing. */
+    private void compileRegex() {
+        compileInto(byRegex, compiledRegex);
+        compileInto(toughnessByRegex, compiledToughnessRegex);
+        compileInto(ablationByRegex, compiledAblationRegex);
+    }
+
+    private static void compileInto(Map<String, Double> table, Map<Pattern, Double> compiled) {
+        compiled.clear();
+        for (Map.Entry<String, Double> e : table.entrySet()) {
+            try {
+                compiled.put(Pattern.compile(e.getKey()), e.getValue());
+            } catch (PatternSyntaxException ex) {
+                // skipped, as a pattern that does not compile always was
+            }
+        }
     }
 
     public float getWeight(Collection<ItemStack> stacks) {
@@ -347,16 +354,32 @@ public enum WeightEngine {
         return poses.stream().map(pos -> getWeight(world, pos)).reduce(0.0F, Float::sum);
     }
 
-    public void load() {
-        resolvedItemCache.clear();
-        compiledRegex.clear();
+    private void load() {
+        if (file == null) {
+            seedDefaults();
+            compileRegex();
+            return;
+        }
         File f = new File(file);
         if (!f.exists()) {
             seedDefaults();
+            compileRegex();
             save();
             return;
         }
         try (Reader r = new FileReader(file)) {
+            read(r);
+        } catch (Exception e) {
+            e.printStackTrace();
+            seedDefaults();
+            compileRegex();
+            System.out.println("The weight config was wrong, could not be read, was broken, not there or something else! Defaults will be used");
+        }
+    }
+
+    /** Replace the tables with those read from {@code r}, or with the defaults if they cannot be read. */
+    private void read(Reader r) {
+        try {
             Gson gson = new GsonBuilder().disableHtmlEscaping().create();
             JsonObject root = gson.fromJson(r, JsonObject.class);
             Type mapType = new TypeToken<HashMap<String, Double>>() {}.getType();
@@ -397,6 +420,7 @@ public enum WeightEngine {
             seedDefaults();
             System.out.println("The weight config was wrong, could not be read, was broken, not there or something else! Defaults will be used");
         }
+        compileRegex();
     }
 
     private static <T extends Map<String, Double>> T readMap(Gson gson, JsonObject root, String name, Type type) {
@@ -428,33 +452,6 @@ public enum WeightEngine {
         ablationByRegex = new LinkedHashMap<>();
     }
 
-    // ---- Runtime / test mutation hooks --------------------------------------
-
-    /** Reset every table to the built-in defaults and drop all caches. */
-    public void resetTables() {
-        seedDefaults();
-        resolvedItemCache.clear();
-        compiledRegex.clear();
-    }
-
-    /** Drop the memoised per-item resolutions (call after changing scale config). */
-    public void clearResolveCache() {
-        resolvedItemCache.clear();
-    }
-
-    /** Register an explicit per-registry-name weight (highest precedence). */
-    public void setIndividual(String registryName, double weight) {
-        individual.put(registryName, weight);
-        resolvedItemCache.clear();
-    }
-
-    /** Register a regex rule matched against the registry name (below individual). */
-    public void setRegex(String pattern, double weight) {
-        byRegex.put(pattern, weight);
-        compiledRegex.clear();
-        resolvedItemCache.clear();
-    }
-
     /** Test accessor: raw individual-override value, or null if none. */
     public Double rawIndividual(String registryName) {
         return individual.get(registryName);
@@ -465,7 +462,11 @@ public enum WeightEngine {
         return materials.size();
     }
 
+    /** Write the tables back to this engine's file; an engine backed by none has nowhere to write. */
     public void save() {
+        if (file == null) {
+            return;
+        }
         File parent = new File(file).getParentFile();
         if (parent != null) {
             parent.mkdirs();
@@ -594,6 +595,7 @@ public enum WeightEngine {
         return m;
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Map<Material, String> MATERIAL_NAMES = buildMaterialNames();
 
     private static Map<Material, String> buildMaterialNames() {

@@ -64,7 +64,9 @@ public enum TurretDriveState {
         return WORKING;
     }
 
+    /** Effectively final, process lifetime: written only by the constructor. */
     private final boolean drivable;
+    /** Effectively final, process lifetime: written only by the constructor. */
     private final double rateFactor;
 
     TurretDriveState(boolean drivable, double rateFactor) {

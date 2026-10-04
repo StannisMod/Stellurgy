@@ -15,6 +15,7 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 
 public abstract class BasePacket implements IMessage {
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	private static final BiMap<Integer,Class<? extends BasePacket>> idMap;
 
 	static {

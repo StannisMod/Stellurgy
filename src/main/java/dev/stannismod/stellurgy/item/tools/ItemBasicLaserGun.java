@@ -24,6 +24,7 @@ import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.util.AudioRegistry;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -34,15 +35,26 @@ import java.util.WeakHashMap;
 public class ItemBasicLaserGun extends Item {
 
     private int reachDistance = 50;
-    private WeakHashMap<EntityLivingBase, BlockPos> posMap;
     private ToolMaterial toolMaterial;
+
+    /**
+     * The block each user started mining with this use of the gun, so turning away cancels the use —
+     * a part of the user's world ({@link WorldRuntime}), because the item is one object for the whole
+     * process and anything kept on it would outlive the entities it is about. Weak keys.
+     */
+    private static final class Targets {
+        final WeakHashMap<EntityLivingBase, BlockPos> byUser = new WeakHashMap<>();
+    }
+
+    private static WeakHashMap<EntityLivingBase, BlockPos> targetsOf(Entity user) {
+        return WorldRuntime.of(user.world, Targets.class, Targets::new).byUser;
+    }
 
     public ItemBasicLaserGun() {
         super();
         toolMaterial = ToolMaterial.DIAMOND;
         setMaxStackSize(1);
         setMaxDamage(0);
-        posMap = new WeakHashMap<>();
     }
 
     @Override
@@ -110,11 +122,12 @@ public class ItemBasicLaserGun extends Item {
         if (rayTrace == null)
             return;
 
-        if (posMap.get(player) != null && !posMap.get(player).equals(rayTrace.getBlockPos())) {
+        WeakHashMap<EntityLivingBase, BlockPos> targets = targetsOf(player);
+        if (targets.get(player) != null && !targets.get(player).equals(rayTrace.getBlockPos())) {
             player.resetActiveHand();
             return;
-        } else if (posMap.get(player) == null) {
-            posMap.put(player, rayTrace.getBlockPos());
+        } else if (targets.get(player) == null) {
+            targets.put(player, rayTrace.getBlockPos());
         }
 
         if (rayTrace.typeOfHit == Type.BLOCK) {
@@ -189,7 +202,7 @@ public class ItemBasicLaserGun extends Item {
             }
         }
 
-        posMap.remove(entityLiving);
+        targetsOf(entityLiving).remove(entityLiving);
 
         return stack;
     }
@@ -224,7 +237,7 @@ public class ItemBasicLaserGun extends Item {
 
         player.setActiveHand(hand);
 
-        posMap.remove(player);
+        targetsOf(player).remove(player);
         ItemStack stack = player.getHeldItem(hand);
 
 

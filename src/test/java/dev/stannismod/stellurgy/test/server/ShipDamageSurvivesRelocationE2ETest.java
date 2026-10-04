@@ -72,7 +72,7 @@ public class ShipDamageSurvivesRelocationE2ETest extends AbstractSharedServerTes
     private static final String PLAIN_SUBJECT_BLOCK = "minecraft:iron_block";
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** A craft left behind goes on ticking in the world the next scenario runs in. */
     @Before
@@ -250,9 +250,6 @@ public class ShipDamageSurvivesRelocationE2ETest extends AbstractSharedServerTes
         return ask("stellurgytest damage stage 0 " + x + " " + y + " " + z).requireOk("read a stage");
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

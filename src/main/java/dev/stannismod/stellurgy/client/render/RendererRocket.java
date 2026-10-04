@@ -31,7 +31,6 @@ import java.lang.reflect.Method;
 
 public class RendererRocket extends Render implements IRenderFactory<EntityRocket> {
 
-    private static BlockRendererDispatcher renderBlocks = Minecraft.getMinecraft().getBlockRendererDispatcher();
     Class tileEntityBlockChiseled;
     Method getState;
     private IRenderChunkFactory factory = new ListChunkFactory();

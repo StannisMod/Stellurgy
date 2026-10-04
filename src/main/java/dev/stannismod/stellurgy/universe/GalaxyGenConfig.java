@@ -512,6 +512,8 @@ public final class GalaxyGenConfig {
     /**
      * The cluster every galaxy has at its own centre — the richest one, and no special case: it is a
      * cluster like the others, drawn at the galaxy's centre instead of on the cluster lattice.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     public static final ClusterType NUCLEUS = new ClusterType("Nucleus", 215, 4d, 8d, 0.4d, true, 1);
 

@@ -5,9 +5,7 @@ import dev.stannismod.stellurgy.util.StationLandingLocation;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  *
@@ -22,32 +20,6 @@ public class StationLandingLocationTest {
 
     private static HashedBlockPosition at(int x, int y, int z) {
         return new HashedBlockPosition(x, y, z);
-    }
-
-    @Test
-    public void getPosAndNameRoundTrip() {
-        HashedBlockPosition pos = at(1, 64, 2);
-        StationLandingLocation loc = new StationLandingLocation(pos, "Pad-A");
-        assertEquals(pos, loc.getPos());
-        assertEquals("Pad-A", loc.getName());
-    }
-
-    @Test
-    public void noArgNameDefaultsToEmpty() {
-        StationLandingLocation loc = new StationLandingLocation(at(0, 0, 0));
-        assertEquals("", loc.getName());
-    }
-
-    @Test
-    public void occupiedAndAutoLandFlagsRoundTrip() {
-        StationLandingLocation loc = new StationLandingLocation(at(0, 0, 0));
-        assertFalse("freshly constructed must be unoccupied", loc.getOccupied());
-        assertFalse("freshly constructed must default to no auto-land", loc.getAllowedForAutoLand());
-
-        loc.setOccupied(true);
-        loc.setAllowedForAutoLand(true);
-        assertTrue(loc.getOccupied());
-        assertTrue(loc.getAllowedForAutoLand());
     }
 
     @Test

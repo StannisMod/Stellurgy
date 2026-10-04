@@ -12,6 +12,7 @@ import net.minecraft.world.World;
 import org.lwjgl.opengl.GL11;
 
 public class OxygenTraceFX extends Particle {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final ResourceLocation icon = new ResourceLocation("stellurgy:textures/particle/softround.png");
 
 

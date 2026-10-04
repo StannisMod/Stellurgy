@@ -35,15 +35,11 @@ class terraformingdrill extends AbstractDrill{
         if (w == null)
             w = laser.world;
 
-        if (!DimensionProperties.proxylists.isinitialized(w.provider.getDimension())){
-            DimensionProperties.proxylists.initdim(w.provider.getDimension());
-        }
-
-        TerraformingHelper t = DimensionProperties.proxylists.gethelper(w.provider.getDimension());
+        TerraformingHelper t = TerraformingHelper.of(w);
 
         if (t == null) {
             DimensionManager.getInstance().getDimensionProperties(w.provider.getDimension()).load_terraforming_helper(false);
-            t = DimensionProperties.proxylists.gethelper(w.provider.getDimension());
+            t = TerraformingHelper.of(w);
         }
         return t;
     }

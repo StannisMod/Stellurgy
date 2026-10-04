@@ -42,6 +42,7 @@ import java.util.List;
 
 public class TileAtmosphereTerraformer extends TileMultiPowerConsumer implements INetworkMachine {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{
             {{null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null},
                     {null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null},

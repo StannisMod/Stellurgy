@@ -45,7 +45,7 @@ public class FirstShotIntoAFreshWallE2ETest extends AbstractSharedServerTest {
     private static final int PRECEDING_FLIGHT_TICKS = 30;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * red-witnessed: with {@code ShotSubstrate#step} at {@code boolean structureFirst = first.isStructure();}'s {@code structureFirst} forced false (a round
@@ -115,9 +115,6 @@ public class FirstShotIntoAFreshWallE2ETest extends AbstractSharedServerTest {
         }
     }
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

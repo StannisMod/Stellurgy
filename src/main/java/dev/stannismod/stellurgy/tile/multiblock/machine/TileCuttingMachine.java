@@ -23,6 +23,7 @@ import java.util.List;
 
 public class TileCuttingMachine extends TileMultiblockMachine implements IModularInventory {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{
             {{'I', 'c', 'O'},
                     {LibVulpesBlocks.motors, StellurgyBlocks.blockSawBlade, 'P'}}};

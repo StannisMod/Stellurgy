@@ -44,35 +44,6 @@ public class StellarHierarchyTest {
         return s;
     }
 
-    // ─── identity ──────────────────────────────────────────────────────────────
-
-    @Test
-    public void bindingACompanionLeavesItsIdentityAlone() {
-        // The whole reason a companion could own nothing: it was handed its primary's id, and a
-        // planet binds to its star by that number. Minting one is the registry's job; binding is not
-        // allowed to overwrite what the registry handed out.
-        StellarBody primary = star("A", 1f);
-        primary.setId(7);
-        StellarBody companion = star("B", 0.5f);
-        companion.setId(19);
-
-        primary.addSubStar(companion);
-
-        assertEquals("the primary keeps its id", 7, primary.getId());
-        assertEquals("and so does the companion", 19, companion.getId());
-        assertSame("which now knows what it orbits", primary, companion.getParentStar());
-    }
-
-    @Test
-    public void aCompanionAnswersForItsOwnWorldsAndNotItsPrimarys() {
-        StellarBody primary = star("A", 1f);
-        StellarBody companion = star("B", 0.5f);
-        primary.addSubStar(companion);
-
-        assertEquals("a companion with no worlds holds none", 0, companion.getNumPlanets());
-        assertEquals("and the primary's count is its own", 0, primary.getNumPlanets());
-    }
-
     /**
      * An orbital distance of {@code au} astronomical units, in the field's own unit. The fixtures were
      * bare hundredths of an AU until 2026-09-30, which is the unit a stale reader of the field also

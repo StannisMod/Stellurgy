@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import org.junit.Test;
@@ -39,6 +40,9 @@ import static org.junit.Assert.assertTrue;
  * and a target on a ship.</p>
  */
 public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETest {
+
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
 
     private static final int OVERWORLD = 0;
 
@@ -84,6 +88,7 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
 
     private static final long ZOMBIE_UUID_MOST = 0x5a11e5ab1e000615L;
     private static final long ZOMBIE_UUID_LEAST = 0x8000000000000615L;
+    /** A constant: a String. */
     private static final String ZOMBIE_UUID = new java.util.UUID(ZOMBIE_UUID_MOST, ZOMBIE_UUID_LEAST).toString();
 
     /**
@@ -92,8 +97,8 @@ public class ALinkerNamesTheBatteryItsTargetE2ETest extends AbstractClientE2ETes
      */
     @Test
     public void aPlayerNamesTheBatteryItsTargetByLookingAtItThroughALinker() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
-        Events client = ClientEvents.of(bot());
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events client = ClientEvents.of(bot(), evictions);
 
         // ---- where it stands: open air, a plot of its own, proved empty first
         Plot plot = Plot.forScenario(0, getClass().getSimpleName(), OVERWORLD, Plot.Lane.DEFAULT);

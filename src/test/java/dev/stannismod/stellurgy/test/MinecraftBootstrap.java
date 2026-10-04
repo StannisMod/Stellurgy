@@ -1,90 +1,31 @@
 package dev.stannismod.stellurgy.test;
 
 import net.minecraft.init.Bootstrap;
-import dev.stannismod.stellurgy.Stellurgy;
-import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
-import dev.stannismod.stellurgy.common.CommonProxy;
-import dev.stannismod.stellurgy.dimension.DimensionManager;
-
-import java.lang.reflect.Field;
 
 /**
- * Idempotent helper that initializes:
- *   1. vanilla Minecraft static registries via {@link Bootstrap#register()};
- *   2. Stellurgy's {@code @SidedProxy} field with a plain {@link CommonProxy} instance,
- *      which transitively wires {@code DimensionManager} (its static
- *      {@code dimensionManagerServer} field is eagerly constructed when CommonProxy
- *      is loaded).
+ * Initializes vanilla Minecraft's static registries via {@link Bootstrap#register()} - and nothing
+ * of the mod. Idempotent because {@code Bootstrap.register} is: vanilla guards it with its own
+ * {@code alreadyRegistered} flag, so a second call does nothing and this class keeps no state.
  *
- * Mod-specific registries (Stellurgy blocks, items, tile entities, packets) and the Forge
- * lifecycle (preInit/init/postInit) are NOT initialized — those require a real
- * Forge mod loader and belong in headless scenario tests under
- * {@code src/test/java/dev/stannismod/stellurgy/test/scenario/}.
+ * <p>That is the whole of what the unit and integration tiers may borrow. A test that needs the mod's
+ * state - its proxy, its mod object, a server lifetime and the galaxy that server holds, the current
+ * configuration - is asking for what a running game provides, and arranging it by hand is a boot
+ * done badly: it builds the part its author thought of and leaves the rest as whatever the previous
+ * test left. Such a test belongs in the harness tiers ({@code test/server}, {@code test/client}),
+ * where the state is real.</p>
  *
  * <p>Usage:</p>
  * <pre>{@code
  *   @BeforeClass public static void bootstrap() { MinecraftBootstrap.ensure(); }
  * }</pre>
- *
- * <p>Calling {@link Bootstrap#register()} multiple times is harmless because MC
- * implementation guards with a flag, but we also de-duplicate here to keep the
- * intent obvious in tests.</p>
  */
 public final class MinecraftBootstrap {
-
-    private static volatile boolean done = false;
 
     private MinecraftBootstrap() {}
 
     public static void ensure() {
-        if (done) return;
         synchronized (MinecraftBootstrap.class) {
-            if (done) return;
-
-            // 1. Vanilla MC registries.
             Bootstrap.register();
-
-            // 2. Stellurgy proxy. Stellurgy.proxy is null in tests because
-            // @SidedProxy is wired by the Forge classloader. Inject a plain
-            // CommonProxy so anything that calls Stellurgy.proxy.getXxx()
-            // (most notably DimensionProperties.readFromNBT -> DimensionManager
-            // .getInstance()) has a working dispatch target.
-            try {
-                Field proxyField = Stellurgy.class.getDeclaredField("proxy");
-                proxyField.setAccessible(true);
-                if (proxyField.get(null) == null) {
-                    proxyField.set(null, new CommonProxy());
-                }
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException(
-                        "Failed to inject CommonProxy into Stellurgy.proxy — "
-                                + "Stellurgy test bootstrap broken; check field visibility.",
-                        e);
-            }
-
-            // 2b. LibVulpes proxy. Satellite getName() (and other display-name
-            // paths) dispatch through LibVulpes.proxy.getLocalizedString(). The
-            // field is null in tests (wired by the Forge classloader in prod), so
-            // inject a plain proxy. Headless it returns the translation KEY, which
-            // is enough for non-null / distinct-name contracts.
-            if (dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy == null) {
-                dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy = new dev.stannismod.stellurgy.libvulpes.common.CommonProxy();
-            }
-
-            // 3. Register a deterministic "Sol" star with id=0 so that
-            // DimensionProperties.readFromNBT (line ~1646) can resolve
-            // DimensionManager.getInstance().getStar(0) without NPE.
-            // This mirrors the production world-load path where Sol is the first
-            // star registered in DimensionManager.preloadGalaxy.
-            if (DimensionManager.getInstance().getStar(0) == null) {
-                StellarBody sol = new StellarBody();
-                sol.setId(0);
-                sol.setName("Sol");
-                sol.setTemperature(100);
-                DimensionManager.getInstance().addStar(sol);
-            }
-
-            done = true;
         }
     }
 }

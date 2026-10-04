@@ -89,11 +89,11 @@ public class ShipDeckCameraAndAttitudeHoldTest {
     }
 
     // A spread of viewing directions (skip |pitch| near the +-90 gimbal per the camera's own doc).
-    private static final double[] LOOK_YAWS = {-150, -90, -30, 0, 45, 120, 170};
-    private static final double[] LOOK_PITCHES = {-60, -30, 0, 20, 50};
+    private final double[] lookYaws = {-150, -90, -30, 0, 45, 120, 170};
+    private final double[] lookPitches = {-60, -30, 0, 20, 50};
 
     // A spread of ship attitudes, expressed as body rates (pitch, yaw, roll) from identity.
-    private static final double[][] SHIP_ATTITUDES = {
+    private final double[][] shipAttitudes = {
             {0, 0, 0}, {0, 0, 30}, {0, 0, 90}, {20, 0, 0},
             {0, 35, 0}, {25, 40, 60}, {0, 0, 150}, {-30, 20, -45}
     };
@@ -110,10 +110,10 @@ public class ShipDeckCameraAndAttitudeHoldTest {
     @Test
     public void levellingTheViewToADeckNeverChangesWhereThePlayerIsLooking() {
         int checked = 0;
-        for (double[] att : SHIP_ATTITUDES) {
+        for (double[] att : shipAttitudes) {
             double[] shipUp = shipUpFrom(att[0], att[1], att[2]);
-            for (double yaw : LOOK_YAWS) {
-                for (double pitch : LOOK_PITCHES) {
+            for (double yaw : lookYaws) {
+                for (double pitch : lookPitches) {
                     double[] fwd = look(yaw, pitch);
                     Quat cam = FreeFlightPhysics.deckLevelledCameraQuat(fwd, shipUp);
                     if (cam == null) continue; // deck normal parallel to view -> roll undefined
@@ -136,8 +136,8 @@ public class ShipDeckCameraAndAttitudeHoldTest {
     @Test
     public void anUprightShipLevelsToZeroRollSoOrdinaryPlayIsUntouched() {
         double[] up = {0, 1, 0};
-        for (double yaw : LOOK_YAWS) {
-            for (double pitch : LOOK_PITCHES) {
+        for (double yaw : lookYaws) {
+            for (double pitch : lookPitches) {
                 Quat cam = FreeFlightPhysics.deckLevelledCameraQuat(look(yaw, pitch), up);
                 assertNotNull(cam);
                 float[] e = FreeFlightPhysics.eulerFromQuat(cam);
@@ -231,8 +231,8 @@ public class ShipDeckCameraAndAttitudeHoldTest {
      */
     @Test
     public void yawFromForwardAgreesWithMinecraftYawConvention() {
-        for (double yaw : LOOK_YAWS) {
-            for (double pitch : LOOK_PITCHES) {
+        for (double yaw : lookYaws) {
+            for (double pitch : lookPitches) {
                 double[] f = look(yaw, pitch);
                 float back = FreeFlightPhysics.yawFromForwardDeg(f[0], f[1], f[2]);
                 assertEquals("yaw recovered (look=" + yaw + "/" + pitch + ")",

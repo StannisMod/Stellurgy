@@ -17,10 +17,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceManagerRoundTripTest extends AbstractSharedServerTest {
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     @Test
     public void controllerFlushesReloadsIsolatesAndGarbageCollects() throws Exception {
         String r = exec("stellurgytest space manager");

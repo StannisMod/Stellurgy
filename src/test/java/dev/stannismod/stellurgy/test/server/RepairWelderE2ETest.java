@@ -128,9 +128,6 @@ public class RepairWelderE2ETest extends AbstractSharedServerTest {
         return reply;
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private static long readLong(String json, String key) {
         return Reply.of(json).longInteger(key);

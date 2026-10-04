@@ -19,6 +19,7 @@ import java.util.List;
 public class TileElectricArcFurnace extends TileMultiblockMachine implements IModularInventory {
 
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
             {{null, null, null, null, null},
                     {null, 'P', StellurgyBlocks.blockBlastBrick, 'P', null},

@@ -70,6 +70,7 @@ public final class PacketRegistry {
             PacketShotSpawn.class,
             PacketShotEnd.class,
             PacketBeamState.class,
+            PacketKnownPlanets.class,
         };
     }
 

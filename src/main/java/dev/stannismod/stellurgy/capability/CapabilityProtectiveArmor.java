@@ -10,6 +10,7 @@ import dev.stannismod.stellurgy.armor.ItemSpaceArmor;
 
 public class CapabilityProtectiveArmor {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation KEY = new ResourceLocation("stellurgy:ProtectiveArmor");
 
     public static void registerCap() {

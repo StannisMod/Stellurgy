@@ -2,38 +2,33 @@ package dev.stannismod.stellurgy.capability;
 
 import dev.stannismod.stellurgy.Stellurgy;
 
-import java.lang.reflect.Field;
-
 public class DimensionCompat {
 
-    static Field JEDSpawnID, JEDEnableOverride;
+    private static final String JED_CONFIGS = "fi.dy.masa.justenoughdimensions.config.Configs";
 
-    static {
-        try {
-            JEDSpawnID = Class.forName("fi.dy.masa.justenoughdimensions.config.Configs").getDeclaredField("initialSpawnDimensionId");
-            JEDEnableOverride = Class.forName("fi.dy.masa.justenoughdimensions.config.Configs").getDeclaredField("enableInitialSpawnDimensionOverride");
-            Stellurgy.logger.info("JED Found, compat loaded");
-        } catch (Exception e) {
-            Stellurgy.logger.info("JED compat not loaded");
-            JEDSpawnID = null;
-            JEDEnableOverride = null;
-        }
-    }
-
+    /**
+     * The dimension a player respawns in by default: Just Enough Dimensions' initial-spawn override
+     * when that mod is installed and the override is on, the overworld otherwise. Asked on respawn
+     * only, so JED's config is read where it is needed instead of being cached at a class load that
+     * happens mid-game.
+     */
     public static int getDefaultSpawnDimension() {
+        Class<?> configs;
         try {
-            if (JEDSpawnID != null && JEDEnableOverride != null && (boolean) JEDEnableOverride.get(null)) {
-
-                return (int) JEDSpawnID.get(null);
-
-            }
-        } catch (Exception e) {
-            //No nonsense
+            configs = Class.forName(JED_CONFIGS);
+        } catch (ClassNotFoundException absent) {
             return 0;
         }
-
-
-        return 0;
+        try {
+            if ((boolean) configs.getDeclaredField("enableInitialSpawnDimensionOverride").get(null)) {
+                return (int) configs.getDeclaredField("initialSpawnDimensionId").get(null);
+            }
+            return 0;
+        } catch (ReflectiveOperationException | ClassCastException e) {
+            Stellurgy.logger.warn("Just Enough Dimensions is installed but its initial-spawn settings"
+                    + " could not be read; respawning in the overworld instead of its override", e);
+            return 0;
+        }
     }
 
 }

@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -35,6 +36,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class BeamReachesClientE2ETest extends AbstractClientE2ETest {
 
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
+
     private static final int DIM = 0;
     private static final int Y = 84, Z = 300;
     /** Where the player stands, and where the gun they should be able to see is built. */
@@ -54,8 +58,8 @@ public class BeamReachesClientE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aBeamBurningNearbyIsDrawnByTheClientAndOneFourKilometresAwayIsNot() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
-        Events client = ClientEvents.of(bot());
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events client = ClientEvents.of(bot(), evictions);
 
         // The player stands beside the near gun for the whole scenario, so which gun is in range
         // never changes while anything burns.

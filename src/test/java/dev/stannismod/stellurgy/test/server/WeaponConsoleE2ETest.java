@@ -35,7 +35,7 @@ public class WeaponConsoleE2ETest extends AbstractSharedServerTest {
     private static final int PARTS = 6;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * A console points two guns at once, and the guns were not commanded individually.
@@ -266,9 +266,6 @@ public class WeaponConsoleE2ETest extends AbstractSharedServerTest {
                 placed.bool("placed"));
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

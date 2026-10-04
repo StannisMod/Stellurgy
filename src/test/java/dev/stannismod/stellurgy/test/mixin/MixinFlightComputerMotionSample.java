@@ -6,7 +6,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.command.test.MotionTrace;
+import dev.stannismod.stellurgy.test.trace.MotionTrace;
+import dev.stannismod.stellurgy.test.trace.SideTrace;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 
 /**
@@ -37,7 +38,7 @@ public abstract class MixinFlightComputerMotionSample {
                     shift = At.Shift.AFTER))
     private void stellurgyTest$gameTickSample(CallbackInfo ci) {
         TileAdvancedFlightComputer self = (TileAdvancedFlightComputer) (Object) this;
-        MotionTrace.game(
+        SideTrace.of(self.getWorld()).motion().game(
                 MotionTrace.keyOf(self.getWorld().provider.getDimension(),
                         self.getPos().getX(), self.getPos().getY(), self.getPos().getZ()),
                 // The tick this sample belongs to, from the WORLD's own counter rather than from a

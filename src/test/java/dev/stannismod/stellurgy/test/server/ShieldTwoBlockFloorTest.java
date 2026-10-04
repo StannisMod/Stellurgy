@@ -111,7 +111,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     @Test
     public void aWorldAnswersForTheEmittersLoadedInItAndNoOthers() throws Exception {
         FixtureSite here = site();
-        here.requireClear(ShieldTwoBlockFloorTest::exec, 0, 1, "the emitter's block");
+        here.requireClear(this::exec, 0, 1, "the emitter's block");
         int y = here.y + 1, z = here.z;
         int overworldX = here.x, netherX = here.x + 2;
         String overworldEmitter = overworldX + "," + y + "," + z, netherEmitter = netherX + "," + y + "," + z;
@@ -130,8 +130,8 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
                 Collections.singletonList(netherEmitter),
                 emittersAmong(NETHER, overworldEmitter, netherEmitter));
 
-        Events events = new Events(ShieldTwoBlockFloorTest::exec,
-                ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+        Events events = new Events(this::exec,
+                ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
         long cycled = events.markInstrumented();
         Reply cycle = Reply.of(exec("stellurgytest chunk cycle " + DIM + " " + cx + " " + cz));
         requireArranged("the emitter's chunk did not unload and come back as a new chunk, so there is no"
@@ -166,7 +166,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      * {@code positions} ({@code "x,y,z"}), in the probe's order, once per listing — so a position
      * listed twice appears twice.
      */
-    private static List<String> emittersAmong(int dim, String... positions) throws Exception {
+    private List<String> emittersAmong(int dim, String... positions) throws Exception {
         Reply listed = Reply.of("stellurgytest shield emitters " + dim,
                 exec("stellurgytest shield emitters " + dim));
         assertEquals("the emitters probe answered for another dimension: " + listed,
@@ -184,7 +184,7 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
         return found;
     }
 
-    private static void placeAt(int dim, String block, int x, int y, int z) throws Exception {
+    private void placeAt(int dim, String block, int x, int y, int z) throws Exception {
         Reply placed = Reply.of(exec("stellurgytest place " + dim + " " + x + " " + y + " " + z + " " + block));
         assertTrue("failed to place " + block + " at " + x + "," + y + "," + z + " in dim " + dim + ": "
                 + placed, placed.bool("placed"));
@@ -203,10 +203,6 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
         String resp = exec("stellurgytest place " + DIM + " " + x + " " + Y + " " + z + " " + block);
         assertTrue("failed to place " + block + " at " + x + "," + Y + "," + z + ": " + resp,
                 Reply.of(resp).bool("placed"));
-    }
-
-    private static String exec(String command) throws Exception {
-        return join(client().execute(command));
     }
 
     private static String join(List<String> resp) {

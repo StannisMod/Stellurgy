@@ -42,6 +42,7 @@ public enum DriveTier {
      */
     GALACTIC(2d * UniverseScale.REFERENCE_GALAXY_RADIUS_LY / UniverseScale.MEAN_STAR_SEPARATION_LY);
 
+    /** Effectively final, process lifetime: set once when the object is built. */
     private final double efficiency;
 
     DriveTier(double efficiency) {

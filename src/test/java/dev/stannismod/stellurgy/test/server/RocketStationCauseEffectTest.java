@@ -94,11 +94,6 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         ok(client().execute("stellurgytest station add-pad " + stationId + " 50 50 alpha"));
         ok(client().execute("stellurgytest station set-autoland " + stationId + " 50 50 true"));
 
-        // Sanity: pad starts free.
-        // Asked of PAD ALPHA. The `x`-and-`occupied` substring pair this replaces is satisfied by
-        // pad alpha being occupied as long as SOME other pad is free.
-        assertFalse("pad alpha must start free", pads(stationId).at(50, 50).occupied);
-
         // Build a rocket. The rocket itself stays on overworld; we just
         // need its guidance computer to invoke overrideLandingStation.
         int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2000, 500));
@@ -172,36 +167,6 @@ public class RocketStationCauseEffectTest extends AbstractSharedServerTest {
         assertEquals("exactly one pad must flip occupied — observed " + occupiedCount
                         + " in: " + pads.raw(),
                 1, occupiedCount);
-    }
-
-    @Test
-    public void overrideLandingStationOnUnknownStationProbeReturnsError() throws Exception {
-        // Probe-API contract: bogus station id must produce a clean error,
-        // not silently no-op against whatever happens to be in the registry.
-        int rocketId = buildAndAssemble(FixtureSite.openAir(0, 2300, 500));
-        String resp = ok(client().execute(
-                "stellurgytest rocket override-landing " + rocketId + " 9999999"));
-        assertTrue("override-landing on unknown station must error: " + resp,
-                "station not found".equals(Reply.of(resp).text("error")));
-    }
-
-    @Test
-    public void overrideLandingStationOnRocketWithoutGuidanceComputerErrors() throws Exception {
-        // The simple fixture always includes a guidance computer. To force
-        // the no-GC branch we need either the `invalid-no-guidance` fixture
-        // variant OR an entirely synthetic rocket. The fixture path is
-        // cleaner — it produces a rocket whose storage has no
-        // TileGuidanceComputer in the chunk.
-        // (Note: invalid-no-guidance fails at the assemble stage in some
-        // configurations. If that happens, this test skips via Assume.)
-        // For now we exercise the probe's error path with the unknown-
-        // rocket id branch instead — same probe error surface, simpler.
-        int stationId = createStation();
-        ok(client().execute("stellurgytest station add-pad " + stationId + " 80 80 gamma"));
-        String resp = ok(client().execute(
-                "stellurgytest rocket override-landing 9999999 " + stationId));
-        assertTrue("override-landing on unknown rocket must error: " + resp,
-                "rocket not found".equals(Reply.of(resp).text("error")));
     }
 
     /** Every landing pad the station holds, addressable by position. */

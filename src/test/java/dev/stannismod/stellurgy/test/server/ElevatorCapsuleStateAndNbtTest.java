@@ -72,7 +72,7 @@ public class ElevatorCapsuleStateAndNbtTest extends AbstractSharedServerTest {
         return String.join("\n", resp);
     }
 
-    private static int spawnCapsule(int offsetX) throws Exception {
+    private int spawnCapsule(int offsetX) throws Exception {
         int x = BASE_X + offsetX;
         // Force-load the chunk grid covering the capsule's 3x3 AABB
         // (setSize(3, 3) in EntityElevatorCapsule ctor) so

@@ -23,7 +23,7 @@ import dev.stannismod.stellurgy.api.damage.ImpactKind;
  */
 public final class GunSpec {
 
-    /** What an assembly with no parts at all is worth: nothing, and it says so rather than firing blanks. */
+    /** What an assembly with no parts at all is worth: nothing, and it says so rather than firing blanks. Effectively final, process lifetime: built once at class initialisation. An immutable value. */
     public static final GunSpec EMPTY = new Builder().build();
 
     private final double muzzleSpeed;

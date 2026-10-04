@@ -41,8 +41,8 @@ public class AUnitHearsWhatBrokeItE2ETest extends AbstractSharedServerTest {
     private static final String RECORDER = "damage_occurrence_recorder";
 
     private final Events log =
-            new Events(AUnitHearsWhatBrokeItE2ETest::exec,
-                    ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec,
+                    ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * A unit that survives hears about it, and what it hears names the cause, the severity and the
@@ -174,8 +174,9 @@ public class AUnitHearsWhatBrokeItE2ETest extends AbstractSharedServerTest {
      *       also writing stage 1 two blocks south of the struck block, the second fails with an
      *       ArrangementFailure "the blow reached the bystander, so it would be RIGHT to tell it:
      *       {…"stage":1…"block":"minecraft:chest"…}";</li>
-     *   <li>with {@code DamageOccurrenceRecorder#onAttach} at
-     *       {@code TestEventLog.noteInstrumentEntered(INSTRUMENT);} removed (and its twin in
+     *   <li>(taken on the pre-merge form, when the recorder lived in the probe command and wrote
+     *       through a static log) with {@code DamageOccurrenceRecorder#onAttach} at
+     *       {@code log.noteInstrumentEntered(INSTRUMENT);} removed (and its twin in
      *       {@code DamageOccurrenceRecorder#record}), the instrument check fails with "the observation
      *       point "damage_occurrence_recorder" never executed";</li>
      *   <li>with {@code ShipDamageService#tellTheUnits} at
@@ -236,11 +237,8 @@ public class AUnitHearsWhatBrokeItE2ETest extends AbstractSharedServerTest {
                 + " " + (Y + 2) + " " + (lane + 2) + " minecraft:air").requireOk("clear the lane");
     }
 
-    private static String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
 
-    private static Reply ask(String command) throws Exception {
+    private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));
     }
 

@@ -22,7 +22,7 @@ public class BlockShieldAccumulator extends Block implements ITileEntityProvider
         super(material);
         setUnlocalizedName(name);
         setRegistryName(AdvancedForceFieldSystem.MODID, name);
-        setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         setHardness(3.0F);
         setResistance(8.0F);
         setSoundType(SoundType.METAL);

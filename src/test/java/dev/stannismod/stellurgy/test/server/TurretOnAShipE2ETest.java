@@ -49,7 +49,7 @@ public class TurretOnAShipE2ETest extends AbstractSharedServerTest {
     private static final int BARRELS = 4;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** A craft left behind goes on ticking in the world the next scenario runs in. */
     @Before
@@ -166,9 +166,6 @@ public class TurretOnAShipE2ETest extends AbstractSharedServerTest {
         return v * v;
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

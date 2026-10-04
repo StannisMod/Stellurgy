@@ -23,6 +23,9 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class BlockTransceiver extends BlockTile {
 
     public static final PropertyDirection FACING = PropertyDirection.create("facing");

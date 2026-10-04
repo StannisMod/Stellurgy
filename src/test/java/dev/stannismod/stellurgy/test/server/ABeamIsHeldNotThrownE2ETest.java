@@ -42,7 +42,7 @@ public class ABeamIsHeldNotThrownE2ETest extends AbstractSharedServerTest {
     private static final int CYCLE_TICKS = 28;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The claim the whole family exists for: keeping it on the same spot digs DEEPER, with no second
@@ -225,9 +225,6 @@ public class ABeamIsHeldNotThrownE2ETest extends AbstractSharedServerTest {
         assertTrue("failed to place " + block + ": " + placed, placed.bool("placed"));
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

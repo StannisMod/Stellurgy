@@ -4,6 +4,9 @@ import net.minecraft.block.Block;
 
 /**
  * Stores references to Stellurgy's blocks
+ *
+ * Every static field of this type is effectively final, process lifetime: written only by
+ * Stellurgy.registerBlocks.
  */
 public class StellurgyBlocks {
     public static Block blockTerraformingTerminal;

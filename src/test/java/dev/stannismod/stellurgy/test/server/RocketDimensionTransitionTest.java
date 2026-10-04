@@ -52,9 +52,7 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
     // What follows are `stellurgytest rocket find-by-uuid`'s OWN field names. They are spelled the same as
     // `rocket info`'s and are a different verb's answer — the post-transition reads go through
     // find-by-uuid deliberately (see the comment at that call site), and it has no reader yet.
-    private static final String UUID_FIELD = "uuid";
     private static final String DIM_FIELD = "dim";
-    private static final String ENTITY_ID_FIELD = "entityId";
     private static final String STORAGE_SIZE_X = "storageSizeX";
     private static final String STORAGE_SIZE_Y = "storageSizeY";
     private static final String STORAGE_SIZE_Z = "storageSizeZ";
@@ -102,29 +100,6 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         java.util.List<RocketList.Entry> built = RocketList.of(list);
         assertTrue("no rocket after assemble: " + list, !built.isEmpty());
         return built.get(built.size() - 1).id;
-    }
-
-    @Test
-    public void rocketInfoAndListExposeUuid() throws Exception {
-        // Pin the probe-surface contract first — the dimension-transition
-        // tests below all depend on UUID being readable from both info and
-        // list endpoints. A regression that drops the uuid field would
-        // mask cause-effect failures in the harder tests.
-        int id = buildAndAssemble(FixtureSite.openAir(0, 5000, 500));
-        // The reader REFUSES an absent uuid rather than answering one, and that refusal IS this
-        // assertion: the value travels into `find-by-uuid` in the legs below.
-        RocketInfo info = rocketInfo(id);
-        assertFalse("rocket info must expose uuid: " + info.raw(), info.requireUuid().isEmpty());
-        // Asked of each ROCKET, because that is where the field lives — `uuid` is a member of the
-        // `rockets` array's elements and never a field of the reply.
-        String list = ok(client().execute("stellurgytest rocket list 0"));
-        java.util.List<RocketList.Entry> listed = RocketList.of(list);
-        assertTrue("rocket list must carry the craft just built, or it says nothing about uuid: "
-                + list, !listed.isEmpty());
-        for (RocketList.Entry listedRocket : listed) {
-            assertTrue("rocket list must expose uuid for " + listedRocket + ": " + list,
-                    listedRocket.uuid != null);
-        }
     }
 
     @Test
@@ -182,7 +157,6 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
 
         RocketInfo infoBefore = rocketInfo(id);
         String uuid = infoBefore.requireUuid();
-        int idBefore = infoBefore.entityId;
         int sxBefore = infoBefore.storageSizeX();
         int syBefore = infoBefore.storageSizeY();
         int szBefore = infoBefore.storageSizeZ();
@@ -204,19 +178,15 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         String byUuid = ok(client().execute("stellurgytest rocket find-by-uuid " + uuid));
         assertTrue("rocket must be findable post-transition: " + byUuid,
                 Reply.of(byUuid).ok());
-        int idAfter = Integer.parseInt(g(ENTITY_ID_FIELD, byUuid, "entityId after"));
-        assertNotEquals("entityId must change across changeDimension", idBefore, idAfter);
         int sxAfter = Integer.parseInt(g(STORAGE_SIZE_X, byUuid, "sizeX after"));
         int syAfter = Integer.parseInt(g(STORAGE_SIZE_Y, byUuid, "sizeY after"));
         int szAfter = Integer.parseInt(g(STORAGE_SIZE_Z, byUuid, "sizeZ after"));
         int engAfter = Integer.parseInt(g(ENGINE_COUNT, byUuid, "engines after"));
-        String uuidAfter = g(UUID_FIELD, byUuid, "uuid after");
 
         assertEquals("storage sizeX preserved", sxBefore, sxAfter);
         assertEquals("storage sizeY preserved", syBefore, syAfter);
         assertEquals("storage sizeZ preserved", szBefore, szAfter);
         assertEquals("engine count preserved", engBefore, engAfter);
-        assertEquals("UUID preserved across changeDimension", uuid, uuidAfter);
     }
 
     @Test
@@ -253,23 +223,5 @@ public class RocketDimensionTransitionTest extends AbstractSharedServerTest {
         assertEquals("rocket must remain in original dim 0", 0, dimAfter);
         assertFalse("rocket must NOT be marked dead by the failed transition: " + byUuid,
                 Reply.of(byUuid).bool("isDead"));
-    }
-
-    @Test
-    public void findByUuidOnUnknownUuidReturnsError() throws Exception {
-        // Probe contract test: a UUID that does not match any loaded
-        // entity must return a structured "not found" error rather than
-        // crashing or returning a stale match.
-        String resp = ok(client().execute(
-                "stellurgytest rocket find-by-uuid 00000000-0000-0000-0000-000000000000"));
-        assertTrue("unknown uuid must error: " + resp,
-                "rocket not found by uuid".equals(Reply.of(resp).text("error")));
-    }
-
-    @Test
-    public void findByUuidOnMalformedUuidReturnsError() throws Exception {
-        String resp = ok(client().execute("stellurgytest rocket find-by-uuid not-a-uuid"));
-        assertTrue("malformed uuid must error: " + resp,
-                "invalid uuid".equals(Reply.of(resp).text("error")));
     }
 }

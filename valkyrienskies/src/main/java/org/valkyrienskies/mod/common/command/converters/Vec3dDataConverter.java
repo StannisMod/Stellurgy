@@ -7,6 +7,7 @@ import picocli.CommandLine.TypeConversionException;
 public class Vec3dDataConverter implements ITypeConverter<Vec3d> {
 
     private static final String DOUBLE_REGEX = "-?(\\d*\\.\\d+)|(\\d+\\.)|(\\d+)"; // Regex for doubles
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final String VECTOR_REGEX = String.format("<%s,%s,%s>", DOUBLE_REGEX, DOUBLE_REGEX, DOUBLE_REGEX);
 
     @Override

@@ -36,6 +36,7 @@ import java.util.Optional;
 
 public class BlockBoatChair extends BlockPilotableBasic implements IBlockForceProvider, IBlockTorqueProvider {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyDirection FACING = BlockHorizontal.FACING;
 
     public BlockBoatChair() {

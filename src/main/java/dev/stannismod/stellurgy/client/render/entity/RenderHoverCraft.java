@@ -18,16 +18,8 @@ import dev.stannismod.stellurgy.libvulpes.render.RenderHelper;
 
 public class RenderHoverCraft extends Render<EntityHoverCraft> implements IRenderFactory<EntityHoverCraft> {
 
-    private static WavefrontObject hoverCraft;
-
-    static {
-
-        try {
-            hoverCraft = new WavefrontObject(new ResourceLocation("stellurgy:models/hoverCraft.obj"));
-        } catch (ModelFormatException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    private final WavefrontObject hoverCraft =
+            WavefrontObject.required(new ResourceLocation("stellurgy:models/hoverCraft.obj"));
 
     public ResourceLocation hovercraftTexture = new ResourceLocation("stellurgy:textures/models/hoverCraft.png");
 

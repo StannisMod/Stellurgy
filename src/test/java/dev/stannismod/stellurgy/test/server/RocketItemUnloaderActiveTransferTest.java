@@ -109,12 +109,6 @@ public class RocketItemUnloaderActiveTransferTest extends AbstractSharedServerTe
                         .holdsElement("slots", "item", "minecraft:cobblestone"));
     }
 
-    // -- helpers ----------------------------------------------------------
-
-    private static String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,

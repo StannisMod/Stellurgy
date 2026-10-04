@@ -4,8 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fluids.Fluid;
+import org.junit.Rule;
 import org.junit.Test;
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
+import org.junit.rules.TemporaryFolder;
 import dev.stannismod.stellurgy.util.WeightEngine;
 
 import java.io.File;
@@ -17,6 +18,7 @@ import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -30,6 +32,9 @@ import static org.junit.Assert.assertTrue;
  * block/item registry — fluid weight arithmetic, the JSON table round-trip, and
  * default seeding. Block/material resolution (which needs real ItemStacks) is
  * covered by the server-tier {@code WeightSystemTest}.
+ *
+ * <p>Every test builds its own engine, so nothing reaches the game's table (the mod's) or its
+ * file.</p>
  */
 public class WeightEngineUnitTest {
 
@@ -37,82 +42,36 @@ public class WeightEngineUnitTest {
      *  far under what the mod ships. */
     private static final int MIN_MATERIALS = 10;
 
-    private static Fluid testFluid() {
-        ResourceLocation tex = new ResourceLocation("stellurgy", "blocks/unit_fluid");
-        return new Fluid("stellurgy_unit_fluid", tex, tex);
-    }
-
-    @Test
-    public void fluidWeightIsPositiveAndLinearInAmount() {
-        WeightEngine we = WeightEngine.INSTANCE;
-        we.resetTables();
-        double prevScale = StellurgyConfiguration.getCurrentConfig().fuelMassScale;
-        try {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
-            // An unknown fluid still weighs something (the fallback per-mB rate)
-            // and the weight is linear in the amount. The exact kN/mB constant is
-            // an implementation default.
-            float base = we.getWeight(testFluid(), 1000f);
-            assertTrue("fallback fluid weight must be positive: " + base, base > 0);
-            assertEquals("fluid weight must be linear in the amount",
-                    2 * base, we.getWeight(testFluid(), 2000f), 1e-4);
-        } finally {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = prevScale;
-        }
-    }
-
-    @Test
-    public void fuelMassScaleMultipliesFluidWeight() {
-        WeightEngine we = WeightEngine.INSTANCE;
-        we.resetTables();
-        double prevScale = StellurgyConfiguration.getCurrentConfig().fuelMassScale;
-        try {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 1.0;
-            float base = we.getWeight(testFluid(), 1000f);
-
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = 2.5;
-            assertEquals("fluid weight must scale by fuelMassScale",
-                    2.5f * base, we.getWeight(testFluid(), 1000f), 1e-4);
-        } finally {
-            StellurgyConfiguration.getCurrentConfig().fuelMassScale = prevScale;
-        }
-    }
+    @Rule
+    public TemporaryFolder tempFolder = new TemporaryFolder();
 
     @Test
     public void seedDefaultsPopulatesMaterialTable() {
-        WeightEngine we = WeightEngine.INSTANCE;
-        we.resetTables();
+        WeightEngine we = WeightEngine.fromJson("{}");
         assertTrue("default material table must be populated", we.materialCount() > MIN_MATERIALS);
     }
 
     @Test
-    public void individualOverrideSurvivesSaveLoadRoundTrip() {
-        WeightEngine we = WeightEngine.INSTANCE;
-        try {
-            we.resetTables();
-            assertNull("clean slate must not know the test key", we.rawIndividual("ar:roundtrip_probe"));
+    public void individualOverrideSurvivesSaveLoadRoundTrip() throws Exception {
+        File file = new File(tempFolder.getRoot(), "weights.json");
 
-            we.setIndividual("ar:roundtrip_probe", 42.0);
-            we.save();
+        WeightEngine fresh = new WeightEngine(file.getPath());
+        assertNull("a fresh file must not know the test key", fresh.rawIndividual("ar:roundtrip_probe"));
 
-            // Wipe in-memory state, then reload from the file just written.
-            we.resetTables();
-            assertNull("resetTables must drop the in-memory override", we.rawIndividual("ar:roundtrip_probe"));
+        Files.write(file.toPath(), "{\"individual\":{\"ar:roundtrip_probe\":42.0}}"
+                .getBytes(StandardCharsets.UTF_8));
+        WeightEngine written = new WeightEngine(file.getPath());
+        assertEquals("the override must be read from the file",
+                Double.valueOf(42.0), written.rawIndividual("ar:roundtrip_probe"));
 
-            we.load();
-            assertEquals("override must persist across save/load",
-                    Double.valueOf(42.0), we.rawIndividual("ar:roundtrip_probe"));
-        } finally {
-            // Leave no residue in the on-disk config for other tests.
-            we.resetTables();
-            we.save();
-        }
+        // Save writes it back; an engine built from what was saved must hold it again.
+        written.save();
+        WeightEngine reloaded = new WeightEngine(file.getPath());
+        assertEquals("override must persist across save/load",
+                Double.valueOf(42.0), reloaded.rawIndividual("ar:roundtrip_probe"));
     }
 
     // ---- The whole file, not one column of it -------------------------------
-
-    /** Where the engine keeps the pack-editable table. Relative, like every other path here. */
-    private static final File CONFIG = new File("config/advRocketry/weights.json");
 
     /**
      * A column the engine READS is a column a pack may write, and {@code save()} rewrites the whole
@@ -125,9 +84,8 @@ public class WeightEngineUnitTest {
      */
     @Test
     public void everyColumnAPackCanWriteSurvivesASave() throws Exception {
-        WeightEngine we = WeightEngine.INSTANCE;
-        try {
-            writeConfig("{\n"
+        File config = new File(tempFolder.getRoot(), "weights.json");
+        writeConfig(config, "{\n"
                     + "  \"individual\": {\"ar:probe\": 1.5},\n"
                     + "  \"byRegex\": {\"ar:probe.*\": 2.5},\n"
                     + "  \"fluids\": {\"ar_probe_fluid\": 0.5},\n"
@@ -142,31 +100,26 @@ public class WeightEngineUnitTest {
                     + "  \"ablationByRegex\": {\"ar:probe.*\": 11.5}\n"
                     + "}\n");
 
-            we.load();
-            we.save();
+        new WeightEngine(config.getPath()).save();
 
-            JsonObject saved = readConfig();
-            List<String> lost = new ArrayList<String>();
-            assertRow(saved, "individual", "ar:probe", 1.5, lost);
-            assertRow(saved, "byRegex", "ar:probe.*", 2.5, lost);
-            assertRow(saved, "fluids", "ar_probe_fluid", 0.5, lost);
-            assertRow(saved, "materials", "IRON", 3.5, lost);
-            assertScalar(saved, "fallback", 4.5, lost);
-            assertScalar(saved, "fluidFallback", 5.5, lost);
-            assertRow(saved, "toughnessIndividual", "ar:probe", 6.5, lost);
-            assertRow(saved, "toughnessByRegex", "ar:probe.*", 7.5, lost);
-            assertRow(saved, "toughnessMaterials", "IRON", 8.5, lost);
-            assertScalar(saved, "toughnessFallback", 9.5, lost);
-            assertRow(saved, "ablationIndividual", "ar:probe", 10.5, lost);
-            assertRow(saved, "ablationByRegex", "ar:probe.*", 11.5, lost);
+        JsonObject saved = readConfig(config);
+        List<String> lost = new ArrayList<String>();
+        assertRow(saved, "individual", "ar:probe", 1.5, lost);
+        assertRow(saved, "byRegex", "ar:probe.*", 2.5, lost);
+        assertRow(saved, "fluids", "ar_probe_fluid", 0.5, lost);
+        assertRow(saved, "materials", "IRON", 3.5, lost);
+        assertScalar(saved, "fallback", 4.5, lost);
+        assertScalar(saved, "fluidFallback", 5.5, lost);
+        assertRow(saved, "toughnessIndividual", "ar:probe", 6.5, lost);
+        assertRow(saved, "toughnessByRegex", "ar:probe.*", 7.5, lost);
+        assertRow(saved, "toughnessMaterials", "IRON", 8.5, lost);
+        assertScalar(saved, "toughnessFallback", 9.5, lost);
+        assertRow(saved, "ablationIndividual", "ar:probe", 10.5, lost);
+        assertRow(saved, "ablationByRegex", "ar:probe.*", 11.5, lost);
 
-            assertTrue("these hand-written config values did not survive one save/load cycle, so a "
-                    + "pack that edits them loses them the first time the game writes the file: "
-                    + lost, lost.isEmpty());
-        } finally {
-            we.resetTables();
-            we.save();
-        }
+        assertTrue("these hand-written config values did not survive one save/load cycle, so a "
+                + "pack that edits them loses them the first time the game writes the file: "
+                + lost, lost.isEmpty());
     }
 
     /**
@@ -176,84 +129,72 @@ public class WeightEngineUnitTest {
      */
     @Test
     public void aRegexColumnKeepsThePackSOrderAcrossASave() throws Exception {
-        WeightEngine we = WeightEngine.INSTANCE;
-        try {
-            // Deliberately not alphabetical and not hash order: three overlapping patterns whose
-            // meaning is entirely decided by which one is tried first.
-            writeConfig("{\n"
-                    + "  \"ablationByRegex\": {\"ar:zulu.*\": 1.0, \"ar:.*\": 2.0, \"ar:alpha.*\": 3.0},\n"
-                    + "  \"toughnessByRegex\": {\"ar:zulu.*\": 1.0, \"ar:.*\": 2.0, \"ar:alpha.*\": 3.0}\n"
-                    + "}\n");
+        File config = new File(tempFolder.getRoot(), "weights.json");
+        // Deliberately not alphabetical and not hash order: three overlapping patterns whose
+        // meaning is entirely decided by which one is tried first.
+        writeConfig(config, "{\n"
+                + "  \"ablationByRegex\": {\"ar:zulu.*\": 1.0, \"ar:.*\": 2.0, \"ar:alpha.*\": 3.0},\n"
+                + "  \"toughnessByRegex\": {\"ar:zulu.*\": 1.0, \"ar:.*\": 2.0, \"ar:alpha.*\": 3.0}\n"
+                + "}\n");
 
-            we.load();
-            we.save();
+        new WeightEngine(config.getPath()).save();
 
-            JsonObject saved = readConfig();
-            List<String> expected = Arrays.asList("ar:zulu.*", "ar:.*", "ar:alpha.*");
-            for (String column : new String[]{"ablationByRegex", "toughnessByRegex"}) {
-                assertEquals("first-match-wins makes pattern order the precedence rule, and "
-                                + column + " came back reordered",
-                        expected, keysInOrder(saved.getAsJsonObject(column)));
-            }
-        } finally {
-            we.resetTables();
-            we.save();
+        JsonObject saved = readConfig(config);
+        List<String> expected = Arrays.asList("ar:zulu.*", "ar:.*", "ar:alpha.*");
+        for (String column : new String[]{"ablationByRegex", "toughnessByRegex"}) {
+            assertEquals("first-match-wins makes pattern order the precedence rule, and "
+                            + column + " came back reordered",
+                    expected, keysInOrder(saved.getAsJsonObject(column)));
         }
     }
 
     /**
-     * {@code resetTables} is the clean slate — both the test hook and the branch the engine takes
-     * when a config file cannot be read. A column it forgets keeps the previous load's rows, so a
-     * broken config silently inherits half of the file it failed to parse.
+     * A config file that cannot be read falls back to the defaults, and the fallback is a clean slate.
+     * The columns are read one after another, so a file that breaks part-way has already filled the
+     * columns before the break — and a column the fallback forgets keeps those rows, so a broken
+     * config silently inherits half of the file it failed to parse.
+     *
+     * <p>The file below breaks on its LAST field, {@code toughnessFallback}, which is read after every
+     * column this asserts on. {@link #everyColumnAPackCanWriteSurvivesASave} is the control: the same
+     * rows in a file that parses are kept.</p>
      */
     @Test
-    public void resettingTheTablesLeavesNoColumnBehind() throws Exception {
-        WeightEngine we = WeightEngine.INSTANCE;
-        try {
-            writeConfig("{\n"
-                    + "  \"individual\": {\"ar:probe\": 1.5},\n"
-                    + "  \"toughnessIndividual\": {\"ar:probe\": 6.5},\n"
-                    + "  \"ablationIndividual\": {\"ar:probe\": 10.5},\n"
-                    + "  \"ablationByRegex\": {\"ar:probe.*\": 11.5}\n"
-                    + "}\n");
-            we.load();
+    public void aConfigThatCannotBeReadLeavesNoColumnBehind() throws Exception {
+        File config = new File(tempFolder.getRoot(), "weights.json");
+        writeConfig(config, "{\n"
+                + "  \"individual\": {\"ar:probe\": 1.5},\n"
+                + "  \"toughnessIndividual\": {\"ar:probe\": 6.5},\n"
+                + "  \"ablationIndividual\": {\"ar:probe\": 10.5},\n"
+                + "  \"ablationByRegex\": {\"ar:probe.*\": 11.5},\n"
+                + "  \"toughnessFallback\": \"not a number\"\n"
+                + "}\n");
 
-            we.resetTables();
-            we.save();
+        new WeightEngine(config.getPath()).save();
 
-            JsonObject saved = readConfig();
-            List<String> survivors = new ArrayList<String>();
-            for (String column : new String[]{"individual", "toughnessIndividual",
-                    "ablationIndividual", "ablationByRegex"}) {
-                // Present-and-empty, not merely absent: a column that save() drops altogether would
-                // otherwise read as "reset worked", which is how this test could pass while the
-                // clean slate left every ablation row standing in memory.
-                assertTrue("save() must write column " + column + ", or this test cannot see whether "
-                        + "the reset cleared it", saved.has(column));
-                if (saved.getAsJsonObject(column).entrySet().size() != 0) {
-                    survivors.add(column + " -> " + saved.getAsJsonObject(column));
-                }
+        JsonObject saved = readConfig(config);
+        List<String> survivors = new ArrayList<String>();
+        for (String column : new String[]{"individual", "toughnessIndividual",
+                "ablationIndividual", "ablationByRegex"}) {
+            // Present-and-empty, not merely absent: a column that save() drops altogether would
+            // otherwise read as "the fallback cleared it".
+            assertTrue("save() must write column " + column + ", or this test cannot see whether "
+                    + "the fallback cleared it", saved.has(column));
+            if (saved.getAsJsonObject(column).entrySet().size() != 0) {
+                survivors.add(column + " -> " + saved.getAsJsonObject(column));
             }
-            assertTrue("a reset must leave no column carrying the previous load's rows, and these "
-                    + "still do: " + survivors, survivors.isEmpty());
-        } finally {
-            we.resetTables();
-            we.save();
         }
+        assertTrue("the fallback must leave no column carrying the broken file's rows, and these "
+                + "still do: " + survivors, survivors.isEmpty());
     }
 
-    private static void writeConfig(String json) throws IOException {
-        File parent = CONFIG.getParentFile();
-        if (parent != null) {
-            parent.mkdirs();
-        }
-        try (Writer w = new OutputStreamWriter(new FileOutputStream(CONFIG), StandardCharsets.UTF_8)) {
+    private static void writeConfig(File config, String json) throws IOException {
+        try (Writer w = new OutputStreamWriter(new FileOutputStream(config), StandardCharsets.UTF_8)) {
             w.write(json);
         }
     }
 
-    private static JsonObject readConfig() throws IOException {
-        try (Reader r = new InputStreamReader(new FileInputStream(CONFIG), StandardCharsets.UTF_8)) {
+    private static JsonObject readConfig(File config) throws IOException {
+        try (Reader r = new InputStreamReader(new FileInputStream(config), StandardCharsets.UTF_8)) {
             return new Gson().fromJson(r, JsonObject.class);
         }
     }

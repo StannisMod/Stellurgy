@@ -51,6 +51,7 @@ public final class LayerCrossing {
         }
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. An immutable value. */
     private static final First NOTHING = new First(-1.0D, null, false);
 
     private LayerCrossing() {

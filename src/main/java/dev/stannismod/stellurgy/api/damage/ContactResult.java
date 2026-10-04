@@ -33,6 +33,7 @@ public final class ContactResult {
     /**
      * The one instance of "nothing to say". A singleton because it carries no facts: two declinings
      * are the same declining, and giving it a residual energy would invite somebody to read one.
+     * Effectively final, process lifetime: built once at class initialisation. An immutable value.
      */
     private static final ContactResult NO_OPINION = new ContactResult(false, 0, null, true);
 

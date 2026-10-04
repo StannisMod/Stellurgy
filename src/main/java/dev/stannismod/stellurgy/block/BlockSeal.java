@@ -17,6 +17,7 @@ import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.tile.atmosphere.TileSeal;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -27,14 +28,22 @@ import java.util.List;
 
 public class BlockSeal extends Block {
 
-    private HashMap<HashedBlockPosition, BlobHandler> blobList = new HashMap<>();
+    /**
+     * The blob each completed seal frame registered, by the position of its centre — a world's own
+     * part ({@link WorldRuntime}). The block is one object for the whole process, so a map kept on it
+     * held every world's frames under bare positions: two frames at the same coordinates in two
+     * dimensions shared one entry.
+     */
+    private static final class SealBlobs {
+        final HashMap<HashedBlockPosition, BlobHandler> byCentre = new HashMap<>();
+    }
+
+    private static HashMap<HashedBlockPosition, BlobHandler> blobsOf(World world) {
+        return WorldRuntime.of(world, SealBlobs.class, SealBlobs::new).byCentre;
+    }
 
     public BlockSeal(Material materialIn) {
         super(materialIn);
-    }
-
-    public void clearMap() {
-        blobList.clear();
     }
 
     @Override
@@ -53,12 +62,12 @@ public class BlockSeal extends Block {
     public void breakBlock(World worldIn, BlockPos pos, IBlockState state) {
         super.breakBlock(worldIn, pos, state);
 
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
         if (atmhandler == null)
             return;
 
         for (EnumFacing dir : EnumFacing.VALUES) {
-            BlobHandler handler = blobList.remove(new HashedBlockPosition(pos.offset(dir)));
+            BlobHandler handler = blobsOf(worldIn).remove(new HashedBlockPosition(pos.offset(dir)));
             if (handler != null) atmhandler.unregisterBlob(handler);
 
             fireCheckAllDirections(worldIn, pos.offset(dir), dir);
@@ -66,23 +75,23 @@ public class BlockSeal extends Block {
     }
 
     public void removeSeal(@Nonnull World worldIn, @Nonnull BlockPos pos) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
         if (atmhandler == null)
             return;
 
         for (EnumFacing dir : EnumFacing.VALUES) {
-            BlobHandler handler = blobList.remove(new HashedBlockPosition(pos.offset(dir)));
+            BlobHandler handler = blobsOf(worldIn).remove(new HashedBlockPosition(pos.offset(dir)));
             if (handler != null) atmhandler.unregisterBlob(handler);
         }
     }
 
     public void clearBlob(@Nonnull World worldIn, @Nonnull BlockPos pos, @Nullable IBlockState state) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
         if (atmhandler == null)
             return;
 
         for (EnumFacing dir : EnumFacing.VALUES) {
-            BlobHandler handler = blobList.remove(new HashedBlockPosition(pos.offset(dir)));
+            BlobHandler handler = blobsOf(worldIn).remove(new HashedBlockPosition(pos.offset(dir)));
             if (handler != null) atmhandler.unregisterBlob(handler);
 
             //fireCheckAllDirections(worldIn, pos.offset(dir), dir);
@@ -116,7 +125,7 @@ public class BlockSeal extends Block {
     }
 
     private boolean checkCompleteness(@Nonnull World worldIn, @Nonnull BlockPos pos) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
         if (atmhandler == null)
             return false;
 
@@ -128,12 +137,12 @@ public class BlockSeal extends Block {
                 (worldIn.getBlockState(pos.up().north()).getBlock() == this &&
                         worldIn.getBlockState(pos.up().south()).getBlock() == this &&
                         worldIn.getBlockState(pos.up().up()).getBlock() == this &&
-                        !blobList.containsKey(new HashedBlockPosition(pos.up()))))) {
+                        !blobsOf(worldIn).containsKey(new HashedBlockPosition(pos.up()))))) {
 
             pos = pos.up();
             HashedBlockPosition hashPos = new HashedBlockPosition(pos);
             BlobHandler handler = new BlobHandler(worldIn, pos);
-            blobList.put(hashPos, handler);
+            blobsOf(worldIn).put(hashPos, handler);
 
             AreaBlob blob = new AreaBlob(handler);
             blob.addBlock(hashPos, new LinkedList<>());
@@ -146,12 +155,12 @@ public class BlockSeal extends Block {
         if (worldIn.getBlockState(pos.east().north()).getBlock() == this &&
                 worldIn.getBlockState(pos.east().south()).getBlock() == this &&
                 worldIn.getBlockState(pos.east().east()).getBlock() == this &&
-                !blobList.containsKey(new HashedBlockPosition(pos.east()))) {
+                !blobsOf(worldIn).containsKey(new HashedBlockPosition(pos.east()))) {
 
             pos = pos.east();
             HashedBlockPosition hashPos = new HashedBlockPosition(pos);
             BlobHandler handler = new BlobHandler(worldIn, pos);
-            blobList.put(hashPos, handler);
+            blobsOf(worldIn).put(hashPos, handler);
 
             AreaBlob blob = new AreaBlob(handler);
             blob.addBlock(hashPos, new LinkedList<>());

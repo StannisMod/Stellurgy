@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -33,6 +34,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class TurretAimReachesClientE2ETest extends AbstractClientE2ETest {
 
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
+
     private static final int X = 120, Y = 79, Z = 120;
 
     /**
@@ -47,8 +51,8 @@ public class TurretAimReachesClientE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void theBearingTheServerCommandsArrivesAtTheClient() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
-        Events client = ClientEvents.of(bot());
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events client = ClientEvents.of(bot(), evictions);
         ask("stellurgytest chunk warmup 0 " + ((X - 16) >> 4) + " " + ((Z - 16) >> 4) + " "
                 + ((X + 16) >> 4) + " " + ((Z + 16) >> 4)).requireOk("warm the site's chunks");
         ask("stellurgytest fill 0 " + (X - 3) + " " + (Y - 1) + " " + (Z - 3) + " " + (X + 3) + " "

@@ -43,6 +43,10 @@ import static org.junit.Assert.assertTrue;
  * — modpack players would log back in to find their docked rockets
  * had vanished from their station's tracking even though the rocket
  * entity itself persists in the world.
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class SpaceStationPadPersistenceTest {
 

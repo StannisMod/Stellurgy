@@ -7,7 +7,6 @@ import dev.stannismod.stellurgy.test.Reply;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * A console reports its network as dead once the network dies.

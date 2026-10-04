@@ -69,7 +69,7 @@ public final class StructureDamageEngine {
      */
     private static final int GAP_TOLERANCE = 6;
 
-    /** One whole voxel at the origin — the box a block is asked to report its collision shape within. */
+    /** One whole voxel at the origin — the box a block is asked to report its collision shape within. Effectively final, process lifetime: built once at class initialisation. An immutable box. */
     private static final AxisAlignedBB FULL_VOXEL = new AxisAlignedBB(0.0D, 0.0D, 0.0D, 1.0D, 1.0D, 1.0D);
 
     /**
@@ -497,7 +497,7 @@ public final class StructureDamageEngine {
      * game is exactly what it always was.</p>
      */
     public static int stageCost(World world, BlockPos pos, double areaFactor, ImpactKind kind) {
-        double resistance = WeightEngine.INSTANCE.getResistance(world, pos, kind);
+        double resistance = dev.stannismod.stellurgy.Stellurgy.weights().getResistance(world, pos, kind);
         int maxStage = Math.max(1, DamageState.getMaxStage(world, pos));
         double perStage = (STAGE_COST_BASE + resistance * STAGE_COST_TOUGHNESS_MULT) / maxStage;
         return Math.max(1, (int) Math.ceil(perStage * Math.max(0.0D, areaFactor)
@@ -718,6 +718,7 @@ public final class StructureDamageEngine {
     /**
      * Who weapon fire breaks blocks AS. A fixed name and a fixed id, because a protection mod's
      * whitelist is written against them and a generated id would be a different player every boot.
+     * Effectively final, process lifetime: built once at class initialisation. Nothing writes its property map.
      */
     private static final GameProfile WEAPON_FIRE = new GameProfile(
             UUID.fromString("b6ab6a37-2b1a-4b0a-9d9f-6e2f2f5f0a11"), "[weapon-fire]");

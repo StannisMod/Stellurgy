@@ -20,6 +20,7 @@ import javax.annotation.Nullable;
 
 public class RenderLaser extends Render implements IRenderFactory<EntityLaserNode> {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation flare = new ResourceLocation("stellurgy", "textures/entity/Flare.png");
 
     float[] color;

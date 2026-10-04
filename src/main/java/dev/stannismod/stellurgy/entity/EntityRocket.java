@@ -103,6 +103,9 @@ import dev.stannismod.stellurgy.util.*;
 
 
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class EntityRocket extends EntityRocketBase implements INetworkEntity, IModularInventory, IProgressBar, IButtonInventory, ISelectionNotify, IPlanetDefiner {
 
     // set to 2 seconds because keyboard event is not sent to server
@@ -150,7 +153,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      *  (climb, cruise, strafe, or just cancelling gravity in a hover), which the
      *  classic {@code areEnginesRunning} (motionY&gt;0) missed &rarr; intermittent sound. */
     private static final DataParameter<Float> FF_ENGINE_POWER = EntityDataManager.createKey(EntityRocket.class, DataSerializers.FLOAT);
-    private static long ERROR_DISPLAY_TIME = 100;
+    private static final long ERROR_DISPLAY_TIME = 100;
     //Offset for buttons linking to the tileEntityGrid
     private final int tilebuttonOffset = 3;
     public StorageChunk storage;
@@ -186,6 +189,15 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
      *  {@link IFlightBackend}). Legacy backend owns the entity transform
      *  exactly as before; a ship-physics backend would own displacement instead. */
     private final IFlightBackend flightBackend = new LegacyFlightBackend();
+    /** What this client's pilot is commanding this rocket; written only on the client. */
+    private final dev.stannismod.stellurgy.client.PilotCommand pilotCommand =
+            new dev.stannismod.stellurgy.client.PilotCommand();
+
+    /** What this client's pilot is commanding this rocket. */
+    public dev.stannismod.stellurgy.client.PilotCommand pilotCommand() {
+        return pilotCommand;
+    }
+
     /** FF attitude source of truth (body&rarr;world quaternion).
      *  Integrated by BODY rates on the server; on the client it is the smoothed
      *  local estimate (predict from input + slerp toward the replicated
@@ -519,7 +531,6 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     @Override
     public String getTextOverlay() {
 
-        ERROR_DISPLAY_TIME = 100;
         if (this.world.getTotalWorldTime() < this.lastErrorTime + ERROR_DISPLAY_TIME)
             return errorStr;
 
@@ -1381,11 +1392,12 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
         if (isInOrbit()) return true;   // already at orbit
 
-        if (stats.getThrust() <= stats.getWeight()) return false;
-
         final DimensionProperties src = DimensionManager.getInstance()
                 .getDimensionProperties(this.world.provider.getDimension());
-        final float gSrc = Math.max(0.01f, src.getGravitationalMultiplier()); 
+        final float gSrc = Math.max(0.01f, src.getGravitationalMultiplier());
+
+        // Cannot even lift itself here, so no amount of fuel gets it to orbit.
+        if (stats.getThrustToWeightRatio(gSrc) <= 1f) return false;
         final double a = Math.max(0.0001d, stats.getAcceleration(gSrc));    
         final double h = Math.max(0.0, stats.orbitHeight - this.posY);
 
@@ -1443,8 +1455,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         player.openGui(Stellurgy.instance, GuiHandler.guiId.MODULAR.ordinal(), player.world, this.getEntityId(), -1, 0);
 
         //Only handle the bypass on the server
-        if (!world.isRemote)
-            RocketInventoryHelper.addPlayerToInventoryBypass(player);
+        if (!world.isRemote && player instanceof EntityPlayerMP)
+            Stellurgy.serverState().rocketInventory.addPlayerToInventoryBypass((EntityPlayerMP) player);
     }
 
     @Override
@@ -1584,7 +1596,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         if (world.isRemote && areEnginesRunning()) {
             for (Vector3F<Float> vec : stats.getEngineLocations()) {
 
-                AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+                AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
                 IAtmosphere atmosphere = null;
 
                 if (handler != null)
@@ -2303,7 +2315,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
 
             ItemStack stack = storage.getGuidanceComputer().getStackInSlot(0);
 
-            Asteroid asteroid = StellurgyConfiguration.getCurrentConfig().asteroidTypes.get(((ItemAsteroidChip) stack.getItem()).getType(stack));
+            Asteroid asteroid = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes().get(((ItemAsteroidChip) stack.getItem()).getType(stack));
 
             if (asteroid != null) {
                 asteroidDrillingMult = asteroid.timeMultiplier;
@@ -2834,7 +2846,9 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         }
 
 
-        if (!this.stats.canLaunch()) {
+        if (!this.stats.canLaunch(DimensionManager.getInstance()
+                .getDimensionProperties(this.world.provider.getDimension())
+                .getGravitationalMultiplier())) {
             setError("error.rocket.tooHeavy");
             return; // hard stop; no silent fall-through
         }
@@ -3000,7 +3014,7 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
             for (Entity e : passengers) {
                 dev.stannismod.stellurgy.atmosphere.RocketTransferGrace.stamp(
                         e, worldserver.getTotalWorldTime());
-                PlanetEventHandler.addDelayedTransition(new TransitionEntity(
+                Stellurgy.serverState().planetEvents.addDelayedTransition(new TransitionEntity(
                         worldserver.getTotalWorldTime() + ++timeOffset,
                         e,
                         dimensionIn,
@@ -3458,7 +3472,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
         } else if (id > BUTTON_ID_OFFSET) {
             TileEntity tile = storage.getGUITiles().get(id - BUTTON_ID_OFFSET - tilebuttonOffset);
 
-            RocketGuiNavigation.rememberIfRocketGuiReturnTile(player, this, tile);
+            if (!world.isRemote)
+                Stellurgy.serverState().rocketGuiReturns.rememberIfRocketGuiReturnTile(player, this, tile);
             //Welcome to super hack time with packets
             //Due to the fact the client uses the player's current world to open the gui, we have to move the client between worlds for a bit
             PacketHandler.sendToPlayer(new PacketEntity(this, (byte) PacketType.CHANGEWORLD.ordinal()), player);
@@ -3829,10 +3844,8 @@ public class EntityRocket extends EntityRocketBase implements INetworkEntity, IM
     @Override
     public boolean canInteractWithContainer(EntityPlayer entity) {
         boolean ret = !this.isDead && this.getDistance(entity) < 64;
-        if (!ret)
-            RocketInventoryHelper.removePlayerFromInventoryBypass(entity);
-
-        RocketInventoryHelper.updateTime(entity, world.getWorldTime());
+        if (!ret && entity instanceof EntityPlayerMP)
+            Stellurgy.serverState().rocketInventory.removePlayerFromInventoryBypass((EntityPlayerMP) entity);
 
         return ret;
     }

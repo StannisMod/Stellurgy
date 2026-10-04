@@ -28,11 +28,6 @@ public class CentrifugeRecipeEndToEndTest extends AbstractSharedServerTest {
     private static final String TILE_SHORT  = "TileCentrifuge";
 
     @Test
-    public void centrifugeFixtureValidates() throws Exception {
-        MachineRecipeEndToEndKit.runFixtureValidates(client(), FIXTURE_KEY, 400, 70, 400);
-    }
-
-    @Test
     public void centrifugeRunsFirstRegisteredRecipe() throws Exception {
         // F3 mitigation: bypass strict output-identity check from the kit.
         // Build fixture + drive recipe through the kit's helper steps, but

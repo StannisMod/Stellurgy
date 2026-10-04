@@ -27,6 +27,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class ContactGeometryTest {
 
+    /** A constant: a Vec3d is immutable. */
     private static final Vec3d POINT = new Vec3d(10.0D, 64.0D, 10.0D);
 
     /** Straight into the face: the flattest possible statement of "not a graze". */

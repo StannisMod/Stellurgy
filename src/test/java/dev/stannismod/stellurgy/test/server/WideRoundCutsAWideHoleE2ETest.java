@@ -43,7 +43,7 @@ public class WideRoundCutsAWideHoleE2ETest extends AbstractSharedServerTest {
     private static final double WIDE_RADIUS = 1.0D;
 
     private final Events events =
-            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * red-witnessed: with {@code ShotSubstrate.bodyRadius} ({@code ShotSubstrate#bodyRadius} at {@code return Math.min(shot.getRadius(), StellurgyConfiguration.getCurrentConfig().shotBodyRadiusCap);}) sweeping every
@@ -157,11 +157,8 @@ public class WideRoundCutsAWideHoleE2ETest extends AbstractSharedServerTest {
         return budget;
     }
 
-    private static String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
 
-    private static Reply ask(String command) throws Exception {
+    private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));
     }
 }

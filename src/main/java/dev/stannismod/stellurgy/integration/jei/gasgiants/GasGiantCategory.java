@@ -26,8 +26,6 @@ public class GasGiantCategory implements IRecipeCategory<GasGiantWrapper> {
     public static final int CELL = 18;
     public static final int MAX_SLOTS = 9;
 
-    private static IDrawable sharedSlotFrame;
-
     private final IDrawable background;
     private final IDrawable icon;
     private final IDrawable slotFrame;
@@ -36,11 +34,6 @@ public class GasGiantCategory implements IRecipeCategory<GasGiantWrapper> {
         this.background = gui.createBlankDrawable(150, 56);
         this.icon = gui.createDrawableIngredient(new ItemStack(StellurgyBlocks.blockDeployableRocketBuilder));
         this.slotFrame = gui.getSlotDrawable();
-        sharedSlotFrame = this.slotFrame;
-    }
-
-    public static IDrawable getSharedSlotFrame() {
-        return sharedSlotFrame;
     }
 
     private static String getHarvestCapTooltip() {

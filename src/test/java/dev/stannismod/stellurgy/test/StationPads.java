@@ -106,9 +106,9 @@ public final class StationPads {
         // `arrayLength` because the guard has to tell THREE states apart, and only it can: -1 when
         // the reply carries no such array, 0 for a station that really holds no pads — a reading,
         // and one that must not be refused here — and a count otherwise. `has` would answer the
-        // first question alone (it is true for an array, including an empty one; measured in
-        // `ReplyContractTest`, after a comment on this very line claimed for months that it
-        // "answers false for an array" and nothing anywhere contradicted it).
+        // first question alone: it is true for an array, including an empty one (`Reply#has` at
+        // `primitiveOf(field) != null`, which renders a non-primitive with `toString()`) — a comment
+        // on this very line once claimed for months that it "answers false for an array".
         if (reply.arrayLength("pads") < 0) {
             throw new AssertionError("this is not an `stellurgytest station pads` answer: it carries no"
                     + " `pads`: " + text);

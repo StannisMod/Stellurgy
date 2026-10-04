@@ -74,7 +74,7 @@ public class ASensorAboardAShipE2ETest extends AbstractSharedServerTest {
 
     /** The sensor ticks in world {@link #DIM}, so its log is stepped by that world's clock. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), DIM, ticks));
+            new Events(this::exec, ticks -> GameTicks.advanceWorld(client(), DIM, ticks), evictionReports());
 
     /** Each config key this scenario set, with the value it held before the scenario touched it. */
     private final Map<String, String> configBefore = new LinkedHashMap<>();
@@ -326,9 +326,6 @@ public class ASensorAboardAShipE2ETest extends AbstractSharedServerTest {
         return v * v;
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

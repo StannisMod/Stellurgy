@@ -319,9 +319,6 @@ public class ShotSubstrateE2ETest extends AbstractSharedServerTest {
         return Reply.of("the round", read.object("shot"));
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

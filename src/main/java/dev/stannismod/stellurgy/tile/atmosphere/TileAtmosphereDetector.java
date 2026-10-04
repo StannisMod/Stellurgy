@@ -50,7 +50,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
             boolean detectedAtm = false;
 
             //TODO: Galacticcraft support
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world);
             if (atmhandler == null) {
                 detectedAtm = atmosphereToDetect == AtmosphereType.AIR;
             } else {

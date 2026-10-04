@@ -36,63 +36,51 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>Manual harness lifecycle for the same reason as its neighbours: the planet file has to be on
  * disk before the server boots.</p>
+ *
+ * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-public class OverworldKeepsASizeWhenThePlanetFileStatesNoneTest {
+@SeededWorld(OverworldKeepsASizeWhenThePlanetFileStatesNoneTest.Galaxy.class)
+public class OverworldKeepsASizeWhenThePlanetFileStatesNoneTest extends AbstractSharedServerTest {
 
     private static final int MOON_DIM = 2;
     /** Luna's measured bulk, the control arm — a body that states its own must keep it. */
     private static final String MOON_MASS = "0.0123";
     private static final String MOON_RADIUS = "0.2727";
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
 
-    @Before
-    public void writeAPlanetFileWithASizelessEarth() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -Dforge.test.harness.enabled=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-sizeless-earth-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-
-        String xml =
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-                "<galaxy>\n" +
-                "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\"\n" +
-                "          isBlackHole=\"false\" diskAngle=\"70\" numPlanets=\"0\" numGasGiants=\"0\">\n" +
-                "        <planet name=\"Earth\" DIMID=\"0\">\n" +
-                "            <isKnown>true</isKnown>\n" +
-                "            <gravitationalMultiplier>100</gravitationalMultiplier>\n" +
-                "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n" +
-                "            <atmosphereDensity>100</atmosphereDensity>\n" +
-                "            <planet name=\"Luna\" DIMID=\"" + MOON_DIM + "\">\n" +
-                "                <isKnown>false</isKnown>\n" +
-                "                <gravitationalMultiplier>16</gravitationalMultiplier>\n" +
-                "                <mass>" + MOON_MASS + "</mass>\n" +
-                "                <radius>" + MOON_RADIUS + "</radius>\n" +
-                "                <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS + "</orbitalDistance>\n" +
-                "                <atmosphereDensity>0</atmosphereDensity>\n" +
-                "            </planet>\n" +
-                "        </planet>\n" +
-                "    </star>\n" +
-                "</galaxy>\n";
-
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
-    }
-
-    @After
-    public void stopHarness() throws Exception {
-        if (harness != null) harness.close();
+    /** The galaxy this class's one shared server boots over. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(dev.stannismod.stellurgy.test.client.GameDirSeed seed) {
+            String xml =
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                    "<galaxy>\n" +
+                    "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\"\n" +
+                    "          isBlackHole=\"false\" diskAngle=\"70\" numPlanets=\"0\" numGasGiants=\"0\">\n" +
+                    "        <planet name=\"Earth\" DIMID=\"0\">\n" +
+                    "            <isKnown>true</isKnown>\n" +
+                    "            <gravitationalMultiplier>100</gravitationalMultiplier>\n" +
+                    "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n" +
+                    "            <atmosphereDensity>100</atmosphereDensity>\n" +
+                    "            <planet name=\"Luna\" DIMID=\"" + MOON_DIM + "\">\n" +
+                    "                <isKnown>false</isKnown>\n" +
+                    "                <gravitationalMultiplier>16</gravitationalMultiplier>\n" +
+                    "                <mass>" + MOON_MASS + "</mass>\n" +
+                    "                <radius>" + MOON_RADIUS + "</radius>\n" +
+                    "                <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.MOON_REFERENCE_UNITS + "</orbitalDistance>\n" +
+                    "                <atmosphereDensity>0</atmosphereDensity>\n" +
+                    "            </planet>\n" +
+                    "        </planet>\n" +
+                    "    </star>\n" +
+                    "</galaxy>\n";
+            seed.planetDefs(xml, OverworldKeepsASizeWhenThePlanetFileStatesNoneTest.class);
+        }
     }
 
     @Test
     public void anOverworldWithNoStatedBulkGetsTheUnitOneAndTheMoonKeepsItsOwn() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        String earth = String.join("\n", harness.client().execute("stellurgytest planet info 0"));
+        String earth = String.join("\n", client().execute("stellurgytest planet info 0"));
         assertTrue("planet info errored for the overworld: " + earth, !Reply.of(earth).has("error"));
         assertTrue("the overworld must run with the unit radius when its planet file states none —"
                         + " a body of radius 0 draws at the marker size at every range and carries the"
@@ -105,7 +93,7 @@ public class OverworldKeepsASizeWhenThePlanetFileStatesNoneTest {
         // CONTROL: the repair is aimed at the ONE body whose bulk is a definition. A body that stated
         // its own must come back with what it stated, or the assertion above is passing on a blanket
         // "everything is 1 Earth" rather than on the overworld's entry.
-        String luna = String.join("\n", harness.client().execute("stellurgytest planet info " + MOON_DIM));
+        String luna = String.join("\n", client().execute("stellurgytest planet info " + MOON_DIM));
         assertTrue("planet info errored for the moon: " + luna, !Reply.of(luna).has("error"));
         assertTrue("a body that STATES its bulk must keep it, not be repaired to the unit one: " + luna,
                 String.valueOf(MOON_RADIUS).equals(Reply.of(luna).text("radius"))

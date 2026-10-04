@@ -17,6 +17,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class TurretInterceptTest {
 
+    /** A constant: a Vec3d is immutable. */
     private static final Vec3d MUZZLE = new Vec3d(0.0D, 0.0D, 0.0D);
 
     /**

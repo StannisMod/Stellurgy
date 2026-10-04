@@ -18,7 +18,7 @@ import java.util.List;
  */
 public final class ShieldNetworkManager {
 
-    /** The domain handle. Shield nodes register under it; nothing else joins these graphs. */
+    /** The domain handle. Shield nodes register under it; nothing else joins these graphs. Effectively final, process lifetime: built once at class initialisation. A domain holds nothing but its name. */
     public static final SubsystemNetworkDomain DOMAIN = new SubsystemNetworkDomain("Shield") {
         @Override
         public SubsystemNetworkState newState() {

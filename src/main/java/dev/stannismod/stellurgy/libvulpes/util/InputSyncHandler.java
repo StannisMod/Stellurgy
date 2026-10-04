@@ -5,20 +5,13 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerChangedDimensionEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedOutEvent;
 import dev.stannismod.stellurgy.libvulpes.api.IJetPack;
 import dev.stannismod.stellurgy.libvulpes.api.IModularArmor;
 
-import java.util.HashMap;
-import java.util.UUID;
-
 public class InputSyncHandler {
-	public static HashMap<UUID, Boolean> spaceDown = new HashMap<>();
 
 	public static boolean isSpaceDown(EntityPlayer player) {
-		Boolean bool = spaceDown.get(player.getUniqueID());
-		
-		return bool != null && bool;
+		return ((JetpackKeys) player).stellurgy$isSpaceDown();
 	}
 	
 	//Called on server (and client in AR KeyBindings class)
@@ -72,7 +65,7 @@ public class InputSyncHandler {
 			}
 			break;
 		case 57: //SPACE
-			spaceDown.put(player.getUniqueID(), state);
+			((JetpackKeys) player).stellurgy$setSpaceDown(state);
 			break;
 			
 			default:
@@ -80,13 +73,9 @@ public class InputSyncHandler {
 		}
 	}
 	
-	@SubscribeEvent
-	public void onPlayerLoggedOut(PlayerLoggedOutEvent evt) {
-		spaceDown.remove(evt.player.getUniqueID());
-	}
-
+	/** A server player keeps its object across a dimension change; the key it held does not carry over. */
 	@SubscribeEvent
 	public void onDimChanged(PlayerChangedDimensionEvent evt) {
-		spaceDown.remove(evt.player.getUniqueID());
+		((JetpackKeys) evt.player).stellurgy$setSpaceDown(false);
 	}
 }

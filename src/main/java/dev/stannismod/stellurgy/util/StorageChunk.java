@@ -67,14 +67,21 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
      * {@code world.setBlockState(pos, AIR)}, which fires each block's {@code breakBlock} exactly as
      * a pickaxe or an explosion would — but the craft is being MOVED, not destroyed, so destruction
      * side effects (dismounting a seated pilot, zeroing his ship's controls) must not run. Blocks
-     * whose {@code breakBlock} distinguishes the two cases gate on {@link #isRelocationInProgress()}.
-     * Server main thread only (all cuts run there), so a plain int suffices.
+     * whose {@code breakBlock} distinguishes the two cases gate on {@link #isRelocationInProgress}.
+     * Counted per world ({@link dev.stannismod.stellurgy.world.WorldRuntime}), the world being cut;
+     * server main thread only (all cuts run there), so a plain int suffices.
      */
-    private static int relocationDepth = 0;
+    private static final class Relocation {
+        int depth;
+    }
 
-    /** Whether a structure-relocation cut is removing blocks right now (see {@link #relocationDepth}). */
-    public static boolean isRelocationInProgress() {
-        return relocationDepth > 0;
+    private static Relocation relocationOf(World world) {
+        return dev.stannismod.stellurgy.world.WorldRuntime.of(world, Relocation.class, Relocation::new);
+    }
+
+    /** Whether a structure-relocation cut is removing blocks from {@code world} right now. */
+    public static boolean isRelocationInProgress(World world) {
+        return relocationOf(world).depth > 0;
     }
 
     public Chunk chunk;
@@ -172,7 +179,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 for (int z = 0; z < this.sizeZ; z++) {
                     Block block = this.blocks[x][y][z];
                     if (block != null) {
-                        this.weight += WeightEngine.INSTANCE.getWeight(null, block);
+                        this.weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(null, block);
                     }
                 }
             }
@@ -180,7 +187,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
 
         // TEs
         for (TileEntity te : this.tileEntities) {
-            this.weight += WeightEngine.INSTANCE.getTEWeight(te);
+            this.weight += dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(te);
 
             if (te instanceof TileSatelliteHatch) {
                 TileSatelliteHatch hatch = (TileSatelliteHatch) te;
@@ -228,7 +235,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                         Block block = state.getBlock();
 
                         if (StellurgyConfiguration.getCurrentConfig().advancedWeightSystem) {
-                            weight += WeightEngine.INSTANCE.getWeight(world, currBlockPos);
+                            weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, currBlockPos);
                         } else {
                             weight += 1;
                         }
@@ -419,7 +426,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                 for (int y = actualMinY; y <= actualMaxY; y++) {
                     BlockPos pos = new BlockPos(x, y, z);
 
-                    weight += WeightEngine.INSTANCE.getWeight(world, pos);
+                    weight += dev.stannismod.stellurgy.Stellurgy.weights().getWeight(world, pos);
 
                     IBlockState state = world.getBlockState(pos);
                     ret.blocks[x - actualMinX][y - actualMinY][z - actualMinZ] = state.getBlock();
@@ -478,7 +485,8 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
     public static StorageChunk cutWorldBB(World worldObj, AxisAlignedBB bb) {
         StorageChunk chunk = StorageChunk.copyWorldBB(worldObj, bb);
 
-        relocationDepth++;
+        Relocation relocation = relocationOf(worldObj);
+        relocation.depth++;
         try {
         for (int x = (int) bb.minX; x <= bb.maxX; x++) {
             for (int z = (int) bb.minZ; z <= bb.maxZ; z++) {
@@ -499,7 +507,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
             }
         }
         } finally {
-            relocationDepth--;
+            relocation.depth--;
         }
 
         // The cut region is air now, and its damage went into the copy above. Leaving the entries
@@ -822,7 +830,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
         BlockDamageSavedData destinationDamage =
                 world.isRemote ? null : BlockDamageSavedData.get(world);
 
-        AtmosphereHandler.beginStructurePaste();
+        AtmosphereHandler.beginStructurePaste(world);
         try {
             //Set all the blocks
             for (int x = 0; x < sizeX; x++) {
@@ -871,7 +879,7 @@ public class StorageChunk implements IBlockAccess, IStorageChunk, IWeighted, IBr
                     entity.readFromNBT(nbt);
             }
         } finally {
-            AtmosphereHandler.endStructurePaste();
+            AtmosphereHandler.endStructurePaste(world);
         }
     }
 

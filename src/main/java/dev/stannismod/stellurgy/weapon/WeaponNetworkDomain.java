@@ -26,6 +26,7 @@ import java.util.List;
  */
 public final class WeaponNetworkDomain extends SubsystemNetworkDomain {
 
+    /** Effectively final, process lifetime: built once at class initialisation. A domain holds nothing but its name. */
     public static final WeaponNetworkDomain INSTANCE = new WeaponNetworkDomain();
 
     private WeaponNetworkDomain() {

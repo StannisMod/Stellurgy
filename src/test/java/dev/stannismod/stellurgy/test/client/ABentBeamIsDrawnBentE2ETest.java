@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import org.junit.Test;
 
@@ -25,6 +26,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class ABentBeamIsDrawnBentE2ETest extends AbstractClientE2ETest {
 
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
+
     private static final int DIM = 0;
     private static final int Y = 84, Z = 420;
     private static final int GUN_X = 700;
@@ -41,8 +45,8 @@ public class ABentBeamIsDrawnBentE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aBeamTurnedByAMirrorReachesTheClientWithItsCornerInIt() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
-        Events client = ClientEvents.of(bot());
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
+        Events client = ClientEvents.of(bot(), evictions);
         serverClient().execute("tp @a " + (GUN_X + 4) + ".5 " + (Y + 1) + " " + (Z + 0.5D));
 
         long built = server.markInstrumented();

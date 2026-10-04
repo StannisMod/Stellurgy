@@ -2,33 +2,26 @@ package dev.stannismod.stellurgy.world;
 
 import net.minecraft.init.Biomes;
 import net.minecraft.util.WeightedRandom;
-import net.minecraft.world.WorldType;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.gen.layer.GenLayer;
 import net.minecraft.world.gen.layer.IntCache;
 import net.minecraftforge.common.BiomeManager.BiomeEntry;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class GenLayerBiomePlanet extends GenLayer {
 
-    private static List<BiomeEntry> biomeEntries;
-    int biomeLimiter = -1;
-    private List<Biome> biomes;
+    /**
+     * The viable biomes of the one planet this layer generates for. Each planet's chunk manager builds
+     * its own layer stack, so two planets — or the client's and the integrated server's managers of
+     * one planet, on two threads — never read each other's list.
+     */
+    private final List<BiomeEntry> biomeEntries;
 
-    public GenLayerBiomePlanet(long p_i2122_1_, GenLayer p_i2122_3_, WorldType worldType) {
-        super(p_i2122_1_);
-
-        this.parent = p_i2122_3_;
-
-        biomeEntries = new ArrayList<>();
-
-    }
-
-    //Used to set the usableBiomes
-    public static synchronized void setupBiomesForUse(List<BiomeEntry> entries) {
-        biomeEntries = entries;
+    public GenLayerBiomePlanet(long seed, GenLayer parent, List<BiomeEntry> biomeEntries) {
+        super(seed);
+        this.parent = parent;
+        this.biomeEntries = biomeEntries;
     }
 
     /**

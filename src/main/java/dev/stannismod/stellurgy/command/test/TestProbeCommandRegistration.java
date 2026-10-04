@@ -51,31 +51,39 @@ public final class TestProbeCommandRegistration {
         }
         // What belongs to THIS server's life: on the bus from here, off it when the server stops.
         ServerScoped scope = ServerScoped.start();
-        event.registerServerCommand(new TestProbeCommand(scope.hold(new WeaponFireVetoProbe())));
+        TestProbeCommand command = new TestProbeCommand(scope.hold(new WeaponFireVetoProbe()));
+        event.registerServerCommand(command);
         // register the rocket-event recorder at server start so
         // counters are accurate from the first rocket lifecycle event.
-        TestProbeCommand.RocketEventRecorder.ensureRegistered();
-        // The ordered event log. Subscribed here and nowhere else, so a shipped game has no
-        // subscriber, builds no record and pays nothing for what only a test wants to see.
-        TestEventLog.ServerRecorder.ensureRegistered();
-        // The listener every tile gets, writing what the damage service tells a unit into that log.
-        scope.hold(new TestProbeCommand.DamageOccurrenceRecorder());
-        // Ships stay loaded for the life of a TEST server, and a scenario whose SUBJECT is an
-        // unloaded ship turns it off for itself (`stellurgytest vs permaload false`).
-        //
-        // The physics substrate loads a ship only while a player is within its load distance and
-        // queues an unload every tick for one that is not — right for a real game, and unreachable
-        // for a headless test, which has no player to spare and often none in the world at all. So
-        // every scenario that assembles a craft wanted this, and each said so for itself: 45 classes
-        // called the probe verb by hand, and 28 of them switched it back off when they finished,
-        // which turned it off for whatever ran next in the same JVM.
-        //
-        // Set HERE rather than in a test base class because the tier has six of those and twelve
-        // classes sit on the framework's own — a default installed per hierarchy is only as complete
-        // as the list of hierarchies, and this one has to hold for every test there is.
-        dev.stannismod.stellurgy.integration.vs.VSIntegration.setShipsPermanentlyLoaded(true);
+        command.rocketEvents.ensureRegistered();
+        // The ordered event log, and the damage-occurrence listener every tile gets, both on the
+        // test side.
+        attachTestEventRecorder(event.getServer());
         Stellurgy.logger.info("Registered /stellurgytest test-only probe commands (-D" + FLAG + "=true)");
         bootstrapTestServerBridge();
+    }
+
+    /**
+     * Test-only hook: subscribe the ordered event log's bus recorder and start the log of
+     * {@code server}. Both live in the test source set, on the server's own trace object, so a
+     * shipped game has no subscriber, builds no record and pays nothing for what only a test wants
+     * to see; the {@link ClassNotFoundException} branch is what makes a production launch cost
+     * nothing.
+     *
+     * <p>Called from HERE, by name, because a bus registration reads the active mod container and
+     * this is a lifecycle event of this mod — the one moment that container is Stellurgy's.
+     * {@code EventBus.register} logs a "should be impossible" error whenever it finds no active
+     * container, which is the case a subscription made from the test side on its own would risk.</p>
+     */
+    private static void attachTestEventRecorder(net.minecraft.server.MinecraftServer server) {
+        try {
+            Class<?> recorder = Class.forName("dev.stannismod.stellurgy.test.trace.ServerEventRecorder");
+            recorder.getMethod("attach", net.minecraft.server.MinecraftServer.class).invoke(null, server);
+        } catch (ClassNotFoundException ignored) {
+            // Test source set absent at runtime — no-op (production launch).
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to attach the test event recorder", e);
+        }
     }
 
     /**

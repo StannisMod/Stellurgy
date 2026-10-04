@@ -37,7 +37,6 @@ import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.eventhandler.Event.Result;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent;
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ServerConnectionFromClientEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
@@ -55,6 +54,7 @@ import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.dimension.watersourcelocked;
 import dev.stannismod.stellurgy.world.TemplateImporter;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.network.PacketConfigSync;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
@@ -76,53 +76,50 @@ import java.util.*;
 
 public class PlanetEventHandler {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ItemStack component = new ItemStack(StellurgyItems.itemUpgrade, 1, 4);
-    /**
-     * Server ticks this handler has seen. OWNER: the SERVER; LIFETIME: one server, released by
-     * {@link #onServerStopped()}.
-     *
-     * <p>It exists to be READ from outside — it is the cheapest evidence that the
-     * {@code ServerTickEvent} subscription is alive, since a lost subscription leaves it frozen
-     * where the last tick put it. That is only true of a counter that STARTS somewhere known: until
-     * the release below, a second world in the same launch inherited the first world's total, so
-     * "frozen at N" and "counting from N" were the same reading.</p>
-     */
-    public static long time = 0;
-    /** The warp-transition flash. OWNER: the CLIENT — {@code runBurst} is client-only and the read
-     *  at the bottom of this file goes through {@code Minecraft}; LIFETIME: one connection, released
-     *  in {@link #disconnected}. NOT released by the server hook below, which is a different owner. */
-    private static long endTime, duration;
-    /** Entity moves this server owes at a future world time. OWNER: the SERVER; LIFETIME: one
-     *  server. Holds live {@code Entity} references, so it is emptied by the release below rather
-     *  than carried into the next world. */
-    private static final List<TransitionEntity> transitionMap = new LinkedList<>();
+    /** What this handler keeps for one server ({@code ServerState#planetEvents}), and dies with it. */
+    public static final class ServerPart {
+        /**
+         * Server ticks this handler has seen. It exists to be READ from outside — it is the cheapest
+         * evidence that the {@code ServerTickEvent} subscription is alive, since a lost subscription
+         * leaves it frozen where the last tick put it. Starting at zero with each server is what
+         * keeps "frozen at N" and "counting from N" distinct readings.
+         */
+        private long ticks;
 
-    public static void addDelayedTransition(TransitionEntity entity) {
-        transitionMap.add(entity);
+        /** Entity moves this server owes at a future world time; they hold live entities of its worlds. */
+        private final List<TransitionEntity> transitions = new LinkedList<>();
+
+        public long ticks() {
+            return ticks;
+        }
+
+        public int pendingTransitions() {
+            return transitions.size();
+        }
+
+        public void addDelayedTransition(TransitionEntity entity) {
+            transitions.add(entity);
+        }
     }
 
     /**
-     * Released here, by the owner: both of these belonged to the server that has just stopped.
-     *
-     * <p>The queue is emptied rather than left to be overwritten — its entries hold entities of a
-     * world that no longer exists, and a transition scheduled against the old world's total time
-     * would fire against the new one's.</p>
+     * The warp-transition flash a client WORLD is showing. Owned by that world ({@link WorldRuntime})
+     * because its end is a moment on that world's clock: carried to another world it would be compared
+     * against a clock that knows nothing about it.
      */
-    public static void onServerStopped() {
-        time = 0;
-        transitionMap.clear();
+    private static final class WarpFlash {
+        long endTime;
+        long duration;
     }
 
-    /**
-     * Starts a burst, used for move to warp effect
-     *
-     * @param endTime
-     * @param duration
-     */
+    /** Flash {@code world}'s fog white for {@code durationTicks} of its clock — the move-to-warp effect. */
     @SideOnly(Side.CLIENT)
-    public static void runBurst(long endTime, long duration) {
-        PlanetEventHandler.endTime = endTime;
-        PlanetEventHandler.duration = duration;
+    public static void runBurst(World world, long durationTicks) {
+        WarpFlash flash = WorldRuntime.of(world, WarpFlash.class, WarpFlash::new);
+        flash.endTime = world.getTotalWorldTime() + durationTicks;
+        flash.duration = durationTicks;
     }
 /*
     public static void modifyChunk(World world, WorldProviderPlanet provider, Chunk chunk) {
@@ -286,10 +283,9 @@ public class PlanetEventHandler {
     public void sleepEvent(@Nonnull PlayerSleepInBedEvent event) {
 
         if (event.getEntity().world.provider instanceof WorldProviderPlanet) {
-            WorldProvider provider = event.getEntity().world.provider;
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(event.getEntity().world);
 
-            if (!StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace && AtmosphereHandler.hasAtmosphereHandler(provider.getDimension()) && atmhandler != null &&
+            if (!StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace && atmhandler != null &&
                     !atmhandler.getAtmosphereType(event.getPos()).isBreathable()) {
                 event.setResult(SleepResult.OTHER_PROBLEM);
             }
@@ -310,10 +306,9 @@ public class PlanetEventHandler {
 
     @SubscribeEvent
     public void blockPlacedEvent(@Nonnull PlaceEvent event) {
-        WorldProvider provider = event.getWorld().provider;
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(event.getWorld());
 
-        if (!event.getWorld().isRemote && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
+        if (!event.getWorld().isRemote && atmhandler != null &&
                 !atmhandler.getAtmosphereType(event.getPos()).allowsCombustion()) {
 
             if (event.getPlacedBlock().getBlock() == Blocks.TORCH) {
@@ -329,10 +324,9 @@ public class PlanetEventHandler {
     @SubscribeEvent
     public void blockRightClicked(@Nonnull RightClickBlock event) {
         EnumFacing direction = event.getFace();
-        WorldProvider provider = event.getWorld().provider;
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(event.getWorld());
 
-        if (!event.getWorld().isRemote && direction != null && event.getEntityPlayer() != null && AtmosphereHandler.getOxygenHandler(provider.getDimension()) != null && atmhandler != null &&
+        if (!event.getWorld().isRemote && direction != null && event.getEntityPlayer() != null && atmhandler != null &&
                 !atmhandler.getAtmosphereType(event.getPos().offset(direction)).allowsCombustion()) {
 
             if (!event.getEntityPlayer().getHeldItem(event.getHand()).isEmpty()) {
@@ -346,42 +340,17 @@ public class PlanetEventHandler {
         }
     }
 
-    @SubscribeEvent
-    public void disconnected(ClientDisconnectionFromServerEvent event) {
-        // Reload configs from disk
-        StellurgyConfiguration.useClientDiskConfig();
-        // C031: clear stale client-side Stellurgy dimension data when leaving a REMOTE
-        // server so it doesn't bleed into the next server joined in the same
-        // client session. dimensionList/starList are a JVM-global singleton and
-        // PacketDimInfo only merges per-id — it never removes a dim that existed
-        // only on the previous server, so those linger as ghost planets/stars.
-        // Guarded to remote-only: in single-player the client and the integrated
-        // server share this DimensionManager, and the integrated server's own
-        // onServerStopped already clears it — clearing here mid-shutdown could
-        // race its save.
-        if (net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance() == null) {
-            DimensionManager.getInstance().unregisterAllDimensions();
-        }
-        // Released here, by the owner: the warp flash is this CLIENT's, and its end time is a moment
-        // on the world it was started in. Carried across the gap it is compared against the NEXT
-        // world's clock, which knows nothing about it — so the overlay either draws for no reason or
-        // is already expired, and which one you get depends on where that world's day count happens
-        // to stand. Unconditional, unlike the dimension sweep above: nothing but this client writes
-        // these two, so there is no integrated server whose shutdown could be raced.
-        endTime = 0;
-        duration = 0;
-    }
-
     //Tick dimensions, needed for satellites, and GUIs
     @SubscribeEvent
     public void tick(TickEvent.ServerTickEvent event) {
         //Tick satellites
         if (event.phase == TickEvent.Phase.END) {
             DimensionManager.getInstance().tickDimensions();
-            time++;
+            ServerPart part = dev.stannismod.stellurgy.Stellurgy.serverState().planetEvents;
+            part.ticks++;
 
-            if (!transitionMap.isEmpty()) {
-                Iterator<TransitionEntity> itr = transitionMap.iterator();
+            if (!part.transitions.isEmpty()) {
+                Iterator<TransitionEntity> itr = part.transitions.iterator();
 
                 while (itr.hasNext()) {
                     TransitionEntity ent = itr.next();
@@ -414,12 +383,6 @@ public class PlanetEventHandler {
         }
     }
 
-    @SubscribeEvent
-    public void tickClient(TickEvent.ClientTickEvent event) {
-        if (event.phase == TickEvent.Phase.END)
-            DimensionManager.getInstance().tickDimensionsClient();
-    }
-
     //Make sure the player receives data about the dimensions
     @SubscribeEvent
     public void playerLoggedInEvent(ServerConnectionFromClientEvent event) {
@@ -441,6 +404,13 @@ public class PlanetEventHandler {
             PacketHandler.sendToDispatcher(new PacketSpaceStationInfo(spaceObject.getId(), spaceObject), event.getManager());
         }
 
+        // Sent to a local client too: it keeps its own copy of the galaxy, as a remote one does.
+        for (dev.stannismod.stellurgy.util.Asteroid asteroid : DimensionManager.getInstance().getAsteroidTypes().values()) {
+            PacketHandler.sendToDispatcher(new dev.stannismod.stellurgy.network.PacketAsteroidInfo(asteroid), event.getManager());
+        }
+        PacketHandler.sendToDispatcher(new dev.stannismod.stellurgy.network.PacketKnownPlanets(
+                DimensionManager.getInstance().knownPlanets), event.getManager());
+
         PacketHandler.sendToDispatcher(new PacketDimInfo(0, DimensionManager.getInstance().getDimensionProperties(0)), event.getManager());
     }
 
@@ -449,7 +419,7 @@ public class PlanetEventHandler {
         if (!event.getWorld().isRemote) {
             World world = event.getWorld();
             int dim = world.provider.getDimension();
-            AtmosphereHandler.registerWorld(dim);
+            AtmosphereHandler.registerWorld(world);
             // Import a TEMPLATE planet's region files before its chunks are first generated (no-op otherwise).
             TemplateImporter.importIfNeeded(world, DimensionManager.getInstance().getDimensionProperties(dim));
         } else if (StellurgyConfiguration.getCurrentConfig().skyOverride)
@@ -459,7 +429,7 @@ public class PlanetEventHandler {
     @SubscribeEvent
     public void worldUnloadEvent(WorldEvent.Unload event) {
         if (!event.getWorld().isRemote)
-            AtmosphereHandler.unregisterWorld(event.getWorld().provider.getDimension());
+            AtmosphereHandler.unregisterWorld(event.getWorld());
     }
 
     //Handle fog density and color
@@ -490,10 +460,12 @@ public class PlanetEventHandler {
                 }
             }
 
-            if (endTime > 0) {
-                double amt = (endTime - Minecraft.getMinecraft().world.getTotalWorldTime()) / (double) duration;
+            World world = event.getEntity().world;
+            WarpFlash flash = WorldRuntime.of(world, WarpFlash.class, WarpFlash::new);
+            if (flash.endTime > 0) {
+                double amt = (flash.endTime - world.getTotalWorldTime()) / (double) flash.duration;
                 if (amt < 0) {
-                    endTime = 0;
+                    flash.endTime = 0;
                 } else {
                     event.setRed((float) amt);
                     event.setGreen((float) amt);
@@ -600,10 +572,9 @@ public class PlanetEventHandler {
             }
 
             //Check environment
-            if (dev.stannismod.stellurgy.client.ClientAtmosphere.pressure()
-                    != dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING) {
-                atmosphere = Math.min(
-                        dev.stannismod.stellurgy.client.ClientAtmosphere.pressure(), 200);
+            int reported = dev.stannismod.stellurgy.client.ClientAtmosphere.of(event.getEntity().world).pressure();
+            if (reported != dev.stannismod.stellurgy.client.ClientAtmosphere.NO_READING) {
+                atmosphere = Math.min(reported, 200);
             }
 
             if (atmosphere > 100) {

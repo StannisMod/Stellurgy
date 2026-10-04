@@ -67,6 +67,7 @@ public class ModulePlanetSelector extends ModuleContainerPan implements IButtonI
 
     private IProgressBar progressSource;
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final IProgressBar NULL_PROGRESS = new IProgressBar() {
         @Override public float getNormallizedProgress(int id) { return 0f; }
         @Override public void setProgress(int id, int progress) {}

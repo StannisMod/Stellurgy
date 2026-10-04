@@ -38,7 +38,7 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     private static final String ENTITY_ID = "entityId";
 
     private final Events events =
-            new Events(ShieldImpactAbsorptionTest::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     @Test
     public void chargedCoilAbsorbsEnergyProjectileCostingMoreThanIntake() throws Exception {
@@ -229,8 +229,8 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
     }
 
     /** What the server says about one entity in this test's dimension. */
-    private static EntityState entity(int entityId) throws Exception {
-        return EntityState.byId(ShieldImpactAbsorptionTest::exec, DIM, entityId);
+    private EntityState entity(int entityId) throws Exception {
+        return EntityState.byId(this::exec, DIM, entityId);
     }
 
     private static double sq(double v) {
@@ -247,10 +247,6 @@ public class ShieldImpactAbsorptionTest extends AbstractSharedServerTest {
         Reply mReply = Reply.of(json);
         assertTrue("no entityId in spawn response: " + json, mReply.has(ENTITY_ID));
         return Integer.parseInt(mReply.text(ENTITY_ID));
-    }
-
-    private static String exec(String command) throws Exception {
-        return join(client().execute(command));
     }
 
     private static String join(List<String> resp) {

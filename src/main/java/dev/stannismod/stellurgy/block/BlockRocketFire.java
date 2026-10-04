@@ -31,6 +31,7 @@ import java.util.Random;
 public class BlockRocketFire extends Block {
 
     //Because CCL is a little pain and needs a property named level to exist for all materials of lava
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyInteger AGE = PropertyInteger.create("level", 0, 15);
 
     public BlockRocketFire() {

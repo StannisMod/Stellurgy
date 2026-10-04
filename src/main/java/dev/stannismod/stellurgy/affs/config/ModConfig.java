@@ -23,41 +23,62 @@ public final class ModConfig {
     public static final int DEFAULT_EMITTER_COIL_BUFFER = 40_000;
     public static final int DEFAULT_ACCUMULATOR_BUFFER = 500_000;
 
+    /** Effectively final, process lifetime: written only by ModConfig.load. */
     private static Configuration configuration;
 
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static int generatorShieldBuffer = DEFAULT_GENERATOR_SHIELD_BUFFER;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static int generatorFeBuffer = DEFAULT_GENERATOR_FE_BUFFER;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static int emitterCoilBuffer = DEFAULT_EMITTER_COIL_BUFFER;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static int accumulatorBuffer = DEFAULT_ACCUMULATOR_BUFFER;
 
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double entityImpactEnergyPerVelocitySq = 160.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double projectileImpactEnergyPerVelocitySq = 320.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double energyProjectileImpactEnergy = 10_000.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double explosionImpactEnergyPerResistance = 12.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldCollisionBaseEnergyCost = 100.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldEnergyResistanceBias = 0.5D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldActivationThreshold = 0.5D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double minimumImpactEnergyCost = 1.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldCollisionMinDamageEnergy = 25.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldCollisionDamagePerEnergy = 0.02D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldTierEfficiencyStep = 0.2D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double contourMaintenanceEnergyPerFieldBlock = 4.0D;
 
     // D134-3: per-emitter recharge throughput. An emitter can only pour energy into its zone of the
     // field at a bounded rate; this is the shield's per-zone regeneration bottleneck (the "interesting"
     // limiter). Base rate per tick, scaled up per emitter tier so larger/denser emitters regenerate
     // faster. The network never routes an emitter more than this per tick.
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static int emitterRechargeThroughputBase = 4_000;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double emitterThroughputTierStep = 0.5D;
     // D134-4: passive-maintenance coefficient. Holding a powered field at its current strength costs
     // little (this coefficient x pi x r^2 per tick, spread over a 20-tick cycle) — the SMALL of the two
     // draws. Regeneration (the LARGE draw) is the throughput-capped refill above. Kept small relative to
     // the throughput so maintenance never dominates the regeneration budget.
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double emitterMaintenanceEnergyPerSurfaceArea = 12.0D;
     // P6 "the interesting limiter binds": a cable's per-tick transport cap. Deliberately several times
     // the emitter base throughput so ordinary builds are constrained by EMITTER PLACEMENT (the fun,
     // construction-derived limiter) and cable throughput (plumbing) only bites at extremes — a big
     // multi-emitter network squeezed through one thin line. Tunable, never balance-pinned.
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static int cableThroughputPerTick = 20_000;
 
     // A shield node's condition drives what it DELIVERS. Two coefficients because the two consequences
@@ -66,7 +87,9 @@ public final class ModConfig {
     // before the shell collapses. Each is the fraction lost at the last stage before destruction; 0
     // disables that consequence entirely. Neither touches what the shield COSTS: a shrunken emitter is
     // still billed for the radius it was told to hold, or being shot would save energy.
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldNodeDamagePenaltyMax = 0.75D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double emitterRadiusDamagePenaltyMax = 0.5D;
 
     // D134-2 tier-1 cooperative weapon interaction (axis-G tunable, never balance-pinned):
@@ -82,8 +105,11 @@ public final class ModConfig {
     //    pricing path. Clamped to [0, 1] — above 1 the shell would hand out energy it never absorbed.
     // The tier-2 residual hitscan-ray hook (a blanket World.rayTraceBlocks mixin) is deferred to its own
     // task; its config lands with it, not here.
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldStrikeAbsorptionRate = 1.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldStrikeDamageToEnergyFactor = 500.0D;
+    /** Effectively final, process lifetime: written only by ModConfig.sync. */
     public static double shieldStrikeReflectionRestitution = 1.0D;
 
     private ModConfig() {

@@ -65,6 +65,7 @@ public class ItemRepairWelder extends Item {
         NO_MATERIALS("msg.welder.nomaterials"),
         NO_CHARGE("msg.welder.nocharge");
 
+        /** Effectively final, process lifetime: written only by the constructor. */
         public final String messageKey;
 
         Outcome(String messageKey) {

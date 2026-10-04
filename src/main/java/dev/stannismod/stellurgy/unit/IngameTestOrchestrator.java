@@ -3,8 +3,6 @@ package dev.stannismod.stellurgy.unit;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.World;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
 import dev.stannismod.stellurgy.Stellurgy;
 
 import java.lang.reflect.Method;
@@ -13,23 +11,21 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
+/**
+ * The steps of {@code /ar dev runtests} still due, and who started the run. One per server
+ * ({@code ServerState}), so a step left pending when a server stops never fires in the next one.
+ */
 public class IngameTestOrchestrator {
 
-    static final Map<Long, PlayerMapping> eventScheduler = new HashMap<>();
-    /** The player who started the in-game test run, so a scheduled step can find him again in
-     *  whichever world he is standing in by then. OWNER: the SERVER; LIFETIME: one run of
-     *  {@code /ar dev runtests}, and the next run overwrites it. Not released on server stop: this
-     *  is a developer command whose steps all execute within the run that set it, and a stale name
-     *  resolves to no player rather than to the wrong one. */
-    public static String name;
-    public static boolean registered = false;
-    public static IngameTestOrchestrator instance = new IngameTestOrchestrator();
+    private final Map<Long, PlayerMapping> eventScheduler = new HashMap<>();
+    /** The player who started the run, so a scheduled step can find him in whichever world he is in. */
+    private String name;
 
-    public static boolean runTests(World world, EntityPlayer player) {
+    public boolean runTests(World world, EntityPlayer player) {
         name = player.getName();
         BuildRocketTest buildRocketTest = new BuildRocketTest();
         try {
-            IngameTestOrchestrator.scheduleEvent(world, 1, BuildRocketTest.class.getDeclaredMethod("Phase1", World.class, EntityPlayer.class), buildRocketTest);
+            scheduleEvent(world, 1, BuildRocketTest.class.getDeclaredMethod("Phase1", World.class, EntityPlayer.class), buildRocketTest);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -37,15 +33,11 @@ public class IngameTestOrchestrator {
         return true;
     }
 
-    public static void scheduleEvent(World world, long numTicks, Method function, BaseTest test) {
+    public void scheduleEvent(World world, long numTicks, Method function, BaseTest test) {
         eventScheduler.put(world.getTotalWorldTime() + numTicks, new PlayerMapping(world, function, test));
     }
 
-    public static EntityPlayer getPlayerFromAnywhere() {
-        return getPlayerByName(name);
-    }
-
-    private static EntityPlayer getPlayerByName(String name) {
+    private EntityPlayer getPlayerFromAnywhere() {
         EntityPlayer player = null;
         for (World world : net.minecraftforge.common.DimensionManager.getWorlds()) {
             player = world.getPlayerEntityByName(name);
@@ -55,12 +47,15 @@ public class IngameTestOrchestrator {
         return player;
     }
 
-    @SubscribeEvent
-    public void serverTickEvent(TickEvent.WorldTickEvent event) {
+    /** One tick of a server world: run every step that has come due by its clock. */
+    public void onWorldTick(World tickingWorld) {
+        if (eventScheduler.isEmpty()) {
+            return;
+        }
         Iterator<Entry<Long, PlayerMapping>> itr = eventScheduler.entrySet().iterator();
         while (itr.hasNext()) {
             Entry<Long, PlayerMapping> e = itr.next();
-            if (event.world.getTotalWorldTime() >= e.getKey()) {
+            if (tickingWorld.getTotalWorldTime() >= e.getKey()) {
                 itr.remove();
                 BaseTest test = e.getValue().test;
                 try {

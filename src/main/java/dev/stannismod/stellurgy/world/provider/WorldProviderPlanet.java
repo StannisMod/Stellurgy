@@ -177,7 +177,7 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
                 // Warn once per dim so the issue is visible in logs.
                 if (StellurgyConfiguration.getCurrentConfig().enableCustomPlanetWeather
                         && !(world.getWorldInfo() instanceof StellurgyDimensionWorldInfo)) {
-                    PlanetWeatherManager.warnUnwrappedOnce(world.provider.getDimension());
+                    PlanetWeatherManager.warnUnwrappedOnce((net.minecraft.world.WorldServer) world);
                 }
                 boolean flag = world.getGameRules().getBoolean("doWeatherCycle");
 
@@ -325,10 +325,10 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     public int getRespawnDimension(@Nonnull EntityPlayerMP player) {
         if (StellurgyConfiguration.getCurrentConfig().canPlayerRespawnInSpace) {
             BlockPos coords = player.getBedLocation(getDimension());
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(player.world.provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(player.world);
 
             //this absolutely can be null, ignore your IDE's warning!
-            if (StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace || coords != null && AtmosphereHandler.hasAtmosphereHandler(player.world.provider.getDimension()) && atmhandler != null && atmhandler.getAtmosphereType(coords).isBreathable()) {
+            if (StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace || coords != null && AtmosphereHandler.hasAtmosphereHandler(player.world) && atmhandler != null && atmhandler.getAtmosphereType(coords).isBreathable()) {
                 return getDimension();
             }
         }
@@ -339,9 +339,9 @@ public class WorldProviderPlanet extends WorldProvider implements IPlanetaryProv
     @Override
     @Nonnull
     public WorldSleepResult canSleepAt(@Nonnull EntityPlayer player, @Nonnull BlockPos pos) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(player.world.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(player.world);
 
-        if (StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace || AtmosphereHandler.hasAtmosphereHandler(player.world.provider.getDimension()) && atmhandler != null && atmhandler.getAtmosphereType(pos).isBreathable()) {
+        if (StellurgyConfiguration.getCurrentConfig().forcePlayerRespawnInSpace || AtmosphereHandler.hasAtmosphereHandler(player.world) && atmhandler != null && atmhandler.getAtmosphereType(pos).isBreathable()) {
             return WorldSleepResult.ALLOW;
         } else {
             return WorldSleepResult.DENY;

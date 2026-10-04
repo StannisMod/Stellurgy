@@ -33,6 +33,10 @@ import static org.junit.Assert.assertTrue;
  * post-restart and that the previously-spawned rocket is still in the world's
  * rocket list — both of which are necessary preconditions for the link to be
  * useful.</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class RocketInfrastructureLinkPersistenceTest {
 

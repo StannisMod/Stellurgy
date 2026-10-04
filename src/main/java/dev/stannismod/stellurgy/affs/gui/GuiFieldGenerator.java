@@ -46,7 +46,7 @@ public class GuiFieldGenerator extends GuiAffsBase {
             // shrunken radius would quietly re-declare the field smaller every time it was nudged.
             int radius = tile.getDeclaredRadius();
             radius += button.id == 0 ? -1 : 1;
-            AdvancedForceFieldSystem.NETWORK.sendToServer(new PacketSetFieldRadius(tile.getPos(), radius));
+            dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendToServer(new PacketSetFieldRadius(tile.getPos(), radius));
         }
     }
 

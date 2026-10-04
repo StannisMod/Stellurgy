@@ -47,7 +47,7 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The claim is about what is true BETWEEN ticks, so it is read off the round's own history rather
@@ -395,9 +395,6 @@ public class ShotBoresOverTimeE2ETest extends AbstractSharedServerTest {
         assertTrue("failed to place " + block + " at " + x + ": " + placed, placed.bool("placed"));
     }
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

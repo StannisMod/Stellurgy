@@ -64,7 +64,7 @@ public class ShotHitsShipHullE2ETest extends AbstractSharedServerTest {
     private static final int MOVE_AGAIN_X = 6700, MOVE_AGAIN_Y = 150, MOVE_AGAIN_Z = 9100;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** Each config key a scenario set, with the value it held before; emptied by {@link #restoreConfig}. */
     private final java.util.Map<String, Double> configBefore = new java.util.LinkedHashMap<>();
@@ -340,9 +340,6 @@ public class ShotHitsShipHullE2ETest extends AbstractSharedServerTest {
         return v * v;
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

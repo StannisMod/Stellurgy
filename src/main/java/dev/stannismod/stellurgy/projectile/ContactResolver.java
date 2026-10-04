@@ -131,7 +131,7 @@ public final class ContactResolver {
         if (threshold >= 90.0D || contact.getIncidenceDegrees() < threshold) {
             return null;
         }
-        if (!WeightEngine.INSTANCE.isMetal(world, contact.getPos())) {
+        if (!dev.stannismod.stellurgy.Stellurgy.weights().isMetal(world, contact.getPos())) {
             return null;
         }
         Vec3d bounced = mirrored(contact);

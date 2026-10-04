@@ -48,11 +48,17 @@ import static org.junit.Assert.assertTrue;
  */
 public class ModelAssetsAreAddressableTest {
 
+    /** A constant: a Path is immutable. */
     private static final Path ASSETS =
             Paths.get("src", "main", "resources", "assets", "stellurgy");
 
-    /** The directories whose file names must equal a lowercased registry name. */
-    private static final String[] REGISTRY_NAMED = {"blockstates", "models/block", "models/item"};
+    /**
+     * The directories whose file names must equal a lowercased registry name.
+     *
+     * <p>A constant: an unmodifiable list of strings.</p>
+     */
+    private static final java.util.List<String> REGISTRY_NAMED = java.util.Collections.unmodifiableList(
+            java.util.Arrays.asList("blockstates", "models/block", "models/item"));
 
     @Test
     public void everyModelAssetIsNamedInTheCaseTheLookupUses() throws IOException {

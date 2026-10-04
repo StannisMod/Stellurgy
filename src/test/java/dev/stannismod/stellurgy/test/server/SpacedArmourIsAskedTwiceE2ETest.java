@@ -52,7 +52,7 @@ public class SpacedArmourIsAskedTwiceE2ETest extends AbstractSharedServerTest {
     private static final double MUZZLE_STANDOFF = 1.0D;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The claim, on the arrangement that makes it matter.
@@ -124,9 +124,6 @@ public class SpacedArmourIsAskedTwiceE2ETest extends AbstractSharedServerTest {
                 .requireOk("read a stage").text("block"));
     }
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

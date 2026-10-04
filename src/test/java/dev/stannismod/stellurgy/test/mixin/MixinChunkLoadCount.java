@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import dev.stannismod.stellurgy.command.test.MotionTrace;
+import dev.stannismod.stellurgy.test.trace.SideTrace;
 
 /**
  * Counts chunk arrivals on both sides.
@@ -28,10 +28,7 @@ public abstract class MixinChunkLoadCount {
     @Inject(method = "onLoad", at = @At("HEAD"))
     private void stellurgyTest$chunkLoaded(CallbackInfo ci) {
         Chunk self = (Chunk) (Object) this;
-        if (self.getWorld() != null && self.getWorld().isRemote) {
-            MotionTrace.clientChunkLoads++;
-        } else {
-            MotionTrace.serverChunkLoads++;
-        }
+        (self.getWorld() == null ? SideTrace.here() : SideTrace.of(self.getWorld()))
+                .motion().chunkLoaded();
     }
 }

@@ -62,14 +62,14 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
     private static final double RADIUS = 0.25D;
 
     private final Events events =
-            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(command -> exec(command), ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * The same energy, the same body, the same wall — only the KIND differs, and the depths must not
      * be the same. Priced off the wall rather than asserted as a number: what is claimed is that
      * boiling material away costs more per joule than pushing through it, not by how much.
      *
-     * <p>red-witnessed: with {@code StructureDamageEngine.stageCost} ({@code StructureDamageEngine#stageCost} at {@code double resistance = WeightEngine.INSTANCE.getResistance(world, pos, kind);})
+     * <p>red-witnessed (taken on the pre-merge form, where the table was reached through a static instance): with {@code StructureDamageEngine.stageCost} ({@code StructureDamageEngine#stageCost} at {@code double resistance = dev.stannismod.stellurgy.Stellurgy.weights().getResistance(world, pos, kind);})
      * pricing every kind from the kinetic column, this fails at "a beam dug as deep as a slug carrying the
      * same energy (beam=10 slug=10, budget=20000)" (2026-09-29).</p>
      */
@@ -109,7 +109,7 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
      * one buys nothing this tick and — carrying its energy onward rather than banking it — nothing on
      * any later tick either.</p>
      *
-     * <p>red-witnessed: with the kinetic column used for every kind ({@code StructureDamageEngine#stageCost} at {@code double resistance = WeightEngine.INSTANCE.getResistance(world, pos, kind);})
+     * <p>red-witnessed (taken on the pre-merge form, where the table was reached through a static instance): with the kinetic column used for every kind ({@code StructureDamageEngine#stageCost} at {@code double resistance = dev.stannismod.stellurgy.Stellurgy.weights().getResistance(world, pos, kind);})
      * AND the intensity gate disabled ({@code StructureDamageEngine#tooFaintToDrill} at {@code if (!WeightEngine.isThermalChannel(kind))}) — either alone leaves it
      * green, because the faint beam is refused by both — this fails at "a beam removed material with a
      * slug's price for it" (2026-09-29).</p>
@@ -227,7 +227,7 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
      * <p>The evidence is the contact seam's own ricochet decision at each plate — not the plate being
      * unmarked, which a round that missed it entirely would also leave.</p>
      *
-     * <p>red-witnessed: with the metal test in {@code ContactResolver.ricochet} ({@code ContactResolver#ricochet} at {@code if (!WeightEngine.INSTANCE.isMetal(world, contact.getPos()))})
+     * <p>red-witnessed (taken on the pre-merge form, where the table was reached through a static instance): with the metal test in {@code ContactResolver.ricochet} ({@code ContactResolver#ricochet} at {@code if (!dev.stannismod.stellurgy.Stellurgy.weights().isMetal(world, contact.getPos()))})
      * disabled, this fails at "the same round at the same angle skipped off WOOD" (2026-09-29).</p>
      *
      * <p>red-witnessed, one inversion per verdict, 2026-09-30: with {@code ContactResolver.ricochet}'s
@@ -390,11 +390,8 @@ public class ArmourAnswersByKindAndAngleE2ETest extends AbstractSharedServerTest
         return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + lane).requireOk("read a stage");
     }
 
-    private static String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
 
-    private static Reply ask(String command) throws Exception {
+    private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));
     }
 }

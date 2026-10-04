@@ -6,9 +6,9 @@ import dev.stannismod.stellurgy.libvulpes.client.util.IndicatorBarImage;
 import dev.stannismod.stellurgy.libvulpes.client.util.ProgressBarImage;
 import dev.stannismod.stellurgy.libvulpes.util.IconResource;
 
-import java.util.HashMap;
-import java.util.Map;
-
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class TextureResources {
     public static final ResourceLocation progressBars = new ResourceLocation("stellurgy:textures/gui/progressBars/progressBars.png");
     public static final ResourceLocation rocketHud = new ResourceLocation("stellurgy:textures/gui/rocketHUD.png");
@@ -83,7 +83,4 @@ public class TextureResources {
     public static final ProgressBarImage latheProgressBar = new ProgressBarImage(185, 24, 23, 4, 185, 28, 23, 4, EnumFacing.EAST, TextureResources.progressBars);
     public static final ProgressBarImage rollingMachineProgressBar = new ProgressBarImage(84, 66, 41, 32, 125, 66, 41, 32, EnumFacing.EAST, TextureResources.progressBars);
     public static final ProgressBarImage terraformProgressBar = new ProgressBarImage(16, 109, 106, 30, 16, 138, 106, 30, EnumFacing.EAST, TextureResources.progressBars);
-
-
-    public static final Map<String, ResourceLocation> planetResources = new HashMap<>();
 }

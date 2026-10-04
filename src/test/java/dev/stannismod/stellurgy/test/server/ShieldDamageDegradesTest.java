@@ -44,16 +44,8 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     private static final String STAGE = "stage";
     private static final String STAGE_COST = "stageCost";
 
-    /**
-     * Impact identities, never reused — the service refuses a repeat and answers DUPLICATE_IMPACT,
-     * which silently ends a scenario. STATIC because JUnit builds a fresh instance per method: a
-     * per-instance counter restarts at the same number for every test in the class, and every method
-     * after the first would be shooting ids the first one already spent.
-     */
-    private static int nextImpactId = 7000;
-
     private final Events events =
-            new Events(ShieldDamageDegradesTest::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * red-witnessed: with {@code TileEntityFieldGenerator#refreshEffectiveRadius} at {@code int derived = ShieldCondition.effectiveRadius(world, pos, radius, MIN_RADIUS);} deriving the effective radius as
@@ -342,6 +334,24 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
                 + readStage(x), readInt(STAGE, readStage(x)) > 0);
     }
 
+    /** This method's next impact identity; 0 until its first impact. */
+    private long impactIdCursor;
+
+    /**
+     * An impact identity no other method on this shared server has spent. The service refuses a
+     * repeat and answers DUPLICATE_IMPACT, which silently ends a scenario, and its memory is the
+     * server's — so a per-method counter starting at a fixed number would shoot the ids the previous
+     * method already spent. Each method's ids start at the server tick of its first impact, times a
+     * thousand: methods run one after another, so their ranges are disjoint while none fires a
+     * thousand impacts.
+     */
+    private long nextImpactId() throws Exception {
+        if (impactIdCursor == 0) {
+            impactIdCursor = serverTick() * 1000L;
+        }
+        return impactIdCursor++;
+    }
+
     /**
      * One declared impact against the block at {@code x}, from the -Z side at its own height: that
      * block is the first solid thing the ray meets, and what is behind it is cleared air, so no
@@ -350,7 +360,7 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
     private void hit(int x) throws Exception {
         int budget = (int) Math.ceil(readInt(STAGE_COST, readStage(x)) * STAGES_PER_IMPACT);
         String resp = exec("stellurgytest damage impact " + DIM + " " + (x + 0.5D) + " " + (Y + 0.5D) + " "
-                + (Z - 2.5D) + " 0 0 1 " + budget + " KINETIC " + (nextImpactId++));
+                + (Z - 2.5D) + " 0 0 1 " + budget + " KINETIC " + nextImpactId());
         Reply.of(resp).requireOk("declare the impact");
         assertTrue("the impact spent nothing — it is not reaching the block, and every assertion"
                 + " after this would be about an undamaged one: " + resp,
@@ -429,9 +439,6 @@ public class ShieldDamageDegradesTest extends AbstractSharedServerTest {
         return Reply.of(json).longInteger(field);
     }
 
-    private static String exec(String command) throws Exception {
-        return join(client().execute(command));
-    }
 
     private static String join(List<String> resp) {
         return String.join("\n", resp);

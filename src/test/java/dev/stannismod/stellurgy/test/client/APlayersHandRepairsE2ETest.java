@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.client;
 
+import dev.stannismod.stellurgy.test.EvictionReports;
 import com.github.stannismod.forge.testing.junit.AbstractClientE2ETest;
 import com.google.gson.JsonObject;
 import net.minecraft.util.EnumFacing;
@@ -37,6 +38,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
 
+    /** What the logs this test reads have already announced about evictions. */
+    private final EvictionReports evictions = new EvictionReports();
+
     /** The harness's single client always joins under this name. */
     private static final String PLAYER = "ForgeTestClient";
 
@@ -59,7 +63,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aBlockAPlayerPutsIntoAHoleIsNotRecordedAsDestroyed() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
         prepareSite();
         int subjectX = X + 2, controlX = X + 4;
         post(subjectX);
@@ -120,7 +124,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
      */
     @Test
     public void aWelderInAPlayersHandTakesOneStageOff() throws Exception {
-        Events server = new Events(this::exec, bot()::waitTicks);
+        Events server = new Events(this::exec, bot()::waitTicks, evictions);
         prepareSite();
         int blockX = X + 6;
         ask("stellurgytest fill " + DIM + " " + blockX + " " + Y + " " + Z + " " + blockX + " " + Y + " " + Z
@@ -179,7 +183,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
     public void aDamagedBlockAPlayerBreaksLeavesNoDamageBehind() throws Exception {
         // The break and its record happen in the server's world, so its log is stepped by that
         // world's own clock.
-        Events server = new Events(this::exec, ticks -> GameTicks.advanceWorld(serverClient(), DIM, ticks));
+        Events server = new Events(this::exec, ticks -> GameTicks.advanceWorld(serverClient(), DIM, ticks), evictions);
         prepareSite();
         int subjectX = X + 2, controlX = X + 6;
         post(subjectX);
@@ -213,7 +217,7 @@ public class APlayersHandRepairsE2ETest extends AbstractClientE2ETest {
         double standX = subjectX + 0.5D, standY = Y, standZ = Z - 2.5D;
         double dy = (Y + 0.5D) - (standY + EYE_HEIGHT), dz = (Z + 0.5D) - standZ;
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, dz));
-        ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot()), this::exec,
+        ClientEvents.placeOntoGroundItHolds(bot(), ClientEvents.of(bot(), evictions), this::exec,
                 "tp " + PLAYER + " " + standX + " " + standY + " " + standZ + " 0 " + pitch,
                 standX, standY, standZ, "the player must stand in front of the damaged post",
                 ROUND_TRIP_DEADLINE_TICKS);

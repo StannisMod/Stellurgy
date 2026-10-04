@@ -27,7 +27,7 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
     private static final int X = 9800, Y = 82, Z = 9800;
 
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks));
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /**
      * red-witnessed: with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}
@@ -105,9 +105,6 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
         return stage.bool("wasDestroyed") || "minecraft:air".equals(stage.text("block"));
     }
 
-    private String exec(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
 
     private Reply ask(String command) throws Exception {
         return Reply.of(command, exec(command));

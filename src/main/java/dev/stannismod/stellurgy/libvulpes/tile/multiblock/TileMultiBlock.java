@@ -50,6 +50,7 @@ public class TileMultiBlock extends TileEntity {
 	protected LinkedList<IFluidHandlerInternal> fluidInPorts = new LinkedList<>();
 	protected LinkedList<IFluidHandlerInternal> fluidOutPorts = new LinkedList<>();
 
+	/** Effectively final, process lifetime: filled only by TileMultiBlock.addMapping. */
 	protected static HashMap<Character, List<BlockMeta>> charMapping = new HashMap<>();
 
 	public TileMultiBlock() {
