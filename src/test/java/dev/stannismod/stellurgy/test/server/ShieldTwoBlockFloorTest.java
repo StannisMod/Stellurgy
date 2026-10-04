@@ -105,8 +105,9 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
      *
      * <p>red-witnessed: with {@code TileEntityFieldGenerator#onChunkUnload} at
      * {@code SubsystemNetworkManager.of(world).unregister(this);} removed, this fails at "after its chunk
-     * unloaded and loaded again ... the unloaded tile was never released expected:[4020,151,4020] but
-     * was:[4020,151,4020, 4020,151,4020]".</p>
+     * unloaded, the emitter at 4020,151,4020 never left the overworld's shield registry" with no
+     * {@code subsystem_node_unregistered} for that position, while a {@code subsystem_network_rebuilt}
+     * WAS recorded in the window (2026-10-04).</p>
      */
     @Test
     public void aWorldAnswersForTheEmittersLoadedInItAndNoOthers() throws Exception {
@@ -137,12 +138,15 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
         requireArranged("the emitter's chunk did not unload and come back as a new chunk, so there is no"
                         + " released tile to look for: " + cycle,
                 cycle.bool("dropped") && cycle.bool("reloaded") && !cycle.bool("sameInstance"));
-        // The unloaded tile leaves the registry on the world's next tile pass, and the network that
-        // tile pass dirties is rebuilt at the end of that same tick — the record of the rebuild is the
-        // record that the leaving has happened.
-        events.awaitRecordWithFields(cycled, "subsystem_network_rebuilt",
-                "the shield network was never rebuilt after the emitter's chunk unloaded", REBUILD_TICKS,
-                "domain", ShieldNetworkManager.DOMAIN.getName(), "dim", String.valueOf(DIM));
+        // The unloaded tile leaves the registry on the world's next tile pass. Its own record is the
+        // link, named by position: any other node leaving the overworld's shield network — another
+        // scenario's, on this shared server — is not this emitter's release.
+        events.awaitRecordWithFields(cycled, "subsystem_node_unregistered",
+                "after its chunk unloaded, the emitter at " + overworldEmitter + " never left the"
+                        + " overworld's shield registry — the unloaded tile was never released", RELEASE_TICKS,
+                "domain", ShieldNetworkManager.DOMAIN.getName(), "dim", String.valueOf(DIM),
+                "x", String.valueOf(overworldX), "y", String.valueOf(y), "z", String.valueOf(z),
+                "released", "true");
         assertEquals("after its chunk unloaded and loaded again, the overworld does not answer for exactly"
                         + " the one emitter standing there — the unloaded tile was never released",
                 Collections.singletonList(overworldEmitter),
@@ -153,13 +157,12 @@ public class ShieldTwoBlockFloorTest extends AbstractSharedServerTest {
     private static final int NETHER = -1;
 
     /**
-     * The rebuild's deadline, from production: the unloaded tile leaves the registry in the next world
+     * The release's deadline, from production: the unloaded tile leaves the registry in the next world
      * tick's tile pass ({@code World#updateEntities} runs {@code onChunkUnload} for every tile its chunk
-     * unload queued) and that tick's END phase rebuilds the dirtied network
-     * ({@code SubsystemNetworkEvents#onWorldTick}). So the record exists one world tick after the cycle;
-     * the wait reads, advances its one step of 5 ticks ({@code Events#awaitMatching}), and reads again.
+     * unload queued). So the record exists one world tick after the cycle; the wait reads, advances its
+     * one step of 5 ticks ({@code Events#awaitMatching}), and reads again.
      */
-    private static final int REBUILD_TICKS = 5;
+    private static final int RELEASE_TICKS = 5;
 
     /**
      * The emitters the {@code shield emitters} probe lists for {@code dim} that stand at one of

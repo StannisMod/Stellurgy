@@ -63,6 +63,7 @@
     "MixinDamageStateEvents",
     "MixinTileFireControlSensorEvents",
     "MixinSubsystemNetworkRebuildEvents",
+    "MixinSubsystemNodeReleaseEvents",
     "MixinContactResolverEvents",
     "MixinContactResolverImpactEvents",
     "MixinShotSubstrateCrossingEvents",
