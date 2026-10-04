@@ -91,6 +91,10 @@ public class ShipInertiaWriterTest {
 
     /**
      * <p>red-witnessed: with {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, fails "cannot be in drift" (a drift was returned), 2026-09-30.</p>
+     *
+     * <p>The control's own witness: with {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);}
+     * answering null, the scenario stops at "must report the record once it is 20% light" — the
+     * verdict alone would have stayed green — 2026-10-04.</p>
      */
     @Test
     public void aRecordThatAgreesWithTheAuthorityReportsNothing() {
@@ -100,6 +104,12 @@ public class ShipInertiaWriterTest {
 
         assertNull("a record just written from the authority cannot be in drift",
                 ShipInertiaWriter.compare(record, frame, "unit-hull"));
+        // CONTROL, same record and the same comparison: once it is made wrong, it IS reported — or the
+        // silence above would be a comparison that never reports anything.
+        record.setGameTickMass(frame.getTotalMass() * 0.80);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the same comparison must report the record once it is 20% light",
+                ShipInertiaWriter.compare(record, frame, "unit-hull") != null);
     }
 
     /**
@@ -134,6 +144,9 @@ public class ShipInertiaWriterTest {
 
     /**
      * <p>red-witnessed: with {@code ShipInertiaWriter#compare} at {@code if (Math.abs(recorded - expected) / massScale <= MASS_TOLERANCE && centreError <= CENTRE_TOLERANCE)}'s agreement test inverted, fails "half a percent is accumulation" (a drift was returned), 2026-09-30.</p>
+     *
+     * <p>The control's own witness: with {@code ShipInertiaWriter#compare} at {@code return new Drift(shipName, recorded, expected, (recorded - expected) / massScale, centreError);}
+     * answering null, the scenario stops at "must report a record five percent heavy" — 2026-10-04.</p>
      */
     @Test
     public void aDisagreementSmallerThanTheToleranceIsNotDrift() {
@@ -147,6 +160,13 @@ public class ShipInertiaWriterTest {
 
         assertNull("half a percent is accumulation, not a missing trigger",
                 ShipInertiaWriter.compare(record, frame, "unit-hull"));
+        // CONTROL, same record: five percent is past the writer's one-percent MASS_TOLERANCE and IS
+        // reported, so the silence
+        // above is the tolerance deciding and not a comparison that never reports.
+        record.setGameTickMass(frame.getTotalMass() * 1.05);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the same comparison must report a record five percent heavy",
+                ShipInertiaWriter.compare(record, frame, "unit-hull") != null);
     }
 
     /**

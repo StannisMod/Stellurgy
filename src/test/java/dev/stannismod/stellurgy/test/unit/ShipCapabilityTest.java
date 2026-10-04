@@ -509,11 +509,21 @@ public class ShipCapabilityTest {
      *
      * <p>red-witnessed: 2026-09-30 — {@code ShipCapability#solve} at {@code boolean massless = !(mass.getTotalMass() > AllocationTolerances.MASS_EPSILON);} with the massless guard removed fails
      * "no mass, no authority".</p>
+     *
+     * <p>The control's own witness: with {@code ShipCapability#solve} at {@code boolean massless = !(mass.getTotalMass() > AllocationTolerances.MASS_EPSILON);}
+     * answering massless for every hull, the scenario stops at "the same engine on a hull with mass
+     * must have authority" — the verdict alone would have stayed green — 2026-10-04.</p>
      */
     @Test
     public void aMasslessHullHasNoAuthority() {
         List<Actuator> hull = new ArrayList<>();
         hull.add(engine(0, 0, -2, 0, 0, T));
+        // CONTROL, same engine: on a hull with mass it pushes. Without this an allocator that answered
+        // nothing for every hull would pass the verdict below.
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the same engine on a hull with mass must have authority",
+                ShipCapability.solve(hull, slab(), HELM)
+                        .authority(ControlDirection.SURGE_POSITIVE, Endurance.BURST) > 0.0D);
         ShipCapability cap = ShipCapability.solve(hull, ShipMassFrame.empty(), HELM);
         assertFalse("no mass, no authority",
                 cap.authority(ControlDirection.SURGE_POSITIVE, Endurance.BURST) > 0.0D);
