@@ -6,6 +6,12 @@ import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import dev.stannismod.stellurgy.atmosphere.gas.Gas;
+import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.PlanetAir;
@@ -19,7 +25,7 @@ import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 
 /**
- * Vacuum, suits, and the air a player breathes. Nine scenarios, one client.
+ * Vacuum, suits, and the air a player breathes, on one client.
  *
  * <p>Every member works the same lever — flip the overworld's atmosphere density and watch what
  * happens to a player who is, or is not, wearing something that protects him — and every one of them
@@ -1304,6 +1310,144 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
             scenario().record("clientChestAir", clientAirAfter);
             assertTrue("the client must render the drained suit, not a stale full one; client="
                     + clientAirAfter, clientAirAfter < 1000);
+        } finally {
+            restoreDim(originalAir);
+        }
+    }
+
+    // ── poisoned air ──────────────────────────────────────────────────────────
+
+    /**
+     * Game ticks between two poison ticks — production's {@code Poisoning#TICKS_PER_SECOND} at
+     * {@code 20}, private there, restated here: the dose advances once a vanilla second.
+     */
+    private static final int POISON_TICK_PERIOD = 20;
+    /**
+     * How many poison ticks the suited player breathes the poison for, counted in the records
+     * themselves: six, so five seconds of exposure lie between the first and the last. A chosen
+     * exposure, not a measurement — long enough that a dose let through would reach twenty
+     * limit-seconds at a toxic index of four. Counted, not timed: the records come from SERVER ticks,
+     * and a window timed in client ticks would end before the last of them on a slow box.
+     */
+    private static final int SUITED_POISON_TICKS = 6;
+    /**
+     * How many poison ticks the unsuited control breathes it for, again counted in its own records:
+     * three. At a toxic index of four the dose entering the third is eight limit-seconds, under the
+     * thirty from which a dose injures — see the method's javadoc for why the control must stop short
+     * of harm.
+     */
+    private static final int CONTROL_POISON_TICKS = 3;
+
+    /**
+     * A whole sealed suit breathing from its own tank keeps poisoned air out: a player wearing one in
+     * air past its toxic limit takes in no dose, second after second, while the same air starts dosing
+     * him the moment he takes it off.
+     *
+     * <p>The subject is the gate {@code Poisoning#tick} asks — {@code AtmosphereHazards#isImmune} for
+     * the poison exposure, which wants all four pieces and a supply — and what the dose does while it
+     * answers. Read on {@code poison_breathed}, written where that question is asked, so each record is
+     * itself the proof that the player breathed poison that second.</p>
+     *
+     * <p>The suited window comes FIRST and the unsuited control second, and the control is SHORT: a dose
+     * outlives the air (half-life five minutes) and injures from thirty limit-seconds on, so a control
+     * run to the point of harm would go on hurting the shared client's player for half a minute of
+     * clean air. The harm itself is pinned on the server ({@code server/PoisonedAirTest}).</p>
+     *
+     * <p>What it does not see: a mask alone (ruled insufficient; not pinned here), a tank running dry
+     * mid-window, and poison inside a sealed zone rather than in a planet's open air.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-04, each run alone against a healthy run of
+     * the same method. KEPT OUT — {@code Poisoning#tick} at {@code index = 0.0D;} made
+     * {@code index = index + 0.0D;} (the gate still answering immune, its answer no longer acted on): "a
+     * whole sealed suit with a supply must keep poisoned air out … expected:&lt;exposed=0
+     * highestDose=0.0&gt;", having recorded suitedSeconds = 6 and suitedHighestDose = 20.0 — the toxic
+     * index of four over five seconds. BREATHING IT — {@code Poisoning#tick} at
+     * {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: "a player
+     * standing in poisoned air must be breathing it … no `poison_breathed` 6 records carrying who =
+     * ForgeTestClient was recorded within 320 ticks". CONTROL EXPOSED — {@code AtmosphereHazards#isImmune}
+     * at {@code if (exposure.isEmpty())} made always to hold: "CONTROL: the same air must judge him
+     * exposed, second after second, once the suit is off — no `poison_breathed` 3 records carrying who =
+     * ForgeTestClient and immune = false was recorded within 260 ticks". CONTROL RISES —
+     * {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} made {@code return dose;}: "the dose
+     * he carries must climb second by second … doses=[0.0, 0.0, 0.0]".</p>
+     *
+     * <p>red-witnessed: NOT YET for the INSTRUMENT RAN verdict ({@code Events.assertInstrumentRan} on
+     * {@code poison_events}). Attempted as {@code Poisoning#tick} at
+     * {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero, which keeps the
+     * observation point from ever executing: the run stops at the BREATHING IT wait above, on the same
+     * records, before this line is reached — so this verdict cannot be the first red of any inversion
+     * that silences the point.</p>
+     */
+    @Test
+    public void aSealedSuitKeepsPoisonedAirOut() throws Exception {
+        int dim = plot().dim;
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, dim);
+        try {
+            standOnOwnPlatformInSurvival();
+            Reply suit = arrangeProbe("stellurgytest player equip-space-chest");
+            String who = suit.text("player");
+            scenario().requireArranged("the suit's tank must hold oxygen, or the gate would refuse for want"
+                    + " of a supply rather than decide on protection: " + suit, suit.integer("chestAir") > 0);
+
+            long mark = events().markInstrumented();
+            // Four times carbon monoxide's own limit (`Gas#hazardThreshold`, production's), put into the
+            // planet's open air: a toxic index of four from this gas alone, whatever else the air holds.
+            // Four is a choice — clear of the index of one at which a dose starts, and small enough that
+            // the control's three seconds stay under the thirty limit-seconds at which a dose injures.
+            Gas poison = GasRegistry.CARBON_MONOXIDE;
+            arrangeProbe("stellurgytest planet add-gas " + dim + " " + poison.name() + " "
+                    + 4L * poison.hazardThreshold());
+            String at = dim + " " + plot().x(STAND_DX) + " " + (PAD_Y + 1) + " " + plot().z(STAND_DZ);
+            Reply air = Reply.of("stellurgytest atmosphere get " + at, exec("stellurgytest atmosphere get " + at));
+            scenario().requireArranged("the air where he stands must be poisonous before the window means"
+                            + " anything: " + air,
+                    air.has("statements") && Arrays.asList(air.textArray("statements")).contains("TOXIC"));
+
+            scenario().measuring("stand suited in the poisoned air");
+            // The window IS the exposure, and it closes on the records: it ends when the poison tick has
+            // asked the suit gate about him SUITED_POISON_TICKS times.
+            String suited = events().awaitMatching(mark, "poison_breathed",
+                    reply -> Events.recordsWhere(reply, "who", who).size() >= SUITED_POISON_TICKS,
+                    SUITED_POISON_TICKS + " records carrying who = " + who,
+                    "a player standing in poisoned air must be breathing it — the poison tick must reach"
+                            + " the suit gate for him once a second", LINK_BUDGET_TICKS
+                            + SUITED_POISON_TICKS * POISON_TICK_PERIOD);
+            Events.assertInstrumentRan(suited, "poison_events", "the suit kept the poison out");
+            List<String> suitedSeconds = Events.recordsWhere(suited, "who", who);
+            int exposed = 0;
+            double highestDose = 0.0D;
+            for (String second : suitedSeconds) {
+                if ("false".equals(Events.text(second, "immune"))) {
+                    exposed++;
+                }
+                highestDose = Math.max(highestDose, Events.number(second, "dose"));
+            }
+            scenario().record("suitedSeconds", suitedSeconds.size()).record("suitedHighestDose", highestDose);
+            assertEquals("a whole sealed suit with a supply must keep poisoned air out: no second judged him"
+                    + " exposed, and the dose he carried never left zero; " + suited,
+                    "exposed=0 highestDose=0.0", "exposed=" + exposed + " highestDose=" + highestDose);
+
+            scenario().measuring("take the suit off in the same air");
+            long controlMark = events().mark();
+            arrangeProbe("stellurgytest player clear-armor");
+            String control = events().awaitMatching(controlMark, "poison_breathed",
+                    reply -> Events.recordsWhereAll(reply, "who", who, "immune", "false").size()
+                            >= CONTROL_POISON_TICKS,
+                    CONTROL_POISON_TICKS + " records carrying who = " + who + " and immune = false",
+                    "CONTROL: the same air must judge him exposed, second after second, once the suit is"
+                            + " off", LINK_BUDGET_TICKS + CONTROL_POISON_TICKS * POISON_TICK_PERIOD);
+            List<Double> doses = new ArrayList<>();
+            for (String second : Events.recordsWhereAll(control, "who", who, "immune", "false")) {
+                doses.add(Events.number(second, "dose"));
+            }
+            scenario().record("controlDoses", doses);
+            boolean rising = doses.size() >= 2;
+            for (int i = 1; i < doses.size(); i++) {
+                rising &= doses.get(i) > doses.get(i - 1);
+            }
+            assertTrue("CONTROL: unsuited in the same air, the dose he carries must climb second by second,"
+                    + " or the suited window above could not have shown a dose at all; doses=" + doses
+                    + " | " + control, rising);
         } finally {
             restoreDim(originalAir);
         }
