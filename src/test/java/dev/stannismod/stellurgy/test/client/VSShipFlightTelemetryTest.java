@@ -9,11 +9,13 @@ import org.lwjgl.input.Keyboard;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.PlayerShipData;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
@@ -28,6 +30,8 @@ import dev.stannismod.stellurgy.test.ShipIdentity;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 import dev.stannismod.stellurgy.test.TransitSetup;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -50,6 +54,9 @@ import static org.junit.Assert.assertTrue;
  *   <li><b>A crew member stays on a steeply rolled deck.</b> Vanilla's vertical drag (0.98) and its
  *       horizontal friction (0.91) are not the same number, so a deck-down pull with world X/Z
  *       components is bent steeply toward world +Y: the crew member is flung up a wall.</li>
+ *   <li><b>The ship's readout goes to the pilot at its helm, and to nobody else aboard.</b> Who
+ *       RECEIVES is the client's fact: a test-only recorder at the readout packet's own client handler
+ *       writes one record per readout that arrives, naming the flight computer it is for.</li>
  * </ul>
  *
  */
@@ -1374,5 +1381,125 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
         // it, and the room a craft rolled upside down by the mouse sweeps.
         return RocketFixture.assembleAt(site, this::exec, VARIANT, 2, 24,
                 "the hull, the deck a body rides, and the air the craft rolls and climbs through");
+    }
+
+    // ---- who is sent the readout ---------------------------------------------------------------
+
+    /**
+     * The deadline of a LINK on a record either side writes about the readout scenario's craft — a
+     * naming, a flight model, a mount, a readout's arrival. Expiry means it never came.
+     */
+    private static final int READOUT_LINK_TICKS = 200;
+
+    /**
+     * EXPERIMENT dose: the ticks each role is held for while its readouts are counted — the same for
+     * both, so the helm's count is the rate the deck's silence is compared against. Measured
+     * 2026-09-30: 5 and 4 readouts arrived at the helm in forty ticks, on two runs.
+     */
+    private static final int ROLE_DOSE_TICKS = 40;
+
+    /**
+     * The pilot receives the readout; the same player, off the helm and standing on the deck, does
+     * not.
+     *
+     * <p>The flight computer sends its readout to exactly two kinds of player — the occupant of the
+     * ship's pilot seat, and anyone with its console open — and nobody else is sent a byte. One client,
+     * two roles in sequence: the same player at the helm and then standing on the deck. The order is
+     * the control's: the helm leg proves the recorder fires and that this server does send readouts to
+     * someone on this ship, so the silence in the deck leg that follows is a silence about HIM, not
+     * about an instrument or a ship that sends nothing. The two legs last the same number of ticks.</p>
+     *
+     * <p>Chain: the craft is built and named (server log), its flight computer announces its first
+     * model (server log — the address the readouts will name); the player is seated in the pilot seat
+     * and the client mounts (client log); a readout for this flight computer arrives (client log, the
+     * LINK); over the next {@link #ROLE_DOSE_TICKS} more arrive (counted). He is dismounted, the client
+     * applies it (client log), the server's deck capture says he stands aboard this craft, and over
+     * the same number of ticks NONE arrives.</p>
+     *
+     * <p>What this does NOT see: the console viewer (the other half of the audience), and what the
+     * pilot is SHOWN — the HUD lines drawn from what arrived.</p>
+     *
+     * <p>Contract: this fails if production breaks the contract that a ship's readout is sent to its
+     * pilot and to no passenger.</p>
+     *
+     * <p>red-witnessed: {@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (the pilot-seat occupant left out of the
+     * audience) fails "seated at the helm, the pilot must receive his ship's readout" with no readout
+     * inside 200 ticks, 2026-09-30</p>
+     * <p>red-witnessed: {@code TileAdvancedFlightComputer#isReadoutAudience} at {@code return seat != null && seat.getFlightComputer() == this;} (every player in the world made the
+     * audience) fails "standing on the deck, off the helm and with no console open, a passenger must
+     * receive none of his ship's readouts" with 4 received against the pilot's 4, 2026-09-30</p>
+     */
+    @Test
+    public void aShipsReadoutReachesItsPilotAndNotAPassenger() throws Exception {
+        FixtureSite site = site();
+        long serverMark = events().mark();
+        site.makeRoom(this::exec, 2, 12, "a decked craft with a pilot seat, and a body on its deck");
+        Reply fixture = Reply.of(exec("stellurgytest fixture rocket " + site.dim + " " + site.x + " "
+                + site.y + " " + site.z + " with-pilot-deck"));
+        requireArranged("the decked craft must be laid: " + fixture,
+                fixture.ok() && fixture.blockPos("builderPos") != null);
+        int[] builder = fixture.blockPos("builderPos");
+        Reply press = Reply.of(exec("stellurgytest rocket assemble " + site.dim + " " + builder[0] + " "
+                + builder[1] + " " + builder[2]));
+        requireArranged("the decked craft can hover and must be built on the first press: " + press,
+                press.ok() && press.bool("shipCut"));
+        String durable = press.text("shipId");
+        // ARRANGEMENT links, typed as such: the naming and the first model are the premise that
+        // gives this scenario its addresses, not the audience it is about.
+        String named = ArrangementFailure.arranged(() -> events().awaitRecordWithFields(serverMark,
+                "ship_lifecycle", "the craft must be named once it is assembled", READOUT_LINK_TICKS,
+                "durable", durable, "edge", "named"));
+        String physicsId = Events.text(named, "ship");
+        String model = ArrangementFailure.arranged(() -> events().awaitRecordWithFields(serverMark,
+                "flight_model_changed", "the craft's flight computer must build its first flight model",
+                READOUT_LINK_TICKS, "ship", durable));
+        String afcX = Events.text(model, "afcX");
+        String afcY = Events.text(model, "afcY");
+        String afcZ = Events.text(model, "afcZ");
+
+        // THE HELM.
+        Reply seat = Reply.of(exec("stellurgytest vs seat-mount " + site.dim + " id " + physicsId));
+        requireArranged("the craft's own pilot seat must be found: " + seat, seat.bool("seatFound"));
+        long helmMark = clientEvents().mark();
+        Reply mounted = Reply.of(exec("stellurgytest player mount-entity " + seat.integer("dummyId")));
+        requireArranged("the player must be seated at the helm: " + mounted,
+                mounted.ok() && mounted.bool("mounted"));
+        // The client seating him is the helm leg's premise, not its subject: an arrangement.
+        ArrangementFailure.arranged(() -> awaitClientMount(helmMark, "the client must seat him at the helm",
+                READOUT_LINK_TICKS, ""));
+        clientEvents().awaitMatching(helmMark, "client_ship_readout_received",
+                reply -> Events.anyRecordHasAll(reply, "afcX", afcX, "afcY", afcY, "afcZ", afcZ),
+                "for this craft's flight computer at " + afcX + "," + afcY + "," + afcZ,
+                "seated at the helm, the pilot must receive his ship's readout", READOUT_LINK_TICKS);
+        long helmWindow = clientEvents().mark();
+        bot().waitTicks(ROLE_DOSE_TICKS);
+        int atTheHelm = Events.recordsWhereAll(clientEvents().since(helmWindow, "client_ship_readout_received"),
+                "afcX", afcX, "afcY", afcY, "afcZ", afcZ).size();
+        requireArranged("held at the helm for " + ROLE_DOSE_TICKS + " ticks the pilot must go on"
+                + " receiving readouts, or the deck's silence below has no rate to be compared with",
+                atTheHelm > 0);
+
+        // THE DECK.
+        long deckMark = clientEvents().mark();
+        Reply off = Reply.of(exec("stellurgytest player dismount"));
+        requireArranged("the player must come off the helm: " + off, off.ok());
+        // Likewise the deck leg's premise: he is off the helm on the client.
+        ArrangementFailure.arranged(() -> awaitClientDismount(deckMark, "the client must take him off the helm",
+                READOUT_LINK_TICKS));
+        deckCaptureOfThisShip(physicsId, "off the helm, the player must be standing aboard this"
+                + " craft — a passenger, not a bystander");
+        long deckWindow = clientEvents().mark();
+        bot().waitTicks(ROLE_DOSE_TICKS);
+        String onDeck = clientEvents().since(deckWindow, "client_ship_readout_received");
+        Events.assertInstrumentRan(onDeck, "client_ship_readout_received",
+                "a passenger received no readout — the recorder must be one that fires, as it did"
+                        + " at the helm");
+        List<String> strays = Events.recordsWhereAll(onDeck, "afcX", afcX, "afcY", afcY, "afcZ", afcZ);
+        System.out.println("[measured] readouts in " + ROLE_DOSE_TICKS + " ticks: at the helm "
+                + atTheHelm + ", on the deck " + strays.size());
+        assertEquals("standing on the deck, off the helm and with no console open, a passenger must"
+                        + " receive none of his ship's readouts; the pilot received " + atTheHelm
+                        + " in the same " + ROLE_DOSE_TICKS + " ticks. Received: " + strays,
+                0, strays.size());
     }
 }

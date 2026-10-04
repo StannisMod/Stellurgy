@@ -1,9 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
+import dev.stannismod.stellurgy.test.ArrangementFailure;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.Reply;
 import dev.stannismod.stellurgy.test.GameTicks;
 import dev.stannismod.stellurgy.test.ShipIdentity;
+import dev.stannismod.stellurgy.test.ShipInfo;
 import dev.stannismod.stellurgy.test.ShipReadiness;
 
 import org.junit.Test;
@@ -12,6 +14,7 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 import dev.stannismod.stellurgy.test.RocketFixture;
 
+import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -50,7 +53,12 @@ import static org.junit.Assert.assertTrue;
  * to kill the server when a registered ship was unloaded; that is pinned in
  * {@code SpaceSlotVsShipPersistTest}.)</p>
  *
- * <p>Gated on the server's real VS presence; skips cleanly otherwise.</p>
+ * <p><b>And the announcements that go with those transitions.</b> The scenarios at the end count what
+ * production ANNOUNCES as a craft is built, dropped, fetched back and crossed — one
+ * {@code ship_lifecycle} record per transition, saying which one it was. A count of ships is a
+ * statement about the world; an announcement is what every consumer that acts at those moments
+ * (the mass recompute, a durable record minted at birth) is told, and the two must agree about
+ * what happened.</p>
  */
 public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
@@ -453,5 +461,141 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
         // FIELD name, so it cannot know what a missing one means — and the callers here
         // include waits, which read the shape that does not carry the field yet.
         return Reply.of(json).numberOr(key, 0.0);
+    }
+
+    // --- the announcements ----------------------------------------------------------------------------
+    //
+    // Becoming a ship, and stopping being one, is announced exactly once per transition — and the
+    // announcement says WHICH transition it was.
+    //
+    // Why an announcement rather than a question: anything that must act at the moment a craft
+    // becomes a ship cannot find that moment by asking "is it named yet" over and over; each subsystem
+    // that polls arrives at its own private answer about which tick the craft started existing on.
+    // Why the count is the property, not the state: an edge leaves nothing behind in the world it
+    // changes — afterwards the ship is simply named, whether the edge fired once, three times, or
+    // never. Why the causes must be distinguishable: a consumer minting a durable record for a new
+    // vessel wants only the first transition; if an assembly and a crossing announce the same thing,
+    // it mints a second record for a craft that already had one.
+    //
+    // Each window is read once, after the LAST transition it is about has been announced: a duplicate
+    // is published in the same manager tick as the one it duplicates, so by the time the awaited
+    // record is in the log its twin is too. Their bases are their own, apart from every leg above.
+
+    private static final int NAMING_Z = 9400;
+    /** One craft per announcement scenario, each on its own X lane, so neither can see the other's. */
+    private static final int NAMING_CYCLE_X = 9400, NAMING_CROSS_X = 9800;
+
+    /**
+     * A craft is built, dropped, and fetched back: ASSEMBLED, then UNLOADED, then LOADED — each once.
+     *
+     * <p>red-witnessed: with the UNLOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at
+     * {@code noteLifecycle(physicsObject.getShipData(), ShipLifecycleEvent.Cause.UNLOADED);}) removed, "dropping the ship object must be announced"
+     * fails with no such record within 200 ticks; with the LOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at
+     * {@code noteLifecycle(toLoad, ShipLifecycleEvent.Cause.LOADED);}) made twice, "coming back must be announced exactly once", 2026-09-29.
+     * One break per remaining verdict, 2026-09-30: the spawn note at {@code WorldServerShipManager#spawnNewShips} at
+     * {@code noteLifecycle(toSpawn, spawnData.cause);} removed fails "a craft that has just been built must be announced"; the LOADED
+     * note removed fails "coming back must be announced"; the UNLOADED note made twice fails "exactly
+     * once"; a PASTED note added beside the LOADED one fails "nothing here was cut and pasted"; a
+     * DESTROYED note added beside the UNLOADED one fails "an unloaded craft still EXISTS".</p>
+     */
+    @Test
+    public void buildingDroppingAndFetchingBackAreThreeDistinctAnnouncements() throws Exception {
+
+        long mark = events.mark();
+        String shipId = buildAnnouncedShipAt(NAMING_CYCLE_X);
+        awaitAnnounced(mark, shipId, "ASSEMBLED", "a craft that has just been built must be announced");
+
+        // Nothing holds a ship loaded on a headless server once permanent loading is off: there is no
+        // player for the world's own pass to measure a distance to, so it drops the craft by itself.
+        ShipReadiness.letShipsUnload(this::exec, "the un-naming half is the subject: the craft has to be"
+                + " dropped by the world's own pass");
+        String window;
+        try {
+            awaitAnnounced(mark, shipId, "UNLOADED", "dropping the ship object must be announced");
+        } finally {
+            ShipReadiness.holdShipsLoaded(this::exec, "the LOADED edge is the last subject: the craft has"
+                    + " to be fetched back — and this scenario's opt-out ends with it");
+        }
+        exec("stellurgytest vs load-ships 0");
+        window = awaitAnnounced(mark, shipId, "LOADED", "coming back must be announced");
+
+        assertEquals("a craft that has just been built must be announced as ASSEMBLED exactly once: "
+                + window, 1, announced(window, shipId, "ASSEMBLED"));
+        assertEquals("dropping the ship object must be announced exactly once: " + window,
+                1, announced(window, shipId, "UNLOADED"));
+        assertEquals("coming back must be announced exactly once: " + window,
+                1, announced(window, shipId, "LOADED"));
+        assertEquals("nothing here was cut and pasted - a consumer that mints a durable record only for"
+                + " a genuinely new vessel would mint nothing at all if a build were reported as a"
+                + " paste: " + window, 0, announced(window, shipId, "PASTED"));
+        assertEquals("an unloaded craft still EXISTS - it is registered and on disk and will be back."
+                + " Reporting it as destroyed would tell every consumer holding something durable for"
+                + " this vessel to throw it away: " + window, 0, announced(window, shipId, "DESTROYED"));
+    }
+
+    /**
+     * A craft that crosses is announced as PASTED, never as a second birth.
+     *
+     * <p>red-witnessed: with {@code WorldServerShipManager.spawnNewShips} ({@code WorldServerShipManager#spawnNewShips} at
+     * {@code noteLifecycle(toSpawn, spawnData.cause);}) noting every spawn as {@code ASSEMBLED}, "no `ship_lifecycle` carrying … cause =
+     * PASTED was recorded within 200 ticks", 2026-09-29; a PASTED spawn noted twice fails "announced as
+     * PASTED exactly once", and one also noted as ASSEMBLED fails "a crossing is not a new build",
+     * 2026-09-30.</p>
+     */
+    @Test
+    public void aCrossingIsAnnouncedAsAPasteAndNotAsANewBuild() throws Exception {
+
+        long mark = events.mark();
+        String shipId = buildAnnouncedShipAt(NAMING_CROSS_X);
+        ArrangementFailure.arranged(() -> awaitAnnounced(mark, shipId, "ASSEMBLED",
+                "the craft must exist before it can cross"));
+
+        // The production crossing: the blocks are cut out and pasted elsewhere, and the craft is
+        // re-registered around them. Told WHICH craft to cut; the source pose is only where the
+        // riders are gathered.
+        ShipInfo source = ShipInfo.byId(this::exec, 0, shipId);
+        String repack = exec("stellurgytest vs ship-repack 0 id " + shipId + " "
+                + (int) source.x + " " + (int) source.y + " " + (int) source.z + " "
+                + (NAMING_CROSS_X + HOP) + " " + FixtureSite.OPEN_AIR_Y + " " + NAMING_Z);
+        requireArranged("the crossing must actually run, or nothing below is a paste: " + repack,
+                Reply.of(repack).ok());
+        // The identity the craft came out under, as the crossing itself reports it.
+        String crossedId = Reply.of("stellurgytest vs ship-repack", repack).text("shipUuid");
+
+        String window = awaitAnnounced(mark, crossedId, "PASTED",
+                "a craft re-registered around pasted blocks must be announced as PASTED");
+        assertEquals("a craft re-registered around pasted blocks must be announced as PASTED exactly"
+                + " once: " + window, 1, announced(window, crossedId, "PASTED"));
+        assertEquals("a crossing is not a new build. This is the distinction the whole cause enum exists"
+                + " for: reported as ASSEMBLED, a vessel would acquire a second birth record every time"
+                + " it crossed. The crossing keeps the identity when it can (" + shipId + " -> "
+                + crossedId + "), so the build's own ASSEMBLED is the only one this id may carry: "
+                + window,
+                shipId.equals(crossedId) ? 1 : 0, announced(window, crossedId, "ASSEMBLED"));
+    }
+
+    /**
+     * Wait for {@code cause} to be announced for {@code shipId} since {@code mark}, and answer the
+     * WHOLE window of announcements at that moment — the reply every count above is read from.
+     */
+    private String awaitAnnounced(long mark, String shipId, String cause, String what) throws Exception {
+        events.awaitRecordWithFields(mark, "ship_lifecycle", what, WAIT_TICKS,
+                "ship", shipId, "cause", cause);
+        return events.since(mark, "ship_lifecycle");
+    }
+
+    /** How many announcements of {@code cause} the window holds for {@code shipId}. */
+    private static int announced(String window, String shipId, String cause) {
+        return Events.recordsWhereAll(window, "ship", shipId, "cause", cause).size();
+    }
+
+    /** Build and assemble a craft on its own lane, and answer its physics identity once it is named. */
+    private String buildAnnouncedShipAt(int baseX) throws Exception {
+        String asm = RocketFixture.assembleAt(FixtureSite.openAir(0, baseX, NAMING_Z), this::exec,
+                "with-pilot-seat", 4, 12, "the craft whose naming edges are counted stands in this volume");
+        requireArranged("with the physics mod an AFC-bearing build must become a ship, not a rocket: " + asm,
+                Reply.of(asm).integer("rocketCount") == 0);
+        return ArrangementFailure.arranged(() -> ShipIdentity.awaitPhysicsIdOf(this::exec, events, 0,
+                ShipIdentity.nameFromAssembly(asm), WAIT_TICKS));
     }
 }
