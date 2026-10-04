@@ -2,6 +2,7 @@ package dev.stannismod.stellurgy.test.mixin;
 
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.inventory.EntityEquipmentSlot;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -22,7 +23,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * reached the question. {@code immune} is the gate's answer, handed back to production unchanged.
  * {@code dose} is the entity's stored dose read through {@link Poisoning#DOSE_KEY} before production
  * advances it — the value the gate's answer is about to act on — so a run of records says whether the
- * dose moved while the gate said one thing or the other.</p>
+ * dose moved while the gate said one thing or the other. {@code worn} names the armour slots holding
+ * something when the gate was asked, so the pieces an answer was given about are on the same record.</p>
  *
  * <p><b>Seam and side.</b> The {@code isImmune} call inside the static {@code Poisoning#tick}, server
  * side, a redirect that calls the original once and returns its answer. Not the RETURN of
@@ -50,8 +52,24 @@ public abstract class MixinPoisoningEvents {
             TestTrace.record(body, "poison_breathed", "\"e\":" + body.getEntityId()
                     + ",\"who\":\"" + TestTrace.json(body.getName())
                     + "\",\"immune\":" + immune
-                    + ",\"dose\":" + TestTrace.fmt(body.getEntityData().getDouble(Poisoning.DOSE_KEY)));
+                    + ",\"dose\":" + TestTrace.fmt(body.getEntityData().getDouble(Poisoning.DOSE_KEY))
+                    + ",\"worn\":\"" + stellurgyTest$worn(body) + "\"");
         }
         return immune;
+    }
+
+    /**
+     * The armour slots holding something at the moment the gate was asked, in slot order and joined by
+     * {@code +} ({@code "FEET+LEGS+CHEST+HEAD"} for a whole suit, {@code "none"} for none) — so a reader
+     * can tell which pieces the answer was given about without a second probe of the player.
+     */
+    private static String stellurgyTest$worn(EntityLivingBase body) {
+        StringBuilder worn = new StringBuilder();
+        for (EntityEquipmentSlot slot : EntityEquipmentSlot.values()) {
+            if (slot.getSlotType() == EntityEquipmentSlot.Type.ARMOR && !body.getItemStackFromSlot(slot).isEmpty()) {
+                worn.append(worn.length() > 0 ? "+" : "").append(slot.name());
+            }
+        }
+        return worn.length() == 0 ? "none" : worn.toString();
     }
 }

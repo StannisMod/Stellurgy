@@ -1359,12 +1359,13 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>red-witnessed: one inversion per verdict, 2026-10-04, each run alone against a healthy run of
      * the same method. KEPT OUT — {@code Poisoning#tick} at {@code index = 0.0D;} made
      * {@code index = index + 0.0D;} (the gate still answering immune, its answer no longer acted on): "a
-     * whole sealed suit with a supply must keep poisoned air out … expected:&lt;exposed=0
-     * highestDose=0.0&gt;", having recorded suitedSeconds = 6 and suitedHighestDose = 20.0 — the toxic
-     * index of four over five seconds. BREATHING IT — {@code Poisoning#tick} at
-     * {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: "a player
+     * whole sealed suit with a supply must keep poisoned air out: no second judged him exposed, and the
+     * dose he carried never rose" — and, under {@code AtmosphereHazards#isImmune} at
+     * {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD)} answering false, the same
+     * verdict after one exposed second rather than a whole window. BREATHING IT — {@code Poisoning#tick}
+     * at {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: "a player
      * standing in poisoned air must be breathing it … no `poison_breathed` 6 records carrying who =
-     * ForgeTestClient was recorded within 320 ticks". CONTROL EXPOSED — {@code AtmosphereHazards#isImmune}
+     * ForgeTestClient, or one judging him exposed was recorded within 320 ticks". CONTROL EXPOSED — {@code AtmosphereHazards#isImmune}
      * at {@code if (exposure.isEmpty())} made always to hold: "CONTROL: the same air must judge him
      * exposed, second after second, once the suit is off — no `poison_breathed` 3 records carrying who =
      * ForgeTestClient and immune = false was recorded within 260 ticks". CONTROL RISES —
@@ -1405,27 +1406,26 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
 
             scenario().measuring("stand suited in the poisoned air");
             // The window IS the exposure, and it closes on the records: it ends when the poison tick has
-            // asked the suit gate about him SUITED_POISON_TICKS times.
+            // asked the suit gate about him SUITED_POISON_TICKS times — or at the FIRST second it judged
+            // him exposed, so a suit that has stopped protecting doses him for one second rather than for
+            // the whole window, and cannot carry the shared player to a harmful dose.
             String suited = events().awaitMatching(mark, "poison_breathed",
-                    reply -> Events.recordsWhere(reply, "who", who).size() >= SUITED_POISON_TICKS,
-                    SUITED_POISON_TICKS + " records carrying who = " + who,
+                    reply -> Events.recordsWhere(reply, "who", who).size() >= SUITED_POISON_TICKS
+                            || !Events.recordsWhereAll(reply, "who", who, "immune", "false").isEmpty(),
+                    SUITED_POISON_TICKS + " records carrying who = " + who + ", or one judging him exposed",
                     "a player standing in poisoned air must be breathing it — the poison tick must reach"
                             + " the suit gate for him once a second", LINK_BUDGET_TICKS
                             + SUITED_POISON_TICKS * POISON_TICK_PERIOD);
             Events.assertInstrumentRan(suited, "poison_events", "the suit kept the poison out");
             List<String> suitedSeconds = Events.recordsWhere(suited, "who", who);
-            int exposed = 0;
-            double highestDose = 0.0D;
-            for (String second : suitedSeconds) {
-                if ("false".equals(Events.text(second, "immune"))) {
-                    exposed++;
-                }
-                highestDose = Math.max(highestDose, Events.number(second, "dose"));
-            }
-            scenario().record("suitedSeconds", suitedSeconds.size()).record("suitedHighestDose", highestDose);
+            int exposed = Events.recordsWhereAll(suited, "who", who, "immune", "false").size();
+            double largestRise = largestRise(dosesOf(suited, who));
+            scenario().record("suitedSeconds", suitedSeconds.size()).record("suitedLargestRise", largestRise);
+            // The dose he carried may be anything a scenario before this one left on the shared player;
+            // what a sealed suit decides is that nothing more gets IN, so the dose never rises.
             assertEquals("a whole sealed suit with a supply must keep poisoned air out: no second judged him"
-                    + " exposed, and the dose he carried never left zero; " + suited,
-                    "exposed=0 highestDose=0.0", "exposed=" + exposed + " highestDose=" + highestDose);
+                    + " exposed, and the dose he carried never rose; " + suited,
+                    "exposed=0 largestRise=0.0", "exposed=" + exposed + " largestRise=" + largestRise);
 
             scenario().measuring("take the suit off in the same air");
             long controlMark = events().mark();
@@ -1436,20 +1436,155 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
                     CONTROL_POISON_TICKS + " records carrying who = " + who + " and immune = false",
                     "CONTROL: the same air must judge him exposed, second after second, once the suit is"
                             + " off", LINK_BUDGET_TICKS + CONTROL_POISON_TICKS * POISON_TICK_PERIOD);
-            List<Double> doses = new ArrayList<>();
-            for (String second : Events.recordsWhereAll(control, "who", who, "immune", "false")) {
-                doses.add(Events.number(second, "dose"));
-            }
+            List<Double> doses = dosesOf(Events.recordsWhereAll(control, "who", who, "immune", "false"));
             scenario().record("controlDoses", doses);
-            boolean rising = doses.size() >= 2;
-            for (int i = 1; i < doses.size(); i++) {
-                rising &= doses.get(i) > doses.get(i - 1);
-            }
             assertTrue("CONTROL: unsuited in the same air, the dose he carries must climb second by second,"
                     + " or the suited window above could not have shown a dose at all; doses=" + doses
-                    + " | " + control, rising);
+                    + " | " + control, climbsEverySecond(doses));
         } finally {
             restoreDim(originalAir);
         }
+    }
+
+    /**
+     * How many poison ticks each half of the partial-suit scenario lasts, counted in its own records:
+     * three, as for the control above, and for the same reason — the exposed half must stop short of
+     * the thirty limit-seconds at which a dose injures.
+     */
+    private static final int PARTIAL_SUIT_POISON_TICKS = 3;
+
+    /**
+     * A helmet and a chest with a full tank are not enough against poison: only the WHOLE suit keeps it
+     * out (ruled 2026-10-04 — "the whole suit only", against a mask stopping it). Without legs and boots
+     * the same air judges the player exposed and doses him; with them put back, it judges him protected
+     * and his dose no longer rises.
+     *
+     * <p>The subject is {@code AtmosphereHazards#isImmune} answering for the poison exposure, which
+     * needs the full suit, asked by {@code Poisoning#tick}; read on {@code poison_breathed}, whose
+     * {@code worn} field names the pieces each answer was given about, so the arrangement is checked on
+     * the very records the verdict reads.</p>
+     *
+     * <p>What it does not see: any other partial set (helmet alone, chest alone — the gate is all or
+     * nothing, and the head-and-chest case is the one a mask would be), and the suit's tank running
+     * dry.</p>
+     *
+     * <p>red-witnessed: one inversion per verdict, 2026-10-04, each against a healthy run of the same
+     * method. PARTIAL EXPOSED — {@code AtmosphereHazards#isImmune} at {@code if (exposure.needsFullSuit()}
+     * made never to hold: "a helmet and a chest with a supply must NOT keep poisoned air out … no
+     * `poison_breathed` 3 records carrying who = ForgeTestClient and immune = false was recorded within
+     * 260 ticks". PARTIAL RISES — {@code Poisoning#nextDose} at {@code return dose + toxicIndex;} made
+     * {@code return dose;}: "and the poison must get in: the dose must climb second by second;
+     * doses=[0.0, 0.0, 0.0]". WHOLE PROTECTED — {@code AtmosphereHazards#isImmune} at
+     * {@code return protects(exposure, entity, EntityEquipmentSlot.HEAD)} answering false: "CONTROL: the
+     * same air must judge him protected once the whole suit is on — every second in it". WHOLE KEPT OUT
+     * — {@code Poisoning#tick} at {@code index = 0.0D;} made {@code index = index + 0.0D;}: "CONTROL: in
+     * the whole suit nothing more gets in — the dose he carried in must not rise; doses=[12.0, 16.0,
+     * 20.0]".</p>
+     *
+     * <p>red-witnessed: NOT YET for the INSTRUMENT RAN verdict ({@code Events.assertInstrumentRan} on
+     * {@code poison_events}). Attempted as {@code Poisoning#tick} at
+     * {@code double index = air == null ? 0.0D : air.toxicIndex();} made to answer zero: the run stops at
+     * the PARTIAL EXPOSED wait on the same records before this line is reached.</p>
+     */
+    @Test
+    public void aHelmetAndTankWithoutTheRestOfTheSuitDoNotKeepPoisonedAirOut() throws Exception {
+        int dim = plot().dim;
+        PlanetAir originalAir = PlanetAir.snapshot(this::exec, dim);
+        try {
+            standOnOwnPlatformInSurvival();
+            Reply suit = arrangeProbe("stellurgytest player equip-space-chest");
+            String who = suit.text("player");
+            scenario().requireArranged("the suit's tank must hold oxygen, or the gate would refuse for want"
+                    + " of a supply rather than for the missing pieces: " + suit, suit.integer("chestAir") > 0);
+            exec("replaceitem entity @a slot.armor.legs minecraft:air");
+            exec("replaceitem entity @a slot.armor.feet minecraft:air");
+
+            long mark = events().markInstrumented();
+            // The same poisoning as the whole-suit scenario above, for the same reasons: carbon monoxide at
+            // four times its own limit (`Gas#hazardThreshold`), a toxic index of four.
+            Gas poison = GasRegistry.CARBON_MONOXIDE;
+            arrangeProbe("stellurgytest planet add-gas " + dim + " " + poison.name() + " "
+                    + 4L * poison.hazardThreshold());
+
+            scenario().measuring("breathe it in a helmet and a chest alone");
+            String partial = events().awaitMatching(mark, "poison_breathed",
+                    reply -> Events.recordsWhereAll(reply, "who", who, "immune", "false").size()
+                            >= PARTIAL_SUIT_POISON_TICKS,
+                    PARTIAL_SUIT_POISON_TICKS + " records carrying who = " + who + " and immune = false",
+                    "a helmet and a chest with a supply must NOT keep poisoned air out — the gate must judge"
+                            + " him exposed, second after second", LINK_BUDGET_TICKS
+                            + PARTIAL_SUIT_POISON_TICKS * POISON_TICK_PERIOD);
+            Events.assertInstrumentRan(partial, "poison_events", "a partial suit let the poison in");
+            List<String> exposedSeconds = Events.recordsWhereAll(partial, "who", who, "immune", "false");
+            scenario().requireArranged("every exposed second must have been judged about a helmet and a chest"
+                    + " and nothing else, or the subject is a different set of pieces: " + partial,
+                    Events.recordsWhereAll(partial, "who", who, "immune", "false", "worn", "CHEST+HEAD").size()
+                            == exposedSeconds.size());
+            List<Double> partialDoses = dosesOf(exposedSeconds);
+            scenario().record("partialDoses", partialDoses);
+            assertTrue("and the poison must get in: the dose must climb second by second; doses=" + partialDoses
+                    + " | " + partial, climbsEverySecond(partialDoses));
+
+            scenario().measuring("put the whole suit back on");
+            long wholeMark = events().mark();
+            arrangeProbe("stellurgytest player equip-space-chest");
+            // Closes on the protected records, or at the FIRST second the whole suit was judged exposed: a
+            // suit that has stopped protecting must not keep a player who already carries a dose in the
+            // poison for the whole budget — measured 2026-10-04 under exactly that inversion, it killed the
+            // shared client's player and failed the next scenario on his death.
+            String whole = events().awaitMatching(wholeMark, "poison_breathed",
+                    reply -> Events.recordsWhereAll(reply, "who", who, "immune", "true",
+                            "worn", "FEET+LEGS+CHEST+HEAD").size() >= PARTIAL_SUIT_POISON_TICKS
+                            || !Events.recordsWhereAll(reply, "who", who, "immune", "false",
+                            "worn", "FEET+LEGS+CHEST+HEAD").isEmpty(),
+                    PARTIAL_SUIT_POISON_TICKS + " records carrying who = " + who
+                            + ", immune = true and worn = FEET+LEGS+CHEST+HEAD, or one in the whole suit"
+                            + " judging him exposed",
+                    "the whole suit on, the poison tick must keep asking the suit gate about him",
+                    LINK_BUDGET_TICKS + PARTIAL_SUIT_POISON_TICKS * POISON_TICK_PERIOD);
+            List<String> wholeSeconds = Events.recordsWhereAll(whole, "who", who, "worn", "FEET+LEGS+CHEST+HEAD");
+            List<String> protectedSeconds = Events.recordsWhereAll(whole, "who", who, "immune", "true",
+                    "worn", "FEET+LEGS+CHEST+HEAD");
+            assertEquals("CONTROL: the same air must judge him protected once the whole suit is on — every"
+                    + " second in it; " + whole, wholeSeconds.size(), protectedSeconds.size());
+            List<Double> wholeDoses = dosesOf(protectedSeconds);
+            scenario().record("wholeDoses", wholeDoses);
+            assertEquals("CONTROL: in the whole suit nothing more gets in — the dose he carried in must not"
+                    + " rise; doses=" + wholeDoses + " | " + whole, 0.0D, largestRise(wholeDoses), 0.0D);
+        } finally {
+            restoreDim(originalAir);
+        }
+    }
+
+    /** The {@code dose} of each of {@code who}'s poison records in {@code reply}, in order. */
+    private static List<Double> dosesOf(String reply, String who) {
+        return dosesOf(Events.recordsWhere(reply, "who", who));
+    }
+
+    /** The {@code dose} each of these poison records carried, in order. */
+    private static List<Double> dosesOf(List<String> records) {
+        List<Double> doses = new ArrayList<>();
+        for (String record : records) {
+            doses.add(Events.number(record, "dose"));
+        }
+        return doses;
+    }
+
+    /** The largest step up between consecutive doses — zero when the dose never rose. */
+    private static double largestRise(List<Double> doses) {
+        double largest = 0.0D;
+        for (int i = 1; i < doses.size(); i++) {
+            largest = Math.max(largest, doses.get(i) - doses.get(i - 1));
+        }
+        return largest;
+    }
+
+    /** Whether the doses rose at every step, over at least two of them. */
+    private static boolean climbsEverySecond(List<Double> doses) {
+        boolean climbs = doses.size() >= 2;
+        for (int i = 1; i < doses.size(); i++) {
+            climbs &= doses.get(i) > doses.get(i - 1);
+        }
+        return climbs;
     }
 }
