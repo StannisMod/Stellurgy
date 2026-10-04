@@ -1194,6 +1194,10 @@ public final class ShipFrameTravel {
         // Always true by now - a body no deck holds returned null above; kept for its readers.
         m.put("tracked", true);
         m.put("heldBy", DeckFrameTick.holds(entity) ? "deckFrame" : "travelResolver");
+        // Whether THIS class moves the body as well - the gate of the world-frame move pass-through
+        // and of the gravity controller's skip. A body the deck frame holds should answer false; a
+        // true beside "deckFrame" is a body two mechanisms both think they move.
+        m.put("resolverMoves", isResolving(entity));
         m.put("subPos", feet.getX() + "," + feet.getY() + "," + feet.getZ());
         m.put("chunkLoaded", world.isBlockLoaded(feet));
         m.put("nonAir", nonAir);
