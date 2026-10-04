@@ -2942,6 +2942,94 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
     }
 
     /**
+     * A teleport along the deck is where the deck holds him from then on.
+     *
+     * <p>The contract: a position somebody WRITES — a teleport, a command, another mod — is a result,
+     * and a deck that holds the body adopts it as the body's new place on the deck. It never drags
+     * him back to the point it held before. On the server the deck takes a player's place from his
+     * client's claim every tick, so the subject here is that the claim after a teleport becomes the
+     * deck's own record of where it holds him, and stays it.</p>
+     *
+     * <p>Arranged on the pad, the craft still: the bot is landed on a free deck cell beside the seat
+     * (the craft names the cell, {@code vs deck-spot}), and the server's deck frame must hold him
+     * there before the stimulus. The stimulus is a server teleport to the NEXT cell along the same
+     * side — still over the deck, so a deck that adopts the write keeps holding him, on the new
+     * cell. The verdict is the deck's own record of the point it holds him at, read twice across a
+     * window, because a deck that re-derived his place from the old point would pull it back on the
+     * tick after the write.</p>
+     *
+     * <p>Not seen: the client's own resolver, which still holds him on his side (that half is
+     * the client's, and comes with it).</p>
+     *
+     * <p>red-witnessed: 2026-10-04, with {@code DeckFrameTick#updatePlayer} at
+     * {@code VSIntegration.toShipFrameFor(world, shipId, player.posX, player.posY, player.posZ)} replaced,
+     * for a body already held, by the deck point the episode held before - "the point it holds him
+     * at is 1.0 from the new cell right after the teleport and 1.0 twenty ticks later".</p>
+     */
+    @Test
+    public void aTeleportAlongTheDeckIsWhereTheDeckHoldsHimFromThen() throws Exception {
+        final FixtureSite site = site();
+        buildShip(site);
+        String spot = exec("stellurgytest vs deck-spot 0 id " + scenarioShipId);
+        scenario().requireArranged("the craft must name a free cell on its deck: " + spot, Reply.of(spot).ok());
+        // The next cell along the same side as the first: the deck is 5x5 under a seat at its centre,
+        // so one more step out from a cell beside the seat is still over it — read, not assumed, off
+        // the craft's own blocks below.
+        String side = Reply.of(spot).text("side");
+        int stepX = "east".equals(side) ? 1 : "west".equals(side) ? -1 : 0;
+        int stepZ = "south".equals(side) ? 1 : "north".equals(side) ? -1 : 0;
+        String next = exec("stellurgytest vs deck-spot 0 id " + scenarioShipId + " at "
+                + (Reply.of(spot).integer("offX") + stepX) + " " + Reply.of(spot).integer("offY") + " "
+                + (Reply.of(spot).integer("offZ") + stepZ));
+        scenario().requireArranged("the next cell along must be over the deck, or a deck that lets him"
+                + " go there would be right to: " + next,
+                Reply.of(next).ok() && Reply.of(next).boolOr("floorSolid", false));
+
+        long clientMark = clientEvents().mark();
+        long serverMark = events().mark();
+        // The bot is put a quarter-block above the first cell's floor: a fall of a few ticks, so the
+        // gate window's record budget covers it many times over.
+        landOnTheDeckUnderGateWatch(clientMark, serverMark, scenarioShipId,
+                "the bot is put on the deck beside the seat", CAPTURE_LINK_BUDGET_TICKS, 40,
+                Reply.of(spot).number("x"), Reply.of(spot).number("y") + 0.25, Reply.of(spot).number("z"));
+        closeDeckGateWindow();
+        DeckCapture before = deckCaptureOfThisShip(scenarioShipId,
+                "the deck must hold him on the first cell before he is moved off it");
+        scenario().requireArranged("the server must hold him by the DECK FRAME, whose adoption is the"
+                + " subject: " + before.raw(), "deckFrame".equals(Reply.of(before.raw()).text("heldBy")));
+
+        long movedMark = clientEvents().mark();
+        double toX = Reply.of(next).number("x"), toY = Reply.of(next).number("y"),
+                toZ = Reply.of(next).number("z");
+        exec("tp @a " + toX + " " + toY + " " + toZ + " 0 0");
+        awaitClientPlacedNear(movedMark, toX, toZ, "the teleport along the deck must reach his client");
+        fenceWhatTheClientSent("the server must have handled his claims from the new cell");
+
+        double[] nextCell = {Reply.of(next).number("subX") + 0.5, Reply.of(next).number("subY"),
+                Reply.of(next).number("subZ") + 0.5};
+        DeckCapture first = deckCaptureOfThisShip(scenarioShipId,
+                "the deck must still hold him after a teleport that kept him over it");
+        // WINDOW: the held point is read on both sides of this stretch and both reads are named in
+        // the verdict. A deck that re-derived his place from the point it held before would pull it
+        // back on his next update; twenty ticks is twenty of them.
+        dev.stannismod.stellurgy.test.GameTicks.advanceWorld(serverClient(), 0, 20);
+        DeckCapture later = deckCaptureOfThisShip(scenarioShipId,
+                "the deck must go on holding him on the new cell");
+        // Half a cell: the two cells are a block apart, so a point within half a block of the new
+        // cell's centre is on it and not on the old one.
+        double offFirst = Math.hypot(first.capturedShipFrameX() - nextCell[0],
+                first.capturedShipFrameZ() - nextCell[2]);
+        double offLater = Math.hypot(later.capturedShipFrameX() - nextCell[0],
+                later.capturedShipFrameZ() - nextCell[2]);
+        assertTrue("the deck must take the teleport as his new place and keep it: the point it holds"
+                        + " him at is " + offFirst + " from the new cell right after the teleport and "
+                        + offLater + " twenty ticks later (more than half a cell is the old one, or"
+                        + " between). Before: " + before.raw() + " | right after: " + first.raw()
+                        + " | later: " + later.raw(),
+                offFirst <= 0.5 && offLater <= 0.5);
+    }
+
+    /**
      * Build the ship and sit the bot on its pilot seat; returns the ship's world position.
      *
      * <p>It ENDS ON LINKS, and that is what the seven callers' {@code waitTicks(20)} used to stand in
