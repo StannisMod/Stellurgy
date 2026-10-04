@@ -180,23 +180,30 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * A seated pilot keeps control of his ship at an extreme Y, through two teleports.
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE SECOND UNPARK — the id-keyed
-     * {@code VSBridge.unparkShip} failing a ship's second unpark only: "the second teleport leaves the
+     * {@code VSBridge#unparkShip} at {@code ship.setPhysicsEnabled(true)} failing a ship's second unpark
+     * only: "the second teleport leaves the
      * craft PARKED … {\"ok\":false}". THE SECOND LANDING — {@code VSBridge.teleportShipToByUuid}'s
-     * transform writes ({@code VSBridge:1036-1037}) skipped on the second extreme-Y move: "the second
+     * transform writes ({@code VSBridge#teleportShip} at
+     * {@code ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved)}) skipped on the second
+     * extreme-Y move: "the second
      * teleport must leave the craft where it was sent: commanded X 53400 ship=… posX 3400.0". THE
      * SECOND TELEPORT —
      * {@code teleportShipAndEveryoneAboard} refusing its second call only: "the second teleport must
      * succeed: {\"ok\":false,…}". THE RIDER STAYS WITH HIS SHIP — the server seat glue
-     * ({@code EntityDummy:381}) putting the mount 10 above its seat at extreme Y, and the mount's rider
+     * ({@code EntityDummy#onUpdate} at {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])})
+     * putting the mount 10 above its seat at extreme Y, and the mount's rider
      * offset lowered by 10 so the rider himself still arrives at the seat: "the CLIENT-rendered rider
      * must arrive WITH his ship … apart by 12.54 blocks". A client-side-only glue offset stayed green:
      * the client's mount is placed by the server's entity tracker, not by its own glue. THE TELEPORT —
-     * {@code VSShipCrossingOps.teleportShipAndEveryoneAboard} ({@code VSShipCrossingOps:366}) refusing:
+     * {@code VSShipCrossingOps#teleportShipAndEveryoneAboard} at
+     * {@code if (!teleportShipAndItsMounts(world, shipId, sx, sy, sz, px, py, pz))} refusing:
      * "teleport-ship to extreme Y must succeed: {\"ok\":false,…}". THE UNPARK — the id-keyed
-     * {@code VSBridge.unparkShip} ({@code VSBridge:959}) never taking: "the unpark must take:
+     * {@code VSBridge#unparkShip} at {@code ship.setPhysicsEnabled(true)} never taking: "the unpark must take:
      * {\"ok\":false}". THE RIDER ARRIVES — BOTH carriers off, the mount loop of
-     * {@code teleportShipAndItsMounts} ({@code VSShipCrossingOps:336}) and the seat glue of
-     * {@code EntityDummy} ({@code EntityDummy:381}) across a teleport-sized gap: "no `pos_jump` a jump
+     * {@code VSShipCrossingOps#teleportShipAndItsMounts} at
+     * {@code d.setPositionAndUpdate(d.posX + (px - sx), d.posY + (py - sy), d.posZ + (pz - sz))} and the
+     * seat glue of {@code EntityDummy#onUpdate} at
+     * {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])} across a teleport-sized gap: "no `pos_jump` a jump
      * of ForgeTestClient to within 3.0 of the ship's Y". Each carrier alone was not measured.</p>
      */
     @Test
@@ -604,8 +611,8 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
      * findable and mountable, a real held vertical-up key lifts the server ship by more than one block,
      * and the CLIENT-rendered rider tracks that climb within 3 blocks.</p>
      *
-     * <p>red-witnessed: with {@code TileAdvancedFlightComputer.setPilotInput} discarding every input
-     * in the overworld: "the x=0 control failed - the instrument, not the coordinate: the vertical-up
+     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#setPilotInput} at
+     * {@code this.pilotInput = input} discarding every input in the overworld: "the x=0 control failed - the instrument, not the coordinate: the vertical-up
      * key did not lift the ship (serverLift=0.0000 …)", 2026-09-28. The waits each turn an expiry into
      * that RUNG's verdict (spawn, id, load, riding), and the control assertion is where any of them at
      * x=0 surfaces — the path this red went through.</p>
@@ -855,7 +862,8 @@ public class VSShipExtremeCoordinatesTest extends AbstractSharedVsClientTest {
             return "pre-clear failed: " + farOneLine(clear);
         }
         String pad = exec("stellurgytest block at 0 " + x + " " + (baseY - 1) + " " + FAR_ARENA_Z);
-        // The id, compared — `contains("stone")` also accepts cobblestone and sandstone.
+        // The id, compared — `contains("stone")` also accepts cobblestone and sandstone. Read bare: the
+        // world was loaded a line above, and on that branch the producer always writes `block`.
         if (!"minecraft:stone".equals(Reply.of(pad).text("block"))) {
             return "the pad is not stone (" + farOneLine(pad) + ")";
         }

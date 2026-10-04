@@ -174,8 +174,9 @@ public class PlayerReleaseContractTest extends AbstractSharedServerTest {
      * grace is let go by the release and by nothing else on that path. The login is the real
      * handler — the event a join fires once the save file has been read, posted for this player.</p>
      *
-     * <p>red-witnessed: with the orphan branch of {@code SpaceEventHandler.onPlayerLoadFromFile}
-     * releasing nothing instead of calling {@code playerRelease().toTheWorld}: "a player orphaned from
+     * <p>red-witnessed: with the orphan branch of {@code SpaceEventHandler#onPlayerLoadFromFile} at
+     * {@code .playerRelease().toTheWorld(player)} releasing nothing instead of calling
+     * {@code playerRelease().toTheWorld}: "a player orphaned from
      * a ship the server no longer knows must come back bound to nothing … {\"bound\":[\"rocket transfer
      * grace\"]}", 2026-09-28.</p>
      */

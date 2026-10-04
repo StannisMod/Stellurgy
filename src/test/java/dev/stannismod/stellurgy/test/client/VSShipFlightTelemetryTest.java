@@ -275,17 +275,21 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * A seated pilot's throttle lifts the ship, his HUD shows its speed, and his flight cursor turns
      * it.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE HUD — {@code freeFlightHudLines}
-     * ({@code KeyBindings:341}) returning no lines for a tier-2 craft: "a seated tier-2 pilot must get
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE HUD — {@code KeyBindings#freeFlightHudLines}
+     * returning no lines for a tier-2 craft: "a seated tier-2 pilot must get
      * a Free Flight HUD at all — no `ff_hud` carrying a non-empty HUD line". THE LIFT — the linear
-     * force ({@code MixinTileAdvancedFlightComputer:98}) multiplied by 0: "must lift the ship: 155.0
-     * -&gt; 152.82". THE SPEED READOUT — the speed line ({@code KeyBindings:391}) printing 0 for tier
+     * force ({@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
+     * {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}) multiplied by 0: "must lift the ship: 155.0
+     * -&gt; 152.82". THE SPEED READOUT — the speed line ({@code KeyBindings#freeFlightHudLines} at
+     * {@code I18n.format("msg.ff.hud.speed", String.format("%.1f", state.speed() * 20.0))}) printing 0 for tier
      * 2: "no `ff_hud` whose latest line carries a non-zero speed readout"; that inversion first left
      * the test GREEN, because the check accepted any non-zero number anywhere in the HUD and the
      * vector line supplied one — it now parses the speed line alone. THE CURSOR —
-     * {@code acceptShipPilotMouseDelta} ({@code KeyBindings:759}) scaling every delta by 0: "must
+     * {@code KeyBindings#acceptShipPilotMouseDelta} at {@code float degPerUnit = f * f * f * 8.0F * 0.15F}
+     * scaling every delta by 0: "must
      * deflect the client's flight cursor (got 0.0)". THE TURN — {@code TileAdvancedFlightComputer}'s
-     * roll rate multiplied by 0: "largest omega over the window=0.0". The cursor-centred and brake
+     * roll rate ({@code TileAdvancedFlightComputer#update} at
+     * {@code double rollRate = in.rollInput * FreeFlightPhysics.MAX_ROLL_RATE}) multiplied by 0: "largest omega over the window=0.0". The cursor-centred and brake
      * verdicts the wave touched live in {@link #aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim}
      * since this method was split.</p>
      */
@@ -402,7 +406,7 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * reference is pinned where the ship is, which brakes any residue. Measured the same day: the rate
      * is already near zero on the tick the cursor reaches the dead-zone.</p>
      *
-     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer} forbidden any angular
+     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer#onPhysicsTick} forbidden any angular
      * acceleration against the current spin — spin-up allowed, braking not — this fails with "its
      * worst rate over the hold was 1.9025…", every one of the ten readings the same: nothing else in
      * a cell touches it. The identical inversion left the overworld form of this verdict GREEN —
@@ -515,8 +519,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * An inverted ship turns its seated pilot's camera over with it, and his eye stays on the ship's
      * side of the deck.
      *
-     * <p>red-witnessed: with the seated-ship camera roll ({@code RocketEventHandler:215}) given an
-     * extra 30 degrees, this fails at the upright control: "an upright ship must leave the camera
+     * <p>red-witnessed: with the seated-ship camera roll ({@code RocketEventHandler#onFreeFlightCameraSetup}
+     * at {@code event.setRoll(e[2])}, the tier-2 seat branch's — taken on the pre-refactor form, when
+     * that branch slerped the attitude the client had sampled rather than asking
+     * {@code VSIntegration.getShipAttitude}) given an extra 30 degrees, this fails at the upright control: "an upright ship must leave the camera
      * level (roll=30.0)", 2026-09-28. The other verdict the wave touched is the screenshot's
      * existence — a check on the harness's own capture, which no production line decides. The
      * camera verdicts after the roll are not witnessed: inverting the roll itself stops the test at
@@ -833,7 +839,8 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /**
      * A parked, unmanned ship holds its altitude instead of sinking.
      *
-     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer}'s gravity feed-forward multiplied
+     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
+     * {@code gx = g.x(); gy = g.y(); gz = g.z()}, the gravity feed-forward, multiplied
      * by {@code 0.0} — the original defect — this fails with "its vertical velocity peaked at
      * -0.1633 blk/s", drift -1.33 blocks over the window — 2026-09-28.</p>
      */

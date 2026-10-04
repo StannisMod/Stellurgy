@@ -204,12 +204,16 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
      * <p>red-witnessed: the entry chain and the IN-CONTROL verdict, both halves, 2026-09-28 — the two
      * the wait rewrite touched; the seated, not-falling and aboard-record verdicts are not witnessed.
      * THE ENTRY — with {@code requestEntry} deciding {@code COOLDOWN} before anything else
-     * (inserted at {@code ShipEntryController:238}, ahead of its first decision): "a ship climbing under its own power past the orbit line (255)
+     * (inserted in {@code ShipEntryController#requestEntry} ahead of its first decision,
+     * {@code return decided(Decision.NO_SHIP_ID, null, now)}): "a ship climbing under its own power
+     * past the orbit line (255)
      * must be taken by the entry crossing … no `cell_crossing_begun` was recorded within 4000 ticks".
      * THE KEY REACHES THE COMPUTER — with
-     * {@code CrewTransfer.boundDummyForMount} binding the arrival's fresh mount to
+     * {@code CrewTransfer#boundDummyForMount} at {@code dummy.setSeatPos(seatPos)} binding the
+     * arrival's fresh mount to
      * {@code seatPos.up(3)}: "no `pilot_input_set` with input = set in dim 3". THE KEY LIFTS THE SHIP —
-     * with {@code TileAdvancedFlightComputer.setPilotInput} replacing every input off the overworld by
+     * with {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input}
+     * replacing every input off the overworld by
      * an idle one: "clientY 77.99 -> 77.99 after 20 ticks of thrust". That second inversion first left
      * this GREEN (+51.6 blocks): the cruise ramped on the way up crosses with the craft, and it
      * climbed on that alone. The cruise is now zeroed by probe before the key is judged.</p>
@@ -434,8 +438,8 @@ public class VSShipEntryClientGroupTest extends AbstractSharedVsClientTest {
      * A ship that climbs through the orbit line while every slot is held is refused, and its pilot
      * keeps his seat.
      *
-     * <p>red-witnessed: with the pool-full catch of {@code ShipEntryController.requestEntry}
-     * ({@code ShipEntryController:273}) deciding {@code NO_SHIP_POSITION} instead of
+     * <p>red-witnessed: with the pool-full catch of {@code ShipEntryController#requestEntry} at
+     * {@code return decided(Decision.REFUSED_POOL_FULL, shipId, now)} deciding {@code NO_SHIP_POSITION} instead of
      * {@code REFUSED_POOL_FULL}: "with the pool held full, the entry gate must REFUSE for a full pool -
      * its first decision was NO_SHIP_POSITION instead", 2026-09-28. The wait before it is the link
      * that the gate decided at all, which that inversion passes by construction.</p>

@@ -73,7 +73,8 @@ public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest 
             "org.valkyrienskies.mod.common.entity.EntityMountableChair";
 
     /**
-     * <p>red-witnessed: with {@code EntityNetworkIds:92} answering the mount dummy's id for the chair
+     * <p>red-witnessed: with {@code EntityNetworkIds#of} at {@code Integer id = IDS.get(key(name.toString()))}
+     * answering the mount dummy's id for the chair
      * — the collision this pins: red at the server's {@code mount} link with "Connection reset", the
      * client having died on the chair it built as the other class, 2026-09-28. Earlier than the
      * named failure in {@code ridingOrDie}: the server-log wait paces on the client's ticks, so a

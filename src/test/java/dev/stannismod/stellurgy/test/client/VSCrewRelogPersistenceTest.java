@@ -511,6 +511,9 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
     /** Walk him back and forth across the deck with a real key; returns the ground he covered. */
     private double walkInBursts() throws Exception {
         double walked = 0.0;
+        // STIMULUS: each burst turns the body and holds W for WALK_BURST_TICKS — the loop is the
+        // walk itself, and the ground covered is summed from the two position reads around each
+        // burst. It exits on its count alone; nothing in it is a verdict.
         for (int burst = 0; burst < WALK_BURSTS; burst++) {
             bot().setLook(burst % 2 == 0 ? 0f : 180f, 0f);
             bot().waitTicks(4);
@@ -551,7 +554,7 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
      *
      * <p>red-witnessed: the CONTROL, 2026-09-28 — the verdict the wait rewrite touched. The guard this
      * javadoc describes was removed on 2026-09-16, so the count now asks whether ANY release happens
-     * during an ordinary walk. A flat 0.05-block step guard re-added to {@code ShipFrameTravel.travel}
+     * during an ordinary walk. A flat 0.05-block step guard re-added to {@code ShipFrameTravel#travel}
      * on the client, firing once: "CONTROL A: the guard must be quiet for the same walk without a
      * stall". The same guard firing on every step instead failed the arrangement first ("the client
      * must have resolved the body through every window") — a body released on every step is never
@@ -1028,6 +1031,11 @@ public class VSCrewRelogPersistenceTest extends AbstractSharedVsClientTest {
         String[] who = new String[11];
         trace[0] = deckPoint();
         who[0] = mover();
+        // WINDOW: the ship-frame deck point read at trace[0], just after the restore, against the
+        // reads at trace[4] and trace[10]; the slide, sink and creep verdicts below assert their
+        // DIFFERENCES. Staying put is the absence of motion, not a thing production commits, so no
+        // record could stand in for the two reads; the samples between them are the trace a failure
+        // prints. What it cannot see: motion that went and came back inside one 5-tick step.
         for (int i = 1; i < trace.length; i++) {
             bot().waitTicks(5);
             trace[i] = deckPoint();

@@ -48,9 +48,10 @@ public class ObservatoryDepositButtonTest extends AbstractSharedClientE2ETest {
 
     /**
      * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE BUTTON DEPOSITS —
-     * {@code TileObservatory:1306} answering the button without calling {@code uploadCrystalHere}: "no
+     * {@code TileObservatory#useNetworkData} at {@code int[] result = uploadCrystalHere()} answering the
+     * button without calling {@code uploadCrystalHere}: "no
      * `crystal_deposited` carrying pos = … was recorded within 200 ticks". THE WORLD LEARNS —
-     * {@code TileObservatory:1230}'s {@code teachThisBody} skipped: "after the click a pad here must
+     * {@code TileObservatory#uploadCrystalHere} at {@code teachThisBody(landed)} skipped: "after the click a pad here must
      * be offered that world: … known:false".</p>
      */
     @Test

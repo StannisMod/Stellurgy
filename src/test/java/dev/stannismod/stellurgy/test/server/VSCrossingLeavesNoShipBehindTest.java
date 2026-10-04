@@ -129,9 +129,10 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
 
     /**
      * <p>red-witnessed: only with all four of the source's collectors removed — the mark by name
-     * ({@code VSIntegration}'s {@code releaseShipIfNothingLoaded}), the same-world adoption
-     * ({@code VSBridge.adoptOwnRemnant}), the registry walk's blockless clause
-     * ({@code WorldServerShipManager.tick}) and the spawn drain's {@code dropOwnBlocklessRemnant}:
+     * ({@code VSIntegration#releaseShipIfNothingLoaded}), the same-world adoption
+     * ({@code VSBridge#adoptOwnRemnant}), the registry walk's blockless clause
+     * ({@code WorldServerShipManager#tick}) and the spawn drain's
+     * {@code WorldServerShipManager#dropOwnBlocklessRemnant}:
      * "the cut source … was never collected — no `ship_removed` … within 200 ticks", 2026-09-28.
      * Removing the mark alone, or the mark and the adoption, stays GREEN. So this pins the outcome,
      * and cannot say which hand collected: the one this test was written for is not the only one.</p>

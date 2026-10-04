@@ -99,8 +99,11 @@ public class PerDimWorldInfoMasterToggleTest extends AbstractSharedServerTest {
 
     private void assertDimRegistered(int dim) throws Exception {
         String dimList = exec("stellurgytest dim list");
+        // Asked of Stellurgy's own registry list, by element: a substring of the whole reply also
+        // matched `-2` for 2, `12` for 1, and the same id in the Forge list.
         assertTrue("fixture dim " + dim + " not registered: " + dimList,
-                dimList.contains(String.valueOf(dim)));
+                java.util.Arrays.stream(Reply.of("stellurgytest dim list", dimList)
+                        .intArray("stellurgyDimensions")).anyMatch(d -> d == dim));
     }
 
     /** A boolean config flag as the server holds it now, so a scenario can put it back. */

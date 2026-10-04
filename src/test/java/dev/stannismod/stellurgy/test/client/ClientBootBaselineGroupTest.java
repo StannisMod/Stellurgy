@@ -103,7 +103,7 @@ public class ClientBootBaselineGroupTest extends AbstractSharedClientE2ETest {
      * silently never plays. Nothing persistent changes, which is what keeps this in this group.</p>
      *
      * <p>red-witnessed: with {@code combustionRocket} left out of {@code AudioRegistry}'s registration
-     * ({@code AudioRegistry:43}): "combustionRocket must be present in ForgeRegistries at send time:
+     * ({@code AudioRegistry#registerSoundEvents} at {@code basicLaser, combustionRocket,}): "combustionRocket must be present in ForgeRegistries at send time:
      * … \"registered\":false", 2026-09-28. The probe's own reply answers {@code ok} whenever the
      * {@code AudioRegistry} field resolves; the registration verdict right after it is the one that
      * decides.</p>

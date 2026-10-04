@@ -126,6 +126,8 @@ final class MachineRecipeEndToEndKit {
     static void assertFixtureValidates(TestClient c, int cx, int cy, int cz,
                                        String tag, String fixtureResp) throws Exception {
         String resp = tryComplete(c, 0, cx, cy, cz);
+        // `isComplete` is missing only from the probe's error replies (no world, no tile, not a
+        // multiblock), and absence is the answer: the fixture did not validate, thrown with the reply.
         if (!Reply.of(resp).boolOr("isComplete", false)) {
             throw new AssertionError(tag + " — the multiblock built by the fixture must validate on"
                     + " the first ask (see tryComplete); reply: " + resp + "\n  fixture: "

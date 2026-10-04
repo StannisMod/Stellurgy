@@ -72,16 +72,20 @@ public class VSShipUnmannedCruiseTest extends AbstractSharedVsClientTest {
      * back rather than a stopped or reset ship.
      *
      * <p>red-witnessed: the ramp and both cruise verdicts, 2026-09-28. THE RAMP — with
-     * {@code TileAdvancedFlightComputer.setPilotInput} discarding every input: "the held throttle must
+     * {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} discarding
+     * every input: "the held throttle must
      * ramp this ship's vertical cruise all the way to the computer's own ceiling … no
      * `cruise_setpoint_changed` with via = pilot and up at SHIP_MAX_SPEED was recorded within 200
      * ticks"; the setpoint verdict after that link is its read-back and falls with it. The dismount
      * and re-mount waits are links on the arrangement (he stood up; his client sat back down).
      * KEEPS CRUISING — with
-     * {@code TileAdvancedFlightComputer}'s unmanned Flight-Assist command built from a zero setpoint
+     * {@code TileAdvancedFlightComputer}'s unmanned Flight-Assist command
+     * ({@code TileAdvancedFlightComputer#update} at
+     * {@code FreeFlightPhysics.shipVelocityCommand(FreeFlightInput.zero(), attitudeReference,}) built
+     * from a zero setpoint
      * instead of {@code velocitySetpoint}: "Climb over the LAST ten ticks of the window=0.0", the
      * slices after the pilot left reading +10.9, +0.7, 0, 0. SURVIVES REMOUNT — with
-     * {@code EntityDummy.syncFlightTelemetry} zeroing the cruise while a rider sits with no input yet:
+     * {@code EntityDummy#syncFlightTelemetry} zeroing the cruise while a rider sits with no input yet:
      * the same message at the re-mount verdict, slices 0, 0, 0, 0. BOTH inversions first left the
      * verdicts GREEN in their earlier form, one climb over the whole forty ticks: a ship braking from
      * cruise to a hover still covered 11.7 and 7.4 blocks against a bar of 4. Healthy, each slice

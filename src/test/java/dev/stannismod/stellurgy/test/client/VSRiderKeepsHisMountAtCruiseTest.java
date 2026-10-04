@@ -144,8 +144,9 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
      * The rider keeps his mount through a coasting horizontal cruise faster than the mount's
      * tracking headroom.
      *
-     * <p>red-witnessed: with {@code MixinEntityTrackerRiderSeesVehicle} no longer forcing the mount
-     * visible to its own rider, this fails with "the client threw the rider off his mount 24 of 40
+     * <p>red-witnessed: with {@code MixinEntityTrackerRiderSeesVehicle#ar$aRiderNeverLosesItsVehicle} at
+     * {@code cir.setReturnValue(true);} removed — no longer forcing the mount visible to its own rider —
+     * this fails with "the client threw the rider off his mount 24 of 40
      * samples", worst anchor lag 40.0 blocks against a 16-block range — 2026-09-28, on the stimulus as
      * it stands after the settle became a dose and a two-speed window.</p>
      */
@@ -228,6 +229,9 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
                 readBool(mountAt, "ok"));
         int dummyId = readInt(mountAt, "dummyId");
         String mount = exec("stellurgytest player mount-entity " + dummyId);
+        // `mounted` is missing only from the probe's "entity not found" reply, which names
+        // `playerDim`, `foundInDim` and `gone` — so absence is the answer: a refused mount, reported
+        // with that reply.
         scenario().requireArranged("the bot must mount the pilot-seat dummy: " + mount,
                 Reply.of(mount).boolOr("mounted", false));
         // THE CLIENT'S OWN SEATING, as a link. The ten ticks that stood here produced the red whose
@@ -271,6 +275,7 @@ public class VSRiderKeepsHisMountAtCruiseTest extends AbstractSharedVsClientTest
         scenario().requireArranged("seat-mount-at must spawn the seat dummy again: " + remountAt,
                 readBool(remountAt, "ok"));
         mount = exec("stellurgytest player mount-entity " + readInt(remountAt, "dummyId"));
+        // Same reading as the first mount: absence is the answer, a refused mount.
         scenario().requireArranged("the bot must be re-seated after the control: " + mount,
                 Reply.of(mount).boolOr("mounted", false));
         // WAS `waitTicks(10)` and a read. The server says it seated him; this reads the

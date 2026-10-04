@@ -85,7 +85,8 @@ public class VSShipMotionServerTest extends AbstractSharedServerTest {
      * A velocity commanded through the ship's own flight computer moves it; a raw substrate setpoint
      * does not (the control).
      *
-     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer}'s linear force multiplied by
+     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
+     * {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}, the linear force, multiplied by
      * {@code 0.0}, this fails at the subject with "it moved -0.506 blocks in 25 server ticks, needing
      * more than 1.0", the setpoint control still green — 2026-09-28.</p>
      */

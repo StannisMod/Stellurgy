@@ -374,8 +374,11 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         awaitCargoReleased(carryMark, carriedSlot);
         String found = exec("stellurgytest space loose-body-find " + bodyId + " "
                 + carriedSlot + " " + dstVsId);
+        // `found` is missing only from the probe's error replies (world not loaded, bad uuid), and
+        // absence is the answer: no body here, which the message below separates further. `aboard`
+        // is read bare — with a ship id given the producer writes it on every `found:true` reply.
         boolean carried = Reply.of(found).boolOr("found", false)
-                && Reply.of(found).boolOr("aboard", false);
+                && Reply.of(found).bool("aboard");
         // The two failure modes are separated on the way out, because they mean different things: a
         // body that never arrived is a crossing that dropped its cargo; a body that arrived and is not
         // aboard is a crossing that put it down beside the deck.
@@ -519,8 +522,9 @@ public class VSShipCellSeamTest extends AbstractSharedServerTest {
         awaitCargoReleased(carryMark, carriedSlot);
         String found = exec("stellurgytest space loose-body-find " + bodyId + " "
                 + carriedSlot + " " + dstVsId);
+        // As in the first scenario: absence is the answer for `found`, and `aboard` is read bare.
         boolean landedAboard = Reply.of(found).boolOr("found", false)
-                && Reply.of(found).boolOr("aboard", false);
+                && Reply.of(found).bool("aboard");
         assertTrue("the cargo never came to rest on the arrived ship: " + found
                 + " ship=" + arrivedShip(carriedSlot, arranged.stellurgyShipId), landedAboard);
 

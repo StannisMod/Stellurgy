@@ -89,7 +89,7 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
      * <p>red-witnessed: the regains-control verdict, the one contract verdict the wait rewrite touched
      * — the others it touched are arrangement reads (the ship's id, the cell entry, the transit
      * beginning); the re-seat and placement verdicts are not witnessed. With
-     * {@code TileAdvancedFlightComputer.setPilotInput} replacing every input by an idle one once the
+     * {@code TileAdvancedFlightComputer#setPilotInput} at {@code this.pilotInput = input} replacing every input by an idle one once the
      * craft is in a world other than the one it was first flown in, this fails with "held input must
      * MOVE THE ARRIVED SHIP", every one of the client's gate readings open and his inputs sent — the
      * fault named as the computer's, not the wire's — 2026-09-28.</p>
@@ -194,7 +194,9 @@ public class VSMidTransitRelogControlTest extends AbstractSharedVsClientTest {
                 + " " + seatX + " " + seatY + " " + seatZ);
         assertTrue("seat-mount-at must spawn the seat dummy: " + mountAt, readBool(mountAt, "ok"));
         String mount = exec("stellurgytest player mount-entity " + readInt(mountAt, "dummyId"));
-        // A read of the command's own verdict, not a wait, so a missing field is a refusal.
+        // A read of the command's own verdict, not a wait. `mounted` is missing only from the probe's
+        // "entity not found" reply, which names `playerDim`, `foundInDim` and `gone` — so
+        // absence is the answer: a refused mount, failing here with that reply printed.
         assertTrue("the bot must mount the pilot-seat dummy on the first attempt: " + mount,
                 Reply.of(mount).boolOr("mounted", false));
         int dummyId = readInt(mountAt, "dummyId");

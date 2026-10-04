@@ -53,11 +53,12 @@ import static org.junit.Assert.assertTrue;
  * It is static because JUnit builds a fresh test instance per method while the client JVM keeps the
  * setting.</p>
  */
-@Ignore("FLAKY, by the maintainer's ruling of 2026-10-03: two client-tier runs reddened a DIFFERENT"
-        + " scenario each — the between-scenario release left an `aboard record` before"
-        + " aSeatedCrewMemberSurvivesAHyperspaceTransitStillRiding, then"
-        + " aJumpAnnouncesItselfInChatOnTheHudAndInTheSky failed alone. Not diagnosed. RE-ENABLE when the"
-        + " leak is found; the acceptance is this class green on a full client tier, twice.")
+@Ignore("HELD FOR THE DECK CONTRACT, by the maintainer's rulings of 2026-10-03 and 2026-10-04: two"
+        + " client-tier runs reddened a DIFFERENT scenario each — the between-scenario release left an"
+        + " `aboard record` before aSeatedCrewMemberSurvivesAHyperspaceTransitStillRiding, then"
+        + " aJumpAnnouncesItselfInChatOnTheHudAndInTheSky failed alone. Not diagnosed. RE-ENABLE with the"
+        + " contract on moving an entity aboard a craft; the acceptance is this class green on a full"
+        + " client tier, twice.")
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class VSTransitCrewGroupTest extends AbstractSharedVsClientTest {
 
@@ -527,8 +528,9 @@ private String execEnvelope(String cmd) throws Exception {
     /**
      * A seated crew member is re-seated on arrival without anything forcing the ship loaded for him.
      *
-     * <p>red-witnessed: with {@code CrewTransfer.reseat} ({@code CrewTransfer:295}) skipping every
-     * seated rider, the test fails after the crossing as an {@code AssertionError} — "the client's
+     * <p>red-witnessed: with {@code CrewTransfer#reseat} at
+     * {@code TilePilotSeat seat = matchSeat(seats, rider, expectedShipId, DURABLE_SHIP_ID)}, its seated
+     * branch, skipping every seated rider, the test fails after the crossing as an {@code AssertionError} — "the client's
      * mount chain did not END seated within 80 ticks of the crossing", 2026-09-28. It used to arrive
      * typed as an ArrangementFailure, because the shared mount helper raised every unmounted end that
      * way; this method now waits through the form for a caller whose SUBJECT is the remount. The
@@ -678,7 +680,8 @@ private static final int SKY_RENDER_DISTANCE = 8;
         // BOTH replies, because a failed mount has two unrelated causes and the second command's
         // answer cannot separate them alone: the spawn says whether a dummy was made and whether it
         // was reused, and the mount says whether the player's own world held it — `playerDim`
-        // against `foundInDim`, and `gone` when no loaded world has it at all.
+        // against `foundInDim`, and `gone` when no loaded world has it at all. That error reply is
+        // the only one without `mounted`, so absence is the answer: a refused mount.
         scenario().requireArranged("the bot must mount the pilot-seat dummy at the seat " + seatX + ","
                         + seatY + "," + seatZ + " in dim " + originDim + " — spawn=" + mountAt
                         + " mount=" + mount,
@@ -777,8 +780,10 @@ private String hud() throws Exception {
      * HUD names the jump phase while the ship is in flight.
      *
      * <p>red-witnessed: the CORRIDOR and HUD verdicts, 2026-09-28 — the two the wait rewrite touched;
-     * the cell sky control and the departure link are not witnessed. With {@code BoundarySky} no longer calling {@code HyperspaceTunnel.render} in
-     * hyperspace: "corridor frames 0 -> 0 over 20 ticks". With {@code KeyBindings.driveHudLines}
+     * the cell sky control and the departure link are not witnessed. With {@code BoundarySky#render} at
+     * {@code HyperspaceTunnel.render(partialTicks, world)} no longer called in
+     * hyperspace: "corridor frames 0 -> 0 over 20 ticks". With {@code KeyBindings#driveHudLines} at
+     * {@code lines.add(I18n.format("msg.ff.hud.transit." + transitPhaseKey(state.transitPhase)))}
      * adding no line in the transit phase: "no `ff_hud` whose latest drawn line names HYPERSPACE was
      * recorded within 600 ticks".</p>
      */
@@ -1078,12 +1083,14 @@ private String hud() throws Exception {
      * here: that is the seated scenario's subject, and its baseline is order-sensitive.</p>
      *
      * <p>red-witnessed: one inversion per verdict, each red at its own with the earlier ones green,
-     * 2026-09-28. CORRIDOR FOR A STANDING CREWMAN — {@code BoundarySky} not calling
-     * {@code HyperspaceTunnel.render}: "the corridor must keep being drawn for a crew member who has
-     * LEFT HIS SEAT". COMPUTER KEEPS TICKING — {@code TileAdvancedFlightComputer.update} returning
-     * early in hyperspace: "server-tick samples 0 -> 0". ABOARD IS SAFE — {@code HyperspaceVoid}'s
-     * {@code aboardSomething} exemption skipped: "must not be taken by the void", his client on the
-     * death screen. THE VOID KILLS — {@code HyperspaceVoid} never calling {@code attackEntityFrom}: "no
+     * 2026-09-28. CORRIDOR FOR A STANDING CREWMAN — {@code BoundarySky#render} at
+     * {@code HyperspaceTunnel.render(partialTicks, world)} not called: "the corridor must keep being
+     * drawn for a crew member who has
+     * LEFT HIS SEAT". COMPUTER KEEPS TICKING — {@code TileAdvancedFlightComputer#update} returning
+     * early in hyperspace: "server-tick samples 0 -> 0". ABOARD IS SAFE — {@code HyperspaceVoid#onServerTick}
+     * at {@code if (aboardSomething(player))}, the exemption, skipped: "must not be taken by the void",
+     * his client on the death screen. THE VOID KILLS — {@code HyperspaceVoid#onServerTick} at
+     * {@code player.attackEntityFrom(VOID_OF_HYPERSPACE, Float.MAX_VALUE)} never called: "no
      * `player_died` carrying source = stellurgyHyperspaceVoid was recorded within 260 ticks".</p>
      */
     @Test
@@ -1396,7 +1403,8 @@ private String hud() throws Exception {
      * question again at the far end, because the clause is about BOTH crossings.</p>
      *
      * <p>red-witnessed: with {@code CrewTransfer.placeOnDeck} skipped for a standing rider outside
-     * hyperspace only ({@code CrewTransfer:318}): "the arrival crossing must carry the crew member on
+     * hyperspace only ({@code CrewTransfer#reseat} at
+     * {@code String deckBlock = placeOnDeck(dstWorld, anchor, rider, expectedShipId, vsShipUuid)}): "the arrival crossing must carry the crew member on
      * his feet too … no `client_dimension_changed` carrying dim = 4 was recorded within 600 ticks",
      * 2026-09-28. Skipping it everywhere reddened the DEPARTURE first ("into dim 13"), which is why
      * the inversion was scoped. The wait before the verdict is the link that the ship arrived.</p>
@@ -1675,7 +1683,7 @@ private String hud() throws Exception {
      * boards him seated, commits the jump from the chair, and only then puts him on his feet. That
      * sibling stays the control: it is green on either side of the fix, and this one is not.
      *
-     * <p>red-witnessed: with {@code CrewTransfer.refreshPostures} ({@code CrewTransfer:175}) returning
+     * <p>red-witnessed: with {@code CrewTransfer#refreshPostures} at {@code out.add(now)} returning
      * the departure postures unchanged: "the arrival's deck hold must END — every branch records it",
      * 2026-09-28 — a replayed SEATED record arms no deck hold. The wait the wave touched is the link
      * that the ship arrived, before that verdict.</p>

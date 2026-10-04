@@ -44,8 +44,8 @@ public class WorldCommandStarMiscContractTest extends AbstractSharedServerTest {
      * not reach the star Earth is lit by.</p>
      *
      * <p>red-witnessed: 2026-09-30, on the code as it stood before the fix — {@code DimensionManager#createAndLoadDimensions}
-     * at {@code DimensionManager.overworldProperties.setStar(sol)} written as
-     * {@code sol.addPlanet(DimensionManager.overworldProperties)}, which lists Earth without binding it:
+     * at {@code overworldProperties.setStar(sol)} written as
+     * {@code sol.addPlanet(overworldProperties)}, which lists Earth without binding it:
      * "Earth's star must be the registered star 0 itself, not a copy with its id: {… "starIsRegistered":false …}".</p>
      */
     @Test

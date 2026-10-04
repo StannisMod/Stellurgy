@@ -145,7 +145,8 @@ public class SpaceDimGuardTest extends AbstractSharedClientE2ETest {
      * With a registered station, a player who lands in the space dim outside the station's bounds
      * gets teleported to the station's spawn location — not back to the overworld.
      *
-     * <p>red-witnessed: with the guard's call moved back into {@code PlanetEventHandler.playerTick}
+     * <p>red-witnessed: with the guard's call ({@code PlanetEventHandler#spaceDimensionGuard} at
+     * {@code evictIfOffStation(player)}) moved back into {@code PlanetEventHandler.playerTick}
      * (the living update, inside the network handler's update) and {@code spaceDimensionGuard}
      * disabled, this fails with "the guard must move a body off a given point ONCE … origin=206,64,154"
      * (2026-09-24, run alone).</p>

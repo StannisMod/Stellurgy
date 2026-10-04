@@ -405,7 +405,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * {@code protectsFrom} &rarr; {@code decrementAir} is never called and the tank's oxygen stays
      * at its initial value.
      *
-     * <p>red-witnessed: with {@code AtmosphereHandler} asking {@code VACUUM.isImmune} of every body in
+     * <p>red-witnessed: with {@code AtmosphereHandler#onTick} (its per-body tick) asking
+     * {@code VACUUM.isImmune} of every body in
      * a breathable atmosphere every ten ticks (it spends a suit's air, hurts nobody), this fails with
      * "a breathable atmosphere must never reach the suit's tank at all; drains recorded" — 2026-09-28.</p>
      */
@@ -534,7 +535,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      *
      * <p>Pins the END STATE (air rises over the window) rather than a per-tick mB rate.</p>
      *
-     * <p>red-witnessed: with {@code TileGasChargePad} draining its tank but no longer calling
+     * <p>red-witnessed: with {@code TileGasChargePad#canPerformFunction} at
+     * {@code fillable.increment(stack, drained.amount)} draining its tank but no longer calling
      * {@code fillable.increment}, this fails with "no `suit_air_filled` whose 'filled' is not 0" —
      * 2026-09-28.</p>
      */
@@ -613,7 +615,7 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * {@code protectsFrom} branch is never evaluated and no decrement fires.
      *
      * <p>red-witnessed: with the same breathable-drain inversion as
-     * {@link #breathableAtmosphereDoesNotDrainChestTank}, this fails with "a breathable atmosphere must
+     * {@link #breathableAtmosphereDoesNotDrainChestTank} (in {@code AtmosphereHandler#onTick}), this fails with "a breathable atmosphere must
      * never reach the enchanted suit's buffer; drains recorded" — 2026-09-28.</p>
      */
     @Test
@@ -664,7 +666,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * whole suit was consulted and the chest was asked to pay. Only then does the silence in
      * {@code living_hurt} say the suit held rather than that the atmosphere never looked at him.</p>
      *
-     * <p>red-witnessed: with {@code ItemAirUtils.decrementAir} reporting the air spent without
+     * <p>red-witnessed: with {@code ItemAirUtils#decrementAir} at {@code nbt.setInteger("air", newAmt)}
+     * reporting the air spent without
      * spending it (protection intact), this fails with "the drained buffer must reach the client's
      * chest slot — no `client_slot_tag_set`" — 2026-09-28.</p>
      */
@@ -847,7 +850,8 @@ public class VacuumAndSuitClientGroupTest extends AbstractSharedClientE2ETest {
      * mean the suit held. The gate's own {@code immune:true} is not asserted, because that recorder
      * writes only on a CHANGE and an unbroken run of protection may produce no record at all.</p>
      *
-     * <p>red-witnessed: with {@code ItemSpaceChest.decrementAir} reporting the air spent without
+     * <p>red-witnessed: with {@code ItemSpaceChest#decrementAir} at
+     * {@code fluidDrained = fluidItem.drain(amtDrained, true)} reporting the air spent without
      * draining its tank (protection intact), this fails with "the drained tank must reach the client's
      * chest slot — no `client_slot_tag_set`" — 2026-09-28.</p>
      */

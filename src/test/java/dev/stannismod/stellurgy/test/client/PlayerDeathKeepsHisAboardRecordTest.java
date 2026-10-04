@@ -53,8 +53,8 @@ public class PlayerDeathKeepsHisAboardRecordTest extends AbstractSharedClientE2E
     /**
      * The record survives a death and a respawn through the death screen.
      *
-     * <p>red-witnessed: with {@code CapabilityPlayerBindings.carryAcrossDeath} not copying the aboard
-     * record onto the respawned player: "a player who dies must still know which ship he belongs to …
+     * <p>red-witnessed: with {@code CapabilityPlayerBindings#carryAcrossDeath} at
+     * {@code fresh.setAboard(old.aboard())} not copying the aboard record onto the respawned player: "a player who dies must still know which ship he belongs to …
      * {\"bound\":[]}", 2026-09-28.</p>
      */
     @Test

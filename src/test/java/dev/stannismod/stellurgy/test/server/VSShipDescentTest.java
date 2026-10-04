@@ -121,6 +121,8 @@ public class VSShipDescentTest extends AbstractSharedServerTest {
         // is a different question that happens to have the same answer today.
         exec("stellurgytest vs load-ships " + slotDim);
         String afc = exec("stellurgytest space find-afc " + slotDim + " " + shipId);
+        // `found` is missing only from the probe's "world or ledger not ready" reply, and
+        // absence is the answer: not located, failing here with that reply.
         assertTrue("could not locate the ship's flight computer in the slot " + slotDim
                         + " after its ships were load-queued; the slot reports "
                         + loadedShips(slotDim) + " loaded ship(s): " + afc,

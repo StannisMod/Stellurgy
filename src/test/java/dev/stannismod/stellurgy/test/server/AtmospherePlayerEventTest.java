@@ -139,8 +139,13 @@ public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
      * <p>red-witnessed: with {@code AtmosphereHandler#getAtmosphereType(Entity)} at
      * {@code return DimensionManager.getInstance().getDimensionProperties(dimId).getAtmosphere()}
      * answering VACUUM for dimension 0: "overworld baseline: cache must be empty or non-Stellurgy;
-     * hasCached=true atmos=vacuum", 2026-09-28. Removing the handler's own dimension check instead
-     * stays GREEN — no other world's handler exists in this scenario to answer for the overworld.</p>
+     * hasCached=true atmos=vacuum", 2026-09-28; re-taken 2026-10-04 on the shared server, same text
+     * plus {@code "cachedInDims":[0]}. NOT YET for the other break: with
+     * {@code AtmosphereHandler#onTick} at {@code entity.world.provider.getDimension() == this.dimId}
+     * removed, this stays GREEN — re-taken 2026-10-04 on the shared server, where both resolving
+     * scenarios ran before this one (class run 3/3 green with the break in place). The earlier reason,
+     * "no other world's handler exists", no longer describes the arrangement; why the other worlds'
+     * handlers still cache nothing for an overworld player is not measured.</p>
      */
     @Test
     public void stellurgyDimWithoutVisitDoesNotCacheAtmosphereForPlayer() throws Exception {

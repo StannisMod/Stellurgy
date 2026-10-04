@@ -455,11 +455,12 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * A jump from the top deck keeps the capture and lands back on the same deck.
      *
-     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE LANDING — {@code ShipFrameTravel.jump}
-     * ({@code ShipFrameTravel:2092}) adding 1.5 blocks a tick of ship-frame sideways motion to every
+     * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE LANDING — {@code ShipFrameTravel#jump}
+     * adding 1.5 blocks a tick of ship-frame sideways motion to every
      * aboard jump, flinging him off the deck: "the jumper was in the air when the key came up, so he
      * must LAND on the deck he jumped from … no `deck_contact` carrying ship = …". THE JUMP LEAVES THE
-     * DECK — the same method giving the jump no upward motion: "the jump must actually leave the deck
+     * DECK — the same method ({@code ShipFrameTravel#jump} at {@code motion[1] = up}) giving the jump
+     * no upward motion: "the jump must actually leave the deck
      * (apex=157.0 deckY=157.0)"; that one never airs him, so the conditional landing wait is skipped
      * on it.</p>
      */
@@ -536,7 +537,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         StringBuilder trace = new StringBuilder();
         bot().holdKey(Keyboard.KEY_SPACE);
         try {
-            // A WINDOW, and the key is held across it: what is measured is the APEX of the jump,
+            // WINDOW: from the deck read before the key to the last sample, with the key held across
+            // it: what is measured is the APEX of the jump,
             // an extremum over the samples, and no record can carry it because it is a property of
             // the arc rather than of any instant production commits. What it cannot see: a higher
             // apex reached and left between two samples.
@@ -715,7 +717,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         StringBuilder trace = new StringBuilder();
         bot().holdKey(Keyboard.KEY_W);
         try {
-            // A WINDOW under a held walk: it counts how many of the samples were captured and takes
+            // WINDOW: under a held walk, from the walk mark to the key-up, it counts how many of the
+            // samples were captured and takes
             // the y RANGE, both properties of the traverse rather than of one instant. A record
             // could say capture began; it could not say what fraction of a walk it held for. What
             // it cannot see: a capture dropped and regained inside one 4-tick sample.
@@ -772,7 +775,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * A still crew member on a deck rolled past vertical is neither dragged sideways nor churned.
      *
-     * <p>red-witnessed: with {@code ShipFrameTravel.travel} ({@code ShipFrameTravel:1559}) declining
+     * <p>red-witnessed: with {@code ShipFrameTravel#travel} declining
      * every tick on a deck whose up points below -0.5: "the client must be resolving the crew member
      * through the stillness window — the ship frame's frame never committed a capture for this body",
      * 2026-09-28. That is the verdict the wait rewrite touched; the drift and churn verdicts after it
@@ -1030,7 +1033,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         long jumpMark = client.mark();
         bot().holdKey(Keyboard.KEY_SPACE);
         StringBuilder arc = new StringBuilder();
-        // A WINDOW that records the arc's SHAPE for the failure message; the verdict is the link
+        // WINDOW: between the jump mark and the key-up, recording the arc's SHAPE for the failure
+        // message; the verdict is the link
         // below. A trajectory is not one record, so these samples exist to be printed, not to
         // decide. What they cannot see: the part of the arc between two samples.
         for (int t = 0; t < 3; t++) {
@@ -1049,7 +1053,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // The arc keeps being sampled while the body is airborne, because the diagnostic is a
         // trajectory and a trajectory is not one record; the WAIT below is what decides when the
         // window is over.
-        // The arc's second half, same window and same reason: it is printed, not asserted on — the
+        // WINDOW: the arc's second half, from the key-up to the landing link below, same reason: it
+        // is printed, not asserted on — the
         // landing is decided by the link that follows. What it cannot see: the ticks in between.
         for (int t = 3; t < 6; t++) {
             bot().waitTicks(2);
@@ -1084,7 +1089,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         int[] keys = {Keyboard.KEY_W, Keyboard.KEY_D, Keyboard.KEY_S, Keyboard.KEY_A};
         StringBuilder legs = new StringBuilder();
         long walkMoveMark = clientEvents().mark();
-        // FOUR STIMULUS LEGS, not a wait: each iteration walks the body in one direction, so
+        // STIMULUS: four legs, not a wait — each iteration walks the body in one direction, so
         // deleting the loop stops the walking rather than stopping the watching. The records the
         // legs produce are read against one mark AFTER them; what the legs themselves cannot see is
         // a capture that dropped and returned inside a single 3-tick hold.
@@ -1244,7 +1249,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * to its deck point the next tick, so every position read afterwards is at the deck whatever the
      * bound did. It now shoves by a step vanilla lets through and reads the bound's own verdict.</p>
      *
-     * <p>red-witnessed: with {@code DeckMovementBound.accepts} ({@code DeckMovementBound:118})
+     * <p>red-witnessed: with {@code DeckMovementBound#accepts} at {@code return moved <= allowed}
      * ratifying every step: "a 6-block step committed by the client's own travel must be REFUSED by
      * the server's deck bound … refused 0, accepted 2", 2026-09-28. Healthy, the same run shape
      * records {@code moved 6.0, accepted:false}. The step is taken from a WALKING body: from a
@@ -1387,7 +1392,9 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * A pilot who dismounts and takes to creative flight is never pulled back down by the deck.
      *
      * <p>red-witnessed: only with BOTH defences removed — the dismount hold's exclusion of an excluded
-     * body ({@code EntityDummy:240}) AND the seed's own excluded check ({@code ShipFrameTravel:790}) —
+     * body ({@code EntityDummy#keepDismountedPilotOnDeck} at {@code logHold("pilotExcluded", exit)}) AND
+     * the seed's own excluded check ({@code ShipFrameTravel#tryApplyPendingSeed} at
+     * {@code excludedStateOf((EntityLivingBase) body) != null}) —
      * does this fail: "a flying ex-pilot must never be yanked back down (maxDrop=5.1)", 2026-09-28.
      * Either one removed alone leaves it green; each suffices. The verdict the wait rewrite touched
      * is the premise that the double-tap started flight at all, which is vanilla's and no Stellurgy line
@@ -1449,7 +1456,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         boolean trackedAtEnd = false;
         bot().holdKey(Keyboard.KEY_SPACE);
         try {
-            // A WINDOW measuring the worst DROP below the running high-water mark — an extremum
+            // WINDOW: from the y0 read before the key to the last sample, measuring the worst DROP
+            // below the running high-water mark — an extremum
             // over the whole hold, which is the quantity the contract is about and which no single
             // record carries. What it cannot see: a deeper drop recovered between two samples.
             for (int i = 0; i < 25; i++) {
@@ -1554,7 +1562,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         long encounterMark = client.mark();
         StringBuilder land = new StringBuilder();
         double settledY = Double.NaN;
-        // A WINDOW over the landing: what it answers is where the body SETTLES, which is a value
+        // WINDOW: over the landing, from the encounter mark to the last sample: what it answers is
+        // where the body SETTLES, which is a value
         // reached asymptotically rather than an instant anything commits, and the trace it keeps is
         // for the message. What it cannot see: a bounce between two 3-tick samples.
         for (int i = 0; i < 30; i++) {
@@ -1730,7 +1739,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double settledY = Double.NaN;
         StringBuilder enc = new StringBuilder();
         StringBuilder fine = new StringBuilder();
-        // A WINDOW that COUNTS: the split between aboard-mode and hull-stand samples is a ratio
+        // WINDOW: one that COUNTS, from the encounter mark to the last sample: the split between
+        // aboard-mode and hull-stand samples is a ratio
         // over the observation, and a ratio is not something a record can carry — each record is
         // one moment. What it cannot see: a mode that flipped and flipped back inside 3 ticks.
         for (int i = 0; i < 30; i++) {
@@ -2139,8 +2149,9 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
      * A body that meets a deck after the craft manoeuvred with nobody aboard is carried by what the
      * craft is doing now, not by the average of what it did.
      *
-     * <p>red-witnessed: with the client's carry ({@code ShipFrameTravel.travel}'s deck carry, the
-     * value {@code remember} binds) raised by 0.1 a tick on a capture that follows more than 100
+     * <p>red-witnessed: with the client's carry ({@code ShipFrameTravel#travel} at
+     * {@code remember(entity, shipId, sweep.x, sweep.y, sweep.z, carryX, carryY, carryZ)}, the deck
+     * carry that call binds) raised by 0.1 a tick on a capture that follows more than 100
      * ticks off the deck: "the carry installed when the body was captured must be what the craft SAYS
      * it is doing (5.9E-19/tick …) … the largest carry any capture in this window was committed with
      * is 0.1", 2026-09-28.</p>
@@ -2299,7 +2310,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         // tick the capture takes hold: the held carry is what the next tick subtracts to recover the
         // body's own motion, so a wrong one is a real displacement and not a reading.
         StringBuilder contact = new StringBuilder();
-        // A WINDOW at one-tick resolution, kept for the contact TRACE a failure needs; the verdict
+        // WINDOW: at one-tick resolution, from the contact mark to the last sample, kept for the
+        // contact TRACE a failure needs; the verdict
         // is taken from the records afterwards. No record carries "how the contact looked across
         // the fall". What it cannot see: anything finer than a tick.
         for (int i = 0; i < 25; i++) {
@@ -2395,8 +2407,8 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
     /**
      * The mouse turns a walking crew member's aim in the deck frame, and the aim rides the deck.
      *
-     * <p>red-witnessed: with {@code VSIntegration.flightComputerOf} ({@code VSIntegration:876})
-     * answering null: "attitude hold must accept the roll", 2026-09-28. The other wait the rewrite
+     * <p>red-witnessed: with {@code VSIntegration#flightComputerOf} at
+     * {@code return flightComputerInYard(world, shipyardBoundsOf(world, shipUuid))} answering null: "attitude hold must accept the roll", 2026-09-28. The other wait the rewrite
      * touched is the hop's landing on the open deck, a link on the arrangement; the aim verdicts
      * after the roll were not touched and are not witnessed.</p>
      */
@@ -2507,7 +2519,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double swept = 0.0;
         double[] prev = look0;
         StringBuilder steps = new StringBuilder();
-        // A STIMULUS WINDOW: each iteration turns the real cursor, so the loop is what makes the
+        // STIMULUS: each iteration turns the real cursor, so the loop is what makes the
         // look move, and what it accumulates is the swept ANGLE — a sum over the steps, which no
         // record could carry. What it cannot see: how the look travelled inside one step.
         for (int i = 0; i < DECK_LOOK_TURNS; i++) {
@@ -2647,7 +2659,7 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         double[] anchor = clientPos();
         double bestMag = -1.0, bestWalkedYaw = 0.0, bestHeldYaw = 0.0;
         StringBuilder legs = new StringBuilder();
-        // FOUR STIMULUS LEGS whose result is an extremum: the largest yaw divergence across the
+        // STIMULUS: four legs whose result is an extremum — the largest yaw divergence across the
         // four directions. Each leg drives the body itself, and the quantity compared is a MAXIMUM
         // over legs, which is not a moment anything records. Every leg's re-seed IS awaited as a
         // link below. What this cannot see: a worse divergence inside a leg.
@@ -2670,6 +2682,9 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
             double[] p0 = clientPos();
             double[] s0 = {infoW0.x, infoW0.y, infoW0.z};
             try {
+                // STIMULUS: eight ticks of W, re-asserted each tick, are the walk this leg measures —
+                // the displacement between the p0 and p1 reads around it. The loop applies the input;
+                // it watches nothing and exits on nothing but its count.
                 for (int i = 0; i < 8; i++) {
                     bot().holdKey(Keyboard.KEY_W); // re-asserted per tick against key-state churn
                     bot().waitTicks(1);
@@ -2729,6 +2744,9 @@ public class VSCrewCaptureContractTest extends AbstractSharedVsClientTest {
         long stepMark = clientEvents().mark();
         ClientWindow stepWindow = ClientWindow.open(bot(), FRAME_STEP_WINDOW);
         try {
+            // STIMULUS: twenty ticks of held jump, re-asserted each tick, are the jump whose frames
+            // the open frame-step window summarises. Nothing is read inside the loop and nothing
+            // after it is asserted; the count only sets how long the input is applied.
             for (int i = 0; i < 20; i++) {
                 bot().holdKey(Keyboard.KEY_SPACE);
                 bot().waitTicks(1);

@@ -150,8 +150,9 @@ public class VSPilotStationDestructionTest extends AbstractSharedVsClientTest {
      * <p>red-witnessed: the never-thrusts verdict. The line the wait rewrite touched is the break
      * probe's own reply, an arrangement check typed as an assertion; the contract after it needs
      * BOTH of production's two defences broken
-     * — VS's {@code MixinChunk.post_removeTileEntity} no longer dropping the removed tile from the
-     * ship's controller set, AND {@code TileAdvancedFlightComputer.invalidate} no longer clearing the
+     * — VS's {@code MixinChunk#post_removeTileEntity} at {@code physo.onRemoveTileEntity(pos)} no
+     * longer dropping the removed tile from the ship's controller set, AND
+     * {@code TileAdvancedFlightComputer#invalidate} at {@code commandedVelocity = null} no longer clearing the
      * command channels — and then fails with "y1=174.19 y2=252.81". Either one broken alone stays
      * green, each defence sufficing on its own — 2026-09-28.</p>
      */

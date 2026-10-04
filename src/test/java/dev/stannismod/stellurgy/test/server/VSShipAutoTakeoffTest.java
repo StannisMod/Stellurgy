@@ -99,8 +99,10 @@ public class VSShipAutoTakeoffTest extends AbstractSharedServerTest {
         events.awaitField(declineMark, "auto_takeoff_declined", "ship", shipId,
                 "auto-takeoff must decline a blocked corridor", DECLINE_TICKS);
         String status = exec("stellurgytest space auto-takeoff 0 id " + shipId + " status");
+        // The bare verb: `engaged` is missing when the seat was not found (`seatFound:false`), and a
+        // default of false there would PASS this assertFalse about a craft nobody located.
         assertFalse("the autopilot announced a decline, so it must no longer be engaged: " + status,
-                Reply.of(status).boolOr("engaged", false));
+                Reply.of(status).bool("engaged"));
 
         // ---- CLIMB + ENTER leg: clear the slab, hop the ship just below the ceiling, engage, enter. ----
         assertTrue("slab clear failed", Reply.of(exec("stellurgytest fill 0 " + ((int) sx - 20) + " " + slabY + " " + ((int) sz - 20)

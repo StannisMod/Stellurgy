@@ -352,11 +352,15 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
      * absence would fail it. The live control for {@code gui_container_served} is the sibling
      * scenario below, which asserts the same seam recording a served container.</p>
      *
-     * <p>red-witnessed: with the satellite gate of {@code ItemOreScanner:85} removed, so an unbound
+     * <p>red-witnessed: with the satellite gate of {@code ItemOreScanner#onItemRightClick} at
+     * {@code if (satellite instanceof SatelliteOreMapping && satellite.getDimensionId() == worldIn.provider.getDimension())}
+     * removed, so an unbound
      * scanner opens its GUI: "an unbound ore scanner must never ask the server for a GUI; GUI
      * requests since the click: …", 2026-09-28. The same inversion first left this test GREEN while
-     * it counted SERVED containers: {@code GuiHandler:40} substitutes {@code null} for a satellite it
-     * cannot resolve, {@code ContainerOreMappingSatellite:23} dereferences it, and the exception
+     * it counted SERVED containers: {@code GuiHandler#getServerGuiElement} at {@code satellite = null}
+     * substitutes {@code null} for a satellite it cannot resolve,
+     * {@code ContainerOreMappingSatellite#ContainerOreMappingSatellite} at
+     * {@code inv.setSelectedSlot(-1)} dereferences it, and the exception
      * leaves the handler past the RETURN-only recorder — the crash this test's name excludes read as
      * "nothing asked". It counts requests now ({@code gui_container_requested}, recorded at HEAD).</p>
      */
@@ -467,7 +471,8 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
      * <p>The player is dropped to survival for the consumption half of the contract; the shared
      * reset puts the mode back for whoever runs next.</p>
      *
-     * <p>red-witnessed: with {@code ItemHovercraft}'s {@code spawnEntity} skipped on the block branch:
+     * <p>red-witnessed: with {@code ItemHovercraft#onItemRightClick} at
+     * {@code worldIn.spawnEntity(entityboat)} skipped on the block branch:
      * "a right-click at a block must reach the server and spawn the hovercraft into the world — no
      * `entity_joined_world` was recorded within 200 ticks", 2026-09-28. (A census of verdicts by call
      * pattern names {@code scenario().asserting(…)} here, which is a phase label; the first real
@@ -585,8 +590,8 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
      * hovercraft proves the item was in hand and the click was not dropped, so the silence that
      * follows is the ray trace's answer rather than the arrangement's.</p>
      *
-     * <p>red-witnessed: with {@code ItemHovercraft}'s empty-ray-trace branch spawning a craft at the
-     * player before it passes: "no hovercraft must be spawned on an empty ray-trace; entities that
+     * <p>red-witnessed: with {@code ItemHovercraft#onItemRightClick}'s empty-ray-trace branch (at
+     * {@code if (raytraceresult == null)}) spawning a craft at the player before it passes: "no hovercraft must be spawned on an empty ray-trace; entities that
      * joined the server world since the click: …", 2026-09-28.</p>
      */
     @Test
@@ -693,9 +698,9 @@ public class ItemRightClickClientGroupTest extends AbstractSharedClientE2ETest {
         long openOnClient = clientEvents().mark();
         bot().setKey(leftShift, true);
         try {
-            // The sneak is held across client ticks before the use, because the client publishes
-            // sneaking from its own tick; one connection delivers in order, so the server reads the
-            // sneak before the use packet that follows it.
+            // STIMULUS: the sneak is held across client ticks before the use, because the client
+            // publishes sneaking from its own tick; one connection delivers in order, so the server
+            // reads the sneak before the use packet that follows it.
             bot().waitTicks(6);
             bot().useItem();
             events.assertChain(openMark, "a sneak-right-click with the chip in hand must REACH the"

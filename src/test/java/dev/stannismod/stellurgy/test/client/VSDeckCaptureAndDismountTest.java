@@ -961,7 +961,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
                         + " measuring a body vanilla owns", DECK_LINK_BUDGET_TICKS);
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE;
-        // A WINDOW whose verdict is the MINIMUM height over its settled tail — a body that dipped
+        // WINDOW: from the seed link above to the last sample, whose verdict is the MINIMUM height
+        // over its settled tail — a body that dipped
         // and recovered is exactly the failure being looked for, so a last-sample read would report
         // the recovery and miss it. No record carries a minimum over a stretch of ticks. What this
         // cannot see: a dip inside one 2-tick sample.
@@ -1078,7 +1079,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         long rollMark = clientEvents.mark();
         StringBuilder traj = new StringBuilder();
         double settledMin = Double.MAX_VALUE, settledMax = -Double.MAX_VALUE;
-        // A WINDOW taking the RANGE over its settled tail: under a roll the claim is that the body
+        // WINDOW: from the roll mark to the last sample, taking the RANGE over its settled tail:
+        // under a roll the claim is that the body
         // stays within a band, which is a property of the stretch and not of any instant. What this
         // cannot see: an excursion inside one 2-tick sample.
         for (int i = 0; i < 22; i++) {
@@ -1207,6 +1209,9 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         // still after an inversion (0.27 rad/s measured in the sibling scenario below), and a bare
         // bar would be cleared by that residue with the controls dead.
         double omegaSettled = shipInfo().omega;
+        // STIMULUS: fifteen raw mouse deltas two ticks apart are the turn command itself; the loop
+        // applies the input and reads nothing. What it produced is judged after it — the cursor
+        // through its `flight_cursor` link, the hull's answer through the rate window below.
         for (int i = 0; i < 15; i++) {
             mouseDelta(60, 0);
             bot().waitTicks(2);
@@ -1298,6 +1303,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
 
         // Now, WHILE inverted, command a fresh turn. The ship must respond - its angular velocity must
         // rise - just as it does upright. If it stays at rest, the controls are dead at inversion.
+        // STIMULUS: twenty raw mouse deltas two ticks apart are the command; the loop applies the
+        // input and reads nothing, and what it produced is judged after it, as in the leg above.
         for (int i = 0; i < 20; i++) {
             mouseDelta(60, 0);
             bot().waitTicks(2);
@@ -1426,7 +1433,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         double yMin = Double.MAX_VALUE, yMax = -Double.MAX_VALUE;
         int captured = 0, camOn = 0;
         StringBuilder trace = new StringBuilder();
-        // A WINDOW that both COUNTS and takes RANGES: how many samples were captured with the deck
+        // WINDOW: from the stability mark to the last sample, one that both COUNTS and takes
+        // RANGES: how many samples were captured with the deck
         // camera on, and how far roll and height moved across them. Every one of those is a
         // property of the observation rather than of a moment, so no record could answer. What this
         // cannot see: a capture or a camera that flipped and returned inside one 4-tick sample.
@@ -1574,8 +1582,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
      * A body standing on a ship stands on the surface the renderer draws: parked (the control), and
      * hull-standing on a hovering, inverted ship (the subject).
      *
-     * <p>red-witnessed: with the hull-stand sweep's box ({@code ShipFrameTravel.hullStandTravel})
-     * centred on the SHIP's up rather than the world's — the subspace-aligned phantom: "the largest
+     * <p>red-witnessed: with the hull-stand sweep's box ({@code ShipFrameTravel#hullStandTravel} at
+     * {@code feet[0] - half, feet[1], feet[2] - half}) centred on the SHIP's up rather than the world's — the subspace-aligned phantom: "the largest
      * gap between the swept solid and the body's own box was 1.77 over 95 sweeps (… upY=-0.93)",
      * 2026-09-28. The two lines the wait rewrite touched are arrangements (the drop point is air, the
      * body starts falling).</p>
@@ -1629,6 +1637,8 @@ public class VSDeckCaptureAndDismountTest extends AbstractSharedVsClientTest {
         assertTrue("attitude hold must accept the past-vertical roll",
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
+        // WINDOW: between the two attitude reads, `upBefore` and `upY`, both printed in the gate
+        // below; the attitude is a value no record publishes, so the slew is read, not linked.
         bot().waitTicks(SKEW_ROLL_WINDOW_TICKS);
         ShipInfo info = shipInfo();
         double upY = info.upY();

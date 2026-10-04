@@ -245,7 +245,8 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * with the WRONG ship: without that leg "the id form was right" would be indistinguishable from
      * "any form would have been right here".</p>
      *
-     * <p>red-witnessed: with the teleport's transform write skipped ({@code VSBridge:1036-1037}), LEG 1
+     * <p>red-witnessed: with the teleport's transform write skipped ({@code VSBridge#teleportShip} at
+     * {@code ship.setPrevTickShipTransform(moved); ship.setShipTransform(moved)}), LEG 1
      * fails at "…and it must report where A IS now, not where it was built (posY=153.76)", 2026-09-28.
      * The wave removed the advance before LEG 1's reads, and what that removal risks is a STALE read —
      * the posY verdict's claim; the "still answers" verdict before it stayed green on that inversion,
@@ -372,12 +373,16 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * the id this scenario's own assembly recorded. Nothing else changed.
      *
      * <p>red-witnessed: one inversion per rung, 2026-09-28, each red at its own verdict with the rungs
-     * before it green. LIFT — {@code MixinTileAdvancedFlightComputer}'s linear force multiplied by
-     * {@code 0.0}: "maxClimb=0.0". YAW — its raw-rate branch leaving {@code angAccel} null: "min |quat
+     * before it green. LIFT — {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
+     * {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}, the linear force, multiplied by
+     * {@code 0.0}: "maxClimb=0.0". YAW — its raw-rate branch ({@code MixinTileAdvancedFlightComputer#onPhysicsTick}
+     * at {@code angAccel = new double[]}) leaving {@code angAccel} null: "min |quat
      * dot| over the window=1.0". ATTITUDE HOLD — the attitude error passed to
-     * {@code attitudeHoldAngAccel} as {@code 0.0}, a hold that only brakes: "|dot to target|
-     * before=0.707… after 120 ticks=0.7986…". FREE FLIGHT — {@code TileAdvancedFlightComputer
-     * .setPilotInput} discarding its input: "max climb over the window=0.0, last=-92.2". That last
+     * {@code attitudeHoldAngAccel} ({@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
+     * {@code angAccel = FreeFlightPhysics.attitudeHoldAngAccel(aa.x, aa.y, aa.z, angle,}) as
+     * {@code 0.0}, a hold that only brakes: "|dot to target|
+     * before=0.707… after 120 ticks=0.7986…". FREE FLIGHT — {@code TileAdvancedFlightComputer#setPilotInput}
+     * at {@code this.pilotInput = input} discarding its input: "max climb over the window=0.0, last=-92.2". That last
      * inversion first left the method GREEN: the rung accepted any displacement, and a hull with no
      * throttle falls. It asserts a climb now.</p>
      */
@@ -546,7 +551,9 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
         // re-send added only traffic.
         String ffCmd = exec("stellurgytest vs ff-input-by-id 0 " + shipId
                 + " 0 1 0 0 0 0"); // throttleVertical = full up
-        if (!Reply.of(ffCmd).bool("afcResolved")) {
+        // `afcResolved` is missing only from the "world not loaded" reply, and
+        // absence is the answer: no computer took the throttle, failed below with that reply.
+        if (!Reply.of(ffCmd).boolOr("afcResolved", false)) {
             // Read only on this branch: what the ship record says at the moment the computer could
             // not be found, which separates "never found" from "it left".
             fail("the throttle must reach this ship's own flight computer: " + ffCmd
@@ -625,8 +632,8 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * Migrated from {@code VSShipSeatDriveE2ETest}: the server-side bisection of the seat &rarr; AFC
      * &rarr; force path. Body unchanged apart from the ship oracle.
      *
-     * <p>red-witnessed: with {@code TileAdvancedFlightComputer.setPilotInput} discarding its input,
-     * this fails at the climb with "maxClimb=0.0" (the seat still reports {@code afcResolved:true}, so
+     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#setPilotInput} at
+     * {@code this.pilotInput = input} discarding its input, this fails at the climb with "maxClimb=0.0" (the seat still reports {@code afcResolved:true}, so
      * the red names the computer's intake, not the seat's link) — 2026-09-28.</p>
      */
     @Test
@@ -708,9 +715,11 @@ public class VSGroundFlightGroupTest extends AbstractSharedVsClientTest {
      * disprove. The identity-keyed form is {@code find-seat <dim> id <shipUuid>}.</p>
      *
      * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE RIDER CLIMBS — the client seat
-     * dummy no longer glued to its ship ({@code EntityDummy:381} made server-only): "the
+     * dummy no longer glued to its ship ({@code EntityDummy#onUpdate} at
+     * {@code setPosition(worldSeat[0], worldSeat[1], worldSeat[2])} made server-only): "the
      * CLIENT-rendered rider must climb with the ship … client=14.78 server=24.25". THE CAMERA STAYS
-     * LOCKED — the ship camera-pin lines ({@code KeyBindings:696-699}) removed: "camYawBefore=0.0
+     * LOCKED — the ship camera-pin lines ({@code KeyBindings#handleShipPilotInput} at
+     * {@code player.rotationYaw = euler[0]} through {@code prevRotationPitch}) removed: "camYawBefore=0.0
      * camYawAfter=180.0". The two waits before them are arrangement links (the spawn, the client
      * standing at the build site).</p>
      */

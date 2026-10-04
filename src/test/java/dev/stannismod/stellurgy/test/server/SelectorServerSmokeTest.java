@@ -177,6 +177,7 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
         java.util.List<Double> own = new java.util.ArrayList<>();
         for (String entity : Reply.of(near).objectArray("entities")) {
             Reply e = Reply.of(entity);
+            // Read bare: the producer always writes `id` on every listed entity.
             if (!othersIds.contains(e.integer("id"))) {
                 own.add(Math.hypot(e.number("x") - centreX, e.number("z") - centreZ));
             }
@@ -274,7 +275,9 @@ public class SelectorServerSmokeTest extends AbstractSharedServerTest {
      * {@code if (body.isMoon())} made false (a moon projected through the planet law), this fails
      * with "a planet centred in the hologram must carry its moons 0.1 + moonViewUnits / 100 out,
      * slack 2.16937643464764E-4 (expected [0.0, 1.6], projected [0.0, 0.10256955525784028]): …
-     * arrays first differed at element [1]; expected:&lt;1.6&gt; but was:&lt;0.10256955525784028&gt;".</p>
+     * arrays first differed at element [1]; expected:&lt;1.6&gt; but was:&lt;0.10256955525784028&gt;".
+     * Re-taken 2026-10-04 on the shared server (class run, this scenario last): the same text, the
+     * moon projected at 0.10256955291540637.</p>
      */
     @Test
     public void theHologramCentredOnAPlanetProjectsItsMoonAsItProjectedLunaAt150() throws Exception {

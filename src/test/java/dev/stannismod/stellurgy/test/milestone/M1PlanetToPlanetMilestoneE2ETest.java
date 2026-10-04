@@ -1601,11 +1601,14 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             int slotDim = Reply.of("one ledgered ship", ship).integer(FEED_SLOT_DIM);
             for (String sky : reply.objectArray(FEED)) {
                 Reply one = Reply.of("one cell's sky", sky);
+                // Read bare: the producer always writes `slotDim` on a feed entry, so a refusal here
+                // is a broken probe, not a sky without the body.
                 if (one.integer(FEED_SLOT_DIM) != slotDim) {
                     continue;
                 }
                 for (String body : one.objectArray(FEED_BODIES)) {
                     Reply b = Reply.of("one sky body", body);
+                    // ...and the producer always writes `dim` on each of the feed's bodies.
                     if (b.integer(BODY_DIM) == dim) {
                         return new long[]{(long) b.number(BODY_DISTANCE), (long) b.number(FEED_SHELL)};
                     }
@@ -1917,12 +1920,13 @@ public class M1PlanetToPlanetMilestoneE2ETest {
             int slotDim = Reply.of("one ledgered ship", ship).integer(FEED_SLOT_DIM);
             for (String sky : reply.objectArray(FEED)) {
                 Reply one = Reply.of("one cell's sky", sky);
+                // Read bare: the producer always writes `slotDim` on a feed entry.
                 if (one.integer(FEED_SLOT_DIM) != slotDim) {
                     continue;
                 }
                 for (String body : one.objectArray(FEED_BODIES)) {
-                    // The producer writes the flag on every element, so its absence is a broken
-                    // probe and not a body that is no descend target.
+                    // The producer always writes the flag on every element, so its absence is a
+                    // broken probe and not a body that is no descend target.
                     if (Reply.of("one sky body", body).bool(FEED_DESCEND)) {
                         out.add(body);
                     }

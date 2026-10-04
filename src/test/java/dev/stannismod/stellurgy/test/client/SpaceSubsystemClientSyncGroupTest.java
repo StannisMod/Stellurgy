@@ -181,7 +181,9 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
      * <p>red-witnessed: both reads of the hold, 2026-09-28. THE COUNT — one transfer to the overworld
      * about a second after the settle's health probe, i.e. inside the hold window: "a client that
      * arrived in a slot dim must STAY there; a dimension change during the hold is it being thrown
-     * out". THE END STATE — the space-dim guard ({@code PlanetEventHandler:249}) run in every dimension
+     * out". THE END STATE — the space-dim guard ({@code PlanetEventHandler#spaceDimensionGuard} at
+     * {@code event.world.provider.getDimension() != StellurgyConfiguration.getCurrentConfig().spaceDimId})
+     * run in every dimension
      * but 0 and evicting a body after 320 ticks in the world, which landed after the window's log read:
      * "the client must still be in the slot dim two seconds later expected:&lt;14&gt; but
      * was:&lt;0&gt;". Evicting at once reddened the ARRIVAL link instead.
@@ -312,7 +314,9 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
      *
      * <p>red-witnessed: the CONTROL and the arrival link, 2026-09-28 — the control is the verdict the
      * wait rewrite touched; the contents pins after it are not witnessed and were not touched.
-     * With {@code SystemBodiesProducer.broadcastTo} sending every cell's sky to every player — the old
+     * With {@code SystemBodiesProducer#broadcastTo} at
+     * {@code PacketHandler.sendToPlayer(PacketSystemBodiesSync.forDims(one, oneSky), player)} sending
+     * every cell's sky to every player — the old
      * {@code sendToAll} — this fails at the control: "a player who is not in the cell's world must not
      * be sent its sky". With it sending nothing: "no `system_bodies_received` naming slot dim 3 was
      * recorded within 400 ticks".</p>
@@ -504,7 +508,7 @@ public class SpaceSubsystemClientSyncGroupTest extends AbstractSharedClientE2ETe
      * load again. {@code vs-assemble} registers a fresh slot on every call, so nothing another scenario
      * here built is in it.</p>
      *
-     * <p>red-witnessed: with {@code SpaceSlotPool.unload} ({@code SpaceSlotPool:296}) saving nothing
+     * <p>red-witnessed: with {@code SpaceSlotPool#unload} at {@code world.saveAllChunks(true, null)} saving nothing
      * before the slot goes: "the ship must RE-LOAD live after the slot rebind — no `ship_usable`
      * carrying dim = 14 was recorded within 300 ticks", 2026-09-28. The two verdicts before it are
      * the arrangement's: the ship spawned, and it is in the pool world's registry.</p>

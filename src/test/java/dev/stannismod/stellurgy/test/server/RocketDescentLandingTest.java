@@ -113,8 +113,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     }
 
     /**
-     * <p>red-witnessed: with the descent gate's {@code setInFlight(true)} ({@code EntityRocket:1841})
-     * removed: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
+     * <p>red-witnessed: with the descent gate's {@code setInFlight(true)} ({@code EntityRocket#onUpdate}
+     * at {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}) removed: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
      * ticks", 2026-09-28.</p>
      */
     @Test
@@ -218,7 +218,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /**
      * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
-     * ({@code EntityRocket:2153}) removed: "no `rocket_landed` carrying e = … was recorded within 100
+     * ({@code EntityRocket#onUpdate} at
+     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this))}) removed: "no `rocket_landed` carrying e = … was recorded within 100
      * ticks", 2026-09-28.</p>
      */
     @Test

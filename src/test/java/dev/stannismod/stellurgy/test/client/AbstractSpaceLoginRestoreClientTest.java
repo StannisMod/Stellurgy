@@ -1863,7 +1863,9 @@ public abstract class AbstractSpaceLoginRestoreClientTest {
         String found = exec("stellurgytest space find-afc " + slotDim + " " + durable);
         // Its flight computer's own block position rides along. The ledger's id and the VS ship uuid
         // are DIFFERENT identities, and the by-id command verbs resolve the second; this is how a
-        // caller holding the first reaches that ship's computer.
+        // caller holding the first reaches that ship's computer. `found` is missing only from the
+        // probe's error reply (world or ledger not ready), and absence is the answer there: it fails
+        // this same assertion, with that reply printed.
         assertTrue("the settled ship's flight computer must be locatable in its slot (dim " + slotDim
                         + "), and must be the one whose own durable id matches the ledger's: " + found,
                 Reply.of(found).boolOr("found", false) && readBool(found, "afcFound"));

@@ -132,7 +132,8 @@ public class RocketEventPayloadContractTest extends AbstractSharedServerTest {
      * references.</p>
      *
      * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
-     * ({@code EntityRocket:2153}) removed: "no `rocket_landed` carrying e = … was recorded within 100
+     * ({@code EntityRocket#onUpdate} at
+     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this))}) removed: "no `rocket_landed` carrying e = … was recorded within 100
      * ticks", 2026-09-28. The payload verdicts after it read the recorder's last landing and need no
      * inversion of their own to be reached: they are the same event's fields.</p>
      */

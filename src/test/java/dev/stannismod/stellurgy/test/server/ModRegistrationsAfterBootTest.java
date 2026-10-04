@@ -121,9 +121,11 @@ public class ModRegistrationsAfterBootTest extends AbstractSharedServerTest {
         int entityId = Reply.of("stellurgytest entity spawn", spawn).integer("entityId");
 
         EntityState info = EntityState.byId(cmd -> join(client().execute(cmd)), 0, entityId);
-        // Asked of the `entityClass` FIELD, not of the whole reply.
-        assertTrue("entity class must be EntityHoverCraft: " + info.raw(),
-                info.entityClass().contains("EntityHoverCraft"));
+        // Asked of the `entityClass` FIELD by its simple name: `contains` also accepted any subclass
+        // or package component carrying those letters.
+        info.entityClass();
+        assertEquals("entity class must be EntityHoverCraft: " + info.raw(), "EntityHoverCraft",
+                Reply.of("stellurgytest entity state", info.raw()).simpleClassName("entityClass"));
     }
 
     private static String join(java.util.List<String> resp) {

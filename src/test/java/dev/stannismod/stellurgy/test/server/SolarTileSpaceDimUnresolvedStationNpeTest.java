@@ -186,6 +186,12 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
      * <p>The sliver is asked of the reverse lookup DIRECTLY as well as through the panel's power: on
      * this shared server a sibling scenario may have put a station orbiting the overworld into the
      * neighbouring cell, and then a regressed lookup would still hand the panel sunlight.</p>
+     *
+     * <p>red-witnessed: 2026-10-04, with {@code SpaceObjectManager#getSpaceStationFromBlockCoords} at
+     * {@code int x = Math.round((pos.getX() - stationSize / 2) / (2f * stationSize));} put back to its
+     * pre-fix form without the offset, this fails with "the +X perimeter sliver (worldX=-1020) must map
+     * back to its own station 1 — the reverse lookup subtracts the stationSize/2 spawn offset: …
+     * expected:&lt;1&gt; but was:&lt;null&gt;".</p>
      */
     @Test
     public void perimeterSliverSolarOnRealStationGeneratesPower() throws Exception {
@@ -206,9 +212,12 @@ public class SolarTileSpaceDimUnresolvedStationNpeTest extends AbstractSharedSer
         int sliverX = gridX * 2048 + 1024 + 4;
 
         String atSliver = join(client().execute("stellurgytest station at " + sliverX + " " + y + " " + spawnZ));
+        // `station at` writes `stationAtPos` as null when no station owns the coordinates, and
+        // absence is the answer there: "no station", the exact regression this pins — so it must
+        // fail as the contract, not as a refusal about the reply.
         assertEquals("the +X perimeter sliver (worldX=" + sliverX + ") must map back to its own station "
                         + stationId + " — the reverse lookup subtracts the stationSize/2 spawn offset: " + atSliver,
-                String.valueOf(stationId), Reply.of("stellurgytest station at", atSliver).text("stationAtPos"));
+                String.valueOf(stationId), Reply.of("stellurgytest station at", atSliver).textOr("stationAtPos", null));
 
         long controlDelta = powerDeltaOver100Ticks(spawnX, y, spawnZ);
         long sliverDelta = powerDeltaOver100Ticks(sliverX, y, spawnZ);

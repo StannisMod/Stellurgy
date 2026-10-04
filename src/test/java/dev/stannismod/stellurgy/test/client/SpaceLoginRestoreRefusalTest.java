@@ -36,7 +36,8 @@ public class SpaceLoginRestoreRefusalTest extends AbstractSpaceLoginRestoreClien
      * produced by an oracle that answers "aboard" unconditionally, or by a restore that drags every
      * logging-in player to the nearest ship.</p>
      *
-     * <p>red-witnessed: with the login hook ({@code SpaceEventHandler:157}) giving a player who has no
+     * <p>red-witnessed: with the login hook ({@code SpaceEventHandler#onPlayerLoadFromFile} at
+     * {@code ShipAboardTag.Aboard aboard = ShipAboardTag.of(player)}) giving a player who has no
      * aboard record a standing one on the first settled ship in the ledger — the restore that drags
      * everyone aboard: "a player who was never aboard must come back where vanilla puts him …
      * expected:&lt;0&gt; but was:&lt;3&gt;", 2026-09-28. The line before it is an arrangement.</p>

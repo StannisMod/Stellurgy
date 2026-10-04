@@ -136,6 +136,7 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
         String bodies = exec("stellurgytest space bodies");
         String row = null;
         for (String ship : Reply.of("stellurgytest space bodies", bodies).objectArray("ships")) {
+            // Read bare: the producer always writes `ship` on every ledger row.
             if (durableId.equals(Reply.of(ship).text("ship"))) {
                 row = ship;
             }
@@ -154,6 +155,7 @@ public class VSShortJumpCrossesDirectlyTest extends AbstractSharedServerTest {
         int descendTargets = 0;
         for (String body : Reply.of("one ship's cell", row).objectArray("cellBodies")) {
             Reply b = Reply.of("one cell body", body);
+            // Read bare: the producer always writes `descendTarget` on every cell body.
             if (b.bool("descendTarget")) {
                 descendTargets++;
                 long margin = (long) b.number("distance") - (long) b.number("shellRadius");

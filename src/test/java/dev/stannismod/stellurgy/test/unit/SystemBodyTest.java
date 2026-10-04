@@ -87,7 +87,8 @@ public class SystemBodyTest {
      * A moon shares its parent's cell NAME and rides its parent's frame, while keeping its own live
      * offset inside it — that is what makes a planet-and-its-moons one destination.
      *
-     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#inCellOffsetAt} at {@code BlockDelta raw = offsetLaw.offsetAt(tick)} reading the offset law at
+     * <p>red-witnessed: 2026-09-30, with {@code SystemBody#inCellOffsetAt} at {@code offsetLaw.offsetAt(tick)} (then bound to a local
+     * {@code raw}, since returned directly) reading the offset law at
      * tick 0 instead of the tick asked, this fails with "a moon's offset inside its parent's cell is
      * live. Actual: BlockDelta[120000,0,0]" — 300 units at 400 blocks each, the fixture printed.</p>
      */

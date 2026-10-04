@@ -86,7 +86,7 @@ public class VSCrewRidesRollingDeckTest extends AbstractSharedVsClientTest {
     }
 
     /**
-     * <p>red-witnessed: with {@code ShipFrameTravel.followShipPoses} (the pass that re-images a held
+     * <p>red-witnessed: with {@code ShipFrameTravel#followShipPoses} (the pass that re-images a held
      * body at its deck point after the craft moves) doing nothing: "the crew member must ride the
      * deck, not the world: he moved 1.95 relative to the ship but only 0.37 in the world",
      * 2026-09-28. The lines the wait rewrite touched are the arrangement links before the roll.</p>

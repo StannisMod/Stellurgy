@@ -305,7 +305,8 @@ public class TelescopeRegionScanServerTest extends AbstractSharedServerTest {
 
     /**
      * <p>red-witnessed: with the survey written into NEITHER of the two places a save takes it from —
-     * {@code TileObservatory.writeToNBT} ({@code :480}) and {@code writeNetworkData} ({@code :426}),
+     * {@code TileObservatory#writeToNBT} at {@code nbt.setTag("regionScan", scan)} and
+     * {@code TileObservatory#writeNetworkData} at {@code nbt.setTag("regionScan", scan)},
      * which {@code TileMultiBlock.writeToNBT} also calls: "the survey did not come back with the
      * chunk: … scanning:false", 2026-09-28. Dropping only the {@code writeToNBT} copy stays GREEN —
      * the network copy lands in the same save compound.</p>
