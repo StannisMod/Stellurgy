@@ -772,9 +772,11 @@ public class RocketLaunchDepthTest extends AbstractSharedServerTest {
      * below the local ratio 84.25 on a body of g 0.166).</p>
      *
      * red-witnessed: with {@code StatsRocket#getThrustToWeightRatio} at
-     * {@code float localWeight = weight * effectiveGravityMultiplier(gravitationalMultiplier)} made
-     * {@code weight * 1f}, this fails at the verdict, the craft refused at one gee (2026-10-03,
-     * {@code logs/bugs-a-601-red1.log}).
+     * {@code float localWeight = getWeightNewtons(gravitationalMultiplier);} weighing at one gee instead,
+     * this fails at the verdict, the craft refused at one gee (2026-10-03,
+     * {@code logs/bugs-a-601-red1.log}) — taken on the pre-merge form of that line, which multiplied
+     * the craft's weight by the effective gravity itself; it now asks the SI weight of the mass, which
+     * applies the same multiplier.
      * red-witnessed: with {@code EntityRocket#launch} at
      * {@code this.stats.canLaunch(DimensionManager.getInstance()} handed {@code 1f} instead of the
      * world's gravity, this fails at the verdict the same way (2026-10-03,

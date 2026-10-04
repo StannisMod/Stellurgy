@@ -285,9 +285,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * <p>red-witnessed: one inversion per verdict, 2026-09-28. THE HUD — {@code KeyBindings#freeFlightHudLines}
      * returning no lines for a tier-2 craft: "a seated tier-2 pilot must get
      * a Free Flight HUD at all — no `ff_hud` carrying a non-empty HUD line". THE LIFT — the linear
-     * force ({@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
-     * {@code fx = a[0] * mass; fy = a[1] * mass; fz = a[2] * mass}) multiplied by 0: "must lift the ship: 155.0
-     * -&gt; 152.82". THE SPEED READOUT — the speed line ({@code KeyBindings#freeFlightHudLines} at
+     * force ({@code TileAdvancedFlightComputer#onPhysicsTick} at
+     * {@code force.set(command.force()).mul(k);}) multiplied by 0: "must lift the ship: 155.0
+     * -&gt; 152.82" — taken on the pre-actuator form, when the controller was a mixin and its force
+     * was the wanted acceleration times the mass; the force is now the hull's allocated command, at the
+     * line cited. THE SPEED READOUT — the speed line ({@code KeyBindings#freeFlightHudLines} at
      * {@code I18n.format("msg.ff.hud.speed", String.format("%.1f", state.speed() * 20.0))}) printing 0 for tier
      * 2: "no `ff_hud` whose latest line carries a non-zero speed readout"; that inversion first left
      * the test GREEN, because the check accepted any non-zero number anywhere in the HUD and the
@@ -413,11 +415,12 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
      * reference is pinned where the ship is, which brakes any residue. Measured the same day: the rate
      * is already near zero on the tick the cursor reaches the dead-zone.</p>
      *
-     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer#onPhysicsTick} forbidden any angular
-     * acceleration against the current spin — spin-up allowed, braking not — this fails with "its
-     * worst rate over the hold was 1.9025…", every one of the ten readings the same: nothing else in
-     * a cell touches it. The identical inversion left the overworld form of this verdict GREEN —
-     * 2026-09-28.</p>
+     * <p>red-witnessed: with the controller forbidden any angular acceleration against the current spin
+     * — spin-up allowed, braking not — this fails with "its worst rate over the hold was 1.9025…",
+     * every one of the ten readings the same: nothing else in a cell touches it. The identical
+     * inversion left the overworld form of this verdict GREEN — 2026-09-28. Taken on the pre-actuator
+     * form, when the controller was a mixin; the torque it applies now stands in
+     * {@code TileAdvancedFlightComputer#onPhysicsTick} at {@code torque.set(command.torque()).mul(k);}.</p>
      */
     @Test
     public void aCentredCursorStopsTheShipTurningWhereNoAirCanDoItForHim() throws Exception {
@@ -862,10 +865,11 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
     /**
      * A parked, unmanned ship holds its altitude instead of sinking.
      *
-     * <p>red-witnessed: with {@code MixinTileAdvancedFlightComputer#onPhysicsTick} at
-     * {@code gx = g.x(); gy = g.y(); gz = g.z()}, the gravity feed-forward, multiplied
+     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#onPhysicsTick} at
+     * {@code gx = g.x(); gy = g.y(); gz = g.z();}, the gravity feed-forward, multiplied
      * by {@code 0.0} — the original defect — this fails with "its vertical velocity peaked at
-     * -0.1633 blk/s", drift -1.33 blocks over the window — 2026-09-28.</p>
+     * -0.1633 blk/s", drift -1.33 blocks over the window — 2026-09-28, taken on the pre-actuator form,
+     * when the same feed-forward line lived in the controller mixin.</p>
      */
     @Test
     public void aStationKeepingShipHoldsAltitudeInsteadOfSinking() throws Exception {
@@ -1387,7 +1391,10 @@ public class VSShipFlightTelemetryTest extends AbstractSharedVsClientTest {
 
     /**
      * The deadline of a LINK on a record either side writes about the readout scenario's craft — a
-     * naming, a flight model, a mount, a readout's arrival. Expiry means it never came.
+     * naming, a flight model, a mount, a readout's arrival. Expiry means it never came. Measured
+     * 2026-10-04, server ticks from each link's mark to its record: naming 4, first model 6, the
+     * client's mount 53 (probe round trips included), first readout one tick after the mount, the
+     * dismount 1 — the slowest is about a quarter of the budget.
      */
     private static final int READOUT_LINK_TICKS = 200;
 

@@ -38,6 +38,7 @@
     "MixinVSShipCrossingOpsEvents",
     "MixinShipLedgerEvents",
     "MixinShipMassTriggerEvents",
+    "MixinFlightComputerUnmannedMode",
     "MixinShipInertiaWriterEvents",
     "MixinBeaconRegistryEvents",
     "MixinBeaconRegistryWrites",

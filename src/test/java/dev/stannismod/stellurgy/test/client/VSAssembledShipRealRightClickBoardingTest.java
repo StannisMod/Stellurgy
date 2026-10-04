@@ -433,12 +433,18 @@ public class VSAssembledShipRealRightClickBoardingTest extends AbstractSharedVsC
      */
     private static final float[] AIM_PITCHES = {55.0F, 65.0F, 75.0F, 45.0F, 85.0F};
 
-    /** How many stand-and-aim passes the edit arrangement makes against a hull that is still settling. */
+    /**
+     * How many stand-and-aim passes the edit arrangement makes against a hull that is still settling.
+     * Measured 2026-10-04: both edit legs found a deck block on the FIRST pass; the rest is room for a
+     * hull still settling when the aim begins.
+     */
     private static final int AIM_ATTEMPTS = 40;
 
     /**
      * A LINK budget for one discrete record — a spawn, a load, a slot write, a break or a placement
-     * standing on the server — in ticks. Its expiry means the thing never happened.
+     * standing on the server — in ticks. Its expiry means the thing never happened. Measured
+     * 2026-10-04, server ticks from each link's stimulus to its record: the ship usable 3 and 52 (two
+     * runs), the given stone in the slot 7, the break 12, the placement 6.
      */
     private static final int LINK_BUDGET_TICKS = 200;
 

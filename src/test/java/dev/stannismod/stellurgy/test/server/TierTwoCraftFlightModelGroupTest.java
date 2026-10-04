@@ -398,9 +398,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * <p>Contract: this fails if production breaks the contract that cargo lowers a craft's
      * acceleration and never its force.</p>
      *
-     * <p>red-witnessed: {@code ShipHullMass#addContents} at {@code double held = dev.stannismod.stellurgy.util.WeightEngine.INSTANCE.getTEWeight(tile);} (a hull's contents weighed at zero) fails "the flight
+     * <p>red-witnessed: {@code ShipHullMass#addContents} at {@code double held = dev.stannismod.stellurgy.Stellurgy.weights().getTEWeight(tile);} (a hull's contents weighed at zero) fails "the flight
      * computer must weigh the cargo that was stowed aboard — the readout's mass must GROW by it" with
-     * no heavier model inside 200 ticks, 2026-09-30</p>
+     * no heavier model inside 200 ticks, 2026-09-30 — taken on the pre-merge form of that line, which
+     * read the table through the engine's former singleton; the line is otherwise unchanged</p>
      * <p>red-witnessed: {@code ShipReadout#of} at {@code a[v][e.ordinal()][d.ordinal()] = views[v].authority(d, e);} (each authority scaled by the structural share of the
      * mass) fails "cargo must not change the craft's surge force" with empty 4 905 000 N, laden
      * 4 044 474 N, 2026-09-30</p>
@@ -945,9 +946,10 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * whole fixture. So this separates the two models without pinning the table's exact numbers,
      * which are balance and may be tuned.</p>
      *
-     * <p>red-witnessed: with {@code StellurgyBlockMass.of} ({@code StellurgyBlockMass#of} at {@code return WeightEngine.INSTANCE.getWeight(asItem);}, read by both the hull pass
+     * <p>red-witnessed: with {@code StellurgyBlockMass.of} ({@code StellurgyBlockMass#of} at {@code return Stellurgy.weights().getWeight(asItem);}, read by both the hull pass
      * and the per-block path) answering 1.0 for every block, the verdict fails — "recorded mass is
-     * 35.0 kg, below the 125000.0 kg of iron deck" — 2026-09-29.</p>
+     * 35.0 kg, below the 125000.0 kg of iron deck" — 2026-09-29, taken on the pre-merge form of that
+     * line, which read the table through the engine's former singleton.</p>
      */
     @Test
     public void anAssembledShipWeighsWhatTheBlockTableSays() throws Exception {
@@ -1047,7 +1049,11 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      */
     private static final double FELL = 4.0;
 
-    /** The window each leg of the Flight Assist scenario is watched over, in server ticks. */
+    /**
+     * The window each leg of the Flight Assist scenario is watched over, in server ticks. Measured
+     * 2026-10-04: held drift 0.0 and a released fall of 85.4 blocks in 61 ticks — twenty times
+     * {@link #FELL}, and still short of the hundred blocks of air under {@link #RELEASE_ALTITUDE}.
+     */
     private static final int ASSIST_SAMPLE_TICKS = 60;
 
     /**
@@ -1061,9 +1067,9 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
     /**
      * How wide a ratio band counts as agreement, as a factor either side of {@link #LOW_GRAVITY}. It
      * refuses everything the scenario exists to catch: an unscaled field lands at 1.0, twice the upper
-     * bound, and a multiplier applied twice lands at 0.0625, half the lower one. The measured ratio is
-     * the multiplier itself (0.2500, 2026-09-29); the slack is for the call-apart reads, not for the
-     * physics.
+     * bound, and a multiplier applied twice lands at 0.0625, half the lower one. The measured ratio
+     * sits near the multiplier — 0.2500 on 2026-09-29, 0.2134 and 0.2137 on two runs of 2026-10-04 in
+     * the shared world; the slack is for the call-apart reads, not for the physics.
      */
     private static final double RATIO_SLACK = 2.0;
 
@@ -1102,7 +1108,11 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      */
     private static final double DRIVE_MIN_TRAVEL = 3.0;
 
-    /** The window each leg of the cell scenario is watched over, in server ticks. */
+    /**
+     * The window each leg of the cell scenario is watched over, in server ticks. Measured 2026-10-04:
+     * the released craft sank 0.0 and the driven one travelled 7.91 blocks in 41 ticks, against the
+     * {@link #DRIVE_MIN_TRAVEL} of 3.0 the control needs.
+     */
     private static final int CELL_SAMPLE_TICKS = 40;
 
     /**
@@ -1291,6 +1301,14 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
      * assembled in the cell with its scaffolding removed, "This one moved 64.53 blocks vertically in 41
      * ticks", 2026-09-30. With the scaffolding left in place that break stayed GREEN — sank 1.0 and
      * stopped on the launchpad — which is why the arrangement removes it.</p>
+     *
+     * <p>The release is a premise, linked on the branch the flight computer took ({@code unmanned_mode},
+     * a test mixin at that branch): in a cell a HELD craft is as still as a released one and cancels any
+     * field it is given, so without the link a broken release would leave this verdict unable to fail.</p>
+     *
+     * <p>red-witnessed: with {@code TileAdvancedFlightComputer#update} at {@code if (!flightAssistEnabled)} never taken,
+     * the scenario stops at that premise — "no `unmanned_mode` released, for this craft's flight
+     * computer … within 200 ticks" — 2026-10-04.</p>
      */
     @Test
     public void aReleasedCraftInACellKeepsItsAltitude() throws Exception {
@@ -1339,8 +1357,27 @@ public class TierTwoCraftFlightModelGroupTest extends AbstractSharedServerTest {
 
         // Release it: Flight Assist off is what hands an unpiloted craft to the field, whatever the
         // field turns out to be. Over a planet this is what makes it fall.
+        // In a cell the release cannot be SEEN in the craft's motion — a held craft is as still as a
+        // released one — and a held craft would cancel any field the cell were wrongly given, so the
+        // stillness below would be true for the wrong reason. So the release is linked on the branch
+        // the flight computer TOOK, recorded by a test mixin at that branch, for this craft's own
+        // computer, from a mark taken before the command.
+        Reply model = Reply.of(exec("stellurgytest vs flight-model-by-id " + cellDim + " " + shipId));
+        requireArranged("the craft must resolve its own flight computer, whose decision is read: "
+                + model, model.bool("found"));
+        String afcX = String.valueOf(model.integer("afcX"));
+        String afcY = String.valueOf(model.integer("afcY"));
+        String afcZ = String.valueOf(model.integer("afcZ"));
+        long releaseMark = events.markInstrumented();
         Released craft = new Released(cellDim, shipId);
         release(craft);
+        ArrangementFailure.arranged(() -> events.awaitMatching(releaseMark, "unmanned_mode",
+                reply -> Events.anyRecordHasAll(reply, "mode", "released", "afcX", afcX, "afcY", afcY,
+                        "afcZ", afcZ),
+                "released, for this craft's flight computer at " + afcX + "," + afcY + "," + afcZ,
+                "the craft's flight computer must take the release branch before its stillness can"
+                        + " say anything about the field — a held craft cancels any field it is given",
+                LINK_BUDGET_TICKS));
 
         // --- the subject: released, over nothing, it must keep its altitude ------------------------
         ShipInfo atRelease = ShipInfo.byId(this::exec, cellDim, shipId);

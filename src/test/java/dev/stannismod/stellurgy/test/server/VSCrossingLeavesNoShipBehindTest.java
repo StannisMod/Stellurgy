@@ -488,6 +488,9 @@ public class VSCrossingLeavesNoShipBehindTest extends AbstractSharedServerTest {
     /**
      * A craft is built, dropped, and fetched back: ASSEMBLED, then UNLOADED, then LOADED — each once.
      *
+     * <p>red-witnessed: with {@code WorldServerShipManager#spawnNewShips} at
+     * {@code noteLifecycle(toSpawn, spawnData.cause);} noting every spawn twice and as ASSEMBLED, this fails
+     * with "must be announced as ASSEMBLED exactly once", 2026-09-29.</p>
      * <p>red-witnessed: with the UNLOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at
      * {@code noteLifecycle(physicsObject.getShipData(), ShipLifecycleEvent.Cause.UNLOADED);}) removed, "dropping the ship object must be announced"
      * fails with no such record within 200 ticks; with the LOADED note ({@code WorldServerShipManager#loadAndUnloadShips} at
