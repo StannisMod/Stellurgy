@@ -63,4 +63,20 @@ public final class TravelPassMemory {
         reseatPassMax = 0.0;
         return max;
     }
+
+    /** Bodies the DECK FRAME's pose pass has re-imaged since {@link #takeDeckFrameReseats}; the
+     *  travel resolver's pass returns its own count, the deck frame's returns nothing. */
+    private int deckFrameReseats;
+
+    /** Count one body the deck frame's pass re-imaged. */
+    public void countDeckFrameReseat() {
+        deckFrameReseats++;
+    }
+
+    /** The deck frame's count since the last call, and reset — read once per pass. */
+    public int takeDeckFrameReseats() {
+        int n = deckFrameReseats;
+        deckFrameReseats = 0;
+        return n;
+    }
 }

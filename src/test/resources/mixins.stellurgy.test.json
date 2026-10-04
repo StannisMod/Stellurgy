@@ -81,6 +81,8 @@
     "MixinShipTransformEntityWrites",
     "MixinShipFrameTravelWrites",
     "MixinShipFrameTravelShove",
+    "MixinDeckFrameTickShove",
+    "MixinDeckFrameReseatPass",
     "MixinClientDeckPoseTrace",
     "MixinClientDeckPoseTickTrace",
     "MixinHullSweepInputs",

@@ -9,6 +9,7 @@
     "MixinEntityCellVoid",
     "MixinEntityDeckHeld",
     "MixinEntityGravity",
+    "MixinEntityLivingDeckFrame",
     "MixinEntityLivingShipTravel",
     "MixinEntityPlayerShipFlight",
     "MixinEntityShipEyes",

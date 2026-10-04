@@ -539,6 +539,21 @@ public final class ShipFrameTravel {
      * to the air: creative flight aboard is this class's alone. A HAND-OVER, the reverse of the one in
      * {@link #handles} - the same craft, at the deck point he is at, and no drop recorded.
      */
+    /**
+     * Stamp a deck-frame hold opening on {@code episode.shipId()}: a capture of this class on the
+     * same craft is the same stay continuing under the other holder, and passes on when it began and
+     * whether a seed placed it; anything else is a new install on the shared clock.
+     */
+    static void stampEpisode(Entity entity, DeckFrameTick.Episode episode) {
+        ShipFrameState state = STATE.get(entity);
+        if (state != null && state.shipId.equals(episode.shipId)) {
+            episode.installEpoch = state.installEpoch;
+            episode.seedAnchored = state.seedAnchored;
+        } else {
+            episode.installEpoch = CAPTURE_EPOCH.incrementAndGet();
+        }
+    }
+
     static void takeOverFlyer(EntityLivingBase entity, String shipId, double[] local) {
         double[] v = VSIntegration.shipVelocityAtPointFor(
                 entity.world, shipId, entity.posX, entity.posY, entity.posZ);
@@ -775,8 +790,12 @@ public final class ShipFrameTravel {
         if (entity == null || shipId == null || entity.world == null || !entity.world.isRemote) {
             return;
         }
+        // Whichever holds the body: a re-sent seed would otherwise find the travel resolver's slot
+        // empty under a deck-frame hold, and put him back on his dismount point every tick it is sent.
+        DeckFrameTick.Episode deck = DeckFrameTick.episodeOf(entity);
         ShipFrameState st = STATE.get(entity);
-        if (st != null && st.seedAnchored && shipId.equals(st.shipId)) {
+        if (deck != null ? deck.seedAnchored && shipId.equals(deck.shipId)
+                : st != null && st.seedAnchored && shipId.equals(st.shipId)) {
             return; // the seed already took; a re-send must not teleport the body again
         }
         PendingSeed slot = pendingSeed;
@@ -814,14 +833,20 @@ public final class ShipFrameTravel {
             pendingSeed = null;
             return;
         }
+        // The hold the seed is weighed against is whichever holds the body: the deck frame's first.
+        DeckFrameTick.Episode deck = DeckFrameTick.episodeOf(body);
         ShipFrameState st = STATE.get(body);
         boolean excluded = body instanceof EntityLivingBase
                 && excludedStateOf((EntityLivingBase) body) != null;
+        boolean captureExists = deck != null || st != null;
+        boolean captureIsThisSeed = deck != null
+                ? deck.seedAnchored && slot.shipId.equals(deck.shipId)
+                : st != null && st.seedAnchored && slot.shipId.equals(st.shipId);
+        boolean capturePredatesSlot = deck != null
+                ? deck.installEpoch <= slot.epoch
+                : st != null && st.installEpoch <= slot.epoch;
         PendingSeedDecision decision = pendingSeedDecision(excluded, slot.ticksLeft,
-                st != null,
-                st != null && st.seedAnchored && slot.shipId.equals(st.shipId),
-                st != null && st.installEpoch <= slot.epoch,
-                slot.restore);
+                captureExists, captureIsThisSeed, capturePredatesSlot, slot.restore);
         switch (decision) {
             case WAIT:
                 return;
@@ -844,10 +869,17 @@ public final class ShipFrameTravel {
                 }
                 if (dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration.isTestMode()) {
                     dev.stannismod.stellurgy.Stellurgy.logger.info("[FF-TRACE/CAP] pending "
-                            + "seed applied ship=" + slot.shipId + " superseded=" + (st != null)
+                            + "seed applied ship=" + slot.shipId + " superseded=" + captureExists
                             + " world=(" + world[0] + "," + world[1] + "," + world[2] + ")");
                 }
-                applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
+                // A deck point for the player this client plays is the deck frame's to hold; the
+                // travel resolver takes it only for a body the deck refuses, and gives up a capture
+                // of its own here so the body is never held twice.
+                if (DeckFrameTick.holdSeeded(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world)) {
+                    STATE.remove(body);
+                } else {
+                    applySeedCapture(body, slot.shipId, slot.subX, slot.subY, slot.subZ, world);
+                }
                 pendingSeed = null;
         }
     }
@@ -2402,7 +2434,7 @@ public final class ShipFrameTravel {
      *  X/Z under the rotation), so using {@code getLookVec()} the basis swung as the crew looked up/down and
      *  collapsed to one fixed heading when he looked along the deck normal - the natural pose walking an
      *  inverted deck, which read as inverted/rotated WASD. Vanilla walks by yaw alone for the same reason. */
-    private static float deckYawDeg(EntityLivingBase entity, String shipId) {
+    static float deckYawDeg(EntityLivingBase entity, String shipId) {
         // One transform for input, aim and movement: when this client HOLDS the body's look in
         // the deck frame, that stored deck yaw IS the heading the player steers by. The derived
         // world yaw is only a projection of it - skewed on a rolled ship, and DEGENERATE when

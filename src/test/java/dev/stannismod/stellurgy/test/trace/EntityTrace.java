@@ -37,6 +37,12 @@ public interface EntityTrace {
         public Boolean groundedAtLastTravel;
     }
 
+    /** Where the deck frame found a body when its update in the deck's frame began: its WORLD
+     *  position, before the update moved it into the shipyard. */
+    final class DeckFrameUpdate {
+        public double startX, startY, startZ;
+    }
+
     /** The suit-immunity recorder's memory: the last decision recorded, per atmosphere. */
     final class SuitDecisions {
         public final HashMap<String, Boolean> byAtmosphere = new HashMap<>();

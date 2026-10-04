@@ -1321,6 +1321,13 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
      * records {@code moved 6.0, accepted:false}. The step is taken from a WALKING body: from a
      * standing one the bound accepted it on healthy production, because a standing client reports only
      * every twenty ticks and the bound licenses up to ten ticks of movement per report.</p>
+     *
+     * <p>red-witnessed: with {@code DeckMovementBound#accepts} at {@code return moved <= allowed}
+     * inverted to {@code return true}, "a 6-block step committed by the client's own travel must be
+     * REFUSED by the server's deck bound … refused 0, accepted 2", 2026-10-04 — the step taken by the
+     * deck frame's held update ({@code MixinDeckFrameTickShove}) from a body that walked, the bound
+     * having judged it the tick before. Healthy the same day: {@code moved 6.00368, accepted:false,
+     * opinion:true}, {@code ticksSinceLastJudged:1}.</p>
      */
     @Test
     public void aWildClientSideStepOnADeckNeverBecomesADeclaredPosition() throws Exception {
@@ -1360,12 +1367,14 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         // A step no input and no parked deck can produce, sized so that vanilla lets it through and
         // only the bound can refuse it (see WILD_STEP_BLOCKS).
         //
-        // Armed INSIDE the client's own travel commit rather than applied from outside it: while Stellurgy
-        // holds the capture it writes this body's position every tick, so a shove from anywhere else
-        // is undone before the client sends anything — measured, a forty-block external shove
-        // produced a movement packet identical to standing still. The code that owns the position is
-        // the only thing that can declare an impossible one, which is exactly how it happened in
-        // play.
+        // Armed INSIDE the code that commits this body's position on the client rather than applied
+        // from outside it: while Stellurgy holds the body it writes its position every tick, so a
+        // shove from anywhere else is undone before the client sends anything — measured, a
+        // forty-block external shove produced a movement packet identical to standing still. The
+        // code that owns the position is the only thing that can declare an impossible one, which is
+        // exactly how it happened in play. Two codes can own it — the travel resolver's commit and
+        // the deck frame's held update — and the arming is taken by whichever holds him
+        // (MixinShipFrameTravelShove, MixinDeckFrameTickShove).
         // FROM A WALKING BODY. The bound's region is scaled by the ticks since it last judged this
         // player, capped at ten — and a STANDING client sends a position packet only every twenty
         // ticks, so a standing body's next packet is licensed (2 + carry) x 10 + 1, about 21 blocks:
@@ -1382,13 +1391,26 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
                     "dev.stannismod.stellurgy.test.trace.ShoveArming", WILD_STEP_BLOCKS);
             // The armed shove TAKING is a link, and the client's own commit records it: awaited from
             // the mark taken before the arming, so a red says "the travel commit never took the step".
-            client.await(shoveMark, "ship_frame_travel_shove", "the client's own travel commit must"
+            client.await(shoveMark, "ship_frame_travel_shove", "the client's own position commit must"
                     + " take the armed step, or nothing in this scenario ever declares an impossible"
                     + " position", 200);
         } finally {
             bot().releaseKey(Keyboard.KEY_W);
         }
         shove.close();
+        // The step must be taken FROM THE DECK. A hold that ended between the arming and the step
+        // means the body walked off the deck (or was let go some other way) first, and a step from
+        // there is not this contract's subject: off a deck the bound has no opinion by design.
+        // Measured 2026-10-04, with the arming takeable by the travel resolver only: the shove waited
+        // while he walked, the deck let him go at its edge (`noDeckBelow`), and it fired on the
+        // outer hull.
+        long shoveSeq = (long) Events.number(
+                Events.records(client.since(shoveMark, "ship_frame_travel_shove")).get(0), "seq");
+        long releasedBeforeTheStep = Events.records(client.since(shoveMark, "deck_released")).stream()
+                .filter(r -> (long) Events.number(r, "seq") < shoveSeq).count();
+        scenario().requireArranged("the step must be taken by a body still held on the deck: "
+                        + client.since(shoveMark, "deck_released"),
+                releasedBeforeTheStep == 0);
         // The fence makes the server have HANDLED every movement packet the client sent since the
         // shove before the bound's records are read. It is not a settle: what is read is a record the
         // bound wrote while handling the packet that carried the step.
@@ -1399,9 +1421,23 @@ public class VSCrewCaptureContractE2ETest extends AbstractSharedVsClientE2ETest 
         String boundTrace = String.valueOf(serverEvents.since(boundMark, "deck_movement_bound"));
         System.out.println("[crewcap] deck-bound shove trace :: " + shoveTrace
                 + "\n[crewcap] deck-bound server trace :: " + boundTrace
+                + "\n[crewcap] deck-bound intervals :: "
+                + serverEvents.since(boundMark, "deck_movement_bound_interval")
                 + "\n[crewcap] deck-bound refusal frames :: " + framesOfRefusals(boundTrace));
         Events.assertInstrumentRan(boundTrace, "deck_movement_bound",
                 "the server's movement bound was or was not asked about the step");
+        // The walk's whole purpose, checked rather than assumed: the bound judged this body the tick
+        // before the step's packet. Its region is scaled by the ticks since it last judged, so after a
+        // silence the step is licensed by the silence and the verdict is about the client's cadence,
+        // not the bound. Measured 2026-10-04: a dismounted body pinned to its dismount point by a
+        // re-applied seed never moved under W, sent nothing for 12 ticks, and the 6-block step was
+        // accepted on a 12-tick licence.
+        String intervals = serverEvents.since(boundMark, "deck_movement_bound_interval");
+        java.util.List<String> intervalRecords = Events.records(intervals);
+        scenario().requireArranged("the bound must have judged the walking body the tick before the"
+                        + " step, or the step is licensed by a silence: " + intervals,
+                !intervalRecords.isEmpty()
+                        && Events.number(intervalRecords.get(0), "ticksSinceLastJudged") <= 1.0);
 
         // WHAT THIS PINS: the BOUND's own verdict on the packet that declared the step, read off its
         // own record — not a position read after the window. A position cannot see the bound: the

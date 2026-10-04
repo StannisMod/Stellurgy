@@ -2,7 +2,9 @@ package dev.stannismod.stellurgy.test.mixin;
 
 import net.minecraft.entity.player.EntityPlayerMP;
 
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -34,6 +36,33 @@ public abstract class MixinDeckMovementBoundInputs {
     /** Step worth reporting, in blocks — above ordinary walking, below the wild ones. */
     private static final double REPORT_ABOVE_BLOCKS = 1.0;
 
+    @Shadow @Final private static java.util.Map<java.util.UUID, Long> LAST_SEEN_TICK;
+
+    /**
+     * What the bound is about to judge AGAINST, read before it overwrites it: the world ticks since it
+     * last judged this player. Its region is scaled by that interval, so a wide step accepted with an
+     * opinion is accepted on the strength of this number, and the RETURN record cannot read it any
+     * more. Recorded for the same steps the RETURN record keeps, in the same handling, so the two are
+     * adjacent in the ring.
+     */
+    @Inject(method = "accepts", at = @At("HEAD"), remap = false)
+    private static void stellurgyTest$recordInterval(EntityPlayerMP player,
+                                              double fromX, double fromY, double fromZ,
+                                              double toX, double toY, double toZ,
+                                              CallbackInfoReturnable<Boolean> cir) {
+        TestTrace.instrumentHere("deck_movement_bound_interval");
+        final double dx = toX - fromX, dy = toY - fromY, dz = toZ - fromZ;
+        if (player == null || player.world == null
+                || Math.sqrt(dx * dx + dy * dy + dz * dz) <= REPORT_ABOVE_BLOCKS) {
+            return;
+        }
+        Long previous = LAST_SEEN_TICK.get(player.getUniqueID());
+        TestTrace.recordHere("deck_movement_bound_interval",
+                "\"who\":\"" + TestTrace.json(player.getName()) + "\""
+                        + ",\"ticksSinceLastJudged\":"
+                        + (previous == null ? "null" : String.valueOf(player.world.getTotalWorldTime() - previous)));
+    }
+
     @Inject(method = "accepts", at = @At("RETURN"), remap = false)
     private static void stellurgyTest$recordStep(EntityPlayerMP player,
                                           double fromX, double fromY, double fromZ,
@@ -60,6 +89,12 @@ public abstract class MixinDeckMovementBoundInputs {
                         + TestTrace.fmt(fromZ) + "\""
                         + ",\"to\":\"" + TestTrace.fmt(toX) + "," + TestTrace.fmt(toY) + ","
                         + TestTrace.fmt(toZ) + "\""
-                        + ",\"accepted\":" + accepted);
+                        + ",\"accepted\":" + accepted
+                        // Whether the bound had an OPINION — it judges only a player some deck holds,
+                        // and answers true for everyone else without looking. Asked of the same
+                        // function it asks, at the same moment (it changes no capture). Without this
+                        // an `accepted:true` is either a verdict or a shrug, and the two read alike.
+                        + ",\"opinion\":" + (player != null
+                                && dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.aboardShipId(player) != null));
     }
 }

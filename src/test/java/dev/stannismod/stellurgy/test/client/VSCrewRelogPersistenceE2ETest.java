@@ -691,9 +691,18 @@ public class VSCrewRelogPersistenceE2ETest extends AbstractSharedVsClientE2ETest
                         + " nothing to absorb and the pin below is arithmetic rather than a contract"
                         + observed,
                 controlWalked > 1.0 && stalledWalked > STIMULUS_BLOCKS);
+        // ON THE DECK, read as the deck's own verdict: a release for having LEFT it. Ticks in the air
+        // are not that — measured 2026-10-04, the walk ran into the seat column and vanilla's
+        // auto-jump put him on top of it, eight airborne ticks and never off the craft (a body the
+        // deck frame holds walks by vanilla's own travel, auto-jump included). `offDeckTicks` stays in
+        // the message as a reading.
+        long leftTheDeck = Events.records(stallReleases).stream()
+                .filter(r -> "noDeckBelow".equals(Events.text(r, "reason"))
+                        || "leftShipRegion".equals(Events.text(r, "reason")))
+                .count();
         scenario().requireArranged("he must have stayed ON the deck across the stall - a body that "
                 + "walked off the edge is measuring the edge, not the guard" + observed,
-                offDeckAfterStall == 0);
+                leftTheDeck == 0);
         assertEquals("CONTROL A: the guard must be quiet for the same walk without a stall, or the "
                 + "count across the stall is not attributable to it" + observed, 0L, dropsControl);
 

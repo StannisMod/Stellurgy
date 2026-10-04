@@ -59,29 +59,46 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
     private static final double RESEATED_AT_HIS_STAND_BLOCKS = 1.1;
 
     /**
-     * How far an ascending body must rise ALONG THE DECK NORMAL, and how far it may stray across
-     * it, in subspace blocks.
+     * The least an ascending flyer must rise along the deck normal for the DIRECTION of his climb to
+     * be read at all, in subspace blocks.
      *
-     * <p>Both are the test's own, and the pair is the whole claim: the climb is along the deck's
-     * own +Y rather than the world's. The lateral bound is deliberately close to the vertical one,
-     * so a body climbing at 45 degrees — which is what a world-frame ascent looks like on a rolled
-     * deck — fails.</p>
+     * <p>Derived from vanilla's creative flight, which the flyer aboard keeps: each tick ascend is
+     * held adds {@code getFlySpeed() * 3} = 0.15 to his vertical motion ({@code
+     * EntityPlayerSP#onLivingUpdate}), and {@code EntityPlayer#travel} keeps 0.6 of it after the move.
+     * From rest, the dose's four held ticks climb 0.15 + 0.24 + 0.294 + 0.326 = 1.01. Half of that is
+     * asked, so a body that barely moved cannot pass on a direction measured out of noise. Measured
+     * 2026-10-04: 1.383 over the dose, the two probe round trips inside it adding ticks.</p>
+     *
+     * <p>A MINIMUM rises with every extra tick the probes add, so it is not the claim — the angle
+     * below is, and the angle does not depend on the dose.</p>
      */
-    private static final double ASCENT_ALONG_NORMAL_BLOCKS = 1.2;
-    /** @see #ASCENT_ALONG_NORMAL_BLOCKS */
-    private static final double ASCENT_LATERAL_BLOCKS = 1.6;
+    private static final double MIN_CLIMB_ALONG_NORMAL_BLOCKS = 0.5;
+
+    /**
+     * How far the climb may lean off the deck normal, degrees. The claim itself: an ascent along the
+     * deck's own +Y leans by nothing, and a world-up ascent leans by the hull's roll, which the
+     * arrangement puts past this with margin (see the roll gate in the scenario).
+     */
+    private static final double MAX_CLIMB_LEAN_DEGREES = 45.0;
 
     /**
      * Readings, two client ticks apart, of a flyer holding ascend on the deck — and so the DOSE of
-     * flight: four client ticks, which the 2026-09-23 gate measured taking him +2 along the deck
-     * normal (subFly=129.0, dySub=2.0 after two samples), against the {@link
-     * #ASCENT_ALONG_NORMAL_BLOCKS} the assertion asks for. One measurement, printed on every run as
-     * {@code [flyaboard]}, is what a retuning starts from.
+     * flight: four client ticks, at least. Read from the census's unfloored deck point.
      */
     private static final int FLY_ABOARD_DOSE_SAMPLES = 2;
 
-    /** Client ticks of held descend after the climb — derived, not measured; see its use. */
-    private static final int FLY_ABOARD_DESCEND_TICKS = 10;
+    /**
+     * Client ticks of held descend after the climb.
+     *
+     * <p>Short on purpose: a flyer that touches the deck has his flight cleared by vanilla itself
+     * ({@code EntityPlayerSP#onLivingUpdate}: on the ground and flying, flying is set false), and
+     * the double-tap that follows then turns flight back ON. Measured 2026-10-04: after ten ticks
+     * of descend the "flight off" double-tap jumped him off the deck and started flight, and he
+     * hovered for the whole landing window. Four ticks sink at most the law's 1.01 from rest, and
+     * less here, where the climb's own upward motion is still being cancelled; the climb put him
+     * more than that above the deck.</p>
+     */
+    private static final int FLY_ABOARD_DESCEND_TICKS = 4;
 
     @Override
     protected String subsystem() {
@@ -257,6 +274,8 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         System.out.println("[interior] census standing: server=" + exec("stellurgytest vs subspace-census")
                 + " client={ship=" + censusField("ship")
                 + " tracked=" + censusField("tracked")
+                + " heldBy=" + censusField("heldBy")
+                + " resolverMoves=" + censusField("resolverMoves")
                 + " subPos=" + censusField("subPos")
                 + " chunkLoaded=" + censusField("chunkLoaded")
                 + " nonAir=" + censusField("nonAir")
@@ -669,6 +688,14 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
      * ({@code ShipFrameTravel:1834}) dropped for descend: "holding descend must sink along the DECK
      * NORMAL (subspace -Y): 131.0 -&gt; 132.0". The ABOARD commit after the dismount is the
      * arrangement's link (server-committed).</p>
+     *
+     * <p>red-witnessed: with {@code ShipFrameTravel#flyingAboardTravel} at {@code double worldMotionY =
+     * entity.motionY - flyImpulse * fly} and {@code motion[1] += flyImpulse * fly} both inverted to
+     * leave vanilla's impulse on the world axis, "holding ascend must climb along the DECK NORMAL
+     * (subspace +Y), not the world's up: the climb leans 70.93884710214297 degrees off it
+     * (dySub=0.7087 dxzSub=2.0511), at most 45.0 allowed", 2026-10-04 — the lean form of the ascent
+     * verdict, read from the census's unfloored point. Healthy the same day: lean 0.0099 degrees,
+     * dySub 1.7416.</p>
      */
     @Test
     public void aFlyingCrewMemberAscendsAlongTheDeckNormalAndReseatsOnFlightOff() throws Exception {
@@ -693,14 +720,14 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 Reply.of(exec("stellurgytest vs point-by-id 0 " + scenarioShipId + " "
                         + Math.cos(h) + " " + Math.sin(h) + " 0.0 0.0")).bool("commanded"));
         // WINDOW: the slew, counted on the hull's world clock, with both ends in the gate. The gate's
-        // angle is not a choice: the ascent bounds below (ASCENT_ALONG_NORMAL_BLOCKS 1.2 along the
-        // normal, ASCENT_LATERAL_BLOCKS 1.6 across it) tell a deck-normal ascent from a world-up one
-        // only past tan(theta) = 1.6 / 1.2, i.e. 53.1 degrees — below that a world-up climb can pass
-        // both. So the hull must be past it, with a degree of margin inside the commanded 60.
+        // angle is not a choice: a world-up climb leans off the deck normal by exactly the hull's
+        // roll, and the ascent assertion below allows a lean of MAX_CLIMB_LEAN_DEGREES (45) — so
+        // below 45 degrees of roll a world-up climb passes it. The hull must be past that, and this
+        // asks for 54, inside the commanded 60.
         GameTicks.advanceWorld(serverClient(), 0, ROLL_SLEW_TICKS);
         double upAfter = ShipInfo.byId(this::exec, 0, scenarioShipId).upY();
-        scenario().requireArranged("the hull must be rolled past the angle the ascent bounds can"
-                        + " discriminate at (53.1 degrees): upY " + upBefore + " -> " + upAfter
+        scenario().requireArranged("the hull must be rolled well past the lean the ascent assertion"
+                        + " allows (" + MAX_CLIMB_LEAN_DEGREES + " degrees): upY " + upBefore + " -> " + upAfter
                         + " over " + ROLL_SLEW_TICKS + " server ticks",
                 upAfter < Math.cos(Math.toRadians(54.0)));
 
@@ -737,8 +764,12 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         // is SHORT deliberately - the stay region ends ~4 blocks above the hull top, and a climb
         // that exits it is a legitimate release (leaving the region ends the capture), not this
         // pin's subject.
-        double[] subFly = parseSub(censusField("subPos"));
-        StringBuilder trace = new StringBuilder();
+        // UNFLOORED. The census's block position quantises a climb of 1.4 to 1 or 2 by where it
+        // started — measured 2026-10-04, an exact 128.346 -> 129.729 read as 128 -> 129 and failed a
+        // 1.2 bound the body had cleared.
+        double[] subFly = parseSub(censusField("subExact"));
+        StringBuilder trace = new StringBuilder(String.format(java.util.Locale.ROOT,
+                "[fly sub=%.3f,%.3f,%.3f held=%s] ", subFly[0], subFly[1], subFly[2], censusField("heldBy")));
         int trackedSeen = 0, camSeen = 0, samples = 0;
         double[] subEnd = subFly;
         // A fixed DOSE of held ascend, sampled as it goes. It used to climb "to a target rise" with
@@ -750,9 +781,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_SPACE);
         try {
             // EXPERIMENT: FLY_ABOARD_DOSE_SAMPLES readings two client ticks apart with ascend held —
-            // four ticks of flight, the stretch the 2026-09-23 gate measured reaching +2 (subFly=129.0
-            // dySub=2.0 after two samples). Every reading also carries the per-sample tracked/cam
-            // invariants the assertions below count.
+            // four ticks of flight at least, the probe round trips adding more. Nothing below reads
+            // the dose's size: the climb's DIRECTION is the claim. Every reading also carries the
+            // per-sample tracked/cam invariants the assertions below count.
             for (int i = 0; i < FLY_ABOARD_DOSE_SAMPLES; i++) {
                 bot().waitTicks(2);
                 samples++;
@@ -767,9 +798,9 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 if (Boolean.parseBoolean(deckCameraText("active"))) {
                     camSeen++;
                 }
-                subEnd = parseSub(censusField("subPos"));
-                trace.append(String.format(java.util.Locale.ROOT, "[t%d sub=%.1f,%.1f,%.1f cap=%b] ",
-                        i * 2, subEnd[0], subEnd[1], subEnd[2], tracked));
+                subEnd = parseSub(censusField("subExact"));
+                trace.append(String.format(java.util.Locale.ROOT, "[t%d sub=%.3f,%.3f,%.3f cap=%b held=%s] ",
+                        i * 2, subEnd[0], subEnd[1], subEnd[2], tracked, censusField("heldBy")));
             }
         } finally {
             bot().releaseKey(org.lwjgl.input.Keyboard.KEY_SPACE);
@@ -777,9 +808,10 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         double dySub = subEnd[1] - subFly[1];
         double dxzSub = Math.sqrt((subEnd[0] - subFly[0]) * (subEnd[0] - subFly[0])
                 + (subEnd[2] - subFly[2]) * (subEnd[2] - subFly[2]));
+        double leanDegrees = Math.toDegrees(Math.atan2(dxzSub, dySub));
         System.out.println("[flyaboard] subFly=" + subFly[1] + " dySub=" + dySub + " dxzSub="
-                + dxzSub + " tracked=" + trackedSeen + "/" + samples + " cam=" + camSeen
-                + "/" + samples + " :: " + trace);
+                + dxzSub + " lean=" + leanDegrees + " tracked=" + trackedSeen + "/" + samples
+                + " cam=" + camSeen + "/" + samples + " :: " + trace);
 
         // The contract, in its three player-visible parts. The first is an ABSENCE and is read as
         // one: the client's resolver records EVERY release with the gate that performed it, so
@@ -797,10 +829,15 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
                 + trackedSeen + "/" + samples + "): " + trace, trackedSeen == samples);
         assertTrue("the ship camera must stay engaged for a flying-aboard body (cam " + camSeen
                 + "/" + samples + ")", camSeen == samples);
-        // The census position is block-floored, so allow a block of lateral jitter; a WORLD-up
-        // ascent at 60 deg would drift the deck plane by ~1.7x the climb (several blocks here).
-        assertTrue("holding ascend must climb along the DECK NORMAL (subspace +Y): dySub=" + dySub
-                + " dxzSub=" + dxzSub + " :: " + trace, dySub > ASCENT_ALONG_NORMAL_BLOCKS && dxzSub < ASCENT_LATERAL_BLOCKS);
+        // Two claims, and only the second is the contract. He CLIMBED — enough that a direction can
+        // be read off the climb at all; and the climb points along the deck normal, where a WORLD-up
+        // ascent on this roll leans by the roll itself, 54 degrees or more.
+        assertTrue("holding ascend must climb: dySub=" + dySub + " (at least "
+                + MIN_CLIMB_ALONG_NORMAL_BLOCKS + ") :: " + trace, dySub >= MIN_CLIMB_ALONG_NORMAL_BLOCKS);
+        assertTrue("holding ascend must climb along the DECK NORMAL (subspace +Y), not the world's up:"
+                + " the climb leans " + leanDegrees + " degrees off it (dySub=" + dySub + " dxzSub="
+                + dxzSub + "), at most " + MAX_CLIMB_LEAN_DEGREES + " allowed :: " + trace,
+                leanDegrees <= MAX_CLIMB_LEAN_DEGREES);
 
         // Descend back toward the deck first - the flight-off double-tap itself adds a little
         // climb, and toggling at the stay region's edge exits it mid-flight (leaving the stay
@@ -810,23 +847,26 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         double[] subHigh = subEnd;
         // A dose for the other vertical intent. A client that is starved of FRAMES still steps his
         // own motion once per client TICK, so a tick count does not under-sink on a busy box — which
-        // is what the early-exit poll that stood here was written against. Census-Y is
-        // block-floored, so the assertion is a strict drop below the captured start height, and that
-        // needs MORE than a block of travel.
+        // is what the early-exit poll that stood here was written against. Read unfloored, so any
+        // sink at all is a reading.
         bot().holdKey(org.lwjgl.input.Keyboard.KEY_LSHIFT);
         try {
-            // EXPERIMENT: FLY_ABOARD_DESCEND_TICKS client ticks of held descend. NOT measured, and
-            // not the ascent's four: vanilla creative flight from rest covers about 1.0 block in
-            // four ticks of sneak (0.15/tick added, 0.6 kept), which a floored census can fail to
-            // register, and about 3.2 in ten. The deck below stops a longer fall; the old poll's
-            // ceiling was fourteen. The sink it bought is printed in the assertion.
+            // EXPERIMENT: FLY_ABOARD_DESCEND_TICKS client ticks of held descend — short enough that
+            // he is still in the air after it (see the constant), which the arrangement below checks.
             bot().waitTicks(FLY_ABOARD_DESCEND_TICKS);
         } finally {
             bot().releaseKey(org.lwjgl.input.Keyboard.KEY_LSHIFT);
         }
-        double[] subDown = parseSub(censusField("subPos"));
+        double[] subDown = parseSub(censusField("subExact"));
         assertTrue("holding descend must sink along the DECK NORMAL (subspace -Y): "
                 + subHigh[1] + " -> " + subDown[1], subDown[1] < subHigh[1]);
+        // The double-tap below turns flight off only if it is still ON. Vanilla clears it by itself
+        // the tick a flyer touches ground, and then the same double-tap jumps and turns it back on —
+        // which reads, at the landing link, exactly like a deck that never took him back.
+        boolean stillFlying = Boolean.parseBoolean(censusField("flying"));
+        scenario().requireArranged("the flyer must still be flying when flight is turned off by key"
+                        + " — a descent that touched the deck has already ended it (census: "
+                        + latestCensus + ")", stillFlying);
 
         // Flight off: double-tap again; deck gravity reclaims the airborne body and seats it.
         // ONE double-tap. It used to be retried up to four times while the capture still read
@@ -870,6 +910,7 @@ public class VSCrewInteriorBoardingE2ETest extends AbstractSharedVsClientE2ETest
         bot().waitTicks(10);
         capEnd = DeckCapture.read(this::exec);
         subSeated = parseSub(censusField("subPos"));
+        System.out.println("[flyaboard] landed: " + landing + " | seated census: " + latestCensus);
         // The descend leg parks the body over the SEAT column, so deck gravity may seat it on
         // the seat block's top - one block above the deck stand. Either landing is "seated on
         // the ship's geometry at the deck spot"; only staying airborne (or lost to the world)

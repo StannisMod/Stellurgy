@@ -287,11 +287,27 @@ public abstract class MixinShipFrameTravelWrites {
         if (m == null) {
             return; // no ship claims this position on this side — not a reading, an absence
         }
+        // The body's point on the census ship, UNFLOORED. `subPos` is the block the census scans
+        // around, so a distance read from two of them is quantised to a whole block, and a climb of
+        // 1.5 reads as 1 or 2 by where it started. Fixed decimals, not TestTrace.fmt: a subspace X of
+        // 19 200 001 keeps no fraction at six significant figures.
+        double[] exact = VSIntegration.toShipFrameFor(entity.world, String.valueOf(m.get("shipId")),
+                entity.posX, entity.posY, entity.posZ);
+        String subExact = exact == null ? ""
+                : String.format(java.util.Locale.ROOT, "%.4f,%.4f,%.4f", exact[0], exact[1], exact[2]);
         TestTrace.record(entity, "subspace_census",
                 "\"e\":" + entity.getEntityId()
                         + ",\"ship\":\"" + TestTrace.json(String.valueOf(m.get("shipId"))) + "\""
                         + ",\"tracked\":" + Boolean.TRUE.equals(m.get("tracked"))
+                        + ",\"heldBy\":\"" + TestTrace.json(String.valueOf(m.get("heldBy"))) + "\""
+                        + ",\"resolverMoves\":" + Boolean.TRUE.equals(m.get("resolverMoves"))
                         + ",\"subPos\":\"" + TestTrace.json(String.valueOf(m.get("subPos"))) + "\""
+                        + ",\"subExact\":\"" + subExact + "\""
+                        // The client's own flight flag, which vanilla also clears by itself the tick
+                        // a flyer touches ground (EntityPlayerSP#onLivingUpdate) - so a scenario that
+                        // toggles flight by key can read whether it is still on before it does.
+                        + ",\"flying\":" + (entity instanceof net.minecraft.entity.player.EntityPlayer
+                                && ((net.minecraft.entity.player.EntityPlayer) entity).capabilities.isFlying)
                         + ",\"chunkLoaded\":" + Boolean.TRUE.equals(m.get("chunkLoaded"))
                         + ",\"nonAir\":" + m.get("nonAir")
                         + ",\"collisionBoxes\":" + m.get("collisionBoxes")

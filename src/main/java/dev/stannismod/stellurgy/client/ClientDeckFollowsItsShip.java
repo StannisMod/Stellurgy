@@ -25,6 +25,10 @@ public final class ClientDeckFollowsItsShip {
     public void afterTheShipsHaveMoved(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END && !Minecraft.getMinecraft().isGamePaused()) {
             ShipFrameTravel.followShipPoses(Minecraft.getMinecraft().world);
+            // The client ticks with no world at all on its menus.
+            if (Minecraft.getMinecraft().world != null) {
+                dev.stannismod.stellurgy.integration.vs.DeckFrameTick.followShipPoses(Minecraft.getMinecraft().world);
+            }
         }
     }
 }
