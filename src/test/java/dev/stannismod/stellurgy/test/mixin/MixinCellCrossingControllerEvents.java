@@ -34,8 +34,15 @@ public abstract class MixinCellCrossingControllerEvents {
         if (granted) {
             dev.stannismod.stellurgy.test.trace.CrossingMemory.here().clear("carry:" + shipId);
         }
+        // The pose the verdict was decided ON. A test that waits for the flight computer's own carry
+        // has no other way to learn it: a granted carry starts cutting the hull out in the same call,
+        // so any read taken afterwards is of the crossing, not of what was judged. Absent when the caller
+        // passed none, so a reader gets "not measured" rather than a zero.
+        String pose = shipPos == null || shipPos.length < 3 ? ""
+                : ",\"px\":" + shipPos[0] + ",\"py\":" + shipPos[1] + ",\"pz\":" + shipPos[2];
         TestTrace.recordServer("carry_requested", "\"ship\":\"" + shipId + "\",\"slotDim\":" + slotDim
-                + ",\"cell\":\"" + (cell == null ? "null" : cell.cellKey()) + "\",\"granted\":" + granted);
+                + ",\"cell\":\"" + (cell == null ? "null" : cell.cellKey()) + "\",\"granted\":" + granted
+                + pose);
     }
 
     @Inject(method = "requestDirectJump", at = @At("RETURN"))
