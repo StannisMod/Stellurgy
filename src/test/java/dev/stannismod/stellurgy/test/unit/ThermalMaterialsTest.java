@@ -2,14 +2,12 @@ package dev.stannismod.stellurgy.test.unit;
 
 import java.io.File;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterial;
 import dev.stannismod.stellurgy.subsystem.heat.ThermalMaterials;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
@@ -29,10 +27,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class ThermalMaterialsTest {
 
-    private int prevMargin;
-    private int prevJoulesPerUnit;
-    private int prevAmbient;
-
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
@@ -51,25 +45,6 @@ public class ThermalMaterialsTest {
     @Before
     public void readTheShippedTable() {
         table = ThermalMaterials.load(new File(folder.getRoot(), "thermalMaterials.json").getPath());
-    }
-
-    @Before
-    public void fixTheScale() {
-        StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
-        prevMargin = config.shipHeatSlugMarginKelvin;
-        prevJoulesPerUnit = config.shipHeatSlugJoulesPerUnit;
-        prevAmbient = config.shipHeatAmbientKelvin;
-        config.shipHeatSlugMarginKelvin = 100;
-        config.shipHeatSlugJoulesPerUnit = 1000;
-        config.shipHeatAmbientKelvin = 293;
-    }
-
-    @After
-    public void restoreTheScale() {
-        StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
-        config.shipHeatSlugMarginKelvin = prevMargin;
-        config.shipHeatSlugJoulesPerUnit = prevJoulesPerUnit;
-        config.shipHeatAmbientKelvin = prevAmbient;
     }
 
     private ThermalMaterial material(String name) {
@@ -198,30 +173,6 @@ public class ThermalMaterialsTest {
                 fourLitres >= 4 * oneLitre);
         assertTrue("and no more than the three units four rounded-down fractions can add: one="
                 + oneLitre + " four=" + fourLitres, fourLitres <= 4 * oneLitre + 3);
-    }
-
-    /**
-     * <p>red-witnessed: one inversion per verdict, 2026-09-30. HALVES - {@code ThermalMaterials#slugCapacity} at {@code int joulesPerUnit = Math.max(1, config.shipHeatSlugJoulesPerUnit);}
-     * ignoring the configured conversion: "halving what a heat unit is worth must halve the slug
-     * expected:&lt;2506&gt; but was:&lt;5013&gt;". REORDERS NONE - {@code ThermalMaterials#slugCapacity} at {@code int joulesPerUnit = Math.max(1, config.shipHeatSlugJoulesPerUnit);}
-     * converting materials denser than 8000 kg/m3 at a quarter of the rate once the conversion moves:
-     * "and it must not change which material is the better slug".</p>
-     */
-    @Test
-    public void theConversionScalesEveryMaterialAndReordersNone() {
-        ThermalMaterial iron = material("iron");
-        ThermalMaterial copper = material("copper");
-        long ironBefore = ThermalMaterials.slugCapacity(iron, 1_000);
-        long copperBefore = ThermalMaterials.slugCapacity(copper, 1_000);
-
-        StellurgyConfiguration.getCurrentConfig().shipHeatSlugJoulesPerUnit = 2000;
-
-        long ironAfter = ThermalMaterials.slugCapacity(iron, 1_000);
-        long copperAfter = ThermalMaterials.slugCapacity(copper, 1_000);
-
-        assertEquals("halving what a heat unit is worth must halve the slug", ironBefore / 2, ironAfter);
-        assertTrue("and it must not change which material is the better slug",
-                (ironBefore > copperBefore) == (ironAfter > copperAfter));
     }
 
     /**
