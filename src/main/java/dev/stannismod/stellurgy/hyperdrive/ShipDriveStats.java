@@ -15,7 +15,11 @@ public final class ShipDriveStats {
     private static final String NBT_BURST = "burstCost";
     private static final String NBT_TIER = "driveTier";
 
-    /** A ship with no generator at all. Every stat is zero, which is what makes it refusable. */
+    /**
+     * A ship with no generator at all. Every stat is zero, which is what makes it refusable.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     public static final ShipDriveStats NONE =
             new ShipDriveStats(0L, 0L, 0L, DriveTier.baseline());
 

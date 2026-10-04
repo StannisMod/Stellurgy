@@ -100,7 +100,7 @@ public class SpaceArmorProtectionContractTest {
     // this test JVM both CapabilitySpaceArmor.PROTECTIVEARMOR and
     // CapabilityItemHandler.ITEM_HANDLER_CAPABILITY are null, so the
     // identity check `capability == PROTECTIVEARMOR` returns true for any
-    // null argument. The real-server WeatherClientSyncE2ETest /
+    // null argument. The real-server PlanetWorldOnTheClientGroupTest /
     // OxygenSuitClientStateE2ETest cover the live capability dispatch.
 
     @Test

@@ -140,6 +140,36 @@ public final class SystemBody {
                 ? RADIUS_UNKNOWN : radiusEarths;
         this.massEarths = Double.isNaN(massEarths) || massEarths < 0d
                 ? MASS_UNKNOWN : massEarths;
+        requireInsideOwnCell();
+    }
+
+    /**
+     * A body whose offset reaches outside its own cell is refused, not flattened onto the face.
+     *
+     * <p>Such a body would stand in a different cell from the one that names it, which is a fault of
+     * whatever derived it, not a state the world can hold. Clamping it used to look like success: every
+     * point of an orbit past the face collapsed onto one spot, so the body appeared to stop moving and
+     * the defect was hunted in the renderer and the ephemeris first.</p>
+     */
+    private void requireInsideOwnCell() {
+        if (offsetLaw == BodyEphemeris.STATIC) {
+            return;
+        }
+        // The bound is THIS cell's, whose width belongs to the lattice the name is counted in: a zone
+        // cell is ~7 000 blocks where a galactic cell is 32 000 000.
+        long half = GalacticCoord.CELL / 2L;
+        if (name.zone() != null) {
+            if (name.cellBlocks() <= 0L) {
+                throw new IllegalArgumentException("body " + this + " has a zoned name whose lattice "
+                        + "width was not carried, so its in-cell offset cannot be bounded");
+            }
+            half = name.cellBlocks() / 2L;
+        }
+        if (!offsetLaw.staysWithin(-half, half - 1L)) {
+            throw new IllegalArgumentException("body " + this + " has an in-cell offset law that "
+                    + "reaches outside its own cell (half-cell " + half + " blocks): its offset is wider "
+                    + "than the cell that names it");
+        }
     }
 
     /**
@@ -224,27 +254,10 @@ public final class SystemBody {
     /**
      * Where this body stands inside its own cell's frame at {@code tick}. Zero for the cell's
      * primary — which every body that {@link #definesFrame() defines a frame} is, moons included.
-     * Held inside the cell: a body outside its own neighbourhood would be a body in a different cell.
+     * Inside the cell by construction: a body whose law reaches past it is refused when built.
      */
     public BlockDelta inCellOffsetAt(long tick) {
-        BlockDelta raw = offsetLaw.offsetAt(tick);
-        if (raw.isZero()) {
-            return raw;
-        }
-        // Bounded by THIS cell, whose width is a property of the lattice the name is counted in — not
-        // by the galactic one. A zone cell is ~7 000 blocks where a galactic cell is 32 000 000, so a
-        // clamp at the galactic width inside a zone is no clamp at all, and the overflow it exists to
-        // report goes unsaid.
-        long half = GalacticCoord.CELL / 2L;
-        if (name.zone() != null) {
-            if (name.cellBlocks() <= 0L) {
-                throw new IllegalStateException("body " + this + " has a zoned name whose lattice "
-                        + "width was not carried, so its in-cell offset cannot be bounded");
-            }
-            half = name.cellBlocks() / 2L;
-        }
-        return BlockDelta.of(clampInCell(raw.dx(), half), clampInCell(raw.dy(), half),
-                clampInCell(raw.dz(), half));
+        return offsetLaw.offsetAt(tick);
     }
 
     /**
@@ -408,42 +421,4 @@ public final class SystemBody {
         return "SystemBody[" + kind + " dim=" + dimId + " star=" + starId + " @ " + name.cellKey()
                 + (offsetLaw.isStatic() ? "" : " +orbit") + "]";
     }
-
-    /**
-     * An in-cell offset held inside the cell, <b>reporting the first time it has to</b>.
-     *
-     * <p>The clamp itself is right: a body outside its own neighbourhood would be a body in a
-     * different cell, so saturating is the only safe answer. What was wrong is that it was SILENT.
-     * An orbit that overflows does not fail — every point of it beyond the face collapses onto the
-     * face, so a giant's outer moons stack at one spot and stop moving, which is a defect that gets
-     * looked for in the renderer, in the ephemeris and in the frame before anyone suspects a clamp.
-     * One line per axis per JVM run, naming the overflow, turns a week into a grep.</p>
-     */
-    private static long clampInCell(long v, long half) {
-        if (v > half - 1L) {
-            reportOverflow(v, half - 1L, half);
-            return half - 1L;
-        }
-        if (v < -half) {
-            reportOverflow(v, -half, half);
-            return -half;
-        }
-        return v;
-    }
-
-    /** Said ONCE per distinct overflow magnitude: a flooded log is a log nobody reads either. */
-    private static void reportOverflow(long raw, long clamped, long half) {
-        if (REPORTED_OVERFLOWS.add(raw / Math.max(1L, 2L * half))) {
-            LOGGER.error("a body's in-cell offset {} is outside its own cell (half-cell {}) and was "
-                            + "flattened onto the face at {}. Every further point of that orbit lands "
-                            + "on the same spot, so the body will appear to stop moving: its orbit is "
-                            + "wider than the cell that names it.",
-                    raw, half, clamped);
-        }
-    }
-
-    private static final org.apache.logging.log4j.Logger LOGGER =
-            org.apache.logging.log4j.LogManager.getLogger("stellurgy/universe");
-    private static final java.util.Set<Long> REPORTED_OVERFLOWS =
-            java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<Long, Boolean>());
 }

@@ -14,6 +14,7 @@ package dev.stannismod.stellurgy.api.atmosphere;
  * names the most severe hazard they are standing in. That is why a scorching room with nothing to
  * breathe tells you about the air rather than the heat — suffocating is the more urgent of the two,
  * and it was the more urgent one before this enum existed too.
+ * <p>The constants and their fields are effectively final, process lifetime: built once at class initialisation.</p>
  */
 public enum AtmosphereHazard {
 

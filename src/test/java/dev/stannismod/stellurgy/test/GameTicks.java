@@ -62,7 +62,11 @@ public final class GameTicks {
      */
     private static final int STALL_FACTOR = 20;
 
-    /** Floor for the net: a very short advance still gets room for a slow round-trip. */
+    /**
+     * Floor for the net: a very short advance still gets room for a slow round-trip.
+     *
+     * <p>A constant: {@code Duration} is an immutable value.</p>
+     */
     private static final Duration MIN_STALL_NET = Duration.ofSeconds(3);
 
     private GameTicks() { }

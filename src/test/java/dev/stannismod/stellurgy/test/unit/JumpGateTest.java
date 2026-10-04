@@ -21,6 +21,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class JumpGateTest {
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord TARGET = GalacticCoord.ofSectorLocal(9L, 2L, 2L, 0L, 0L, 0L);
 
     /** Where the thermal refusal sits for these tests, so no assertion rides on the shipped default. */
@@ -115,16 +118,14 @@ public class JumpGateTest {
     private int prevRefusalKelvin;
 
     @Before
-    public void clearRegistrations() {
-        JumpGate.reset();
+    public void setTheDriveRefusalThreshold() {
         StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
         prevRefusalKelvin = config.shipHeatDriveRefusalKelvin;
         config.shipHeatDriveRefusalKelvin = DRIVE_REFUSAL_KELVIN;
     }
 
     @After
-    public void restoreRegistrations() {
-        JumpGate.reset();
+    public void restoreTheDriveRefusalThreshold() {
         StellurgyConfiguration.getCurrentConfig().shipHeatDriveRefusalKelvin = prevRefusalKelvin;
     }
 
@@ -307,46 +308,10 @@ public class JumpGateTest {
     }
 
     @Test
-    public void anAdvisoryWarnsWithoutBlocking() {
-        JumpGate.register(JumpGate.Stage.SUPPLY, new JumpGate.Predicate() {
-            @Override
-            public JumpGate.Objection check(JumpGate.ShipContext ship) {
-                return new JumpGate.Objection(JumpGate.Severity.ADVISORY, "msg.test.notenoughfuel");
-            }
-        });
-
-        JumpGate.Verdict verdict = JumpGate.check(new FakeShip());
-
-        assertTrue("an ill-advised jump is still the pilot's to make", verdict.allowed());
-        assertTrue("but he must be told and must confirm", verdict.needsConfirmation());
-        assertEquals("msg.test.notenoughfuel", verdict.firstMessage());
-    }
-
-    @Test
-    public void aRegisteredHardObjectionRefusesTheJump() {
-        JumpGate.register(JumpGate.Stage.POWER, new JumpGate.Predicate() {
-            @Override
-            public JumpGate.Objection check(JumpGate.ShipContext ship) {
-                return new JumpGate.Objection(JumpGate.Severity.HARD, "msg.test.nocharge");
-            }
-        });
-
-        JumpGate.Verdict verdict = JumpGate.check(new FakeShip());
-
-        assertFalse("a subsystem that registers a hard objection can stop the jump", verdict.allowed());
-        assertEquals("msg.test.nocharge", verdict.firstMessage());
-    }
-
-    @Test
     public void navigationObjectionsAreReportedBeforeLaterStages() {
         FakeShip ship = new FakeShip();
         ship.navComputer = false;
-        JumpGate.register(JumpGate.Stage.POWER, new JumpGate.Predicate() {
-            @Override
-            public JumpGate.Objection check(JumpGate.ShipContext s) {
-                return new JumpGate.Objection(JumpGate.Severity.HARD, "msg.test.nocharge");
-            }
-        });
+        ship.capacitorCharge = ship.burstCost - 1L;
 
         JumpGate.Verdict verdict = JumpGate.check(ship);
 

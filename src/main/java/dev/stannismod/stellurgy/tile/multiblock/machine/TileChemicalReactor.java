@@ -36,6 +36,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class TileChemicalReactor extends TileWasteHeatMachine {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
             {{null, 'c', null},
                     {'L', 'I', 'L'}},
@@ -45,7 +46,20 @@ public class TileChemicalReactor extends TileWasteHeatMachine {
 
     };
 
-    private static List<IRecipe> recipesSpecial = new LinkedList<>();
+    /**
+     * Whether {@code recipe} is one of the generated armor-sealing recipes — read off the recipe
+     * itself (a non-space armor piece coming out with the space-protection enchantment), the same
+     * test {@link #onInventoryUpdated} uses, so no separate list has to remember which they are.
+     */
+    private static boolean isSealingRecipe(IRecipe recipe) {
+        List<ItemStack> output = recipe.getOutput();
+        if (output.isEmpty()) {
+            return false;
+        }
+        Item item = output.get(0).getItem();
+        return item instanceof ItemArmor && !(item instanceof ItemSpaceArmor)
+                && EnchantmentHelper.getEnchantmentLevel(StellurgyAPI.enchantmentSpaceProtection, output.get(0)) == 1;
+    }
 
     public static void reloadRecipesSpecial() {
         //Chemical Reactor
@@ -53,26 +67,21 @@ public class TileChemicalReactor extends TileWasteHeatMachine {
             RecipesMachine recipesMachine = RecipesMachine.getInstance();
             List<IRecipe> recipes = recipesMachine.getRecipes(TileChemicalReactor.class);
 
-            //Forget any special recipes removed by another mod since generation
-            recipesSpecial.retainAll(recipes);
+            //The special recipes still in the registry: one another mod removed since generation is not
+            List<IRecipe> recipesSpecial = new LinkedList<>();
+            for (IRecipe recipe : recipes) {
+                if (isSealingRecipe(recipe)) {
+                    recipesSpecial.add(recipe);
+                }
+            }
 
             //Clear special recipes from the registry
             recipes.removeAll(recipesSpecial);
-
-            List<IRecipe> originalRecipes = new LinkedList<>(recipes);
 
             //Regenerate special recipes, but only those that weren't removed by another mod since first generation
             for (IRecipe recipe : recipesSpecial) {
                 Item item = recipe.getOutput().get(0).getItem();
                 registerRecipe(recipesMachine, item);
-            }
-
-            //Recreate the internal special recipes list based on what recipes were added by the above generation
-            recipesSpecial.clear();
-            for (IRecipe recipe : recipes) {
-                if (!originalRecipes.contains(recipe)) {
-                    recipesSpecial.add(recipe);
-                }
             }
         }
     }
@@ -187,19 +196,10 @@ public class TileChemicalReactor extends TileWasteHeatMachine {
         //Chemical Reactor
         if (StellurgyConfiguration.getCurrentConfig().enableOxygen) {
             RecipesMachine recipesMachine = RecipesMachine.getInstance();
-            List<IRecipe> recipes = recipesMachine.getRecipes(TileChemicalReactor.class);
-            List<IRecipe> originalRecipes = new LinkedList<>(recipes);
 
             for (ResourceLocation key : Item.REGISTRY.getKeys()) {
                 Item item = Item.REGISTRY.getObject(key);
                 registerRecipe(recipesMachine, item);
-            }
-
-            //Create the internal special recipes list based on what recipes were added by the above generation
-            for (IRecipe recipe : recipes) {
-                if (!originalRecipes.contains(recipe)) {
-                    recipesSpecial.add(recipe);
-                }
             }
         }
     }

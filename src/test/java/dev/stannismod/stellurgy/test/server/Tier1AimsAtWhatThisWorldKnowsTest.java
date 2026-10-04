@@ -1,0 +1,181 @@
+package dev.stannismod.stellurgy.test.server;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.Test;
+
+import dev.stannismod.stellurgy.test.RealizedBody;
+import dev.stannismod.stellurgy.test.FixtureSite;
+import dev.stannismod.stellurgy.test.Reply;
+import dev.stannismod.stellurgy.test.TelescopeReading;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * The loop the two discovery systems exist to close, driven on a real server: an address is carried
+ * to a world, deposited there, and a tier-1 launch pad standing on that world may then be aimed at
+ * it.
+ *
+ * <p>The unit and integration tiers pin the pieces - a body carries its own known-set, one body's
+ * finds never reach its neighbour, a beacon teaches its own system. What only a server can answer is
+ * whether the PRODUCTION gate a rocket asks agrees: `IPlanetDefiner.isPlanetKnown` reading the world
+ * it is standing in, with the pack's authored set as the floor beneath it.</p>
+ *
+ * <p>Both assertions here are stated against dims the probe itself reports, never against a literal
+ * this test wrote down: which worlds a survey resolves depends on the server's own sky.</p>
+ *
+ * <p>Position-isolated at x=4900-4960 (clear of the survey fixtures at 4300-4660 and the observatory
+ * multiblock fixtures at 4000-4060).</p>
+ */
+public class Tier1AimsAtWhatThisWorldKnowsTest extends AbstractSharedServerTest {
+
+    private static final int CY = FixtureSite.OPEN_AIR_Y;
+    private static final int CZ = 4900;
+    private static final int X = 4900;
+
+    private String where() {
+        return "0 " + X + " " + CY + " " + CZ;
+    }
+
+    /** Whether the gate a rocket standing in {@code standing} asks says {@code target} is known. */
+    private boolean known(int standing, int target) throws Exception {
+        String reply = exec("stellurgytest planet knowledge " + standing + " " + target);
+        assertTrue("the knowledge probe failed: " + reply, Reply.of(reply).has("known"));
+        return Reply.of(reply).bool("known");
+    }
+
+    /** The same reply's two halves, so a red test says WHICH source moved. */
+    private String halves(int standing, int target) throws Exception {
+        return exec("stellurgytest planet knowledge " + standing + " " + target);
+    }
+
+    /** A numeric field of a probe reply. */
+    private static int intField(String json, String name) {
+        Reply reply = Reply.of("this probe reply", json);
+        assertTrue("probe reply has no field " + name + ": " + json, reply.has(name));
+        return reply.integer(name);
+    }
+
+    /**
+     * An integer array field, by name. The hand-rolled version this replaces located the key, sliced
+     * to the first {@code ]} and split the text on commas — which carried its own opinion about
+     * spaces, signs and an empty list, and answered a slice of a document to a parser.
+     */
+    private static List<Integer> ints(String json, String field) {
+        Reply reply = Reply.of("this probe reply", json);
+        assertTrue("probe reply has no array " + field + ": " + json, reply.has(field));
+        List<Integer> out = new ArrayList<>();
+        for (int value : reply.intArray(field)) {
+            out.add(value);
+        }
+        return out;
+    }
+
+    @Test
+    public void withResearchOnAPadIsNotOfferedAWorldNobodyHasFoundHere() throws Exception {
+        exec("stellurgytest config set planetsMustBeDiscovered true");
+
+        assertTrue("the overworld must always be known - it is the floor every pack starts from",
+                known(0, 0));
+
+        // The target is MINTED for this test rather than picked out of the server's planet list: a
+        // world that has just come into existence cannot be in anybody's known-set, so the assertion
+        // below cannot be quietly satisfied by whatever another test taught this world earlier.
+        try {
+            String installed = exec("stellurgytest space gen-install 0.9 2000000 987654321");
+            assertTrue("the procedural generator must install: " + installed,
+                    Reply.of(installed).ok());
+            String found = exec("stellurgytest space find-procedural 4");
+            assertTrue("a dense procedural galaxy must offer a landable body: " + found,
+                    Reply.of(found).ok());
+            String cell = intField(found, "sx") + " " + intField(found, "sy") + " "
+                    + intField(found, "sz");
+            int fresh = RealizedBody.at(this::exec, cell).dim;
+
+            String reply = halves(0, fresh);
+            assertTrue("a freshly minted world must be in nobody's global set: " + reply,
+                    (!Reply.of(reply).bool("global")));
+            assertTrue("nor known on the world we are standing on: " + reply,
+                    (!Reply.of(reply).bool("local")));
+            assertFalse("and a pad here must therefore not be offered it: " + reply,
+                    known(0, fresh));
+        } finally {
+            exec("stellurgytest space gen-reset");
+        }
+    }
+
+    @Test
+    public void withResearchOffThePlaceBoundSetGatesNothing() throws Exception {
+        // The other half of the same knob, and the one a pack that does not want research at all
+        // relies on: with the master switch off there must be NO new gate anywhere. Measured against
+        // the hardest case - a world minted a moment ago, which by construction is in neither the
+        // pack's authored set nor this world's own, and which must still be selectable.
+        exec("stellurgytest config set planetsMustBeDiscovered false");
+        try {
+            String installed = exec("stellurgytest space gen-install 0.9 2000000 987654321");
+            assertTrue("the procedural generator must install: " + installed,
+                    Reply.of(installed).ok());
+            String found = exec("stellurgytest space find-procedural 4");
+            assertTrue("a dense procedural galaxy must offer a landable body: " + found,
+                    Reply.of(found).ok());
+            int fresh = RealizedBody.atSectorLocal(this::exec, intField(found, "sx"),
+                    intField(found, "sy"), intField(found, "sz")).dim;
+
+            String reply = halves(0, fresh);
+            assertTrue("arrangement: nobody may have taught this world globally: " + reply,
+                    (!Reply.of(reply).bool("global")));
+            assertTrue("arrangement: nor locally: " + reply, (!Reply.of(reply).bool("local")));
+            assertTrue("with research off a pad must still be offered it - the place-bound set is"
+                    + " additive over a gate that is not there: " + reply, known(0, fresh));
+        } finally {
+            exec("stellurgytest space gen-reset");
+            exec("stellurgytest config set planetsMustBeDiscovered true");
+        }
+    }
+
+    @Test
+    public void anAddressDepositedHereBecomesSomethingAPadHereCanBeAimedAt() throws Exception {
+        // The sweep runs with research OFF, where what the instrument reaches is resolved outright -
+        // the pacing is a different mechanic with its own test, and waiting for it here would only
+        // make this fixture slower and flakier. The GATE is then asked with research ON, which is
+        // the mode the whole question exists in.
+        exec("stellurgytest config set planetsMustBeDiscovered false");
+        exec("stellurgytest config set telescopeLimitingMagnitude 30");
+        exec("stellurgytest config set telescopePassiveRadiusSteps 1");
+
+        String placed = exec("stellurgytest telescope place " + where());
+        assertTrue("could not place an observatory: " + placed, Reply.of(placed).ok());
+        String crystal = exec("stellurgytest telescope crystal " + where());
+        assertEquals("the crystal must start blank: " + crystal,
+                0, Reply.of("stellurgytest telescope crystal", crystal).integer("addresses"));
+
+        // The instrument watching its own neighbourhood: what it resolves are the bodies of the
+        // system this observatory is standing in, which are the ones that have worlds to fly to.
+        TelescopeReading.of(exec("stellurgytest telescope passive " + where()))
+                .requireOk("the passive sweep did not start");
+        TelescopeReading afterSweep = TelescopeReading.at(this::exec, where());
+        assertFalse("the sweep must be finished with research off: " + afterSweep.raw(),
+                afterSweep.scanning);
+        exec("stellurgytest config set planetsMustBeDiscovered true");
+
+        String deposited = exec("stellurgytest telescope deposit " + where());
+        List<Integer> landed = ints(deposited, "dims");
+        assertFalse("the sweep resolved nothing with a world in it, so there is nothing to deposit"
+                + " and this fixture proves nothing: " + deposited, landed.isEmpty());
+
+        for (int dim : landed) {
+            String reply = halves(0, dim);
+            assertTrue("a deposited address must be known to a pad standing here: " + reply,
+                    Reply.of(reply).bool("known"));
+            assertTrue("and it must be known LOCALLY - the deposit may not touch the global floor: "
+                    + reply, Reply.of(reply).bool("local"));
+        }
+
+        String depositedAgain = exec("stellurgytest telescope deposit " + where());
+        assertEquals("depositing the same crystal twice must land the same addresses, not more",
+                landed, ints(depositedAgain, "dims"));
+    }
+}

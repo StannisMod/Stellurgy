@@ -20,6 +20,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
  * What survives here is the NAME and the two flags the rest of the mod still reads. Both flags are
  * still assigned by hand at construction, which is the last of the old model left standing: they
  * become derivations of a composition when planets carry one.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public class Atmosphere {
 

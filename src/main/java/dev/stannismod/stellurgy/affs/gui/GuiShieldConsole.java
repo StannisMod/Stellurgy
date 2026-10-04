@@ -30,7 +30,7 @@ public class GuiShieldConsole extends GuiAffsBase {
 
         mapButton = new GuiButton(1, left + 8, top + 30, 160, 20, I18n.format("gui.affs.network_map"));
         resistanceSlider = new GuiRatioSlider(2, left + 8, top + 76, 160, 20, tile.getShieldEnergyResistanceBias(), I18n.format("gui.affs.energy_resistance"), I18n.format("gui.affs.physical_resistance"), value ->
-                AdvancedForceFieldSystem.NETWORK.sendToServer(PacketSetShieldResistanceBias.forConsole(tile.getPos(), value))
+                dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendToServer(PacketSetShieldResistanceBias.forConsole(tile.getPos(), value))
         );
         buttonList.add(mapButton);
         buttonList.add(resistanceSlider);
@@ -44,7 +44,7 @@ public class GuiShieldConsole extends GuiAffsBase {
         }
 
         if (button.id == 1) {
-            AdvancedForceFieldSystem.NETWORK.sendToServer(PacketOpenGui.forBlock(AdvancedForceFieldSystem.GUI_NETWORK_MAP, tile.getPos()));
+            dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendToServer(PacketOpenGui.forBlock(AdvancedForceFieldSystem.GUI_NETWORK_MAP, tile.getPos()));
         }
     }
 

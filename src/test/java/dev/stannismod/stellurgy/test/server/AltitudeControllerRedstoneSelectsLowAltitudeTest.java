@@ -5,7 +5,6 @@ import dev.stannismod.stellurgy.test.StationInfo;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * Repro (finding C142) for the station-altitude redstone
@@ -75,8 +74,8 @@ public class AltitudeControllerRedstoneSelectsLowAltitudeTest extends AbstractSh
     }
 
     /** What the server says about one station. */
-    private static StationInfo station(int stationId) throws Exception {
-        return StationInfo.byId(WorldCommandFixtures::exec, stationId);
+    private StationInfo station(int stationId) throws Exception {
+        return StationInfo.byId(this::exec, stationId);
     }
 
     private static int extract(String field, String s) {

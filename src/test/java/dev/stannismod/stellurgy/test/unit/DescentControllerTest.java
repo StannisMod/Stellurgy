@@ -44,7 +44,12 @@ import static org.junit.Assert.assertTrue;
  */
 public class DescentControllerTest {
 
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID SHIP = UUID.fromString("00000000-0000-0000-0000-0000000000BB");
+    /**
+     * A constant: a {@code BlockPos} built with {@code new} is immutable: three final ints (not the mutable
+     * subclass).
+     */
     private static final BlockPos AFC = new BlockPos(2, 70, 2);
     private static final int SLOT_DIM = 10;
     private static final int PLANET_DIM = 3;
@@ -70,7 +75,11 @@ public class DescentControllerTest {
         boolean failCross;
         final List<String> messages = new ArrayList<>();
         final List<Integer> reseatDims = new ArrayList<>();
-        /** The identity the cross hands back — every settle half must address THIS ship. */
+        /**
+         * The identity the cross hands back — every settle half must address THIS ship.
+         *
+         * <p>A constant: a {@code UUID} is an immutable value: two final longs.</p>
+         */
         static final UUID CROSSED_SHIP = UUID.fromString("11111111-2222-3333-4444-555555555555");
         /** What the settle actually named when it re-seated; a null here is a position lookup. */
         final List<UUID> reseatShipUuids = new ArrayList<>();
@@ -557,6 +566,9 @@ public class DescentControllerTest {
 
     // ---- fixture: Sol, Earth and Luna, built the way SystemContent builds them -----------------
 
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord ANCHOR = GalacticCoord.ORIGIN;
     private static final double EARTH_PERIOD_TICKS = 365.25d * 24_000d;
     private static final double LUNA_PERIOD_TICKS =

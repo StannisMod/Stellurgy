@@ -20,7 +20,7 @@ import dev.stannismod.stellurgy.util.DelayedActionBar;
  * <h2>The event</h2>
  *
  * <ul>
- *   <li>{@code action_bar_queued} — HEAD of the public static
+ *   <li>{@code action_bar_queued} — HEAD of the server's
  *       {@code DelayedActionBar.send(EntityPlayerMP, ITextComponent, int)}: the moment a notice is
  *       put on the pending list, which is the moment the DECISION to notify was taken (a seat found
  *       occupied, a seat on an unassembled hull, a crossing that landed on a taken seat). Recorded
@@ -35,7 +35,7 @@ import dev.stannismod.stellurgy.util.DelayedActionBar;
  * <h2>What this mixin is silent about</h2>
  *
  * <p>It does not say the message was DELIVERED: the drain runs in a later server tick, skips a
- * player who has since left, and is cleared wholesale when the server is gone — none of that is
+ * player who has since left, and dies with the server that queued it — none of that is
  * seen here. The delivery itself is {@code EntityPlayerMP.sendStatusMessage}, a separate event
  * ({@code status_message_sent}) recorded by its own mixin; the two are correlated by {@code who}
  * and {@code key} on a run, and their order is measured there, never assumed here. It also does not
@@ -54,7 +54,7 @@ public abstract class MixinDelayedActionBarEvents {
     private static final String INSTRUMENT = "action_bar_events";
 
     @Inject(method = "send", at = @At("HEAD"))
-    private static void stellurgyTest$queued(EntityPlayerMP player, ITextComponent message, int delayTicks,
+    private void stellurgyTest$queued(EntityPlayerMP player, ITextComponent message, int delayTicks,
             CallbackInfo ci) {
         if (player == null) {
             TestTrace.instrumentHere(INSTRUMENT);

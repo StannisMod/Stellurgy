@@ -16,7 +16,7 @@ import static org.junit.Assert.assertTrue;
  *
  * <p>{@code conflicts()} is pure and does not touch the client, so this stays a
  * deterministic unit test; the "which context is active when" half is covered by
- * the real-client {@code FreeFlightModeE2ETest} key-conflict cases.
+ * the real-client {@code FreeFlightModeTest} key-conflict cases.
  */
 public class StellurgyKeyConflictContextTest {
 

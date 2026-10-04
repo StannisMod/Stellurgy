@@ -67,10 +67,10 @@ public final class UniverseSchemaV0 implements UniverseSchema {
     }
 
     @Override
-    public IGalaxyGenerator generator(GalaxyGenConfig config) {
+    public IGalaxyGenerator generator(GalaxyGenConfig config, PlanetTypes types, ReportOnce reports) {
         return (config == null)
                 ? new EmptyGalaxyGenerator()
-                : new ClusteredGalaxyGenerator(config, BodyDerivationV0.INSTANCE, laws());
+                : new ClusteredGalaxyGenerator(reports, config, new BodyDerivationV0(types), laws());
     }
 
     @Override

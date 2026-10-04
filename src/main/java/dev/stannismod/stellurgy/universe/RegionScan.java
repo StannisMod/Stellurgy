@@ -208,9 +208,9 @@ public final class RegionScan {
         return distanceCells;
     }
 
-    /** The same reach in light years — the form the number is recognisable in. */
-    public double distanceLightYears() {
-        return UniverseRegistry.getGenerator().laws().lightYearsForCells(distanceCells);
+    /** The same reach in light years, in the metric of the universe surveyed. */
+    public double distanceLightYears(IUniverseLaws laws) {
+        return laws.lightYearsForCells(distanceCells);
     }
 
     /** How far apart the cells this survey looks at stand. One star's territory, or one cell. */
@@ -428,15 +428,19 @@ public final class RegionScan {
         private final int baseTicks;
         private final int cellsPerStep;
         private final long strideCells;
+        /** The metric the horizon is converted to cells by: the generator's whose sky is surveyed. */
+        private final IUniverseLaws laws;
 
         /**
          * @param archetypes the star types the sky can produce — the reach is DERIVED against the
          *                   brightest of them here and is never a field anyone can set, so an
          *                   instrument's horizon cannot disagree with its aperture
+         * @param laws       the metric of the universe being surveyed
          */
         public Tuning(double limitMagnitude, Iterable<GalaxyGenConfig.StarType> archetypes,
                       double halfAngleRadians, int maxCells, int baseTicks, int cellsPerStep,
-                      long strideCells) {
+                      long strideCells, IUniverseLaws laws) {
+            this.laws = laws;
             this.limitMagnitude = limitMagnitude;
             this.reachLightYears = StellarMagnitude.instrumentReachLightYears(archetypes, limitMagnitude);
             this.halfAngleRadians = Math.max(0d, halfAngleRadians);
@@ -447,11 +451,12 @@ public final class RegionScan {
         }
 
         /**
-         * The tuning the running game is configured with — including the stride, which is the active
-         * generator's own star spacing and never a number of its own: a survey that strode by
-         * anything else would either re-read one system or step over whole ones.
+         * The tuning the running game is configured with for a sky made by {@code generator} — the
+         * generator in force for the save — including the stride, which is that generator's own star
+         * spacing and never a number of its own: a survey that strode by anything else would either
+         * re-read one system or step over whole ones.
          */
-        public static Tuning fromConfig() {
+        public static Tuning fromConfig(IGalaxyGenerator generator) {
             StellurgyConfiguration config = StellurgyConfiguration.getCurrentConfig();
             return new Tuning(
                     config.telescopeLimitingMagnitude,
@@ -461,7 +466,7 @@ public final class RegionScan {
                     // has to be able to reach. Falling back to the reference table is the same move
                     // as reading an unstated bulk as one Earth; taking the empty list literally gave
                     // the instrument a reach of zero and collapsed every pointing to a single shell.
-                    UniverseRegistry.getGenerator().tuning()
+                    generator.tuning()
                             .map(c -> c.starTypes)
                             .filter(types -> !types.isEmpty())
                             .orElse(GalaxyGenConfig.defaults().starTypes),
@@ -469,7 +474,13 @@ public final class RegionScan {
                     config.telescopeScanMaxCells,
                     config.telescopeScanBaseTicks,
                     config.telescopeScanCellsPerStep,
-                    UniverseRegistry.getGenerator().minSpacingCells());
+                    generator.minSpacingCells(),
+                    generator.laws());
+        }
+
+        /** The metric this tuning converts lengths to cells by. */
+        public IUniverseLaws laws() {
+            return laws;
         }
 
         /** How faint a star this instrument can still register. Magnitudes: larger is fainter. */
@@ -498,8 +509,7 @@ public final class RegionScan {
 
         /** The horizon as a number of steps, which is what an operator aims in. At least one. */
         public int maxRangeSteps() {
-            long steps = UniverseRegistry.getGenerator().laws()
-                    .cellsForLightYears(maxRangeLightYears()) / strideCells;
+            long steps = laws.cellsForLightYears(maxRangeLightYears()) / strideCells;
             return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, steps));
         }
 

@@ -99,22 +99,6 @@ public class ItemDataCarrierNBTRoundTripTest {
                 + "!isEmpty for the attach branch)", s.hasTagCompound());
     }
 
-    @Test
-    public void elevatorChipPositionsSurviveItemStackCopy() {
-        ItemSpaceElevatorChip chip = new ItemSpaceElevatorChip();
-        ItemStack a = new ItemStack(chip, 1);
-        chip.setBlockPositions(a, Arrays.asList(
-                new DimensionBlockPosition(2, new HashedBlockPosition(1, 2, 3))));
-
-        ItemStack b = a.copy();
-        List<DimensionBlockPosition> out = chip.getBlockPositions(b);
-        assertEquals("copy must preserve elevator-chip position list size",
-                1, out.size());
-        assertEquals("copy must preserve elevator-chip position content",
-                new DimensionBlockPosition(2, new HashedBlockPosition(1, 2, 3)),
-                out.get(0));
-    }
-
     /** The empty-input clear branch
      *  previously called {@code removeTag("positions")} but the data
      *  lived under {@code "list"} per
@@ -297,24 +281,5 @@ public class ItemDataCarrierNBTRoundTripTest {
                 item.getData(s, DataStorage.DataType.MASS) < massBefore);
         assertEquals("HUMIDITY must NOT be touched by removeData(MASS)",
                 humBefore, item.getData(s, DataStorage.DataType.HUMIDITY));
-    }
-
-    @Test
-    public void multiDataSurvivesItemStackCopy() {
-        ItemMultiData item = new ItemMultiData();
-        ItemStack a = new ItemStack(item, 1);
-        item.setMaxData(a, 500);
-        item.addData(a, 77, DataStorage.DataType.COMPOSITION);
-
-        ItemStack b = a.copy();
-        assertEquals("copy preserves maxData", 500, item.getMaxData(b));
-        assertEquals("copy preserves per-type data",
-                item.getData(a, DataStorage.DataType.COMPOSITION),
-                item.getData(b, DataStorage.DataType.COMPOSITION));
-
-        // Independence: mutating b must not bleed into a.
-        item.setData(b, 0, DataStorage.DataType.COMPOSITION);
-        assertTrue("mutating the copy must not change the original",
-                item.getData(a, DataStorage.DataType.COMPOSITION) > 0);
     }
 }

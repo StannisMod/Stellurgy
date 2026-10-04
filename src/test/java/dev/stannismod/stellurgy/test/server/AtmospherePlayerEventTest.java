@@ -1,19 +1,11 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
 
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -34,8 +26,14 @@ import static org.junit.Assert.assertTrue;
  * {@code PlayerChangedDimensionEvent} Forge's transfer fires);
  * {@code tick-living} supplies the per-tick {@code LivingUpdateEvent}
  * cadence {@code AtmosphereHandler.onTick} subscribes to.</p>
+ *
+ * <p>One server for the class, over the two planets {@link Galaxy} declares. The fake player is
+ * shared, so every scenario that waits for a resolution first takes him through the overworld
+ * ({@link #startFromTheOverworld}): resolved as breathable there, he owes a change of answer on the
+ * airless planet, which is what guarantees the resolution it waits for is recorded.</p>
  */
-public class AtmospherePlayerEventTest {
+@SeededWorld(AtmospherePlayerEventTest.Galaxy.class)
+public class AtmospherePlayerEventTest extends AbstractSharedServerTest {
 
     /**
      * Server ticks granted beyond the living updates requested. The handler resolves inside the
@@ -57,28 +55,20 @@ public class AtmospherePlayerEventTest {
     private static final String PLAYER_ATMOS = "atmosphere";
     private static final String PLAYER_BREATHABLE = "breathable";
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
-
-    @Before
-    public void startServer() throws Exception {
-        Assume.assumeTrue("Server harness disabled",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-atm-player-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
-                + planetXml("VacuumPlanet", DIM_VAC, 0)
-                + planetXml("AirPlanet", DIM_AIR, 100)
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+    /** A vacuum planet and a breathable one, otherwise identical. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(GameDirSeed seed) {
+            seed.planetDefs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
+                    + planetXml("VacuumPlanet", DIM_VAC, 0)
+                    + planetXml("AirPlanet", DIM_AIR, 100)
+                    + "    </star>\n"
+                    + "</galaxy>\n", AtmospherePlayerEventTest.class);
+        }
     }
 
     private static String planetXml(String name, int dim, int atmosDensity) {
@@ -102,19 +92,10 @@ public class AtmospherePlayerEventTest {
                 + "        </planet>\n";
     }
 
-    @After
-    public void stopServer() throws Exception {
-        if (harness != null) harness.close();
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", harness.client().execute(cmd));
-    }
-
     /** This class's reader of the server's ordered event log. */
     private Events events() {
         return new Events(this::exec,
-                ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
+                ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
     }
 
     /** Stations the fake player in {@code dim} and starts {@code ticks} living updates there. */
@@ -125,12 +106,25 @@ public class AtmospherePlayerEventTest {
     }
 
     /**
+     * The shared fake player starts this scenario resolved as breathable in the overworld, whatever
+     * world a sibling scenario left him in — so the move to an airless planet that follows is a
+     * change of answer, which is what the instrument records.
+     */
+    private void startFromTheOverworld() throws Exception {
+        enterDim(0, OVERWORLD_UPDATES);
+        // EXPERIMENT: the dose is OVERWORLD_UPDATES living updates in the overworld; the ticker posts
+        // one per server tick and then stops, so overshoot delivers none extra.
+        GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
+    }
+
+    /**
      * Stations the fake player in {@code dim} and waits for that dimension's handler to RESOLVE him,
      * on the record it emits ({@code player_atmosphere_changed}, carrying the resolver's dim).
      *
-     * <p>The record is an EDGE, and every caller arrives with one owed: the instrument has seen
-     * nothing for him on a fresh server, and the one move this class makes — airless to breathable —
-     * changes the answer. So the wait cannot expire on a healthy path. Marked before the station,
+     * <p>The record is an EDGE, and every caller arrives with one owed: he starts resolved as
+     * breathable in the overworld ({@link #startFromTheOverworld}), so going airless changes the
+     * answer, and going on from airless to breathable changes it again. So the wait cannot expire on
+     * a healthy path. Marked before the station,
      * because the first living update may resolve him before a later mark could be taken.</p>
      */
     private String enterDimAndAwaitResolution(int dim) throws Exception {
@@ -170,7 +164,7 @@ public class AtmospherePlayerEventTest {
         // posts one per server tick and then stops, so this many server ticks (plus the slack)
         // deliver all of them; overshoot delivers none extra, so the verdict does not depend on the
         // box's speed.
-        GameTicks.advance(harness.client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
+        GameTicks.advance(client(), GameTicks.server(), OVERWORLD_UPDATES + TICK_SLACK);
         String resp = exec("stellurgytest atmosphere for-player");
         assertFalse("the gate must answer SOMETHING for a player in the overworld: " + resp,
                 field(PLAYER_ATMOS, resp).isEmpty());
@@ -188,6 +182,7 @@ public class AtmospherePlayerEventTest {
      */
     @Test
     public void aPlayerOnAnAirlessPlanetResolvesUnbreathableAir() throws Exception {
+        startFromTheOverworld();
         enterDimAndAwaitResolution(DIM_VAC);
         String resp = exec("stellurgytest atmosphere for-player");
         assertFalse("the gate must answer SOMETHING for a player on a Stellurgy planet: " + resp,
@@ -213,6 +208,7 @@ public class AtmospherePlayerEventTest {
      */
     @Test
     public void aDimChangeMakesAPlayerResolveTheNewDimsAir() throws Exception {
+        startFromTheOverworld();
         enterDimAndAwaitResolution(DIM_VAC);
         String onVacuum = exec("stellurgytest atmosphere for-player");
         String atmoVac = field(PLAYER_ATMOS, onVacuum);

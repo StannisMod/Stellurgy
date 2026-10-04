@@ -30,6 +30,7 @@ import dev.stannismod.stellurgy.Stellurgy;
 
 public class BlockPressurizedFluidTank extends Block {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final AxisAlignedBB bb = new AxisAlignedBB(.0625, 0, 0.0625, 0.9375, 1, 0.9375);
 
     public BlockPressurizedFluidTank(Material material) {

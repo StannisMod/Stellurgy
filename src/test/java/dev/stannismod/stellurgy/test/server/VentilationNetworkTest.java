@@ -7,8 +7,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * Tier 4: a central plant regenerating a room it does not stand in, through ducts.

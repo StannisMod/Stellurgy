@@ -60,7 +60,7 @@ public class SpaceStationObject implements ISpaceObject, IPlanetDefiner {
 
     
     public SpaceStationObject() {
-        properties = (DimensionProperties) dev.stannismod.stellurgy.dimension.DimensionManager.defaultSpaceDimensionProperties.clone();
+        properties = dev.stannismod.stellurgy.dimension.DimensionManager.newOpenSpaceProperties();
         orbitalDistance = 50.0f;
         targetOrbitalDistance = 50;
         targetRotationsPerHour = new int[]{0, 0, 0};

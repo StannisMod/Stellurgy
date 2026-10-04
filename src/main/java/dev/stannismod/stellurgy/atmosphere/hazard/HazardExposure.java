@@ -27,6 +27,7 @@ import dev.stannismod.stellurgy.network.PacketOxygenState;
  * <p>
  * Damage is not merged: two different injuries are two different injuries, and each names its own
  * source so the death message says what actually happened.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class HazardExposure {
 

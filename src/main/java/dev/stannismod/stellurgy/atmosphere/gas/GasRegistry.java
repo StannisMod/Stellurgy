@@ -25,6 +25,7 @@ import java.util.Map;
  * <p>
  * The boiling points are the measured normal boiling points at one atmosphere (sublimation for carbon
  * dioxide, which has no liquid phase there).
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class GasRegistry {
 

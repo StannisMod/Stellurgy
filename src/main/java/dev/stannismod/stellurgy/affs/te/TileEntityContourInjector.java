@@ -32,6 +32,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
 
     public static final int MAX_SCAN_RADIUS = 16;
     public static final int MAX_SHIELD_BUFFER = 200_000;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DamageSource SHIELD_COLLISION_DAMAGE = new DamageSource("affs.contour_collision");
 
     private String contourCode = "";

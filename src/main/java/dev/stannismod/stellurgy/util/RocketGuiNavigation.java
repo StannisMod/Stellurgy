@@ -36,14 +36,17 @@ public final class RocketGuiNavigation {
 
     private static final int BACK_BUTTON_Y = BACK_BUTTON_MARGIN;
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation[] BACK_BUTTON_TEXTURE =
             TextureResources.buttonBuild;
 
-    private static final Map<UUID, ReturnContext> SERVER_CONTEXTS = new HashMap<>();
+    /**
+     * Where each player came from when he stepped from a rocket's GUI into one of its tiles' GUIs.
+     * One per server ({@code ServerState}); a player's entry is dropped when he logs out.
+     */
+    private final Map<UUID, ReturnContext> contexts = new HashMap<>();
 
-    private RocketGuiNavigation() {}
-
-    public static void rememberIfRocketGuiReturnTile(EntityPlayer player, EntityRocket rocket, TileEntity tile) {
+    public void rememberIfRocketGuiReturnTile(EntityPlayer player, EntityRocket rocket, TileEntity tile) {
         if (player == null || rocket == null || tile == null) return;
         if (player.world == null || player.world.isRemote) return;
 
@@ -57,7 +60,7 @@ public final class RocketGuiNavigation {
                 || tile instanceof TileSatelliteHatch;
     }
 
-    private static void remember(EntityPlayer player, EntityRocket rocket, TileEntity sourceTile) {
+    private void remember(EntityPlayer player, EntityRocket rocket, TileEntity sourceTile) {
         if (rocket.world == null || sourceTile.getWorld() == null) return;
 
         ReturnContext ctx = new ReturnContext(
@@ -68,7 +71,12 @@ public final class RocketGuiNavigation {
                 player.world.getTotalWorldTime() + RETURN_CONTEXT_TTL_TICKS
         );
 
-        SERVER_CONTEXTS.put(player.getUniqueID(), ctx);
+        contexts.put(player.getUniqueID(), ctx);
+    }
+
+    /** The player has left this server. */
+    public void forget(UUID playerId) {
+        contexts.remove(playerId);
     }
 
     public static void addBackButtonIfApplicable(List<ModuleBase> modules, EntityPlayer player, IButtonInventory owner) {
@@ -90,7 +98,7 @@ public final class RocketGuiNavigation {
         modules.add(back);
     }
 
-    public static boolean openRocketGuiFromReturnContext(
+    public boolean openRocketGuiFromReturnContext(
             EntityPlayerMP player,
             int sourceTileDimensionId,
             BlockPos sourceTilePos
@@ -119,19 +127,19 @@ public final class RocketGuiNavigation {
         if (rocket.storage == null) return false;
         if (rocket.getDistance(player) >= 64) return false;
 
-        SERVER_CONTEXTS.remove(player.getUniqueID());
+        contexts.remove(player.getUniqueID());
 
         rocket.openGui(player);
         return true;
     }
 
-    private static ReturnContext getValidContext(EntityPlayerMP player) {
-        ReturnContext ctx = SERVER_CONTEXTS.get(player.getUniqueID());
+    private ReturnContext getValidContext(EntityPlayerMP player) {
+        ReturnContext ctx = contexts.get(player.getUniqueID());
 
         if (ctx == null) return null;
 
         if (player.world.getTotalWorldTime() > ctx.expiresAtWorldTime) {
-            SERVER_CONTEXTS.remove(player.getUniqueID());
+            contexts.remove(player.getUniqueID());
             return null;
         }
 

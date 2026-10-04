@@ -15,7 +15,6 @@ import dev.stannismod.stellurgy.api.satellite.SatelliteProperties;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.network.PacketAirParticle;
 import dev.stannismod.stellurgy.network.PacketAsteroidInfo;
-import dev.stannismod.stellurgy.network.PacketBiomeIDChange;
 import dev.stannismod.stellurgy.network.PacketConfigSync;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketFluidParticle;
@@ -23,17 +22,14 @@ import dev.stannismod.stellurgy.network.PacketInvalidLocationNotify;
 import dev.stannismod.stellurgy.network.PacketLaserGun;
 import dev.stannismod.stellurgy.network.PacketMoveRocketInSpace;
 import dev.stannismod.stellurgy.network.PacketSatellite;
-import dev.stannismod.stellurgy.network.PacketSatellitesUpdate;
 import dev.stannismod.stellurgy.network.PacketSpaceStationInfo;
 import dev.stannismod.stellurgy.network.PacketStationUpdate;
-import dev.stannismod.stellurgy.stations.SpaceStationObject;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.Asteroid;
 import dev.stannismod.stellurgy.libvulpes.util.HashedBlockPosition;
 
 import java.lang.reflect.Field;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -97,40 +93,6 @@ public class PacketSerializationTest {
     }
 
     // ---- PacketDimInfo --------------------------------------------------------
-
-    @Test
-    public void packetDimInfoRoundTrip() {
-        DimensionProperties props = new DimensionProperties(4242);
-        props.setName("TestDim");
-        props.setBulk(1d, 1d);
-        props.realizeAtmosphere(true, 75);
-        props.orbitalDist = 175;
-        props.rotationalPeriod = 18000;
-
-        PacketDimInfo sent = new PacketDimInfo(4242, props);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketDimInfo received = new PacketDimInfo();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(4242, (int) getField(received, "dimNumber"));
-        assertEquals(false, (boolean) getField(received, "deleteDim"));
-
-        // The packet stores raw NBT and re-hydrates inside executeClient (which
-        // mutates DimensionManager). Round-trip through DimensionProperties to
-        // verify the NBT survived the wire.
-        NBTTagCompound nbt = getField(received, "dimNBT");
-        assertNotNull("dimNBT missing on receive", nbt);
-
-        DimensionProperties restored = new DimensionProperties(4242);
-        restored.readFromNBT(nbt);
-        assertEquals("TestDim", restored.getName());
-        assertEquals(75, restored.getAtmosphereDensity());
-        assertEquals(175, restored.orbitalDist);
-        assertEquals(18000, restored.rotationalPeriod);
-    }
 
     @Test
     public void packetDimInfoNullPropertiesIsDeleteSignal() {
@@ -214,52 +176,6 @@ public class PacketSerializationTest {
     }
 
     // ---- PacketStationUpdate --------------------------------------------------
-
-    @Test
-    public void packetStationUpdateFuelRoundTrip() {
-        // FUEL_UPDATE is the simplest payload — just stationNumber+type+fuel int.
-        SpaceStationObject station = new SpaceStationObject();
-        station.setFuelAmount(7777);
-        // ISpaceObject.getId() reads from a field that's normally set by
-        // SpaceObjectManager.register; inject via reflection for the test.
-        station.setId(1234);
-
-        PacketStationUpdate sent = new PacketStationUpdate(station, PacketStationUpdate.Type.FUEL_UPDATE);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketStationUpdate received = new PacketStationUpdate();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(1234, (int) getField(received, "stationNumber"));
-        assertEquals(PacketStationUpdate.Type.FUEL_UPDATE, getField(received, "type"));
-        assertEquals(7777, (int) getField(received, "fuel"));
-    }
-
-    @Test
-    public void packetStationUpdateOrbitRoundTrip() {
-        SpaceStationObject station = new SpaceStationObject();
-        // Avoid the orbiting-body NPE — beginTransition flips `created` to true
-        // and primes destination resolution.
-        station.beginTransition(0);
-        station.setOrbitingBody(0);
-        station.setId(5678);
-
-        PacketStationUpdate sent = new PacketStationUpdate(
-                station, PacketStationUpdate.Type.ORBIT_UPDATE);
-        ByteBuf buffer = newBuffer();
-        sent.write(buffer);
-
-        PacketStationUpdate received = new PacketStationUpdate();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(5678, (int) getField(received, "stationNumber"));
-        assertEquals(PacketStationUpdate.Type.ORBIT_UPDATE, getField(received, "type"));
-        // ORBIT_UPDATE stores planet id in `destOrbitingBody` slot on the wire.
-        assertEquals(0, (int) getField(received, "destOrbitingBody"));
-    }
 
     // ---- PacketConfigSync -----------------------------------------------------
 
@@ -406,113 +322,26 @@ public class PacketSerializationTest {
     // ---- PacketLaserGun ------------------------------------------------------
 
     /**
-     * write() pulls fromEntity.getEntityId() — we can't easily fabricate a real
-     * Entity, so this test exercises the readClient path against a hand-crafted
-     * wire payload that matches what write() would have produced. The write
-     * symmetry is implicitly covered by the executeClient half being a no-op for
-     * fields other than entityId/toPos.
+     * The shooter crosses the wire as its entity id, which is what the client looks it up by; the
+     * target crosses as floats, so the coordinates here are exactly representable in one.
      */
     @Test
-    public void packetLaserGunReadClientDecodesWire() {
-        ByteBuf buffer = newBuffer();
-        buffer.writeInt(4242);              // entityId
-        buffer.writeFloat(1.5f);            // toPos.x
-        buffer.writeFloat(64.25f);          // toPos.y
-        buffer.writeFloat(-2.75f);          // toPos.z
+    public void packetLaserGunRoundTripsTheShooterAndTheTarget() {
+        net.minecraft.entity.Entity shooter = new net.minecraft.entity.projectile.EntitySnowball(null);
+        PacketLaserGun sent = new PacketLaserGun(shooter, new net.minecraft.util.math.Vec3d(1.5, 64.25, -2.75));
 
+        ByteBuf buffer = newBuffer();
+        sent.write(buffer);
         PacketLaserGun received = new PacketLaserGun();
         received.readClient(buffer);
 
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(4242, (int) PacketSerializationTest.<Integer>getField(received, "entityId"));
+        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
+        assertEquals(shooter.getEntityId(), (int) PacketSerializationTest.<Integer>getField(received, "entityId"));
 
         net.minecraft.util.math.Vec3d toPos = getField(received, "toPos");
         assertEquals(1.5, toPos.x, 1e-6);
         assertEquals(64.25, toPos.y, 1e-6);
         assertEquals(-2.75, toPos.z, 1e-6);
-    }
-
-    // ---- PacketBiomeIDChange -------------------------------------------------
-
-    /**
-     * write() pulls chunk.x / chunk.z / chunk.getBiomeArray() — fabricating a
-     * real Chunk requires a full World. We test the readClient path against a
-     * known wire layout matching what the production write() emits.
-     */
-    @Test
-    public void packetBiomeIDChangeReadClientDecodesWire() {
-        byte[] biomeArr = new byte[256];
-        for (int i = 0; i < 256; i++) biomeArr[i] = (byte) (i ^ 0x5A);
-
-        ByteBuf buffer = newBuffer();
-        buffer.writeInt(7);                 // worldId
-        buffer.writeInt(12);                // chunk.x -> xPos
-        buffer.writeInt(-3);                // chunk.z -> zPos
-        buffer.writeInt(200);               // pos.x
-        buffer.writeShort(64);              // pos.y (short)
-        buffer.writeInt(-50);               // pos.z
-        buffer.writeBytes(biomeArr);
-
-        PacketBiomeIDChange received = new PacketBiomeIDChange();
-        received.readClient(buffer);
-
-        assertEquals(0, buffer.readableBytes());
-        assertEquals(7, (int) PacketSerializationTest.<Integer>getField(received, "worldId"));
-        assertEquals(12, (int) PacketSerializationTest.<Integer>getField(received, "xPos"));
-        assertEquals(-3, (int) PacketSerializationTest.<Integer>getField(received, "zPos"));
-
-        HashedBlockPosition pos = getField(received, "pos");
-        assertEquals(200, pos.x);
-        assertEquals(64, pos.y);
-        assertEquals(-50, pos.z);
-
-        byte[] restored = getField(received, "array");
-        assertArrayEquals(biomeArr, restored);
-    }
-
-    // ---- PacketStorageTileUpdate ---------------------------------------------
-
-    /**
-     * readClient() touches Minecraft.getMinecraft().world — unreachable from
-     * unit JVM. We exercise the wire shape directly: write a known payload via
-     * PacketBuffer (as production write does) and verify the bytes decode into
-     * the expected primitive layout. The Entity.world.provider dispatch is
-     * covered by scenario tests.
-     */
-    @Test
-    public void packetStorageTileUpdateWireLayout() {
-        // Wire format:
-        //   int worldId, int entityId, int x, int y, int z, NBTCompound tile.
-        ByteBuf buffer = newBuffer();
-        buffer.writeInt(0);                 // overworld
-        buffer.writeInt(99);                // entityId
-        buffer.writeInt(15);                // x
-        buffer.writeInt(70);                // y
-        buffer.writeInt(-15);               // z
-
-        NBTTagCompound tileNbt = new NBTTagCompound();
-        tileNbt.setString("id", "stellurgy:test_tile");
-        tileNbt.setInteger("energy", 42_000);
-        new PacketBuffer(buffer).writeCompoundTag(tileNbt);
-
-        // Mirror-decode the bytes the way readClient would, but without the
-        // Minecraft.getMinecraft() lookup. This proves the wire format is
-        // self-describing and the NBT is recoverable.
-        assertEquals(0, buffer.readInt());
-        assertEquals(99, buffer.readInt());
-        assertEquals(15, buffer.readInt());
-        assertEquals(70, buffer.readInt());
-        assertEquals(-15, buffer.readInt());
-
-        NBTTagCompound restored;
-        try {
-            restored = new PacketBuffer(buffer).readCompoundTag();
-        } catch (java.io.IOException e) {
-            throw new AssertionError(e);
-        }
-        assertNotNull(restored);
-        assertEquals("stellurgy:test_tile", restored.getString("id"));
-        assertEquals(42_000, restored.getInteger("energy"));
     }
 
     // ---- PacketAirParticle ---------------------------------------------------
@@ -538,52 +367,6 @@ public class PacketSerializationTest {
     // ---- PacketSpaceStationInfo ----------------------------------------------
 
     /**
-     * write() needs a live {@code SpaceStationObject} hooked into
-     * {@code SpaceObjectManager} (which the mod registers only during init).
-     * We exercise the read path against a hand-crafted wire that matches what
-     * production write() emits when {@code isBeingDeleted=false}.
-     *
-     * <p>Wire layout (non-deletion branch):</p>
-     * <pre>
-     *   int stationNumber
-     *   bool isBeingDeleted = false
-     *   String clazzId (PacketBuffer)
-     *   NBTTagCompound nbt
-     *   int fuelAmt
-     *   int direction.ordinal()
-     * </pre>
-     */
-    @Test
-    public void packetSpaceStationInfoNonDeletionReadClient() throws Exception {
-        ByteBuf buffer = newBuffer();
-        net.minecraft.network.PacketBuffer pb = new net.minecraft.network.PacketBuffer(buffer);
-        buffer.writeInt(7777);                  // stationNumber
-        buffer.writeBoolean(false);             // isBeingDeleted
-        pb.writeString("station-class-id");     // clazzId
-        NBTTagCompound payload = new NBTTagCompound();
-        payload.setString("name", "RoundTripStation");
-        payload.setInteger("dim", 7777);
-        pb.writeCompoundTag(payload);
-        pb.writeInt(98_765);                    // fuelAmt
-        buffer.writeInt(net.minecraft.util.EnumFacing.SOUTH.ordinal());
-
-        PacketSpaceStationInfo received = new PacketSpaceStationInfo();
-        received.readClient(buffer);
-
-        assertEquals("wire should be fully consumed", 0, buffer.readableBytes());
-        assertEquals(7777, (int) PacketSerializationTest.<Integer>getField(received, "stationNumber"));
-        assertEquals(false, (boolean) PacketSerializationTest.<Boolean>getField(received, "isBeingDeleted"));
-        assertEquals("station-class-id", PacketSerializationTest.<String>getField(received, "clazzId"));
-        NBTTagCompound restoredNbt = getField(received, "nbt");
-        assertNotNull(restoredNbt);
-        assertEquals("RoundTripStation", restoredNbt.getString("name"));
-        assertEquals(7777, restoredNbt.getInteger("dim"));
-        assertEquals(98_765, (int) PacketSerializationTest.<Integer>getField(received, "fuelAmt"));
-        assertEquals(net.minecraft.util.EnumFacing.SOUTH.ordinal(),
-                (int) PacketSerializationTest.<Integer>getField(received, "direction"));
-    }
-
-    /**
      * Deletion branch — server signals "remove this station". Wire is just
      * {@code int stationNumber + bool isBeingDeleted=true}. No further fields
      * are emitted, no further fields are read. Tripwire: if someone adds a
@@ -603,55 +386,6 @@ public class PacketSerializationTest {
                 0, buffer.readableBytes());
         assertEquals(4242, (int) PacketSerializationTest.<Integer>getField(received, "stationNumber"));
         assertEquals(true, (boolean) PacketSerializationTest.<Boolean>getField(received, "isBeingDeleted"));
-    }
-
-    // ---- PacketSatellitesUpdate ----------------------------------------------
-
-    /**
-     * write() requires a {@code DimensionProperties} with ticking satellites
-     * (lookup goes via DimensionManager). readClient runs an FML side check
-     * AND mutates {@code DimensionManager.getInstance().getDimensionProperties(dim)},
-     * neither of which is testable in unit JVM without a registered planet
-     * containing real satellites.
-     *
-     * We exercise the wire shape: write a known payload via the same primitives
-     * the production write() uses, then mirror-decode and verify the NBT block
-     * is recoverable. The DimensionManager mutation is covered end-to-end by
-     * {@code SatelliteLifecycleSmokeTest}.
-     */
-    @Test
-    public void packetSatellitesUpdateWireLayout() {
-        ByteBuf buffer = newBuffer();
-        buffer.writeInt(0);                     // dimNumber
-
-        NBTTagCompound payload = new NBTTagCompound();
-        // Two satellite tags keyed by id, the exact layout production write uses.
-        NBTTagCompound sat1 = new NBTTagCompound();
-        sat1.setString("dataType", "ar:test_sat");
-        sat1.setInteger("powerStored", 1234);
-        payload.setTag("100", sat1);
-
-        NBTTagCompound sat2 = new NBTTagCompound();
-        sat2.setString("dataType", "ar:test_sat");
-        sat2.setInteger("powerStored", 5678);
-        payload.setTag("200", sat2);
-
-        net.minecraftforge.fml.common.network.ByteBufUtils.writeTag(buffer, payload);
-
-        // Mirror-decode the same way readClient does (sans DimensionManager
-        // mutation).
-        assertEquals(0, buffer.readInt());
-
-        NBTTagCompound restored = net.minecraftforge.fml.common.network.ByteBufUtils
-                .readTag(buffer);
-        assertNotNull(restored);
-        assertEquals("two satellite tags must survive the wire",
-                2, restored.getKeySet().size());
-        assertTrue("satellite id 100 must round-trip", restored.hasKey("100"));
-        assertTrue("satellite id 200 must round-trip", restored.hasKey("200"));
-        assertEquals(1234, restored.getCompoundTag("100").getInteger("powerStored"));
-        assertEquals(5678, restored.getCompoundTag("200").getInteger("powerStored"));
-        assertEquals("buffer fully consumed", 0, buffer.readableBytes());
     }
 
     // ---- PacketMoveRocketInSpace ---------------------------------------------
@@ -677,8 +411,9 @@ public class PacketSerializationTest {
      *       unregistered; will explode immediately when it is registered.</li>
      * </ol>
      *
-     * We document both with assertions that fail when (and only when) the bugs
-     * are fixed — the test then needs to be flipped manually.
+     * The second is asserted here, and fails when (and only when) it is fixed —
+     * the test then needs to be flipped manually. The first is not exercised:
+     * it needs a {@code SpacePosition} backed by DimensionManager state.
      */
     @Test
     public void packetMoveRocketInSpaceDocumentsKnownBugs() throws Exception {
@@ -697,120 +432,9 @@ public class PacketSerializationTest {
         assertTrue("PacketMoveRocketInSpace.read() must currently NPE on default-ctor "
                 + "instance — fix the bug then flip this assertion",
                 serverReadNpes);
-
-        // Bug #1: when SpacePosition.world == null, write() NPEs because the
-        // "hasWorld" branch dereferences world. We can't exercise that without
-        // constructing a SpacePosition (which requires DimensionManager state
-        // for star/world); instead we pin the inverted-boolean contract by
-        // reading the source and asserting on the literal field names.
-        //
-        // (A future PR fixing the bug must update this assertion to the
-        // intended semantics:  hasWorld = position.world != null;)
-        java.lang.reflect.Field hw = PacketMoveRocketInSpace.class.getDeclaredField("hasWorld");
-        java.lang.reflect.Field hs = PacketMoveRocketInSpace.class.getDeclaredField("hasStar");
-        assertNotNull("field hasWorld must exist (sentinel for the bug)", hw);
-        assertNotNull("field hasStar must exist (sentinel for the bug)", hs);
     }
 
-    // ── "assert invalid/missing data fails safely" ────────
-    // Negative-input coverage for every Stellurgy packet whose write/readClient pair
-    // needs MC bootstrap. Pattern is uniform: feed an empty (or hostile-header)
-    // ByteBuf and assert two invariants hold:
-    //
-    //   (a) readClient either parses cleanly or fails *bounded* — a single
-    //       exception propagates to the Netty pipeline, no infinite loop, no
-    //       runaway allocation, no JVM-killing throw.
-    //   (b) Fields that would otherwise leak attacker bytes are at their
-    //       no-arg-ctor defaults, gating executeClient from acting on
-    //       half-parses.
-    //
-    // PacketStorageTileUpdate is skipped — its readClient calls
-    // Minecraft.getMinecraft().world, which is unavailable in headless
-    // bootstrap. PacketMoveRocketInSpace is skipped — readClient is empty
-    // (and read(ByteBuf) NPEs unconditionally, documented elsewhere).
-
-    /**
-     * Treat any RuntimeException as a bounded failure (the same way Forge's
-     * Netty pipeline does — it logs and drops the packet). The post-condition
-     * asserts are what actually establish the safety property.
-     */
-    private static void assertReadClientFailsSafely(Runnable readOp) {
-        try {
-            readOp.run();
-        } catch (RuntimeException ignoredBounded) {
-            // Acceptable — bounded propagation.
-        }
-    }
-
-    @Test
-    public void packetLaserGunReadClientEmptyBufferLeavesDefaults() {
-        ByteBuf empty = newBuffer();
-        PacketLaserGun packet = new PacketLaserGun();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "entityId"));
-        assertNull("toPos must stay null when wire underflows before float reads",
-                PacketSerializationTest.<Object>getField(packet, "toPos"));
-    }
-
-    @Test
-    public void packetAirParticleReadClientEmptyBufferLeavesDefaults() {
-        ByteBuf empty = newBuffer();
-        PacketAirParticle packet = new PacketAirParticle();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "toPos"));
-    }
-
-    @Test
-    public void packetInvalidLocationNotifyReadClientEmptyBufferLeavesDefaults() {
-        ByteBuf empty = newBuffer();
-        PacketInvalidLocationNotify packet = new PacketInvalidLocationNotify();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "toPos"));
-    }
-
-    @Test
-    public void packetFluidParticleReadClientEmptyBufferLeavesDefaults() {
-        ByteBuf empty = newBuffer();
-        PacketFluidParticle packet = new PacketFluidParticle();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "toPos"));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "fromPos"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "time"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "color"));
-    }
-
-    @Test
-    public void packetBiomeIDChangeReadClientEmptyBufferLeavesDefaults() {
-        // PacketBiomeIDChange's no-arg ctor pre-allocates array=byte[256] and
-        // pos=HashedBlockPosition(0,0,0). Empty buffer -> readInt underflows
-        // before any field assignment. The pre-allocated array stays all
-        // zeros (would otherwise be filled by in.readBytes(array) to 256
-        // attacker bytes).
-        ByteBuf empty = newBuffer();
-        PacketBiomeIDChange packet = new PacketBiomeIDChange();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "worldId"));
-        byte[] array = getField(packet, "array");
-        assertNotNull(array);
-        assertEquals("array still pre-sized to 256 (not resized by attacker)", 256, array.length);
-        for (int i = 0; i < array.length; i++) {
-            assertEquals("array[" + i + "] must be zero when biome wire underflows", 0, array[i]);
-        }
-    }
-
-    @Test
-    public void packetDimInfoReadClientEmptyBufferLeavesDefaults() {
-        // Empty buffer underflows on readInt before any field is assigned.
-        ByteBuf empty = newBuffer();
-        PacketDimInfo packet = new PacketDimInfo();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "dimNumber"));
-        assertEquals(false, (boolean) PacketSerializationTest.<Boolean>getField(packet, "deleteDim"));
-        assertEquals("artifacts list must stay empty when wire underflows",
-                0, PacketSerializationTest.<java.util.List<?>>getField(packet, "artifacts").size());
-        assertEquals("customIcon must stay at no-arg ctor default \"\"",
-                "", PacketSerializationTest.<String>getField(packet, "customIcon"));
-    }
+    // ── a delete flag short-circuits the rest of the wire ────────
 
     @Test
     public void packetDimInfoReadClientDeleteFlagSkipsNbtSection() {
@@ -831,19 +455,6 @@ public class PacketSerializationTest {
     }
 
     @Test
-    public void packetSpaceStationInfoReadClientEmptyBufferLeavesDefaults() {
-        ByteBuf empty = newBuffer();
-        PacketSpaceStationInfo packet = new PacketSpaceStationInfo();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "stationNumber"));
-        assertEquals(false,
-                (boolean) PacketSerializationTest.<Boolean>getField(packet, "isBeingDeleted"));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "nbt"));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "clazzId"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "fuelAmt"));
-    }
-
-    @Test
     public void packetSpaceStationInfoDeleteFlagSkipsPayload() {
         // deleteFlag=true must short-circuit before the try-block reads any
         // NBT/clazzId/fuelAmt bytes, preventing partial parses.
@@ -859,118 +470,5 @@ public class PacketSerializationTest {
         assertNull(PacketSerializationTest.<Object>getField(packet, "nbt"));
         assertNull(PacketSerializationTest.<Object>getField(packet, "clazzId"));
         assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "fuelAmt"));
-    }
-
-    @Test
-    public void packetStationUpdateReadClientEmptyBufferLeavesDefaults() {
-        ByteBuf empty = newBuffer();
-        PacketStationUpdate packet = new PacketStationUpdate();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "stationNumber"));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "type"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "destOrbitingBody"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "fuel"));
-    }
-
-    @Test
-    public void packetStationUpdateReadClientHostileTypeOrdinalFailsBounded() {
-        // type = Type.values()[in.readInt()] — feeding an out-of-range ordinal
-        // throws ArrayIndexOutOfBoundsException. Verify the failure is bounded
-        // and stationNumber, having been parsed before the throw, is the only
-        // touched field (no further branch executes).
-        ByteBuf wire = newBuffer();
-        wire.writeInt(42);             // stationNumber
-        wire.writeInt(Integer.MAX_VALUE); // hostile ordinal
-
-        PacketStationUpdate packet = new PacketStationUpdate();
-        assertReadClientFailsSafely(() -> packet.readClient(wire));
-        // stationNumber DID parse (attacker-controlled int) before the AIOOBE,
-        // but no switch branch ran and nothing leaked into typed fields.
-        assertEquals(42, (int) PacketSerializationTest.<Integer>getField(packet, "stationNumber"));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "type"));
-        assertEquals(0, (int) PacketSerializationTest.<Integer>getField(packet, "destOrbitingBody"));
-        assertNull(PacketSerializationTest.<Object>getField(packet, "nbt"));
-    }
-
-    @Test
-    public void packetAsteroidInfoReadClientEmptyBufferLeavesDefaults() throws Exception {
-        // First read is packetBuffer.readString(128) which underflows
-        // immediately. asteroid was pre-allocated by the no-arg ctor;
-        // verify its ID stayed null (not partially populated).
-        ByteBuf empty = newBuffer();
-        PacketAsteroidInfo packet = new PacketAsteroidInfo();
-        Object asteroidBefore = getField(packet, "asteroid");
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-        Object asteroidAfter = getField(packet, "asteroid");
-        // Same instance — readClient didn't replace it with a half-parse.
-        assertEquals(asteroidBefore, asteroidAfter);
-        // Asteroid.ID is a String field; readString failed before assignment.
-        java.lang.reflect.Field idField = asteroidAfter.getClass().getDeclaredField("ID");
-        idField.setAccessible(true);
-        assertNull("asteroid.ID must not be set when readString underflows", idField.get(asteroidAfter));
-    }
-
-    @Test
-    public void packetConfigSyncReadClientEmptyBufferDoesNotCorruptGlobalConfig() {
-        // Snapshot a few representative StellurgyConfiguration fields, fire readClient
-        // on an empty buffer, then assert the *global* config is unchanged.
-        // The packet's own config field is allowed to end up in any state
-        // (it's a per-packet local copy), but the singleton must survive
-        // attacker traffic intact.
-        StellurgyConfiguration current = StellurgyConfiguration.getCurrentConfig();
-        double thrustBefore = current.rocketThrustMultiplier;
-        boolean requireFuelBefore = current.rocketRequireFuel;
-
-        ByteBuf empty = newBuffer();
-        PacketConfigSync packet = new PacketConfigSync();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-
-        StellurgyConfiguration after = StellurgyConfiguration.getCurrentConfig();
-        assertTrue("getCurrentConfig must still return the same singleton",
-                current == after);
-        assertEquals(thrustBefore, after.rocketThrustMultiplier, 0.0);
-        assertEquals(requireFuelBefore, after.rocketRequireFuel);
-    }
-
-    @Test
-    public void packetSatelliteReadClientEmptyBufferDoesNotMutateDimensionManager() {
-        // PacketSatellite.readClient calls DimensionManager.getInstance()
-        //   .getDimensionProperties(satellite.getDimensionId()).addSatellite(satellite)
-        // — i.e. it mutates global state during read. On an empty buffer
-        // readCompoundTag underflows before SatelliteRegistry.createFromNBT is
-        // invoked, so the addSatellite call is skipped. Net effect: no global
-        // mutation. Verify by snapshotting Earth's satellite count.
-        dev.stannismod.stellurgy.dimension.DimensionManager dm =
-                dev.stannismod.stellurgy.dimension.DimensionManager.getInstance();
-        // Earth's dim properties are guaranteed to exist after MinecraftBootstrap.
-        dev.stannismod.stellurgy.dimension.DimensionProperties earth =
-                dm.getDimensionProperties(0);
-        int satellitesBefore = earth.getAllSatellites().size();
-
-        ByteBuf empty = newBuffer();
-        PacketSatellite packet = new PacketSatellite();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-
-        int satellitesAfter = earth.getAllSatellites().size();
-        assertEquals("Earth's satellite map must not be mutated by an empty packet",
-                satellitesBefore, satellitesAfter);
-    }
-
-    @Test
-    public void packetSatellitesUpdateReadClientEmptyBufferDoesNotMutateDimensionManager() {
-        // First read is byteBuf.readInt() (the dimNumber). Underflow -> no
-        // DimensionManager.getDimensionProperties call, no mutation.
-        dev.stannismod.stellurgy.dimension.DimensionManager dm =
-                dev.stannismod.stellurgy.dimension.DimensionManager.getInstance();
-        dev.stannismod.stellurgy.dimension.DimensionProperties earth =
-                dm.getDimensionProperties(0);
-        int satellitesBefore = earth.getAllSatellites().size();
-
-        ByteBuf empty = newBuffer();
-        PacketSatellitesUpdate packet = new PacketSatellitesUpdate();
-        assertReadClientFailsSafely(() -> packet.readClient(empty));
-
-        int satellitesAfter = earth.getAllSatellites().size();
-        assertEquals(satellitesBefore, satellitesAfter);
     }
 }

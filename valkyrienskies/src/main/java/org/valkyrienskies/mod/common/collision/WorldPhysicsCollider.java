@@ -134,6 +134,7 @@ public class WorldPhysicsCollider {
         task.getCollisionInformationGenerated().clear();
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final byte[] combinationsOfOnes = new byte[] {
             1, 1, 1,
             1, 1, -1,

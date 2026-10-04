@@ -31,7 +31,7 @@ public class ClientProxy extends CommonProxy {
 	
 	@Override
 	public void init() {
-		LibVulpes.materialRegistry.init();
+		dev.stannismod.stellurgy.Stellurgy.instance.libVulpes.materialRegistry.init();
 	}
 	
 	@Override

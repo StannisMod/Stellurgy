@@ -27,8 +27,14 @@ import java.util.concurrent.TimeUnit;
 
 public class AtmosphereBlob extends AreaBlob implements Runnable {
 
-
-    private static ThreadPoolExecutor pool = (StellurgyConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1 ? new ThreadPoolExecutor(2, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(32)) : null;
+    /**
+     * The executor the threaded blob fill runs on: one per server ({@code ServerState}), shut down
+     * when it stops, so a fill queued at stop never runs against the next world. Its threads are
+     * created on first use, so a server that keeps the fill on its own thread pays nothing.
+     */
+    public static ThreadPoolExecutor newFillPool() {
+        return new ThreadPoolExecutor(2, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(32));
+    }
 
     private boolean executing;
     private HashedBlockPosition blockPos;
@@ -98,7 +104,7 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
                     executing = true;
                     if ((StellurgyConfiguration.getCurrentConfig().atmosphereHandleBitMask & 1) == 1)
                         try {
-                            pool.execute(this);
+                            Stellurgy.serverState().atmosphereFillPool.execute(this);
                         } catch (RejectedExecutionException e) {
                             Stellurgy.logger.warn("Atmosphere calculation at " + this.getRootPosition() + " aborted due to oversize queue!");
                         }
@@ -188,7 +194,7 @@ public class AtmosphereBlob extends AreaBlob implements Runnable {
      * @param blocks Collection containing affected locations
      */
     protected void runEffectOnWorldBlocks(@Nonnull World world, @Nonnull Collection<HashedBlockPosition> blocks) {
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world);
 
         if (atmhandler != null && !atmhandler.getDefaultAtmosphereType().allowsCombustion()) {
 

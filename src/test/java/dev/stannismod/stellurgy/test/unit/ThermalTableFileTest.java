@@ -30,7 +30,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class ThermalTableFileTest {
 
-    /** Where the install's table lives, relative to the run; read through {@link ThermalMaterials#load}. */
+    /** Where the install's table lives, relative to the run; read through {@link ThermalMaterials#load}.
+     *  A constant: a {@link Path} is an immutable value. */
     private static final Path TABLE = Paths.get("config", "advRocketry", "thermalMaterials.json");
 
     private byte[] found;

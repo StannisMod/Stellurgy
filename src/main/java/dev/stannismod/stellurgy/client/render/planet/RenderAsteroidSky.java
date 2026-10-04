@@ -28,6 +28,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class RenderAsteroidSky extends IRenderHandler {
 
     // === Textures ===
@@ -54,9 +57,10 @@ public class RenderAsteroidSky extends IRenderHandler {
     private final float[] shadowColorTmp = new float[3];
 
     // Helpers for ring/black-hole math
-    private static float xrotangle = 0;             // for ring rotation (kept exactly as before)
-    private static final float[] skycolor = {0,0,0}; // for black hole rendering (same usage as before)
-    private static double currentplanetphi = 0;     // ring/disk angle (same)
+    // Computed earlier in a frame and read later in the same frame, by this sky alone.
+    private float xrotangle = 0;
+    private final float[] skycolor = {0,0,0};
+    private double currentplanetphi = 0;
 
     // === ctor ===
     public RenderAsteroidSky() {
@@ -352,11 +356,11 @@ public class RenderAsteroidSky extends IRenderHandler {
             childrenBuf.clear();
             children = childrenBuf;
             isMoon = false;
-            atmosphere = DimensionManager.overworldProperties.getAtmosphereDensityAtHeight(mc.getRenderViewEntity().posY);
-            solarOrbitalDistance = DimensionManager.overworldProperties.orbitalDist;
+            atmosphere = DimensionManager.getInstance().getOverworldProperties().getAtmosphereDensityAtHeight(mc.getRenderViewEntity().posY);
+            solarOrbitalDistance = DimensionManager.getInstance().getOverworldProperties().orbitalDist;
             sunColor = new Vec3d(1, 1, 1);
-            primaryStar = DimensionManager.overworldProperties.getStar();
-            properties = DimensionManager.overworldProperties;
+            primaryStar = DimensionManager.getInstance().getOverworldProperties().getStar();
+            properties = DimensionManager.getInstance().getOverworldProperties();
         }
 
         currentplanetphi = myPhi;
@@ -701,12 +705,12 @@ public class RenderAsteroidSky extends IRenderHandler {
         float[] skyColor = properties.skyColor;
         float[] ringColor = properties.ringColor;
 
-        // Keep external call identical
         RenderPlanetarySky.renderPlanetPubHelper(
                 buffer, icon, 0, 0, -20,
                 size * 0.2f, alphaMultiplier, shadowAngle,
                 hasAtmosphere, skyColor, ringColor, gasGiant, hasRing, properties.ringAngle,
-                hasDecorators, shadowColorMultiplier, alphaMultiplier2
+                hasDecorators, shadowColorMultiplier, alphaMultiplier2,
+                currentplanetphi, xrotangle
         );
     }
 

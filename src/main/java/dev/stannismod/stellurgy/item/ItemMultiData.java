@@ -44,6 +44,7 @@ public class ItemMultiData extends Item {
     }
     // Supported types for this item. Others will be ignored.
     // FIX IF WE ADD MORE TYPES TO DataStorage.DataType
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final java.util.EnumSet<DataStorage.DataType> SUPPORTED_TYPES =
         java.util.EnumSet.of(
             DataStorage.DataType.COMPOSITION,

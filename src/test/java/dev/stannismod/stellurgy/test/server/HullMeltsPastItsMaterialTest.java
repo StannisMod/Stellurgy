@@ -8,7 +8,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
 
 /**
  * The failure ladder's last rung: past its material's own limit a block stops being damaged and is

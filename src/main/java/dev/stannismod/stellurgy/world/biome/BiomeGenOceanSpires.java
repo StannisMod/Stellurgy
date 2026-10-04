@@ -4,7 +4,6 @@ import net.minecraft.init.Blocks;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.ChunkPrimer;
-import net.minecraft.world.gen.MapGenBase;
 import net.minecraft.world.gen.feature.WorldGenAbstractTree;
 import net.minecraft.world.gen.feature.WorldGenShrub;
 import dev.stannismod.stellurgy.world.decoration.MapGenInvertedPillar;
@@ -12,8 +11,6 @@ import dev.stannismod.stellurgy.world.decoration.MapGenInvertedPillar;
 import java.util.Random;
 
 public class BiomeGenOceanSpires extends Biome {
-
-    MapGenBase oceanSpire;
 
     public BiomeGenOceanSpires(BiomeProperties properties) {
         super(properties);
@@ -28,8 +25,6 @@ public class BiomeGenOceanSpires extends Biome {
         this.spawnableCreatureList.clear();
         this.topBlock = GRAVEL;
         this.fillerBlock = GRAVEL;
-
-        oceanSpire = new MapGenInvertedPillar(4, Blocks.MOSSY_COBBLESTONE.getDefaultState(), Blocks.COBBLESTONE.getDefaultState(), Blocks.DIRT.getDefaultState());
     }
 
     @Override
@@ -37,8 +32,11 @@ public class BiomeGenOceanSpires extends Biome {
                                  ChunkPrimer chunkPrimerIn, int x, int z, double noiseVal) {
         super.genTerrainBlocks(worldIn, rand, chunkPrimerIn, x, z, noiseVal);
 
+        // A MapGenBase keeps the world it last generated into; built per chunk, so the biome - one
+        // object for the whole process - holds no world.
         if (x % 16 == 0 && z % 16 == 0)
-            oceanSpire.generate(worldIn, x / 16, z / 16, chunkPrimerIn);
+            new MapGenInvertedPillar(4, Blocks.MOSSY_COBBLESTONE.getDefaultState(), Blocks.COBBLESTONE.getDefaultState(),
+                    Blocks.DIRT.getDefaultState()).generate(worldIn, x / 16, z / 16, chunkPrimerIn);
     }
 
     @Override

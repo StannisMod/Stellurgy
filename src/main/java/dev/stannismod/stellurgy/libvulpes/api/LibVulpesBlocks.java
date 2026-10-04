@@ -13,30 +13,45 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class LibVulpesBlocks {
+	/** Effectively final, process lifetime: filled only by LibVulpesBlocks.registerBlock. */
 	public static final Set<Block> blocks = new HashSet<>();
+	/** Effectively final, process lifetime: filled only by LibVulpesBlocks.registerBlock. */
 	public static final Set<Block> itemBlocks = new HashSet<>();
 
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockHatch;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockPhantom;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockPlaceHolder;
-	public static Block blockRFBattery;
+	/** Effectively final, process lifetime: written only by LibVulpes.registerBlocks (null without IC2). */
 	public static Block blockIC2Plug;
-	public static Block blockRFOutput;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockStructureBlock;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockAdvStructureBlock;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockCreativeInputPlug;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockForgeInputPlug;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockForgeOutputPlug;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockMotor;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockAdvancedMotor;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockEnhancedMotor;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockEliteMotor;
 	//public static List<Block> blockOre = new ArrayList<Block>();
 	//public static List<Block> blockMetal = new ArrayList<Block>();
-	public static Item[] itemOreProduct;
 	//public static List<Block> blockCoil = new ArrayList<Block>();
+	/** Effectively final, process lifetime: written only by LibVulpes.registerBlocks. */
 	public static Block[] motors;
+	/** Effectively final, process lifetime: written only by LibVulpes.createContent. */
 	public static Block blockCoalGenerator;
+	/** Effectively final, process lifetime: written only by LibVulpes.registerBlocks (null without GregTech). */
 	public static Block blockGTPlug;
 
 	

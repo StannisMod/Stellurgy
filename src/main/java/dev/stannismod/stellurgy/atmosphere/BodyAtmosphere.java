@@ -28,6 +28,7 @@ import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
  * </ol>
  * If every gas is lost or frozen out the answer is a vacuum, whatever total was asked for: the air is
  * the sum of what is in it, and nothing is in it.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class BodyAtmosphere {
 

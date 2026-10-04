@@ -8,8 +8,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * What happens when a hull is opened, and what the ship can do about it (D127-9 / D127-6).

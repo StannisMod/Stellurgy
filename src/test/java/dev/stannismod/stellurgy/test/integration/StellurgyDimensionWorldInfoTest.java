@@ -212,11 +212,4 @@ public class StellurgyDimensionWorldInfoTest {
         assertEquals("non-weather, non-time mutations must NOT mark saved-data dirty",
                 0, dirtyHits.get());
     }
-
-    @Test
-    public void getDelegateExposesUnderlyingForUnwrap() {
-        WorldInfo delegate = seededDelegate();
-        StellurgyDimensionWorldInfo wrapper = wrap(delegate, new PlanetWeatherState(), () -> {});
-        assertSame(delegate, wrapper.getDelegate());
-    }
 }

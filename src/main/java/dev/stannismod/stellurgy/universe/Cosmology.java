@@ -43,6 +43,8 @@ public final class Cosmology {
      * The fractional rate at which every intergalactic separation grows, per tick. Derived, never
      * written as a literal: it is the Hubble constant expressed in this layer's length and this
      * layer's clock.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     public static final double HUBBLE_PER_TICK =
             UniverseScale.lightYearsPerTick(HUBBLE_KM_S_PER_MEGAPARSEC) / LIGHT_YEARS_PER_MEGAPARSEC;

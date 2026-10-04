@@ -35,11 +35,11 @@ public final class ShipLocalMove {
      *
      * @return true if the movement was fully handled and the vanilla move must be skipped
      */
-    public static boolean resolve(Entity entity, double dx, double dy, double dz) {
+    public static boolean resolve(ShipLocalMoveControl control, Entity entity, double dx, double dy, double dz) {
         World world = entity.world;
 
         // The authoritative ship-frame position; seeded from the world position on the first tick.
-        double[] local = ShipLocalMoveControl.getShipFramePos();
+        double[] local = control.getShipFramePos();
         if (local == null) {
             local = VSIntegration.toShipFrame(entity, entity.posX, entity.posY, entity.posZ);
             if (local == null) {
@@ -90,7 +90,7 @@ public final class ShipLocalMove {
         if (worldPos == null) {
             return false;
         }
-        ShipLocalMoveControl.setShipFramePos(newLocalX, newLocalY, newLocalZ);
+        control.setShipFramePos(newLocalX, newLocalY, newLocalZ);
         entity.setPosition(worldPos[0], worldPos[1], worldPos[2]);
         entity.onGround = standingOnDeck;
 

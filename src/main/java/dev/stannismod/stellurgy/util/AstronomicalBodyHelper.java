@@ -3,6 +3,9 @@ package dev.stannismod.stellurgy.util;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class AstronomicalBodyHelper {
 
     // ─── The reference frame ───────────────────────────────────────────────────

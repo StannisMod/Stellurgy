@@ -16,6 +16,7 @@ import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
  * <p>
  * Nothing here re-implements a network. The graph, the max-flow solve, the priority tiers and the
  * statistics are the shared primitive's; this class is an identity and a unit.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class LifeSupportNetwork {
 

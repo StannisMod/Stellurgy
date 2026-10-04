@@ -38,6 +38,7 @@ import dev.stannismod.stellurgy.util.ItemAirUtils;
  * temporary: a zone derives one from its gases and a planet derives one from its density, and until
  * those two meet somewhere better, keying here is what keeps a SINGLE answer to "what is wrong with
  * this air" instead of one answer per caller.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class AtmosphereHazards {
 

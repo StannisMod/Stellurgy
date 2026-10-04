@@ -39,7 +39,7 @@ public class TileHeatIntakeDuct extends TileEntity {
     public BlockPos findServedCell() {
         if (world == null || world.isRemote)
             return null;
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         if (handler == null)
             return null;
         for (EnumFacing dir : EnumFacing.VALUES) {
@@ -56,7 +56,7 @@ public class TileHeatIntakeDuct extends TileEntity {
         BlockPos cell = findServedCell();
         if (cell == null)
             return null;
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         return handler == null ? null : handler.getAirStateAt(cell);
     }
 
@@ -65,7 +65,7 @@ public class TileHeatIntakeDuct extends TileEntity {
         BlockPos cell = findServedCell();
         if (cell == null || world == null)
             return 0;
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         return handler == null ? 0 : handler.getBlobSizeAt(cell);
     }
 

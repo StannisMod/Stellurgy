@@ -33,6 +33,8 @@ import dev.stannismod.stellurgy.util.AstronomicalBodyHelper;
  * frames and no gravitational relation between them. The floor is therefore set comfortably wider
  * than any binary the model describes, so multiplicity is something the generator states inside ONE
  * system rather than something the lattice fakes by accident.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class UniverseScale {
 

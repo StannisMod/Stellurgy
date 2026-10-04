@@ -8,8 +8,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * A compartment's air as a HEAT reservoir: it has a temperature, it has a capacity, and gas arriving
@@ -76,7 +74,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
         // total partial pressure — which is what `AirState.mixIn` weights by. The weights are read as
         // the exact partial pressures, not the centi-atm `airPressure`, which is truncated to
         // hundredths of an atmosphere and would put a percent of error into each weight.
-        long tickBefore = WorldCommandFixtures.serverTick();
+        long tickBefore = serverTick();
         Reply before = ventInfo(cx);
         long gasBefore = totalGas(before);
         long tempBefore = before.longInteger("airTempMilliK");
@@ -87,7 +85,7 @@ public class ZoneAirIsAReservoirTest extends AbstractSharedServerTest {
         runCombinerInto(cx);
 
         Reply after = ventInfo(cx);
-        long ticksWatched = WorldCommandFixtures.serverTick() - tickBefore;
+        long ticksWatched = serverTick() - tickBefore;
         long gasAfter = totalGas(after);
         long tempAfter = after.longInteger("airTempMilliK");
         assertTrue("premise: the combiner must actually have put gas in (before=" + gasBefore

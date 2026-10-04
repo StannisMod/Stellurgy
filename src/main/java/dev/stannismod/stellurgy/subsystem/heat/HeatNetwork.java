@@ -46,6 +46,7 @@ import java.util.Set;
  * is quartic in temperature, so it sheds several times what the first could. Nobody sets the hot
  * loop's temperature: energy accumulates in it against its own capacity and the temperature follows,
  * which is what makes it a real reservoir a burst can heat.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class HeatNetwork {
 
@@ -610,7 +611,7 @@ public final class HeatNetwork {
         // One number, one meaning: the melt clock decides GRANULARITY here and never rate.
         double seconds = Math.max(1, HullMelting.checkIntervalTicks()) / 20.0D;
         AtmosphereHandler handler =
-                AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+                AtmosphereHandler.getOxygenHandler(world);
         if (handler == null) {
             return 0L;
         }

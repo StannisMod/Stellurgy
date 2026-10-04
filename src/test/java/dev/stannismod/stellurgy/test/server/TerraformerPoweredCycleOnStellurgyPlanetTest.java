@@ -14,7 +14,6 @@ import dev.stannismod.stellurgy.test.FixtureSite;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * terraformer powered cycle on a Stellurgy-native planet.
@@ -274,7 +273,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      *  dim-load handshake has regressed and the powered-cycle assertions
      *  below would fail for an irrelevant reason. */
     private void assertDimIsNativeStellurgyPlanet() throws Exception {
-        DimInfo info = DimInfo.forDim(WorldCommandFixtures::exec, newDim);
+        DimInfo info = DimInfo.forDim(this::exec, newDim);
         assertTrue("dim info missing isStellurgyPlanet:true — " + info.raw(), info.stellurgyPlanet);
         // The terraformer gate also needs WorldProviderPlanet, asked of the field that names the
         // provider: the `contains` this replaces would have been answered by the save folder or by
@@ -337,7 +336,7 @@ public class TerraformerPoweredCycleOnStellurgyPlanetTest extends AbstractShared
      * {@code ar planet list}. Nothing here claims anything about that command's output; both read
      * {@code DimensionManager.getInstance().getRegisteredDimensions()}.
      */
-    private static Set<Integer> stellurgyDims() throws Exception {
+    private Set<Integer> stellurgyDims() throws Exception {
         Set<Integer> ids = new HashSet<>();
         for (int dim : Reply.of("stellurgytest dim list", exec("stellurgytest dim list")).intArray("stellurgyDimensions")) {
             ids.add(dim);

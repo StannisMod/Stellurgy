@@ -55,7 +55,11 @@ public final class GalacticCoord {
     /** Half a cell; the canonical local offset lives in {@code [-HALF_CELL, HALF_CELL)}. */
     public static final long HALF_CELL = CELL / 2L;
 
-    /** Absolute origin: sector {@code (0,0,0)}, local {@code (0,0,0)}. */
+    /**
+     * Absolute origin: sector {@code (0,0,0)}, local {@code (0,0,0)}.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     public static final GalacticCoord ORIGIN = new GalacticCoord(0L, 0L, 0L, 0, 0, 0);
 
     private final long sectorX;

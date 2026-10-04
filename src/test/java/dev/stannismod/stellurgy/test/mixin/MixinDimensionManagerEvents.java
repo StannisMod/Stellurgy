@@ -22,7 +22,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <p>A remote login is followed by one {@code PacketDimInfo} per Stellurgy dimension, and each one the
  * client has never seen ends in {@code DimensionManager.registerDimNoUpdate} — that is where a
  * planet the server knows becomes a planet this client knows. A remote disconnect ends in
- * {@code unregisterAllDimensions} (the guarded call in {@code PlanetEventHandler.disconnected}),
+ * {@code unregisterAllDimensions} (the remote-only call in {@code PlanetEventHandler.disconnected}),
  * which is the contract the disconnect test pins: leaving a remote server clears the registry. Both
  * used to be read by polling {@code getRegisteredDimensions()} through the reflective bridge — a
  * count, which could say neither WHICH dimension arrived nor whether a clear actually ran or the
@@ -40,8 +40,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * the clear, so {@code dims} and {@code stars} are the sizes the registry held going in. A clear of an
  * already-empty registry records {@code 0,0} and is still a record: "cleared nothing" and "never
  * cleared" must stay distinguishable. {@code hasServer} names the path — {@code false} is the remote
- * disconnect at {@code PlanetEventHandler.disconnected}, {@code true} an integrated server's
- * {@code onServerStopped}.</li>
+ * disconnect at {@code PlanetEventHandler.disconnected}, {@code true} an integrated server
+ * ending its lifetime ({@code Stellurgy.endServerLifetime}).</li>
  * </ul>
  *
  * <h2>Side</h2>
@@ -49,9 +49,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * <p>The mixin is applied only in a client JVM (the {@code client} list), so neither event exists in
  * a dedicated server's log. Within the client JVM the record is routed by the calling thread's
  * effective side: a call from the client thread (the packet handler, the disconnect handler) lands in
- * the client event log; a call from an integrated server's thread — {@code loadDimensions},
- * {@code onServerStopped}, which in single-player share the very same {@code dimensionManagerClient}
- * instance — lands in that JVM's server-side log. The harness client tests connect a separate client
+ * the client event log; a call from an integrated server's thread — on the server's own manager,
+ * which is a different object from the connection's — lands in that JVM's server-side log. The harness client tests connect a separate client
  * JVM to a dedicated server, so there every record is a client-thread record and {@code hasServer} is
  * {@code false}.</p>
  *

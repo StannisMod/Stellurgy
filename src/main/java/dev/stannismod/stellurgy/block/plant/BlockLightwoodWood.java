@@ -9,6 +9,7 @@ import net.minecraft.world.IBlockAccess;
 
 public class BlockLightwoodWood extends BlockLog {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final String[] names = new String[]{"blue"};
 
     public BlockLightwoodWood() {

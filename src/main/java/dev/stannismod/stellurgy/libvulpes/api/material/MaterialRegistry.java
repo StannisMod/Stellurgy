@@ -27,10 +27,20 @@ import java.util.*;
 
 public class MaterialRegistry {
 
+	/** Effectively final, process lifetime: filled only by MaterialRegistry.registerMixedMaterial. */
 	static HashMap<Object, MixedMaterial> mixedMaterialList = new HashMap<>();
-	static HashMap<AllowedProducts, List<Block>> productBlockListMapping;
+	/** Effectively final, process lifetime: filled only by AllowedProducts.registerProduct. One map for
+	 *  every registry: each constructor used to replace it, so a registry built after the products were
+	 *  registered would have wiped them. */
+	static final HashMap<AllowedProducts, List<Block>> productBlockListMapping = new HashMap<>();
+	/**
+	 * Effectively final, process lifetime: filled only by this class's constructor, once per registry -
+	 * the two the mod classes build when they initialise (LibVulpes.materialRegistry,
+	 * Stellurgy.materialRegistry).
+	 */
 	static List<MaterialRegistry> registries = new LinkedList<>();
 
+	/** Effectively final, process lifetime: written only by MaterialRegistry.init. */
 	@SideOnly(Side.CLIENT)
 	static Object oreProductColorizer;
 
@@ -47,7 +57,6 @@ public class MaterialRegistry {
 
 	public MaterialRegistry(String registryDomain) {
 		this.registryDomain = registryDomain;
-		productBlockListMapping = new HashMap<>();
 		registries.add(this);
 	}
 

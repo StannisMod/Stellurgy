@@ -35,6 +35,10 @@ import static org.junit.Assert.assertTrue;
  * walking the same map, so a world that loads with an empty one writes an empty one back. The
  * assertion below therefore also guards the file: what the second boot holds is what the third boot
  * would inherit.</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class StarKeepsItsPlanetsAcrossARestartTest {
 

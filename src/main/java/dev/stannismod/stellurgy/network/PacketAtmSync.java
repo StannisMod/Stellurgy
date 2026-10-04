@@ -82,7 +82,7 @@ public class PacketAtmSync extends BasePacket {
 
     @Override
     public void executeClient(EntityPlayer thePlayer) {
-        ClientAtmosphere.accept(summary);
+        ClientAtmosphere.of(thePlayer.world).accept(summary);
     }
 
     @Override

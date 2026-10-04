@@ -7,7 +7,6 @@ import org.junit.Test;
 import dev.stannismod.stellurgy.test.FixtureSite;
 
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * Station-controller tile smoke.
@@ -68,7 +67,7 @@ public class StationControllersSmokeTest extends AbstractSharedServerTest {
                 "TileStationAltitudeController");
     }
 
-    private static void assertPlacesTicksAndReportsCorrectTileClass(
+    private void assertPlacesTicksAndReportsCorrectTileClass(
             int cx, String registryName, String tileSimpleName) throws Exception {
         String place = exec("stellurgytest place 0 " + cx + " " + CY + " " + CZ
                 + " " + registryName);

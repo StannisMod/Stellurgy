@@ -22,7 +22,8 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent.ElementType;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent;
+import net.minecraft.world.World;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
@@ -30,6 +31,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.api.armor.IFillableArmor;
 import dev.stannismod.stellurgy.client.ClientAtmosphere;
 import dev.stannismod.stellurgy.client.FreeFlightHudState;
+import dev.stannismod.stellurgy.client.HudLayout;
 import dev.stannismod.stellurgy.client.KeyBindings;
 import dev.stannismod.stellurgy.client.render.ClientDynamicTexture;
 import dev.stannismod.stellurgy.entity.EntityRocket;
@@ -48,16 +50,26 @@ public class RocketEventHandler extends Gui {
 
 
     private static final int numTicksToDisplay = 100;
-    public static GuiBox suitPanel = new GuiBox(8, 8, 24, 24);
-    public static GuiBox oxygenBar = new GuiBox(8, -57, 80, 48);
-    public static GuiBox hydrogenBar = new GuiBox(8, -74, 80, 48);
-    public static GuiBox atmBar = new GuiBox(8, 27, 200, 48);
-    private static String displayString = "";
-    private static long lastDisplayTime = -1000;
 
-    private ResourceLocation background = TextureResources.rocketHud;
-    private static long suppressSuffocationWarningUntil = Long.MIN_VALUE;
-    private static int lastSuffocationWarningDim = Integer.MIN_VALUE;
+    /**
+     * The HUD state a client WORLD owns: the overlay message, stamped with that world's clock, and
+     * the window after arriving in it during which the suffocation warning stays quiet. Owned by the
+     * world ({@link WorldRuntime}) because every value here is meaningful only against its clock —
+     * kept across a world change, a stamp from an old world is compared with a younger one and the
+     * message stays up until the new clock catches up.
+     */
+    private static final class HudState {
+        String message = "";
+        long messageUntil = -1000;
+        boolean arrived;
+        long suppressWarningUntil = Long.MIN_VALUE;
+    }
+
+    private static HudState hudOf(World world) {
+        return WorldRuntime.of(world, HudState.class, HudState::new);
+    }
+
+    private final ResourceLocation background = TextureResources.rocketHud;
 
 
     /** [-1,1] clamp for HUD bar/dot geometry; NaN-safe. */
@@ -143,16 +155,12 @@ public class RocketEventHandler extends Gui {
         drawRect(ccx + fcx - 2, ccy + fcy - 2, ccx + fcx + 3, ccy + fcy + 3, 0xFFFFE060);
     }
 
+    /** Show {@code msg} until the current client world's clock passes {@code endTime}. */
     @SideOnly(Side.CLIENT)
     public static void setOverlay(long endTime, String msg) {
-        displayString = msg;
-        lastDisplayTime = endTime;
-    }
-
-    @SubscribeEvent
-    public void playerTeleportEvent(PlayerEvent.PlayerChangedDimensionEvent event) {
-        //Fix O2, space elevator popup displaying after teleporting
-        lastDisplayTime = -1000;
+        HudState hud = hudOf(Minecraft.getMinecraft().world);
+        hud.message = msg;
+        hud.messageUntil = endTime;
     }
 
     /**
@@ -197,15 +205,16 @@ public class RocketEventHandler extends Gui {
             return;
         }
 
-        // Tier-2 ship: the pilot rides a seat dummy, not a rocket. Lock the camera to the ship
-        // attitude the client sampled this tick (KeyBindings), slerped prev->current by partialTicks
-        // for a smooth per-frame view - the same nose-lock + no-free-look behaviour as the rocket.
-        // Without this the ship view jitters (mouse leaks into free-look between ticks).
+        // Tier-2 ship: the pilot rides a seat dummy, not a rocket. Lock the camera to the ship's
+        // attitude, slerped from its previous to its current tick by partialTicks for a smooth
+        // per-frame view - the same nose-lock + no-free-look behaviour as the rocket. Without this
+        // the ship view jitters (mouse leaks into free-look between ticks).
         TilePilotSeat seat = TilePilotSeat.forRider(ridden, Minecraft.getMinecraft().world);
-        if (seat != null && seat.isLinked()) {
-            dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat cq =
-                    dev.stannismod.stellurgy.api.FreeFlightPhysics.slerp(
-                            KeyBindings.shipPrevQuat(), KeyBindings.shipQuat(), p);
+        dev.stannismod.stellurgy.api.FreeFlightPhysics.Quat cq = seat != null && seat.isLinked()
+                ? dev.stannismod.stellurgy.integration.vs.VSIntegration.getShipAttitude(
+                        Minecraft.getMinecraft().world, seat.getPos(), p)
+                : null;
+        if (cq != null) {
             float[] e = dev.stannismod.stellurgy.api.FreeFlightPhysics.eulerFromQuat(cq);
             event.setYaw(e[0] + 180f);
             event.setPitch(e[1]);
@@ -400,8 +409,8 @@ public class RocketEventHandler extends Gui {
                     mc.renderEngine.bindTexture(background);
                     GlStateManager.color(1f, 1f, 1f);
                     int width = 83;
-                    int screenX = oxygenBar.getRenderX();//+ 8;
-                    int screenY = oxygenBar.getRenderY();//- 57;
+                    int screenX = HudLayout.oxygenBarX(event.getResolution().getScaledWidth());
+                    int screenY = HudLayout.oxygenBarY(event.getResolution().getScaledHeight());
 
                     //Draw BG
                     this.drawTexturedModalRect(screenX, screenY, 23, 0, width, 17);
@@ -418,24 +427,21 @@ public class RocketEventHandler extends Gui {
 
 
             long worldTime = mc.world.getTotalWorldTime();
+            HudState hud = hudOf(mc.world);
+            ClientAtmosphere air = ClientAtmosphere.of(mc.world);
 
-            if (mc.player.dimension != lastSuffocationWarningDim) {
-                lastSuffocationWarningDim = mc.player.dimension;
-                ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
-                suppressSuffocationWarningUntil = worldTime + 40;
-            }
-
-            // In event of world change make sure the warning isn't displayed
-            if (worldTime - ClientAtmosphere.lastSuffocationTime() < 0) {
-                ClientAtmosphere.suffocatedAt(worldTime - numTicksToDisplay - 1);
+            // First frame in this world (a dimension change or a new connection each build one): hold
+            // the warning for 40 ticks.
+            if (!hud.arrived) {
+                hud.arrived = true;
+                hud.suppressWarningUntil = worldTime + 40;
             }
 
             // Tell the player he's suffocating if needed
-            if (worldTime >= suppressSuffocationWarningUntil &&
-                    worldTime - ClientAtmosphere.lastSuffocationTime() < numTicksToDisplay) {
+            if (worldTime >= hud.suppressWarningUntil && air.suffocatedWithin(worldTime, numTicksToDisplay)) {
                 FontRenderer fontRenderer = mc.fontRenderer;
                 // The server said what to warn about; the client only localizes it.
-                String warningKey = ClientAtmosphere.summary().warningKey();
+                String warningKey = air.summary().warningKey();
                 String str = warningKey.isEmpty()
                         ? "" : dev.stannismod.stellurgy.libvulpes.LibVulpes.proxy.getLocalizedString(warningKey);
 
@@ -454,12 +460,12 @@ public class RocketEventHandler extends Gui {
             }
 
             //Draw arbitrary string
-            if (mc.world.getTotalWorldTime() <= lastDisplayTime) {
+            if (worldTime <= hud.messageUntil) {
                 FontRenderer fontRenderer = mc.fontRenderer;
                 GL11.glPushMatrix();
                 GL11.glScalef(2, 2, 2);
                 int loc = 0;
-                for (String str : displayString.split("\n")) {
+                for (String str : hud.message.split("\n")) {
 
                     int screenX = event.getResolution().getScaledWidth() / 4 - fontRenderer.getStringWidth(str) / 2;
                     int screenY = event.getResolution().getScaledHeight() / 12 + loc * (event.getResolution().getScaledHeight()) / 12;
@@ -492,8 +498,9 @@ public class RocketEventHandler extends Gui {
             if (modularArmorFlag || ItemAirUtils.INSTANCE.isStackValidAirContainer(armorStack)) {
 
                 int size = 24;
-                int screenY = suitPanel.getRenderY() + (slot - 1) * (size + 8);
-                int screenX = suitPanel.getRenderX();
+                int panelX = HudLayout.suitPanelX(event.getResolution().getScaledWidth());
+                int screenY = HudLayout.suitPanelY(event.getResolution().getScaledHeight()) + (slot - 1) * (size + 8);
+                int screenX = panelX;
 
                 //Draw BG
                 GlStateManager.color(1f, 1f, 1f, 1f);
@@ -527,7 +534,7 @@ public class RocketEventHandler extends Gui {
 
                         //if(texture != null) {
 
-                        screenX = suitPanel.getRenderX() + 4 + index * (size + 2);
+                        screenX = panelX + 4 + index * (size + 2);
 
                         //Draw BG
 
@@ -557,7 +564,7 @@ public class RocketEventHandler extends Gui {
                     }
                 }
 
-                screenX = (index) * (size + 2) + suitPanel.getRenderX() - 12;
+                screenX = (index) * (size + 2) + panelX - 12;
                 //Draw BG
                 GlStateManager.color(1, 1, 1, 1f);
                 Minecraft.getMinecraft().renderEngine.bindTexture(TextureResources.frameHUDBG);
@@ -568,89 +575,5 @@ public class RocketEventHandler extends Gui {
         }
 
         GlStateManager.disableAlpha();
-    }
-
-    public static class GuiBox {
-        int modeX = -1;
-        int modeY = -1;
-        int sizeX, sizeY;
-        boolean isVisible = true;
-        private int x;
-        private int y;
-
-        public GuiBox(int x, int y, int sizeX, int sizeY) {
-            this.setRawX(x);
-            this.setRawY(y);
-            this.sizeX = sizeX;
-            this.sizeY = sizeY;
-        }
-
-        public int getX(int scaledW) {
-
-            if (modeX == 1)
-                return scaledW - getRawX();
-            else if (modeX == 0) {
-                return scaledW / 2 - getRawX();
-            }
-            return getRawX();
-        }
-
-        public int getY(int scaledH) {
-
-            if (modeY == 1)
-                return scaledH - getRawY();
-            else if (modeY == 0) {
-                return scaledH / 2 - getRawY();
-            }
-            return getRawY();
-        }
-
-        public int getRenderX() {
-            ScaledResolution scaledresolution = new ScaledResolution(Minecraft.getMinecraft());
-            int i = scaledresolution.getScaledWidth();
-
-            if (modeX == 1) {
-                return i - getRawX();
-            } else if (modeX == 0) {
-                return i / 2 - getRawX();
-            }
-            return this.getRawX();
-        }
-
-        public int getRenderY() {
-            ScaledResolution scaledresolution = new ScaledResolution(Minecraft.getMinecraft());
-            int i = scaledresolution.getScaledHeight();
-
-            if (modeY == 1) {
-                return i - getRawY();
-            } else if (modeY == 0) {
-                return i / 2 - getRawY();
-            }
-            return this.getRawY();
-        }
-
-        public int getRawX() {
-            return x;
-        }
-
-        public void setRawX(int x) {
-            this.x = x;
-        }
-
-        public int getRawY() {
-            return y;
-        }
-
-        public void setRawY(int y) {
-            this.y = y;
-        }
-
-        public void setSizeModeX(int int1) {
-            modeX = int1;
-        }
-
-        public void setSizeModeY(int int1) {
-            modeY = int1;
-        }
     }
 }

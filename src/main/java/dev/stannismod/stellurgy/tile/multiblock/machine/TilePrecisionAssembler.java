@@ -25,6 +25,7 @@ import java.util.List;
 
 public class TilePrecisionAssembler extends TileWasteHeatMachine implements IModularInventory, IProgressBar {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = new Object[][][]{{{LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock},
             {LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock},
             {LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock}},

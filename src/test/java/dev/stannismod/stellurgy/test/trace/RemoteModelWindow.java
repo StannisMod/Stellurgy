@@ -61,6 +61,8 @@ public final class RemoteModelWindow implements TraceWindow {
      * It is a question about the woven bytecode, not about production's logic, so asking it here is
      * a read and not a re-derivation — and it is evaluated once, on first touch, rather than on
      * every client's class-init.</p>
+     *
+     * <p>A constant: an immutable value computed once, from bytecode that cannot change once woven.</p>
      */
     private static final int modelGateInstalledFlag = probeModelGate();
 

@@ -20,6 +20,7 @@ import java.util.List;
 
 public class TileRollingMachine extends TileWasteHeatMachine {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = new Object[][][]{
             {{Blocks.AIR, Blocks.AIR, Blocks.AIR, Blocks.AIR, Blocks.AIR},
                     {LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock},

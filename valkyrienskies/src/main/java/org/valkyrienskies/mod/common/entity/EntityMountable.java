@@ -25,6 +25,7 @@ import valkyrienwarfare.api.TransformType;
 @ParametersAreNonnullByDefault
 public class EntityMountable extends Entity implements IEntityAdditionalSpawnData {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DataParameter<NBTTagCompound> SHARED_NBT = EntityDataManager
         .createKey(EntityMountable.class,
             DataSerializers.COMPOUND_TAG);

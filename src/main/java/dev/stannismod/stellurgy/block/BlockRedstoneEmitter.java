@@ -29,6 +29,7 @@ import dev.stannismod.stellurgy.Stellurgy;
 // Atmosphere Detector that emits redstone signal when a specific atmosphere is detected
 public class BlockRedstoneEmitter extends Block {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyBool POWERED = PropertyBool.create("powered");
 
     public BlockRedstoneEmitter(Material material, String activeIconName) {

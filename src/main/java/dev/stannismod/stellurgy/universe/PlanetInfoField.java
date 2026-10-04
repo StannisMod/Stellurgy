@@ -41,6 +41,7 @@ public enum PlanetInfoField {
     ARTIFACTS(InfoTier.ORBIT),
     OPERATIONAL(InfoTier.ORBIT);
 
+    /** Effectively final, process lifetime: set once when the object is built. */
     private final InfoTier minTier;
 
     PlanetInfoField(InfoTier minTier) {

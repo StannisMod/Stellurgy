@@ -13,13 +13,13 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import dev.stannismod.stellurgy.entity.EntityItemAbducted;
 
 import javax.annotation.Nullable;
-import java.util.Random;
 
 /**
  * Yeah, i know, this is literally a copy of the item renderer, other option was asm the class responsible for render distance
  */
 @SideOnly(Side.CLIENT)
 public class RendererItem extends Render<EntityItemAbducted> implements IRenderFactory<EntityItemAbducted> {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation RES_ITEM_GLINT = new ResourceLocation("textures/misc/enchanted_item_glint.png");
     public boolean renderWithColor = true;
     /**
@@ -27,10 +27,6 @@ public class RendererItem extends Render<EntityItemAbducted> implements IRenderF
      */
     public float zLevel;
     RenderEntityItem itemRenderer;
-    /**
-     * The RNG used in RenderItem (for bobbing itemstacks on the ground)
-     */
-    private Random random = new Random();
 
     public RendererItem(RenderManager renderManagerIn, RenderItem p_i46167_2_) {
         super(renderManagerIn);

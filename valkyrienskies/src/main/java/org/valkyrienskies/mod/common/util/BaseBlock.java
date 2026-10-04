@@ -17,7 +17,7 @@ public class BaseBlock extends Block implements BaseModel {
 
         if (creativeTab) {
             // No need to change this for addons
-            this.setCreativeTab(ValkyrienSkiesMod.VS_CREATIVE_TAB);
+            this.setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.creativeTab);
         }
     }
 

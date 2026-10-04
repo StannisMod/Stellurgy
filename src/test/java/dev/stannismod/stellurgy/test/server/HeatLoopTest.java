@@ -7,8 +7,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.StellurgyTestConstants.ppm;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * The coolant loop as a physical body: a machine's waste heat goes into the pipes touching it, and

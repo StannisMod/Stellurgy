@@ -21,6 +21,7 @@ import java.util.List;
 
 public class TileLathe extends TileWasteHeatMachine implements IModularInventory {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {
             {{'c', LibVulpesBlocks.motors, Blocks.AIR, 'I'}},
             {{'P', LibVulpesBlocks.blockStructureBlock, LibVulpesBlocks.blockStructureBlock, 'O'}},

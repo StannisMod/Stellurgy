@@ -147,7 +147,7 @@ public final class ShieldControl {
         if (world == null || domainId == null) {
             return result;
         }
-        for (TileEntityFieldGenerator emitter : TileEntityFieldGenerator.getActiveGenerators()) {
+        for (TileEntityFieldGenerator emitter : TileEntityFieldGenerator.getActiveGenerators(world)) {
             if (emitter == null || emitter.isInvalid() || emitter.getWorld() == null) {
                 continue;
             }

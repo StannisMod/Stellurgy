@@ -21,7 +21,7 @@ import java.util.*;
 
 public class SatelliteBiomeChanger extends SatelliteBase {
 
-    private static int MAX_SIZE = 1024;
+    private int maxQueuedBlocks = 1024;
     private Biome biomeId;
     private int radius;
     //Stores blocks to be updated
@@ -111,7 +111,7 @@ private int noise_val;
     }
 
     public void addBlockToList(HashedBlockPosition pos) {
-        if (toChangeList.size() < MAX_SIZE)
+        if (toChangeList.size() < maxQueuedBlocks)
             toChangeList.add(pos);
     }
 
@@ -122,7 +122,7 @@ private int noise_val;
 
         radius = 12;
         noise_val = 12;
-        MAX_SIZE = 8000;
+        maxQueuedBlocks = 8000;
 
         // make it less square by adding noise to the edges
 

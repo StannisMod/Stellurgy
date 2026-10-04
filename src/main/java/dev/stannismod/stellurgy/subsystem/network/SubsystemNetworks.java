@@ -9,10 +9,10 @@ import dev.stannismod.stellurgy.Stellurgy;
 /**
  * One server's subsystem networks: which nodes each domain has, and each world's solved topology.
  * <p>
- * <b>Owned by the SERVER, held by the mod object.</b> Both tables describe the blocks of the running
- * server's worlds, so they live exactly as long as it does: a fresh object is attached when a server
- * is about to start — before any world loads, because a tile registers itself the moment its chunk
- * does — and released when it has stopped. A single-player player opening a second save therefore
+ * <b>Owned by the SERVER, held in its {@code ServerState}.</b> Both tables describe the blocks of the
+ * running server's worlds, so they live exactly as long as it does: a fresh object is built with the
+ * server's state when a server is about to start — before any world loads, because a tile registers
+ * itself the moment its chunk does — and dropped with it when the server has stopped. A single-player player opening a second save therefore
  * starts from nothing instead of inheriting the first save's graph under the same dimension ids.
  * <p>
  * There is no setter and no test seam. {@link SubsystemNetworkRegistry} and
@@ -30,19 +30,8 @@ public final class SubsystemNetworks {
     private SubsystemNetworks() {
     }
 
-    /**
-     * A fresh set of networks for a server that is about to start.
-     *
-     * @param live what the mod currently holds, which must be nothing: a server starting over another
-     *             server's networks means the previous one never reported that it stopped, and
-     *             reusing its tables would carry its graph into this one
-     * @throws IllegalStateException when {@code live} is not null
-     */
-    public static SubsystemNetworks forStartingServer(SubsystemNetworks live) {
-        if (live != null) {
-            throw new IllegalStateException("a server is starting while the previous server's subsystem "
-                    + "networks are still attached; it never reported that it stopped");
-        }
+    /** A fresh, empty set of networks for one server; built with that server's state. */
+    public static SubsystemNetworks forServer() {
         return new SubsystemNetworks();
     }
 

@@ -4,7 +4,6 @@ import net.minecraft.init.Blocks;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.ChunkPrimer;
-import net.minecraft.world.gen.MapGenBase;
 import net.minecraft.world.gen.feature.WorldGenerator;
 import dev.stannismod.stellurgy.api.StellurgyBlocks;
 import dev.stannismod.stellurgy.world.decoration.MapGenLargeCrystal;
@@ -16,7 +15,6 @@ import java.util.Random;
 public class BiomeGenCrystal extends Biome {
 
     WorldGenerator crystalGenerator;
-    MapGenBase crystalGenBase;
 
     public BiomeGenCrystal(BiomeProperties properties) {
         super(properties);
@@ -32,7 +30,6 @@ public class BiomeGenCrystal extends Biome {
         this.decorator.mushroomsPerChunk = 0;
 
         crystalGenerator = new WorldGenLargeCrystal();
-        crystalGenBase = new MapGenLargeCrystal(fillerBlock, StellurgyBlocks.blockCrystal.getDefaultState());
     }
 
     @Override
@@ -40,7 +37,10 @@ public class BiomeGenCrystal extends Biome {
                                  @Nonnull ChunkPrimer chunkPrimerIn, int x, int z, double noiseVal) {
         super.genTerrainBlocks(worldIn, rand, chunkPrimerIn, x, z, noiseVal);
 
+        // A MapGenBase keeps the world it last generated into; built per chunk, so the biome - one
+        // object for the whole process - holds no world.
         if (x % 16 == 0 && z % 16 == 0)
-            crystalGenBase.generate(worldIn, x >> 4, z >> 4, chunkPrimerIn);
+            new MapGenLargeCrystal(fillerBlock, StellurgyBlocks.blockCrystal.getDefaultState())
+                    .generate(worldIn, x >> 4, z >> 4, chunkPrimerIn);
     }
 }

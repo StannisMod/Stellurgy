@@ -25,7 +25,6 @@ import java.util.Random;
 
 public class OreGenerator extends WorldGenerator implements IWorldGenerator {
 
-    private static IBlockState dilithiumTargetOre;
 
     private void generate(World world, Material material, int numPerChunk, int clumpSize, int chunkX, int chunkZ, Random random) {
         for (int i = 0; i < numPerChunk; i++) {

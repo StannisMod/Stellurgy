@@ -19,8 +19,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * {@link PacketSystemBodiesSync}, taken at the return of its {@code executeClient}.
  *
  * <p>What it observes is the production fact that the client's render store now holds exactly this
- * packet's payload — {@code executeClient} clears both client-side maps and overwrites them with the
- * decoded halves, so at its RETURN the store IS the payload. The tests used to poll the store's size
+ * packet's payload — {@code executeClient} hands both decoded halves to the client's view of the
+ * server, which replaces its sky whole, so at its RETURN the store IS the payload. The tests used to poll the store's size
  * through reflection on a tick budget; a size cannot say which broadcast filled it, cannot tell an
  * empty feed (a deliberate "draw nothing" packet) from a feed that never came, and cannot count how
  * many broadcasts the cell change produced. Each arrival is now its own record.</p>

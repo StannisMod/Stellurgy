@@ -159,10 +159,6 @@ public class ShieldAccumulatorTest extends AbstractSharedServerTest {
         return Long.parseLong(mReply.text(STORED));
     }
 
-    private static String exec(String command) throws Exception {
-        return join(client().execute(command));
-    }
-
     private static String join(List<String> resp) {
         return String.join("\n", resp);
     }

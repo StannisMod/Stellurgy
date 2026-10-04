@@ -37,6 +37,7 @@ import net.minecraft.util.math.BlockPos;
  */
 public final class ShipTransitManager {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /**
@@ -792,7 +793,7 @@ public final class ShipTransitManager {
                     + "restart - no physical ship exists until arrival; placing the player at spawn", shipId);
             return -1;
         }
-        return HyperspaceWorld.dimId();
+        return dev.stannismod.stellurgy.Stellurgy.serverState().hyperspace.dimId();
     }
 
     /**

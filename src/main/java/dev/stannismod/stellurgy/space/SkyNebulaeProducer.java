@@ -52,27 +52,22 @@ public final class SkyNebulaeProducer {
     public static final int MAX_PER_CELL = 12;
 
     /**
-     * What each cell's sky showed last time it was asked, keyed {@code seed|cellKey}.
+     * What each cell's sky showed last time it was asked, keyed {@code seed|cellKey}. One per space
+     * subsystem, so it dies with the server whose generator produced it.
      *
      * <p>Derived data and never a dependency: every entry can be recomputed from {@code (seed, cell)}
-     * alone, and {@link #reset()} restores the empty map rather than nulling anything. It exists
-     * because the answer is CONSTANT — a cloud is hundreds of light years away and a cell is 4·10⁻⁴ of
-     * one across, so re-deriving it once a second per loaded cell would burn a few thousand hashes and
-     * a heap of short-lived clusters to arrive at the same list.</p>
+     * alone. It exists because the answer is CONSTANT — a cloud is hundreds of light years away and a
+     * cell is 4·10⁻⁴ of one across, so re-deriving it once a second per loaded cell would burn a few
+     * thousand hashes and a heap of short-lived clusters to arrive at the same list.</p>
      */
-    private static final Map<String, List<RenderNebula>> CACHE = new LinkedHashMap<>();
+    public static final class Cache {
+        /** How many cells the cache keeps. Oldest out first; a pool of live cells is far smaller than this. */
+        private static final int LIMIT = 64;
 
-    /** How many cells the cache keeps. Oldest out first; a pool of live cells is far smaller than this. */
-    private static final int CACHE_LIMIT = 64;
-
-    private SkyNebulaeProducer() {
+        private final Map<String, List<RenderNebula>> entries = new LinkedHashMap<>();
     }
 
-    /** Drop the per-cell cache (server stop, or a generator/seed change under a test). */
-    public static void reset() {
-        synchronized (CACHE) {
-            CACHE.clear();
-        }
+    private SkyNebulaeProducer() {
     }
 
     /**
@@ -174,7 +169,8 @@ public final class SkyNebulaeProducer {
      * "present and empty" is what clears a stale sky, where "absent" would leave one standing.</p>
      */
     public static Map<Integer, List<RenderNebula>> buildByDim(Map<GalacticCoord, Integer> loadedCells,
-                                                              IGalaxyGenerator generator, long seed) {
+                                                              IGalaxyGenerator generator, long seed,
+                                                              Cache cache) {
         Map<Integer, List<RenderNebula>> byDim = new LinkedHashMap<>();
         if (loadedCells == null) {
             return byDim;
@@ -188,31 +184,31 @@ public final class SkyNebulaeProducer {
             if (slotDim == null || slotDim == SpaceManager.UNBOUND_SLOT || cell == null) {
                 continue;
             }
-            byDim.put(slotDim, cached(generator, seed, cell));
+            byDim.put(slotDim, cached(cache, generator, seed, cell));
         }
         return byDim;
     }
 
     /** {@link #around} through the per-cell cache. */
-    private static List<RenderNebula> cached(IGalaxyGenerator generator, long seed,
+    private static List<RenderNebula> cached(Cache cache, IGalaxyGenerator generator, long seed,
                                              GalacticCoord cell) {
         String key = seed + "|" + cell.cellCentre().cellKey();
-        synchronized (CACHE) {
-            List<RenderNebula> hit = CACHE.get(key);
+        synchronized (cache.entries) {
+            List<RenderNebula> hit = cache.entries.get(key);
             if (hit != null) {
                 return hit;
             }
         }
         List<RenderNebula> computed = around(generator, seed, cell);
-        synchronized (CACHE) {
-            if (CACHE.size() >= CACHE_LIMIT) {
-                java.util.Iterator<String> oldest = CACHE.keySet().iterator();
+        synchronized (cache.entries) {
+            if (cache.entries.size() >= Cache.LIMIT) {
+                java.util.Iterator<String> oldest = cache.entries.keySet().iterator();
                 if (oldest.hasNext()) {
                     oldest.next();
                     oldest.remove();
                 }
             }
-            CACHE.put(key, computed);
+            cache.entries.put(key, computed);
         }
         return computed;
     }
@@ -224,6 +220,7 @@ public final class SkyNebulaeProducer {
         if (reg == null || stack == null) {
             return new LinkedHashMap<>();
         }
-        return buildByDim(stack.manager.loadedCells(), UniverseRegistry.getGenerator(), reg.worldSeed());
+        return buildByDim(stack.manager.loadedCells(), reg.generator(), reg.worldSeed(),
+                stack.skyProducer.nebulae);
     }
 }

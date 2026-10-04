@@ -22,6 +22,7 @@ import dev.stannismod.stellurgy.atmosphere.hazard.Poisoning;
  * true of the air, in a fixed order — a derived label, not an identity. Nothing branches on it; if it
  * is stale by a fraction of a second, the worst that happens is that a line of text lags, which is
  * the whole point of only sending it for display.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class AtmosphereSummary {
 

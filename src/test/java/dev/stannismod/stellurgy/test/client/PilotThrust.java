@@ -29,7 +29,7 @@ import dev.stannismod.stellurgy.test.GameTicks;
  * <p>It replaced a poll that held the key until the craft had climbed, up to 400 client ticks. That
  * ceiling was not only patience: the key was held while it ran, so it also decided how far a craft
  * that did not stop could fly — and a craft under a held throttle for 200 ticks leaves the loaded
- * region (measured in {@code VSGroundFlightGroupE2ETest}, which then read {@code managed:false}).</p>
+ * region (measured in {@code VSGroundFlightGroupTest}, which then read {@code managed:false}).</p>
  *
  * <p>The two links are what make a red legible: a key that never arrived fails naming the missing
  * {@code pilot_input_set}, never as a craft that "did not climb".</p>

@@ -7,7 +7,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
 
 /**
  * How much substance a block IS, read off the block itself.

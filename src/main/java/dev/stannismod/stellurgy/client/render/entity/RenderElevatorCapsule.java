@@ -12,16 +12,8 @@ import dev.stannismod.stellurgy.entity.EntityElevatorCapsule;
 
 public class RenderElevatorCapsule extends Render<EntityElevatorCapsule> implements IRenderFactory<EntityElevatorCapsule> {
 
-    private static WavefrontObject sphere;
-
-    static {
-
-        try {
-            sphere = new WavefrontObject(new ResourceLocation("stellurgy:models/spaceElevator.obj"));
-        } catch (ModelFormatException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    private final WavefrontObject sphere =
+            WavefrontObject.required(new ResourceLocation("stellurgy:models/spaceElevator.obj"));
 
     public ResourceLocation capsuleTexture = new ResourceLocation("stellurgy:textures/models/spaceElevatorCapsule.png");
 

@@ -51,6 +51,7 @@ public class TileAtmosphereTerraformer extends TileWasteHeatPowerConsumer implem
      */
     private static final long STEP_PER_GAS = AirState.ONE_ATM / 200L;
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Object[][][] structure = new Object[][][]{
             {{null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null},
                     {null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null},

@@ -2,8 +2,7 @@ package dev.stannismod.stellurgy.event;
 
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import dev.stannismod.stellurgy.wirelessdata.HandlerDataNetwork;
-import dev.stannismod.stellurgy.wirelessdata.NetworkRegistry;
+import dev.stannismod.stellurgy.Stellurgy;
 
 public class WirelessDataTickHandler {
 
@@ -13,9 +12,6 @@ public class WirelessDataTickHandler {
             return;
         }
 
-        HandlerDataNetwork nets = NetworkRegistry.dataNetwork();
-        if (nets != null) {
-            nets.tickAllNetworks();
-        }
+        Stellurgy.serverState().tickWirelessNetworks();
     }
 }

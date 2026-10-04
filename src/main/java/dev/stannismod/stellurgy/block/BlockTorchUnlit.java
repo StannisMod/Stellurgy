@@ -60,7 +60,7 @@ public class BlockTorchUnlit extends BlockTorch {
 
         if (!player.getHeldItem(EnumHand.MAIN_HAND).isEmpty()) {
             Item item = player.getHeldItem(EnumHand.MAIN_HAND).getItem();
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world);
 
             if (atmhandler != null
                     && !world.isRemote

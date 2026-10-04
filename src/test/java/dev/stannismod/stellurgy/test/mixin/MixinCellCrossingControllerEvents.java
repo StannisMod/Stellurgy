@@ -27,12 +27,12 @@ public abstract class MixinCellCrossingControllerEvents {
                               double[] shipPos, CallbackInfoReturnable<Boolean> cir) {
         TestTrace.instrumentHere("cell_crossing_events");
         boolean granted = cir.getReturnValueZ();
-        if (!granted && !dev.stannismod.stellurgy.command.test.CrossingDiag
+        if (!granted && !dev.stannismod.stellurgy.test.trace.CrossingMemory.here()
                 .noteBlocked("carry:" + shipId, "refused")) {
             return; // the same refusal as last tick
         }
         if (granted) {
-            dev.stannismod.stellurgy.command.test.CrossingDiag.clear("carry:" + shipId);
+            dev.stannismod.stellurgy.test.trace.CrossingMemory.here().clear("carry:" + shipId);
         }
         TestTrace.recordServer("carry_requested", "\"ship\":\"" + shipId + "\",\"slotDim\":" + slotDim
                 + ",\"cell\":\"" + (cell == null ? "null" : cell.cellKey()) + "\",\"granted\":" + granted);

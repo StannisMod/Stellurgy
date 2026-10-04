@@ -53,6 +53,7 @@ import java.util.Map;
  * three figures this table needs could not come from it. The table is therefore AR's, and the JSON
  * is the extension point: a pack that wants GT's exact numbers, or an addon that adds a material,
  * writes a row rather than patching code.</p>
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value. The table is read from the install's file when the class loads and is never replaced.</p>
  */
 public final class ThermalMaterials {
 

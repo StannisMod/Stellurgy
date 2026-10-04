@@ -12,14 +12,11 @@ import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
 
 public class PilotControlsMessage implements IMessage {
 
-    public static boolean airshipUp_KeyPressedLast;
-    public static boolean airshipDown_KeyPressedLast;
-    public static boolean airshipForward_KeyPressedLast;
-    public static boolean airshipBackward_KeyPressedLast;
-    public static boolean airshipLeft_KeyPressedLast;
-    public static boolean airshipRight_KeyPressedLast;
-    public static boolean airshipStop_KeyPressedLast;
-    private static UUID defaultUUID = new UUID(0, 0);
+    /** Number of keys whose press edge is detected: up, down, forward, backward, left, right, stop. */
+    public static final int EDGE_KEYS = 7;
+
+    /** Effectively final, process lifetime: built once at class initialisation. */
+    private static final UUID defaultUUID = new UUID(0, 0);
     public boolean airshipUp_KeyDown;
     public boolean airshipDown_KeyDown;
     public boolean airshipForward_KeyDown;
@@ -113,7 +110,12 @@ public class PilotControlsMessage implements IMessage {
         packetBuf.writeBlockPos(controlBlockPos);
     }
 
-    public void assignKeyBooleans(PhysicsObject shipPiloting, Enum inputType) {
+    /**
+     * Sample the pilot's keys. {@code keysDownLastTick} is the pilot's own record of which edge keys
+     * were down at the previous sample, in {@link #EDGE_KEYS} order; it is read for the press edges
+     * and then overwritten with this sample.
+     */
+    public void assignKeyBooleans(PhysicsObject shipPiloting, Enum inputType, boolean[] keysDownLastTick) {
         airshipUp_KeyDown = VSKeyHandler.airshipUp.isKeyDown();
         airshipDown_KeyDown = VSKeyHandler.airshipDown.isKeyDown();
         airshipForward_KeyDown = VSKeyHandler.airshipForward.isKeyDown();
@@ -123,13 +125,13 @@ public class PilotControlsMessage implements IMessage {
         airshipSprinting = VSKeyHandler.airshipSpriting
             .isKeyDown(); // Minecraft.getMinecraft().player.isSprinting();
 
-        airshipUp_KeyPressed = airshipUp_KeyDown && !airshipUp_KeyPressedLast;
-        airshipDown_KeyPressed = airshipDown_KeyDown && !airshipDown_KeyPressedLast;
-        airshipForward_KeyPressed = airshipForward_KeyDown && !airshipForward_KeyPressedLast;
-        airshipBackward_KeyPressed = airshipBackward_KeyDown && !airshipBackward_KeyPressedLast;
-        airshipLeft_KeyPressed = airshipLeft_KeyDown && !airshipLeft_KeyPressedLast;
-        airshipRight_KeyPressed = airshipRight_KeyDown && !airshipRight_KeyPressedLast;
-        airshipStop_KeyPressed = airshipStop_KeyDown && !airshipStop_KeyPressedLast;
+        airshipUp_KeyPressed = airshipUp_KeyDown && !keysDownLastTick[0];
+        airshipDown_KeyPressed = airshipDown_KeyDown && !keysDownLastTick[1];
+        airshipForward_KeyPressed = airshipForward_KeyDown && !keysDownLastTick[2];
+        airshipBackward_KeyPressed = airshipBackward_KeyDown && !keysDownLastTick[3];
+        airshipLeft_KeyPressed = airshipLeft_KeyDown && !keysDownLastTick[4];
+        airshipRight_KeyPressed = airshipRight_KeyDown && !keysDownLastTick[5];
+        airshipStop_KeyPressed = airshipStop_KeyDown && !keysDownLastTick[6];
 
         if (shipPiloting != null) {
             // USED TO BE #getUniqueID
@@ -145,22 +147,22 @@ public class PilotControlsMessage implements IMessage {
             airshipRight_KeyDown = VSKeyHandler.airshipRight_Zepplin.isKeyDown();
             airshipStop_KeyDown = VSKeyHandler.airshipStop_Zepplin.isKeyDown();
 
-            airshipUp_KeyPressed = airshipUp_KeyDown && !airshipUp_KeyPressedLast;
-            airshipDown_KeyPressed = airshipDown_KeyDown && !airshipDown_KeyPressedLast;
-            airshipForward_KeyPressed = airshipForward_KeyDown && !airshipForward_KeyPressedLast;
-            airshipBackward_KeyPressed = airshipBackward_KeyDown && !airshipBackward_KeyPressedLast;
-            airshipLeft_KeyPressed = airshipLeft_KeyDown && !airshipLeft_KeyPressedLast;
-            airshipRight_KeyPressed = airshipRight_KeyDown && !airshipRight_KeyPressedLast;
-            airshipStop_KeyPressed = airshipStop_KeyDown && !airshipStop_KeyPressedLast;
+            airshipUp_KeyPressed = airshipUp_KeyDown && !keysDownLastTick[0];
+            airshipDown_KeyPressed = airshipDown_KeyDown && !keysDownLastTick[1];
+            airshipForward_KeyPressed = airshipForward_KeyDown && !keysDownLastTick[2];
+            airshipBackward_KeyPressed = airshipBackward_KeyDown && !keysDownLastTick[3];
+            airshipLeft_KeyPressed = airshipLeft_KeyDown && !keysDownLastTick[4];
+            airshipRight_KeyPressed = airshipRight_KeyDown && !keysDownLastTick[5];
+            airshipStop_KeyPressed = airshipStop_KeyDown && !keysDownLastTick[6];
         }
 
-        airshipUp_KeyPressedLast = airshipUp_KeyDown;
-        airshipDown_KeyPressedLast = airshipDown_KeyDown;
-        airshipForward_KeyPressedLast = airshipForward_KeyDown;
-        airshipBackward_KeyPressedLast = airshipBackward_KeyDown;
-        airshipLeft_KeyPressedLast = airshipLeft_KeyDown;
-        airshipRight_KeyPressedLast = airshipRight_KeyDown;
-        airshipStop_KeyPressedLast = airshipStop_KeyDown;
+        keysDownLastTick[0] = airshipUp_KeyDown;
+        keysDownLastTick[1] = airshipDown_KeyDown;
+        keysDownLastTick[2] = airshipForward_KeyDown;
+        keysDownLastTick[3] = airshipBackward_KeyDown;
+        keysDownLastTick[4] = airshipLeft_KeyDown;
+        keysDownLastTick[5] = airshipRight_KeyDown;
+        keysDownLastTick[6] = airshipStop_KeyDown;
     }
 
 }

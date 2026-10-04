@@ -88,19 +88,21 @@ public class LibVulpes {
 	 */
 	public static final String REGISTRY_DOMAIN = "libvulpes";
 
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	public static org.apache.logging.log4j.Logger logger = LogManager.getLogger("libVulpes");
-	public static int time = 0;
-	private static HashMap<Class, String> userModifiableRecipes = new HashMap<>();
+	/** Effectively final, process lifetime: filled only by {@link #registerRecipeHandler} during pre-init. */
+	private final HashMap<Class, String> userModifiableRecipes = new HashMap<>();
 
-	//Classload
-	public static Object teslaHandler = new TeslaHandler();
+	/** Effectively final, process lifetime: built with this object, dropped by {@link #preInit}. */
+	private Object teslaHandler = new TeslaHandler();
 
 	// modId names the HOST: this class is not a @Mod class, so FML cannot infer the owner from
 	// the class name and would silently skip the injection.
 	@SidedProxy(modId = Constants.modId, clientSide="dev.stannismod.stellurgy.libvulpes.client.ClientProxy", serverSide="dev.stannismod.stellurgy.libvulpes.common.CommonProxy")
 	public static CommonProxy proxy;
 
-	private static CreativeTabs tabMultiblock = new CreativeTabs("multiBlock") {
+	/** Effectively final, process lifetime: built with this object. */
+	private final CreativeTabs tabMultiblock = new CreativeTabs("multiBlock") {
 		@Override
 		@Nonnull
 		public ItemStack getTabIconItem() {
@@ -109,7 +111,8 @@ public class LibVulpes {
 	};
 
 	// Labelled by the host's lang files (itemGroup.stellurgyOres): the host's ores share this tab.
-	public static CreativeTabs tabLibVulpesOres = new CreativeTabs("stellurgyOres") {
+	/** Effectively final, process lifetime: built with this object. */
+	public final CreativeTabs tabLibVulpesOres = new CreativeTabs("stellurgyOres") {
 
 		@Override
 		@Nonnull
@@ -118,23 +121,24 @@ public class LibVulpes {
 		}
 	};
 
-	public static MaterialRegistry materialRegistry = new MaterialRegistry(REGISTRY_DOMAIN);
+	/** Effectively final, process lifetime: built with this object; filled at registration. */
+	public final MaterialRegistry materialRegistry = new MaterialRegistry(REGISTRY_DOMAIN);
 
-	/**
-	 * Stands in for the {@code @Instance} FML filled while libVulpes was a mod of its own, and has
-	 * that object's lifetime: the process. Built at class-load and holds nothing then: its content
-	 * is created in {@link #preInit}, so loading this class has no side effects (a unit test that
-	 * only wants {@link #proxy} must not construct blocks against an uninitialised Loader). It is
-	 * NOT a mod object any more - FML has no container for it - so it can never be passed to
-	 * {@code openGui} or {@code registerGuiHandler}; those take the host.
-	 */
-	public static final LibVulpes instance = new LibVulpes();
+	/** The libVulpes packet channel. Effectively final, process lifetime: created only by
+	 *  {@link #preInit}, the first thing it does. */
+	public PacketHandler packets;
 
-	public static void registerRecipeHandler(Class clazz, String fileName) {
+	public void registerRecipeHandler(Class clazz, String fileName) {
 		userModifiableRecipes.put(clazz, fileName);
 	}
 
-	private LibVulpes() {
+	/**
+	 * Built by the host mod object, which owns it ({@code Stellurgy.instance.libVulpes}) - libVulpes is
+	 * not a mod of its own any more, so FML has no container and no {@code @Instance} for it, and it can
+	 * never be passed to {@code openGui} or {@code registerGuiHandler}; those take the host. Its blocks
+	 * and items are created in {@link #preInit}, not here.
+	 */
+	public LibVulpes() {
 	}
 
 	/** What the constructor did while FML constructed libVulpes as a mod of its own. */
@@ -157,14 +161,7 @@ public class LibVulpes {
         LibVulpesBlocks.blockAdvancedMotor = new BlockMotor(Material.IRON, 1/1.5f).setCreativeTab(tabMultiblock).setUnlocalizedName("advancedMotor").setHardness(2f);
         LibVulpesBlocks.blockEnhancedMotor = new BlockMotor(Material.IRON, 1/2f).setCreativeTab(tabMultiblock).setUnlocalizedName("enhancedMotor").setHardness(2f);
         LibVulpesBlocks.blockEliteMotor = new BlockMotor(Material.IRON, 1/4f).setCreativeTab(tabMultiblock).setUnlocalizedName("eliteMotor").setHardness(2f);
-        
-        if(Loader.isModLoaded("ic2"))
-        	LibVulpesBlocks.blockIC2Plug = new BlockMultiMachineBattery(Material.IRON, TilePlugInputIC2.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("forgePowerInput").setCreativeTab(tabMultiblock).setHardness(3f);
-        
-        if(Loader.isModLoaded("gregtech"))
-        	LibVulpesBlocks.blockGTPlug = new BlockMultiMachineBattery(Material.IRON, TilePlugInputGregTech.class, GuiHandler.guiId.MODULAR.ordinal()).setUnlocalizedName("gregPowerInput").setCreativeTab(tabMultiblock).setHardness(3f);
-        
-        
+
         //Initialize Items
         LibVulpesItems.itemLinker = new ItemLinker().setUnlocalizedName("Linker").setCreativeTab(tabMultiblock).setRegistryName(REGISTRY_DOMAIN, "linker");
         LibVulpesItems.itemBattery = new ItemIngredient(2).setUnlocalizedName("libvulpes:battery").setCreativeTab(tabMultiblock).setRegistryName(REGISTRY_DOMAIN, "battery");
@@ -310,6 +307,10 @@ public class LibVulpes {
 	 */
 	public void preInit(FMLPreInitializationEvent event)
 	{
+		if (packets != null) {
+			throw new IllegalStateException("libVulpes pre-init runs once per process");
+		}
+		packets = new PacketHandler();
 		createContent();
 		// Here, not at class-load, so the order against the host's own registry listeners is
 		// decided by the host's call order rather than by whenever this class happened to load.
@@ -374,10 +375,9 @@ public class LibVulpes {
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("Aluminum", "pickaxe", 1, 0xb3e4dc, AllowedProducts.getProductByName("COIL").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue()));
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("Iridium", "pickaxe", 2, 0xdedcce, AllowedProducts.getProductByName("COIL").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue()));
 
-		//
-		PacketHandler.INSTANCE.addDiscriminator(PacketMachine.class);
-		PacketHandler.INSTANCE.addDiscriminator(PacketEntity.class);
-		PacketHandler.INSTANCE.addDiscriminator(PacketChangeKeyState.class);
+		packets.addDiscriminator(PacketMachine.class);
+		packets.addDiscriminator(PacketEntity.class);
+		packets.addDiscriminator(PacketChangeKeyState.class);
 	}
 
 	/**
@@ -388,7 +388,6 @@ public class LibVulpes {
 	public void init(FMLInitializationEvent event) {
 		registerRecipes();
 		proxy.init();
-		PacketHandler.init();
 		proxy.registerEventHandlers();
 
 
@@ -419,8 +418,6 @@ public class LibVulpes {
 		list = new LinkedList<>();
 		list.add(new BlockMeta(LibVulpesBlocks.blockCreativeInputPlug, BlockMeta.WILDCARD));
 		list.add(new BlockMeta(LibVulpesBlocks.blockForgeInputPlug, BlockMeta.WILDCARD));
-		if(LibVulpesBlocks.blockRFBattery != null)
-			list.add(new BlockMeta(LibVulpesBlocks.blockRFBattery, BlockMeta.WILDCARD));
 		if(LibVulpesBlocks.blockIC2Plug != null)
 			list.add(new BlockMeta(LibVulpesBlocks.blockIC2Plug, BlockMeta.WILDCARD));
 		TileMultiBlock.addMapping('P', list);
@@ -428,8 +425,6 @@ public class LibVulpes {
 		//Power output
 		list = new LinkedList<>();
 		list.add(new BlockMeta(LibVulpesBlocks.blockForgeOutputPlug, BlockMeta.WILDCARD));
-		if(LibVulpesBlocks.blockRFOutput != null)
-			list.add(new BlockMeta(LibVulpesBlocks.blockRFOutput, BlockMeta.WILDCARD));
 		TileMultiBlock.addMapping('p', list);
 
 		//Liquid input
@@ -501,11 +496,6 @@ public class LibVulpes {
 			}
 		}
 
-	}
-
-	@SubscribeEvent
-	public void tick(TickEvent.ServerTickEvent event) {
-		time++;
 	}
 }
 

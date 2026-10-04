@@ -59,9 +59,15 @@ import java.util.List;
  *   - Slot 0: input chip (sat or station chip)
  *   - Slot 1: output written chip
  *   - "Scan" button to populate/refresh the list from server state
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public class TileOrbitalRegistry extends TileWasteHeatPowerConsumer
         implements IModularInventory, IButtonInventory, IGuiCallback, IInventory {
+
+    /** Where this registry's lists were scrolled to, on the client. */
+    private final dev.stannismod.stellurgy.inventory.modules.ScrollMemory listScroll =
+            new dev.stannismod.stellurgy.inventory.modules.ScrollMemory();
 
     // Simple 1x1 structure
     public static final Object[][][] structure = new Object[][][] {
@@ -896,7 +902,8 @@ public class TileOrbitalRegistry extends TileWasteHeatPowerConsumer
             modules.add(Stellurgy.proxy.createScrollListPan(
                     baseX, baseY,
                     satButtons,
-                    sizeX, sizeY
+                    sizeX, sizeY,
+                    listScroll
             ));
         }
     }
@@ -1038,7 +1045,8 @@ public class TileOrbitalRegistry extends TileWasteHeatPowerConsumer
             modules.add(Stellurgy.proxy.createScrollListPan(
                     baseX, baseY,
                     stationButtons,
-                    sizeX, sizeY
+                    sizeX, sizeY,
+                    listScroll
             ));
         }
     }
@@ -1169,7 +1177,7 @@ public class TileOrbitalRegistry extends TileWasteHeatPowerConsumer
         // Client -> server via PacketMachine
         if (world != null && world.isRemote) {
             if (buttonId == GUI_BUTTON_SCAN) {
-                Stellurgy.proxy.clearScrollCache();
+                listScroll.clear();
                 pendingReopenAfterScan = true;
                 PacketHandler.sendToServer(new PacketMachine(this, NET_BUTTON_SCAN));
                 return;
@@ -1538,19 +1546,5 @@ public class TileOrbitalRegistry extends TileWasteHeatPowerConsumer
         selectedStationId = -1;
         lastSatButton = -1;
         lastStationButton = -1;
-
-        // Critical: reset static scroll cache so containers don't reuse old offsets
-        if (world != null && world.isRemote) {
-            Stellurgy.proxy.clearScrollCache();
-        }
-
-    }
-
-    @Override
-    public void onChunkUnload() {
-        super.onChunkUnload();
-        if (world != null && world.isRemote) {
-            Stellurgy.proxy.clearScrollCache();
-        }
     }
 }

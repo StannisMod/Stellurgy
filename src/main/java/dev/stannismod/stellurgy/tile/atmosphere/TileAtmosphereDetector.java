@@ -67,7 +67,7 @@ public class TileAtmosphereDetector extends TileEntity implements ITickable, IMo
      * Two implementations of one rule stay in step exactly as long as nobody edits one of them.
      */
     public boolean statementHolds() {
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         if (handler == null) {
             // No handler for this dimension: the only thing anyone can honestly say about the air is
             // that it is ordinary, so only the statement that it is breathable holds.

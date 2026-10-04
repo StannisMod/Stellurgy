@@ -21,6 +21,7 @@ import javax.annotation.Nullable;
  * <p>
  * Placing it against a hull face points its radiating side AWAY from that face, which is the way a
  * player expects to build a plate: click the outside of the hull, get a cell facing space.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public class BlockHeatRadiator extends BlockHeatLoop {
 

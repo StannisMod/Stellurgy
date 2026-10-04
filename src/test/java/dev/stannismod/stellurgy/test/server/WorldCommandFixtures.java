@@ -1,69 +1,24 @@
 package dev.stannismod.stellurgy.test.server;
 
-import dev.stannismod.stellurgy.test.DimList;
-import dev.stannismod.stellurgy.test.Reply;
-import dev.stannismod.stellurgy.test.GameTicks;
-
 import java.util.List;
 
 /**
- * shared command-invocation + result-readback helpers for the
- * {@code /ar} (WorldCommand) test suites. Keeps each test class small
- * by absorbing the duplicated <em>"run a command then read state back"</em>
- * boilerplate.
+ * Stateless helpers for the server suites that need no server of their own. The verbs that DO talk
+ * to the server — {@code exec}, {@code serverTick}, the planet-info readers — are instance methods of
+ * {@link AbstractSharedServerTest}, because the server they talk to is the class run's.
  *
- * <p>Result-readback strategy: prefer {@code /stellurgytest planet info <dim>}
+ * <p>Result-readback strategy for the {@code /ar} suites: prefer {@code /stellurgytest planet info <dim>}
  * (independent reader, JSON output) over re-reading via {@code /ar planet get}
  * (shares its codepath with {@code /ar planet set} — same impl reading
  * the same field, so they'd agree-but-be-wrong on a shared bug).
  * {@code /ar planet get} is checked for its own contract once, then we
  * trust the independent JSON readback everywhere else.</p>
  *
- * <p>Package-private — only the {@code /ar} test classes need it.</p>
+ * <p>Package-private — only the server suites need it.</p>
  */
 final class WorldCommandFixtures {
 
     private WorldCommandFixtures() {}
-
-    /** Send a command via the shared {@link AbstractSharedServerTest}
-     *  harness and return the concatenated console response. */
-    static String exec(String cmd) throws Exception {
-        return String.join("\n", AbstractSharedServerTest.client().execute(cmd));
-    }
-
-    /** Send a command and read its reply as DATA — refusing, naming the command, if the verb did
-     *  not answer one JSON object. */
-    static Reply ask(String cmd) throws Exception {
-        return Reply.of(cmd, exec(cmd));
-    }
-
-    /**
-     * Send a command that is a STEP OF THE ARRANGEMENT, and refuse as an arrangement failure unless
-     * the verb reported {@code ok}.
-     *
-     * <p>A reply dropped on the floor cannot say that the step did not happen: a fill into an
-     * unloaded world, a force-tick of a tile that is not there and an energy inject into the wrong
-     * block all answer an {@code error}, and an unread one lets the scenario go on to measure a world
-     * that was never built — and report what it measures as the mechanic.</p>
-     */
-    static Reply arrange(String cmd) throws Exception {
-        return ask(cmd).requireOk(cmd);
-    }
-
-    /**
-     * What time it is in the GAME, asked of the server.
-     *
-     * <p>The server's own tick counter. A test that needs to know how long it is willing to wait for
-     * something asks here rather than looking at a watch.</p>
-     *
-     * <p>A DELEGATE. The implementation lives in the public {@link GameTicks}, because this class
-     * is package-private and bound to the shared-server harness while most of the suite cannot
-     * reach it — and because two readers of one clock is exactly one too many. What stays here is
-     * the vocabulary: the name reads better at a {@code /ar} call site.</p>
-     */
-    static long serverTick() throws Exception {
-        return GameTicks.read(AbstractSharedServerTest.client(), GameTicks.server());
-    }
 
     /**
      * Wait for ONE craft to finish entering space, on the record production publishes for it.
@@ -99,58 +54,6 @@ final class WorldCommandFixtures {
             throws Exception {
         return events.awaitField(mark, "ship_left_planet", "ship", durableShipId,
                 what, tickBudget, stimulus);
-    }
-
-    /** Read an integer field out of {@code /stellurgytest planet info <dim>}
-     *  JSON. Asserts the field is present (matcher must find). */
-    static int planetIntField(int dim, String field) throws Exception {
-        return Integer.parseInt(matchOrThrow(planetInfo(dim), field));
-    }
-
-    /** Read a float/double field out of {@code /stellurgytest planet info <dim>}. */
-    static double planetFloatField(int dim, String field) throws Exception {
-        return Double.parseDouble(matchOrThrow(planetInfo(dim), field));
-    }
-
-    /** True iff Stellurgy's planet registry knows the given dim, observed via
-     *  {@code /ar planet list} (which iterates {@code getRegisteredDimensions()}
-     *  &rarr; the underlying {@code dimensionList} keyset). Cannot use
-     *  {@code /stellurgytest planet info} here because
-     *  {@code DimensionManager.getDimensionProperties} falls back to
-     *  {@code overworldProperties} for unknown dims (line 539), so the
-     *  info probe is incapable of distinguishing "registered" from
-     *  "absent" by itself. */
-    static boolean planetExists(int dim) throws Exception {
-        // Asked of the DATA that answers the same question. The comment above rules out
-        // `planet info`, and rightly — but `stellurgytest dim list` reports
-        // `DimensionManager.getRegisteredDimensions()`, which is the very collection
-        // `/ar planet list` iterates, and it reports it as a list of integers. The chat form
-        // needed the trailing colon to stop `DIM9` matching `DIM90`, which is a bound a reader
-        // does not have to remember.
-        return DimList.from(WorldCommandFixtures::exec).holds(dim);
-    }
-
-    private static String planetInfo(int dim) throws Exception {
-        return exec("stellurgytest planet info " + dim);
-    }
-
-    /**
-     * One field of a planet-info reply, as text.
-     *
-     * <p>It used to build a regex out of a TEMPLATE — {@code "\"%s\":(-?\\d+)"} with the field name
-     * formatted into it — one template per Java type, so the reader's answer depended on which
-     * template the caller picked as well as on what the probe wrote. A field read by name needs
-     * neither.</p>
-     */
-    private static String matchOrThrow(String src, String field) {
-        // absence is the answer, and WHICH answer is the CALLER's: this verb is handed a
-        // FIELD name, so it cannot know what a missing one means — and the callers here
-        // include waits, which read the shape that does not carry the field yet.
-        String value = Reply.of("stellurgytest planet info", src).textOr(field, null);
-        if (value == null) {
-            throw new AssertionError("field \"" + field + "\" not found in: " + src);
-        }
-        return value;
     }
 
     /** First line that contains the substring, or {@code null}. Useful

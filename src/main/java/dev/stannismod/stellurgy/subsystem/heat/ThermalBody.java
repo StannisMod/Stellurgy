@@ -87,7 +87,7 @@ public final class ThermalBody {
         if (!(own instanceof HeatNetworkState)) {
             return null;
         }
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         String shipId = VSIntegration.registeredShipIdManagingBlock(world, anchor);
         List<HeatNetworkState> loops = loopsOf(world, handler, shipId, (HeatNetworkState) own);
 

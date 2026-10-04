@@ -49,16 +49,11 @@ import java.util.*;
 import java.util.Map.Entry;
 import dev.stannismod.stellurgy.api.Constants;
 
-public class ItemProjector extends Item implements IModularInventory, IButtonInventory, IGuiCallback, INetworkItem {
+public class ItemProjector extends Item implements IModularInventory, IButtonInventory, INetworkItem {
 
 	private ArrayList<TileMultiBlock> machineList;
 	private ArrayList<BlockTile> blockList;
 	private ArrayList<String> descriptionList;
-
-	private ModuleTextBox projectorSearchBox;
-	private ModuleContainerPan projectorMachinePan;
-	private final List<ModuleSelectableProjectorButton> projectorSearchButtons = new LinkedList<>();
-	private String projectorSearchText = "";
 
 	private static final String IDNAME = "machineId";
 
@@ -326,11 +321,11 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 		List<ModuleBase> modules = new LinkedList<>();
 		List<ModuleBase> btns = new LinkedList<>();
 
-		projectorSearchButtons.clear();
-		projectorMachinePan = null;
-		projectorSearchBox = null;
-
 		boolean isClient = player != null && player.world.isRemote;
+		// The search is the open screen's: one per opening, client side only. The item is one object
+		// for the whole process, so state kept on it was shared by every projector screen, and the
+		// server-side call of this method wiped what the client screen had just built.
+		ProjectorSearch search = isClient ? new ProjectorSearch() : null;
 
 		if(isClient) {
 			modules.add(new ModuleText(
@@ -340,9 +335,8 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 					0x404040
 			));
 
-			projectorSearchBox = new ModuleTextBox(this, 55, 18, 110, 14, 64);
-			projectorSearchBox.setText(projectorSearchText);
-			modules.add(projectorSearchBox);
+			search.box = new ModuleTextBox(search, 55, 18, 110, 14, 64);
+			modules.add(search.box);
 		}
 
 		List<Integer> sortedMachineIds = new ArrayList<>();
@@ -374,7 +368,7 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 						dev.stannismod.stellurgy.libvulpes.inventory.TextureResources.buttonBuild
 				);
 
-				projectorSearchButtons.add(button);
+				search.buttons.add(button);
 				btns.add(button);
 			}
 			else {
@@ -404,8 +398,8 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 		);
 
 		if(isClient) {
-			projectorMachinePan = panningContainer;
-			updateProjectorSearchFilter();
+			search.pan = panningContainer;
+			search.applyFilter();
 		}
 
 		modules.add(panningContainer);
@@ -451,19 +445,6 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 		}
 	}
 
-	@Override
-	public void onModuleUpdated(ModuleBase module) {
-		if(module == projectorSearchBox && projectorSearchBox != null) {
-			projectorSearchText = normalizeProjectorSearch(projectorSearchBox.getText());
-
-			if(projectorMachinePan != null) {
-				projectorMachinePan.setOffset2(0, 0);
-			}
-
-			updateProjectorSearchFilter();
-		}
-	}
-
 	private String normalizeProjectorSearch(String text) {
 		if(text == null) {
 			return "";
@@ -472,24 +453,41 @@ public class ItemProjector extends Item implements IModularInventory, IButtonInv
 		return text.trim().toLowerCase(Locale.ROOT);
 	}
 
-	private void updateProjectorSearchFilter() {
-		String search = normalizeProjectorSearch(projectorSearchText);
-		int visibleIndex = 0;
+	/** The machine search of one open projector screen: its text box, its pan and its buttons. */
+	private class ProjectorSearch implements IGuiCallback {
+		private ModuleTextBox box;
+		private ModuleContainerPan pan;
+		private final List<ModuleSelectableProjectorButton> buttons = new LinkedList<>();
 
-		for(ModuleSelectableProjectorButton button : projectorSearchButtons) {
-			boolean matches = search.isEmpty() || normalizeProjectorSearch(button.getSearchText()).contains(search);
+		@Override
+		public void onModuleUpdated(ModuleBase module) {
+			if(module == box) {
+				if(pan != null) {
+					pan.setOffset2(0, 0);
+				}
+				applyFilter();
+			}
+		}
 
-			button.setVisible(matches);
-			button.setEnabled(matches);
+		private void applyFilter() {
+			String search = normalizeProjectorSearch(box == null ? "" : box.getText());
+			int visibleIndex = 0;
 
-			if(matches) {
-				setProjectorButtonPosition(
-						button,
-						PROJECTOR_PAN_X + PROJECTOR_BUTTON_X,
-						PROJECTOR_PAN_Y + PROJECTOR_BUTTON_START_Y + visibleIndex * PROJECTOR_BUTTON_SPACING_Y
-				);
+			for(ModuleSelectableProjectorButton button : buttons) {
+				boolean matches = search.isEmpty() || normalizeProjectorSearch(button.getSearchText()).contains(search);
 
-				visibleIndex++;
+				button.setVisible(matches);
+				button.setEnabled(matches);
+
+				if(matches) {
+					setProjectorButtonPosition(
+							button,
+							PROJECTOR_PAN_X + PROJECTOR_BUTTON_X,
+							PROJECTOR_PAN_Y + PROJECTOR_BUTTON_START_Y + visibleIndex * PROJECTOR_BUTTON_SPACING_Y
+					);
+
+					visibleIndex++;
+				}
 			}
 		}
 	}

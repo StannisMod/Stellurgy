@@ -92,7 +92,7 @@ public class XMLPlanetLoaderTest {
         dev.stannismod.stellurgy.api.dimension.solar.IGalaxy emptyGalaxy =
                 new EmptyGalaxyFixture();
 
-        String xml = XMLPlanetLoader.writeXML(emptyGalaxy);
+        String xml = XMLPlanetLoader.writeXML(emptyGalaxy, null);
         assertFalse("writeXML must produce non-empty output", xml.isEmpty());
         assertTrue("writeXML must declare the galaxy element", xml.contains("<galaxy"));
 

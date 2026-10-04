@@ -59,8 +59,8 @@ import dev.stannismod.stellurgy.api.event.ShipEvent;
  * <h2>What it is silent about</h2>
  *
  * <p>Ships in a world that stops ticking are not reported as gone — nothing here observes a world
- * unloading, and the per-world memory below is dropped only when that world ticks again with the
- * ship absent. <b>So the absence of a {@code ShipGoneEvent} is not proof a craft still exists</b>,
+ * unloading: the per-world memory below goes with the world object and announces nothing.
+ * <b>So the absence of a {@code ShipGoneEvent} is not proof a craft still exists</b>,
  * and a consumer that must ultimately answer for a craft in a world nobody ticks still needs an end
  * of its own. That limit is why {@code DeckHold} keeps a give-up at all, and it is stated on both
  * sides so neither reads as an oversight.</p>
@@ -68,55 +68,58 @@ import dev.stannismod.stellurgy.api.event.ShipEvent;
 public final class ShipLoadedAnnouncer {
 
     /**
-     * Per world dimension, the substrate ids that were loaded-and-settled on the previous tick. Keyed by
-     * dimension rather than by {@code World} so a world object replaced between ticks does not
-     * resurrect an entry, and cleared per world as it ticks.
+     * What one server WORLD remembers between its ticks ({@link dev.stannismod.stellurgy.world.WorldRuntime}),
+     * so it goes with the world object and a later world reusing the dimension number starts clean.
      */
-    private final Map<Integer, Map<String, UUID>> readyLastTick = new HashMap<>();
+    private static final class WorldWatch {
+        /** The substrate ids that were loaded-and-settled on the previous tick. */
+        final Map<String, UUID> readyLastTick = new HashMap<>();
+
+        /**
+         * The substrate ids the REGISTRY carried on the previous tick, with each craft's durable name
+         * — the set {@link ShipEvent.ShipGoneEvent} is the falling edge of.
+         *
+         * <p>Kept separately from {@link #readyLastTick} because it answers a different question and
+         * has a different membership: the registry carries ships that are not loaded, and (during a
+         * crossing) the source hull between its cut and the substrate's own destroy pass. The durable
+         * name is remembered HERE rather than looked up when the craft leaves, because by then there
+         * is nothing left to ask — that is the whole difficulty with publishing a disappearance.</p>
+         */
+        final Map<String, UUID> registeredLastTick = new HashMap<>();
+
+        /**
+         * Craft a crossing has told us it is about to cut out of this world, and where to — substrate
+         * id to destination dimension. Consumed by the next falling edge for that id, which turns it
+         * into {@link ShipEvent.ShipLeftWorldEvent} instead of {@link ShipEvent.ShipGoneEvent}.
+         *
+         * <p><b>Clock-free on purpose.</b> A mark lives until the edge it predicts arrives — the cut
+         * is what causes that edge, so it does arrive — rather than for some number of ticks chosen
+         * to be "long enough". A crossing that decides not to cut after all takes its own mark back
+         * ({@link #abandonDeparture}); nothing else may.</p>
+         */
+        final Map<String, Integer> departing = new HashMap<>();
+    }
+
+    private static WorldWatch watchOf(World world) {
+        return dev.stannismod.stellurgy.world.WorldRuntime.of(world, WorldWatch.class, WorldWatch::new);
+    }
 
     /**
-     * Per world dimension, the substrate ids the REGISTRY carried on the previous tick, with each
-     * craft's durable name — the set {@link ShipEvent.ShipGoneEvent} is the falling edge of.
-     *
-     * <p>Kept separately from {@link #readyLastTick} because it answers a different question and has
-     * a different membership: the registry carries ships that are not loaded, and (during a crossing)
-     * the source hull between its cut and the substrate's own destroy pass. The durable name is
-     * remembered HERE rather than looked up when the craft leaves, because by then there is nothing
-     * left to ask — that is the whole difficulty with publishing a disappearance.</p>
-     */
-    private final Map<Integer, Map<String, UUID>> registeredLastTick = new HashMap<>();
-
-    /**
-     * Craft a crossing has told us it is about to cut out of a world, and where to — substrate id to
-     * destination dimension. Consumed by the next falling edge for that id, which turns it into
-     * {@link ShipEvent.ShipLeftWorldEvent} instead of {@link ShipEvent.ShipGoneEvent}.
-     *
-     * <p><b>Clock-free on purpose.</b> A mark lives until the edge it predicts arrives — the cut is
-     * what causes that edge, so it does arrive — rather than for some number of ticks chosen to be
-     * "long enough". A crossing that decides not to cut after all takes its own mark back
-     * ({@link #abandonDeparture}); nothing else may.</p>
-     *
-     * <p>Static because the declaring code is a crossing mid-tick and holds no reference to the one
-     * instance the event bus owns — the same reasoning as {@code DeckHold.HOLDS}.</p>
-     */
-    private static final Map<String, Integer> DEPARTING = new HashMap<>();
-
-    /**
-     * A crossing is about to cut {@code substrate} out of its world into {@code destinationDim}.
+     * A crossing is about to cut {@code substrate} out of {@code world} into {@code destinationDim}.
      * Declared BEFORE the cut, so the registry edge it causes is classified by the code that knows
      * rather than guessed at by the code that watches.
      */
-    public static void declareDeparture(UUID substrate, int destinationDim) {
+    public static void declareDeparture(World world, UUID substrate, int destinationDim) {
         if (substrate != null) {
-            DEPARTING.put(substrate.toString(), destinationDim);
+            watchOf(world).departing.put(substrate.toString(), destinationDim);
         }
     }
 
     /** The declared departure did not happen: the craft is still here, and a later disappearance of
      *  it would be a real one. */
-    public static void abandonDeparture(UUID substrate) {
+    public static void abandonDeparture(World world, UUID substrate) {
         if (substrate != null) {
-            DEPARTING.remove(substrate.toString());
+            watchOf(world).departing.remove(substrate.toString());
         }
     }
 
@@ -130,12 +133,8 @@ public final class ShipLoadedAnnouncer {
             return;
         }
         Map<String, UUID> now = VSIntegration.shipsReadyForPhysics(world);
-        int dim = world.provider.getDimension();
-        Map<String, UUID> before = readyLastTick.get(dim);
-        if (before == null) {
-            before = new HashMap<>();
-            readyLastTick.put(dim, before);
-        }
+        WorldWatch watch = watchOf(world);
+        Map<String, UUID> before = watch.readyLastTick;
         for (Map.Entry<String, UUID> entry : now.entrySet()) {
             if (!before.containsKey(entry.getKey())) {
                 UUID durable = entry.getValue();
@@ -151,7 +150,7 @@ public final class ShipLoadedAnnouncer {
             }
         }
         before.putAll(now);
-        announceGone(world, dim);
+        announceGone(world, watch);
     }
 
     /**
@@ -163,12 +162,8 @@ public final class ShipLoadedAnnouncer {
      * removed, so a disappearance published from a live lookup could only ever say "some ship, name
      * unknown", which is the shape of answer this whole family exists to stop giving.</p>
      */
-    private void announceGone(World world, int dim) {
-        Map<String, UUID> remembered = registeredLastTick.get(dim);
-        if (remembered == null) {
-            remembered = new HashMap<>();
-            registeredLastTick.put(dim, remembered);
-        }
+    private void announceGone(World world, WorldWatch watch) {
+        Map<String, UUID> remembered = watch.registeredLastTick;
         java.util.Map<UUID, double[]> registered = VSIntegration.registeredShipPoses(world);
         for (UUID substrate : registered.keySet()) {
             String key = substrate.toString();
@@ -183,7 +178,7 @@ public final class ShipLoadedAnnouncer {
             }
             UUID durable = was.getValue();
             String name = durable == null ? null : durable.toString();
-            Integer departedTo = DEPARTING.remove(was.getKey());
+            Integer departedTo = watch.departing.remove(was.getKey());
             // DEPARTED or DESTROYED — the registry edge is identical for both, and only the crossing
             // knows which. Reported as "gone" they are the same sentence, and it is false for exactly
             // the case that happens all the time: a craft carrying its crew to the next cell.

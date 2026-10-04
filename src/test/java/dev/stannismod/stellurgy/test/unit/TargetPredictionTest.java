@@ -27,8 +27,16 @@ import static org.junit.Assert.assertTrue;
 public class TargetPredictionTest {
 
     private static final int BODY = 7;
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord ORIGIN = GalacticCoord.ORIGIN;
-    /** The body's one, eternal name. Nothing below may change it. */
+    /**
+     * The body's one, eternal name. Nothing below may change it.
+     *
+     * <p>A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable
+     * reachable.</p>
+     */
     private static final GalacticCoord BODY_CELL = GalacticCoord.ofSectorLocal(50, 0, 0, 0, 0, 0);
 
     /**

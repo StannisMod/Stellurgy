@@ -29,7 +29,6 @@ import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
@@ -41,9 +40,11 @@ import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
-    private static ResourceIcon icon;
     private static ResourceLocation eyeCandySpinner = new ResourceLocation("stellurgy:textures/gui/eyeCandy/spinnyThing.png");
 
     private static String breathable = LibVulpes.proxy.getLocalizedString("msg.atmanal.canbreathe");
@@ -62,9 +63,9 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
       * a model: the analyser is a display, and a display that reasoned would be a second answer to
       * questions the server has already answered.
       */
-    private List<ITextComponent> getClientReadout() {
+    private List<ITextComponent> getClientReadout(World world) {
         dev.stannismod.stellurgy.atmosphere.AtmosphereSummary summary =
-                dev.stannismod.stellurgy.client.ClientAtmosphere.summary();
+                dev.stannismod.stellurgy.client.ClientAtmosphere.of(world).summary();
         List<ITextComponent> str = new LinkedList<>();
 
         // The label is the statements that are true of the air, in order — which is what a name IS
@@ -122,7 +123,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
     public ActionResult<ItemStack> onItemRightClick(@Nonnull World worldIn, @Nonnull EntityPlayer playerIn, @Nonnull EnumHand hand) {
         ItemStack stack = playerIn.getHeldItem(hand);
         if (!worldIn.isRemote) {
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
             // Server side: the handler is asked where the player is standing, so the pressure is a
             // real reading of his own air rather than the dimension's nominal density.
             List<ITextComponent> str = getAtmosphereReadout(stack,
@@ -171,10 +172,13 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
         FontRenderer fontRenderer = Minecraft.getMinecraft().fontRenderer;
 
-        int screenX = RocketEventHandler.atmBar.getRenderX();//8;
-        int screenY = RocketEventHandler.atmBar.getRenderY();//event.getResolution().getScaledHeight() - fontRenderer.FONT_HEIGHT*3;
+        int screenX = dev.stannismod.stellurgy.client.HudLayout.atmosphereBarX(event.getResolution().getScaledWidth());
+        int screenY = dev.stannismod.stellurgy.client.HudLayout.atmosphereBarY(event.getResolution().getScaledHeight());
 
-        List<ITextComponent> str = getClientReadout();
+        // Held as a World: naming the client world's own type here would load a client-only class
+        // wherever this item class is verified, the dedicated server included.
+        World world = Minecraft.getMinecraft().world;
+        List<ITextComponent> str = getClientReadout(world);
         //Draw BG
         gui.drawString(fontRenderer, str.get(0).getFormattedText(), screenX, screenY, 0xaaffff);
         gui.drawString(fontRenderer, str.get(1).getFormattedText(), screenX, screenY + fontRenderer.FONT_HEIGHT * 4 / 3, 0xaaffff);

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import dev.stannismod.stellurgy.command.test.CrossingDiag;
+import dev.stannismod.stellurgy.test.trace.CrossingMemory;
 import dev.stannismod.stellurgy.space.CrewTransfer;
 import dev.stannismod.stellurgy.space.VSShipCrossingOps;
 import dev.stannismod.stellurgy.test.trace.TestTrace;
@@ -37,11 +37,11 @@ public abstract class MixinVSShipCrossingOpsEvents {
         TestTrace.instrumentHere(INSTRUMENT);
         String key = "pose:" + destDim + ":" + vsShipUuid;
         if (cir.getReturnValueZ()) {
-            CrossingDiag.clear(key);
+            CrossingMemory.here().clear(key);
             TestTrace.recordServer("crossing_pose_settled", "\"vsShip\":\"" + vsShipUuid + "\",\"dim\":"
                     + destDim + ",\"pose\":\"" + TestTrace.fmt(px) + "," + TestTrace.fmt(py) + ","
                     + TestTrace.fmt(pz) + "\"");
-        } else if (CrossingDiag.noteBlocked(key, "pasted blocks not yet claimed")) {
+        } else if (CrossingMemory.here().noteBlocked(key, "pasted blocks not yet claimed")) {
             TestTrace.recordServer("crossing_pose_pending", "\"vsShip\":\"" + vsShipUuid + "\",\"dim\":"
                     + destDim + ",\"anchor\":\"" + (anchor == null ? "null"
                             : anchor.getX() + "," + anchor.getY() + "," + anchor.getZ()) + "\"");
@@ -54,13 +54,13 @@ public abstract class MixinVSShipCrossingOpsEvents {
         TestTrace.instrumentHere(INSTRUMENT);
         String key = "crossing-reseat:" + shipId;
         if (cir.getReturnValueZ()) {
-            CrossingDiag.clear(key);
+            CrossingMemory.here().clear(key);
             TestTrace.recordServer("crossing_crew_reseated", "\"ship\":\"" + shipId + "\",\"dim\":" + destDim
                     + ",\"crew\":" + (crew == null ? 0 : crew.size()));
             return;
         }
-        String block = CrewTransfer.lastReseatBlock();
-        if (CrossingDiag.noteBlocked(key, block)) {
+        String block = ((VSShipCrossingOps) (Object) this).settleDiagnostics();
+        if (CrossingMemory.here().noteBlocked(key, block)) {
             TestTrace.recordServer("crossing_reseat_blocked", "\"ship\":\"" + shipId + "\",\"dim\":" + destDim
                     + ",\"crew\":" + (crew == null ? 0 : crew.size()) + ",\"block\":\""
                     + TestTrace.json(block) + "\"");

@@ -46,6 +46,7 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 public class TileRailgun extends TileWasteHeatPowerConsumer implements IInventory, ILinkableTile, IGuiCallback {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     static final Object[][][] structure = new Object[][][]
             {
                     {

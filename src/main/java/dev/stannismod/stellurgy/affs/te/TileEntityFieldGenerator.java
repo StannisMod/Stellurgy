@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.affs.te;
 
 import dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem;
+import dev.stannismod.stellurgy.world.WorldRuntime;
 import dev.stannismod.stellurgy.affs.block.BlockFieldGenerator;
 import dev.stannismod.stellurgy.affs.config.ModConfig;
 import dev.stannismod.stellurgy.affs.network.PacketFieldTouchEffect;
@@ -49,9 +50,24 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     public static final int DEFAULT_RADIUS = 4;
     private static final int CLIENT_SYNC_BASE_INTERVAL_TICKS = 20;
     private static final int CLIENT_SYNC_JITTER_TICKS = 10;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DamageSource SHIELD_COLLISION_DAMAGE = new DamageSource("affs.shield_collision");
-    private static final Set<TileEntityFieldGenerator> ACTIVE_GENERATORS = new HashSet<>();
-    private static final Map<UUID, PlayerLastSafePosition> PLAYER_LAST_SAFE_POSITIONS = new HashMap<>();
+
+    /**
+     * What a server world knows about its emitters: which are loaded, and on which side of a shell
+     * each player was last seen. Owned by the world ({@link WorldRuntime}), so it goes when the world
+     * goes — server stop unloads worlds without unloading their chunks, so no emitter would ever
+     * have removed itself, and the next world's dimension of the same number would have inherited
+     * the previous world's powered shells.
+     */
+    private static final class WorldEmitters {
+        final Set<TileEntityFieldGenerator> active = new HashSet<>();
+        final Map<UUID, PlayerLastSafePosition> lastSafe = new HashMap<>();
+    }
+
+    private static WorldEmitters emittersOf(World world) {
+        return WorldRuntime.of(world, WorldEmitters.class, WorldEmitters::new);
+    }
 
     // Coil capacity is read from config at construction (config is loaded in preInit, before any tile
     // is built). Small and fast: the field activates at shieldActivationThreshold of this capacity.
@@ -164,7 +180,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         super.onLoad();
         resolveFieldFrame();
         if (world != null && !world.isRemote) {
-            ACTIVE_GENERATORS.add(this);
+            emittersOf(world).active.add(this);
             SubsystemNetworkRegistry.register(this);
             SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
             refreshFieldPowerState(true);
@@ -375,7 +391,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
         double outerRadiusSq = outerRadius * outerRadius;
 
         if (entity instanceof EntityPlayer) {
-            PlayerLastSafePosition safePosition = PLAYER_LAST_SAFE_POSITIONS.get(entity.getUniqueID());
+            PlayerLastSafePosition safePosition = emittersOf(world).lastSafe.get(entity.getUniqueID());
             if (!intersectsShell) {
                 if (currentDistSq >= outerRadiusSq) {
                     rememberPlayerSafePosition(entity, true);
@@ -385,7 +401,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
                 return false;
             }
 
-            if (safePosition != null && safePosition.dimension == world.provider.getDimension()) {
+            if (safePosition != null) {
                 return safePosition.outside;
             }
             return true;
@@ -629,7 +645,7 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            ACTIVE_GENERATORS.remove(this);
+            emittersOf(world).active.remove(this);
             SubsystemNetworkRegistry.unregister(this);
             SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
         }
@@ -639,24 +655,25 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            ACTIVE_GENERATORS.remove(this);
+            emittersOf(world).active.remove(this);
             SubsystemNetworkRegistry.unregister(this);
             SubsystemNetworkManager.markDirty(ShieldNetworkManager.DOMAIN, world);
         }
         super.onChunkUnload();
     }
 
-    public static Set<TileEntityFieldGenerator> getActiveGenerators() {
-        return ACTIVE_GENERATORS;
+    /** The emitters loaded in {@code world}, a server world. */
+    public static Set<TileEntityFieldGenerator> getActiveGenerators(World world) {
+        return emittersOf(world).active;
     }
 
     /**
-     * Cheap global short-circuit for the strike / residual-ray paths: true iff any emitter is loaded and
-     * active anywhere. Lets a raytrace-layer hook bail in O(1) in the common no-shields-present case
+     * Cheap short-circuit for the strike / residual-ray paths: true iff any emitter is loaded in
+     * {@code world}. Lets a raytrace-layer hook bail in O(1) in the common no-shields-present case
      * before touching per-generator geometry.
      */
-    public static boolean hasActiveGenerators() {
-        return !ACTIVE_GENERATORS.isEmpty();
+    public static boolean hasActiveGenerators(World world) {
+        return !emittersOf(world).active.isEmpty();
     }
 
     private int getShieldDrainForPhase(int phase) {
@@ -753,12 +770,12 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
             return;
         }
         UUID uuid = entity.getUniqueID();
-        PlayerLastSafePosition safePosition = PLAYER_LAST_SAFE_POSITIONS.get(uuid);
+        Map<UUID, PlayerLastSafePosition> lastSafe = emittersOf(entity.world).lastSafe;
+        PlayerLastSafePosition safePosition = lastSafe.get(uuid);
         if (safePosition == null) {
             safePosition = new PlayerLastSafePosition();
-            PLAYER_LAST_SAFE_POSITIONS.put(uuid, safePosition);
+            lastSafe.put(uuid, safePosition);
         }
-        safePosition.dimension = entity.world.provider.getDimension();
         safePosition.outside = outside;
         safePosition.x = entity.posX;
         safePosition.y = entity.posY;
@@ -905,7 +922,6 @@ public class TileEntityFieldGenerator extends TileEntity implements ITickable, F
     }
 
     private static final class PlayerLastSafePosition {
-        private int dimension;
         private boolean outside;
         private double x;
         private double y;

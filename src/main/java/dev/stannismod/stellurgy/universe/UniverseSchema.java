@@ -41,7 +41,7 @@ package dev.stannismod.stellurgy.universe;
  * final class UniverseSchemaV2 implements UniverseSchema {
  *     private final UniverseSchema previous = new UniverseSchemaV0();
  *     public int version() { return 2; }
- *     public IGalaxyGenerator generator(GalaxyGenConfig config) { ...the one thing that changed... }
+ *     public IGalaxyGenerator generator(GalaxyGenConfig config, PlanetTypes types, ReportOnce reports) { ...the one thing that changed... }
  * }
  * </pre>
  *
@@ -87,9 +87,10 @@ public interface UniverseSchema {
     /**
      * The generator this schema produces for {@code config}, or the empty generator when the pack
      * declares no {@code <galaxyGen>} (an authored-anchors-only universe, which is a legitimate world
-     * rather than a missing configuration).
+     * rather than a missing configuration). Worlds are typed from {@code types}, the save's own
+     * planet-type table, and what it reports is remembered in {@code reports}, the galaxy's.
      */
-    IGalaxyGenerator generator(GalaxyGenConfig config);
+    IGalaxyGenerator generator(GalaxyGenConfig config, PlanetTypes types, ReportOnce reports);
 
     /**
      * The metric and expansion this version measures with. One source: the generator this schema builds

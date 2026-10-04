@@ -17,6 +17,7 @@ import java.util.List;
 
 public class RendererCuttingMachine extends TileEntitySpecialRenderer {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public final static ResourceLocation texture = new ResourceLocation("stellurgy:textures/models/cuttingMachine.png");
     private WavefrontObject model;
 

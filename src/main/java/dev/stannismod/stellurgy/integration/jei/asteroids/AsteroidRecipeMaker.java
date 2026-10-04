@@ -13,38 +13,27 @@ import java.util.*;
 
 public class AsteroidRecipeMaker {
 
-    private static List<AsteroidWrapper> cached = null;
-    private static long cachedMTime = -1L;
-
+    /** Built afresh on every call: JEI asks once per time it (re)loads its plugins, which is rare. */
     public static List<AsteroidWrapper> getRecipes(IJeiHelpers helpers) {
         // Primary truth: XML in config folder (avoids load-order race)
         File xml = getAsteroidXmlFile();
-        long mtime = (xml != null && xml.exists()) ? xml.lastModified() : -1L;
-
-        if (cached != null && mtime == cachedMTime) {
-            return cached;
-        }
 
         List<AsteroidWrapper> fromXml = tryLoadFromXml(xml);
         if (fromXml != null && !fromXml.isEmpty()) {
-            cached = fromXml;
-            cachedMTime = mtime;
-            return cached;
+            return fromXml;
         }
 
         // Fallback: whatever Stellurgy already has in memory (better than nothing)
         try {
-            Map<String, Asteroid> map = StellurgyConfiguration.getCurrentConfig().asteroidTypes;
+            // Throws while the client has no connection — JEI loads at the title screen — which is
+            // the same answer the empty map used to give there.
+            Map<String, Asteroid> map = dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getAsteroidTypes();
             if (map != null && !map.isEmpty()) {
-                cached = buildPagedFromMap(map);
-                cachedMTime = mtime;
-                return cached;
+                return buildPagedFromMap(map);
             }
         } catch (Throwable ignored) {}
 
-        cached = Collections.emptyList();
-        cachedMTime = mtime;
-        return cached;
+        return Collections.emptyList();
     }
 
     private static File getAsteroidXmlFile() {
@@ -133,11 +122,5 @@ public class AsteroidRecipeMaker {
 
     public static List<AsteroidWrapper> getMachineRecipes(IJeiHelpers helpers, Class<?> ignored) {
         return getRecipes(helpers);
-    }
-
-    // Optional: call this if you ever add a config-reload hook
-    public static void clearCache() {
-        cached = null;
-        cachedMTime = -1L;
     }
 }

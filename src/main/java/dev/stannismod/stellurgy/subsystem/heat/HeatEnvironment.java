@@ -41,6 +41,7 @@ import java.util.List;
  * high-emissivity surface, so it absorbs as well as sheds; a hull does neither. A ship with no
  * radiators therefore does not heat in a star, and shutting the sinks is protection as well as
  * silence.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class HeatEnvironment {
 

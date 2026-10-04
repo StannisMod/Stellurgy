@@ -29,7 +29,7 @@ public final class SpaceSubsystemEvents {
     @SubscribeEvent
     public void onPlayerLoggedIn(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.player instanceof net.minecraft.entity.player.EntityPlayerMP)
-                || SpaceSlotPool.slotDims().isEmpty()) {
+                || dev.stannismod.stellurgy.Stellurgy.serverState().slots.slotDims().isEmpty()) {
             return;
         }
         dev.stannismod.stellurgy.network.PacketSlotDimSync sync =
@@ -41,6 +41,23 @@ public final class SpaceSubsystemEvents {
         // After the slot dims are registered client-side, seed the joining player's render bodies
         // (the BoundarySky feed) so a login restore into a settled cell draws them immediately.
         SystemBodiesProducer.sendToPlayer((net.minecraft.entity.player.EntityPlayerMP) event.player);
+    }
+
+    /**
+     * Cover the space cells' pose band in every server world as it loads. The cells realize ship
+     * poses across the whole [-HALF_CELL, HALF_CELL) band on every axis while the physics mod's stock
+     * altitude clamp sits at 1000, and a ship's own thrust can never carry it past that clamp - so
+     * the band is declared deterministically before the first ship arrives, not ratcheted up
+     * arrival-by-arrival, which left each ship a ~1000-block corridor above wherever it entered.
+     * Every world, planets included: a planet's ascent and descent gates are derived from its
+     * ceiling. Declared on the world, so it ends with the world.
+     */
+    @SubscribeEvent
+    public void onWorldLoad(net.minecraftforge.event.world.WorldEvent.Load event) {
+        if (!event.getWorld().isRemote) {
+            dev.stannismod.stellurgy.integration.vs.VSIntegration.coverShipAltitudeBand(event.getWorld(),
+                    SpaceSubsystem.requiredShipFloor(), SpaceSubsystem.requiredShipCeiling());
+        }
     }
 
     @SubscribeEvent
@@ -56,7 +73,7 @@ public final class SpaceSubsystemEvents {
         // stand-down. Nothing else in the mod may increment it; the other server-tick handler in
         // this subsystem (SpaceEventHandler) deliberately only READS it, because two writers on
         // the same event would run the clock at twice the tick rate and nothing would report it.
-        SpaceSubsystem.advanceClock();
+        Stellurgy.serverState().advanceSpaceClock();
         // One read of the server's stack per tick: the five used to be read through five independent
         // accessors, so a swap landing mid-tick could tick one stack's transits against another's
         // entries.
@@ -74,9 +91,11 @@ public final class SpaceSubsystemEvents {
         live.descent.tick();
         // Advance in-flight CELL-SEAM carries (a ship that flew out of its cell into the next one).
         live.cellCrossings.tick();
+        // Retry the pilots waiting to be re-seated on a ship still being assembled.
+        live.crewRebind.tick(FMLCommonHandler.instance().getMinecraftServerInstance());
         // Rebroadcast the per-slot render bodies (throttled) so the slot-world sky (BoundarySky)
         // tracks each settled ship's direction to the bodies of its cell.
-        SystemBodiesProducer.onBroadcastTick(FMLCommonHandler.instance().getMinecraftServerInstance());
+        live.skyProducer.onBroadcastTick(FMLCommonHandler.instance().getMinecraftServerInstance());
         if (live.tickGc()) {
             mgr.gc();
         }
@@ -177,7 +196,7 @@ public final class SpaceSubsystemEvents {
             java.util.Map<java.util.UUID, ShipLedger.Entry> live = stack.ledger.snapshot();
             java.util.List<TransitRecord> inFlight = stack.transit.exportTransits();
             java.util.Map<String, Long> visits = stack.manager.exportVisits();
-            SpaceSubsystem.failSavePointIfArmed();
+            stack.failSavePointIfArmed();
             java.util.List<java.util.UUID> dropped = data.replaceAll(live, inFlight, visits);
             if (!dropped.isEmpty()) {
                 Stellurgy.logger.error("[SPACE] refusing to persist a ship ledger that would "

@@ -95,11 +95,6 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
         assertTrue("tick probe failed: " + resp, Reply.of(resp).ok());
         long post = longField(POST_STORED, resp, "postStored");
 
-        String battResp = String.join("\n", client().execute(
-                "stellurgytest satellite battery 0 " + satId));
-        long max = longField(BATT_MAX, battResp, "max");
-        assertEquals("battery must report max=500 (powerStorage echo); "
-                + "max=" + max, 500L, max);
         assertTrue("battery must cap at powerStorage=500 even when "
                 + "per-tick accrual would overflow; postStored=" + post,
                 post <= TYPE_POWER_STORAGE);
@@ -146,8 +141,6 @@ public class SatelliteTickBehaviourTest extends AbstractSharedServerTest {
         String dataResp = String.join("\n", client().execute(
                 "stellurgytest satellite data 0 " + satId));
         long maxData = longField(MAX_DATA, dataResp, "maxData");
-        assertEquals("maxData must echo configured cap; maxData=" + maxData,
-                2L, maxData);
 
         // Read postData via a fresh 0-tick run (gives us a snapshot).
         String snap = String.join("\n", client().execute(

@@ -52,6 +52,7 @@ import dev.stannismod.stellurgy.util.XMLPlanetLoader;
  */
 public final class PlanetRealizer {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("Stellurgy|Universe");
 
     private PlanetRealizer() {
@@ -218,9 +219,10 @@ public final class PlanetRealizer {
             return Constants.INVALID_PLANET;
         }
 
-        BodyProfile profile = UniverseRegistry.getGenerator().derivation()
+        BodyProfile profile = registry.generator().derivation()
                 .derive(registry.worldSeed(), anchor, target.name(), variant,
-                star, target.kind() == SystemBodyKind.MOON, target.orbitalDistance());
+                star, target.kind() == SystemBodyKind.MOON, target.orbitalDistance(),
+                dev.stannismod.stellurgy.Stellurgy.serverDimensions().reports());
         DimensionProperties props = materialize(dimId, profile, star, target, parentBody);
 
         if (!DimensionManager.getInstance().registerDim(props, true)) {

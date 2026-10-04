@@ -21,6 +21,7 @@ import java.util.List;
  * {@code @Mod.EventBusSubscriber} that had to name the owning container rather than the vendored
  * guest modid; both moved to the shared primitive when the bridge layer collapsed, and the modid
  * question moved with them.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class ShieldNetworkManager {
 

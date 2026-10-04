@@ -79,7 +79,7 @@ public class SpaceElevatorUnlinkedDeconstructTest extends AbstractSharedServerTe
     /** Force-generate and populate the chunk grid covering the elevator
      *  footprint BEFORE the fixture lays its blocks — see
      *  {@link SpaceElevatorMultiblockTest} for why. */
-    private static void warmup(int blockX, int blockZ) throws Exception {
+    private void warmup(int blockX, int blockZ) throws Exception {
         int cx1 = (blockX - 16) >> 4;
         int cz1 = (blockZ - 16) >> 4;
         int cx2 = (blockX + 16) >> 4;

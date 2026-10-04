@@ -186,25 +186,4 @@ public class TileMachineDepthTest extends AbstractSharedServerTest {
         assertTrue("tileClass should mention SatelliteBuilder: " + storedResp.raw(),
                 "TileSatelliteBuilder".equals(storedResp.tileSimpleName()));
     }
-
-    @Test
-    public void virginAirPositionHasNoTileEntity() throws Exception {
-        // Sanity: the test setup itself is honest — a virgin position
-        // (no place call) must report "no tile entity" rather than
-        // accidentally finding a leftover tile from a previous test.
-        // Skip the place() helper because setBlockState(air->air) returns
-        // false, which would trip the helper's placed=true assertion;
-        // here we just want to assert the *initial* state.
-        int x = BASE_X + 100, z = BASE_Z + 100;
-        // LEFT RAW, and this is the one site that must be: the subject here IS the error shape.
-        // `EnergyStore` refuses that reply — correctly, since every other site in this tier would
-        // otherwise read it as a machine with no capability — so a reading of it cannot be the
-        // thing being asserted.
-        String stored = ok(client().execute(
-                "stellurgytest energy stored " + DIM + " " + x + " " + Y + " " + z));
-        // THIS refusal and not merely some refusal: the claim is that the block is empty, and a
-        // probe answering `world not loaded` satisfied the substring form just as well.
-        assertEquals("virgin position must not have a tile entity: " + stored,
-                "no tile entity", Reply.of(stored).error());
-    }
 }

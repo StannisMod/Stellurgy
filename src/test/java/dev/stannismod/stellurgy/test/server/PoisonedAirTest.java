@@ -38,10 +38,6 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
     /** EXPERIMENT: how long the golem breathes each air — the dose is this time. Ten seconds. */
     private static final int EXPOSURE_TICKS = 200;
 
-    private static String run(String command) throws Exception {
-        return String.join("\n", client().execute(command));
-    }
-
     /**
      * red-witnessed: with {@code Poisoning#tick} at {@code if (damage > 0.0F)} made unreachable (the
      * dose kept, the harm never dealt): "health 100.0 -> 100.0"; with {@code AtmosphereAssertions#holdsAt}
@@ -51,16 +47,16 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
      */
     @Test
     public void aLivingThingBreathingPoisonedAirIsHurtByTheDoseAndNotInCleanAir() throws Exception {
-        PlanetAir.Probe probe = PoisonedAirTest::run;
+        PlanetAir.Probe probe = this::exec;
         FixtureSite site = clearedSite(1, 4, "the golem is held in this air");
         int x = site.x, y = site.y + 1, z = site.z;
-        Reply.of(run("stellurgytest chunk forceload " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4)))
+        Reply.of(exec("stellurgytest chunk forceload " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4)))
                 .requireOk("keep the golem's chunk ticking");
 
         String spawn = "stellurgytest entity spawn " + OVERWORLD + " " + x + " " + y + " " + z
                 + " minecraft:villager_golem";
-        int golem = Reply.of(spawn, run(spawn)).requireOk(spawn).integer("entityId");
-        Reply.of(run("stellurgytest entity set-no-gravity " + OVERWORLD + " " + golem + " true"))
+        int golem = Reply.of(spawn, exec(spawn)).requireOk(spawn).integer("entityId");
+        Reply.of(exec("stellurgytest entity set-no-gravity " + OVERWORLD + " " + golem + " true"))
                 .requireOk("hold the golem in the open air");
 
         PlanetAir before = PlanetAir.snapshot(probe, OVERWORLD);
@@ -77,7 +73,7 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
             assertEquals("CONTROL: clean air does not hurt it", start.number("health"),
                     clean.number("health"), 0.0D);
 
-            Reply.of(run("stellurgytest planet add-gas " + OVERWORLD + " carbonmonoxide " + MONOXIDE))
+            Reply.of(exec("stellurgytest planet add-gas " + OVERWORLD + " carbonmonoxide " + MONOXIDE))
                     .requireOk("poison the world's air");
             assertTrue("air with carbon monoxide past its limit is said to be poisonous, outdoors too",
                     statements(x, y, z).contains("TOXIC"));
@@ -90,19 +86,19 @@ public class PoisonedAirTest extends AbstractSharedServerTest {
             assertEquals("and what hurt it last was the poison", "Poison", poisoned.text("lastDamageType"));
         } finally {
             before.restore(probe);
-            run("stellurgytest chunk release " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4));
+            exec("stellurgytest chunk release " + OVERWORLD + " " + (x >> 4) + " " + (z >> 4));
         }
     }
 
-    private static Reply info(int golem) throws Exception {
+    private Reply info(int golem) throws Exception {
         String command = "stellurgytest entity info " + OVERWORLD + " " + golem;
-        Reply reply = Reply.of(command, run(command));
+        Reply reply = Reply.of(command, exec(command));
         assertTrue("the golem must be alive to be read: " + reply, reply.bool("isAlive"));
         return reply;
     }
 
-    private static java.util.List<String> statements(int x, int y, int z) throws Exception {
+    private java.util.List<String> statements(int x, int y, int z) throws Exception {
         String command = "stellurgytest atmosphere get " + OVERWORLD + " " + x + " " + y + " " + z;
-        return Arrays.asList(Reply.of(command, run(command)).textArray("statements"));
+        return Arrays.asList(Reply.of(command, exec(command)).textArray("statements"));
     }
 }

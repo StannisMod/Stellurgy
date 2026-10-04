@@ -32,6 +32,7 @@ import net.minecraft.util.math.BlockPos;
  */
 public final class ShipCrossingService {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final Logger LOGGER = LogManager.getLogger("stellurgy/space");
 
     /** Max ticks to retry the re-seat + pose-teleport half before giving up (async VS assembly). */

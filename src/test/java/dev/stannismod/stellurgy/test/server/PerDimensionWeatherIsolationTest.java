@@ -29,36 +29,31 @@ import static org.junit.Assert.assertTrue;
  *
  * Setup pattern mirrors {@code WeatherBaselineTest}: pre-stage a 2-planet
  * fixture XML in the harness workdir, start the harness, drive it via /stellurgytest.
+ *
+ * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-public class PerDimensionWeatherIsolationTest {
+@SeededWorld(PerDimensionWeatherIsolationTest.Galaxy.class)
+public class PerDimensionWeatherIsolationTest extends AbstractSharedServerTest {
 
     private static final int FIXTURE_DIM_A = 9201;
     private static final int FIXTURE_DIM_B = 9202;
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
 
-    @Before
-    public void writeFixture() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -Dforge.test.harness.enabled=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-perdim-weather-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
-                + planetXml("PerDimPlanetA", FIXTURE_DIM_A)
-                + planetXml("PerDimPlanetB", FIXTURE_DIM_B)
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+    /** The galaxy this class's one shared server boots over. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(dev.stannismod.stellurgy.test.client.GameDirSeed seed) {
+            String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
+                    + planetXml("PerDimPlanetA", FIXTURE_DIM_A)
+                    + planetXml("PerDimPlanetB", FIXTURE_DIM_B)
+                    + "    </star>\n"
+                    + "</galaxy>\n";
+            seed.planetDefs(xml, PerDimensionWeatherIsolationTest.class);
+        }
     }
 
     private static String planetXml(String name, int dim) {
@@ -82,23 +77,17 @@ public class PerDimensionWeatherIsolationTest {
                 + "        </planet>\n";
     }
 
-    @After
-    public void stopHarness() throws Exception {
-        if (harness != null) harness.close();
-    }
-
     @Test
     public void rainOnPlanetADoesNotLeakToBOrOverworld() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
         // Clear everywhere first so the test starts from a known baseline.
-        harness.client().execute("stellurgytest weather set 0 clear 12000");
-        harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
-        harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " clear 12000");
+        client().execute("stellurgytest weather set 0 clear 12000");
+        client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
+        client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " clear 12000");
 
         // Rain on A only.
         String setA = String.join("\n",
-                harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " rain 12000"));
+                client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " rain 12000"));
         assertTrue("set rain on A failed: " + setA, Reply.of(setA).ok());
 
         DimWeather wA = weather(FIXTURE_DIM_A);
@@ -122,13 +111,12 @@ public class PerDimensionWeatherIsolationTest {
     public void rainOnPlanetBDoesNotLeakToAOrOverworld() throws Exception {
         // The reverse direction — guards against a one-way leak bug where A
         // is properly wrapped but B silently writes to the overworld.
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        harness.client().execute("stellurgytest weather set 0 clear 12000");
-        harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
-        harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " clear 12000");
+        client().execute("stellurgytest weather set 0 clear 12000");
+        client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
+        client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " clear 12000");
 
-        harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " rain 12000");
+        client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " rain 12000");
 
         DimWeather wA = weather(FIXTURE_DIM_A);
         DimWeather wB = weather(FIXTURE_DIM_B);
@@ -144,11 +132,10 @@ public class PerDimensionWeatherIsolationTest {
     public void clearOnPlanetADoesNotClearB() throws Exception {
         // Symmetric to the rain test — clearing one planet must not clear the
         // other. Without the wrapper, /weather clear would propagate.
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
         // Rain on BOTH first.
-        harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " rain 12000");
-        harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " rain 12000");
+        client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " rain 12000");
+        client().execute("stellurgytest weather set " + FIXTURE_DIM_B + " rain 12000");
 
         DimWeather beforeA = weather(FIXTURE_DIM_A);
         DimWeather beforeB = weather(FIXTURE_DIM_B);
@@ -156,7 +143,7 @@ public class PerDimensionWeatherIsolationTest {
         assertTrue("planet B must be raining as precondition: " + beforeB.raw(), beforeB.raining);
 
         // Clear only A.
-        harness.client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
+        client().execute("stellurgytest weather set " + FIXTURE_DIM_A + " clear 12000");
 
         DimWeather afterA = weather(FIXTURE_DIM_A);
         DimWeather afterB = weather(FIXTURE_DIM_B);
@@ -169,7 +156,7 @@ public class PerDimensionWeatherIsolationTest {
 
     /** One world's sky, refusing the {@code world not loaded} reply and the wrong dimension. */
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", harness.client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
                 .requireDim(dim);
     }
 }

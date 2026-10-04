@@ -53,7 +53,7 @@ import static org.junit.Assert.assertTrue;
  * the ship frame this test goes red and must be rewritten to the new contract.</p>
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETest {
+public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientTest {
 
     /**
      * How far apart the subspace and world frames must be, in blocks, for their comparison to mean

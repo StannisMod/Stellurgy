@@ -42,6 +42,7 @@ import dev.stannismod.stellurgy.api.StellurgyConfiguration;
  * a seeker turning radiance into a lock - belongs to those systems, which is why the sensor supplies
  * its own quality in {@link #detectionRangeBlocks(double)} rather than being told a range by the
  * thermal model.
+ * <p>Every static field of this type is effectively final, process lifetime: built once at class initialisation, and holds an immutable value.</p>
  */
 public final class ThermalSignature {
 

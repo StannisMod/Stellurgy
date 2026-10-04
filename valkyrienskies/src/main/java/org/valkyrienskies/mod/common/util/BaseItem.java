@@ -12,10 +12,10 @@ public class BaseItem extends Item implements BaseModel {
 
         if (creativeTab) {
             // No need to change this for addons
-            this.setCreativeTab(ValkyrienSkiesMod.VS_CREATIVE_TAB);
+            this.setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.creativeTab);
         }
 
-        ValkyrienSkiesMod.ITEMS.add(this);
+        dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.items.add(this);
     }
 
     // No need to change this for addons

@@ -7,8 +7,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.ask;
 
 /**
  * What the OUTSIDE does to a ship's heat: the incident flux, and the shield that thins it.
@@ -80,7 +78,7 @@ public class HeatEnvironmentTest extends AbstractSharedServerTest {
     }
 
     private void requireClearInCell(Cell cell, int x0, String what) throws Exception {
-        FixtureSite.openAir(cell.dim, x0, z).requireClear(WorldCommandFixtures::exec, HALO, 3, what);
+        FixtureSite.openAir(cell.dim, x0, z).requireClear(this::exec, HALO, 3, what);
     }
 
     /** `getStateFromMeta` maps this to a cell radiating UP, so nothing but sky is in front of it. */

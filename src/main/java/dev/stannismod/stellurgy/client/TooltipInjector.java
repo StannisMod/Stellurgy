@@ -26,6 +26,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 @Mod.EventBusSubscriber(modid = Constants.modId, value = Side.CLIENT)
 public final class TooltipInjector {
 

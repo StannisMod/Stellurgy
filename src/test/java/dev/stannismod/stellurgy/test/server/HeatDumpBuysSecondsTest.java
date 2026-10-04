@@ -7,7 +7,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.arrange;
 
 /**
  * The emergency dump: heat leaves the ship inside a lump of matter that is thrown overboard.
@@ -84,7 +83,7 @@ public class HeatDumpBuysSecondsTest extends AbstractSharedServerTest {
         return cycled;
     }
 
-    private static long configValue(String key) throws Exception {
+    private long configValue(String key) throws Exception {
         return arrange("stellurgytest config get " + key).longInteger("value");
     }
 

@@ -45,16 +45,17 @@ public final class ShipFrameCamera {
 
     /**
      * The attitude of the ship {@code view} is aboard, smoothed across the frame, or {@code null} when
-     * it is aboard none. A piloting local player uses the per-tick attitude samples the input path
-     * already keeps, slerped by {@code partialTicks} - stepping at 20 Hz instead is the tier-2 jitter.
+     * it is aboard none. The ship's previous and current tick attitude, slerped by
+     * {@code partialTicks} - stepping at 20 Hz instead is the tier-2 jitter.
      */
     public static FreeFlightPhysics.Quat viewShipQuat(Entity view, float partialTicks) {
         if (view == null || view.world == null) {
             return null;
         }
         Minecraft mc = Minecraft.getMinecraft();
-        if (TilePilotSeat.forShipPilot(view.getRidingEntity(), view.world) != null && view == mc.player) {
-            return FreeFlightPhysics.slerp(KeyBindings.shipPrevQuat(), KeyBindings.shipQuat(), partialTicks);
+        TilePilotSeat helm = TilePilotSeat.forShipPilot(view.getRidingEntity(), view.world);
+        if (helm != null && view == mc.player) {
+            return VSIntegration.getShipAttitude(view.world, helm.getPos(), partialTicks);
         }
         // The LOCAL player's eye/camera/model gate on the MOVEMENT truth - resolved ABOARD a deck -
         // never on containment: a body is aboard when a deck carries its movement, not when it
@@ -65,14 +66,7 @@ public final class ShipFrameCamera {
             if (!dev.stannismod.stellurgy.integration.vs.ShipFrameTravel.isResolvingAboard(view)) {
                 return null;
             }
-            // Slerp the per-tick attitude samples across the frame, exactly as the pilot path
-            // above does - the raw attitude steps at 20 Hz and a station-keeping ship's hunting
-            // then shows as jitter at any frame rate.
-            FreeFlightPhysics.Quat slerped = DeckLook.slerpedShipQuat(partialTicks);
-            if (slerped != null) {
-                return slerped;
-            }
-            return VSIntegration.shipAttitudeFor(view);
+            return DeckLook.slerpedShipQuat(view, partialTicks);
         }
         // A REMOTE body has no capture state on this side (the client resolves only its own
         // player's movement), so the movement truth is unavailable and containment is not a
@@ -90,10 +84,13 @@ public final class ShipFrameCamera {
      *  the model upright mid-jump; the window only has to outlast a jump, not a walk-off. */
     private static final int SUPPORT_MEMORY_TICKS = 20;
 
-    /** Per-body memory of the last ship measured to carry it, with the tick it was measured on.
+    /** Per-body memory of the last ship measured to carry it, as a part of the client world the
+     *  bodies are in ({@link dev.stannismod.stellurgy.world.WorldRuntime}), so it goes with that world.
      *  Weak keys: an entity that despawns must not be held alive by this. */
-    private static final java.util.Map<EntityLivingBase, SupportMemo> SUPPORT_MEMO =
-            new java.util.WeakHashMap<EntityLivingBase, SupportMemo>();
+    private static final class SupportMemos {
+        final java.util.Map<EntityLivingBase, SupportMemo> byBody =
+                new java.util.WeakHashMap<EntityLivingBase, SupportMemo>();
+    }
 
     private static final class SupportMemo {
         String shipId;
@@ -116,11 +113,13 @@ public final class ShipFrameCamera {
         }
         EntityLivingBase body = (EntityLivingBase) view;
         long tick = view.world.getTotalWorldTime();
-        SupportMemo memo = SUPPORT_MEMO.get(body);
+        java.util.Map<EntityLivingBase, SupportMemo> memos = dev.stannismod.stellurgy.world.WorldRuntime
+                .of(view.world, SupportMemos.class, SupportMemos::new).byBody;
+        SupportMemo memo = memos.get(body);
         if (memo == null) {
             memo = new SupportMemo();
             memo.supportedTick = Long.MIN_VALUE;
-            SUPPORT_MEMO.put(body, memo);
+            memos.put(body, memo);
         }
         if (memo.probedTick != tick) {
             memo.probedTick = tick;

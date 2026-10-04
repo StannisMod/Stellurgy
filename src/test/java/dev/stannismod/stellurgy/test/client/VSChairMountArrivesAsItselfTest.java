@@ -1,0 +1,190 @@
+package dev.stannismod.stellurgy.test.client;
+
+import com.google.gson.JsonObject;
+
+import org.junit.FixMethodOrder;
+import org.junit.Test;
+import org.junit.runners.MethodSorters;
+
+import dev.stannismod.stellurgy.test.Reply;
+
+import dev.stannismod.stellurgy.test.FixtureSite;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+/**
+ * A mount entity is the SAME entity on both sides.
+ *
+ * <p>Sitting on a chair spawns a mount entity that the server owns and the client must rebuild as
+ * itself. When it does not, nothing reports an error: the client silently builds some other
+ * registered class, is handed the sender's synced fields BY SLOT INDEX, and the first read of a
+ * slot whose type no longer matches takes the whole client to the crash screen mid-tick. From the
+ * player's side that is the worst failure this mod can produce, and it needs no command and no
+ * unusual action — only sitting down.
+ *
+ * <p><b>Why this must be a client test.</b> The defect lives only on the receiving side: the
+ * server's own view is correct and every server-tier query agrees with itself. The subject is what
+ * the CLIENT rebuilt, so only the client can answer.
+ *
+ * <p><b>Why an ordinary chair on the ground.</b> The mix-up is a property of the entity numbering
+ * this jar ships, not of any ship: a plain chair mounts through the same spawn path, with no
+ * physics object, no assembly and no timing window, so the reproduction is deterministic. The
+ * riding report is its own control — {@code riding=true} means the mount did reach the client, so
+ * a wrong class cannot be explained away as "the client never saw it".
+ *
+ */
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
+public class VSChairMountArrivesAsItselfTest extends AbstractSharedVsClientTest {
+
+    /**
+     * How far below the platform's own surface the player may settle and still be ON it, in blocks.
+     *
+     * <p>The TEST'S OWN: a body that fell off is out of reach of the chair, which is what the leg
+     * needs; 0.6 is under a body's step height.</p>
+     */
+    private static final double ON_THE_PLATFORM_BLOCKS = 0.6;
+
+    @Override
+    protected String subsystem() {
+        return "vs-chair-mount-identity";
+    }
+
+    /** The block this scenario is about, spelled as the registry spells it: the
+     *  substring `passenger_chair` also matches any id merely ending in it. */
+    private static final String CHAIR_BLOCK = "stellurgy:passenger_chair";
+
+    /** How long either side's {@code mount} record may take to follow the click. A link's budget:
+     *  its expiry is "the seating never happened", never "not yet". */
+    private static final int SIT_LINK_BUDGET_TICKS = 200;
+
+    /** The server's own entity report: {@code "entities":[{"id":…,"class":…,"x":…}, …]}. */
+    private static final String ENTITIES = "entities";
+    private static final String ENTITY_ID = "id";
+    private static final String ENTITY_CLASS = "class";
+
+    /** Far from every other fixture's build site, and high enough to be clear of any terrain. */
+    private static final int FX = 7700, FY = FixtureSite.OPEN_AIR_Y, FZ = 7700;
+    /** The chair block, one step from where the player stands — inside interaction reach. */
+    private static final int CX = FX + 1, CY = FY + 1, CZ = FZ;
+
+    private static final String CHAIR_ENTITY =
+            "org.valkyrienskies.mod.common.entity.EntityMountableChair";
+
+    /**
+     * <p>red-witnessed: with {@code EntityNetworkIds#of} at {@code Integer id = IDS.get(key(name.toString()))}
+     * answering the mount dummy's id for the chair
+     * — the collision this pins: red at the server's {@code mount} link with "Connection reset", the
+     * client having died on the chair it built as the other class, 2026-09-28. Earlier than the
+     * named failure in {@code ridingOrDie}: the server-log wait paces on the client's ticks, so a
+     * dead client ends it first, and the socket error does not name the cause.</p>
+     */
+    @Test
+    public void aChairMountArrivesAtTheClientAsItself() throws Exception {
+
+        // ---- ARRANGE: a floor, a chair on it, and the player standing next to the chair. --------
+        scenario().requireArranged("chunk warmup failed",
+                Reply.of(exec("stellurgytest chunk warmup 0 " + (FX >> 4) + " " + (FZ >> 4) + " "
+                        + ((FX + 1) >> 4) + " " + ((FZ + 1) >> 4))).ok());
+        scenario().requireArranged("floor fill failed",
+                Reply.of(exec("stellurgytest fill 0 " + (FX - 2) + " " + FY + " " + (FZ - 2) + " "
+                        + (FX + 2) + " " + FY + " " + (FZ + 2) + " minecraft:stone")
+                        ).ok());
+        scenario().requireArranged("clearing the space above the floor failed",
+                Reply.of(exec("stellurgytest fill 0 " + (FX - 2) + " " + (FY + 1) + " " + (FZ - 2) + " "
+                        + (FX + 2) + " " + (FY + 3) + " " + (FZ + 2) + " minecraft:air")
+                        ).ok());
+        // The chair block carries the HOST mod's domain, not the physics engine's: vendored code
+        // registers under the container it is loaded in. An unknown block id fills air here and
+        // still reports success, which is why the placement is read back below.
+        String chair = exec("stellurgytest fill 0 " + CX + " " + CY + " " + CZ + " "
+                + CX + " " + CY + " " + CZ + " stellurgy:passenger_chair");
+        scenario().requireArranged("the chair block must be placeable: " + chair,
+                Reply.of(chair).ok());
+        String rightAfter = exec("stellurgytest block at 0 " + CX + " " + CY + " " + CZ);
+        scenario().requireArranged("the chair must actually be in the world once the fill reports"
+                + " success: " + rightAfter, CHAIR_BLOCK.equals(
+                        Reply.of("stellurgytest block at", rightAfter).text("block")));
+        // The platform is built into a chunk the client may not hold yet, and a teleport onto a floor
+        // the client does not have lands him on nothing — so he is stood on it only once his client
+        // holds it (both cases named in the helper), and his position is then read ONCE.
+        standOnFloorTheClientHolds(FX + 0.5, FY + 1, FZ + 0.5, 90f, 0f,
+                "the player must be stood on the chair's platform");
+        JsonObject stood = bot().reportState();
+        double standY = stood.get("playerY").getAsDouble();
+        scenario().requireArranged("the player must end up standing ON the platform - one that fell"
+                        + " off it is out of reach of the chair (expected y~" + (FY + 1)
+                        + ", measured " + standY + "): " + stood,
+                Math.abs(standY - (FY + 1)) <= ON_THE_PLATFORM_BLOCKS);
+        String placed = exec("stellurgytest block at 0 " + CX + " " + CY + " " + CZ);
+        scenario().requireArranged("the chair block must still be there when the player reaches for"
+                + " it: " + placed, CHAIR_BLOCK.equals(
+                        Reply.of("stellurgytest block at", placed).text("block")));
+
+        // ---- ACT: the player sits down, through a real right-click on his own client. -----------
+        long sitMark = events().markInstrumented();
+        long sitOnClient = clientEvents().mark();
+        JsonObject click = bot().interactBlock(CX, CY, CZ);
+        scenario().requireArranged("the right-click must be accepted by the client: " + click,
+                click != null);
+        events().await(sitMark, "mount", "the right-click on the chair must seat the player on the"
+                + " SERVER - without that there is no mount entity to compare", SIT_LINK_BUDGET_TICKS);
+
+        // ---- The server's view: the truth the client is supposed to reproduce. Read FIRST, so
+        // that a client already dead to this very defect still leaves the arrangement on record. --
+        String serverSide = exec("stellurgytest entity near 0 " + CX + " " + CY + " " + CZ + " 8");
+        int chairEntityId = -1;
+        String chairEntityClass = null;
+        for (String near : Reply.of("stellurgytest entity near", serverSide).objectArray(ENTITIES)) {
+            Reply entity = Reply.of("one nearby entity", near);
+            // the producer always writes `class` on every element of this list — id, class and
+            // the three coordinates are appended together — so an element without it is a broken
+            // probe rather than an entity that is not the chair.
+            if (CHAIR_ENTITY.equals(entity.text(ENTITY_CLASS))) {
+                chairEntityId = entity.integer(ENTITY_ID);
+                chairEntityClass = entity.text(ENTITY_CLASS);
+            }
+        }
+        scenario().requireArranged("sitting on the chair must give the server a mount entity -"
+                + " without one this test has no subject: " + serverSide, chairEntityClass != null);
+
+        // ---- ASSERT: the client is riding THAT entity, and it is the same class. ----------------
+        JsonObject riding = ridingOrDie(sitOnClient);
+        assertTrue("CONTROL: the client must report itself riding - if the mount never reached it,"
+                + " nothing below is evidence about class identity: " + riding,
+                riding.get("riding").getAsBoolean());
+        assertEquals("the mount entity must carry the same network id on both sides: server="
+                        + serverSide + " client=" + riding,
+                chairEntityId, riding.get("entityId").getAsInt());
+        assertEquals("the entity the player sits on must be the SAME class on both sides; another"
+                        + " class here means the client rebuilt it as something else and is"
+                        + " applying this entity's synced fields to that object, slot by slot,"
+                        + " until one of them is read at the wrong type: server=" + serverSide,
+                chairEntityClass, riding.get("entityClass").getAsString());
+    }
+
+    // ---- helpers -----------------------------------------------------------------------------
+
+    /**
+     * The client's riding report, once its own {@code mount} record since {@code clientMark} says it
+     * performed the seating. A client that has already died to a mis-built entity answers nothing
+     * at all — the bot sees only a dropped connection — so that case is named here rather than
+     * surfacing as a bare socket error with no cause in it. A client that is alive and never
+     * mounted fails the link itself, with its own mount chain in the message.
+     */
+    private JsonObject ridingOrDie(long clientMark) throws Exception {
+        try {
+            return awaitClientMount(clientMark, "CONTROL: the client must perform the seating the"
+                    + " server did - if the mount never reached it, nothing below is evidence about"
+                    + " class identity", SIT_LINK_BUDGET_TICKS, "");
+        } catch (Exception dead) {
+            fail("the client stopped answering after it was seated on a mount entity - the symptom"
+                    + " of having rebuilt it as another class and then read one of its synced"
+                    + " fields at the wrong type. The cause is in the preserved client log, never"
+                    + " in this error: " + dead);
+            return null; // unreachable
+        }
+    }
+
+}

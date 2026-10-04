@@ -16,6 +16,7 @@ import javax.annotation.Nonnull;
 
 public class ItemAirUtils implements IFillableArmor {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final ItemAirUtils INSTANCE = new ItemAirUtils();
 
     /**

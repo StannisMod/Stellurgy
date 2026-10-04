@@ -159,7 +159,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
 
     @Override
     public boolean canPerformFunction() {
-        return AtmosphereHandler.hasAtmosphereHandler(this.world.provider.getDimension());
+        return AtmosphereHandler.hasAtmosphereHandler(this.world);
     }
 
     @Override
@@ -207,7 +207,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
             return;
         }
 
-        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world);
         if (atmhandler != null) {
             atmhandler.unregisterBlob(this);
         }
@@ -282,7 +282,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
         //IF first tick then register the blob and check for scrubbers
 
         if (!world.isRemote) {
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(this.world.provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(this.world);
             if (atmhandler == null)
                 return;
 
@@ -484,7 +484,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
         if (converted <= 0L)
             return 0;
 
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         if (handler != null)
             handler.refreshDerivedAtmosphere(this);
         return LifeSupportNetwork.absolute(converted, volume);
@@ -496,12 +496,12 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
         if (world == null || world.isRemote || !isMaintainingAtmosphere()
                 || !StellurgyConfiguration.getCurrentConfig().lifeSupportZones)
             return null;
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         return handler == null ? null : handler.getAirState(this);
     }
 
     private int zoneVolume() {
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         return handler == null ? 1 : Math.max(1, handler.getBlobSize(this));
     }
 
@@ -606,7 +606,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
             return;
         ticksSinceVenting = 0;
 
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         if (handler == null)
             return;
         AirState air = handler.getAirState(this);
@@ -667,7 +667,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
     @Override
     public void notEnoughEnergyForFunction() {
         if (!world.isRemote) {
-            AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(this.world.provider.getDimension());
+            AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(this.world);
             if (handler != null)
                 handler.clearBlob(this);
 
@@ -830,7 +830,7 @@ public class TileOxygenVent extends TileInventoriedRFConsumerTank implements IBl
      */
     private AirState getZoneAirState() {
         if (world != null && !world.isRemote) {
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(world);
             if (atmhandler != null) {
                 AirState live = atmhandler.getAirState(this);
                 if (live != null)

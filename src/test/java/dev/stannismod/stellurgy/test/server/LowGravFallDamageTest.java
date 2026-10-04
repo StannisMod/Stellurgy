@@ -1,16 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -23,8 +15,12 @@ import static org.junit.Assert.assertTrue;
  * untouched elsewhere) is server-authoritative event-handler logic, and the
  * old client test drove it exclusively through the {@code try-fall} probe
  * anyway. Player supply: {@code ensure-fake}.
+ *
+ * <p>One server for the class, over the galaxy {@link Galaxy} declares; both scenarios only station
+ * the fake player and read one posted event.</p>
  */
-public class LowGravFallDamageTest {
+@SeededWorld(LowGravFallDamageTest.Galaxy.class)
+public class LowGravFallDamageTest extends AbstractSharedServerTest {
 
     private static final int DIM_LOW_GRAV = 9701;
     private static final String IS_PLANETARY = "isPlanetaryProvider";
@@ -32,53 +28,36 @@ public class LowGravFallDamageTest {
     private static final String RESULT_DIST = "resultDistance";
     private static final String GRAVITY = "gravityMultiplier";
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
-
-    @Before
-    public void startServer() throws Exception {
-        Assume.assumeTrue("Server harness disabled",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-lowgrav-fall-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"1\" numGasGiants=\"0\">\n"
-                + "        <planet name=\"LowGravPlanet\" DIMID=\"" + DIM_LOW_GRAV + "\">\n"
-                + "            <mass>1.0</mass>\n"
-                + "            <radius>1.0</radius>\n"
-                + "            <isKnown>true</isKnown>\n"
-                + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
-                + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
-                + "            <gravitationalMultiplier>17</gravitationalMultiplier>\n"
-                + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
-                + "            <orbitalTheta>0</orbitalTheta>\n"
-                + "            <orbitalPhi>0</orbitalPhi>\n"
-                + "            <retrograde>false</retrograde>\n"
-                + "            <averageTemperature>250</averageTemperature>\n"
-                + "            <rotationalPeriod>24000</rotationalPeriod>\n"
-                + "            <atmosphereDensity>100</atmosphereDensity>\n"
-                + "            <generateCraters>false</generateCraters>\n"
-                + "            <generateCaves>true</generateCaves>\n"
-                + "            <generateVolcanos>false</generateVolcanos>\n"
-                + "        </planet>\n"
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
-    }
-
-    @After
-    public void stopServer() throws Exception {
-        if (harness != null) harness.close();
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", harness.client().execute(cmd));
+    /** One low-gravity planet at gravity multiplier 17 (0.17 g). */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(GameDirSeed seed) {
+            seed.planetDefs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"1\" numGasGiants=\"0\">\n"
+                    + "        <planet name=\"LowGravPlanet\" DIMID=\"" + DIM_LOW_GRAV + "\">\n"
+                    + "            <mass>1.0</mass>\n"
+                    + "            <radius>1.0</radius>\n"
+                    + "            <isKnown>true</isKnown>\n"
+                    + "            <fogColor>0.5,0.5,0.5</fogColor>\n"
+                    + "            <skyColor>0.4,0.6,0.9</skyColor>\n"
+                    + "            <gravitationalMultiplier>17</gravitationalMultiplier>\n"
+                    + "            <orbitalDistance>" + dev.stannismod.stellurgy.util.AstronomicalBodyHelper.DISTANCE_UNITS_PER_AU + "</orbitalDistance>\n"
+                    + "            <orbitalTheta>0</orbitalTheta>\n"
+                    + "            <orbitalPhi>0</orbitalPhi>\n"
+                    + "            <retrograde>false</retrograde>\n"
+                    + "            <averageTemperature>250</averageTemperature>\n"
+                    + "            <rotationalPeriod>24000</rotationalPeriod>\n"
+                    + "            <atmosphereDensity>100</atmosphereDensity>\n"
+                    + "            <generateCraters>false</generateCraters>\n"
+                    + "            <generateCaves>true</generateCaves>\n"
+                    + "            <generateVolcanos>false</generateVolcanos>\n"
+                    + "        </planet>\n"
+                    + "    </star>\n"
+                    + "</galaxy>\n", LowGravFallDamageTest.class);
+        }
     }
 
     /**

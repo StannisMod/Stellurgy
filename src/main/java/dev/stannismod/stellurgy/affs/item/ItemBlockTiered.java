@@ -15,7 +15,7 @@ public class ItemBlockTiered extends ItemBlock {
         super(block);
         this.tierCount = Math.max(1, tierCount);
         this.setRegistryName(block.getRegistryName());
-        this.setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        this.setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         this.setHasSubtypes(true);
     }
 

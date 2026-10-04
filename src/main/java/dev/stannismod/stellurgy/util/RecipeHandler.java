@@ -10,7 +10,7 @@ import net.minecraftforge.oredict.ShapedOreRecipe;
 import net.minecraftforge.oredict.ShapelessOreRecipe;
 import net.minecraftforge.registries.GameData;
 import dev.stannismod.stellurgy.block.BlockSmallPlatePress;
-import dev.stannismod.stellurgy.libvulpes.LibVulpes;
+import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.libvulpes.api.material.AllowedProducts;
 import dev.stannismod.stellurgy.libvulpes.api.material.MaterialRegistry;
 import dev.stannismod.stellurgy.libvulpes.recipe.RecipesMachine;
@@ -40,17 +40,17 @@ public class RecipeHandler {
 
     public void registerXMLRecipes() {
         //Load XML recipes
-        LibVulpes.instance.loadXMLRecipe(TileCuttingMachine.class);
-        LibVulpes.instance.loadXMLRecipe(TilePrecisionAssembler.class);
-        LibVulpes.instance.loadXMLRecipe(TileChemicalReactor.class);
-        LibVulpes.instance.loadXMLRecipe(TileCrystallizer.class);
-        LibVulpes.instance.loadXMLRecipe(TileElectrolyser.class);
-        LibVulpes.instance.loadXMLRecipe(TileElectricArcFurnace.class);
-        LibVulpes.instance.loadXMLRecipe(TileLathe.class);
-        LibVulpes.instance.loadXMLRecipe(TileRollingMachine.class);
-        LibVulpes.instance.loadXMLRecipe(BlockSmallPlatePress.class);
-        LibVulpes.instance.loadXMLRecipe(TileCentrifuge.class);
-        LibVulpes.instance.loadXMLRecipe(TilePrecisionLaserEtcher.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TileCuttingMachine.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TilePrecisionAssembler.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TileChemicalReactor.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TileCrystallizer.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TileElectrolyser.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TileElectricArcFurnace.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TileLathe.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TileRollingMachine.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(BlockSmallPlatePress.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TileCentrifuge.class);
+        Stellurgy.instance.libVulpes.loadXMLRecipe(TilePrecisionLaserEtcher.class);
     }
 
     public void registerAllMachineRecipes() {

@@ -75,7 +75,7 @@ public final class HullMelting {
                                          HeatEnvironment environment) {
         double hottest = Math.max(0.0D, loopKelvin);
         AtmosphereHandler handler = world == null ? null
-                : AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+                : AtmosphereHandler.getOxygenHandler(world);
         if (handler != null) {
             AirState air = handler.getAirStateAt(pos);
             if (air != null) {

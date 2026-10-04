@@ -186,8 +186,11 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
                             return BootOutcome.BIND_FAILED;
                         }
                     }
+                    // The tail alone is usually stack frames of whatever failed LAST (a stop
+                    // handler), so the cause is kept whole on disk and the message says where.
                     throw new AssertionError("Server process exited (code="
-                            + process.exitValue() + ") before becoming ready. Recent output: "
+                            + process.exitValue() + ") before becoming ready. Full output: "
+                            + preserveTranscript(transcript) + ". Recent output: "
                             + tailOf(transcript));
                 }
                 long remainingNanos = deadlineNanos - System.nanoTime();
@@ -197,6 +200,20 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
         }
         throw new AssertionError("Timed out waiting for server to become ready. Recent output: "
                 + tailOf(transcript));
+    }
+
+    /** Write the whole transcript to {@link #preservedLogPath()}; answers the path, or why it could not. */
+    private static String preserveTranscript(List<String> transcript) {
+        Path path = preservedLogPath();
+        synchronized (transcript) {
+            try {
+                java.nio.file.Files.write(path, new java.util.ArrayList<>(transcript),
+                        java.nio.charset.StandardCharsets.UTF_8);
+                return path.toString();
+            } catch (java.io.IOException e) {
+                return "(not written: " + e + ")";
+            }
+        }
     }
 
     private static String tailOf(List<String> transcript) {
@@ -532,14 +549,16 @@ public final class RealDedicatedServerHarness implements AutoCloseable {
      * seated craft's ship identity" while the child had already printed
      * {@code Critical injection failure: LVT … has incompatible changes}. The loudness existed the
      * whole time; nobody could hear it.
+     *
+     * <p>A constant: an unmodifiable list of strings over a backing list nothing else references.</p>
      */
-    private static final String[] FATAL_MARKERS = {
-        "Critical injection failure",
-        "InvalidMixinException",
-        "InvalidInjectionException",
-        "Mixin apply for mod",
-        "MixinTransformerError",
-    };
+    private static final java.util.List<String> FATAL_MARKERS = java.util.Collections.unmodifiableList(
+            java.util.Arrays.asList(
+                    "Critical injection failure",
+                    "InvalidMixinException",
+                    "InvalidInjectionException",
+                    "Mixin apply for mod",
+                    "MixinTransformerError"));
 
     /** Put a child-side fatal on the TEST runner's own stdout, where a failure report can see it. */
     private static void echoIfFatal(String line) {

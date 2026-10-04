@@ -20,7 +20,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class AirStateTest {
 
+    /** A constant: a final primitive, computed once from a literal. */
     private static final long SAFE_MIN = ppm(160_000);
+    /** A constant: a final primitive, computed once from a literal. */
     private static final long SAFE_MAX = ppm(300_000);
 
     /**

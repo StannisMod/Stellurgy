@@ -105,7 +105,6 @@ import dev.stannismod.stellurgy.tile.satellite.TileSatelliteTerminal;
 import dev.stannismod.stellurgy.tile.satellite.TileTerraformingTerminal;
 import dev.stannismod.stellurgy.world.decoration.MapGenLander;
 import dev.stannismod.stellurgy.world.ore.OreGenerator;
-import dev.stannismod.stellurgy.world.provider.WorldProviderPlanet;
 import dev.stannismod.stellurgy.world.type.WorldTypePlanetGen;
 import dev.stannismod.stellurgy.world.type.WorldTypeSpace;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
@@ -162,20 +161,48 @@ import dev.stannismod.stellurgy.world.biome.*;
 public class Stellurgy {
 
     private static final String PLANET = "Planet";
-    public static final RecipeHandler machineRecipes = new RecipeHandler();
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Logger logger = LogManager.getLogger(Constants.modId);
-    private static final CreativeTabs tabAdvRocketry = new CreativeTabs("stellurgy") {
+    @SidedProxy(clientSide = "dev.stannismod.stellurgy.client.ClientProxy", serverSide = "dev.stannismod.stellurgy.common.CommonProxy")
+    public static CommonProxy proxy;
+    @Instance(value = Constants.modId)
+    public static Stellurgy instance;
+
+    // ---- What the mod holds for the whole process ---------------------------------------------
+    //
+    // Fields of THIS object, not statics of the class: Forge builds the mod object once and calls
+    // every lifecycle hook on it, so the state those hooks build belongs on it, reached through
+    // `instance`.
+
+    /** The machine recipe tables. Filled by the mod in preInit / recipe registration / postInit and
+     *  read for the life of the side; rewritten only by the operator's /reloadrecipes, a partial
+     *  re-initialisation of the mod and the sanctioned exception to being written once.
+     *  Effectively final, process lifetime: built with the mod object. */
+    public final RecipeHandler machineRecipes = new RecipeHandler();
+    /** Effectively final, process lifetime: built with the mod object (a creative tab registers itself
+     *  in vanilla's tab array when it is constructed). */
+    private final CreativeTabs tabAdvRocketry = new CreativeTabs("stellurgy") {
         @Override
         @Nonnull
         public ItemStack getTabIconItem() {
             return new ItemStack(StellurgyItems.itemSatelliteIdChip);
         }
     };
-    @SidedProxy(clientSide = "dev.stannismod.stellurgy.client.ClientProxy", serverSide = "dev.stannismod.stellurgy.common.CommonProxy")
-    public static CommonProxy proxy;
-    public static String version;
-    @Instance(value = Constants.modId)
-    public static Stellurgy instance;
+    /** Effectively final, process lifetime: written only by {@link #preInit}. */
+    public String version;
+
+    /** The vendored libVulpes, folded into this mod: built with the mod object, driven from its
+     *  lifecycle hooks. Effectively final, process lifetime. */
+    public final dev.stannismod.stellurgy.libvulpes.LibVulpes libVulpes =
+            new dev.stannismod.stellurgy.libvulpes.LibVulpes();
+    /** The vendored force-field system, folded into this mod: built with the mod object, driven from
+     *  its lifecycle hooks. Effectively final, process lifetime. */
+    public final dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem affs =
+            new dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem();
+    /** The vendored Valkyrien Skies host object: built with the mod object, driven from its lifecycle
+     *  hooks. Effectively final, process lifetime. */
+    public final org.valkyrienskies.mod.common.ValkyrienSkiesMod valkyrienSkies =
+            new org.valkyrienskies.mod.common.ValkyrienSkiesMod();
 
     // ---- The four API services, owned here ---------------------------------------------------
     //
@@ -192,9 +219,19 @@ public class Stellurgy {
     // point it already had — moving init order is a separate change with separate risk — but now
     // has ONE writer, and a second install is a loud error instead of a silent overwrite.
 
+    /** Effectively final, process lifetime: written only by Stellurgy.installSealHandler. */
     private IAtmosphereSealHandler apiSealHandler;
+    /**
+     * Effectively final, server lifetime: written only by Stellurgy.attachServerServices,
+     * Stellurgy.detachServerServices at server start, released at server stop.
+     */
     private ISpaceObjectManager apiSpaceObjects;
+    /**
+     * Effectively final, server lifetime: written only by Stellurgy.attachServerServices,
+     * Stellurgy.detachServerServices at server start, released at server stop.
+     */
     private IGalaxy apiGalaxy;
+    /** Effectively final, process lifetime: written only by Stellurgy.installGravityManager. */
     private IGravityManager apiGravity;
 
     private static <T> T installOnce(T current, T next, String what) {
@@ -217,17 +254,10 @@ public class Stellurgy {
     * The two services above belong to the JVM. These two belong to the SERVER, and the difference is
     * in their names because it is a difference in lifetime, not in style.
     *
-    * <p>Both objects happen to be process-wide singletons, but their STATE is the running server's —
-    * station locations, orbits, temporary dimensions, the initialised flag, the save's planets — and
-    * each already has an {@code onServerStopped()} that empties it. So the reference this mod object
-    * publishes is attached when a server starts and RELEASED when it stops, exactly as
-    * {@code spaceSubsystem} beside it is: an API caller between servers is told there is no galaxy,
-    * rather than handed the last one's emptied object.</p>
-    *
-    * <p>This is not the end state. The right owner for state that belongs to a server is the server,
-    * and a process-wide singleton whose maps are cleared rather than replaced keeps a stale reference
-    * alive across saves. Attaching and releasing here makes the LIFETIME honest and is a strictly
-    * smaller change than moving the objects; the ownership question is recorded, not answered.</p>
+    * <p>Both are the running server's own objects ({@link #serverDimensions()},
+    * {@link #serverSpaceObjects()}), so the reference this mod object publishes is attached when a
+    * server starts and RELEASED when it stops, exactly as {@code spaceSubsystem} beside it is: an API
+    * caller between servers is told there is no galaxy.</p>
     */
     public void attachServerServices(ISpaceObjectManager manager, IGalaxy galaxy) {
         apiSpaceObjects = installOnce(apiSpaceObjects, manager, "the space object manager");
@@ -260,15 +290,20 @@ public class Stellurgy {
     public IGravityManager gravity() {
         return apiGravity;
     }
-    public static WorldType planetWorldType;
-    public static WorldType spaceWorldType;
-    public static MaterialRegistry materialRegistry = new MaterialRegistry(Constants.modId);
+    /** Effectively final, process lifetime: written only by {@link #load}. */
+    public WorldType planetWorldType;
+    /** Effectively final, process lifetime: written only by {@link #load}. */
+    public WorldType spaceWorldType;
+    /** Effectively final, process lifetime: built with the mod object; filled at registration. */
+    public final MaterialRegistry materialRegistry = new MaterialRegistry(Constants.modId);
     /** Products other mods may have auto-generated recipes for, accumulated from registry events
-     *  during load and consumed once by {@code createAutoGennedRecipes} at init. OWNER: the LOADER
-     *  — FML fires those events once per launch and the recipes are built once from what they left
-     *  here. Final: the map is filled, never replaced. */
-    private static final HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
-    private static Configuration config;
+     *  during load and consumed once by {@code createAutoGennedRecipes} at init - FML fires those
+     *  events once per launch. Effectively final, process lifetime: filled only by {@link #registerOre}. */
+    private final HashMap<AllowedProducts, HashSet<String>> modProducts = new HashMap<>();
+    /** The mod's config file. Its contents are edited at run time only by the operator's /addtorch and
+     *  /addsealant, a partial re-initialisation of the mod and the sanctioned exception to being
+     *  written once. Effectively final, process lifetime: written only by {@link #preInit}. */
+    private Configuration config;
 
     /**
      * This server's space subsystem, or {@code null} when it has none (before server start, on a
@@ -287,6 +322,9 @@ public class Stellurgy {
      * no setter and no swap seam, so nothing can leave a running server without its subsystem. A test
      * that wants an isolated stack builds its own {@code SpaceSubsystem} and ticks it itself; it
      * cannot pass it off as the server's.</p>
+     *
+     * Effectively final, server lifetime: written only by Stellurgy.serverStarting, Stellurgy.serverStopped
+     * at server start, released at server stop.
      */
     private dev.stannismod.stellurgy.space.SpaceSubsystem spaceSubsystem;
 
@@ -301,16 +339,82 @@ public class Stellurgy {
     }
 
     /**
-     * This server's subsystem networks — shields, ventilation, heat — or {@code null} when no server is
-     * running. The SERVER's state, held here: attached in {@link #serverAboutToStart}, before any world
-     * loads, because a tile registers itself as its chunk loads; released in {@link #serverStopped}.
-     * Written by those two handlers and nothing else.
+     * What the running server owns ({@link ServerState}). Static by transitivity (a field of the mod
+     * object); effectively final, SERVER lifetime, approved by the maintainer 2026-10-01: built by
+     * {@link #beginServerLifetime()} when a server is about to start and released by
+     * {@link #endServerLifetime()} when it has stopped. Nothing in it is cleared for reuse — the next
+     * server builds its own.
      */
-    private dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks subsystemNetworks;
+    private ServerState server;
+
+    /**
+     * What the running server owns.
+     *
+     * @throws IllegalStateException when no server is running
+     */
+    public static ServerState serverState() {
+        ServerState state = instance == null ? null : instance.server;
+        if (state == null) {
+            throw new IllegalStateException("No server is running: there is no server state");
+        }
+        return state;
+    }
+
+    /**
+     * The weight table every rocket, satellite and stored structure is weighed by, over
+     * {@code config/advRocketry/weights.json}. Static by transitivity (a field of the mod object);
+     * effectively final, lifetime the PROCESS (the client or the dedicated server): written once by
+     * {@link #postInit} and only read after — a second write throws. Approved by the maintainer
+     * 2026-10-02.
+     */
+    private WeightEngine weights;
+
+    /**
+     * The weight table this process weighs by.
+     *
+     * @throws IllegalStateException before post-init has built it
+     */
+    public static WeightEngine weights() {
+        WeightEngine table = instance == null ? null : instance.weights;
+        if (table == null) {
+            throw new IllegalStateException("the weight table is built in post-init and is not built yet");
+        }
+        return table;
+    }
+
+    /** The running server's galaxy. @throws IllegalStateException when no server is running */
+    public static DimensionManager serverDimensions() {
+        return serverState().dimensions;
+    }
+
+    /** The running server's stations. @throws IllegalStateException when no server is running */
+    public static SpaceObjectManager serverSpaceObjects() {
+        return serverState().spaceObjects;
+    }
 
     /** The running server's subsystem networks, or {@code null} when there is none. */
     public static dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks subsystemNetworks() {
-        return instance == null ? null : instance.subsystemNetworks;
+        ServerState state = instance == null ? null : instance.server;
+        return state == null ? null : state.subsystemNetworks;
+    }
+
+    /**
+     * Builds the state whose lifetime is one server. The server-start hook calls it; so does the
+     * headless test bootstrap, which runs no server and arranges the server's state the same way.
+     */
+    public void beginServerLifetime() {
+        if (server != null) {
+            throw new IllegalStateException("A server lifetime is already open; a second begin is a lifecycle bug");
+        }
+        server = new ServerState(dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().minDimension);
+    }
+
+    /** Releases the state {@link #beginServerLifetime()} built, undoing its Forge dimension registrations. */
+    public void endServerLifetime() {
+        if (server != null) {
+            server.release();
+        }
+        server = null;
     }
 
     /**
@@ -323,9 +427,10 @@ public class Stellurgy {
      * at mod init and left on the bus. So its lifetime is theirs; giving it a shorter one would say
      * something untrue about what it holds.</p>
      *
-     * <p>That the owners' own state is the SERVER's while their objects are the mod's is a real
-     * defect and a pre-existing one, recorded in {@code attachServerServices}' javadoc below. This
-     * class neither worsens nor fixes it.</p>
+     * <p>That the owners' own state is the SERVER's while their objects are the mod's is a real,
+     * pre-existing defect. This class neither worsens nor fixes it.</p>
+     *
+     * Effectively final, process lifetime: written only by Stellurgy.postInit.
      */
     private dev.stannismod.stellurgy.player.PlayerRelease playerRelease;
 
@@ -339,6 +444,7 @@ public class Stellurgy {
     }
 
     //CONFIG-stuff here to make sure we load early enough
+    /** Effectively final, process lifetime: written only by Stellurgy.preInit. */
     private boolean resetFromXml;
 
     //Biome registry.
@@ -448,12 +554,19 @@ public class Stellurgy {
         // libVulpes was a separate mod and is folded into this container. It goes FIRST: everything below
         // builds on the products, materials and packet discriminators it registers, and it used to
         // be a separate mod that FML initialised before this one.
-        LibVulpes.instance.preInit(event);
+        libVulpes.preInit(event);
 
         version = event.getModMetadata().version;
 
+        dev.stannismod.stellurgy.atmosphere.AtmosphereHandler.createDamageSources();
+        dev.stannismod.stellurgy.world.WorldRuntime.register();
+        // Forge cannot withdraw a DimensionType, so the two space types are registered once, here, on
+        // both sides; the dimension IDS that use them are each server's own.
+        dev.stannismod.stellurgy.space.SpaceSlotPool.registerType();
+        dev.stannismod.stellurgy.space.HyperspaceWorld.registerType();
+        MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.world.WorldRuntime.Attach.class);
+
         //Init API
-        DimensionManager.planetWorldProvider = WorldProviderPlanet.class;
         instance.installSealHandler(SealableBlockHandler.INSTANCE);
         SealableBlockHandler.INSTANCE.loadDefaultData();
 
@@ -486,9 +599,6 @@ public class Stellurgy {
         if (resetOnlyOnce && resetFromXml) {
             config.get("Planet", "resetPlanetsFromXML", false).set(false);
         }
-        //Load client and UI positioning stuff
-        proxy.loadUILayout(config);
-
         config.save();
 
         //Register cap events
@@ -641,17 +751,17 @@ public class Stellurgy {
 
 
         //Register machine recipes
-        LibVulpes.registerRecipeHandler(TileCuttingMachine.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/CuttingMachine.xml");
-        LibVulpes.registerRecipeHandler(TilePrecisionAssembler.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/PrecisionAssembler.xml");
-        LibVulpes.registerRecipeHandler(TileChemicalReactor.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/ChemicalReactor.xml");
-        LibVulpes.registerRecipeHandler(TileCrystallizer.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Crystallizer.xml");
-        LibVulpes.registerRecipeHandler(TileElectrolyser.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Electrolyser.xml");
-        LibVulpes.registerRecipeHandler(TileElectricArcFurnace.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/ElectricArcFurnace.xml");
-        LibVulpes.registerRecipeHandler(TileLathe.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Lathe.xml");
-        LibVulpes.registerRecipeHandler(TileRollingMachine.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/RollingMachine.xml");
-        LibVulpes.registerRecipeHandler(BlockSmallPlatePress.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/SmallPlatePress.xml");
-        LibVulpes.registerRecipeHandler(TileCentrifuge.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Centrifuge.xml");
-        LibVulpes.registerRecipeHandler(TilePrecisionLaserEtcher.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/PrecisionLaserEtcher.xml");
+        libVulpes.registerRecipeHandler(TileCuttingMachine.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/CuttingMachine.xml");
+        libVulpes.registerRecipeHandler(TilePrecisionAssembler.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/PrecisionAssembler.xml");
+        libVulpes.registerRecipeHandler(TileChemicalReactor.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/ChemicalReactor.xml");
+        libVulpes.registerRecipeHandler(TileCrystallizer.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Crystallizer.xml");
+        libVulpes.registerRecipeHandler(TileElectrolyser.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Electrolyser.xml");
+        libVulpes.registerRecipeHandler(TileElectricArcFurnace.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/ElectricArcFurnace.xml");
+        libVulpes.registerRecipeHandler(TileLathe.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Lathe.xml");
+        libVulpes.registerRecipeHandler(TileRollingMachine.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/RollingMachine.xml");
+        libVulpes.registerRecipeHandler(BlockSmallPlatePress.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/SmallPlatePress.xml");
+        libVulpes.registerRecipeHandler(TileCentrifuge.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/Centrifuge.xml");
+        libVulpes.registerRecipeHandler(TilePrecisionLaserEtcher.class, event.getModConfigurationDirectory().getAbsolutePath() + "/" + dev.stannismod.stellurgy.api.StellurgyConfiguration.configFolder + "/PrecisionLaserEtcher.xml");
 
 
         //AUDIO
@@ -660,7 +770,7 @@ public class Stellurgy {
 
 
         //Register Space Objects
-        SpaceObjectManager.getSpaceManager().registerSpaceObjectType("genericObject", SpaceStationObject.class);
+        SpaceObjectManager.registerSpaceObjectType("genericObject", SpaceStationObject.class);
 
 
         //Register item/block crap
@@ -680,11 +790,11 @@ public class Stellurgy {
 
         // Valkyrien Skies is vendored into Stellurgy and hosted by Stellurgy's mod container: drive its lifecycle
         // from Stellurgy's own handlers (VS is no longer a separate @Mod with its own @EventHandler methods).
-        ValkyrienSkiesMod.INSTANCE.preInit(event);
+        valkyrienSkies.preInit(event);
 
         // Advanced Force Field System (shield subsystem) was a separate mod and is folded into Stellurgy's
         // mod container: drive its lifecycle from Stellurgy's own handlers, as with VS above.
-        AdvancedForceFieldSystem.INSTANCE.preInit(event);
+        affs.preInit(event);
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
@@ -1207,7 +1317,7 @@ public class Stellurgy {
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("TitaniumAluminide", "pickaxe", 1, 0xaec2de, AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("GEAR").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue(), false));
         materialRegistry.registerMaterial(new dev.stannismod.stellurgy.libvulpes.api.material.Material("TitaniumIridium", "pickaxe", 1, 0xd7dfe4, AllowedProducts.getProductByName("PLATE").getFlagValue() | AllowedProducts.getProductByName("INGOT").getFlagValue() | AllowedProducts.getProductByName("NUGGET").getFlagValue() | AllowedProducts.getProductByName("DUST").getFlagValue() | AllowedProducts.getProductByName("STICK").getFlagValue() | AllowedProducts.getProductByName("BLOCK").getFlagValue() | AllowedProducts.getProductByName("GEAR").getFlagValue() | AllowedProducts.getProductByName("SHEET").getFlagValue(), false));
 
-        materialRegistry.registerOres(LibVulpes.tabLibVulpesOres);
+        materialRegistry.registerOres(libVulpes.tabLibVulpesOres);
 
         //OreDict stuff
         OreDictionary.registerOre("turfMoon", new ItemStack(StellurgyBlocks.blockMoonTurf));
@@ -1237,7 +1347,7 @@ public class Stellurgy {
 
     @EventHandler
     public void load(FMLInitializationEvent event) {
-        LibVulpes.instance.init(event);
+        libVulpes.init(event);
         StellurgyAdvancements.register();
         proxy.init();
 
@@ -1340,14 +1450,19 @@ public class Stellurgy {
 
         machineRecipes.createAutoGennedRecipes(modProducts);
 
-        ValkyrienSkiesMod.INSTANCE.init(event);
-        AdvancedForceFieldSystem.INSTANCE.init(event);
+        valkyrienSkies.init(event);
+        affs.init(event);
     }
 
 
     @EventHandler
     public void postInit(FMLPostInitializationEvent event) {
-        LibVulpes.instance.postInit(event);
+        libVulpes.postInit(event);
+
+        if (weights != null) {
+            throw new IllegalStateException("the weight table is written once per process");
+        }
+        weights = new WeightEngine("config/advRocketry/weights.json");
 
         CapabilitySpaceArmor.register();
         // The player's own bindings: one home for what this mod holds on him, attached to the
@@ -1440,7 +1555,7 @@ public class Stellurgy {
         VSIntegration.init();
         // End compat stuff
 
-        MinecraftForge.EVENT_BUS.register(SpaceObjectManager.getSpaceManager());
+        MinecraftForge.EVENT_BUS.register(dev.stannismod.stellurgy.stations.SpaceObjectManagerEvents.class);
         // Keeps /time off the worlds whose skip is locked. Registered unconditionally: it stands
         // aside the moment no loaded world is locked, so the default-everything case pays nothing.
         MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.world.TimeCommandGuard());
@@ -1456,9 +1571,6 @@ public class Stellurgy {
         dev.stannismod.stellurgy.space.SpaceEventHandler spaceEvents =
                 new dev.stannismod.stellurgy.space.SpaceEventHandler();
         MinecraftForge.EVENT_BUS.register(spaceEvents);
-        // Carries a pre-assembly boarding across the asynchronous ship assembly (core assembly
-        // glue - registered unconditionally, works with the space subsystem down).
-        MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.space.AssemblyCrewRebind());
         // Hyperspace is a void with ships in it and nothing else: leaving your ship out there is
         // fatal. Idle on every tick that has no hyperspace world and no player in it.
         dev.stannismod.stellurgy.space.HyperspaceVoid hyperspaceVoid =
@@ -1466,9 +1578,7 @@ public class Stellurgy {
         MinecraftForge.EVENT_BUS.register(hyperspaceVoid);
         playerRelease = new dev.stannismod.stellurgy.player.PlayerRelease(
                 spaceEvents, hyperspaceVoid);
-        MinecraftForge.EVENT_BUS.register(new dev.stannismod.stellurgy.util.DelayedActionBar());
-
-        PacketHandler.init();
+        MinecraftForge.EVENT_BUS.register(ServerStateEvents.class);
 
         GameRegistry.registerWorldGenerator(new OreGenerator(), 100);
 
@@ -1487,21 +1597,18 @@ public class Stellurgy {
         //TODO recipes?
         machineRecipes.registerXMLRecipes();
 
-        //Add the overworld as a discovered planet
-        dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets.add(0);
-
         TilePlugBase.energy_multiplier =  dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig(). blockEnergyHatchCapacityMultiplier;
         TileFluidHatch.capacityMultiplier =  dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().blockLiquidHatchCapacityMultiplier;
 
-        ValkyrienSkiesMod.INSTANCE.postInit(event);
-        AdvancedForceFieldSystem.INSTANCE.postInit(event);
+        valkyrienSkies.postInit(event);
+        affs.postInit(event);
     }
 
     @EventHandler
     public void serverStarted(FMLServerStartedEvent event) {
-        for (int dimId : DimensionManager.getInstance().getLoadedDimensions()) {
-            DimensionProperties properties = DimensionManager.getInstance().getDimensionProperties(dimId);
-            if (!properties.isNativeDimension && properties.getId() == dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId && !Loader.isModLoaded("GalacticraftCore")) {
+        for (int dimId : serverDimensions().getLoadedDimensions()) {
+            DimensionProperties properties = serverDimensions().getDimensionProperties(dimId);
+            if (!properties.isNativeDimension && properties.getId() == serverDimensions().getMoonId() && !Loader.isModLoaded("GalacticraftCore")) {
                 properties.isNativeDimension = true;
             }
         }
@@ -1509,7 +1616,8 @@ public class Stellurgy {
         // Layer-1 universe registry: worlds are loaded (seed + map storage reachable) and the star
         // catalogue is built (createAndLoadDimensions ran at serverAboutToStart), so place every system.
         dev.stannismod.stellurgy.universe.UniverseRegistry.populate(
-                net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance());
+                net.minecraftforge.fml.common.FMLCommonHandler.instance().getMinecraftServerInstance(),
+                serverDimensions());
         // Layer-2: restore the persisted ship ledger (settled positions survive a restart) now that the
         // overworld MapStorage is reachable, before any player logs in.
         dev.stannismod.stellurgy.space.SpaceSubsystem.onServerStarted(spaceSubsystem);
@@ -1517,16 +1625,14 @@ public class Stellurgy {
         // together in serverStopped. Here rather than in either object's constructor: a constructor
         // runs from its class's own static initialiser, at whatever moment something first touches
         // the class, which may be before Forge has assigned this mod instance at all.
-        attachServerServices(SpaceObjectManager.getSpaceManager(),
-                dev.stannismod.stellurgy.dimension.DimensionManager.getInstance());
+        attachServerServices(serverSpaceObjects(), serverDimensions());
     }
 
     @EventHandler
     public void serverAboutToStart(FMLServerAboutToStartEvent event) {
-        subsystemNetworks = dev.stannismod.stellurgy.subsystem.network.SubsystemNetworks
-                .forStartingServer(subsystemNetworks);
+        beginServerLifetime();
         // Populate dimension properties before worlds get loaded
-        DimensionManager.getInstance().createAndLoadDimensions(resetFromXml);
+        serverDimensions().createAndLoadDimensions(resetFromXml);
     }
 
     @EventHandler
@@ -1583,7 +1689,7 @@ public class Stellurgy {
         try {
             if (load.loadFile(file)) {
                 for (Asteroid asteroid : load.loadPropertyFile()) {
-                    dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().asteroidTypes.put(asteroid.ID, asteroid);
+                    serverDimensions().getAsteroidTypes().put(asteroid.ID, asteroid);
                 }
             }
         } catch (IOException e) {
@@ -1611,6 +1717,7 @@ public class Stellurgy {
             try {
                 if (oreLoader.loadFile(file)) {
                     List<SingleEntry<HashedBlockPosition, OreGenProperties>> mapping = oreLoader.loadPropertyFile();
+                    dev.stannismod.stellurgy.util.OreGenTable oreTable = serverState().oreTable;
 
                     for (Entry<HashedBlockPosition, OreGenProperties> entry : mapping) {
                         int pressure = entry.getKey().x;
@@ -1618,12 +1725,12 @@ public class Stellurgy {
 
                         if (pressure == -1) {
                             if (temp != -1) {
-                                OreGenProperties.setOresForTemperature(Temps.values()[temp], entry.getValue());
+                                oreTable.setOresForTemperature(Temps.values()[temp], entry.getValue());
                             }
                         } else if (temp == -1) {
-                            OreGenProperties.setOresForPressure(AtmosphereTypes.values()[pressure], entry.getValue());
+                            oreTable.setOresForPressure(AtmosphereTypes.values()[pressure], entry.getValue());
                         } else {
-                            OreGenProperties.setOresForPressureAndTemp(AtmosphereTypes.values()[pressure], Temps.values()[temp], entry.getValue());
+                            oreTable.setOresForPressureAndTemp(AtmosphereTypes.values()[pressure], Temps.values()[temp], entry.getValue());
                         }
                     }
                 }
@@ -1633,7 +1740,7 @@ public class Stellurgy {
         }
         //End open and load ore files
 
-        ValkyrienSkiesMod.INSTANCE.serverStart(event);
+        valkyrienSkies.serverStart(event);
     }
 
 
@@ -1648,22 +1755,11 @@ public class Stellurgy {
 
     @EventHandler
     public void serverStopped(FMLServerStoppedEvent event) {
-        dev.stannismod.stellurgy.wirelessdata.NetworkRegistry.clear();
-        dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().onServerStopped();
-        SpaceObjectManager.getSpaceManager().onServerStopped();
-        dev.stannismod.stellurgy.space.SpaceSubsystem.onServerStopped();
-        dev.stannismod.stellurgy.event.PlanetEventHandler.onServerStopped();
         // Released here, by the owner: the subsystem belonged to the server that has just stopped.
         spaceSubsystem = null;
-        subsystemNetworks = null;
         detachServerServices();
-        dev.stannismod.stellurgy.universe.UniverseRegistry.onServerStopped();
-        AtmosphereHandler.clear();
-        dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().MoonId = Constants.INVALID_PLANET;
-        ((BlockSeal) StellurgyBlocks.blockPipeSealer).clearMap();
-        DimensionManager.getInstance().setDimOffset(config.getInt("minDimension", "Planet", 2, -127, 8000, "Dimensions including and after this number are allowed to be made into planets"));
-        dev.stannismod.stellurgy.api.StellurgyConfiguration.getCurrentConfig().spaceDimId = config.get(Configuration.CATEGORY_GENERAL, "spaceStationId", -2, "Dimension ID to use for space stations").getInt();
-        WeightEngine.INSTANCE.save();
+        weights.save();
+        endServerLifetime();
     }
 
     @SubscribeEvent
@@ -1696,7 +1792,8 @@ public class Stellurgy {
             // An ALPHA world model is told to the player, on the world it applies to, every time he
             // arrives. Not once and not in a changelog: what it warns about is that this world may have
             // no way forward, and that is worth knowing before he invests another evening in it.
-            dev.stannismod.stellurgy.universe.UniverseRegistry.activeSchema().ifPresent(schema -> {
+            java.util.Optional.ofNullable(dev.stannismod.stellurgy.universe.UniverseRegistry.get(player.getServer()))
+                    .flatMap(dev.stannismod.stellurgy.universe.UniverseRegistry::activeSchema).ifPresent(schema -> {
                 if (!schema.isStable()) {
                     player.sendMessage(new net.minecraft.util.text.TextComponentTranslation(
                             "msg.stellurgy.universe.alpha", schema.label())

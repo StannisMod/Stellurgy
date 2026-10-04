@@ -109,7 +109,7 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
         else
             split(air, cell);
 
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         if (handler != null)
             handler.refreshDerivedAtmosphereAt(cell);
         markDirty();
@@ -211,7 +211,7 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
     }
 
     private int zoneVolume(@Nonnull BlockPos cell) {
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         return handler == null ? 1 : Math.max(1, handler.getBlobSizeAt(cell));
     }
 
@@ -226,7 +226,7 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
      */
     @Nullable
     public BlockPos findServedCell() {
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         if (handler == null)
             return null;
         for (EnumFacing dir : EnumFacing.values()) {
@@ -239,7 +239,7 @@ public class TileGasSeparator extends TileInventoriedRFConsumerTank implements I
 
     @Nullable
     private AirState getZoneAir() {
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         BlockPos cell = findServedCell();
         return (handler == null || cell == null) ? null : handler.getAirStateAt(cell);
     }

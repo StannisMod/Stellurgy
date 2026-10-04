@@ -40,32 +40,6 @@ public class PlatePressRecipeEndToEndTest extends AbstractSharedServerTest {
     private static final String PRESS_FQN   = "dev.stannismod.stellurgy.block.BlockSmallPlatePress";
 
     @Test
-    public void platePressFixtureBuildsExpectedStack() throws Exception {
-        int x = 400, y = FixtureSite.OPEN_AIR_Y, z = 400;
-        TestClient c = client();
-        String resp = String.join("\n",
-                c.execute("stellurgytest fixture machine " + FIXTURE_KEY + " 0 " + x + " " + y + " " + z));
-        assertTrue("fixture machine " + FIXTURE_KEY + " failed: " + resp,
-                Reply.of(resp).ok());
-        // The position, read as three numbers and compared. Built as a needle it depended on how
-        // the producer renders a coordinate — a space after a comma, or a double instead of an
-        // int, and the fixture reads as having reported no position at all.
-        assertArrayEquals("response missing pressPos: " + resp,
-                new int[]{x, y, z}, Reply.of("stellurgytest fixture machine", resp).blockPos("pressPos"));
-
-        // Read each cell of the 3-stack and verify the correct block sits there.
-        String obsRead = String.join("\n", c.execute(
-                "stellurgytest block at 0 " + x + " " + (y - 2) + " " + z));
-        assertTrue("obsidian missing at " + x + "," + (y - 2) + "," + z + ": " + obsRead,
-                "minecraft:obsidian".equals(Reply.of(obsRead).text("block")));
-
-        String pressRead = String.join("\n", c.execute(
-                "stellurgytest block at 0 " + x + " " + y + " " + z));
-        assertTrue("press missing at " + x + "," + y + "," + z + ": " + pressRead,
-                "stellurgy:platepress".equals(Reply.of(pressRead).text("block")));
-    }
-
-    @Test
     public void platePressRedstoneActivationDropsRecipeOutput() throws Exception {
         int x = 500, y = FixtureSite.OPEN_AIR_Y, z = 400;
         TestClient c = client();

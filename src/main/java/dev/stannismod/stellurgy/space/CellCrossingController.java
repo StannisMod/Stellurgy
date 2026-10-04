@@ -46,6 +46,8 @@ import net.minecraft.util.math.BlockPos;
  * flying with its report saturated at the boundary — the old behaviour, now the fallback rather than
  * the rule — and is retried after a cooldown. A refused jump is reported to its caller, which has
  * already charged the pilot for the attempt.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class CellCrossingController {
 
@@ -65,6 +67,8 @@ public final class CellCrossingController {
      * What the crew is told, and what the log calls the move. The two callers differ in nothing else,
      * and a crossing that reported "carried into the next neighbourhood" for a jump across a system
      * would be lying to the only person who can see it.
+     *
+     * Every field of this object is effectively final, process lifetime: set once when the object is built.
      */
     private enum Kind {
         SEAM("cell-seam carry", "msg.shipseam.arrived", "msg.shipseam.failed"),

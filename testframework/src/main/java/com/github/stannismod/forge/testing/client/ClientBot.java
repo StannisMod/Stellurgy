@@ -48,6 +48,8 @@ public final class ClientBot implements Closeable {
      * minutes, inside this. A slow world load was therefore delivered as "the client bridge did not
      * answer", and the client's own "Timed out waiting for the client world to load" could not
      * reach anyone by construction.</p>
+     *
+     * <p>A constant: a final {@code long} computed from a fixed duration.</p>
      */
     public static final long READ_TIMEOUT_MILLIS = Duration.ofMinutes(2).toMillis();
 

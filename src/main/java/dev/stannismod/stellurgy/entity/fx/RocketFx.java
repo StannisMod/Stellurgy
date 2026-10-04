@@ -23,6 +23,7 @@ import static java.lang.Math.min;
 
 public class RocketFx extends Particle {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final ResourceLocation icon = new ResourceLocation("stellurgy:textures/particle/soft2.png");
 
     float alpha = 0.45f;
@@ -42,7 +43,7 @@ public class RocketFx extends Particle {
                     double y, double z, double motx, double moty, double motz, float scale) {
         super(world, x, y, z, motx, moty, motz);
 
-        DelayedParticleRenderingEventHandler.RocketFxParticles.add(this);
+        DelayedParticleRenderingEventHandler.in(world).rocket.add(this);
 
         this.prevPosX = this.posX = x;
         this.prevPosY = this.posY = y;

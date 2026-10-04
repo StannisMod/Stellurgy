@@ -112,7 +112,7 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
         carbonBuffer += regenerated;
         emitDust();
 
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         BlockPos cell = findServedCell();
         if (handler != null && cell != null)
             handler.refreshDerivedAtmosphereAt(cell);
@@ -162,7 +162,7 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
      */
     @Nullable
     private BlockPos findServedCell() {
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         if (handler == null)
             return null;
         for (EnumFacing dir : EnumFacing.values()) {
@@ -175,7 +175,7 @@ public class TileAirRecirculator extends TileInventoriedRFConsumer implements IM
 
     @Nullable
     private AirState getZoneAir() {
-        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world.provider.getDimension());
+        AtmosphereHandler handler = AtmosphereHandler.getOxygenHandler(world);
         BlockPos cell = findServedCell();
         return (handler == null || cell == null) ? null : handler.getAirStateAt(cell);
     }

@@ -24,6 +24,7 @@ import java.util.Random;
 
 public class BlockLightwoodSapling extends BlockBush implements IGrowable {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyInteger STAGE = PropertyInteger.create("stage", 0, 1);
     public String[] names = new String[]{"blueTree"};
 
