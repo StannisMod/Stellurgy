@@ -11,6 +11,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
@@ -34,7 +35,7 @@ import dev.stannismod.stellurgy.weapon.TurretFireControl;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkDomain;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkState;
-import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkAimedTile;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -57,7 +58,7 @@ import java.util.UUID;
  * for: a part marks every controller it can reach, and the walk happens on the next tick. There is no
  * polling — a gun that nobody is building is a gun that costs one boolean check per tick.</p>
  */
-public class TileTurret extends TileEntity implements ITickable, ISubsystemSink, ILinkableTile {
+public class TileTurret extends TileEntity implements ITickable, ISubsystemSink, ILinkAimedTile {
 
     /** Smallest buffer a turret keeps, so a cheap gun still holds a few rounds' worth. */
     private static final int MIN_ENERGY_BUFFER = 20_000;
@@ -848,19 +849,34 @@ public class TileTurret extends TileEntity implements ITickable, ISubsystemSink,
         beamChannel.update(world, pos, replicatedPath(), false);
     }
 
-    // ---- linker: the no-network way to give a gun a target
+    // ---- linker: the no-network way to give a gun a target (see LinkerDesignation)
 
     @Override
     public boolean onLinkStart(@Nonnull ItemStack item, TileEntity entity, EntityPlayer player, World world) {
+        LinkerDesignation.bind(item, this, player);
         return true;
     }
 
     @Override
     public boolean onLinkComplete(@Nonnull ItemStack item, TileEntity entity, EntityPlayer player, World world) {
-        if (entity == null) {
-            return false;
+        LinkerDesignation.bind(item, this, player);
+        return true;
+    }
+
+    /**
+     * This gun's OWN order. A network order still outranks it (see {@link #getEffectiveTarget}), the
+     * same as an order given any other way; to point a whole battery, bind the linker to its console.
+     */
+    @Override
+    public boolean onLinkAimed(@Nonnull ItemStack linker, @Nonnull RayTraceResult aimedAt, EntityPlayer player) {
+        if (aimedAt.typeOfHit == RayTraceResult.Type.ENTITY) {
+            setTarget(null);
+            setTargetEntity(aimedAt.entityHit.getUniqueID());
+        } else {
+            setTargetEntity(null);
+            setTarget(aimedAt.hitVec);
         }
-        setTarget(TurretFireControl.center(entity.getPos()));
+        LinkerDesignation.confirm(player, aimedAt);
         return true;
     }
 

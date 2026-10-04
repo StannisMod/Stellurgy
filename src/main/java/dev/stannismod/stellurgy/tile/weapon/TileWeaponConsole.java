@@ -10,7 +10,9 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ITickable;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.network.ByteBufUtils;
 import net.minecraftforge.fml.relauncher.Side;
@@ -23,7 +25,6 @@ import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkDomain;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkManager;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkState;
 import dev.stannismod.stellurgy.subsystem.network.SubsystemNetworkStatus;
-import dev.stannismod.stellurgy.weapon.TurretFireControl;
 import dev.stannismod.stellurgy.weapon.TurretMechanism;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkDomain;
 import dev.stannismod.stellurgy.weapon.WeaponNetworkState;
@@ -33,7 +34,7 @@ import dev.stannismod.stellurgy.libvulpes.inventory.modules.IModularInventory;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleBase;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleButton;
 import dev.stannismod.stellurgy.libvulpes.inventory.modules.ModuleText;
-import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkableTile;
+import dev.stannismod.stellurgy.libvulpes.interfaces.ILinkAimedTile;
 import dev.stannismod.stellurgy.libvulpes.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
@@ -60,7 +61,7 @@ import java.util.List;
  * commanded individually — which is exactly what the guns' own tests pin.</p>
  */
 public class TileWeaponConsole extends TileEntity implements ITickable, ISubsystemNetworkController,
-        ILinkableTile, IModularInventory, IButtonInventory, INetworkMachine {
+        ILinkAimedTile, IModularInventory, IButtonInventory, INetworkMachine {
 
     private static final int BUTTON_HOLD_FIRE = 0;
     private static final int BUTTON_CLEAR_TARGET = 1;
@@ -316,16 +317,39 @@ public class TileWeaponConsole extends TileEntity implements ITickable, ISubsyst
         return String.format(LibVulpes.proxy.getLocalizedString(key), args);
     }
 
-    // ---- linker: the way a player names a target without typing coordinates
+    // ---- linker: the way a player names a target for the whole battery (see LinkerDesignation)
 
     @Override
     public boolean onLinkStart(@Nonnull ItemStack item, TileEntity entity, EntityPlayer player, World world) {
+        LinkerDesignation.bind(item, this, player);
         return true;
     }
 
     @Override
     public boolean onLinkComplete(@Nonnull ItemStack item, TileEntity entity, EntityPlayer player, World world) {
-        return entity != null && assignTarget(TurretFireControl.center(entity.getPos()));
+        LinkerDesignation.bind(item, this, player);
+        return true;
+    }
+
+    /**
+     * The order goes to the NETWORK, so every gun on it takes it; a console on no network commands
+     * nothing and says so rather than appearing to have taken the order.
+     */
+    @Override
+    public boolean onLinkAimed(@Nonnull ItemStack linker, @Nonnull RayTraceResult aimedAt, EntityPlayer player) {
+        WeaponNetworkState state = network();
+        if (state == null) {
+            player.sendMessage(new TextComponentTranslation("msg.weaponLinker.noNetwork"));
+            return false;
+        }
+        state.clearTarget();
+        if (aimedAt.typeOfHit == RayTraceResult.Type.ENTITY) {
+            state.setTargetEntity(aimedAt.entityHit.getUniqueID());
+        } else {
+            state.setTarget(aimedAt.hitVec);
+        }
+        LinkerDesignation.confirm(player, aimedAt);
+        return true;
     }
 
     // ---- GUI
