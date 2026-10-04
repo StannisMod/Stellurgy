@@ -160,7 +160,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
 
     @Test
     public void aShipFlownPastItsCellFaceIsCarriedIntoTheNeighbourAndStaysThere() throws Exception {
-        ShipPastItsFace arranged = arrangeAShipPastItsFace();
+        ShipPastItsFace arranged = arrangeAShipPastItsFace("with-pilot-seat");
         String setup = arranged.setup;
         String stellurgyShipId = arranged.stellurgyShipId;
         String sourceCell = arranged.sourceCell;
@@ -261,7 +261,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      */
     @Test
     public void aBodyOnTheDeckIsCarriedAcrossTheSeamWithItsShip() throws Exception {
-        ShipPastItsFace arranged = arrangeAShipPastItsFace();
+        ShipPastItsFace arranged = arrangeAShipPastItsFace("with-pilot-deck");
 
         // The SOURCE ship's VS id, captured by the arrangement while the ship was still at its settle
         // pose, and used only here: the crossing replaces the VS body, so this id names nothing on
@@ -278,13 +278,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the deck's chunks could not be held, so the body would be swept away before "
                 + "anything could carry it: " + heldSrc, Reply.of(heldSrc).ok());
 
-        // Dropped at the ship's own pose: inside the hull box, which is what the stay region judges.
-        // Whole blocks deliberately — "on the deck" is a question about a volume thousands of blocks
-        // wide, and a fractional offset here would only look precise.
-        String drop = exec("stellurgytest space loose-body " + arranged.sourceSlot + " "
-                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z
-                + " " + settledVsId);
-        assertTrue("the body could not be dropped: " + drop, Reply.of(drop).ok());
+        String drop = dropOnTheDeck(arranged);
         assertTrue("PRODUCTION's own aboard predicate says this body is not on the ship, so the carry "
                 + "is under no obligation to take it and this scenario would pin nothing: " + drop,
                 Reply.of(drop).bool("aboard"));
@@ -434,9 +428,15 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
          * seam either, for the same reason.</p>
          */
         final String settledVsId;
+        /**
+         * A free cell on the deck beside the pilot seat, as an offset from the craft's block-region
+         * corner — surveyed on the pad, where its blocks are loaded; {@code null} for a craft with no
+         * deck.
+         */
+        final int[] deckCell;
 
         ShipPastItsFace(String setup, String stellurgyShipId, String sourceCell, int sourceSlot,
-                        double x, double y, double z, String settledVsId) {
+                        double x, double y, double z, String settledVsId, int[] deckCell) {
             this.setup = setup;
             this.stellurgyShipId = stellurgyShipId;
             this.sourceCell = sourceCell;
@@ -445,10 +445,10 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
             this.y = y;
             this.z = z;
             this.settledVsId = settledVsId;
+            this.deckCell = deckCell;
         }
     }
 
-    /** Build a ship, fly it into space through the production on-ramp, and move it past its +X face. */
     /**
      * E2E: a craft that is STILL UNDER WAY carries its cargo across the seam and KEEPS it.
      *
@@ -463,10 +463,21 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * the craft simply leaves without its cargo, which reads afterwards as "the crossing dropped
      * it". Measured before the hold existed: the body was 139 blocks under its own ship after 600
      * ticks, and 419 after 1800.</p>
+     *
+     * <p>Two things keep cargo on a deck across the seam — the carry's own hold when it puts the body
+     * back, and the deck taking whatever lies on it — and this verdict is about the pair: with either
+     * one alone broken it stays green.</p>
+     *
+     * <p>red-witnessed: 2026-10-04, with {@code AboardBodies#release} at
+     * {@code DeckFrameTick.holdAt(restored, shipId, sub[0], sub[1], sub[2])} and its resolver fallback
+     * replaced by {@code false} AND {@code DeckFrameTick#admissible} at
+     * {@code return !entity.isInWater() && !entity.isInLava()} answering false - "the cargo was put down
+     * on the deck and then left behind by its own ship: the craft travelled 186.2987541345107 blocks",
+     * the body at y -31.0.</p>
      */
     @Test
     public void aShipStillUnderWayCarriesItsCargoAcrossTheSeamAndKeepsIt() throws Exception {
-        ShipPastItsFace arranged = arrangeAShipPastItsFace();
+        ShipPastItsFace arranged = arrangeAShipPastItsFace("with-pilot-deck");
         String settledVsId = arranged.settledVsId;
 
         String heldSrc = exec("stellurgytest chunk hold " + arranged.sourceSlot + " "
@@ -474,10 +485,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("the deck's chunks could not be held, so the body would be swept away before "
                 + "anything could carry it: " + heldSrc, Reply.of(heldSrc).ok());
 
-        String drop = exec("stellurgytest space loose-body " + arranged.sourceSlot + " "
-                + (long) arranged.x + " " + (long) arranged.y + " " + (long) arranged.z
-                + " " + settledVsId);
-        assertTrue("the body could not be dropped: " + drop, Reply.of(drop).ok());
+        String drop = dropOnTheDeck(arranged);
         assertTrue("PRODUCTION's own aboard predicate says this body is not on the ship, so the carry "
                 + "is under no obligation to take it: " + drop, Reply.of(drop).bool("aboard"));
         String bodyId = extractString(drop, "uuid");
@@ -574,13 +582,52 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // this one: the deck has gone, and without a hold the body has not.
         String still = exec("stellurgytest space loose-body-find " + bodyId + " " + carriedSlot + " "
                 + dstVsId);
-        assertTrue("the cargo was put down on the deck and then left behind by its own ship: the "
-                        + "craft travelled " + Math.abs(afterY - beforeY) + " blocks and the body is "
-                        + still + "; ship=" + shipAfter.raw(),
-                Reply.of(still).bool("found") && Reply.of(still).bool("aboard"));
+        if (!(Reply.of(still).bool("found") && Reply.of(still).bool("aboard"))) {
+            // Read only on the failing path, after the window: which holder took the body after the
+            // carry and why it let go is the question the position alone cannot answer.
+            fail("the cargo was put down on the deck and then left behind by its own ship: the "
+                    + "craft travelled " + Math.abs(afterY - beforeY) + " blocks and the body is "
+                    + still + "; ship=" + shipAfter.raw()
+                    + " | carry mark seq " + carryMark
+                    + " | arrived deck spot " + exec("stellurgytest vs deck-spot " + carriedSlot + " id "
+                            + dstVsId + " at " + arranged.deckCell[0] + " " + arranged.deckCell[1] + " "
+                            + arranged.deckCell[2])
+                    + " | deck holds this boot: " + events.since(0L, "deck_entered")
+                    + " | deck releases this boot: " + events.since(0L, "deck_released")
+                    + " | bodies put back: " + events.since(carryMark, "aboard_bodies_released")
+                    + " | ships usable since the carry: " + events.since(carryMark, "ship_usable"));
+        }
     }
 
-    private ShipPastItsFace arrangeAShipPastItsFace() throws Exception {
+    /**
+     * Drop the cargo ON this ship's deck — on the floor of the deck cell surveyed on the pad, mapped
+     * through the craft as it stands in its slot now — and return the drop's reply.
+     *
+     * <p>Not at the ship's pose. The pose is a point inside the hull with nothing under it, and a
+     * body there is on no deck: these scenarios once dropped their cargo there, and were green only
+     * because an earlier hold pinned whatever it was given where it was given it. The deck lets go of
+     * a body with no floor under it, so the cargo has to be where a player's cargo would be.</p>
+     */
+    private String dropOnTheDeck(ShipPastItsFace arranged) throws Exception {
+        assertTrue("this scenario carries cargo, so its craft must have a deck", arranged.deckCell != null);
+        String spot = exec("stellurgytest vs deck-spot " + arranged.sourceSlot + " id "
+                + arranged.settledVsId + " at " + arranged.deckCell[0] + " " + arranged.deckCell[1]
+                + " " + arranged.deckCell[2]);
+        assertTrue("the deck cell surveyed on the pad does not map onto the craft in its slot: " + spot,
+                Reply.of(spot).ok());
+        String drop = exec("stellurgytest space loose-body " + arranged.sourceSlot + " "
+                + Reply.of(spot).number("x") + " " + Reply.of(spot).number("y") + " "
+                + Reply.of(spot).number("z") + " " + arranged.settledVsId);
+        assertTrue("the body could not be dropped: " + drop, Reply.of(drop).ok());
+        return drop;
+    }
+
+    /**
+     * Build a ship of fixture {@code variant}, fly it into space through the production on-ramp, and
+     * move it past its +X face. A scenario that carries cargo asks for {@code with-pilot-deck}: a
+     * body is held by a DECK, and {@code with-pilot-seat} is a seat over air with no deck to stand on.
+     */
+    private ShipPastItsFace arrangeAShipPastItsFace(String variant) throws Exception {
         // Marked at the very top, so a failure below can print every claim THIS scenario caused and
         // nothing from the ones before it — the question is what accumulates, and an unbounded dump
         // answers it with the whole boot.
@@ -589,7 +636,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         assertTrue("entry setup failed: " + setup, Reply.of(setup).ok());
 
         // --- Arrangement: get a ship into a cell through the production on-ramp ------------------
-        String coords = placeFixture(site(), "with-pilot-seat");
+        String coords = placeFixture(site(), variant);
         String asm = exec("stellurgytest rocket assemble 0 " + coords);
         assertTrue("with VS an AFC-bearing build must route to a ship (no rocket): " + asm,
                 (Reply.of(asm).integer("rocketCount") == 0));
@@ -618,6 +665,16 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
         // either side with the other's id answers "not found" and reads exactly like the mechanic
         // being broken.
         String srcVsId = vsIdOf(0, stellurgyShipId);
+        // THE DECK, surveyed HERE: on the pad the craft has just been assembled and its blocks are
+        // loaded. Past its face in its slot they are not, and loading them there is not this
+        // scenario's to do.
+        int[] deckCell = null;
+        if ("with-pilot-deck".equals(variant)) {
+            String spot = exec("stellurgytest vs deck-spot 0 id " + srcVsId);
+            assertTrue("the craft names no free cell on its deck: " + spot, Reply.of(spot).ok());
+            deckCell = new int[]{Reply.of(spot).integer("offX"), Reply.of(spot).integer("offY"),
+                    Reply.of(spot).integer("offZ")};
+        }
         ShipInfo srcInfo = ShipInfo.byId(this::exec, 0, srcVsId);
         double sx = srcInfo.x, sy = srcInfo.y, sz = srcInfo.z;
 
@@ -802,7 +859,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                         + "would be about a carry: " + stopped,
                 Math.abs(cruiseF) < EXACTLY_ZERO && Math.abs(cruiseR) < EXACTLY_ZERO && Math.abs(cruiseU) < EXACTLY_ZERO);
 
-        return finishPastTheFace(setup, stellurgyShipId, sourceCell, sourceSlot, settledVsId);
+        return finishPastTheFace(setup, stellurgyShipId, sourceCell, sourceSlot, settledVsId, deckCell);
     }
 
     /**
@@ -812,7 +869,8 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
      * witness attributable to the moving deck rather than to a difference in how its ship got there.
      */
     private ShipPastItsFace finishPastTheFace(String setup, String stellurgyShipId, String sourceCell,
-                                              int sourceSlot, String settledVsId) throws Exception {
+                                              int sourceSlot, String settledVsId, int[] deckCell)
+            throws Exception {
         // --- Act: put the ship past the +X face of its cell --------------------------------------
         // The SAME durable craft, under the physics id translated above: entry is itself a crossing,
         // so the body that reached the cell is not the one that was built.
@@ -839,7 +897,7 @@ public class VSShipCellSeamE2ETest extends AbstractSharedServerTest {
                 mx > GalacticCoord.HALF_CELL + CellSeam.CARRY_MARGIN);
 
         return new ShipPastItsFace(setup, stellurgyShipId, sourceCell, sourceSlot,
-                mx, moved.y, moved.z, settledVsId);
+                mx, moved.y, moved.z, settledVsId, deckCell);
     }
 
     /**

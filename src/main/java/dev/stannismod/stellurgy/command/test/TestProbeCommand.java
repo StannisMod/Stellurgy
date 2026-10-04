@@ -898,6 +898,89 @@ public class TestProbeCommand extends CommandBase {
             send(sender, jsonMap(m));
             return;
         }
+        // deck-spot <dim> id <vsShipId> [at <offX> <offY> <offZ>] — a place on this craft's deck to
+        // put something down, as the world point on a cell's floor.
+        //
+        // The SURVEY form (no `at`) finds a free cell beside the craft's pilot seat: the seat BY
+        // IDENTITY (inside the block region of the ship that id names - claims of distinct ships never
+        // overlap), and "on the deck" read off the blocks themselves, the cell air and the block under
+        // it solid on top. It reads blocks, so it is asked where they are loaded - on the pad, just
+        // after assembly - and it answers the cell also as an OFFSET from its block region's corner.
+        //
+        // The `at` form maps such an offset through the craft's region and transform as they stand
+        // now, reading no block and loading no chunk. A crossing re-creates a craft elsewhere in
+        // subspace with the same shape, so the offset names the same cell on the new hull. It loads
+        // nothing ON PURPOSE. Measured 2026-10-04: a first version that provided a settled craft's
+        // shipyard chunks, asked of a craft parked past its cell face, was followed by that craft no
+        // longer resolving in its slot by the caller's next command - read as the load waking it and
+        // the craft crossing on its own, which was not separately traced.
+        if (args.length >= 4 && "deck-spot".equalsIgnoreCase(args[0]) && "id".equalsIgnoreCase(args[2])) {
+            net.minecraft.world.WorldServer world = vsWorld(sender, parseIntOr(args[1], Integer.MIN_VALUE));
+            if (world == null) {
+                send(sender, "{\"error\":\"world not loaded\"}");
+                return;
+            }
+            String shipId = args[3];
+            net.minecraft.util.math.AxisAlignedBB region =
+                    dev.stannismod.stellurgy.integration.vs.VSIntegration.subspaceStayRegion(world, shipId, 0.0);
+            if (region == null) {
+                send(sender, "{\"error\":\"ship not loaded\",\"shipId\":\"" + escapeJson(shipId) + "\"}");
+                return;
+            }
+            BlockPos lo = new BlockPos(Math.floor(region.minX), Math.floor(region.minY), Math.floor(region.minZ));
+            BlockPos hi = new BlockPos(Math.ceil(region.maxX), Math.ceil(region.maxY), Math.ceil(region.maxZ));
+            if (args.length >= 8 && "at".equalsIgnoreCase(args[4])) {
+                BlockPos cell = lo.add(parseIntOr(args[5], 0), parseIntOr(args[6], 0), parseIntOr(args[7], 0));
+                double[] w = dev.stannismod.stellurgy.integration.vs.VSIntegration.toWorldFrameFor(
+                        world, shipId, cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
+                if (w == null) {
+                    send(sender, "{\"error\":\"ship not loaded\",\"shipId\":\"" + escapeJson(shipId) + "\"}");
+                    return;
+                }
+                // What the deck would read there, without loading anything to read it: whether the
+                // cell's chunk is loaded at all, and only then whether its floor is solid.
+                boolean loaded = world.isBlockLoaded(cell);
+                String floor = !loaded ? "null" : String.valueOf(world.getBlockState(cell.down())
+                        .isSideSolid(world, cell.down(), net.minecraft.util.EnumFacing.UP));
+                send(sender, "{\"ok\":true,\"x\":" + w[0] + ",\"y\":" + w[1] + ",\"z\":" + w[2]
+                        + ",\"subX\":" + cell.getX() + ",\"subY\":" + cell.getY() + ",\"subZ\":" + cell.getZ()
+                        + ",\"cellLoaded\":" + loaded + ",\"floorSolid\":" + floor + "}");
+                return;
+            }
+            BlockPos seatPos = null;
+            for (BlockPos p : BlockPos.getAllInBox(lo, hi)) {
+                if (world.getTileEntity(p) instanceof dev.stannismod.stellurgy.tile.TilePilotSeat) {
+                    seatPos = p.toImmutable();
+                    break;
+                }
+            }
+            if (seatPos == null) {
+                send(sender, "{\"error\":\"no loaded pilot seat belongs to that ship\",\"shipId\":\""
+                        + escapeJson(shipId) + "\"}");
+                return;
+            }
+            for (net.minecraft.util.EnumFacing side : net.minecraft.util.EnumFacing.Plane.HORIZONTAL) {
+                BlockPos cell = seatPos.offset(side);
+                if (!world.isAirBlock(cell)
+                        || !world.getBlockState(cell.down()).isSideSolid(world, cell.down(), net.minecraft.util.EnumFacing.UP)) {
+                    continue;
+                }
+                double[] w = dev.stannismod.stellurgy.integration.vs.VSIntegration.toWorldFrameFor(
+                        world, shipId, cell.getX() + 0.5, cell.getY(), cell.getZ() + 0.5);
+                if (w == null) {
+                    send(sender, "{\"error\":\"ship not loaded\",\"shipId\":\"" + escapeJson(shipId) + "\"}");
+                    return;
+                }
+                send(sender, "{\"ok\":true,\"x\":" + w[0] + ",\"y\":" + w[1] + ",\"z\":" + w[2]
+                        + ",\"subX\":" + cell.getX() + ",\"subY\":" + cell.getY() + ",\"subZ\":" + cell.getZ()
+                        + ",\"offX\":" + (cell.getX() - lo.getX()) + ",\"offY\":" + (cell.getY() - lo.getY())
+                        + ",\"offZ\":" + (cell.getZ() - lo.getZ()) + ",\"side\":\"" + side.getName() + "\"}");
+                return;
+            }
+            send(sender, "{\"error\":\"no free deck cell beside the pilot seat\",\"seat\":["
+                    + seatPos.getX() + "," + seatPos.getY() + "," + seatPos.getZ() + "]}");
+            return;
+        }
         // ship-uuid <dim> <durableShipId> — the PHYSICS id of the craft whose flight computer carries
         // the durable id <durableShipId>, or null.
         //
