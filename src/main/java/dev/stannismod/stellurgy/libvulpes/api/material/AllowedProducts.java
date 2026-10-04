@@ -1,6 +1,5 @@
 package dev.stannismod.stellurgy.libvulpes.api.material;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -27,7 +26,6 @@ public class AllowedProducts {
 		product.flagValue = currentFlagValue;
 		product.name = name;
 		currentFlagValue++;
-		MaterialRegistry.productBlockListMapping.put(product, new ArrayList<>());
 		map.put(name, product);
 		list.add(product);
 	}
