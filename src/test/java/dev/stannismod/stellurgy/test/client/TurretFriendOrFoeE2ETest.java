@@ -43,8 +43,8 @@ public class TurretFriendOrFoeE2ETest extends AbstractClientE2ETest {
 
     /**
      * red-witnessed: with {@code !targetIsFriendly()} taken out of {@code TileTurret.canFireNow}
-     * ({@code TileTurret#canFireNow} at {@code && !targetIsFriendly()}), this fails at "the gun was PERMITTED to fire on a player carrying
-     * its own access code" on a decision reading {@code permitted:true, friendly:true} (2026-09-29).
+     * ({@code TileTurret#canFireNow} at {@code return !targetIsFriendly()}), this fails at "the gun was PERMITTED to fire on a player carrying
+     * its own access code" on a decision reading {@code permitted:true, friendly:true} (2026-10-04).
      */
     @Test
     public void aGunHoldsFireOnAPlayerCarryingItsCodeAndFiresOnOneWhoIsNot() throws Exception {
