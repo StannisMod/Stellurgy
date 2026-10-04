@@ -54,9 +54,11 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
     // -- a living body with no will of its own rests on the deck, at any attitude ---------------
 
     /**
-     * red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick:370} admitting no
-     * living body (so the travel resolver held the stand) - along 0.136. The ACROSS verdict has not
-     * been seen red: it runs after along and read 6e-12 in that same run.
+     * red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#admissible} at
+     * {@code return entity instanceof EntityLivingBase} answering false (no living body admitted, so the
+     * travel resolver held the stand) - along 0.136; taken on the pre-player-admission form, which
+     * also excluded players on that line. The ACROSS verdict has not been seen red: it runs after
+     * along and read 6e-12 in that same run.
      */
     @Test
     public void anArmorStandOnADeckRolled30DegreesStaysWhereItLanded() throws Exception {
@@ -64,9 +66,11 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
     }
 
     /**
-     * red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick:370} admitting no
-     * living body (so the travel resolver held the stand) - along 0.136. The ACROSS verdict has not
-     * been seen red: it runs after along and read 1e-12 in that same run.
+     * red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#admissible} at
+     * {@code return entity instanceof EntityLivingBase} answering false (no living body admitted, so the
+     * travel resolver held the stand) - along 0.136; taken on the pre-player-admission form, which
+     * also excluded players on that line. The ACROSS verdict has not been seen red: it runs after
+     * along and read 1e-12 in that same run.
      */
     @Test
     public void anArmorStandOnADeckRolled60DegreesStaysWhereItLanded() throws Exception {
@@ -77,9 +81,11 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
      * The deck rolls over while the stand is on it: past a right angle world-down points away from
      * the deck, so "falls toward the deck" and "falls toward the world" give different answers.
      *
-     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick:187} taking the whole
-     * world motion into the deck frame each update instead of adding only what the world wrote -
-     * along 0.41; and with {@code DeckFrameTick:370} admitting no living body - along 0.226. The
+     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#update} at
+     * {@code entity.motionX - episode.writtenX} (and its Y, Z) taking the whole world motion into the
+     * deck frame each update instead of adding only what the world wrote - along 0.41; and with
+     * {@code DeckFrameTick#admissible} at {@code return entity instanceof EntityLivingBase} answering
+     * false (no living body admitted) - along 0.226, taken on the pre-player-admission form. The
      * ACROSS verdict, asserted first, passed in both (2e-11, 7e-12) and has not been seen red.</p>
      */
     @Test
@@ -108,8 +114,9 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
     /**
      * The craft keeps rolling at a steady rate under the stand; read while it is still turning.
      *
-     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick:370} admitting no
-     * living body - along 0.0054. That run was read against the earlier 0.05 bound and PASSED there;
+     * <p>red-witnessed: 2026-09-29, the ALONG verdict, with {@code DeckFrameTick#admissible} at
+     * {@code return entity instanceof EntityLivingBase} answering false (no living body admitted; taken
+     * on the pre-player-admission form) - along 0.0054. That run was read against the earlier 0.05 bound and PASSED there;
      * it is red against {@code AT_REST} as now measured. The ACROSS verdict has not been seen red.</p>
      */
     @Test
@@ -147,8 +154,8 @@ public class VSLivingBodyOnADeckE2ETest extends AbstractDeckBodyE2ETest {
      * stands on its deck, so a stand let go a tenth of a block above it falls onto it. The landing
      * is the subject, so it is asserted, not gated.
      *
-     * <p>red-witnessed: 2026-09-29, without the stand-down for a deck-held body at
-     * {@code GravityHandler:111} - 0.865 blocks off the top face after 100 ticks.</p>
+     * <p>red-witnessed: 2026-09-29, without the stand-down for a deck-held body, {@code GravityHandler#apply}
+     * at {@code DeckFrameTick.holds(entity)} - 0.865 blocks off the top face after 100 ticks.</p>
      */
     @Test
     public void anArmorStandLetGoAboveADeckInAWorldWithoutGravityFallsOntoIt() throws Exception {

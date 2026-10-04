@@ -40,10 +40,12 @@ public class VSItemOnADeckE2ETest extends AbstractDeckBodyE2ETest {
     // -- an item falls toward the deck and rests on it, at any attitude ------------------------------------------------------
 
     /**
-     * red-witnessed: 2026-09-29, with the deck point re-derived from the world position on every
-     * entry to {@code DeckFrameTick.update} and no end-of-tick re-image - along 0.13. (With the
-     * substrate holding the item it fails as an ARRANGEMENT instead: the item rests 0.061 off the
-     * face.)
+     * red-witnessed: 2026-09-29, with {@code DeckFrameTick#update} at
+     * {@code boolean mappedIn = !episode.held || episode.worldWritten} made always true (the deck point
+     * re-derived from the world position on every entry) and {@code DeckFrameTick#followShipPoses} at
+     * {@code entity.setPosition(pos[0], pos[1], pos[2])} removed (no end-of-tick re-image) - along 0.13.
+     * (With the substrate holding the item it fails as an ARRANGEMENT instead: the item rests 0.061
+     * off the face.)
      */
     @Test
     public void anItemDroppedOnADeckRolled30DegreesStaysWhereItLanded() throws Exception {
@@ -51,8 +53,10 @@ public class VSItemOnADeckE2ETest extends AbstractDeckBodyE2ETest {
     }
 
     /**
-     * red-witnessed: 2026-09-29, with the end-of-tick re-image but the deck point re-derived on entry
-     * - along 0.26. (With the substrate holding the item: an ARRANGEMENT failure, 0.107 off the face.)
+     * red-witnessed: 2026-09-29, with {@code DeckFrameTick#update} at
+     * {@code boolean mappedIn = !episode.held || episode.worldWritten} made always true (the deck point
+     * re-derived on entry, the end-of-tick re-image kept) - along 0.26. (With the substrate holding the
+     * item: an ARRANGEMENT failure, 0.107 off the face.)
      */
     @Test
     public void anItemDroppedOnADeckRolled60DegreesStaysWhereItLanded() throws Exception {
@@ -67,8 +71,9 @@ public class VSItemOnADeckE2ETest extends AbstractDeckBodyE2ETest {
      * <p>The landing is the SUBJECT here, so it is asserted rather than gated: with no pull toward
      * the deck the item hangs where it was let go, which is exactly the failure this reads.</p>
      *
-     * <p>red-witnessed: 2026-09-29, without the stand-down for a deck-held body at
-     * {@code GravityHandler:111} - the item still exactly 0.1 above the face after 100 ticks.</p>
+     * <p>red-witnessed: 2026-09-29, without the stand-down for a deck-held body, {@code GravityHandler#apply}
+     * at {@code DeckFrameTick.holds(entity)} - the item still exactly 0.1 above the face after 100
+     * ticks.</p>
      */
     @Test
     public void anItemLetGoAboveADeckInAWorldWithoutGravityFallsOntoIt() throws Exception {
@@ -97,9 +102,11 @@ public class VSItemOnADeckE2ETest extends AbstractDeckBodyE2ETest {
      * toward the world" give different answers: a static deck below that cannot tell them apart, and
      * measured on 2026-09-29 the substrate's own collision held an item still at both 30 deg and 60 deg.
      *
-     * <p>red-witnessed: 2026-09-29, with {@code MixinWorldDeckFrameTick} unregistered (the substrate
-     * holding the item) - along 0.42, across 0.28; and with the deck point re-derived from the world
-     * position on every entry to {@code DeckFrameTick.update} - along 0.53.</p>
+     * <p>red-witnessed: 2026-09-29, with {@code MixinWorldDeckFrameTick} unregistered, so the world
+     * tick never calls {@code DeckFrameTick#update} (the substrate holding the item) - along 0.42,
+     * across 0.28; and with {@code DeckFrameTick#update} at
+     * {@code boolean mappedIn = !episode.held || episode.worldWritten} made always true (the deck point
+     * re-derived from the world position on every entry) - along 0.53.</p>
      */
     @Test
     public void anItemLyingOnADeckStaysOnItWhileTheCraftRollsOver() throws Exception {
@@ -128,8 +135,8 @@ public class VSItemOnADeckE2ETest extends AbstractDeckBodyE2ETest {
      * into, the deck carrying the item round through every attitude, inverted included. The slew
      * scenario above ends at rest; this one is read while the craft is still turning.
      *
-     * <p>red-witnessed: 2026-09-29, with {@code MixinWorldDeckFrameTick} unregistered - along 1.39,
-     * across 0.27.</p>
+     * <p>red-witnessed: 2026-09-29, with {@code MixinWorldDeckFrameTick} unregistered, so the world
+     * tick never calls {@code DeckFrameTick#update} - along 1.39, across 0.27.</p>
      */
     @Test
     public void anItemLyingOnADeckStaysOnItWhileTheCraftKeepsRolling() throws Exception {
@@ -169,10 +176,11 @@ public class VSItemOnADeckE2ETest extends AbstractDeckBodyE2ETest {
      * or another mod would. The item is where it was put, and stays there: nothing the deck
      * remembers about where the item used to be may pull it back.
      *
-     * <p>red-witnessed: 2026-09-29, without {@code DeckFrameTick.clearOfMappingNoise} - the write came
-     * back 2e-11 inside the face, vanilla's {@code pushOutOfBlocks} ejected the item and it rolled
-     * 0.849 blocks along the deck; and with {@code DeckFrameTick.noteWrite} made a no-op - the item
-     * went back to where it lay before, 1.005 blocks from its new place.</p>
+     * <p>red-witnessed: 2026-09-29, with {@code DeckFrameTick#update} at
+     * {@code clearOfMappingNoise(entity, local)} removed - the write came back 2e-11 inside the face,
+     * vanilla's {@code pushOutOfBlocks} ejected the item and it rolled 0.849 blocks along the deck; and
+     * with {@code DeckFrameTick#noteWrite} at {@code episode.worldWritten = true} removed (the method a
+     * no-op) - the item went back to where it lay before, 1.005 blocks from its new place.</p>
      */
     @Test
     public void anItemPlacedElsewhereOnTheDeckStaysWhereItWasPut() throws Exception {

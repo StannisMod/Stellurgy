@@ -126,14 +126,15 @@ public class VSShipAtmosphereFrameSpikeTest extends AbstractSharedVsClientE2ETes
     /**
      * RESULT-1 is the control: a sealed cabin on an assembled ship seals a blob at all.
      *
-     * <p>red-witnessed: with {@code AtmosphereBlob.addBlock} ({@code AtmosphereBlob:74}) refusing any
-     * block beyond |x| &gt; 1 000 000 — the subspace side of the frame split: "RESULT-1: a vent in a
+     * <p>red-witnessed: with {@code AtmosphereBlob#addBlock} refusing any block beyond |x| &gt; 1 000 000
+     * on entry, ahead of {@code if (blobHandler.canFormBlob())} — the subspace side of the frame split: "RESULT-1: a vent in a
      * sealed cabin built on an ASSEMBLED ship must still seal a blob (control blob=28, ship seal=…
      * \"blobSize\":0)", 2026-09-28. The two waits before it are arrangement links (the ship's id, the
      * ship usable).</p>
      *
-     * <p>RESULT-3 red-witnessed: with the server player's living update run outside the deck's frame
-     * (the tree before {@code MixinNetHandlerPlayerDeckFrame}), the player inside the pressurised
+     * <p>RESULT-3 red-witnessed: with the server player's living update run outside the deck's frame -
+     * {@code DeckFrameTick#updatePlayer} never called, the tree before {@code MixinNetHandlerPlayerDeckFrame}
+     * redirected the network handler's update into it - the player inside the pressurised
      * cabin resolved {@code air} - measured 2026-07-26 and again in every run of this method until
      * 2026-09-30, when its assertion was the inverse of this one.</p>
      */
