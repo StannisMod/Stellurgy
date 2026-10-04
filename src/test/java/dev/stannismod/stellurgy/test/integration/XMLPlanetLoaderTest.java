@@ -102,7 +102,8 @@ public class XMLPlanetLoaderTest {
 
         XMLPlanetLoader loader = new XMLPlanetLoader();
         try {
-            loader.loadPlanetsOrThrow(garbage);
+            loader.loadPlanetsOrThrow(garbage, new dev.stannismod.stellurgy.dimension.DimensionManager(
+                    new dev.stannismod.stellurgy.api.StellurgyConfiguration().minDimension));
             fail("unparseable planetDefs XML must throw so Forge generates a crash "
                     + "report — it must not be swallowed or trigger a silent exitJava");
         } catch (RuntimeException expected) {

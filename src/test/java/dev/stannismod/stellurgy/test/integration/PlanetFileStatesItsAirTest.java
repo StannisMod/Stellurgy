@@ -1,7 +1,9 @@
 package dev.stannismod.stellurgy.test.integration;
 
+import dev.stannismod.stellurgy.api.StellurgyConfiguration;
 import dev.stannismod.stellurgy.atmosphere.AirState;
 import dev.stannismod.stellurgy.atmosphere.gas.GasRegistry;
+import dev.stannismod.stellurgy.dimension.DimensionManager;
 import dev.stannismod.stellurgy.dimension.DimensionProperties;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
 import dev.stannismod.stellurgy.util.XMLPlanetLoader;
@@ -28,7 +30,9 @@ import static org.junit.Assert.fail;
  * never silently replaced by a default.
  *
  * <p>The joint pinned is the loader's file reading against the planet's creation door, wired as
- * production wires them: a real file, the real loader, the properties it returns.</p>
+ * production wires them: a real file, the real loader, the properties it returns. The galaxy the file
+ * is read into is one this test builds and owns, through the constructor the server builds its own
+ * with, at the shipped default lowest id — no running server's galaxy is read or written.</p>
  */
 public class PlanetFileStatesItsAirTest {
 
@@ -47,7 +51,7 @@ public class PlanetFileStatesItsAirTest {
         Files.write(file.toPath(), xml.getBytes(StandardCharsets.UTF_8));
         XMLPlanetLoader loader = new XMLPlanetLoader();
         assertTrue("the fixture file must parse as XML", loader.loadFile(file));
-        return loader.readAllPlanets();
+        return loader.readAllPlanets(new DimensionManager(new StellurgyConfiguration().minDimension));
     }
 
     /** A sized planet with whatever air element(s) the case gives it. */

@@ -911,7 +911,7 @@ public class DimensionManager implements IGalaxy {
             // A fatal/structural failure propagates so Forge produces a normal crash
             // report (diagnosable) instead of the old silent FMLCommonHandler.exitJava.
             // Recoverable per-planet config mistakes are skipped inside readAllPlanets.
-            dimCouplingList = loader.loadPlanetsOrThrow(file);
+            dimCouplingList = loader.loadPlanetsOrThrow(file, this);
             this.dimOffset += dimCouplingList.dims.size();
         }
         //End load planet files
@@ -946,7 +946,7 @@ public class DimensionManager implements IGalaxy {
                         refusedBodies.add(properties);
                         continue;
                     }
-                    properties.setStar(properties.getStarId());
+                    properties.setStar(properties.getStarId(), this);
                 }
 
                 for (StellarBody star : dimCouplingList.stars) {
@@ -1207,7 +1207,7 @@ public class DimensionManager implements IGalaxy {
             if (props == null || this.isDimensionCreated(entry.getKey()))
                 continue;
             this.registerDimNoUpdate(props, props.isNativeDimension);
-            props.setStar(props.getStarId());
+            props.setStar(props.getStarId(), this);
         }
 
         // The save's planet-type table: its file's <planetType> section, or the code-shipped set when

@@ -194,7 +194,7 @@ public class XMLPlanetLoader {
     /**
      * Bodies whose air is a copy of another body's, resolved once the whole file has been read: the
      * body named may come later in the file, or be another copy. Filled and drained by one
-     * {@link #readAllPlanets()}.
+     * {@link #readAllPlanets(DimensionManager)}.
      */
     private final List<AtmosphereCopy> atmosphereCopies = new ArrayList<>();
 
@@ -1130,10 +1130,10 @@ public class XMLPlanetLoader {
      * {@code DIMID} anywhere in the file, and not an id this parse already gave out. {@code
      * INVALID_PLANET} when the allocator's range is exhausted, as {@code getNextFreeDim} answers.
      */
-    private int allocateUnstatedDim() {
-        int id = DimensionManager.getInstance().getNextFreeDim(offset);
+    private int allocateUnstatedDim(DimensionManager into) {
+        int id = into.getNextFreeDim(offset);
         while (id != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET && claimedDims.contains(id)) {
-            id = DimensionManager.getInstance().getNextFreeDim(id + 1);
+            id = into.getNextFreeDim(id + 1);
         }
         if (id != dev.stannismod.stellurgy.api.Constants.INVALID_PLANET) {
             claimedDims.add(id);
@@ -1141,14 +1141,14 @@ public class XMLPlanetLoader {
         return id;
     }
 
-    private List<DimensionProperties> readPlanetFromNode(Node planetNode, StellarBody star) {
+    private List<DimensionProperties> readPlanetFromNode(Node planetNode, StellarBody star, DimensionManager into) {
         List<DimensionProperties> list = new ArrayList<>();
         Node planetPropertyNode = planetNode.getFirstChild();
 
 
         // A body that states its id takes that id below; only a body that states none is given one.
         DimensionProperties properties = new DimensionProperties(statesADimId(planetNode)
-                ? dev.stannismod.stellurgy.api.Constants.INVALID_PLANET : allocateUnstatedDim());
+                ? dev.stannismod.stellurgy.api.Constants.INVALID_PLANET : allocateUnstatedDim(into));
         list.add(properties);
         offset++;//Increment for dealing with child planets
 
@@ -1539,7 +1539,7 @@ public class XMLPlanetLoader {
                 if (!stack.isEmpty())
                     properties.getRequiredArtifacts().add(stack);
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_PLANET)) {
-                List<DimensionProperties> childList = readPlanetFromNode(planetPropertyNode, star);
+                List<DimensionProperties> childList = readPlanetFromNode(planetPropertyNode, star, into);
                 if (childList.size() > 0) {
                     DimensionProperties child = childList.get(0); // First entry in the list is the child planet
                     properties.addChildPlanet(child);
@@ -1668,7 +1668,7 @@ public class XMLPlanetLoader {
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(ELEMENT_ISKNOWN)) {
                 String text = planetPropertyNode.getTextContent();
                 if (text != null && text.equalsIgnoreCase("true")) {
-                    dev.stannismod.stellurgy.dimension.DimensionManager.getInstance().getInitiallyKnownPlanets().add(properties.getId());
+                    into.getInitiallyKnownPlanets().add(properties.getId());
                 }
             } else if (planetPropertyNode.getNodeName().equalsIgnoreCase(GENERATECRATERS)) {
                 String text = planetPropertyNode.getTextContent();
@@ -1735,7 +1735,7 @@ public class XMLPlanetLoader {
         }
 
         //Star may not be registered at this time, use ID version instead
-        properties.setStar(star.getId());
+        properties.setStar(star.getId(), into);
 
         // Set temperature. From the LOCAL star object, not through properties.getStar(): the star is
         // not in the catalogue yet (see the line above), so the lookup would come back null here and
@@ -2014,7 +2014,12 @@ public class XMLPlanetLoader {
         resolved.add(copy.body);
     }
 
-    public DimensionPropertyCoupling readAllPlanets() {
+    /**
+     * Every body and star of the loaded file, read for {@code into}: the galaxy the file is being
+     * loaded into allocates the id of a body that states none, and keeps the bodies the file marks as
+     * known from the start.
+     */
+    public DimensionPropertyCoupling readAllPlanets(DimensionManager into) {
         DimensionPropertyCoupling coupling = new DimensionPropertyCoupling();
         atmosphereCopies.clear();
 
@@ -2027,7 +2032,7 @@ public class XMLPlanetLoader {
         //readPlanetFromNode changes value
         //Yes it's hacky but that's another reason why it's private
 
-        offset = DimensionManager.getInstance().getDimOffset();
+        offset = into.getDimOffset();
         claimedDims.clear();
         claimStatedDims(galaxyNodes.item(0));
         while (masterNode != null) {
@@ -2078,7 +2083,7 @@ public class XMLPlanetLoader {
                     // from a mod that isn't installed) is logged and skipped rather
                     // than aborting the whole config load. See issue #77.
                     try {
-                        coupling.dims.addAll(readPlanetFromNode(planetNode, star));
+                        coupling.dims.addAll(readPlanetFromNode(planetNode, star, into));
                     } catch (RuntimeException e) {
                         Stellurgy.logger.warn("Skipping malformed planet definition under star '"
                                 + star.getName() + "' — check your planetDefs.xml: " + e, e);
@@ -2111,9 +2116,9 @@ public class XMLPlanetLoader {
      * thrown exception into a normal crash report, which is far more diagnosable than
      * the old silent {@link net.minecraftforge.fml.common.FMLCommonHandler#exitJava}.
      * Recoverable per-planet config mistakes are skipped-and-warned inside
-     * {@link #readAllPlanets()} and never reach here.
+     * {@link #readAllPlanets(DimensionManager)} and never reach here.
      */
-    public DimensionPropertyCoupling loadPlanetsOrThrow(File file) {
+    public DimensionPropertyCoupling loadPlanetsOrThrow(File file, DimensionManager into) {
         try {
             if (!loadFile(file)) {
                 throw new RuntimeException("planetDefs XML at " + file.getAbsolutePath()
@@ -2123,7 +2128,7 @@ public class XMLPlanetLoader {
             throw new RuntimeException("planetDefs XML at " + file.getAbsolutePath()
                     + " could not be read", e);
         }
-        return readAllPlanets();
+        return readAllPlanets(into);
     }
 
     public static class DimensionPropertyCoupling {

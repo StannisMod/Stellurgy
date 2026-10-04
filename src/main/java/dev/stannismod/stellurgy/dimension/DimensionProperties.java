@@ -22,6 +22,7 @@ import net.minecraftforge.fml.common.SidedProxy;
 import org.apache.commons.lang3.ArrayUtils;
 import dev.stannismod.stellurgy.Stellurgy;
 import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
+import dev.stannismod.stellurgy.api.dimension.solar.IGalaxy;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.api.atmosphere.Atmosphere;
@@ -771,10 +772,15 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             this.star.addPlanet(this);
     }
 
-    public void setStar(int id) {
+    /**
+     * Names the host star by id, and links it as well when {@code galaxy} already holds that star — a
+     * body read from a planet file names its star before the star is registered.
+     */
+    public void setStar(int id, IGalaxy galaxy) {
         this.starId = id;
-        if (DimensionManager.getInstance().getStar(id) != null)
-            setStar(DimensionManager.getInstance().getStar(id));
+        StellarBody registered = galaxy.getStar(id);
+        if (registered != null)
+            setStar(registered);
     }
 
     public StellarBody getStarData() {
