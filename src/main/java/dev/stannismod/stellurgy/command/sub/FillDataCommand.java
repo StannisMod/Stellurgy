@@ -20,6 +20,7 @@ import java.util.*;
 public class FillDataCommand extends StellurgyCommand {
     private static final int ASTEROID_CHIP_FILL_AMOUNT = 1000;
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final EnumSet<DataStorage.DataType> ASTEROID_CHIP_DATA_TYPES =
             EnumSet.of(
                     DataStorage.DataType.COMPOSITION,

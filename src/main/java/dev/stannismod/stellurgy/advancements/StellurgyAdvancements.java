@@ -6,7 +6,14 @@ import net.minecraftforge.fml.relauncher.ReflectionHelper;
 
 import java.lang.reflect.Method;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class StellurgyAdvancements {
+
+    /* The triggers live as long as the side, exactly as vanilla's own in CriteriaTriggers: each is
+     * registered there once and its per-player listener map is vanilla's to fill and empty, which
+     * PlayerAdvancements does as each player's advancements are loaded and disposed. */
 
     public static final CustomTrigger MOON_LANDING = new CustomTrigger("moonlanding");
     public static final CustomTrigger ONE_SMALL_STEP = new CustomTrigger("onesmallstep");
@@ -28,7 +35,6 @@ public class StellurgyAdvancements {
             ATM_TERRAFORMER,
             DEATH_STAR
     };
-    private static Method CriterionRegister;
 
     public static void register() {
         Method method;

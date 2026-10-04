@@ -29,6 +29,10 @@ import static org.junit.Assert.assertTrue;
  * Manages two harness lifecycles directly against the same workDir — not a
  * fit for {@link AbstractHeadlessServerTest} (which auto-manages a single
  * fresh-dir harness).
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class WeatherPersistenceTest {
 

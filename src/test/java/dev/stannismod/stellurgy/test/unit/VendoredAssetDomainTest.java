@@ -43,6 +43,7 @@ public class VendoredAssetDomainTest {
     /** Where the client will actually look, because that is the domain the blocks register into. */
     private static final String HOST_ASSETS = "src/main/resources/assets/stellurgy";
 
+    /** A constant: a non-capturing lambda, which holds no state at all. */
     private static final FilenameFilter JSON = (dir, name) -> name.endsWith(".json");
 
     /**

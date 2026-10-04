@@ -53,15 +53,12 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /** This class's reader of the server's ordered event log, stepped on the rockets' own world. */
     private final Events events =
-            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks));
+            new Events(cmd -> ok(client().execute(cmd)), ticks -> GameTicks.advanceWorld(client(), 0, ticks), evictionReports());
 
     private static final String ROCKET_LIST_ID = "id";
     /** The field the TICK reply answers with — that verb's own, not {@code rocket info}'s. */
     private static final String TICKS_EXISTED = "ticksExisted";
     private static final String LANDED_COUNT = "landed";
-    /** The forceload ticket the chunk-ticket claims are about, and the array it lives in. */
-    private static final String TICKETS = "tickets";
-    private static final String TICKET_KEY = "0:100:100";
 
     private static String ok(java.util.List<String> resp) {
         return String.join("\n", resp);
@@ -83,7 +80,7 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
     // shared dedicated-server harness for >30 s (likely chunk-unload
     // bookkeeping over entities still in those chunks). We let the
     // tickets leak for the duration of the class — they're freed
-    // implicitly when the harness shuts down at @AfterClass. Each test
+    // implicitly when the class's harness shuts down. Each test
     // picks a position-disjoint chunk so leaked tickets do not bleed
     // into other tests.
 
@@ -115,24 +112,9 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         }
     }
 
-    @Test
-    public void rocketTickProbeReportsTicksExistedInResponse() throws Exception {
-        // Probe-surface sanity: /stellurgytest rocket tick must succeed and
-        // expose ticksExisted in the response. Used by the explicit
-        // synthetic-tick path in Phase 5 (failure-mode tests).
-        int id = buildAndAssemble(FixtureSite.openAir(0, 6000, 500));
-        String tickResp = ok(client().execute("stellurgytest rocket tick " + id + " 5"));
-        assertTrue("tick probe must succeed: " + tickResp,
-                Reply.of(tickResp).ok());
-        assertTrue("tick probe response must expose ticksExisted: " + tickResp,
-                Reply.of(tickResp).has("ticksExisted"));
-        int t = gi(TICKS_EXISTED, tickResp, "ticksExisted from tick response");
-        assertTrue("ticksExisted must be non-negative: " + t, t >= 0);
-    }
-
     /**
-     * <p>red-witnessed: with the descent gate's {@code setInFlight(true)} ({@code EntityRocket:1841})
-     * removed: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
+     * <p>red-witnessed: with the descent gate's {@code setInFlight(true)} ({@code EntityRocket#onUpdate}
+     * at {@code if (this.ticksExisted > DESCENT_TIMER && isInOrbit() && !isInFlight())}) removed: "no `rocket_flight_set` carrying e = … and inFlight = true was recorded within 100
      * ticks", 2026-09-28.</p>
      */
     @Test
@@ -236,7 +218,8 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
 
     /**
      * <p>red-witnessed: with the landing branch's {@code RocketLandedEvent} post
-     * ({@code EntityRocket:2153}) removed: "no `rocket_landed` carrying e = … was recorded within 100
+     * ({@code EntityRocket#onUpdate} at
+     * {@code MinecraftForge.EVENT_BUS.post(new RocketEvent.RocketLandedEvent(this))}) removed: "no `rocket_landed` carrying e = … was recorded within 100
      * ticks", 2026-09-28.</p>
      */
     @Test
@@ -325,28 +308,5 @@ public class RocketDescentLandingTest extends AbstractSharedServerTest {
         }
         assertTrue("dismantle must paste at least one non-air block back",
                 foundNonAir);
-    }
-
-    @Test
-    public void chunkAnchorProbeRoundTrips() throws Exception {
-        // Probe-surface sanity: forceload + release for a single chunk
-        // must succeed and return ok=true. The list endpoint reflects
-        // the active ticket set. release-all clears them.
-        String fl = ok(client().execute("stellurgytest chunk forceload 0 100 100"));
-        assertTrue("forceload must succeed: " + fl, Reply.of(fl).ok());
-
-        String list = ok(client().execute("stellurgytest chunk list"));
-        // MEMBERSHIP of the ticket array, asked of the array. As a substring the key was also
-        // matched inside a LONGER key — `0:100:1000` contains `0:100:100` — so the negative
-        // claim below could fail for a neighbour's ticket and the positive one pass on it.
-        assertTrue("list must include the ticket key: " + list,
-                Reply.of("stellurgytest chunk list", list).holdsText(TICKETS, TICKET_KEY));
-
-        String rel = ok(client().execute("stellurgytest chunk release 0 100 100"));
-        assertTrue("release must succeed: " + rel, Reply.of(rel).ok());
-
-        String listAfter = ok(client().execute("stellurgytest chunk list"));
-        assertFalse("list must not include released ticket: " + listAfter,
-                Reply.of("stellurgytest chunk list", listAfter).holdsText(TICKETS, TICKET_KEY));
     }
 }

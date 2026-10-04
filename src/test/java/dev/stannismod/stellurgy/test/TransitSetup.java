@@ -13,7 +13,7 @@ package dev.stannismod.stellurgy.test;
  * {@link #durableId} the craft's own name — and they are separate fields because they are separate
  * things. <b>At the setup reply they currently hold one value</b>: the fixture assembles from the
  * pasted footprint and the flight computer inside it is found, so no second id is minted.
- * {@code VSShortJumpCrossesDirectlyE2ETest} asserts that equality rather than leaving it to a
+ * {@code VSShortJumpCrossesDirectlyTest} asserts that equality rather than leaving it to a
  * paragraph, which is the only reason it can be relied on here.</p>
  *
  * <p><b>The distinction is real AFTER a crossing.</b> A crossing re-assembles the hull and mints a

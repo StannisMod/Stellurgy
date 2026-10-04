@@ -29,7 +29,6 @@ import dev.stannismod.stellurgy.atmosphere.AtmosphereHandler;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
 import dev.stannismod.stellurgy.client.TooltipInjector;
 import dev.stannismod.stellurgy.dimension.DimensionManager;
-import dev.stannismod.stellurgy.event.RocketEventHandler;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.api.IArmorComponent;
@@ -41,9 +40,11 @@ import javax.annotation.Nullable;
 import java.util.LinkedList;
 import java.util.List;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
-    private static ResourceIcon icon;
     private static ResourceLocation eyeCandySpinner = new ResourceLocation("stellurgy:textures/gui/eyeCandy/spinnyThing.png");
 
     private static String breathable = LibVulpes.proxy.getLocalizedString("msg.atmanal.canbreathe");
@@ -96,7 +97,7 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
     public ActionResult<ItemStack> onItemRightClick(@Nonnull World worldIn, @Nonnull EntityPlayer playerIn, @Nonnull EnumHand hand) {
         ItemStack stack = playerIn.getHeldItem(hand);
         if (!worldIn.isRemote) {
-            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn.provider.getDimension());
+            AtmosphereHandler atmhandler = AtmosphereHandler.getOxygenHandler(worldIn);
             // Server side: no client report exists here, and the dimension is the authority anyway.
             List<ITextComponent> str = getAtmosphereReadout(stack,
                     atmhandler == null ? null : (AtmosphereType) atmhandler.getAtmosphereType(playerIn),
@@ -142,13 +143,13 @@ public class ItemAtmosphereAnalzer extends Item implements IArmorComponent {
 
         FontRenderer fontRenderer = Minecraft.getMinecraft().fontRenderer;
 
-        int screenX = RocketEventHandler.atmBar.getRenderX();//8;
-        int screenY = RocketEventHandler.atmBar.getRenderY();//event.getResolution().getScaledHeight() - fontRenderer.FONT_HEIGHT*3;
+        int screenX = dev.stannismod.stellurgy.client.HudLayout.atmosphereBarX(event.getResolution().getScaledWidth());
+        int screenY = dev.stannismod.stellurgy.client.HudLayout.atmosphereBarY(event.getResolution().getScaledHeight());
 
+        World world = Minecraft.getMinecraft().world;
+        dev.stannismod.stellurgy.client.ClientAtmosphere air = dev.stannismod.stellurgy.client.ClientAtmosphere.of(world);
         List<ITextComponent> str = getAtmosphereReadout(componentStack,
-                (AtmosphereType) dev.stannismod.stellurgy.client.ClientAtmosphere.atmosphere(),
-                Minecraft.getMinecraft().world,
-                dev.stannismod.stellurgy.client.ClientAtmosphere.pressure());
+                (AtmosphereType) air.atmosphere(), world, air.pressure());
         //Draw BG
         gui.drawString(fontRenderer, str.get(0).getFormattedText(), screenX, screenY, 0xaaffff);
         gui.drawString(fontRenderer, str.get(1).getFormattedText(), screenX, screenY + fontRenderer.FONT_HEIGHT * 4 / 3, 0xaaffff);

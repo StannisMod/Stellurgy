@@ -20,6 +20,7 @@ import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Handler for checking if blocks can be used to deal a room.
@@ -29,30 +30,42 @@ import java.util.List;
 public final class SealableBlockHandler implements IAtmosphereSealHandler {
     /**
      * INSTANCE
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     public static final SealableBlockHandler INSTANCE = new SealableBlockHandler();
     /**
      * List of blocks not allowed.
+     *
+     * Effectively final, process lifetime: filled only by SealableBlockHandler.addUnsealableBlock,
+     * SealableBlockHandler.addSealableBlock.
      */
     private List<Block> blockBanList = new ArrayList<>();
     /**
      * List of blocks that are allowed regardless of properties.
+     *
+     * Effectively final, process lifetime: filled only by SealableBlockHandler.addUnsealableBlock,
+     * SealableBlockHandler.addSealableBlock.
      */
     private List<Block> blockAllowList = new ArrayList<>();
     /**
      * List of block materials not allowed.
+     *
+     * Effectively final, process lifetime: filled only by SealableBlockHandler.loadDefaultData.
      */
     private List<Material> materialBanList = new ArrayList<>();
     /**
      * List of block materials that are allowed regardless of properties.
+     *
+     * Effectively final, process lifetime: set once when the object is built.
      */
     private List<Material> materialAllowList = new ArrayList<>();
     //TODO add meta support
     //TODO add complex logic support through API interface
     //TODO add complex logic handler for integration support
-    private HashSet<HashedBlockPosition> doorPositions = new HashSet<>();
 
-    private SealableBlockHandler() {
+    /** An empty handler. The game's is {@link #INSTANCE}; another is a caller's own, sharing nothing with it. */
+    public SealableBlockHandler() {
     }
 
     /**
@@ -105,6 +118,16 @@ public final class SealableBlockHandler implements IAtmosphereSealHandler {
      */
     @Override
     public boolean isBlockSealed(@Nonnull World world, @Nonnull BlockPos pos) {
+        return isBlockSealed(world, pos, null);
+    }
+
+    /**
+     * @param doorsInCheck the airlocks this one check is already inside — a door asking about its
+     *                     neighbours can reach itself again, and counts as sealed when it does.
+     *                     Belongs to the one check, so nothing of it outlives it, a thrown one
+     *                     included; {@code null} at the top of a check.
+     */
+    private boolean isBlockSealed(World world, BlockPos pos, Set<HashedBlockPosition> doorsInCheck) {
         //Ensure we are not checking outside of the map
         if (pos.getY() >= 0 && pos.getY() <= 256) {
             //Prevents orphan chunk loading - DarkGuardsman
@@ -132,12 +155,12 @@ public final class SealableBlockHandler implements IAtmosphereSealHandler {
             //TODO replace with seal logic handler
             else if (block == StellurgyBlocks.blockAirLock) {
                 HashedBlockPosition myPos = new HashedBlockPosition(pos);
-                if (doorPositions.contains(myPos))
+                Set<HashedBlockPosition> doors = doorsInCheck == null ? new HashSet<>() : doorsInCheck;
+                if (!doors.add(myPos))
                     return true;
-                doorPositions.add(myPos);
 
-                boolean doorIsSealed = checkDoorIsSealed(world, pos, state);
-                doorPositions.remove(myPos);
+                boolean doorIsSealed = checkDoorIsSealed(world, pos, state, doors);
+                doors.remove(myPos);
                 return doorIsSealed;
             }
             //TODO add is side solid check, which will require forge direction or side check. Eg more complex logic...
@@ -167,16 +190,16 @@ public final class SealableBlockHandler implements IAtmosphereSealHandler {
     }
 
     //TODO unit test, document, cleanup
-    private boolean checkDoorIsSealed(World world, BlockPos pos, IBlockState state) {
+    private boolean checkDoorIsSealed(World world, BlockPos pos, IBlockState state, Set<HashedBlockPosition> doors) {
         IBlockState state2 = state;
         //For some reason the actual direction is stored in the bottom block of a door, so get that, but use the current block to determine openness due to order of update
         if (state.getValue(BlockDoor.HALF) == EnumDoorHalf.UPPER)
             state2 = world.getBlockState(pos.down());
 
         if (state.getValue(BlockDoor.OPEN))
-            return isBlockSealed(world, pos.offset(state2.getValue(BlockDoor.FACING))) && isBlockSealed(world, pos.offset(state2.getValue(BlockDoor.FACING).rotateYCCW().rotateYCCW()));
+            return isBlockSealed(world, pos.offset(state2.getValue(BlockDoor.FACING)), doors) && isBlockSealed(world, pos.offset(state2.getValue(BlockDoor.FACING).rotateYCCW().rotateYCCW()), doors);
         //state.getValue(BlockDoor.FACING)
-        boolean sealed = isBlockSealed(world, pos.offset(state2.getValue(BlockDoor.FACING).rotateY())) && isBlockSealed(world, pos.offset(state2.getValue(BlockDoor.FACING).rotateYCCW()));
+        boolean sealed = isBlockSealed(world, pos.offset(state2.getValue(BlockDoor.FACING).rotateY()), doors) && isBlockSealed(world, pos.offset(state2.getValue(BlockDoor.FACING).rotateYCCW()), doors);
 
         // If not sealed, check if the airlock is against the edge of sealed blocks (see issue #89)
         // Right now only works for single doors with edges, TODO extend to allow other blocks to be placed alongside the same axis as the door (see photo in #89, has two doors)
@@ -187,7 +210,7 @@ public final class SealableBlockHandler implements IAtmosphereSealHandler {
             // ex: D = door - E = first offset result - B = second offset result
             //   EDE
             //   B B
-            sealed = isBlockSealed(world, pos.offset(face.rotateYCCW()).offset(face.getOpposite())) && isBlockSealed(world, pos.offset(face.rotateY()).offset(face.getOpposite()));
+            sealed = isBlockSealed(world, pos.offset(face.rotateYCCW()).offset(face.getOpposite()), doors) && isBlockSealed(world, pos.offset(face.rotateY()).offset(face.getOpposite()), doors);
         }
         return sealed;
     }

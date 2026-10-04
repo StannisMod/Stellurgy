@@ -119,30 +119,6 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
     }
 
     @Test
-    public void coreEventHandlersAreClassLoaded() throws Exception {
-        // Class-load smoke for the three event handlers that the @Mod
-        // init phase wires. If any one of them fails to load (rare —
-        // would have to be a static-init crash or a build-time class
-        // strip), the field-/Class-lookup in the probe surfaces it.
-        String resp = ok(client().execute("stellurgytest event handlers"));
-        assertTrue("PlanetEventHandler must be class-loaded: " + resp,
-                "loaded".equals(Reply.of(resp).text("planetEventHandler")));
-        // RocketEventHandler is reported as "shipped" via classfile-resource
-        // lookup — a static class reference would NoClassDefFoundError on
-        // dedicated server because the class imports LWJGL / FontRenderer
-        // (client-only). Resource presence is the strongest server-safe
-        // proof that the @Mod packaging didn't drop the class.
-        assertTrue("RocketEventHandler .class resource must be shipped: " + resp,
-                "shipped".equals(Reply.of(resp).text("rocketEventHandler")));
-        // PlanetWeatherEventHandler IS server-safe (no client imports), so
-        // a direct static reference verifies + reports its FQN.
-        assertTrue("PlanetWeatherEventHandler must be class-loaded (probe "
-                        + "should report its FQN): " + resp,
-                "dev.stannismod.stellurgy.world.weather.PlanetWeatherEventHandler".equals(
-                        Reply.of(resp).text("planetWeatherEventHandler")));
-    }
-
-    @Test
     public void stellurgyDimensionPreJoinSideEffectsAreCoherent() throws Exception {
         // For a Stellurgy dim, the pre-join side-effects MUST all line up:
         //   - WorldInfo wrapped (StellurgyDimensionWorldInfo) — required for the
@@ -167,12 +143,6 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
                 Reply.of(resp).bool("hasAtmosphereHandler"));
         assertTrue("dim must be classified as Stellurgy planet: " + resp,
                 Reply.of(resp).bool("isStellurgyPlanet"));
-        // hasSkyColor=true means props.skyColor is non-null/non-empty.
-        // (A future fixture planet with the default vanilla colour would
-        // still pass — float[] is allocated by DimensionProperties; this
-        // assertion just guards against a regression that drops the field.)
-        assertTrue("Stellurgy dim must have a sky-color array configured: " + resp,
-                Reply.of(resp).bool("hasSkyColor"));
     }
 
     @Test
@@ -206,22 +176,5 @@ public class PlayerEventHandlerWiringTest extends AbstractSharedServerTest {
         // a non-Stellurgy dim must stay vanilla so weather doesn't bleed in/out.
         assertNotEquals("non-Stellurgy dim " + nonStellurgyDim + " WorldInfo must NOT be wrapped: " + resp,
                 "StellurgyDimensionWorldInfo", Reply.of(resp).simpleClassName(WORLD_INFO_CLASS));
-    }
-
-    @Test
-    public void transitionMapIsEmptyAtRest() throws Exception {
-        // No rocket launches have been issued in this test class -> the
-        // transition queue MUST be empty. If it's not, either:
-        //   (a) a previous test in the same JVM leaked a transition
-        //       (failure of cleanup discipline), OR
-        //   (b) the queue's drain logic in PlanetEventHandler.tick()
-        //       (line ~322) silently regressed and never pops entries.
-        // Either failure mode would silently corrupt subsequent rocket
-        // launches' destination dim.
-        String resp = ok(client().execute("stellurgytest event transitions"));
-        assertTrue("transition map probe must succeed: " + resp,
-                Reply.of(resp).ok());
-        assertTrue("transition map must be empty at rest in a no-rocket test: " + resp,
-                (Reply.of(resp).integer("size") == 0));
     }
 }

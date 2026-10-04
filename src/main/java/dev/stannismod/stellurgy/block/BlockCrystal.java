@@ -21,6 +21,9 @@ import dev.stannismod.stellurgy.libvulpes.block.INamedMetaBlock;
 
 import javax.annotation.Nonnull;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class BlockCrystal extends Block implements INamedMetaBlock {
 
     public final static PropertyEnum<EnumCrystal> CRYSTALPROPERTY = PropertyEnum.create("type", EnumCrystal.class);
@@ -89,6 +92,9 @@ public class BlockCrystal extends Block implements INamedMetaBlock {
 
     }
 
+    /**
+     * Every field of this object is effectively final, process lifetime: set once when the object is built.
+     */
     public enum EnumCrystal implements IStringSerializable {
         AMETHYST(0, 0xb23fff, "amethyst", MapColor.PURPLE),
         SAPPHIRE(1, 0x3333ff, "sapphire", MapColor.BLUE),

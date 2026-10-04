@@ -10,6 +10,7 @@ import net.minecraft.util.IStringSerializable;
 
 public class BlockLightwoodPlanks extends Block {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final PropertyEnum<BlockLightwoodPlanks.EnumType> VARIANT = PropertyEnum.create("variant", BlockLightwoodPlanks.EnumType.class);
 
     public BlockLightwoodPlanks() {
@@ -54,6 +55,7 @@ public class BlockLightwoodPlanks extends Block {
     public enum EnumType implements IStringSerializable {
         ALIEN(0, "alien", "alien", MapColor.LAPIS);
 
+        /** Effectively final, process lifetime: built once at class initialisation. */
         private static final BlockLightwoodPlanks.EnumType[] META_LOOKUP = new BlockLightwoodPlanks.EnumType[values().length];
 
         static {
@@ -62,11 +64,16 @@ public class BlockLightwoodPlanks extends Block {
             }
         }
 
+        /** Effectively final, process lifetime: written only by EnumType.byMetadata. */
         private final int meta;
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final String name;
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final String unlocalizedName;
         /**
          * The color that represents this entry on a map.
+         *
+         * Effectively final, process lifetime: set once when the object is built.
          */
         private final MapColor mapColor;
 

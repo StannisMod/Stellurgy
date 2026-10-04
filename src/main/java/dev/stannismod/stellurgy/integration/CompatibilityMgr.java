@@ -10,6 +10,8 @@ package dev.stannismod.stellurgy.integration;
  * <p>A third flag, Thermal Expansion, was removed: it was written by a constructor and by a method
  * nothing called, and read nowhere at all. So was the instance the mod held solely to run that
  * constructor. A flag nobody reads reads like a capability check that exists.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: written only by Stellurgy.postInit.
  */
 public class CompatibilityMgr {
 

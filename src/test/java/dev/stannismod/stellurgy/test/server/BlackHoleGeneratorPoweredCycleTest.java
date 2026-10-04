@@ -10,7 +10,6 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * Black-Hole-Generator powered cycle on a station
@@ -180,7 +179,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
 
         // The reader refuses a station the manager does not hold, and its spawn accessors refuse a
         // station that has no spawn — which is what the two-field has-check stood for.
-        StationInfo station = StationInfo.byId(WorldCommandFixtures::exec, stationId);
+        StationInfo station = StationInfo.byId(this::exec, stationId);
         return new int[]{station.spawnX(), 128, station.spawnZ()};
     }
 
@@ -235,7 +234,7 @@ public class BlackHoleGeneratorPoweredCycleTest extends AbstractSharedServerTest
     }
 
     private long readEnergyStored(int dim, int[] pos) throws Exception {
-        return EnergyStore.at(WorldCommandFixtures::exec, dim, pos[0], pos[1], pos[2])
+        return EnergyStore.at(this::exec, dim, pos[0], pos[1], pos[2])
                 .requireEnergy("the plug must expose a store, or its reading is an absence")
                 .stored();
     }

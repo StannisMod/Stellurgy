@@ -14,8 +14,15 @@ import java.util.Map.Entry;
 import java.util.logging.Logger;
 
 public class SatelliteRegistry {
+    /*
+     * Both maps are effectively final for the life of the side: filled by the mod (and add-ons
+     * through this API) in the FML init phases, and only read afterwards. A test that adds an
+     * entry takes it back when it is done.
+     */
+    /** Effectively final, process lifetime: filled only by SatelliteRegistry.registerSatellite. */
     static HashMap<String, Class<? extends SatelliteBase>> registry = new HashMap<>();
 
+    /** Effectively final, process lifetime: filled only by SatelliteRegistry.registerSatelliteProperty. */
     static HashMap<ItemStack, SatelliteProperties> itemPropertiesRegistry = new HashMap<>();
 
     /**

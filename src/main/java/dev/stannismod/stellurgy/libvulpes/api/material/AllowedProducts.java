@@ -40,8 +40,11 @@ public class AllowedProducts {
 		return list;
 	}
 	
+	/** Effectively final, process lifetime: written only by AllowedProducts.registerProduct. */
 	private static short currentFlagValue = 1;
+	/** Effectively final, process lifetime: filled only by AllowedProducts.registerProduct. */
 	private static HashMap<String, AllowedProducts> map = new HashMap<>();
+	/** Effectively final, process lifetime: filled only by AllowedProducts.registerProduct. */
 	private static List<AllowedProducts> list = new LinkedList<>();
 	/*DUST,
 	INGOT,

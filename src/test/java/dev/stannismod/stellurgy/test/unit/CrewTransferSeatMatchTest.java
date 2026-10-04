@@ -29,7 +29,9 @@ import static org.junit.Assert.assertSame;
  */
 public class CrewTransferSeatMatchTest {
 
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID MY_SHIP = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID OTHER_SHIP = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
     private final Map<TilePilotSeat, UUID> shipOf = new HashMap<>();

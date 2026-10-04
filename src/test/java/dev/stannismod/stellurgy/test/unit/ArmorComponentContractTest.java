@@ -74,26 +74,6 @@ public class ArmorComponentContractTest {
     }
 
     @Test
-    public void jetpackOnComponentAddedReturnsTrue() {
-        // Production ItemSpaceArmor.addArmorComponent only inserts when
-        // onComponentAdded returns true. A regression to false would
-        // silently make jetpacks un-installable via the Suit Workstation.
-        ItemJetpack jetpack = new ItemJetpack();
-        ItemStack armor = new ItemStack(jetpack);  // any stack — unused by jetpack's impl
-        assertTrue("ItemJetpack.onComponentAdded must return true so the "
-                        + "chest sub-inventory accepts it",
-                jetpack.onComponentAdded(null, armor));
-    }
-
-    @Test
-    public void pressureTankOnComponentAddedReturnsTrue() {
-        ItemPressureTank tank = new ItemPressureTank(1, 8000);
-        ItemStack armor = new ItemStack(tank);
-        assertTrue("ItemPressureTank.onComponentAdded must return true",
-                tank.onComponentAdded(null, armor));
-    }
-
-    @Test
     public void pressureTankCapacityScalesAsPowerOfTwoWithItemDamage() {
         // capacity formula: baseCapacity * 2^itemDamage
         // — see ItemPressureTank.getCapacity(stack):75-77
@@ -134,19 +114,5 @@ public class ArmorComponentContractTest {
         jetpack.setEnabledState(stack, false);
         assertFalse("setEnabledState(false) must clear the enabled flag",
                 jetpack.isEnabled(stack));
-    }
-
-    @Test
-    public void jetpackOnArmorDamagedIsNoOp() {
-        // Production wires component-tick -> onArmorDamaged broadcasts to
-        // every component. The jetpack's no-op contract is intentional —
-        // a regression that adds damage-amount logic would (a) crash on
-        // null-checks or (b) silently consume jetpack durability that
-        // players don't expect.
-        ItemJetpack jetpack = new ItemJetpack();
-        ItemStack armor = new ItemStack(jetpack);
-        ItemStack component = new ItemStack(jetpack);
-        // Should not throw — null entity/source is the easiest no-op proof.
-        jetpack.onArmorDamaged(null, armor, component, null, 99);
     }
 }

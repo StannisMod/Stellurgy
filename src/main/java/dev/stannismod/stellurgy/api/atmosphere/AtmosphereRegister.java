@@ -9,11 +9,16 @@ import java.util.List;
 import java.util.Map;
 
 public class AtmosphereRegister {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final AtmosphereRegister instance = new AtmosphereRegister();
+    /** Effectively final, process lifetime: filled only by AtmosphereRegister.registerAtmosphere. */
     private Map<String, IAtmosphere> atmosphereRegistration;
+    /** Effectively final, process lifetime: filled only by AtmosphereRegister.registerHarvestableFluid. */
     private List<Fluid> harvestableAtmosphere;
+    /** Effectively final, process lifetime: filled only by AtmosphereRegister.registerAtmosphere. */
     private List<IAtmosphere> atmosphereList;
-    private AtmosphereRegister() {
+    /** An empty register. The game's is {@link #getInstance()}; another is a caller's own, sharing nothing with it. */
+    public AtmosphereRegister() {
         atmosphereRegistration = new HashMap<>();
         atmosphereList = new LinkedList<>();
         harvestableAtmosphere = new LinkedList<>();

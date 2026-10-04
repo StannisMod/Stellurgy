@@ -88,13 +88,13 @@ public abstract class TileEntityPilotableImpl extends TileEntity implements
         // If old pilot equals new pilot, then don't send the stop piloting message
         if (oldPilot != null && oldPilot != newPilot) {
             MessageStopPiloting stopMessage = new MessageStopPiloting(getPos());
-            ValkyrienSkiesMod.controlNetwork.sendTo(stopMessage, oldPilot);
+            dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.controlNetwork.sendTo(stopMessage, oldPilot);
         }
         if (newPilot != null) {
             MessageStartPiloting startMessage = new MessageStartPiloting(getPos(),
                 setClientPilotingEntireShip(),
                 getControlInputType());
-            ValkyrienSkiesMod.controlNetwork.sendTo(startMessage, newPilot);
+            dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.controlNetwork.sendTo(startMessage, newPilot);
         }
     }
 

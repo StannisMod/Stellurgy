@@ -22,10 +22,10 @@ import dev.stannismod.stellurgy.api.FreeFlightPhysics;
 import dev.stannismod.stellurgy.api.RocketFlightMode;
 import dev.stannismod.stellurgy.command.test.TestProbeCommandRegistration;
 import net.minecraft.util.math.BlockPos;
-import dev.stannismod.stellurgy.entity.EntityDummy;
 import dev.stannismod.stellurgy.entity.EntityHoverCraft;
 import dev.stannismod.stellurgy.entity.EntityRocket;
 import dev.stannismod.stellurgy.integration.vs.VSIntegration;
+import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
 import dev.stannismod.stellurgy.libvulpes.LibVulpes;
 import dev.stannismod.stellurgy.libvulpes.interfaces.INetworkEntity;
@@ -35,65 +35,36 @@ import dev.stannismod.stellurgy.libvulpes.network.PacketHandler;
 import dev.stannismod.stellurgy.libvulpes.network.PacketMachine;
 import dev.stannismod.stellurgy.libvulpes.util.InputSyncHandler;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 @SideOnly(Side.CLIENT)
 public class KeyBindings {
 
     //static KeyBinding launch = new KeyBinding("Launch", Keyboard.KEY_SPACE, "key.controls." + Constants.modId);
-    static KeyBinding toggleJetpack = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.toggleJetpack"), Keyboard.KEY_X, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding openRocketUI = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.openRocketUI"), Keyboard.KEY_C, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding toggleRCS = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.togglercs"), Keyboard.KEY_R, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding turnRocketLeft = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.turnRocketLeft"), Keyboard.KEY_A, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding turnRocketRight = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.turnRocketRight"), Keyboard.KEY_D, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding turnRocketUp = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.turnRocketUp"), Keyboard.KEY_Z, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding turnRocketDown = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.turnRocketDown"), Keyboard.KEY_X, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding toggleFlightMode = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.toggleFlightMode"), Keyboard.KEY_M, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding toggleJetpack = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.toggleJetpack"), Keyboard.KEY_X, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding openRocketUI = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.openRocketUI"), Keyboard.KEY_C, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding toggleRCS = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.togglercs"), Keyboard.KEY_R, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding turnRocketLeft = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.turnRocketLeft"), Keyboard.KEY_A, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding turnRocketRight = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.turnRocketRight"), Keyboard.KEY_D, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding turnRocketUp = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.turnRocketUp"), Keyboard.KEY_Z, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding turnRocketDown = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.turnRocketDown"), Keyboard.KEY_X, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding toggleFlightMode = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.toggleFlightMode"), Keyboard.KEY_M, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
     // Free Flight lateral strafe (nose-relative). Q/E — share defaults with vanilla drop/inventory (resolved by StellurgyKeyConflictContext).
-    static KeyBinding strafeLeft  = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.strafeLeft"),  Keyboard.KEY_Q, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding strafeRight = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.strafeRight"), Keyboard.KEY_E, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding strafeLeft  = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.strafeLeft"),  Keyboard.KEY_Q, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding strafeRight = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.strafeRight"), Keyboard.KEY_E, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
     // Free Flight vertical along the craft's up axis. R/F — R shares with toggleRCS, F with vanilla swap-hands (resolved by StellurgyKeyConflictContext).
-    static KeyBinding flightVerticalUp   = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.flightVerticalUp"),   Keyboard.KEY_R, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding flightVerticalDown = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.flightVerticalDown"), Keyboard.KEY_F, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    static KeyBinding flightAssistToggle  = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.flightAssistToggle"),  Keyboard.KEY_N, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding flightVerticalUp   = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.flightVerticalUp"),   Keyboard.KEY_R, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding flightVerticalDown = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.flightVerticalDown"), Keyboard.KEY_F, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding flightAssistToggle  = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.flightAssistToggle"),  Keyboard.KEY_N, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
     // Tier-2 auto-takeoff autopilot (diagonal climb to orbit). K — unbound in vanilla, so no conflict.
-    static KeyBinding autoTakeoffToggle   = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.autoTakeoffToggle"),   Keyboard.KEY_K, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
+    static final KeyBinding autoTakeoffToggle   = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.autoTakeoffToggle"),   Keyboard.KEY_K, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
     /** The helm's jump key: commits the destination armed at the navigation computer, and aborts a
      *  wind-up already running. Both directions on one key, because they are the same decision. */
     /** OWNER: the CLIENT — a key binding is registered once with the client's key registry, which
      *  then owns it for the launch; the object here is the same one that registry holds, and the
      *  binding's own pressed-state is read through it. A dedicated server never touches this class. */
     private static final KeyBinding jumpTrigger  = new KeyBinding(LibVulpes.proxy.getLocalizedString("key.jumpTrigger"),         Keyboard.KEY_J, LibVulpes.proxy.getLocalizedString("key.controls." + Constants.modId));
-    boolean prevState;
-    /** Last FF input dispatched to the server. We only resend when the intent actually changes (saves bandwidth). */
-    private FreeFlightInput lastSentInput = FreeFlightInput.zero();
-    /** Tracks FF-gate transitions for [FF-TRACE] logging. */
-    private boolean wasFreeFlightActive = false;
-    /** Last FF input dispatched to a tier-2 ship's pilot seat; resend only on change. */
-    private FreeFlightInput lastSentShipInput = FreeFlightInput.zero();
-    /** Whether the ship-pilot mouse baseline is valid; false forces this tick's look-delta to
-     *  zero (so an arbitrary pre-seat look doesn't read as one huge cursor jump on sit). */
-    private boolean shipPilotPinValid = false;
-    /** Ship attitude sampled this tick / previous tick (client), for the per-frame camera slerp -
-     *  the tier-2 analogue of the rocket's ffQuat/prevFfQuat. Read by the render camera lock in
-     *  RocketEventHandler via {@link #shipQuat()} / {@link #shipPrevQuat()}. */
-    private static volatile FreeFlightPhysics.Quat shipQuat = FreeFlightPhysics.Quat.IDENTITY;
-    private static volatile FreeFlightPhysics.Quat shipPrevQuat = FreeFlightPhysics.Quat.IDENTITY;
-    /** RAW mouse motion (converted to vanilla look degrees) accumulated since the last client tick,
-     *  consumed by the tier-2 flight cursor. See {@link #handleShipPilotInput} for why the ship
-     *  cursor must be driven by the mouse itself and never by a player-rotation difference. */
-    private static volatile float pendingCursorYawDeg, pendingCursorPitchDeg;
-    /** Camera-pin state for mouse-as-rate steering: the player
-     *  rotation we pinned at the end of the previous tick. Whatever the mouse
-     *  added on top of it since is this tick's turn command. Static so the
-     *  PosLook re-pin (see {@link #repinCameraAfterTeleport()}) can keep the
-     *  pin and the delta baseline consistent. */
-    private static volatile float lastPinnedYaw, lastPinnedPitch;
-    /** Elite-style flight-cursor deflection in [-1,1]² (X = roll, Y = pitch).
-     *  Absolute: stays where the mouse leaves it; reset when FF goes inactive. */
-    private static volatile float flightCursorX, flightCursorY;
-    /** Previous-tick cursor deflection, so the HUD can interpolate the dot by
-     *  partialTicks — the cursor is sampled at 20 Hz (client tick) but drawn per
-     *  frame, and without this the dot visibly steps at the tick rate. */
-    private static volatile float prevFlightCursorX, prevFlightCursorY;
     /** Deflection added per degree of mouse movement (≈ full deflection at 25°). */
     private static final float FF_CURSOR_SENS = 0.04f;
     /** Centre deadzone: |deflection| below this reads as zero (no drift at rest). */
@@ -104,74 +75,73 @@ public class KeyBindings {
         return Math.abs(v) < FF_CURSOR_DEADZONE ? 0f : v;
     }
 
-    /** Current flight-cursor deflection (X = roll, Y = pitch), for the HUD. */
-    public static float flightCursorX() { return flightCursorX; }
-    public static float flightCursorY() { return flightCursorY; }
+    /**
+     * The command of the craft the local player is piloting, or {@code null} when he pilots none: a
+     * rocket he rides, or the flight computer of the ship whose helm he sits at.
+     */
+    private static PilotCommand pilotedCommand() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc == null || mc.player == null) {
+            return null;
+        }
+        if (mc.player.getRidingEntity() instanceof EntityRocket) {
+            return ((EntityRocket) mc.player.getRidingEntity()).pilotCommand();
+        }
+        TilePilotSeat seat = TilePilotSeat.forShipPilot(mc.player.getRidingEntity(), mc.world);
+        TileAdvancedFlightComputer computer = seat == null ? null : seat.getFlightComputer();
+        return computer == null ? null : computer.pilotCommand();
+    }
+
+    /** Current flight-cursor deflection (X = roll, Y = pitch), for the HUD; zero when nothing is piloted. */
+    public static float flightCursorX() {
+        PilotCommand command = pilotedCommand();
+        return command == null ? 0f : command.cursorX;
+    }
+
+    public static float flightCursorY() {
+        PilotCommand command = pilotedCommand();
+        return command == null ? 0f : command.cursorY;
+    }
+
     /** partialTicks-interpolated cursor deflection for smooth per-frame HUD draw. */
     public static float flightCursorX(float partialTicks) {
-        return prevFlightCursorX + (flightCursorX - prevFlightCursorX) * partialTicks;
+        PilotCommand command = pilotedCommand();
+        return command == null ? 0f : command.cursorX(partialTicks);
     }
+
     public static float flightCursorY(float partialTicks) {
-        return prevFlightCursorY + (flightCursorY - prevFlightCursorY) * partialTicks;
+        PilotCommand command = pilotedCommand();
+        return command == null ? 0f : command.cursorY(partialTicks);
     }
-    /** Ship attitude sampled this / previous client tick, for the render camera lock's per-frame
-     *  slerp (RocketEventHandler). Identity until the client first pilots a tier-2 ship. */
-    public static FreeFlightPhysics.Quat shipQuat() { return shipQuat; }
-    public static FreeFlightPhysics.Quat shipPrevQuat() { return shipPrevQuat; }
+
     /** True once the camera has been pinned to the craft this flight — gates
      *  the frame-time lock telemetry in RocketEventHandler so pre-takeoff
      *  frames (arbitrary look) don't pollute it. */
-    private static volatile boolean cameraPinValid = false;
-
-    // ---- Ship-input delivery diagnostics (ungated statics) ----------------------------------
-    /** Client ticks of ship control, the clock {@link PilotInputCadence} counts its repeat
-     *  interval on. Not a world time: it must keep counting while the world's own clock is
-     *  whatever a loading screen left it at. */
-    private static long shipInputTick;
-
     public static boolean isCameraPinnedThisFlight() {
-        return cameraPinValid;
+        Minecraft mc = Minecraft.getMinecraft();
+        return mc != null && mc.player != null && PilotInput.of(mc.player).cameraPinValid;
     }
 
     // ---- Engine-start ritual -------------------------------
     /** Ticks the jump key must be held (pre-flight, FF mode) to start the engines. */
     public static final int ENGINE_START_HOLD_TICKS = 60;
-    /** Client-side hold progress, 0..ENGINE_START_HOLD_TICKS. Published for the
-     *  HUD progress line and for client e2e readback. */
-    private static volatile int engineStartHoldTicks = 0;
-    /** Ticks left to flash the engine-state line ("Engines started/stopped"). */
-    private static volatile int engineFlashTicks = 0;
-    /** Which flash: true = "Engines started", false = "Engines stopped". */
-    private static volatile boolean engineFlashStarted = false;
-    /** Guards the one-shot ENGINE_START send per hold. */
-    private boolean engineStartSent = false;
-    /** Commanded turn rates of the current tick, [-1,1] — drawn as the HUD
-     *  turn-rate dot (Phase 4). Written only by this class's two input paths, which publish the
-     *  same deflection at the same step; the HUD reads them through the accessors below. */
-    private static volatile float hudYawRate = 0f, hudPitchRate = 0f;
 
-    /** @see #hudYawRate */
+    /** The commanded yaw-axis turn rate of the current tick, [-1,1], for the HUD turn-rate dot. */
     public static float hudYawRate() {
-        return hudYawRate;
+        PilotCommand command = pilotedCommand();
+        return command == null ? 0f : command.yawRate;
     }
 
-    /** @see #hudPitchRate */
+    /** The commanded pitch rate of the current tick, [-1,1], for the HUD turn-rate dot. */
     public static float hudPitchRate() {
-        return hudPitchRate;
+        PilotCommand command = pilotedCommand();
+        return command == null ? 0f : command.pitchRate;
     }
-
-    /** Mouse motion accumulated since the last pin, captured at the HEAD of
-     *  a PosLook teleport so the vanilla handler can't destroy it (the echo
-     *  overwrites the player rotation fields the delta lives in). */
-    private static volatile float pendingMouseYaw = 0f, pendingMousePitch = 0f;
-
-    /** True between the HEAD capture and the RETURN re-pin of one PosLook. */
-    private static boolean teleportCaptureArmed = false;
 
     /** Guards shared by the two PosLook hooks: a pinned FF flight on the MC thread. */
     private static EntityRocket pinnedFlightCraft() {
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc == null || mc.player == null || !cameraPinValid) return null;
+        if (mc == null || mc.player == null || !PilotInput.of(mc.player).cameraPinValid) return null;
         if (!mc.isCallingFromMinecraftThread()) return null; // netty-thread early return path
         if (!(mc.player.getRidingEntity() instanceof EntityRocket)) return null;
         EntityRocket rocket = (EntityRocket) mc.player.getRidingEntity();
@@ -188,8 +158,10 @@ public class KeyBindings {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null || mc.player == null) return null;
         if (!mc.isCallingFromMinecraftThread()) return null;
-        if (TilePilotSeat.forShipPilot(mc.player.getRidingEntity(), mc.world) == null) return null;
-        return FreeFlightPhysics.eulerFromQuat(shipQuat);
+        TilePilotSeat seat = TilePilotSeat.forShipPilot(mc.player.getRidingEntity(), mc.world);
+        if (seat == null) return null;
+        FreeFlightPhysics.Quat attitude = VSIntegration.getShipAttitude(mc.world, seat.getPos());
+        return attitude == null ? null : FreeFlightPhysics.eulerFromQuat(attitude);
     }
 
     /**
@@ -205,9 +177,10 @@ public class KeyBindings {
         if (player == null) return;
         // Gated on an FF-pinned craft - a rocket OR a tier-2 ship pilot; a no-op otherwise.
         if (pinnedFlightCraft() == null && pinnedShipEuler() == null) return;
-        pendingMouseYaw   = net.minecraft.util.math.MathHelper.wrapDegrees(player.rotationYaw - lastPinnedYaw);
-        pendingMousePitch = player.rotationPitch - lastPinnedPitch;
-        teleportCaptureArmed = true;
+        PilotInput input = PilotInput.of(player);
+        input.pendingMouseYaw   = net.minecraft.util.math.MathHelper.wrapDegrees(player.rotationYaw - input.lastPinnedYaw);
+        input.pendingMousePitch = player.rotationPitch - input.lastPinnedPitch;
+        input.teleportCaptureArmed = true;
     }
 
     /**
@@ -225,9 +198,10 @@ public class KeyBindings {
         float[] shipEuler = rocket == null ? pinnedShipEuler() : null;
         if (rocket == null && shipEuler == null) return;
         EntityPlayerSP player = Minecraft.getMinecraft().player;
-        float pendYaw   = teleportCaptureArmed ? pendingMouseYaw   : 0f;
-        float pendPitch = teleportCaptureArmed ? pendingMousePitch : 0f;
-        teleportCaptureArmed = false;
+        PilotInput pilot = PilotInput.of(player);
+        float pendYaw   = pilot.teleportCaptureArmed ? pilot.pendingMouseYaw   : 0f;
+        float pendPitch = pilot.teleportCaptureArmed ? pilot.pendingMousePitch : 0f;
+        pilot.teleportCaptureArmed = false;
         // Re-pin to the craft attitude (the rocket's live rotation, or the ship's sampled Euler).
         float yaw, prevYaw, pitch, prevPitch;
         if (rocket != null) {
@@ -241,8 +215,8 @@ public class KeyBindings {
         player.prevRotationYaw   = prevYaw + pendYaw;
         player.rotationPitch     = pitch + pendPitch;
         player.prevRotationPitch = prevPitch + pendPitch;
-        lastPinnedYaw   = yaw;
-        lastPinnedPitch = pitch;
+        pilot.lastPinnedYaw   = yaw;
+        pilot.lastPinnedPitch = pitch;
     }
 
     /** Harness-only ([FF-TRACE/K]) client keybind log; pass -Dstellurgy.tests=true. */
@@ -339,6 +313,10 @@ public class KeyBindings {
      */
     public static java.util.List<String> freeFlightHudLines(FreeFlightHudState state) {
         GameSettings gs = Minecraft.getMinecraft().gameSettings;
+        PilotInput input = PilotInput.of(Minecraft.getMinecraft().player);
+        int engineStartHoldTicks = input.engineStartHoldTicks;
+        int engineFlashTicks = input.engineFlashTicks;
+        boolean engineFlashStarted = input.engineFlashStarted;
         java.util.List<String> lines = new java.util.ArrayList<>();
         if (!state.inFlight) {
             // Pre-flight is a tier-1 rocket concept (the engine-start ritual). A tier-2 ship is
@@ -468,40 +446,38 @@ public class KeyBindings {
         // inGameHasFocus — losing window focus shouldn't freeze the controls,
         // and the headless test bot never reports focus.)
         if (player == null || mc.currentScreen != null) return;
-        if (engineFlashTicks > 0) engineFlashTicks--;
+        PilotInput pilot = PilotInput.of(player);
+        if (pilot.engineFlashTicks > 0) pilot.engineFlashTicks--;
         // Tier-2 ship path: if the player is seated in a linked pilot seat, steer the ship and
         // stop — the rocket steering below is only for a ridden EntityRocket.
         if (handleShipPilotInput(mc, player)) return;
         if (!(player.getRidingEntity() instanceof EntityRocket)) {
-            if (wasFreeFlightActive) { kbTrace("FF gate -> inactive (no longer riding a rocket)"); wasFreeFlightActive = false; }
-            engineStartHoldTicks = 0;
-            engineStartSent = false;
+            if (pilot.freeFlightActive) { kbTrace("FF gate -> inactive (no longer riding a rocket)"); pilot.freeFlightActive = false; }
+            pilot.engineStartHoldTicks = 0;
+            pilot.engineStartSent = false;
             return;
         }
 
         EntityRocket rocket = (EntityRocket) player.getRidingEntity();
+        PilotCommand command = rocket.pilotCommand();
         boolean active = rocket.isFreeFlight() && rocket.isInFlight();
-        if (active != wasFreeFlightActive) {
+        if (active != pilot.freeFlightActive) {
             kbTrace("FF gate active=" + active + " (isFreeFlight=" + rocket.isFreeFlight()
                     + " isInFlight=" + rocket.isInFlight() + ")");
             // Engine-state flash: in FF, "in flight" IS "engines
             // on" — entering shows "Engines started", leaving (touchdown)
             // shows "Engines stopped".
             if (rocket.isFreeFlight()) {
-                engineFlashTicks = 60;
-                engineFlashStarted = active;
+                pilot.engineFlashTicks = 60;
+                pilot.engineFlashStarted = active;
             }
-            wasFreeFlightActive = active;
+            pilot.freeFlightActive = active;
         }
         if (!active) {
             // Reset so the next entry into FF sends a fresh, current snapshot
             // and the camera re-aligns to the craft on the next takeoff.
-            lastSentInput = FreeFlightInput.zero();
-            cameraPinValid = false;
-            flightCursorX = 0f;
-            flightCursorY = 0f;
-            prevFlightCursorX = 0f;
-            prevFlightCursorY = 0f;
+            command.reset();
+            pilot.cameraPinValid = false;
 
             // Engine-start ritual: pre-flight in FF mode, hold
             // the jump key for ENGINE_START_HOLD_TICKS; releasing early
@@ -509,26 +485,26 @@ public class KeyBindings {
             // server validates (mode, fuel, climb authority) and starts.
             if (rocket.isFreeFlight()) {
                 if (mc.gameSettings.keyBindJump.isKeyDown()) {
-                    if (engineStartHoldTicks < ENGINE_START_HOLD_TICKS) engineStartHoldTicks++;
-                    if (engineStartHoldTicks >= ENGINE_START_HOLD_TICKS && !engineStartSent) {
+                    if (pilot.engineStartHoldTicks < ENGINE_START_HOLD_TICKS) pilot.engineStartHoldTicks++;
+                    if (pilot.engineStartHoldTicks >= ENGINE_START_HOLD_TICKS && !pilot.engineStartSent) {
                         kbTrace("engine-start hold complete -> ENGINE_START");
                         PacketHandler.sendToServer(new PacketEntity(
                                 rocket, (byte) EntityRocket.PacketType.ENGINE_START.ordinal()));
-                        engineStartSent = true;
+                        pilot.engineStartSent = true;
                     }
                 } else {
-                    if (engineStartHoldTicks > 0) kbTrace("engine-start hold released at " + engineStartHoldTicks);
-                    engineStartHoldTicks = 0;
-                    engineStartSent = false;
+                    if (pilot.engineStartHoldTicks > 0) kbTrace("engine-start hold released at " + pilot.engineStartHoldTicks);
+                    pilot.engineStartHoldTicks = 0;
+                    pilot.engineStartSent = false;
                 }
             } else {
-                engineStartHoldTicks = 0;
-                engineStartSent = false;
+                pilot.engineStartHoldTicks = 0;
+                pilot.engineStartSent = false;
             }
             return;
         }
-        engineStartHoldTicks = 0;
-        engineStartSent = false;
+        pilot.engineStartHoldTicks = 0;
+        pilot.engineStartSent = false;
 
         // Throttle cut (X): with FA on the server zeroes the velocity setpoint
         // (brake-to-hover); with FA off it neutralises translation thrust.
@@ -554,19 +530,19 @@ public class KeyBindings {
         // it, excess discarded — Elite-style rate limit), then the camera is
         // re-pinned to the craft axes so view and nose can never diverge.
         float mouseYawDelta, mousePitchDelta;
-        if (!cameraPinValid) {
+        if (!pilot.cameraPinValid) {
             // First active tick (takeoff / remount): align the view to the
             // craft and DISCARD the stale look-offset — otherwise the
             // pilot's arbitrary pre-takeoff look would read as a huge
             // phantom swipe and kick the nose around on tick one.
             mouseYawDelta = 0f;
             mousePitchDelta = 0f;
-            cameraPinValid = true;
+            pilot.cameraPinValid = true;
             kbTrace("camera pinned to craft (yaw=" + rocket.rotationYaw
                     + " pitch=" + rocket.rotationPitch + ")");
         } else {
-            mouseYawDelta   = net.minecraft.util.math.MathHelper.wrapDegrees(player.rotationYaw - lastPinnedYaw);
-            mousePitchDelta = player.rotationPitch - lastPinnedPitch;
+            mouseYawDelta   = net.minecraft.util.math.MathHelper.wrapDegrees(player.rotationYaw - pilot.lastPinnedYaw);
+            mousePitchDelta = player.rotationPitch - pilot.lastPinnedPitch;
         }
 
         float yawKeys = (turnRocketRight.isKeyDown() ?  1f : 0f)
@@ -579,27 +555,27 @@ public class KeyBindings {
         // Vertical -> pitch rate, horizontal -> roll (bank) rate. Yaw is keyboard.
         // Snapshot the previous-tick cursor so the HUD interpolates the dot per
         // frame (sampled 20 Hz, drawn 60+ fps) instead of stepping at tick rate.
-        prevFlightCursorX = flightCursorX;
-        prevFlightCursorY = flightCursorY;
-        flightCursorX = FreeFlightInput.clamp(flightCursorX + mouseYawDelta   * FF_CURSOR_SENS);
-        flightCursorY = FreeFlightInput.clamp(flightCursorY + mousePitchDelta * FF_CURSOR_SENS);
+        command.prevCursorX = command.cursorX;
+        command.prevCursorY = command.cursorY;
+        command.cursorX = FreeFlightInput.clamp(command.cursorX + mouseYawDelta   * FF_CURSOR_SENS);
+        command.cursorY = FreeFlightInput.clamp(command.cursorY + mousePitchDelta * FF_CURSOR_SENS);
         float yaw   = FreeFlightInput.clamp(yawKeys);
-        float pitch = deadzone(flightCursorY);
-        float roll  = deadzone(flightCursorX);
+        float pitch = deadzone(command.cursorY);
+        float roll  = deadzone(command.cursorX);
 
         float brake = mc.gameSettings.keyBindSneak.isKeyDown() ? 1f : 0f;
 
         // HUD indicators: commanded pitch/roll deflection.
-        hudYawRate = roll;
-        hudPitchRate = pitch;
+        command.yawRate = roll;
+        command.pitchRate = pitch;
 
         FreeFlightInput input = new FreeFlightInput(fwd, vert, strafe, yaw, pitch, roll, brake, cut);
-        if (!input.equals(lastSentInput)) {
+        if (!input.equals(command.lastSent)) {
             kbTrace("send FF input " + input);
             rocket.applyFreeFlightInput(input);
             PacketHandler.sendToServer(new PacketEntity(
                     rocket, (byte) EntityRocket.PacketType.FREE_FLIGHT_INPUT.ordinal()));
-            lastSentInput = input;
+            command.lastSent = input;
         }
 
         // Hard camera-nose lock: mirror BOTH current and prev rotation from the
@@ -609,8 +585,8 @@ public class KeyBindings {
         player.prevRotationYaw   = rocket.prevRotationYaw;
         player.rotationPitch     = rocket.rotationPitch;
         player.prevRotationPitch = rocket.prevRotationPitch;
-        lastPinnedYaw   = rocket.rotationYaw;
-        lastPinnedPitch = rocket.rotationPitch;
+        pilot.lastPinnedYaw   = rocket.rotationYaw;
+        pilot.lastPinnedPitch = rocket.rotationPitch;
     }
 
     /**
@@ -631,17 +607,16 @@ public class KeyBindings {
         // and only accept it while a ship really manages it: a craft whose assembly was rejected
         // keeps its link forever, and steering one sends input at a ship that does not exist.
         TilePilotSeat seat = TilePilotSeat.forShipPilot(player.getRidingEntity(), mc.world);
-        if (seat == null) {
-            // Diagnostics: count only ticks where the player IS on a seat mount - that is the
-            // silent "seated but not piloting" state worth attributing (walking ticks are noise).
-            if (player.getRidingEntity() instanceof EntityDummy) {
-                }
-            shipPilotPinValid = false;
-            lastSentShipInput = FreeFlightInput.zero();
-            pendingCursorYawDeg = 0f;
-            pendingCursorPitchDeg = 0f;
+        TileAdvancedFlightComputer computer = seat == null ? null : seat.getFlightComputer();
+        PilotInput pilot = PilotInput.of(player);
+        if (computer == null) {
+            // No helm, or a helm whose flight computer this client does not hold: nothing to steer.
+            pilot.shipPinValid = false;
+            pilot.pendingCursorYawDeg = 0f;
+            pilot.pendingCursorPitchDeg = 0f;
             return false;
         }
+        PilotCommand command = computer.pilotCommand();
         BlockPos seatPos = seat.getPos();
 
         boolean cut = turnRocketDown.isKeyDown();
@@ -662,68 +637,64 @@ public class KeyBindings {
         // Writes the SHARED cursor / turn-rate fields the FF HUD reads, so the ship gets the same
         // on-screen flight cursor as the rocket. The first tick after sitting centres the cursor and
         // discards any motion made before the pilot sat down.
-        boolean firstShipTick = !shipPilotPinValid;
-        float yawDelta = pendingCursorYawDeg;
-        float pitchDelta = pendingCursorPitchDeg;
-        pendingCursorYawDeg = 0f;
-        pendingCursorPitchDeg = 0f;
+        boolean firstShipTick = !pilot.shipPinValid;
+        float yawDelta = pilot.pendingCursorYawDeg;
+        float pitchDelta = pilot.pendingCursorPitchDeg;
+        pilot.pendingCursorYawDeg = 0f;
+        pilot.pendingCursorPitchDeg = 0f;
         if (firstShipTick) {
             yawDelta = 0f;
             pitchDelta = 0f;
-            shipPilotPinValid = true;
-            flightCursorX = 0f;
-            flightCursorY = 0f;
+            pilot.shipPinValid = true;
+            command.reset();
         }
-        prevFlightCursorX = flightCursorX;
-        prevFlightCursorY = flightCursorY;
-        flightCursorX = FreeFlightInput.clamp(flightCursorX + yawDelta * FF_CURSOR_SENS);
-        flightCursorY = FreeFlightInput.clamp(flightCursorY + pitchDelta * FF_CURSOR_SENS);
+        command.prevCursorX = command.cursorX;
+        command.prevCursorY = command.cursorY;
+        command.cursorX = FreeFlightInput.clamp(command.cursorX + yawDelta * FF_CURSOR_SENS);
+        command.cursorY = FreeFlightInput.clamp(command.cursorY + pitchDelta * FF_CURSOR_SENS);
 
-        // Sample the ship attitude for BOTH the cursor baseline and the per-frame render camera
-        // lock. The visible camera is owned by RocketEventHandler.onFreeFlightCameraSetup, which
-        // slerps shipPrevQuat->shipQuat by partialTicks (smooth at frame rate instead of stepping
-        // at the 20 Hz tick - the old prev==current pin was the tier-2 jitter). Here we only mirror
-        // the ship attitude onto the player rotation and re-baseline the pin, so the flight-cursor
-        // delta above reads pure mouse motion next tick. When no attitude is available this tick
-        // (VS transform not ready) don't fight the view - just re-baseline the pin.
+        // Mirror the ship attitude onto the player rotation and re-baseline the pin, so the
+        // flight-cursor delta above reads pure mouse motion next tick. The visible camera is owned
+        // by RocketEventHandler.onFreeFlightCameraSetup, which slerps the ship's previous and
+        // current tick attitude by partialTicks. When no attitude is available this tick (VS
+        // transform not ready) don't fight the view - just re-baseline the pin.
         FreeFlightPhysics.Quat shipAttitude = VSIntegration.getShipAttitude(mc.world, seatPos);
-        if (shipAttitude != null) {
-            shipPrevQuat = firstShipTick ? shipAttitude : shipQuat;
-            shipQuat = shipAttitude;
-            float[] euler = FreeFlightPhysics.eulerFromQuat(shipQuat);
-            float[] prevEuler = FreeFlightPhysics.eulerFromQuat(shipPrevQuat);
+        FreeFlightPhysics.Quat shipPrevAttitude = VSIntegration.getShipPrevAttitude(mc.world, seatPos);
+        if (shipAttitude != null && shipPrevAttitude != null) {
+            float[] euler = FreeFlightPhysics.eulerFromQuat(shipAttitude);
+            float[] prevEuler = FreeFlightPhysics.eulerFromQuat(firstShipTick ? shipAttitude : shipPrevAttitude);
             player.rotationYaw = euler[0];
             player.prevRotationYaw = prevEuler[0];
             player.rotationPitch = euler[1];
             player.prevRotationPitch = prevEuler[1];
-            lastPinnedYaw = euler[0];
-            lastPinnedPitch = euler[1];
+            pilot.lastPinnedYaw = euler[0];
+            pilot.lastPinnedPitch = euler[1];
         } else {
-            lastPinnedYaw = player.rotationYaw;
-            lastPinnedPitch = player.rotationPitch;
+            pilot.lastPinnedYaw = player.rotationYaw;
+            pilot.lastPinnedPitch = player.rotationPitch;
         }
 
         float yaw = FreeFlightInput.clamp(yawKeys);
-        float pitch = deadzone(flightCursorY);
-        float roll = deadzone(flightCursorX);
+        float pitch = deadzone(command.cursorY);
+        float roll = deadzone(command.cursorX);
         float brake = mc.gameSettings.keyBindSneak.isKeyDown() ? 1f : 0f;
 
         // Publish the commanded pitch/roll deflection for the HUD turn-rate dot.
-        hudYawRate = roll;
-        hudPitchRate = pitch;
+        command.yawRate = roll;
+        command.pitchRate = pitch;
 
         FreeFlightInput input = new FreeFlightInput(fwd, vert, strafe, yaw, pitch, roll, brake, cut);
         // A change goes out at once; a HELD non-idle input is also re-asserted on its seat's own
         // phase. The server keeps this input on a tile INSTANCE, and an instance does not outlive a
         // chunk reload — so under send-on-change alone a craft flies on with a command the server has
         // forgotten and a pilot who has no way to know. See PilotInputCadence for the measurement.
-        shipInputTick++;
-        if (PilotInputCadence.shouldSend(input, lastSentShipInput, shipInputTick,
+        pilot.shipInputTick++;
+        if (PilotInputCadence.shouldSend(input, command.lastSent, pilot.shipInputTick,
                 PilotInputCadence.phaseOfSeat(seatPos.getX(), seatPos.getY(), seatPos.getZ()))) {
             seat.pendingInput = input;
             PacketHandler.sendToServer(new PacketMachine(seat, TilePilotSeat.PACKET_PILOT_INPUT));
             kbTrace("SHIP send " + input + " -> seat " + seatPos);
-            lastSentShipInput = input;
+            command.lastSent = input;
         }
         return true;
     }
@@ -764,8 +735,9 @@ public class KeyBindings {
         float f = mc.gameSettings.mouseSensitivity * 0.6F + 0.2F;
         float degPerUnit = f * f * f * 8.0F * 0.15F;
         int invert = mc.gameSettings.invertMouse ? -1 : 1;
-        pendingCursorYawDeg += dx * degPerUnit;
-        pendingCursorPitchDeg -= dy * degPerUnit * invert;
+        PilotInput pilot = PilotInput.of(mc.player);
+        pilot.pendingCursorYawDeg += dx * degPerUnit;
+        pilot.pendingCursorPitchDeg -= dy * degPerUnit * invert;
     }
 
     @SubscribeEvent
@@ -894,10 +866,11 @@ public class KeyBindings {
         }
 
 
-        if (Keyboard.isKeyDown(Keyboard.KEY_SPACE) != prevState) {
-            prevState = Keyboard.isKeyDown(Keyboard.KEY_SPACE);
-            InputSyncHandler.updateKeyPress(player, Keyboard.KEY_SPACE, prevState);
-            PacketHandler.sendToServer(new PacketChangeKeyState(Keyboard.KEY_SPACE, prevState));
+        PilotInput pilot = PilotInput.of(player);
+        if (Keyboard.isKeyDown(Keyboard.KEY_SPACE) != pilot.spaceKeyDown) {
+            pilot.spaceKeyDown = Keyboard.isKeyDown(Keyboard.KEY_SPACE);
+            InputSyncHandler.updateKeyPress(player, Keyboard.KEY_SPACE, pilot.spaceKeyDown);
+            PacketHandler.sendToServer(new PacketChangeKeyState(Keyboard.KEY_SPACE, pilot.spaceKeyDown));
         }
     }
 }

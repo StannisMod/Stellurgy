@@ -44,7 +44,7 @@ public class CreateStationCommand extends StellurgyCommand {
         int orbitDimId = parseInt(args[0]);
         DimensionProperties props = DimensionManager.getInstance().getDimensionProperties(orbitDimId);
         if (orbitDimId != Constants.INVALID_PLANET &&
-                props == DimensionManager.overworldProperties && orbitDimId != props.getId()) {
+                props == DimensionManager.getInstance().getOverworldProperties() && orbitDimId != props.getId()) {
             sender.sendMessage(new TextComponentTranslation("commands.stellurgy.station.create.tip"));
             throw new CommandException("commands.stellurgy.station.create.invalid", orbitDimId);
         }

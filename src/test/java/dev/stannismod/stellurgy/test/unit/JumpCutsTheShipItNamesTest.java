@@ -39,14 +39,25 @@ import static org.junit.Assert.assertEquals;
  */
 public class JumpCutsTheShipItNamesTest {
 
+    /**
+     * A constant: a {@code BlockPos} built with {@code new} is immutable: three final ints (not the mutable
+     * subclass).
+     */
     private static final BlockPos ANCHOR = new BlockPos(0, 128, 0);
     private static final int DIM = 7;
 
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID OURS = UUID.fromString("00000000-0000-0000-0000-0000000000A1");
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID STRANGER = UUID.fromString("00000000-0000-0000-0000-0000000000B2");
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID AT_ANCHOR = UUID.fromString("00000000-0000-0000-0000-0000000000C3");
 
-    /** {@code REFUSED} is a value of the same type as an answer; recognise it the way production does. */
+    /**
+     * {@code REFUSED} is a value of the same type as an answer; recognise it the way production does.
+     *
+     * <p>A constant: a {@code UUID} is an immutable value: two final longs.</p>
+     */
     private static final UUID REFUSED = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     private static UUID cut(UUID byDurableId, UUID byPosition, UUID afcNames) {

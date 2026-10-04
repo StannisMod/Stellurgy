@@ -26,6 +26,7 @@ package dev.stannismod.stellurgy.space;
  */
 public final class BlockDelta {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final BlockDelta ZERO = new BlockDelta(0L, 0L, 0L, false);
 
     private final long dx;

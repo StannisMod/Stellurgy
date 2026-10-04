@@ -10,11 +10,17 @@ import java.util.Set;
  * Stores Stellurgy Fluids
  */
 public class StellurgyFluids {
+    /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */
     public static Fluid fluidOxygen;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */
     public static Fluid fluidHydrogen;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */
     public static Fluid fluidRocketFuel;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */
     public static Fluid fluidNitrogen;
+    /** Effectively final, process lifetime: written only by Stellurgy.registerBlocks. */
     public static Fluid fluidEnrichedLava;
+    /** Effectively final, process lifetime: filled only by StellurgyFluids.registerGasGiantGas. */
     private static Set<FluidGasGiantGas> gasses = new HashSet<>();
 
     // Registers a gas that can be spawned on a gas giant

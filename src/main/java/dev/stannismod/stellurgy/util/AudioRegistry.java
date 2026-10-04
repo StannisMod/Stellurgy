@@ -6,6 +6,9 @@ import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class AudioRegistry {
     public static final SoundEvent electricShockSmall = createSoundEvent("ElectricShockSmall");
     public static final SoundEvent laserDrill = createSoundEvent("laserDrill");

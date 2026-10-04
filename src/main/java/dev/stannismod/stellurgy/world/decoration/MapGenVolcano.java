@@ -8,8 +8,8 @@ import dev.stannismod.stellurgy.api.StellurgyBlocks;
 
 public class MapGenVolcano extends MapGenBase {
 
-    private static final Block blockEnrichedLava = StellurgyBlocks.blockEnrichedLavaFluid;
-    private static final Block blockCasing = StellurgyBlocks.blockBasalt;
+    private final Block blockEnrichedLava = StellurgyBlocks.blockEnrichedLavaFluid;
+    private final Block blockCasing = StellurgyBlocks.blockBasalt;
     int chancePerChunk;
 
     public MapGenVolcano(int chancePerChunk) {

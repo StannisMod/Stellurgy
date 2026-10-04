@@ -28,6 +28,7 @@ import dev.stannismod.stellurgy.api.Constants;
 public class RotatableMachineBlock extends RotatableBlock {
 	protected final Random random = new Random();
 	
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	static  PropertyBool STATE = PropertyBool.create("state");
 
 	public RotatableMachineBlock(Material par2Material) {

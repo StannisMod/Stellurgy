@@ -1,6 +1,7 @@
 package dev.stannismod.stellurgy.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
 import net.minecraftforge.fml.relauncher.Side;
@@ -39,6 +40,9 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
  * the held deck look would undo it, so every sync compares the fields against what this class last
  * wrote: a mismatch means an external writer, and the deck look RE-SEEDS from the new world aim
  * (the same discipline the movement capture applies to external position writes).</p>
+ *
+ * <p>The held look is the player's own ({@link PilotInput}); the ship's attitude is read off the
+ * ship.</p>
  */
 @SideOnly(Side.CLIENT)
 public final class DeckLook {
@@ -77,44 +81,33 @@ public final class DeckLook {
     /** The held deck heading for {@code entity}, or {@code null} when this client does not own
      *  its look (not the local player, or the deck look is not engaged). */
     private static Float heldDeckYawFor(net.minecraft.entity.EntityLivingBase entity) {
-        if (!active || entity == null || entity != Minecraft.getMinecraft().player) {
+        EntityPlayerSP player = Minecraft.getMinecraft().player;
+        if (entity == null || entity != player) {
             return null;
         }
-        return (float) deckYawDeg;
+        PilotInput input = PilotInput.of(player);
+        return input.deckActive ? (float) input.deckYawDeg : null;
     }
 
     /** The local player's vertical fly intent (+1 ascend / -1 descend / 0), or {@code null} when
      *  this client does not own {@code entity}'s movement. */
     private static Integer flyIntentFor(net.minecraft.entity.EntityLivingBase entity) {
-        net.minecraft.client.entity.EntityPlayerSP player = Minecraft.getMinecraft().player;
+        EntityPlayerSP player = Minecraft.getMinecraft().player;
         if (entity == null || player == null || entity != player || player.movementInput == null) {
             return null;
         }
         return (player.movementInput.jump ? 1 : 0) - (player.movementInput.sneak ? 1 : 0);
     }
 
-    // ---- Client-observable state. PRIVATE; this class is the sole writer. ----
-
-    /** Whether the deck-frame look currently owns the local player's aim. */
-    private static volatile boolean active = false;
-    /** The held look, in the DECK frame (degrees; pitch clamped to +/-90 like vanilla). */
-    private static volatile double deckYawDeg = 0.0;
-    private static volatile double deckPitchDeg = 0.0;
-
-    /** @see #active */
-    public static boolean isActive() {
-        return active;
-    }
-
-    /** What this class last wrote into the player's world rotation. A mismatch on the next sync
-     *  means someone else wrote the fields and the deck look must re-seed from them. NaN = never
-     *  written (forces the first sync to seed). */
-    private static float lastWrittenYaw = Float.NaN;
-    private static float lastWrittenPitch = Float.NaN;
-
     /** Slack for the external-write comparison: our own writes round-trip through float exactly,
      *  so anything beyond noise is a foreign write. */
     private static final float EXTERNAL_WRITE_EPSILON = 1.0E-3F;
+
+    /** Whether the deck-frame look currently owns the local player's aim. */
+    public static boolean isActive() {
+        EntityPlayerSP player = Minecraft.getMinecraft().player;
+        return player != null && PilotInput.of(player).deckActive;
+    }
 
     /**
      * Mouse turn, in the deck frame. Applies vanilla's exact delta scaling and pitch clamp to the
@@ -127,92 +120,32 @@ public final class DeckLook {
         if (!sync(player)) {
             return false;
         }
-        deckYawDeg += yawDelta * 0.15D;
-        deckPitchDeg = MathHelper.clamp((float) (deckPitchDeg - pitchDelta * 0.15D), -90.0F, 90.0F);
+        PilotInput input = PilotInput.of((EntityPlayerSP) player);
+        input.deckYawDeg += yawDelta * 0.15D;
+        input.deckPitchDeg = MathHelper.clamp((float) (input.deckPitchDeg - pitchDelta * 0.15D), -90.0F, 90.0F);
         derive(player, null);
         return true;
     }
 
-    /** The anchor ship's attitude sampled this / previous client tick, for the render camera's
-     *  per-frame slerp - the walking-crew analogue of the pilot's shipQuat/shipPrevQuat pair.
-     *  Stepping the crew camera at the raw 20 Hz attitude instead is the tier-2 jitter (the
-     *  ledgered "not smooth at 120 FPS" feel): a station-keeping ship always hunts a little, and
-     *  an uninterpolated attitude shows at any frame rate. Null while not aboard. */
-    private static volatile FreeFlightPhysics.Quat shipQuatCur = null;
-    private static volatile FreeFlightPhysics.Quat shipQuatPrev = null;
-
-    /** The sampled anchor attitude, slerped across the frame, or {@code null} when not aboard or
-     *  not yet warmed up (first aboard tick). */
-    public static FreeFlightPhysics.Quat slerpedShipQuat(float partialTicks) {
-        FreeFlightPhysics.Quat cur = shipQuatCur;
-        FreeFlightPhysics.Quat prev = shipQuatPrev;
-        if (cur == null || prev == null) {
-            return null;
-        }
-        return FreeFlightPhysics.slerp(prev, cur, partialTicks);
-    }
-
-    /** A fixed SUBSPACE reference point of the current capture episode (the deck spot the episode
-     *  engaged at) and its per-tick world images - the "where the deck is" oracle the smoothness
-     *  discriminators measure the body's RELATIVE motion against. Snapshotted once per episode so
-     *  the reference itself never moves in the ship frame. */
-    private static boolean refSet = false;
-    private static double refSubX, refSubY, refSubZ;
-    private static volatile double[] refWorldPrev = null;
-    private static volatile double[] refWorldCur = null;
-
-    /** The reference deck point's world position this frame (lerped between the tick samples), or
-     *  {@code null} while not aboard / not warmed up. */
-    public static double[] refWorldAt(float partialTicks) {
-        double[] cur = refWorldCur;
-        double[] prev = refWorldPrev;
-        if (cur == null || prev == null) {
-            return null;
-        }
-        return new double[]{
-                prev[0] + (cur[0] - prev[0]) * partialTicks,
-                prev[1] + (cur[1] - prev[1]) * partialTicks,
-                prev[2] + (cur[2] - prev[2]) * partialTicks};
+    /**
+     * The attitude of the ship the local player is aboard, slerped across the frame between its
+     * previous and current game tick, or {@code null} when he is aboard none. Stepping the crew
+     * camera at the raw 20 Hz attitude instead is the tier-2 jitter (the ledgered "not smooth at
+     * 120 FPS" feel): a station-keeping ship always hunts a little, and an uninterpolated attitude
+     * shows at any frame rate.
+     */
+    public static FreeFlightPhysics.Quat slerpedShipQuat(Entity player, float partialTicks) {
+        return VSIntegration.shipAttitudeForId(player.world, ShipFrameTravel.aboardShipId(player), partialTicks);
     }
 
     /**
      * Once per client tick: keep the world aim glued to the deck as the ship turns under a crew
      * member whose mouse is still. Runs with a GUI open too - the ship does not stop rolling while
-     * he reads a chest. Also samples the anchor attitude for the camera's per-frame slerp.
+     * he reads a chest.
      */
     public static void clientTick(Entity player) {
         if (sync(player)) {
-            FreeFlightPhysics.Quat sampled = VSIntegration.shipAttitudeFor(player);
-            if (sampled != null) {
-                shipQuatPrev = shipQuatCur == null ? sampled : shipQuatCur;
-                shipQuatCur = sampled;
-            }
-            String shipId = ShipFrameTravel.aboardShipId(player);
-            if (!refSet) {
-                double[] sub = VSIntegration.toShipFrameFor(
-                        player.world, shipId, player.posX, player.posY, player.posZ);
-                if (sub != null) {
-                    refSubX = sub[0];
-                    refSubY = sub[1];
-                    refSubZ = sub[2];
-                    refSet = true;
-                }
-            }
-            if (refSet) {
-                double[] refWorld = VSIntegration.toWorldFrameFor(
-                        player.world, shipId, refSubX, refSubY, refSubZ);
-                if (refWorld != null) {
-                    refWorldPrev = refWorldCur == null ? refWorld : refWorldCur;
-                    refWorldCur = refWorld;
-                }
-            }
             derive(player, null);
-        } else {
-            shipQuatPrev = null;
-            shipQuatCur = null;
-            refSet = false;
-            refWorldPrev = null;
-            refWorldCur = null;
         }
     }
 
@@ -230,7 +163,8 @@ public final class DeckLook {
     /** The held deck look as a roll-free quaternion; the camera composes the ship attitude with
      *  exactly this. */
     public static FreeFlightPhysics.Quat lookQuat() {
-        return FreeFlightPhysics.lookQuat(deckYawDeg, deckPitchDeg);
+        PilotInput input = PilotInput.of(Minecraft.getMinecraft().player);
+        return FreeFlightPhysics.lookQuat(input.deckYawDeg, input.deckPitchDeg);
     }
 
     /**
@@ -238,16 +172,20 @@ public final class DeckLook {
      * Returns true when the deck look is (now) active and safe to use; false hands the caller back
      * to vanilla.
      */
-    private static boolean sync(Entity player) {
+    private static boolean sync(Entity entity) {
         Minecraft mc = Minecraft.getMinecraft();
-        if (player == null || player != mc.player || player.world == null
-                || !ShipFrameTravel.isResolvingAboard(player)) {
-            active = false;
+        if (entity == null || entity != mc.player) {
             return false;
         }
-        if (active
-                && Math.abs(player.rotationYaw - lastWrittenYaw) <= EXTERNAL_WRITE_EPSILON
-                && Math.abs(player.rotationPitch - lastWrittenPitch) <= EXTERNAL_WRITE_EPSILON) {
+        EntityPlayerSP player = (EntityPlayerSP) entity;
+        PilotInput input = PilotInput.of(player);
+        if (player.world == null || !ShipFrameTravel.isResolvingAboard(player)) {
+            input.deckActive = false;
+            return false;
+        }
+        if (input.deckActive
+                && Math.abs(player.rotationYaw - input.lastWrittenYaw) <= EXTERNAL_WRITE_EPSILON
+                && Math.abs(player.rotationPitch - input.lastWrittenPitch) <= EXTERNAL_WRITE_EPSILON) {
             return true;
         }
         // Seed (fresh capture), or re-seed (a teleport / PosLook re-aimed the player in WORLD
@@ -258,18 +196,18 @@ public final class DeckLook {
         double[] deck = VSIntegration.rotateToShipFrameFor(
                 player.world, shipId, fwd[0], fwd[1], fwd[2]);
         if (deck == null) {
-            active = false; // ship transform unavailable this instant; vanilla owns the turn
+            input.deckActive = false; // ship transform unavailable this instant; vanilla owns the turn
             return false;
         }
         // Along the deck normal the yaw is degenerate; keep the previous heading rather than
         // snapping it to an arbitrary one (vanilla keeps yaw at pitch +/-90 the same way).
         if (Math.sqrt(deck[0] * deck[0] + deck[2] * deck[2]) >= 1.0E-4) {
-            deckYawDeg = FreeFlightPhysics.yawFromForwardDeg(deck[0], deck[1], deck[2]);
+            input.deckYawDeg = FreeFlightPhysics.yawFromForwardDeg(deck[0], deck[1], deck[2]);
         }
-        deckPitchDeg = Math.toDegrees(Math.asin(clampUnit(-deck[1])));
-        lastWrittenYaw = player.rotationYaw;
-        lastWrittenPitch = player.rotationPitch;
-        active = true;
+        input.deckPitchDeg = Math.toDegrees(Math.asin(clampUnit(-deck[1])));
+        input.lastWrittenYaw = player.rotationYaw;
+        input.lastWrittenPitch = player.rotationPitch;
+        input.deckActive = true;
         return true;
     }
 
@@ -281,7 +219,8 @@ public final class DeckLook {
      * only their VALUES now follow the deck.
      */
     private static void derive(Entity player, FreeFlightPhysics.Quat shipQuat) {
-        double[] fwd = lookVec((float) deckYawDeg, (float) deckPitchDeg);
+        PilotInput input = PilotInput.of((EntityPlayerSP) player);
+        double[] fwd = lookVec((float) input.deckYawDeg, (float) input.deckPitchDeg);
         double[] w = shipQuat != null
                 ? shipQuat.rotate(fwd[0], fwd[1], fwd[2])
                 : VSIntegration.rotateToWorldFrameFor(player.world,
@@ -303,8 +242,8 @@ public final class DeckLook {
         player.prevRotationPitch += pitch - player.rotationPitch;
         player.rotationYaw = yaw;
         player.rotationPitch = pitch;
-        lastWrittenYaw = yaw;
-        lastWrittenPitch = pitch;
+        input.lastWrittenYaw = yaw;
+        input.lastWrittenPitch = pitch;
     }
 
     /** Minecraft's look vector for a yaw/pitch pair (degrees). */

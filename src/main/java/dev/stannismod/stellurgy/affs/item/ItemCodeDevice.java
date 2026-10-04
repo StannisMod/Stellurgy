@@ -25,7 +25,7 @@ public class ItemCodeDevice extends Item {
     public ItemCodeDevice() {
         this.setRegistryName(AdvancedForceFieldSystem.MODID, "code_device");
         this.setUnlocalizedName("code_device");
-        this.setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        this.setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         this.setMaxStackSize(1);
     }
 

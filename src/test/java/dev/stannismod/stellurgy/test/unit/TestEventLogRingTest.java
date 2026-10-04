@@ -6,8 +6,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import dev.stannismod.stellurgy.command.test.TestEventLog;
 import dev.stannismod.stellurgy.test.MinecraftBootstrap;
+import dev.stannismod.stellurgy.test.trace.ServerEventLog;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -36,35 +36,37 @@ public class TestEventLogRingTest {
     private static final String CHATTY = "chunk_data_applied";
     private static final String RARE = "pos_jump";
 
+    private ServerEventLog log;
+
     @BeforeClass
     public static void bootstrap() {
         MinecraftBootstrap.ensure();
-        // The log drops everything unless a recorder is subscribed — which is the OTHER half of not
-        // being able to fake an answer, and here it has to be switched on for the subject to exist.
-        TestEventLog.ServerRecorder.ensureRegistered();
     }
 
     @Before
-    public void clearLog() {
-        TestEventLog.reset();
+    public void freshLog() {
+        log = new ServerEventLog();
+        // The log drops everything until it is started — which is the OTHER half of not being able
+        // to fake an answer, and here it has to be switched on for the subject to exist.
+        log.startRecording();
     }
 
     /** The one record that matters survives ten times its own ring's worth of noise. */
     @Test
     public void aChattyTypeDoesNotEvictARareOne() {
-        TestEventLog.record("server", 1L, RARE, "\"marker\":1");
-        for (int i = 0; i < TestEventLog.CAPACITY_PER_TYPE * 10; i++) {
-            TestEventLog.record("server", 2L, CHATTY, "\"cx\":" + i);
+        log.record("server", 1L, RARE, "\"marker\":1");
+        for (int i = 0; i < ServerEventLog.CAPACITY_PER_TYPE * 10; i++) {
+            log.record("server", 2L, CHATTY, "\"cx\":" + i);
         }
 
         assertEquals("the rare record must still be readable after the chatty type overflowed"
-                        + " many times over; dropped=" + TestEventLog.droppedByType(),
-                1, TestEventLog.count(RARE));
-        assertTrue("only the chatty type may have been truncated: " + TestEventLog.droppedByType(),
-                TestEventLog.droppedByType().contains(CHATTY));
+                        + " many times over; dropped=" + log.droppedByType(),
+                1, log.count(RARE));
+        assertTrue("only the chatty type may have been truncated: " + log.droppedByType(),
+                log.droppedByType().contains(CHATTY));
         assertTrue("the rare type must not appear among the evictions: "
-                        + TestEventLog.droppedByType(),
-                !TestEventLog.droppedByType().contains(RARE));
+                        + log.droppedByType(),
+                !log.droppedByType().contains(RARE));
     }
 
     /**
@@ -76,17 +78,17 @@ public class TestEventLogRingTest {
      */
     @Test
     public void recordsComeBackInSequenceOrderAcrossTypes() {
-        TestEventLog.record("server", 1L, "right_click_block", "");
-        TestEventLog.record("server", 1L, CHATTY, "");
-        TestEventLog.record("server", 2L, "sleep_in_bed", "");
-        TestEventLog.record("server", 2L, CHATTY, "");
-        TestEventLog.record("server", 3L, "player_wake_up", "");
+        log.record("server", 1L, "right_click_block", "");
+        log.record("server", 1L, CHATTY, "");
+        log.record("server", 2L, "sleep_in_bed", "");
+        log.record("server", 2L, CHATTY, "");
+        log.record("server", 3L, "player_wake_up", "");
 
-        List<TestEventLog.Record> all = TestEventLog.since(0);
-        assertEquals("every record must come back: " + TestEventLog.dump(), 5, all.size());
+        List<ServerEventLog.Record> all = log.since(0);
+        assertEquals("every record must come back: " + log.dump(), 5, all.size());
         for (int i = 1; i < all.size(); i++) {
             assertTrue("records must be ordered by sequence, but " + all.get(i - 1).seq
-                            + " came before " + all.get(i).seq + "; dump=" + TestEventLog.dump(),
+                            + " came before " + all.get(i).seq + "; dump=" + log.dump(),
                     all.get(i - 1).seq < all.get(i).seq);
         }
         assertEquals("and the order must be the order they happened in",
@@ -104,7 +106,7 @@ public class TestEventLogRingTest {
      * the reply and started parsing it; then this test went red and stayed red, because no run in
      * between had executed the unit tier.</p>
      */
-    private static String typesReply(List<TestEventLog.Record> records) {
+    private static String typesReply(List<ServerEventLog.Record> records) {
         StringBuilder sb = new StringBuilder("{\"ok\":true,\"count\":");
         sb.append(records.size()).append(",\"events\":[");
         for (int i = 0; i < records.size(); i++) {

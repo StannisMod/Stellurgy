@@ -7,12 +7,14 @@ import org.junit.Test;
 
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * extends {@code SpaceStationLifecycleSmokeTest}
- * (create-list-info already covered there) with:
+ * Space station registry and fuel:
+ *   - create registers a station that list and info reflect
+ *   - the centre grid cell resolves to no station
  *   - multiple stations coexisting in the same orbit have distinct ids
  *   - fuel set / add / use are accounted (respect max capacity for add,
  *     clamp at zero for use)
@@ -128,6 +130,59 @@ public class SpaceStationDepthTest extends AbstractSharedServerTest {
 
         StationInfo info = station(id);
         assertEquals("info must reflect the partial drain: " + info.raw(), 40, info.fuelAmount());
+    }
+
+    /**
+     * Create registers a real {@link dev.stannismod.stellurgy.stations.SpaceStationObject}: its id
+     * was not in the list before and is after, and its info reports the orbit it was created for and
+     * an empty tank. Read as a DELTA — sibling scenarios on this server create stations too.
+     */
+    @Test
+    public void stationCreateRegistersAndPersistsForList() throws Exception {
+        String before = String.join("\n", client().execute("stellurgytest station list"));
+        int id = createStation(0);
+        assertFalse("the new station's id " + id + " was already listed before create: " + before,
+                Reply.of("stellurgytest station list", before).holdsElement("stations", "id", String.valueOf(id)));
+
+        String listAfter = String.join("\n", client().execute("stellurgytest station list"));
+        Reply.of(listAfter).element("stations", "id", String.valueOf(id));
+
+        // Read as NUMBERS: the substring form was a prefix, so `"orbitingPlanetId":0` was also
+        // satisfied by a station orbiting dim 9701 and `"fuelAmount":0` by one holding 1000.
+        StationInfo info = station(id);
+        assertEquals("station info wrong orbitingPlanetId: " + info.raw(), 0, info.orbitingPlanetId);
+        assertEquals("station info wrong default fuelAmount: " + info.raw(), 0, info.fuelAmount());
+    }
+
+    /**
+     * The reverse index's radius-0 case in {@code SpaceObjectManager.getSpaceStationFromBlockCoords}.
+     *
+     * <p>The spiral index formula {@code (2*radius-1)^2 + x + radius} evaluates to {@code 1} at
+     * {@code radius == 0}, so the centre grid cell (0,0) collided with grid (-1,-1) on spiral index 1
+     * and a position in the central inter-station void falsely resolved to station 1. Station id 0
+     * is never allocated ({@code getNextStationId} starts at 1), so the central cell must map to no
+     * station. Station 1 exists whatever order this class runs in: this scenario creates a station
+     * itself, and ids start at 1.</p>
+     */
+    @Test
+    public void centreGridCellResolvesToNoStationNotFalselyStationOne() throws Exception {
+        int stationId = createStation(0);
+        StationInfo info = station(stationId);
+
+        // Control: the station's own spawn resolves back to it — the reverse map still finds real
+        // on-station positions after the radius-0 fix.
+        String atSpawn = String.join("\n", client().execute(
+                "stellurgytest station at " + info.spawnX() + " " + info.spawnY() + " " + info.spawnZ()));
+        assertTrue("control: the station spawn must resolve to its own station id " + stationId
+                        + " (spawn=" + info.spawnX() + "," + info.spawnZ() + "): " + atSpawn,
+                String.valueOf(stationId).equals(Reply.of(atSpawn).text("stationAtPos")));
+
+        // (100,·,100) reverse-maps to grid (0,0).
+        String atCentre = String.join("\n", client().execute("stellurgytest station at 100 64 100"));
+        assertTrue("the central grid cell must resolve to no station (radius-0 index fix) — it "
+                        + "collided with grid (-1,-1) on index 1 = station 1 via (2*0-1)^2. Got: " + atCentre,
+                // `has` answers false for an ABSENT field and for one whose value is JSON null.
+                !Reply.of("stellurgytest station at", atCentre).has("stationAtPos"));
     }
 
     /** What the server says about one station. */

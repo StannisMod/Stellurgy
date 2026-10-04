@@ -23,6 +23,7 @@ import java.util.List;
 public class TileCrystallizer extends TileMultiblockMachine implements IModularInventory {
 
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final Object[][][] structure = {{{StellurgyBlocks.blockQuartzCrucible, StellurgyBlocks.blockQuartzCrucible, StellurgyBlocks.blockQuartzCrucible},
             {StellurgyBlocks.blockQuartzCrucible, StellurgyBlocks.blockQuartzCrucible, StellurgyBlocks.blockQuartzCrucible}},
 

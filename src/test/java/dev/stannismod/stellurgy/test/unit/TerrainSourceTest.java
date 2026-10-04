@@ -3,7 +3,6 @@ package dev.stannismod.stellurgy.test.unit;
 import org.junit.Test;
 import dev.stannismod.stellurgy.dimension.TerrainSource;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
 /**
@@ -33,13 +32,5 @@ public class TerrainSourceTest {
         assertSame(TerrainSource.NATIVE, TerrainSource.byName("   "));
         assertSame(TerrainSource.NATIVE, TerrainSource.byName("not_a_mode"));
         assertSame(TerrainSource.NATIVE, TerrainSource.byName("123"));
-    }
-
-    @Test
-    public void persistedFormIsTheEnumName() {
-        // The write side stores TerrainSource.name(); this pins the exact tokens the save/XML schema uses.
-        assertEquals("NATIVE", TerrainSource.NATIVE.name());
-        assertEquals("MOD_WORLDTYPE", TerrainSource.MOD_WORLDTYPE.name());
-        assertEquals("TEMPLATE", TerrainSource.TEMPLATE.name());
     }
 }

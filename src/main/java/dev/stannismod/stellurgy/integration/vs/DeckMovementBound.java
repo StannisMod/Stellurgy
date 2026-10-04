@@ -37,7 +37,8 @@ import net.minecraft.entity.player.EntityPlayerMP;
  */
 public final class DeckMovementBound {
 
-    private DeckMovementBound() {}
+    /** One per server ({@code ServerState#deckMovement}). */
+    public DeckMovementBound() {}
 
     /**
      * The most a body can move under its OWN power in one tick, blocks, on a deck it is captured on.
@@ -60,9 +61,14 @@ public final class DeckMovementBound {
 
     /** When each player was last judged, so a step spanning several ticks is judged against several
      *  ticks of allowance. Only a TIMESTAMP: the position anchor is read from the server on either
-     *  side of the packet, precisely so a teleport cannot leave a stale one behind. */
-    private static final java.util.Map<java.util.UUID, Long> LAST_SEEN_TICK =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<java.util.UUID, Long>());
+     *  side of the packet, precisely so a teleport cannot leave a stale one behind. A player's entry
+     *  is dropped when he logs out; movement packets are handled on the server thread. */
+    private final java.util.Map<java.util.UUID, Long> lastSeenTick = new java.util.HashMap<>();
+
+    /** The player has left this server. */
+    public void forget(java.util.UUID playerId) {
+        lastSeenTick.remove(playerId);
+    }
 
     /**
      * Whether the step from {@code (fromX, fromY, fromZ)} to {@code (toX, toY, toZ)} is one this
@@ -78,7 +84,7 @@ public final class DeckMovementBound {
      * ordinary staging teleports. Reading the server's position immediately before and after the
      * packet is handled has no such state to go stale: a teleport moves BOTH readings.</p>
      */
-    public static boolean accepts(EntityPlayerMP player,
+    public boolean accepts(EntityPlayerMP player,
                                   double fromX, double fromY, double fromZ,
                                   double toX, double toY, double toZ) {
         if (player == null || player.world == null || player.world.isRemote) {
@@ -106,7 +112,7 @@ public final class DeckMovementBound {
         // of anything. Bounded above, because a client nobody heard from for a minute does not get a
         // minute's worth of licence.
         final long now = player.world.getTotalWorldTime();
-        final Long previous = LAST_SEEN_TICK.put(player.getUniqueID(), now);
+        final Long previous = lastSeenTick.put(player.getUniqueID(), now);
         final double ticks = previous == null ? 1.0
                 : Math.max(1.0, Math.min(MAX_CLAIMED_TICKS, now - previous));
 

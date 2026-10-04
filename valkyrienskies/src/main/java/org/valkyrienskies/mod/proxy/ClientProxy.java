@@ -3,7 +3,6 @@ package org.valkyrienskies.mod.proxy;
 import net.minecraft.block.Block;
 import org.valkyrienskies.mod.client.EventsClient;
 import org.valkyrienskies.mod.client.VSKeyHandler;
-import org.valkyrienskies.mod.client.render.GibsModelRegistry;
 import org.valkyrienskies.mod.common.ValkyrienSkiesMod;
 
 import net.minecraft.client.Minecraft;
@@ -23,6 +22,12 @@ public class ClientProxy extends CommonProxy {
             new ModelResourceLocation(item.getRegistryName(), "inventory"));
     }
 
+    /**
+     * A field of the sided proxy, so a static by transitivity. Final, lifetime the client process:
+     * created with the proxy Forge injects, registered on the bus once by {@link #preInit}.
+     *
+     * Effectively final, process lifetime: set once when the object is built.
+     */
     private final VSKeyHandler keyEvents = new VSKeyHandler();
 
     @Override
@@ -34,14 +39,6 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(new EventsClient());
         MinecraftForge.EVENT_BUS.register(keyEvents);
 
-        // Register VS Minecraft resource reload listener.
-        IReloadableResourceManager mcResourceManager = (IReloadableResourceManager) Minecraft
-            .getMinecraft()
-            .getResourceManager();
-
-        // When Minecraft reloads resources tell GibsModelRegistry to delete all its caches.
-        mcResourceManager.registerReloadListener(GibsModelRegistry::onResourceManagerReload);
-
         registerAnimations();
     }
 
@@ -50,8 +47,8 @@ public class ClientProxy extends CommonProxy {
         super.postInit(e);
         Minecraft.getMinecraft().getFramebuffer().enableStencil();
 
-        registerBlockItem(ValkyrienSkiesMod.INSTANCE.captainsChair);
-        registerBlockItem(ValkyrienSkiesMod.INSTANCE.passengerChair);
+        registerBlockItem(dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.captainsChair);
+        registerBlockItem(dev.stannismod.stellurgy.Stellurgy.instance.valkyrienSkies.passengerChair);
     }
 
     private void registerAnimations() {

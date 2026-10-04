@@ -18,7 +18,7 @@ import dev.stannismod.stellurgy.test.trace.SideTraceOwner;
 public abstract class MixinMinecraftSideTrace implements SideTraceOwner {
 
     @Unique
-    private final SideTrace stellurgyTest$sideTrace = new SideTrace("client");
+    private final SideTrace stellurgyTest$sideTrace = SideTrace.forClient();
 
     @Override
     public SideTrace stellurgyTest$sideTrace() {

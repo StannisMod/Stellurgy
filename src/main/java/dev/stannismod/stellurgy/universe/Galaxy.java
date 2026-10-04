@@ -34,6 +34,8 @@ import dev.stannismod.stellurgy.space.GalacticCoord;
  *
  * <p>The rate is slow enough to be invisible inside one save, which is the ratified position: the
  * mechanic exists even when slow, and the speed is tuning.</p>
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public final class Galaxy {
 

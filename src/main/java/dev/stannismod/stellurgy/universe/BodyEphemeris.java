@@ -21,7 +21,11 @@ import dev.stannismod.stellurgy.space.BlockDelta;
  */
 public final class BodyEphemeris {
 
-    /** The law of something that does not move: zero displacement at every tick. */
+    /**
+     * The law of something that does not move: zero displacement at every tick.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     public static final BodyEphemeris STATIC = new BodyEphemeris(0L, 0L, 0L, 0d, 0d, 0d, false, 0d, 0L);
 
     // A FIXED law (period <= 0) carries its displacement directly; an ORBIT law derives it.
@@ -104,6 +108,21 @@ public final class BodyEphemeris {
     public boolean isStatic() {
         return unitBlocks == 0L || !(periodTicks > 0d) || Double.isInfinite(periodTicks)
                 || distUnits == 0d;
+    }
+
+    /**
+     * Whether every displacement this law will ever produce has each axis within
+     * {@code [low, high]}. A fixed law is checked per axis; an orbit by its radius, which bounds every
+     * axis because the offset's length is the orbital distance at every inclination (see
+     * {@link #orbit}), rounded as {@link #offsetAt} rounds.
+     */
+    public boolean staysWithin(long low, long high) {
+        if (unitBlocks == 0L) {
+            return fixedX >= low && fixedX <= high && fixedY >= low && fixedY <= high
+                    && fixedZ >= low && fixedZ <= high;
+        }
+        long radius = Math.round(Math.abs(distUnits) * unitBlocks);
+        return -radius >= low && radius <= high;
     }
 
     /** The displacement, in blocks, at world tick {@code tick}. */

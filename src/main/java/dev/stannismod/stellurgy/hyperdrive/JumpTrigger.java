@@ -86,6 +86,7 @@ public final class JumpTrigger {
     public static final String MSG_CELL_NOT_LIVE = "msg.jump.cellnotlive";
     public static final String MSG_CONFIRM = "msg.jump.confirm";
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final org.apache.logging.log4j.Logger LOGGER =
             org.apache.logging.log4j.LogManager.getLogger("stellurgy/space");
 

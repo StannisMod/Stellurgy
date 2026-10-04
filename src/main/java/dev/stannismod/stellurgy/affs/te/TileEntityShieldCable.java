@@ -50,7 +50,7 @@ public class TileEntityShieldCable extends TileEntity implements ITickable, IShi
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.register(this);
+            ShieldNetworkRegistry.of(world).register(this);
             ShieldNetworkManager.markDirty(world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] load cable at {} dim={}", pos, world.provider.getDimension());
@@ -61,7 +61,7 @@ public class TileEntityShieldCable extends TileEntity implements ITickable, IShi
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] invalidate cable at {} dim={}", pos, world.provider.getDimension());
@@ -73,7 +73,7 @@ public class TileEntityShieldCable extends TileEntity implements ITickable, IShi
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
             if (dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG != null) {
                 dev.stannismod.stellurgy.affs.AdvancedForceFieldSystem.LOG.info("[ShieldNetwork] chunk unload cable at {} dim={}", pos, world.provider.getDimension());

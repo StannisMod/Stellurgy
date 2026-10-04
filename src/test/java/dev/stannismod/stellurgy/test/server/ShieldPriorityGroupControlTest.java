@@ -150,10 +150,6 @@ public class ShieldPriorityGroupControlTest extends AbstractSharedServerTest {
                 Reply.of(resp).bool("placed"));
     }
 
-    private static String exec(String command) throws Exception {
-        return join(client().execute(command));
-    }
-
     private static String join(List<String> resp) {
         return String.join("\n", resp);
     }

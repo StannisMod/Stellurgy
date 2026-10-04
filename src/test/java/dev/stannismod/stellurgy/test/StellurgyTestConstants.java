@@ -26,6 +26,9 @@ public final class StellurgyTestConstants {
      * <p>MEASURED through the same law the departure prices a jump with, never written down. It was
      * written down once, as 4M, from a probe comment that predated the cell growing to 32M — and the
      * speeds derived from it put a "hyperspace" fixture 2 560 ticks from its destination.</p>
+     *
+     * <p>A constant: a final {@code long} computed once from the static cell frames, a pure function of
+     * constants.</p>
      */
     public static final long FIXTURE_CELL_SPACING_BLOCKS = (long) Math.ceil(
             CellFrames.STATIC.distanceBetween(

@@ -18,10 +18,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class SpaceSlotPoolRebindTest extends AbstractSharedServerTest {
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     @Test
     public void slotRebindsBetweenCellsAndBlockRoundTrips() throws Exception {
         // The whole rebind round-trip runs synchronously inside the probe (see `space roundtrip`),

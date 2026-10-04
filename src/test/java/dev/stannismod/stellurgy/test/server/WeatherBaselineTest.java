@@ -28,36 +28,31 @@ import static org.junit.Assert.fail;
  * is the only supported behaviour: rain on the overworld must NOT propagate to
  * Stellurgy planets, and each Stellurgy planet's {@code WorldInfo} must be the
  * {@code StellurgyDimensionWorldInfo} wrapper.
+ *
+ * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-public class WeatherBaselineTest {
+@SeededWorld(WeatherBaselineTest.Galaxy.class)
+public class WeatherBaselineTest extends AbstractSharedServerTest {
 
     private static final int FIXTURE_DIM_A = 9101;
     private static final int FIXTURE_DIM_B = 9102;
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
 
-    @Before
-    public void writeTwoPlanetFixture() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -Dforge.test.harness.enabled=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-weather-baseline-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
-                + planetXml("WeatherPlanetA", FIXTURE_DIM_A)
-                + planetXml("WeatherPlanetB", FIXTURE_DIM_B)
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+    /** The galaxy this class's one shared server boots over. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(dev.stannismod.stellurgy.test.client.GameDirSeed seed) {
+            String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
+                    + planetXml("WeatherPlanetA", FIXTURE_DIM_A)
+                    + planetXml("WeatherPlanetB", FIXTURE_DIM_B)
+                    + "    </star>\n"
+                    + "</galaxy>\n";
+            seed.planetDefs(xml, WeatherBaselineTest.class);
+        }
     }
 
     private static String planetXml(String name, int dim) {
@@ -79,21 +74,15 @@ public class WeatherBaselineTest {
                 + "        </planet>\n";
     }
 
-    @After
-    public void stopHarness() throws Exception {
-        if (harness != null) harness.close();
-    }
-
     @Test
     public void weatherPropagationMatchesExpectedMode() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
-        DimList dimList = DimList.of(String.join("\n", harness.client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
         assertTrue("fixture dim A not registered: " + dimList, dimList.holds(FIXTURE_DIM_A));
         assertTrue("fixture dim B not registered: " + dimList, dimList.holds(FIXTURE_DIM_B));
 
-        harness.client().execute("stellurgytest weather set 0 clear 12000");
-        String setOver = String.join("\n", harness.client().execute("stellurgytest weather set 0 rain 12000"));
+        client().execute("stellurgytest weather set 0 clear 12000");
+        String setOver = String.join("\n", client().execute("stellurgytest weather set 0 rain 12000"));
         assertTrue("weather set on overworld failed: " + setOver, Reply.of(setOver).ok());
 
         DimWeather w0 = weather(0);
@@ -136,7 +125,7 @@ public class WeatherBaselineTest {
     }
 
     private DimWeather weather(int dim) throws Exception {
-        return DimWeather.forDim(cmd -> String.join("\n", harness.client().execute(cmd)), dim)
+        return DimWeather.forDim(cmd -> String.join("\n", client().execute(cmd)), dim)
                 .requireDim(dim);
     }
 }

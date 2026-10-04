@@ -28,8 +28,11 @@ import static org.junit.Assert.assertTrue;
  * harness lifecycle pre-creates its workDir via {@code Files.createTempDirectory}
  * AFTER spawning. We need to write the XML BEFORE startup, so the harness is
  * managed manually via {@link RealDedicatedServerHarness#startWith}.</p>
+ *
+ * <p>One server for the class, booted once over the galaxy {@link Galaxy} declares.</p>
  */
-public class PlanetXmlConfigIntegrationTest {
+@SeededWorld(PlanetXmlConfigIntegrationTest.Galaxy.class)
+public class PlanetXmlConfigIntegrationTest extends AbstractSharedServerTest {
 
     /** Dim id we declare in the fixture. Must be outside vanilla 0/-1/1 + Stellurgy's
      *  defaults (Sol=0, Stellurgy uses 2+ for first planet). 9001 is well clear. */
@@ -40,65 +43,59 @@ public class PlanetXmlConfigIntegrationTest {
     private static final int FIXTURE_ATM_DENSITY = 50;
     private static final int FIXTURE_ROTATIONAL_PERIOD = 16000;
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
 
-    @Before
-    public void writeFixtureXml() throws Exception {
-        Assume.assumeTrue(
-                "Server harness disabled — set -Dforge.test.harness.enabled=true",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-
-        workDir = Files.createTempDirectory("forge-server-planet-xml-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-
-        String xml =
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-                "<galaxy>\n" +
-                "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" " +
-                "          isBlackHole=\"false\" diskAngle=\"70\" " +
-                "          numPlanets=\"1\" numGasGiants=\"0\">\n" +
-                "        <planet name=\"" + FIXTURE_PLANET_NAME + "\" DIMID=\"" + FIXTURE_DIM + "\">\n" +
-                "            <isKnown>true</isKnown>\n" +
-                "            <fogColor>0.5,0.5,0.5</fogColor>\n" +
-                "            <skyColor>0.4,0.6,0.9</skyColor>\n" +
-                "            <gravitationalMultiplier>" + FIXTURE_GRAVITY_HUNDREDTHS + "</gravitationalMultiplier>\n" +
-                "            <orbitalDistance>" + FIXTURE_ORBITAL_DISTANCE + "</orbitalDistance>\n" +
-                "            <orbitalTheta>0</orbitalTheta>\n" +
-                "            <orbitalPhi>0</orbitalPhi>\n" +
-                "            <retrograde>false</retrograde>\n" +
-                "            <averageTemperature>250</averageTemperature>\n" +
-                "            <rotationalPeriod>" + FIXTURE_ROTATIONAL_PERIOD + "</rotationalPeriod>\n" +
-                "            <atmosphereDensity>" + FIXTURE_ATM_DENSITY + "</atmosphereDensity>\n" +
-                "            <generateCraters>false</generateCraters>\n" +
-                "            <generateCaves>true</generateCaves>\n" +
-                "            <generateVolcanos>false</generateVolcanos>\n" +
-                "        </planet>\n" +
-                "    </star>\n" +
-                "</galaxy>\n";
-
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
+    /** The galaxy this class's one shared server boots over. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(dev.stannismod.stellurgy.test.client.GameDirSeed seed) {
+            String xml =
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                    "<galaxy>\n" +
+                    "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" " +
+                    "          isBlackHole=\"false\" diskAngle=\"70\" " +
+                    "          numPlanets=\"1\" numGasGiants=\"0\">\n" +
+                    "        <planet name=\"" + FIXTURE_PLANET_NAME + "\" DIMID=\"" + FIXTURE_DIM + "\">\n" +
+                    "            <isKnown>true</isKnown>\n" +
+                    "            <fogColor>0.5,0.5,0.5</fogColor>\n" +
+                    "            <skyColor>0.4,0.6,0.9</skyColor>\n" +
+                    "            <gravitationalMultiplier>" + FIXTURE_GRAVITY_HUNDREDTHS + "</gravitationalMultiplier>\n" +
+                    "            <orbitalDistance>" + FIXTURE_ORBITAL_DISTANCE + "</orbitalDistance>\n" +
+                    "            <orbitalTheta>0</orbitalTheta>\n" +
+                    "            <orbitalPhi>0</orbitalPhi>\n" +
+                    "            <retrograde>false</retrograde>\n" +
+                    "            <averageTemperature>250</averageTemperature>\n" +
+                    "            <rotationalPeriod>" + FIXTURE_ROTATIONAL_PERIOD + "</rotationalPeriod>\n" +
+                    "            <atmosphereDensity>" + FIXTURE_ATM_DENSITY + "</atmosphereDensity>\n" +
+                    "            <generateCraters>false</generateCraters>\n" +
+                    "            <generateCaves>true</generateCaves>\n" +
+                    "            <generateVolcanos>false</generateVolcanos>\n" +
+                    "        </planet>\n" +
+                    "    </star>\n" +
+                    "</galaxy>\n";
+            seed.planetDefs(xml, PlanetXmlConfigIntegrationTest.class);
+        }
     }
 
-    @After
-    public void stopHarness() throws Exception {
-        if (harness != null) harness.close();
-    }
-
+    /**
+     * The fixture's fields as the running server holds them, and — its last verdict — that a file
+     * stating no {@code <galaxyGen>} runs its authored anchors only.
+     *
+     * <p>red-witnessed: 2026-10-02, the last verdict only (the field reads above predate this record):
+     * with {@code XMLPlanetLoader#readAllPlanets} at {@code return coupling;} preceded by a line
+     * giving an absent {@code galaxyGenConfig} the shipped {@code GalaxyGenConfig.defaults()}, this
+     * fails with {@code "generator":"ClusteredGalaxyGenerator"}.</p>
+     */
     @Test
     public void fixtureXmlRoundTripsThroughServerStart() throws Exception {
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
 
         // `holds` refuses a reply carrying no `stellurgyDimensions` of its own, so the malformed-reply
         // claim that used to stand here as a separate line is the same claim, made where it bites.
-        DimList dimList = DimList.of(String.join("\n", harness.client().execute("stellurgytest dim list")));
+        DimList dimList = DimList.of(String.join("\n", client().execute("stellurgytest dim list")));
         assertTrue("fixture dim " + FIXTURE_DIM + " not in stellurgyDimensions: " + dimList,
                 dimList.holds(FIXTURE_DIM));
 
         String planetInfo = String.join("\n",
-                harness.client().execute("stellurgytest planet info " + FIXTURE_DIM));
+                client().execute("stellurgytest planet info " + FIXTURE_DIM));
         assertTrue("planet info errored: " + planetInfo,
                 !Reply.of(planetInfo).has("error"));
 
@@ -116,5 +113,14 @@ public class PlanetXmlConfigIntegrationTest {
                 FIXTURE_ROTATIONAL_PERIOD, info.integer("rotationalPeriod"));
         assertEquals("gravity did not round-trip: " + planetInfo,
                 FIXTURE_GRAVITY_HUNDREDTHS / 100.0, info.number("gravity"), 1e-9);
+
+        // This fixture states no <galaxyGen>, and a pack that states none gets a universe of its
+        // authored systems ONLY — no procedural generator, rather than the shipped generator's
+        // defaults. Read off the generator the running universe has in force. (The file WITH a
+        // <galaxyGen> is PlanetDefsAuthoringTest's.)
+        Reply inForce = Reply.of("stellurgytest space gen-config",
+                String.join("\n", client().execute("stellurgytest space gen-config")));
+        assertEquals("a planetDefs.xml with no <galaxyGen> must run its authored anchors only: "
+                + inForce, "EmptyGalaxyGenerator", inForce.text("generator"));
     }
 }

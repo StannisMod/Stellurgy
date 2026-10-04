@@ -69,7 +69,7 @@ public class TileEntityShieldConsole extends TileEntity implements ITickable, IS
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.register(this);
+            ShieldNetworkRegistry.of(world).register(this);
             ShieldNetworkManager.markDirty(world);
         }
     }
@@ -77,7 +77,7 @@ public class TileEntityShieldConsole extends TileEntity implements ITickable, IS
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
         }
         super.invalidate();
@@ -86,7 +86,7 @@ public class TileEntityShieldConsole extends TileEntity implements ITickable, IS
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
         }
         super.onChunkUnload();

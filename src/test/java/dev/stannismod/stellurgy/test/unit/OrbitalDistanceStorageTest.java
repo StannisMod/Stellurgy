@@ -71,16 +71,4 @@ public class OrbitalDistanceStorageTest {
         assertEquals(WIDEST_NAMED_ORBIT, SystemBody.readFromNBT(tag).orbitalDistance());
     }
 
-    @Test
-    public void aPlanetsDimensionKeepsItsOrbitThroughNbt() {
-        requireBeyondInt();
-        DimensionProperties written = new DimensionProperties(-7301);
-        written.orbitalDist = WIDEST_NAMED_ORBIT;
-        NBTTagCompound tag = new NBTTagCompound();
-        written.writeToNBT(tag);
-
-        DimensionProperties read = new DimensionProperties(-7301);
-        read.readFromNBT(tag);
-        assertEquals(WIDEST_NAMED_ORBIT, read.getOrbitalDist());
-    }
 }

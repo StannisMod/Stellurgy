@@ -17,6 +17,9 @@ import dev.stannismod.stellurgy.integration.vs.VSIntegration;
 import dev.stannismod.stellurgy.tile.TileAdvancedFlightComputer;
 import dev.stannismod.stellurgy.tile.TilePilotSeat;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class EntityDummy extends Entity {
 
     /**

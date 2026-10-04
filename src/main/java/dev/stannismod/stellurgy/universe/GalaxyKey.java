@@ -22,7 +22,11 @@ public final class GalaxyKey {
     /** The word a pack writes for the galaxy authored content lives in by default. */
     public static final String HOME_NAME = "home";
 
-    /** The reserved home galaxy: lattice cell (0,0,0), centred on the universe origin. */
+    /**
+     * The reserved home galaxy: lattice cell (0,0,0), centred on the universe origin.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     public static final GalaxyKey HOME = new GalaxyKey(0L, 0L, 0L);
 
     private final long gx;

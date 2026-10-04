@@ -34,6 +34,7 @@ import net.minecraft.world.WorldServer;
  */
 public final class ArrivalSpawn {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final org.apache.logging.log4j.Logger LOGGER =
             org.apache.logging.log4j.LogManager.getLogger("stellurgy/space");
 

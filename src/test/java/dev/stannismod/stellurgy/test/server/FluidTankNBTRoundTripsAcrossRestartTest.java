@@ -32,6 +32,10 @@ import static org.junit.Assert.assertTrue;
  * fluid on world reload — a silent gameplay break.</p>
  *
  * <p>Uses the same two-boot pattern as {@link PersistenceRestartSmokeTest}.</p>
+ *
+ * <p>SEPARATE-BOOT: a server restart that is the subject. Every scenario here boots a server, stops
+ * it, and boots a second one over the same world directory to read what the save carried across;
+ * a shared, running server cannot be stopped under its siblings.</p>
  */
 public class FluidTankNBTRoundTripsAcrossRestartTest {
 

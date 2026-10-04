@@ -59,16 +59,15 @@ public abstract class MixinWorld implements IWorldVS, IHasShipManager {
     @Shadow
     protected List<IWorldEventListener> eventListeners;
 
-    // No initialisers on purpose: a mixin's static fields are merged into the target, and a field
-    // that needs <clinit> code is a needless risk in a class woven this early. Both default to the
-    // zero value, which is what this wants.
-    private static long vsLastGiantBoxWarnMillis;
-    private static int vsSuppressedGiantBoxWarns;
-    private static boolean vsGiantBoxStackPrinted;
+    // The warning's throttle, per world: the world whose box went giant is the one being reported.
+    // No initialisers: all three want their zero value.
+    private long vsLastGiantBoxWarnMillis;
+    private int vsSuppressedGiantBoxWarns;
+    private boolean vsGiantBoxStackPrinted;
 
     /**
-     * Report a bounding box that cannot be honoured — ONCE with its stack, then at most one line
-     * per ten seconds carrying how many were swallowed in between.
+     * Report a bounding box that cannot be honoured — ONCE per world with its stack, then at most one
+     * line per ten seconds carrying how many were swallowed in between.
      *
      * <p>It used to be {@code new Exception(...).printStackTrace()} at five call sites, every one of
      * them on a per-tick path. When a player's box genuinely does go giant, that prints a full stack
@@ -81,7 +80,7 @@ public abstract class MixinWorld implements IWorldVS, IHasShipManager {
      * <p>The first stack is kept because it is genuinely the useful part: it names the call path
      * (a player's {@code travel}, a sneak transform, a collision step) that produced the box.</p>
      */
-    private static void vsWarnGiantBoundingBox(String context) {
+    private void vsWarnGiantBoundingBox(String context) {
         vsSuppressedGiantBoxWarns++;
         if (!vsGiantBoxStackPrinted) {
             vsGiantBoxStackPrinted = true;
@@ -492,6 +491,7 @@ public abstract class MixinWorld implements IWorldVS, IHasShipManager {
         manager = managerSupplier.apply(World.class.cast(this));
     }
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final RayTraceResult DUMMY_RAYTRACE_RESULT = new RayTraceResult(Vec3d.ZERO, EnumFacing.DOWN);
 
     /**

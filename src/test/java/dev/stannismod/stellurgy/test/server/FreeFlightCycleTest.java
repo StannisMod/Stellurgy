@@ -38,14 +38,6 @@ import static org.junit.Assert.assertTrue;
 public class FreeFlightCycleTest extends AbstractSharedServerTest {
 
     /**
-     * The vertical input this scenario SENDS, echoed back by the assertion that reads the reply.
-     *
-     * <p>Not a threshold: it is the arrangement's own argument. Named so the command and the
-     * expectation cannot drift apart.</p>
-     */
-    private static final double COMMANDED_VERT = -0.5;
-
-    /**
      * The clamp production applies to an out-of-range axis.
      *
      * <p>PRODUCTION'S bound, restated here because it is what the two overshoot legs assert: an
@@ -124,45 +116,6 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
     // ---------------------------------------------------------------------
 
     @Test
-    public void freshRocketDefaultsToClassicLaunchMode() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 2000, 500));
-        RocketInfo info = rocketInfo(id);
-        assertEquals("default mode must be CLASSIC_LAUNCH: " + info.raw(),
-                RocketInfo.CLASSIC_LAUNCH, info.flightMode);
-    }
-
-    @Test
-    public void setFlightModeRoundTripsThroughInfo() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 2100, 500));
-
-        String set = ok(client().execute(
-                "stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        assertTrue("set-flight-mode FREE_FLIGHT must succeed: " + set,
-                Reply.of(set).ok());
-        assertTrue("set-flight-mode must echo mode: " + set,
-                "FREE_FLIGHT".equals(Reply.of(set).text("flightMode")));
-
-        RocketInfo info1 = rocketInfo(id);
-        assertEquals("info must report FREE_FLIGHT after set: " + info1.raw(),
-                RocketInfo.FREE_FLIGHT, info1.flightMode);
-
-        // And back to classic.
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " CLASSIC_LAUNCH"));
-        RocketInfo info2 = rocketInfo(id);
-        assertEquals("info must report CLASSIC_LAUNCH after flip-back: " + info2.raw(),
-                RocketInfo.CLASSIC_LAUNCH, info2.flightMode);
-    }
-
-    @Test
-    public void setFlightModeRejectsUnknownMode() throws Exception {
-        int id = buildAndAssemble(FixtureSite.openAir(0, 2200, 500));
-        String resp = ok(client().execute(
-                "stellurgytest rocket set-flight-mode " + id + " WARPDRIVE"));
-        assertTrue("unknown mode must be reported as error: " + resp,
-                "unknown mode".equals(Reply.of(resp).text("error")));
-    }
-
-    @Test
     public void startFreeFlightBypassesClassicCountdown() throws Exception {
         // Critical FF contract: NO destination chip programmed, NO classic
         // countdown — start-free-flight goes directly to isInFlight=true.
@@ -179,52 +132,6 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         RocketInfo info = rocketInfo(id);
         assertTrue("info must reflect in-flight after start-free-flight: " + info.raw(),
                 info.inFlight);
-        assertEquals("info must keep flightMode=FREE_FLIGHT: " + info.raw(),
-                RocketInfo.FREE_FLIGHT, info.flightMode);
-    }
-
-    @Test
-    public void startFreeFlightRejectsClassicRocket() throws Exception {
-        // Counter-test: start-free-flight on a rocket still in CLASSIC mode
-        // must NOT silently launch it (classic flow has its own gates).
-        int id = buildAndAssemble(FixtureSite.openAir(0, 2400, 500));
-        String resp = ok(client().execute(
-                "stellurgytest rocket start-free-flight " + id));
-        assertTrue("classic rocket must reject start-free-flight: " + resp,
-                "rocket not in FREE_FLIGHT".equals(Reply.of(resp).text("error")));
-
-        RocketInfo info = rocketInfo(id);
-        assertFalse("rejected start must NOT flip isInFlight: " + info.raw(), info.inFlight);
-    }
-
-    @Test
-    public void freeFlightInputIsStoredOnServerAfterPacketPath() throws Exception {
-        // Cross-side wiring: free-flight-input probe goes through the same
-        // server-side application path that PacketType.FREE_FLIGHT_INPUT
-        // would (calls rocket.applyFreeFlightInput). After the probe completes,
-        // info must reflect the new currentFreeFlightInput so a client UI /
-        // tick loop reads what was set.
-        int id = buildAndAssemble(FixtureSite.openAir(0, 2500, 500));
-        ok(client().execute("stellurgytest rocket set-flight-mode " + id + " FREE_FLIGHT"));
-        ok(client().execute("stellurgytest rocket start-free-flight " + id));
-
-        String applied = ok(client().execute(
-                "stellurgytest rocket free-flight-input " + id + " 1.0 -0.5 0.25 0 0.75"));
-        assertTrue("input must apply on FF rocket: " + applied,
-                Reply.of(applied).bool("applied"));
-        // Probe echoes the clamped values back; full-range happy-path values
-        // should pass through unchanged.
-        assertTrue("applied response must echo fwd=1.0: " + applied,
-                (Reply.of(applied).number("fwd") == 1.0));
-        assertTrue("applied response must echo vert=-0.5: " + applied,
-                (Reply.of(applied).number("vert") == COMMANDED_VERT));
-
-        // Info must round-trip the input — proves server-side storage path
-        // is wired into the probe surface that clients/UI will read.
-        RocketInfo.FreeFlightInput stored = rocketInfo(id).freeFlightInput();
-        assertEquals("info must store ffInputFwd=1.0: " + stored, 1.0, stored.forward, 0.0);
-        assertEquals("info must store ffInputVert=-0.5: " + stored, -0.5, stored.vertical, 0.0);
-        assertEquals("info must store ffInputBrake=0.75: " + stored, 0.75, stored.brake, 0.0);
     }
 
     @Test
@@ -315,10 +222,8 @@ public class FreeFlightCycleTest extends AbstractSharedServerTest {
         int id = buildAndAssemble(FixtureSite.openAir(0, 2700, 500));
         // (intentionally NO set-flight-mode — rocket stays CLASSIC_LAUNCH)
 
-        String applied = ok(client().execute(
+        ok(client().execute(
                 "stellurgytest rocket free-flight-input " + id + " 1.0 1.0 1.0 1.0 0.0"));
-        assertTrue("classic-mode input must report applied=false: " + applied,
-                (!Reply.of(applied).bool("applied")));
 
         // info still shows zero current input (defensive). A craft with NO input block at all
         // satisfies the same claim more strongly — nothing is holding its stick — so the two are

@@ -170,12 +170,6 @@ public class ShipArrivalKeepsItsPilotSeatInASuperheatedAtmosphereTest extends Ab
         }
     }
 
-    // --- helpers ------------------------------------------------------------------------------------
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     /** Poll for a loaded VS ship (assembly is asynchronous). Bounded ~10 s. Returns the loaded count. */
     /** How many ships are LOADED in {@code dim} right now. A read, not a wait: measured across this
      *  tier at one and at six forks, the ship is already loaded whenever a scenario asks. */

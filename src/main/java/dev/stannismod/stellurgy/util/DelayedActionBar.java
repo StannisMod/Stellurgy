@@ -8,9 +8,6 @@ import java.util.UUID;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.ITextComponent;
-import net.minecraftforge.fml.common.FMLCommonHandler;
-import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 /**
  * Sends a player an action-bar message a few ticks FROM NOW. The action bar holds exactly one
@@ -20,7 +17,8 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
  * OVERWRITTEN by the hint before the player can read it. Queuing the message a few ticks out puts
  * it after the tracker's flush, so it lands last and stays visible.
  *
- * <p>Server main thread only (queued and drained there).</p>
+ * <p>One per server ({@code ServerState}), so a message still pending when a server stops dies with
+ * it. Server main thread only (queued and drained there).</p>
  */
 public final class DelayedActionBar {
 
@@ -36,24 +34,19 @@ public final class DelayedActionBar {
         }
     }
 
-    private static final List<Entry> PENDING = new ArrayList<>();
+    private final List<Entry> pending = new ArrayList<>();
 
     /** Queue {@code message} for {@code player}'s action bar, {@code delayTicks} server ticks out. */
-    public static void send(EntityPlayerMP player, ITextComponent message, int delayTicks) {
-        PENDING.add(new Entry(player.getUniqueID(), message, Math.max(1, delayTicks)));
+    public void send(EntityPlayerMP player, ITextComponent message, int delayTicks) {
+        pending.add(new Entry(player.getUniqueID(), message, Math.max(1, delayTicks)));
     }
 
-    @SubscribeEvent
-    public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || PENDING.isEmpty()) {
+    /** One server tick: deliver what is due. */
+    public void tick(MinecraftServer server) {
+        if (pending.isEmpty()) {
             return;
         }
-        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
-        if (server == null) {
-            PENDING.clear();
-            return;
-        }
-        Iterator<Entry> it = PENDING.iterator();
+        Iterator<Entry> it = pending.iterator();
         while (it.hasNext()) {
             Entry entry = it.next();
             if (--entry.ticksLeft > 0) {

@@ -1,7 +1,7 @@
 package dev.stannismod.stellurgy.space;
 
 /**
- * The client's copy of the space clock.
+ * A client's copy of the space clock.
  *
  * <p>The space clock is the SERVER's counter — the space subsystem's own, advanced once per server
  * tick and persisted with the subsystem's saved state. A client has no access to it and no way to
@@ -22,59 +22,40 @@ package dev.stannismod.stellurgy.space;
  * the value BACKWARDS — the server's counter is the truth and a client that ran ahead is simply
  * wrong. Nothing may assume this value never decreases.</p>
  *
- * <p>Before the first sync ever arrives the answer is {@code 0}, which is what a client-side read of
- * the space clock returned before this class existed; {@link #hasSync()} distinguishes "not told
+ * <p>Before the first sync arrives the answer is {@code 0}; {@link #hasSync()} distinguishes "not told
  * yet" from "told it is tick zero".</p>
  *
- * <p>Plain state, no Minecraft types: it is written by a packet on the client and advanced by a
- * client tick, but it must load on a dedicated server like any other common class.</p>
+ * <p>One per connection: the client's view of the server it is connected to owns it, so the next
+ * server's counter starts from "not told yet" rather than from this one's baseline. Plain state, no
+ * Minecraft types, so it loads on a dedicated server like any other common class.</p>
  */
 public final class SpaceClockSync {
 
     /** No baseline has been received. Distinguishable from a legitimate tick 0. */
     private static final long NO_SYNC = Long.MIN_VALUE;
 
-    // OWNER: the CLIENT; LIFETIME: one connection to one server. Nothing here outlives that, and
-    // {@link #reset()} is the release — called on disconnect, so the next server's counter starts
-    // from "not told yet" rather than from this one's baseline. Static because a client's connection
-    // is what the class describes and there is exactly one of it while these fields mean anything;
-    // a second one would be a second client in this JVM, which cannot exist.
-    private static long baseTick = NO_SYNC;
-    private static long baseLocal;
-    private static long localTicks;
-
-    private SpaceClockSync() {
-    }
+    private long baseTick = NO_SYNC;
+    private long baseLocal;
+    private long localTicks;
 
     /** Take a fresh baseline from the server. */
-    public static void accept(long serverTick) {
+    public void accept(long serverTick) {
         baseTick = serverTick;
         baseLocal = localTicks;
     }
 
     /** One client tick elapsed. */
-    public static void onClientTick() {
+    public void onClientTick() {
         localTicks++;
     }
 
     /** Whether a baseline has ever arrived. */
-    public static boolean hasSync() {
+    public boolean hasSync() {
         return baseTick != NO_SYNC;
     }
 
     /** The space clock as this client currently believes it, or {@code 0} before the first sync. */
-    public static long now() {
+    public long now() {
         return baseTick == NO_SYNC ? 0L : baseTick + (localTicks - baseLocal);
-    }
-
-    /**
-     * Forget the baseline. Called when the client leaves a server: the next server's counter is
-     * unrelated to this one, and carrying the old baseline across would answer confidently with a
-     * number from a different world.
-     */
-    public static void reset() {
-        baseTick = NO_SYNC;
-        baseLocal = 0L;
-        localTicks = 0L;
     }
 }

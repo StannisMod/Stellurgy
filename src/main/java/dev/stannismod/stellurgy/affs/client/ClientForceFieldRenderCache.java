@@ -10,22 +10,31 @@ import net.minecraft.world.World;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+
+import dev.stannismod.stellurgy.world.WorldRuntime;
 
 public final class ClientForceFieldRenderCache {
 
-    private static final Map<Integer, RenderState> STATES_BY_DIMENSION = new ConcurrentHashMap<>();
+    /** The active emitters a client world was last told about, as that world's own part
+     *  ({@link WorldRuntime}): it goes with the world, so nothing of one world is drawn in the next. */
+    private static final class Snapshot {
+        volatile RenderState state;
+    }
 
     private ClientForceFieldRenderCache() {
     }
 
+    /**
+     * Take the server's emitter snapshot for {@code dimension}, if that is the world this client shows.
+     * The world is looked up here, inside a client class, because the packet handler that calls this
+     * is common code and must not name the client's world type.
+     */
     public static void replaceSnapshot(int dimension, List<? extends FieldSource> sources) {
-        STATES_BY_DIMENSION.put(dimension, new RenderState(sources));
-    }
-
-    public static void clearAll() {
-        STATES_BY_DIMENSION.clear();
+        World world = net.minecraft.client.Minecraft.getMinecraft().world;
+        if (world == null || world.provider.getDimension() != dimension) {
+            return;
+        }
+        WorldRuntime.of(world, Snapshot.class, Snapshot::new).state = new RenderState(sources);
     }
 
     public static RenderMesh getMesh(World world) {
@@ -33,7 +42,7 @@ public final class ClientForceFieldRenderCache {
             return RenderMesh.EMPTY;
         }
 
-        RenderState state = STATES_BY_DIMENSION.get(world.provider.getDimension());
+        RenderState state = WorldRuntime.of(world, Snapshot.class, Snapshot::new).state;
         if (state == null) {
             return RenderMesh.EMPTY;
         }
@@ -255,6 +264,7 @@ public final class ClientForceFieldRenderCache {
     }
 
     public static final class RenderMesh {
+        /** Effectively final, process lifetime: built once at class initialisation. */
         public static final RenderMesh EMPTY = new RenderMesh(Collections.emptyList());
         private final List<Triangle> triangles;
 

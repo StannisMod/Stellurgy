@@ -28,8 +28,8 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * re-assembled hull, and it answers whether the WHOLE crew is back aboard. The record carries the
  * answer ({@code seated}), the crew it was asked about by name, the destination dimension, the
  * durable ship id the seats were filtered on ({@code ship}, {@code "null"} when the caller had none),
- * production's own account of what held a refusal up ({@code block} — {@code lastReseatBlock()},
- * written at the end of the same call), and the {@code caller} trail, because the same seam serves
+ * production's own account of what held a refusal up ({@code block} — the returned
+ * {@code Reseat.block}), and the {@code caller} trail, because the same seam serves
  * three paths and a chain wants to know which one it is on.</p>
  *
  * <p>A crossing retries the re-seat every tick until it succeeds or the settle gives up (200
@@ -59,8 +59,7 @@ import dev.stannismod.stellurgy.test.trace.TestTrace;
  * is the caller's count, not this seam's — nor the debounce that turns a run of
  * {@code NOT_ON_STALE_MOUNT} into a cancelled entry. It says nothing about the client: a re-seat that
  * the server considers done is a mount the client has yet to be told about. And {@code reseat}'s
- * early return for an empty crew is recorded as a success with {@code crew:[]}; on that path the
- * {@code block} read is the previous call's and is therefore reported as {@code ""}.</p>
+ * early return for an empty crew is recorded as a success with {@code crew:[]}.</p>
  *
  * <p>Both targets are {@code public static} and return a value, so both handlers are static and take
  * {@code CallbackInfoReturnable}; both fire at every return and read only arguments and the return
@@ -76,9 +75,10 @@ public abstract class MixinCrewTransferEvents {
     @Inject(method = "reseat", at = @At("RETURN"))
     private static void stellurgyTest$reseated(WorldServer dstWorld, BlockPos anchor,
                                         List<CrewTransfer.Crew> crew, UUID expectedShipId,
-                                        UUID vsShipUuid, CallbackInfoReturnable<Boolean> cir) {
+                                        UUID vsShipUuid, CallbackInfoReturnable<CrewTransfer.Reseat> cir) {
         TestTrace.instrumentHere(INSTRUMENT);
-        boolean seated = cir.getReturnValueZ();
+        CrewTransfer.Reseat reseat = cir.getReturnValue();
+        boolean seated = reseat.seated;
         int dim = dstWorld == null ? 0 : dstWorld.provider.getDimension();
         String key = dim + ":" + expectedShipId + ":" + vsShipUuid;
         String block = "";
@@ -86,10 +86,7 @@ public abstract class MixinCrewTransferEvents {
         if (seated) {
             lastBlock.remove(key);
         } else {
-            block = CrewTransfer.lastReseatBlock();
-            if (block == null) {
-                block = "";
-            }
+            block = reseat.block;
             if (block.equals(lastBlock.get(key))) {
                 return; // same refusal as last tick — an edge is what the chain reads
             }

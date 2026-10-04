@@ -1,5 +1,6 @@
 package dev.stannismod.stellurgy.test.unit;
 
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import sun.misc.Unsafe;
@@ -44,18 +45,21 @@ import static org.junit.Assert.assertTrue;
  */
 public class RocketLoaderRedstonePolarityTest {
 
-    private static Unsafe UNSAFE;
-    private static Method isStateActive;
-    private static TileRocketLoader fakeLoader;
+    private Method isStateActive;
+    private TileRocketLoader fakeLoader;
 
     @BeforeClass
-    public static void bootstrap() throws Exception {
+    public static void bootstrap() {
         // SatelliteBase / LibVulpes localisation paths touched during
         // ctor need MC's Bootstrap registries.
         MinecraftBootstrap.ensure();
+    }
+
+    @Before
+    public void reachIsStateActive() throws Exception {
         Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
         theUnsafe.setAccessible(true);
-        UNSAFE = (Unsafe) theUnsafe.get(null);
+        Unsafe unsafe = (Unsafe) theUnsafe.get(null);
 
         // Allocate a TileRocketLoader without running its ctor — the
         // ctor builds libVulpes UI modules + sideSelectorModule that
@@ -63,7 +67,7 @@ public class RocketLoaderRedstonePolarityTest {
         // we don't need them here. isStateActive is a pure boolean
         // function of (RedstoneState, boolean) so a bare instance is
         // enough as the dispatch target.
-        fakeLoader = (TileRocketLoader) UNSAFE.allocateInstance(TileRocketLoader.class);
+        fakeLoader = (TileRocketLoader) unsafe.allocateInstance(TileRocketLoader.class);
 
         // Cache the protected helper. Located on the loader class
         // itself (not inherited).
@@ -72,7 +76,7 @@ public class RocketLoaderRedstonePolarityTest {
         isStateActive.setAccessible(true);
     }
 
-    private static boolean invoke(RedstoneState state, boolean condition) {
+    private boolean invoke(RedstoneState state, boolean condition) {
         try {
             return (Boolean) isStateActive.invoke(fakeLoader, state, condition);
         } catch (ReflectiveOperationException e) {

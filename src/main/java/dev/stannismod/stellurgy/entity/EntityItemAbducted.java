@@ -15,6 +15,7 @@ import javax.annotation.Nonnull;
 
 public class EntityItemAbducted extends Entity {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DataParameter<ItemStack> ITEM = EntityDataManager.createKey(EntityItem.class, DataSerializers.ITEM_STACK);
 
     private int lifespan;

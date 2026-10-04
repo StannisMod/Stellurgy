@@ -30,6 +30,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
 
     public static final int MAX_SCAN_RADIUS = 16;
     public static final int MAX_SHIELD_BUFFER = 200_000;
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final DamageSource SHIELD_COLLISION_DAMAGE = new DamageSource("affs.contour_collision");
 
     private String contourCode = "";
@@ -119,7 +120,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     public void onLoad() {
         super.onLoad();
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.register(this);
+            ShieldNetworkRegistry.of(world).register(this);
             ShieldNetworkManager.markDirty(world);
         }
     }
@@ -127,7 +128,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     @Override
     public void invalidate() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
         }
         super.invalidate();
@@ -136,7 +137,7 @@ public class TileEntityContourInjector extends TileEntity implements ITickable, 
     @Override
     public void onChunkUnload() {
         if (world != null && !world.isRemote) {
-            ShieldNetworkRegistry.unregister(this);
+            ShieldNetworkRegistry.of(world).unregister(this);
             ShieldNetworkManager.markDirty(world);
         }
         super.onChunkUnload();

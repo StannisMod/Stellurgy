@@ -25,7 +25,11 @@ import static org.junit.Assert.assertTrue;
  */
 public class ShipAboardTagTest {
 
+    /** A constant: a {@code UUID} is an immutable value: two final longs. */
     private static final UUID SHIP = UUID.fromString("f7a1c3d2-0000-4000-8000-00000000beef");
+    /**
+     * A constant: {@code GalacticCoord} is an immutable value: every field final, nothing mutable reachable.
+     */
     private static final GalacticCoord COORD =
             GalacticCoord.ofSectorLocal(12L, -3L, 7L, 640L, -128L, 4096L);
 

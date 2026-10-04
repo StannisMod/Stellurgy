@@ -1,16 +1,8 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
 
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Test;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -50,9 +42,11 @@ import static org.junit.Assert.assertTrue;
  * the same list walked in the same loop. <b>So this file pins the MECHANISM and two of its
  * participants, not all six.</b> Anyone reading a green here should read that sentence too.</p>
  *
- * <p>Server tier: every binding is server state, and {@code ensure-fake} supplies the player.</p>
+ * <p>Server tier: every binding is server state, and {@code ensure-fake} supplies the player. One
+ * server for the class: every scenario binds what it asserts on and ends with a release, and the one
+ * that needs a player with nothing bound arranges it by releasing first.</p>
  */
-public class PlayerReleaseContractTest {
+public class PlayerReleaseContractTest extends AbstractSharedServerTest {
 
     /** Any well-formed id: the record names a ship, and nothing here asks the ledger about it. */
     private static final String SHIP = "11111111-2222-3333-4444-555555555555";
@@ -65,29 +59,6 @@ public class PlayerReleaseContractTest {
     private static final String ABOARD_RECORD = "aboard record";
     private static final String TRANSFER_GRACE = "rocket transfer grace";
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
-
-    @Before
-    public void startServer() throws Exception {
-        Assume.assumeTrue("Server harness disabled",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-player-release-");
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
-    }
-
-    @After
-    public void stopServer() throws Exception {
-        if (harness != null) {
-            harness.close();
-        }
-    }
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", harness.client().execute(cmd));
-    }
-
     private void ensurePlayer() throws Exception {
         String fake = exec("stellurgytest player ensure-fake 0 8.5 80 8.5");
         assertTrue("the fake player must exist before anything can be bound to him: " + fake,
@@ -95,13 +66,18 @@ public class PlayerReleaseContractTest {
     }
 
     @Test
-    public void aFreshPlayerIsBoundToNothing() throws Exception {
+    public void aPlayerWithNothingBoundReportsNothingAndReleasesNothing() throws Exception {
         ensurePlayer();
-        // THE CONTROL FOR EVERY OTHER ASSERTION IN THIS FILE. If a fresh player already reported
-        // bindings, "he is bound to nothing after a release" would be satisfied by an answer that
+        // The fake player is shared with the sibling scenarios, so "has done nothing" is not a state
+        // this scenario can be handed; it ARRANGES "has nothing bound" instead, by letting go of
+        // whatever a sibling left. The claims below are about the witness and the release, not about
+        // freshness.
+        exec("stellurgytest player release");
+        // THE CONTROL FOR EVERY OTHER ASSERTION IN THIS FILE. If the witness could not answer
+        // "nothing", "he is bound to nothing after a release" would be satisfied by an answer that
         // never changes, and so would every green below.
         String bound = exec("stellurgytest player bindings");
-        assertTrue("a player who has done nothing must be bound to nothing: " + bound,
+        assertTrue("a player with nothing bound must be REPORTED as bound to nothing: " + bound,
                 (Reply.of(bound).arrayLength("bound") == 0));
 
         // And releasing nothing releases NOTHING — a release that always claims something would
@@ -198,8 +174,9 @@ public class PlayerReleaseContractTest {
      * grace is let go by the release and by nothing else on that path. The login is the real
      * handler — the event a join fires once the save file has been read, posted for this player.</p>
      *
-     * <p>red-witnessed: with the orphan branch of {@code SpaceEventHandler.onPlayerLoadFromFile}
-     * releasing nothing instead of calling {@code playerRelease().toTheWorld}: "a player orphaned from
+     * <p>red-witnessed: with the orphan branch of {@code SpaceEventHandler#onPlayerLoadFromFile} at
+     * {@code .playerRelease().toTheWorld(player)} releasing nothing instead of calling
+     * {@code playerRelease().toTheWorld}: "a player orphaned from
      * a ship the server no longer knows must come back bound to nothing … {\"bound\":[\"rocket transfer
      * grace\"]}", 2026-09-28.</p>
      */

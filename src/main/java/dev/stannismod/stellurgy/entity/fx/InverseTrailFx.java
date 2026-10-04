@@ -23,7 +23,7 @@ public class InverseTrailFx extends Particle {
                           double y, double z, double motx, double moty, double motz) {
         super(world, x, y, z, motx, moty, motz);
 
-        DelayedParticleRenderingEventHandler.TrailFxParticles.add(this);
+        DelayedParticleRenderingEventHandler.in(world).trail.add(this);
 
         float chroma = this.rand.nextFloat() * 0.2f;
         this.particleRed = .8F + chroma;

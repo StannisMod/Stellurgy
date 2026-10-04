@@ -119,7 +119,7 @@ public class StarClusterTest {
     public void everyGalaxyHasANucleusAtItsOwnCentre() {
         // Not a special case: the nucleus is a cluster like the others, drawn at a known place instead
         // of a drawn one, and it is the richest of them.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg());
         ClusterField clusters = gen.clusters();
         Galaxy home = gen.galaxies().home(SEED);
         Optional<StarCluster> nucleus = clusters.nucleusOf(SEED, home);
@@ -145,7 +145,7 @@ public class StarClusterTest {
         // galaxies routinely are — got ~4·10^7 stars inside a six-light-year core while holding ~10^7
         // altogether. A nucleus four times its own galaxy. Population goes as radius cubed and k cubed,
         // so k has to go as the radius.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg());
         ClusterField clusters = gen.clusters();
 
         int atReference = clusters.nucleusOf(SEED, galaxyOfRadius(
@@ -187,7 +187,7 @@ public class StarClusterTest {
     public void aClusterNeverStraddlesItsOwnLatticeCell() {
         // The same containment the galaxy tier needs, one level down and for the same reason: a
         // cluster reaching into a neighbouring cluster cell would make ownership ambiguous.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg());
         ClusterField clusters = gen.clusters();
         Galaxy home = gen.galaxies().home(SEED);
         long spacing = clusters.spacingSuperCells();
@@ -213,7 +213,7 @@ public class StarClusterTest {
     public void clustersOnlyExistWhereTheirGalaxyHasStars() {
         // One function, not a second rule: a cluster's occupancy is scaled by the same density profile
         // that placed the systems, so clusters stop where the galaxy does.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg());
         Galaxy home = gen.galaxies().home(SEED);
         long farSuper = UniverseScale.cellsForLightYears(home.radiusLy() * 4d) / cfg().minSpacing;
         long farCluster = farSuper / gen.clusters().spacingSuperCells() + 1L;
@@ -228,7 +228,7 @@ public class StarClusterTest {
         // The point of the whole tier: the stratified lattice caps density at about three times the
         // mean, while a real cluster runs tens of times the field. Measured as seats found in the same
         // volume, inside a cluster and beside it.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg());
         Galaxy home = gen.galaxies().home(SEED);
         ClusterField clusters = gen.clusters();
         long s = cfg().minSpacing;
@@ -267,7 +267,7 @@ public class StarClusterTest {
         // opposite of a cluster — so a spacing too tight to refine simply is not refined, exactly as
         // too tight a spacing already degenerates rather than erroring.
         int tiny = 16;
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new GalaxyGenConfig(tiny, 0.9d,
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),new GalaxyGenConfig(tiny, 0.9d,
                 GalaxyGenConfig.DEFAULT_GALAXY_SPACING, GalaxyGenConfig.DEFAULT_GALAXY_DENSITY,
                 null, null));
         assertTrue("a spacing of " + tiny + " cells is below the refinement floor",
@@ -294,7 +294,7 @@ public class StarClusterTest {
         // The invariant that survives the refinement: whatever lattice is in force locally, a cell is
         // attributed to a seat inside its OWN coarse super-cell. That is what keeps member attribution
         // exact and two systems' neighbourhoods from interleaving.
-        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(cfg());
+        ClusteredGalaxyGenerator gen = new ClusteredGalaxyGenerator(new dev.stannismod.stellurgy.universe.ReportOnce(),cfg());
         long s = cfg().minSpacing;
         int checked = 0;
         for (long sup = -3L; sup <= 3L; sup++) {

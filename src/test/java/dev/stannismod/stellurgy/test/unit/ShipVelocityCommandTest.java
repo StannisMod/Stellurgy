@@ -32,10 +32,14 @@ public class ShipVelocityCommandTest {
     private static final double DELTA = 1e-9;
     private static final double MAX = 8.0;
     private static final double RAMP = MAX / 60.0; // full deflection reaches MAX in 3 s
-    /** Identity attitude: body forward=+Z, right=+X, up=+Y -> world {x=right, y=up, z=forward}. */
+    /**
+     * Identity attitude: body forward=+Z, right=+X, up=+Y -> world {x=right, y=up, z=forward}.
+     *
+     * <p>A constant: {@code Quat} is an immutable value: four final doubles.</p>
+     */
     private static final Quat LEVEL = Quat.IDENTITY;
 
-    private static final double[] REST = {0.0, 0.0, 0.0};
+    private final double[] restVelocity = {0.0, 0.0, 0.0};
 
     private static FreeFlightInput input(float fwd, float vert, float strafe, float brake, boolean cut) {
         // (throttleForward, throttleVertical, strafeInput, yawInput, pitchInput, rollInput, brake, cut)
@@ -58,8 +62,8 @@ public class ShipVelocityCommandTest {
         return FreeFlightPhysics.shipVelocityCommand(in, LEVEL, true, sp, MAX);
     }
 
-    private static double[] newtonianCommand(FreeFlightInput in) {
-        return FreeFlightPhysics.shipVelocityCommand(in, LEVEL, false, REST, MAX);
+    private double[] newtonianCommand(FreeFlightInput in) {
+        return FreeFlightPhysics.shipVelocityCommand(in, LEVEL, false, restVelocity, MAX);
     }
 
     // ---- Flight Assist ON: cruise control -------------------------------------------------
@@ -67,7 +71,7 @@ public class ShipVelocityCommandTest {
     @Test
     public void faOnReleasingTheThrottleKeepsCruising() {
         // THE regression pin: accelerate, then let go. The ship must hold its speed, not stop.
-        double[] sp = rampFor(60, REST, input(1f, 0f, 0f, 0f, false));
+        double[] sp = rampFor(60, restVelocity, input(1f, 0f, 0f, 0f, false));
         assertEquals("full deflection reaches cruise speed", MAX, sp[0], 1e-6);
 
         double[] coasting = rampFor(40, sp, FreeFlightInput.zero()); // hands off the keys
@@ -78,34 +82,34 @@ public class ShipVelocityCommandTest {
 
     @Test
     public void faOnThrottleRampsGraduallyNotInstantly() {
-        double[] sp = ramp(REST, input(1f, 0f, 0f, 0f, false));
+        double[] sp = ramp(restVelocity, input(1f, 0f, 0f, 0f, false));
         assertEquals(RAMP, sp[0], DELTA);
         assertTrue("one tick of throttle is far below cruise speed", sp[0] < MAX / 10.0);
     }
 
     @Test
     public void faOnSetpointClampsToMaxSpeed() {
-        double[] sp = rampFor(500, REST, input(1f, 0f, 0f, 0f, false));
+        double[] sp = rampFor(500, restVelocity, input(1f, 0f, 0f, 0f, false));
         assertEquals(MAX, sp[0], 1e-6);
     }
 
     @Test
     public void faOnCutZeroesTheSetpointToHover() {
-        double[] sp = rampFor(60, REST, input(1f, 0f, 0f, 0f, false));
+        double[] sp = rampFor(60, restVelocity, input(1f, 0f, 0f, 0f, false));
         double[] afterCut = ramp(sp, input(1f, 0f, 0f, 0f, true)); // X, throttle still held
-        assertArrayEquals(REST, afterCut, DELTA);
+        assertArrayEquals(restVelocity, afterCut, DELTA);
         assertArrayEquals(new double[]{0.0, 0.0, 0.0}, faCommand(afterCut, FreeFlightInput.zero()), DELTA);
     }
 
     @Test
     public void faOnBrakeZeroesTheSetpointToHover() {
-        double[] sp = rampFor(60, REST, input(1f, 0f, 0f, 0f, false));
-        assertArrayEquals(REST, ramp(sp, input(0f, 0f, 0f, 1f, false)), DELTA);
+        double[] sp = rampFor(60, restVelocity, input(1f, 0f, 0f, 0f, false));
+        assertArrayEquals(restVelocity, ramp(sp, input(0f, 0f, 0f, 1f, false)), DELTA);
     }
 
     @Test
     public void faOnIdleAtRestHovers() {
-        double[] v = faCommand(REST, FreeFlightInput.zero());
+        double[] v = faCommand(restVelocity, FreeFlightInput.zero());
         assertNotNull(v);
         assertArrayEquals(new double[]{0.0, 0.0, 0.0}, v, DELTA);
     }
@@ -113,9 +117,9 @@ public class ShipVelocityCommandTest {
     @Test
     public void faOnSetpointMapsThroughBodyAxes() {
         // vertical -> world +Y, strafe -> world +X (identity attitude).
-        double[] up = rampFor(60, REST, input(0f, 1f, 0f, 0f, false));
+        double[] up = rampFor(60, restVelocity, input(0f, 1f, 0f, 0f, false));
         assertArrayEquals(new double[]{0.0, MAX, 0.0}, faCommand(up, FreeFlightInput.zero()), 1e-6);
-        double[] right = rampFor(60, REST, input(0f, 0f, 1f, 0f, false));
+        double[] right = rampFor(60, restVelocity, input(0f, 0f, 1f, 0f, false));
         assertArrayEquals(new double[]{MAX, 0.0, 0.0}, faCommand(right, FreeFlightInput.zero()), 1e-6);
     }
 
@@ -149,7 +153,7 @@ public class ShipVelocityCommandTest {
     @Test
     public void faOffIgnoresTheCruiseSetpoint() {
         // A stale cruise setpoint must not resurrect thrust once the pilot switches FA off.
-        double[] cruising = rampFor(60, REST, input(1f, 0f, 0f, 0f, false));
+        double[] cruising = rampFor(60, restVelocity, input(1f, 0f, 0f, 0f, false));
         assertNull(FreeFlightPhysics.shipVelocityCommand(
                 FreeFlightInput.zero(), LEVEL, false, cruising, MAX));
     }
@@ -158,10 +162,10 @@ public class ShipVelocityCommandTest {
 
     @Test
     public void nullInputIsIdle() {
-        assertNull(FreeFlightPhysics.shipVelocityCommand(null, LEVEL, false, REST, MAX));
+        assertNull(FreeFlightPhysics.shipVelocityCommand(null, LEVEL, false, restVelocity, MAX));
         assertArrayEquals(new double[]{0.0, 0.0, 0.0},
-                FreeFlightPhysics.shipVelocityCommand(null, LEVEL, true, REST, MAX), DELTA);
-        assertArrayEquals(REST, FreeFlightPhysics.shipRampSetpoint(0, 0, 0, null, MAX, RAMP), DELTA);
+                FreeFlightPhysics.shipVelocityCommand(null, LEVEL, true, restVelocity, MAX), DELTA);
+        assertArrayEquals(restVelocity, FreeFlightPhysics.shipRampSetpoint(0, 0, 0, null, MAX, RAMP), DELTA);
     }
 
     @Test
@@ -196,18 +200,18 @@ public class ShipVelocityCommandTest {
     @Test
     public void hoverCommandHoldsAltitudeInsteadOfSinking() {
         // vCmd = 0 (station-keeping / cut / brake). Under gravity the ship must settle at REST, not sink.
-        double[] v = REST.clone();
+        double[] v = restVelocity.clone();
         for (int i = 0; i < 20; i++) {
             v = vsStep(v, new double[]{0.0, 0.0, 0.0});
         }
-        assertArrayEquals("a hovering ship holds zero velocity under gravity", REST, v, DELTA);
+        assertArrayEquals("a hovering ship holds zero velocity under gravity", restVelocity, v, DELTA);
     }
 
     @Test
     public void withoutFeedForwardAHoverSinksAtExactlyMinusGDt() {
         // Documents the bug the feed-forward fixes: hide gravity from the law (pass zero) while the
         // solver still applies it, and the deadbeat settles at exactly -g*dt - the reported residual.
-        double[] v = REST.clone();
+        double[] v = restVelocity.clone();
         for (int i = 0; i < 50; i++) {
             double[] a = FreeFlightPhysics.shipControlAccel(0, 0, 0, v[0], v[1], v[2], PHYS_DT,
                     0, 0, 0, AUTHORITY); // gravity hidden from the control law
@@ -220,7 +224,7 @@ public class ShipVelocityCommandTest {
     @Test
     public void commandedClimbVelocityIsHeldExactly() {
         // A non-zero vertical command must be reached and held: the fix must not break climb/descend.
-        double[] v = REST.clone();
+        double[] v = restVelocity.clone();
         for (int i = 0; i < 30; i++) {
             v = vsStep(v, new double[]{0.0, 2.0, 0.0});
         }

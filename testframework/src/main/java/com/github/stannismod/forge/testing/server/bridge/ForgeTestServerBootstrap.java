@@ -30,7 +30,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The in-JVM half of the SERVER control bridge — the mirror of
@@ -47,7 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Protocol, line-delimited JSON, one object per line, identical in shape to the client bridge:
  * the child writes the literal line {@code READY} once on connect; a request is
- * {@code {"command":"stellurgytest events since 12"}}; a response is {@code {"ok":true,"lines":[…]}} or
+ * {@code {"command":"stellurgytest beacon list 2"}}; a response is {@code {"ok":true,"lines":[…]}} or
  * {@code {"ok":false,"error":"…"}}.</p>
  *
  * <p>What it is silent about: it reports only what the command sent to its sender. Anything the
@@ -60,25 +59,35 @@ public final class ForgeTestServerBootstrap {
     /** System property carrying the harness's control port. Absent ⇒ this class does nothing. */
     public static final String PROP_PORT = "forge.test.server.port";
 
-    private static final AtomicBoolean STARTED = new AtomicBoolean(false);
 
     private ForgeTestServerBootstrap() {
     }
 
     /**
-     * Start the bridge thread, once per JVM.
+     * Start the bridge thread, once per server.
      *
      * <p>Called reflectively from the consuming mod's {@code FMLServerStartingEvent} handler, which
      * is the first point at which {@code FMLCommonHandler.getMinecraftServerInstance()} is
      * guaranteed non-null. A no-op when {@link #PROP_PORT} is unset, so a production launch that
      * somehow carries this class still pays nothing.</p>
+     *
+     * <p>"Once" is remembered by the server itself ({@link ServerBridgeOwner}, mixed in by the
+     * harness), so nothing of it outlives that server. A server without that mixin, in a JVM the
+     * harness launched with its port, means the harness's own mixin configuration was not applied —
+     * that fails here, loudly, rather than running a bridge whose instruments are silently off.</p>
      */
     public static void bootstrap() {
-        if (!STARTED.compareAndSet(false, true)) {
-            return;
-        }
         Integer port = Integer.getInteger(PROP_PORT);
         if (port == null || port.intValue() <= 0) {
+            return;
+        }
+        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        if (!(server instanceof ServerBridgeOwner)) {
+            throw new IllegalStateException("the server " + server + " carries no test bridge: the"
+                    + " harness mixin configuration (mixins.forgetestframework.json) was not applied"
+                    + " — is -Dfml.coreMods.load naming ForgeTestCoreMod?");
+        }
+        if (!((ServerBridgeOwner) server).forgeTest$claimServerBridgeStart()) {
             return;
         }
         Thread bridgeThread = new Thread(ForgeTestServerBootstrap::runBridge, "forge-test-server-bridge");

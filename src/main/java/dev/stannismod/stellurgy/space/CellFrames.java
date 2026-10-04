@@ -20,6 +20,8 @@ public interface CellFrames {
      * The static reading: every cell sits at {@code sector * CELL} forever. This is what a void cell
      * — one with no primary to ride — really does, and it is the honest answer for any caller with no
      * registry: a pure unit test, a fixture, a probe with no world.
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
      */
     CellFrames STATIC = new CellFrames() {
         @Override

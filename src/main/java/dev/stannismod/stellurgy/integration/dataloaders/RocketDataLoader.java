@@ -32,6 +32,8 @@ import dev.stannismod.stellurgy.libvulpes.util.Vector3F;
  * - Guidance Computer stack. If this is null, there is no guidance computer.
  * - Rocket Entity
  * - Guidance Computer Destination
+ *
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
  */
 public abstract class RocketDataLoader {
     abstract protected EntityRocket getRocket();

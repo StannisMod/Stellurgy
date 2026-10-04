@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.valkyrienskies.mod.common.ships.interpolation.DeclaredMotionTransformInterpolator;
 import org.valkyrienskies.mod.common.ships.ship_transform.ShipTransform;
 
-import dev.stannismod.stellurgy.command.test.MotionTrace;
+import dev.stannismod.stellurgy.test.trace.SideTrace;
 
 /**
  * Counts the pose packets a client actually receives for a ship.
@@ -58,6 +58,8 @@ public abstract class MixinShipTransformUpdateDiag {
             + "ShipTransform;Lnet/minecraft/util/math/AxisAlignedBB;)V", at = @At("HEAD"))
     private void stellurgyTest$countTransformArrival(@Nonnull ShipTransform newTransform,
                                               @Nonnull AxisAlignedBB newAABB, CallbackInfo ci) {
-        MotionTrace.clientShipTransformUpdates++;
+        // By the calling thread: the pose is applied on the client thread, and the interpolator
+        // class is not client-only, so a dedicated server must be able to load this too.
+        SideTrace.here().motion().shipTransformArrived();
     }
 }

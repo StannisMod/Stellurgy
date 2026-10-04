@@ -1,8 +1,9 @@
 package org.valkyrienskies.mod.common.ships.block_relocation;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
@@ -13,24 +14,27 @@ import org.valkyrienskies.mod.common.config.VSConfig;
 
 public class ShipSpawnDetector extends SpatialDetector {
 
-    private static final Set<Block> blacklist = new CopyOnWriteArraySet<>();
-
-    static {
-        VSConfig.registerSyncEvent(ShipSpawnDetector::syncWithConfig);
-        // This static block doesn't get loaded until we try spawning a ship, so initially blacklist is empty.
-        // We run the function here to fix that.
-        syncWithConfig();
-    }
+    /**
+     * The blocks a ship-spawn flood does not cross. Written whole by {@link #syncWithConfig}, never
+     * edited in place, so an assembly reads either the old set or the new one and never a half-built
+     * one. {@code null} until the mod's init has built it.
+     *
+     * Effectively final, process lifetime: written only by ShipSpawnDetector.syncWithConfig.
+     */
+    private static volatile Set<Block> blacklist;
 
     /**
-     * This is called by {@link VSConfig#sync}
+     * Rebuild the blacklist from the config and swap it in whole. The mod runs this at init, once
+     * every block is registered so a modded name resolves; a config reload runs it again, which is
+     * the config reload's partial re-initialisation of the mod, the sanctioned exception to statics
+     * being written once.
      */
-    private static void syncWithConfig() {
-        blacklist.clear();
-
+    public static void syncWithConfig() {
+        Set<Block> rebuilt = new HashSet<>();
         Arrays.stream(VSConfig.shipSpawnDetectorBlacklist)
             .map(Block::getBlockFromName)
-            .forEach(blacklist::add);
+            .forEach(rebuilt::add);
+        blacklist = Collections.unmodifiableSet(rebuilt);
     }
 
     private final MutableBlockPos mutablePos = new MutableBlockPos();
@@ -49,7 +53,11 @@ public class ShipSpawnDetector extends SpatialDetector {
             cleanHouse = true;
             return false;
         }
-        return !blacklist.contains(state.getBlock());
+        Set<Block> excluded = blacklist;
+        if (excluded == null) {
+            throw new IllegalStateException("ship spawn blacklist read before the mod's init built it");
+        }
+        return !excluded.contains(state.getBlock());
     }
 
 }

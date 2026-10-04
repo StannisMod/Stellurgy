@@ -25,6 +25,7 @@ public class CapabilityPlayerBindings {
     @CapabilityInject(IPlayerBindings.class)
     public static Capability<IPlayerBindings> PLAYER_BINDINGS = null;
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ResourceLocation KEY =
             new ResourceLocation("stellurgy", "player_bindings");
 

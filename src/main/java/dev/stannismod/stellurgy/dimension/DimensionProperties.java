@@ -28,7 +28,6 @@ import dev.stannismod.stellurgy.api.dimension.IDimensionProperties;
 import dev.stannismod.stellurgy.api.dimension.solar.StellarBody;
 import dev.stannismod.stellurgy.api.satellite.SatelliteBase;
 import dev.stannismod.stellurgy.atmosphere.AtmosphereType;
-import dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.Afuckinginterface;
 import dev.stannismod.stellurgy.inventory.TextureResources;
 import dev.stannismod.stellurgy.network.PacketDimInfo;
 import dev.stannismod.stellurgy.network.PacketSatellite;
@@ -50,6 +49,9 @@ import dev.stannismod.stellurgy.api.*;
 import dev.stannismod.stellurgy.util.*;
 
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class DimensionProperties implements Cloneable, IDimensionProperties {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
@@ -255,18 +257,21 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     /** Lazily-built, never persisted: this world's own scaled copy of the shared climate ore table. */
     private transient OreGenProperties scaledOreCache;
     private transient double scaledOreCacheFor = Double.NaN;
+    /** Whether {@link TerrainResolution} has already said this planet's authored terrain is unusable. */
+    private transient boolean terrainFallbackWarned;
+
+    /** {@code true} the first time it is asked: the terrain fallback is reported once per planet. */
+    boolean firstTerrainFallbackWarning() {
+        if (terrainFallbackWarned) {
+            return false;
+        }
+        terrainFallbackWarned = true;
+        return true;
+    }
 
     /** Sentinel for {@link #mass} / {@link #radius}: nobody has stated one. */
     public static final double BULK_UNSET = 0d;
     //public int target_sea_level;
-
-    // modId must be declared explicitly: this @SidedProxy lives outside the @Mod class, and the jar
-    // now ships more than one @Mod. FML's implicit owner resolution matches the target class name
-    // against the @Mod class names, which fails for a field in a non-@Mod class when >1 mod is present,
-    // leaving this proxy uninjected (null). Naming the owning mod bypasses that resolution.
-    @SidedProxy(modId = Constants.modId, serverSide = "dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.serverlists", clientSide = "dev.stannismod.stellurgy.integrated_server_and_client_variable_sharing_fix.clientlists")
-    public static Afuckinginterface proxylists;
-
 
     public List<ChunkPos> terraformingChunksAlreadyAdded;
 
@@ -336,27 +341,27 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     }
 
     public void load_terraforming_helper(boolean reset) {
-        if (!net.minecraftforge.common.DimensionManager.getWorld(getId()).isRemote) {
-
-            if (!proxylists.isinitialized(getId())){
-                proxylists.initdim(getId());
-            }
+        World world = net.minecraftforge.common.DimensionManager.getWorld(getId());
+        if (world == null) {
+            throw new IllegalStateException("planet " + getId() + " is not loaded; its terraforming lives in its world");
+        }
+        if (!world.isRemote) {
+            TerraformingRecord record = TerraformingRecord.of(world);
 
             getAverageTemp();
             getViableBiomes(false);
             if (reset) {
-                proxylists.getChunksFullyTerraformed(getId()).clear();
-                proxylists.getChunksFullyBiomeChanged(getId()).clear();
+                record.forgetProgress();
                 terraformingChunksAlreadyAdded.clear();
             }
 
-            System.out.println("load helper with protecting blocks: " + proxylists.getProtectingBlocksForDimension(getId()).size() + " (" + reset + ")");
+            System.out.println("load helper with protecting blocks: " + record.protectingBlocks().size() + " (" + reset + ")");
 
-            proxylists.sethelper(getId(), new TerraformingHelper(getId(), getBiomesEntries(getViableBiomes(false)), proxylists.getChunksFullyTerraformed(getId()), proxylists.getChunksFullyBiomeChanged(getId())));
+            TerraformingHelper.install(new TerraformingHelper(world, getBiomesEntries(getViableBiomes(false)), record.terraformedChunks(), record.biomeChangedChunks()));
 
             System.out.println("num biomes: "+ getViableBiomes(false).size());
 
-            Collection<Chunk> list = (net.minecraftforge.common.DimensionManager.getWorld(getId())).getChunkProvider().getLoadedChunks();
+            Collection<Chunk> list = ((net.minecraft.world.WorldServer) world).getChunkProvider().getLoadedChunks();
             System.out.println("add chunks to tf list");
             if (!list.isEmpty()) {
                 for (Chunk chunk : list) {
@@ -368,48 +373,30 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
     }
 
-    public void registerProtectingBlock(BlockPos p) {
-        boolean already_registered = false;
-        for (BlockPos i : proxylists.getProtectingBlocksForDimension(getId())) {
-            if (i.equals(p)) {
-                already_registered = true;
-                break;
-            }
-        }
-        //System.out.println("register protecting block called");
-        if (!already_registered) {
-            proxylists.getProtectingBlocksForDimension(getId()).add(p);
-            //System.out.println("block registered");
-            if (proxylists.gethelper(getId()) != null) {
-                proxylists.gethelper(getId()).recalculate_chunk_status();
+    public static void registerProtectingBlock(World world, BlockPos p) {
+        if (TerraformingRecord.of(world).addProtectingBlock(p)) {
+            TerraformingHelper helper = TerraformingHelper.of(world);
+            if (helper != null) {
+                helper.recalculate_chunk_status();
             }
         }
     }
 
-    public void unregisterProtectingBlock(BlockPos p) {
-        for (BlockPos i : proxylists.getProtectingBlocksForDimension(getId())) {
-            if (i.equals(p)) {
-                proxylists.getProtectingBlocksForDimension(getId()).remove(i);
-                if (proxylists.gethelper(getId()) != null)
-                    proxylists.gethelper(getId()).recalculate_chunk_status();
-                break;
+    public static void unregisterProtectingBlock(World world, BlockPos p) {
+        if (TerraformingRecord.of(world).removeProtectingBlock(p)) {
+            TerraformingHelper helper = TerraformingHelper.of(world);
+            if (helper != null) {
+                helper.recalculate_chunk_status();
             }
         }
     }
 
-    public void add_block_to_terraforming_queue(BlockPos p) {
-        proxylists.gethelper(getId()).add_position_to_queue(p);
-    }
-    public void add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(ChunkPos pos){
+    public void add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(TerraformingHelper helper, ChunkPos pos){
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
-                    add_block_to_terraforming_queue(new BlockPos(pos.x * 16 + x, 0, pos.z * 16 + z));
+                    helper.add_position_to_queue(new BlockPos(pos.x * 16 + x, 0, pos.z * 16 + z));
             }
         }
-    }
-
-    public void add_block_to_biomechanging_queue(BlockPos p) {
-        proxylists.gethelper(getId()).add_position_to_biomechanging_queue(p);
     }
 
     synchronized boolean chunk_was_added_to_terraforming_list_if_not_add_it(ChunkPos pos){
@@ -427,15 +414,16 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     //if it already was biomechanged fully, add it directly to terraforming queue
     public void add_chunk_to_terraforming_list(Chunk chunk) {
 
-        if (proxylists.gethelper(getId()) != null) {
+        TerraformingHelper helper = TerraformingHelper.of(chunk.getWorld());
+        if (helper != null) {
 
-            boolean chunk_was_already_done = proxylists.getChunksFullyTerraformed(getId()).contains(new ChunkPos(chunk.x,chunk.z));; // do not add a chunk if it is already fully terraformed
+            boolean chunk_was_already_done = TerraformingRecord.of(chunk.getWorld()).isTerraformed(new ChunkPos(chunk.x,chunk.z)); // do not add a chunk if it is already fully terraformed
             if (chunk_was_already_done)
                 return;
 
             //System.out.println("add chunk to terraforming list: "+chunk.x+":"+chunk.z);
 
-            chunkdata current_chunk = proxylists.gethelper(getId()).getChunkFromList(chunk.x, chunk.z);
+            chunkdata current_chunk = helper.getChunkFromList(chunk.x, chunk.z);
             if (current_chunk == null || !current_chunk.chunk_fully_biomechanged) {
 
                 if(chunk_was_added_to_terraforming_list_if_not_add_it(new ChunkPos(chunk.x,chunk.z)))
@@ -447,7 +435,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
                     for (int z = 0; z < 16; z++) {
                         if (current_chunk == null || !current_chunk.fully_generated[x][z])
                             // if a position in the chunk is already fully generated, skip
-                            add_block_to_biomechanging_queue(new BlockPos(chunk.x * 16 + x, 0, chunk.z * 16 + z));
+                            helper.add_position_to_biomechanging_queue(new BlockPos(chunk.x * 16 + x, 0, chunk.z * 16 + z));
 
                     }
                 }
@@ -455,7 +443,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
                 if(chunk_was_added_to_terraforming_list_if_not_add_it(new ChunkPos(chunk.x,chunk.z)))
                     return;
 
-                add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(new ChunkPos(chunk.x,chunk.z));
+                add_chunk_to_terraforming_list_but_this_time_real_terraforming_and_not_biomechanging(helper, new ChunkPos(chunk.x,chunk.z));
             }
         }
     }
@@ -515,12 +503,12 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public OreGenProperties getOreGenProperties(World world) {
         if (oreProperties != null)
             return oreProperties;
-        OreGenProperties climate = OreGenProperties.getOresForPressure(
+        OreGenProperties climate = dev.stannismod.stellurgy.Stellurgy.serverState().oreTable.getOresForPressure(
                 AtmosphereTypes.getAtmosphereTypeFromValue(originalAtmosphereDensity),
                 Temps.getTempFromValue(getAverageTemp()));
         if (climate == null || metallicity == 1d)
             return climate;
-        // The climate table is a SHARED static object — one instance per (pressure, temperature) cell,
+        // The climate table is a SHARED object — one instance per (pressure, temperature) cell,
         // handed to every world that lands in it — so a per-planet scaling must never mutate it. This
         // world gets its own copy instead, cached because ore generation asks per chunk.
         if (scaledOreCache == null || scaledOreCacheFor != metallicity) {
@@ -837,7 +825,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
     public void removeBeaconLocation(World world, HashedBlockPosition pos) {
         beaconLocations.remove(pos);
 
-        if (beaconLocations.isEmpty() && !StellurgyConfiguration.getCurrentConfig().initiallyKnownPlanets.contains(getId()))
+        if (beaconLocations.isEmpty() && !DimensionManager.getInstance().getInitiallyKnownPlanets().contains(getId()))
             DimensionManager.getInstance().knownPlanets.remove(getId());
 
         //LAAZZY
@@ -853,13 +841,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         if (!customIcon.isEmpty()) {
             try {
-                String resource_location = "stellurgy:textures/planets/" + customIcon.toLowerCase() + ".png";
-                if (TextureResources.planetResources.containsKey(resource_location))
-                    return TextureResources.planetResources.get(resource_location);
-
-                ResourceLocation new_resource = new ResourceLocation(resource_location);
-                TextureResources.planetResources.put(resource_location, new_resource);
-                return new_resource;
+                return new ResourceLocation("stellurgy:textures/planets/" + customIcon.toLowerCase() + ".png");
             } catch (IllegalArgumentException e) {
                 return PlanetIcons.UNKNOWN.resource;
             }
@@ -904,13 +886,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
 
         if (!customIcon.isEmpty()) {
             try {
-                String resource_location = "stellurgy:textures/planets/" + customIcon.toLowerCase() + "leo.jpg";
-                if (TextureResources.planetResources.containsKey(resource_location))
-                    return TextureResources.planetResources.get(resource_location);
-
-                ResourceLocation new_resource = new ResourceLocation(resource_location);
-                TextureResources.planetResources.put(resource_location, new_resource);
-                return new_resource;
+                return new ResourceLocation("stellurgy:textures/planets/" + customIcon.toLowerCase() + "leo.jpg");
 
             } catch (IllegalArgumentException e) {
                 return PlanetIcons.UNKNOWN.resource;
@@ -1380,8 +1356,8 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         World world = (net.minecraftforge.common.DimensionManager.getWorld(getId()));
         //world has to be loaded
         if (world != null) {
-            if (proxylists.gethelper(getId()) != null) {
-                TerraformingHelper t = proxylists.gethelper(getId());
+            TerraformingHelper t = TerraformingHelper.of(world);
+            if (t != null) {
                 if (t.has_blocks_in_dec_queue()) {
                     //if (new Random().nextInt(100) < 50) {
                     for (int i = 0; i < 5; i++) {
@@ -2153,114 +2129,6 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
             nbt.setTag("satallites", allSatelliteNBT);
         }   }
 
-    //terraforming data
-    public void read_terraforming_data(NBTTagCompound nbt){
-
-        int dimid =getId();
-        if (!proxylists.isinitialized(dimid)){
-            proxylists.initdim(dimid);
-        }
-
-        if (nbt.hasKey("fullyGeneratedChunks")) {
-
-            NBTTagList list = nbt.getTagList("fullyGeneratedChunks", NBT.TAG_COMPOUND);
-            if (!list.hasNoTags())
-                proxylists.setChunksFullyTerraformed(dimid, new HashSet<ChunkPos>());
-            for (NBTBase entry : list) {
-                assert entry instanceof NBTTagCompound;
-                int x = ((NBTTagCompound) entry).getInteger("x");
-                int z = ((NBTTagCompound) entry).getInteger("z");
-                System.out.println("Chunk fully terraformed: " + x + ":" + z);
-
-                boolean chunk_was_already_done = false;
-                for (ChunkPos i : proxylists.getChunksFullyTerraformed(dimid)) {
-                    if (x == i.x && z == i.z) {
-                        chunk_was_already_done = true;
-                        break;
-                    }
-                }
-                if (!chunk_was_already_done)
-                    proxylists.getChunksFullyTerraformed(dimid).add(new ChunkPos(x, z));
-                else System.out.println("Chunk is already in list: " + x + ":" + z);
-            }
-        }
-
-        if (nbt.hasKey("fullyBiomeChangedChunks")) {
-
-            NBTTagList list = nbt.getTagList("fullyBiomeChangedChunks", NBT.TAG_COMPOUND);
-            if (!list.hasNoTags())
-                proxylists.setChunksFullyBiomeChanged(dimid, new HashSet<ChunkPos>());
-            for (NBTBase entry : list) {
-                assert entry instanceof NBTTagCompound;
-                int x = ((NBTTagCompound) entry).getInteger("x");
-                int z = ((NBTTagCompound) entry).getInteger("z");
-                System.out.println("Chunk fully biome changed: " + x + ":" + z);
-
-                boolean chunk_was_already_done = false;
-                for (ChunkPos i : proxylists.getChunksFullyBiomeChanged(dimid)) {
-                    if (x == i.x && z == i.z) {
-                        chunk_was_already_done = true;
-                        break;
-                    }
-                }
-                if (!chunk_was_already_done)
-                    proxylists.getChunksFullyBiomeChanged(dimid).add(new ChunkPos(x, z));
-                else System.out.println("Chunk is already in list: " + x + ":" + z);
-            }
-        }
-
-        if (nbt.hasKey("terraformingProtectedBlocks")) {
-
-            NBTTagList list = nbt.getTagList("terraformingProtectedBlocks", NBT.TAG_COMPOUND);
-            if (!list.hasNoTags())
-                proxylists.setProtectingBlocksForDimension(dimid, new ArrayList<>());
-            for (NBTBase entry : list) {
-                assert entry instanceof NBTTagCompound;
-                int x = ((NBTTagCompound) entry).getInteger("x");
-                int z = ((NBTTagCompound) entry).getInteger("z");
-                int y = ((NBTTagCompound) entry).getInteger("y");
-                proxylists.getProtectingBlocksForDimension(dimid).add(new BlockPos(x, y, z));
-                System.out.println("read protecting block at " + x + ":" + y + ":" + z + " - - " + proxylists.getProtectingBlocksForDimension(dimid).size());
-            }
-        }
-    }
-    public void write_terraforming_data(NBTTagCompound nbt) {
-        // write terraforming data
-
-        int dimid = getId();
-        if (!proxylists.isinitialized(dimid)){
-            return;
-        }
-        NBTTagList list = new NBTTagList();
-        for (ChunkPos pos : proxylists.getChunksFullyTerraformed(dimid)) {
-            NBTTagCompound entry = new NBTTagCompound();
-            entry.setInteger("x", pos.x);
-            entry.setInteger("z", pos.z);
-            list.appendTag(entry);
-        }
-        nbt.setTag("fullyGeneratedChunks", list);
-
-        list = new NBTTagList();
-        for (ChunkPos pos : proxylists.getChunksFullyBiomeChanged(dimid)) {
-            NBTTagCompound entry = new NBTTagCompound();
-            entry.setInteger("x", pos.x);
-            entry.setInteger("z", pos.z);
-            list.appendTag(entry);
-        }
-        nbt.setTag("fullyBiomeChangedChunks", list);
-
-        list = new NBTTagList();
-            for (BlockPos pos : proxylists.getProtectingBlocksForDimension(dimid)) {
-                NBTTagCompound entry = new NBTTagCompound();
-                entry.setInteger("x", pos.getX());
-                entry.setInteger("y", pos.getY());
-                entry.setInteger("z", pos.getZ());
-                list.appendTag(entry);
-            }
-            nbt.setTag("terraformingProtectedBlocks", list);
-
-
-    }
     /**
      * What is known ON this body: the planets a launch pad standing here may be aimed at, beyond the
      * ones everybody knows.
@@ -3025,6 +2893,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         FRIGID(175),
         SNOWBALL(0);
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final int temp;
 
         Temps(int i) {
@@ -3081,6 +2950,7 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         LOW(25),
         NONE(0);
 
+        /** Effectively final, process lifetime: set once when the object is built. */
         private final int value;
 
         AtmosphereTypes(int value) {
@@ -3108,6 +2978,9 @@ public class DimensionProperties implements Cloneable, IDimensionProperties {
         }
     }
 
+    /**
+     * Every field of this object is effectively final, process lifetime: set once when the object is built.
+     */
     public enum PlanetIcons {
         EARTHLIKE(new ResourceLocation("stellurgy:textures/planets/Earthlike.png")),
         LAVA(new ResourceLocation("stellurgy:textures/planets/Lava.png")),

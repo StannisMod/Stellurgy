@@ -285,6 +285,16 @@ public class TileRocketMonitoringStation extends TileEntity
         }
     }
 
+    // A server stop unloads worlds without unloading their chunks, so onChunkUnload never runs then;
+    // without this the station, and its world, stayed on the process-wide bus after the server.
+    @SubscribeEvent
+    public void onWorldUnload(net.minecraftforge.event.world.WorldEvent.Unload event) {
+        if (event.getWorld() == world && registeredBus) {
+            MinecraftForge.EVENT_BUS.unregister(this);
+            registeredBus = false;
+        }
+    }
+
 
     // --- Redstone power caching via block neighbor callbacks ---
 

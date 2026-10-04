@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import dev.stannismod.stellurgy.client.KeyBindings;
-import dev.stannismod.stellurgy.command.test.MotionTrace;
+import dev.stannismod.stellurgy.test.trace.SideTrace;
 
 /**
  * One flight-recorder sample per CLIENT TICK.
@@ -47,7 +47,7 @@ public abstract class MixinKeyBindingsMotionSample {
             // tick and a lurch that never happened. `ticksExisted` is incremented by
             // `Entity.onUpdate` on the client and nothing else writes it.
             net.minecraft.entity.Entity mount = player.getRidingEntity();
-            MotionTrace.clientTick(player.ticksExisted,
+            SideTrace.client().motion().clientTick(player.ticksExisted,
                     player.posX, player.posY, player.posZ,
                     mount != null,
                     mount == null ? 0.0 : mount.posX,

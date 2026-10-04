@@ -12,7 +12,6 @@ import dev.stannismod.stellurgy.test.RocketInfo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static dev.stannismod.stellurgy.test.server.WorldCommandFixtures.exec;
 
 /**
  * Contract of
@@ -90,7 +89,7 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
                             + "cancelled: " + launch,
                     Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
-            RocketInfo info = RocketInfo.byId(WorldCommandFixtures::exec, entityId);
+            RocketInfo info = RocketInfo.byId(this::exec, entityId);
             assertEquals("cancelled prepareLaunch must leave LAUNCH_COUNTER "
                             + "at its default (-1) — countdown must NOT have "
                             + "started: " + info.raw(),
@@ -123,7 +122,7 @@ public class RocketPreLaunchEventCancellationTest extends AbstractSharedServerTe
                         + launch,
                 Reply.of(launch).ok() || Reply.of(launch).has("entityId"));
 
-        RocketInfo info = RocketInfo.byId(WorldCommandFixtures::exec, entityId);
+        RocketInfo info = RocketInfo.byId(this::exec, entityId);
         assertEquals("uncancelled prepareLaunch must seed LAUNCH_COUNTER to 200 "
                         + "(the countdown tick budget): " + info.raw(),
                 200, info.launchCounter);

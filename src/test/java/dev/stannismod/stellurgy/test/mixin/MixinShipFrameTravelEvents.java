@@ -153,8 +153,8 @@ public abstract class MixinShipFrameTravelEvents {
      * by it now — the EPISODE's opening edge, the twin of {@code deck_released}.
      *
      * <p><b>Path-independent by construction, and that is the whole reason it is taken here.</b>
-     * {@code STATE.put} happens in {@code captureState} and nowhere else (and {@code STATE.remove}
-     * in {@code release} and nowhere else), so these two injectors see every capture there is. The
+     * A capture is installed on the body in {@code captureState} and nowhere else (and cleared in
+     * {@code release} and nowhere else), so these two injectors see every capture there is. The
      * alternative — recording at the three places that INSTALL one ({@code remember}'s first
      * contact, the candidate path in {@code handles}, and {@code applySeedCapture}) — would be an
      * instrument only as complete as its enumeration of entries, and the third of those calls no

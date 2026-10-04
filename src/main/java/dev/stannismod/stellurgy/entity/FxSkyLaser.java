@@ -13,7 +13,7 @@ import dev.stannismod.stellurgy.client.render.RenderLaser;
 public class FxSkyLaser extends Particle {
 
 
-    static RenderLaser render = new RenderLaser(0.75, new float[]{0.2f, 0.2f, 0.8f, 0.0f}, new float[]{0.2f, 0.2f, 0.8f, 0.2f});
+    private final RenderLaser render = new RenderLaser(0.75, new float[]{0.2f, 0.2f, 0.8f, 0.0f}, new float[]{0.2f, 0.2f, 0.8f, 0.2f});
 
     public FxSkyLaser(World world, double x,
                       double y, double z) {

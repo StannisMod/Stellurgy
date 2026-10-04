@@ -16,7 +16,11 @@ public enum RocketFlightMode {
 
     public static final String NBT_KEY = "flightMode";
 
-    /** Default behaviour when the NBT field is missing (legacy save). */
+    /**
+     * Default behaviour when the NBT field is missing (legacy save).
+     *
+     * Effectively final, process lifetime: built once at class initialisation.
+     */
     public static final RocketFlightMode DEFAULT = CLASSIC_LAUNCH;
 
     /**

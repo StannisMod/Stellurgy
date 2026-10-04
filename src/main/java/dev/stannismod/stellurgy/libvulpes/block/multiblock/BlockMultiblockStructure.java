@@ -20,6 +20,7 @@ import dev.stannismod.stellurgy.libvulpes.tile.multiblock.TileMultiBlock;
  */
 public class BlockMultiblockStructure extends Block {
 	
+	/** Effectively final, process lifetime: built once at class initialisation. */
 	public static final PropertyInteger VARIANT = PropertyInteger.create("varient", 0, 15);
     protected boolean isBlockContainer;
 

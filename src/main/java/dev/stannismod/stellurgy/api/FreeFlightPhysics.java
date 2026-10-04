@@ -305,6 +305,7 @@ public final class FreeFlightPhysics {
             this.w = w; this.x = x; this.y = y; this.z = z;
         }
 
+        /** Effectively final, process lifetime: built once at class initialisation. */
         public static final Quat IDENTITY = new Quat(1, 0, 0, 0);
 
         /** Renormalise to unit length (guards against per-tick drift); a

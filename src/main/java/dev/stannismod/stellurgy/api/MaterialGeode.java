@@ -5,6 +5,7 @@ import net.minecraft.block.material.Material;
 
 public class MaterialGeode extends Material {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     public static final MaterialGeode geode = new MaterialGeode(MapColor.OBSIDIAN);
 
     public MaterialGeode(MapColor p_i2116_1_) {

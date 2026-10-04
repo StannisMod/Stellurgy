@@ -15,7 +15,7 @@ public class ItemLaserGun extends Item {
     public ItemLaserGun() {
         this.setRegistryName(AdvancedForceFieldSystem.MODID, "laser_gun");
         this.setUnlocalizedName("laser_gun");
-        this.setCreativeTab(AdvancedForceFieldSystem.tabAffs);
+        this.setCreativeTab(dev.stannismod.stellurgy.Stellurgy.instance.affs.tabAffs);
         this.setMaxStackSize(1);
     }
 

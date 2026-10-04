@@ -27,8 +27,11 @@ public class GasGiantWrapper implements IRecipeWrapper {
     private final ResourceLocation planetIcon;
     private final List<FluidStack> fluids;
     private final ItemStack machineStack;
+    private final IDrawable slotFrame;
 
-    public GasGiantWrapper(int dimId, String planetName, String starName, ResourceLocation planetIcon, List<FluidStack> fluids) {
+    public GasGiantWrapper(int dimId, String planetName, String starName, ResourceLocation planetIcon,
+                           List<FluidStack> fluids, IDrawable slotFrame) {
+        this.slotFrame = slotFrame;
         this.dimId = dimId;
         this.planetName = planetName;
         this.starName = starName == null ? "" : starName;
@@ -143,27 +146,24 @@ public class GasGiantWrapper implements IRecipeWrapper {
             GlStateManager.popMatrix();
         }
 
-        IDrawable slotFrame = GasGiantCategory.getSharedSlotFrame();
-        if (slotFrame != null) {
-            int slotCount = Math.min(fluids.size(), GasGiantCategory.MAX_SLOTS);
+        int slotCount = Math.min(fluids.size(), GasGiantCategory.MAX_SLOTS);
 
-            GlStateManager.pushMatrix();
-            GlStateManager.color(1f, 1f, 1f, 1f);
-            GlStateManager.enableBlend();
-            GlStateManager.disableLighting();
+        GlStateManager.pushMatrix();
+        GlStateManager.color(1f, 1f, 1f, 1f);
+        GlStateManager.enableBlend();
+        GlStateManager.disableLighting();
 
-            for (int i = 0; i < slotCount; i++) {
-                int col = 2 - (i % 3);
-                int row = i / 3;
+        for (int i = 0; i < slotCount; i++) {
+            int col = 2 - (i % 3);
+            int row = i / 3;
 
-                int x = GasGiantCategory.GRID_X + col * GasGiantCategory.CELL;
-                int y = GasGiantCategory.GRID_Y + row * GasGiantCategory.CELL;
+            int x = GasGiantCategory.GRID_X + col * GasGiantCategory.CELL;
+            int y = GasGiantCategory.GRID_Y + row * GasGiantCategory.CELL;
 
-                slotFrame.draw(minecraft, x, y);
-            }
-
-            GlStateManager.popMatrix();
+            slotFrame.draw(minecraft, x, y);
         }
+
+        GlStateManager.popMatrix();
     }
 
     @Override

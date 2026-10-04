@@ -16,6 +16,9 @@ import dev.stannismod.stellurgy.tile.station.TileHolographicPlanetSelector;
 
 import javax.annotation.Nullable;
 
+/**
+ * Every static field of this type is effectively final, process lifetime: built once at class initialisation.
+ */
 public class EntityUIPlanet extends Entity {
 
     protected static final DataParameter<Integer> planetID = EntityDataManager.createKey(EntityUIPlanet.class, DataSerializers.VARINT);

@@ -27,13 +27,8 @@ public class PacketSyncActiveGenerators implements IMessage {
     public static PacketSyncActiveGenerators fromWorld(World world) {
         PacketSyncActiveGenerators packet = new PacketSyncActiveGenerators();
         packet.dimension = world.provider.getDimension();
-        int dimension = packet.dimension;
-        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.getActiveGenerators()) {
+        for (TileEntityFieldGenerator generator : TileEntityFieldGenerator.getActiveGenerators(world)) {
             if (generator == null || generator.isInvalid() || !generator.isFieldPowered()) {
-                continue;
-            }
-            World generatorWorld = generator.getWorld();
-            if (generatorWorld == null || generatorWorld.provider.getDimension() != dimension) {
                 continue;
             }
             packet.entries.add(new Entry(generator.getPos(), generator.getRadius()));
@@ -45,7 +40,7 @@ public class PacketSyncActiveGenerators implements IMessage {
         if (world == null || world.isRemote) {
             return;
         }
-        AdvancedForceFieldSystem.NETWORK.sendToDimension(fromWorld(world), world.provider.getDimension());
+        dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendToDimension(fromWorld(world), world.provider.getDimension());
     }
 
     public static void sendFullSnapshotToPlayer(EntityPlayerMP player) {
@@ -56,7 +51,7 @@ public class PacketSyncActiveGenerators implements IMessage {
         if (world == null || world.isRemote) {
             return;
         }
-        AdvancedForceFieldSystem.NETWORK.sendTo(fromWorld(world), player);
+        dev.stannismod.stellurgy.Stellurgy.instance.affs.network.sendTo(fromWorld(world), player);
     }
 
     @Override
@@ -90,7 +85,8 @@ public class PacketSyncActiveGenerators implements IMessage {
             if (!ctx.side.isClient()) {
                 return null;
             }
-            Minecraft.getMinecraft().addScheduledTask(() -> ClientForceFieldRenderCache.replaceSnapshot(message.dimension, message.entries));
+            Minecraft.getMinecraft().addScheduledTask(() -> ClientForceFieldRenderCache.replaceSnapshot(
+                    message.dimension, message.entries));
             return null;
         }
     }

@@ -30,6 +30,7 @@ import static com.googlecode.cqengine.query.QueryFactory.equal;
 @MethodsReturnNonnullByDefault
 @SuppressWarnings("WeakerAccess")
 public class QueryableShipData implements Iterable<ShipData> {
+    /** Effectively final, process lifetime: built once at class initialisation. */
     @java.lang.SuppressWarnings("all")
     private static final org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(QueryableShipData.class);
     // Where every ship data instance is stored, regardless if the corresponding PhysicsObject is

@@ -43,7 +43,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * — a compass pointing at nothing. Redirecting the single call we actually
  * disagree with leaves every other packet, present and future, owned by
  * vanilla, which removes that whole class of drift. Pinned by
- * {@code SpawnPointReachesClientE2ETest}.</p>
+ * {@code PlanetWorldOnTheClientGroupTest}.</p>
  *
  * <p>Both injections carry {@code require = 1}: this mixin has one target
  * class and no fallback path, so a selector that silently matched nothing

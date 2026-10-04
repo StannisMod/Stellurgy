@@ -16,6 +16,7 @@ import java.util.*;
  */
 public class ShipIndexDataMessage implements IMessage {
 
+    /** Effectively final, process lifetime: built once at class initialisation. */
     private static final ObjectMapper serializer = VSJacksonUtil.getPacketMapper();
     final List<ShipData> indexedData;
     final List<UUID> shipsToLoad, shipsToUnload;

@@ -88,10 +88,6 @@ public class TilePumpFillsFromAdjacentWaterSourceTest extends AbstractSharedServ
                 amount > 0);
     }
 
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", client().execute(cmd));
-    }
-
     private void ok(String cmd) throws Exception {
         String resp = exec(cmd);
         assertTrue("probe must succeed: cmd='" + cmd + "' resp=" + resp,

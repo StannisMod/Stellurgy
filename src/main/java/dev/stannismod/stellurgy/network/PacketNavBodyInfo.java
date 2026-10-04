@@ -1,17 +1,12 @@
 package dev.stannismod.stellurgy.network;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 
 import dev.stannismod.stellurgy.universe.InfoTier;
 import dev.stannismod.stellurgy.universe.PlanetInfoField;
@@ -30,11 +25,6 @@ import dev.stannismod.stellurgy.libvulpes.network.BasePacket;
  * and then, per field, {@code writeInt(fieldOrdinal)} + {@code writeString(value)}.</p>
  */
 public final class PacketNavBodyInfo extends BasePacket {
-
-    /** Client-side store of the last answer received; the nav GUI reads it. */
-    private static final Map<PlanetInfoField, String> CLIENT_VIEW = new LinkedHashMap<>();
-    /** The tier the last answer was redacted at. */
-    private static InfoTier clientTier = InfoTier.TELESCOPE;
 
     private Map<PlanetInfoField, String> fields = new LinkedHashMap<>();
     private InfoTier tier = InfoTier.TELESCOPE;
@@ -96,31 +86,12 @@ public final class PacketNavBodyInfo extends BasePacket {
         // never read on the server: this channel only answers
     }
 
+    /** Nothing on the client displays the answer yet, so it is decoded and dropped. */
     @Override
-    @SideOnly(Side.CLIENT)
     public void executeClient(EntityPlayer player) {
-        CLIENT_VIEW.clear();
-        CLIENT_VIEW.putAll(fields);
-        clientTier = tier;
     }
 
     @Override
     public void executeServer(EntityPlayerMP player) {
-    }
-
-    /** The last redacted body view the client received, in reading order. */
-    @SideOnly(Side.CLIENT)
-    public static List<String> clientLines() {
-        List<String> lines = new ArrayList<>();
-        for (Map.Entry<PlanetInfoField, String> e : CLIENT_VIEW.entrySet()) {
-            lines.add(e.getKey().name() + ": " + e.getValue());
-        }
-        return Collections.unmodifiableList(lines);
-    }
-
-    /** The tier the client's current view was redacted at. */
-    @SideOnly(Side.CLIENT)
-    public static InfoTier clientTier() {
-        return clientTier;
     }
 }

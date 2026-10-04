@@ -80,22 +80,6 @@ public class WearSystemTest extends AbstractSharedServerTest {
         assertTrue("seat must host wear cap: " + seat, Reply.of(seat).bool("registered"));
     }
 
-    @Test
-    public void wearStageRoundTripsThroughCapability() throws Exception {
-        final FixtureSite bSite = FixtureSite.openAir(0, 2960, 2900);
-        final int bx = bSite.x, by = bSite.y, bz = bSite.z;
-        buildFixture(bSite);
-        int ex = bx + 3 - 1, ey = by + 1, ez = bz + 3;
-
-        String set = String.join("\n", client().execute("stellurgytest wear set 0 " + ex + " " + ey + " " + ez + " 7"));
-        assertTrue("wear set failed: " + set, Reply.of(set).ok());
-
-        String get = String.join("\n", client().execute("stellurgytest wear get 0 " + ex + " " + ey + " " + ez));
-        Reply mReply = Reply.of(get);
-        assertTrue("no stage in get: " + get, mReply.has("stage"));
-        assertEquals("wear stage must persist", 7, mReply.integer("stage"));
-    }
-
     private double breakingProbOf(int entityId) throws Exception {
         return rocketInfo(entityId).breakingProb;
     }

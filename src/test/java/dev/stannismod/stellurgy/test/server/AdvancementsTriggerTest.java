@@ -1,18 +1,10 @@
 package dev.stannismod.stellurgy.test.server;
 
 import dev.stannismod.stellurgy.test.Reply;
-import com.github.stannismod.forge.testing.junit.AbstractHeadlessServerTest;
-import com.github.stannismod.forge.testing.server.RealDedicatedServerHarness;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Before;
+import dev.stannismod.stellurgy.test.client.GameDirSeed;
 import org.junit.Test;
 import dev.stannismod.stellurgy.test.Events;
 import dev.stannismod.stellurgy.test.GameTicks;
-
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -30,8 +22,13 @@ import static org.junit.Assert.assertTrue;
  * {@code LivingUpdateEvent} per server tick (Forge's FakePlayer no-ops
  * {@code onUpdate}), reproducing a ticking player's cadence so the
  * {@code worldTime % 20 == 0} gate is crossed naturally.</p>
+ *
+ * <p>One server for the class, over the galaxy {@link Galaxy} declares. The grant is the one thing a
+ * scenario leaves on the shared fake player, and it is undone: every scenario starts by revoking it
+ * ({@code player advancement reset}), so "not granted" is a premise each one establishes for itself.</p>
  */
-public class AdvancementsTriggerTest {
+@SeededWorld(AdvancementsTriggerTest.Galaxy.class)
+public class AdvancementsTriggerTest extends AbstractSharedServerTest {
 
     /** World the advancement is given to fire in - the old 15 s ceiling, said in ticks. */
     private static final int GRANT_TICKS = 300;
@@ -41,28 +38,20 @@ public class AdvancementsTriggerTest {
     private static final String ADV_WENT = "stellurgy:normal/wenttothemoon";
     private static final String IS_DONE = "isDone";
 
-    private Path workDir;
-    private RealDedicatedServerHarness harness;
-
-    @Before
-    public void startServer() throws Exception {
-        Assume.assumeTrue("Server harness disabled",
-                Boolean.parseBoolean(System.getProperty(
-                        AbstractHeadlessServerTest.PROP_HARNESS_ENABLED, "false")));
-        workDir = Files.createTempDirectory("forge-server-advancements-");
-        Path stellurgyConfigDir = workDir.resolve("config").resolve("advRocketry");
-        Files.createDirectories(stellurgyConfigDir);
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<galaxy>\n"
-                + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
-                + "          isBlackHole=\"false\" diskAngle=\"70\" "
-                + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
-                + planetXml("Luna", DIM_LUNA)
-                + planetXml("AlsoNotLuna", DIM_OTHER)
-                + "    </star>\n"
-                + "</galaxy>\n";
-        Files.write(stellurgyConfigDir.resolve("planetDefs.xml"), xml.getBytes(StandardCharsets.UTF_8));
-        harness = RealDedicatedServerHarness.startWith(workDir, /*cleanupOnClose=*/true);
+    /** Luna, and a planet identical to it in everything but its name. */
+    public static final class Galaxy implements WorldSeed {
+        @Override
+        public void seed(GameDirSeed seed) {
+            seed.planetDefs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<galaxy>\n"
+                    + "    <star name=\"Sol\" temp=\"100\" x=\"0\" y=\"0\" size=\"1.0\" "
+                    + "          isBlackHole=\"false\" diskAngle=\"70\" "
+                    + "          numPlanets=\"2\" numGasGiants=\"0\">\n"
+                    + planetXml("Luna", DIM_LUNA)
+                    + planetXml("AlsoNotLuna", DIM_OTHER)
+                    + "    </star>\n"
+                    + "</galaxy>\n", AdvancementsTriggerTest.class);
+        }
     }
 
     private static String planetXml(String name, int dim) {
@@ -84,18 +73,9 @@ public class AdvancementsTriggerTest {
                 + "        </planet>\n";
     }
 
-    @After
-    public void stopServer() throws Exception {
-        if (harness != null) harness.close();
-    }
-
     /** This class's reader of the server's ordered event log. */
     private final Events events =
-            new Events(this::exec, ticks -> GameTicks.advance(harness.client(), GameTicks.server(), ticks));
-
-    private String exec(String cmd) throws Exception {
-        return String.join("\n", harness.client().execute(cmd));
-    }
+            new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
 
     /** Stations the fake player and runs {@code ticks} living-updates worth of
      *  real server ticks. A forceload ticket keeps the otherwise-empty planet
@@ -104,6 +84,7 @@ public class AdvancementsTriggerTest {
     private void stationAndTick(int dim, double x, double y, double z, int ticks) throws Exception {
         String fake = exec("stellurgytest player ensure-fake " + dim + " " + x + " " + y + " " + z);
         assertTrue("ensure-fake must succeed: " + fake, Reply.of(fake).ok());
+        revokeTheAdvancement();
         exec("stellurgytest chunk forceload " + dim + " " + (((int) x) >> 4) + " " + (((int) z) >> 4));
         assertTrue("tick-living must succeed",
                 Reply.of(exec("stellurgytest player tick-living " + ticks)).ok());
@@ -114,7 +95,15 @@ public class AdvancementsTriggerTest {
         // the updates are judged against. Overshoot adds no updates — the dose is capped by the
         // ticker, not by this wait — so the verdict does not move with the box's speed. Measured
         // on the world's clock so a world that is not ticking fails here, naming itself.
-        GameTicks.advanceWorld(harness.client(), dim, ticks + 10);
+        GameTicks.advanceWorld(client(), dim, ticks + 10);
+    }
+
+    /** The fake player starts without the advancement, whatever a sibling scenario earned it. */
+    private void revokeTheAdvancement() throws Exception {
+        String reset = exec("stellurgytest player advancement reset " + ADV_WENT);
+        dev.stannismod.stellurgy.test.ArrangementFailure.requireArranged(
+                "the advancement must be revocable on the fake player before this scenario: " + reset,
+                !Reply.of(reset).has("error"));
     }
 
     private boolean isDone(String src) {
@@ -142,10 +131,7 @@ public class AdvancementsTriggerTest {
 
         // Linked on the grant Forge publishes. Vanilla posts AdvancementEvent from
         // PlayerAdvancements.grantCriterion inside `if (!flag1 && progress.isDone())` — once, on
-        // the tick it becomes done — so this ends on the moment the advancement was EARNED. The
-        // poll it replaces asked "is it done yet" one reading at a time, which answers about
-        // whenever it happened to look and needs a budget to say how long it is willing to keep
-        // looking.
+        // the tick it becomes done — so this ends on the moment the advancement was EARNED.
         events.awaitField(grantMark, "advancement_granted", "id", ADV_WENT,
                 "standing near (2347,80,67) on Luna must grant WENT_TO_THE_MOON", GRANT_TICKS);
         assertEquals("the advancement was announced as granted, so the player's own record must"
