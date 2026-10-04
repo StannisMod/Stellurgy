@@ -1,6 +1,8 @@
 package dev.stannismod.stellurgy.atmosphere;
 
 import net.minecraft.block.material.Material;
+import net.minecraft.entity.EntityLivingBase;
+import dev.stannismod.stellurgy.atmosphere.hazard.Poisoning;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLiving;
 import net.minecraft.entity.player.EntityPlayer;
@@ -303,6 +305,13 @@ public class AtmosphereHandler {
                 return;
             }
 
+            EntityLivingBase living = event.getEntityLiving();
+            if (!StellurgyConfiguration.getCurrentConfig().bypassEntity.contains(entity.getClass())) {
+                // Under water or in lava nothing is breathed, which clears a dose like clean air.
+                boolean breathesNothing = living.isInLava() || living.isInsideOfMaterial(Material.WATER);
+                Poisoning.tick(living, () -> breathesNothing ? null : getAirAround(entity));
+            }
+
             if (atmosType.canTick() &&
                     !(event.getEntityLiving().isInLava() || event.getEntityLiving().isInsideOfMaterial(Material.WATER))) {
                 AtmosphereEvent event2 = new AtmosphereEvent.AtmosphereTickEvent(entity, atmosType);
@@ -360,12 +369,34 @@ public class AtmosphereHandler {
      * predicate: indoors and outdoors are two holders of one kind of air.
      */
     public boolean allowsCombustionAt(@Nonnull BlockPos pos) {
+        AirState air = getAirAround(pos);
+        return air != null && air.allowsCombustion();
+    }
+
+    /**
+     * The air at this position: the zone's where there is one, the planet's outdoors. Null only when
+     * the world has no properties to ask. Indoors and outdoors are two holders of one kind of air, so
+     * every question about the air at a place is asked of this.
+     */
+    @Nullable
+    public AirState getAirAround(@Nonnull BlockPos pos) {
         AirState air = getAirStateAt(pos);
         if (air != null) {
-            return air.allowsCombustion();
+            return air;
         }
         DimensionProperties outside = DimensionManager.getInstance().getDimensionProperties(dimId);
-        return outside != null && outside.getAir().allowsCombustion();
+        return outside == null ? null : outside.getAir();
+    }
+
+    /** The same, at an entity: the zone it stands in, by the zone lookup the effects use. */
+    @Nullable
+    private AirState getAirAround(@Nonnull Entity entity) {
+        AtmosphereBlob blob = getBlobContaining(entity);
+        if (blob != null) {
+            return blob.getAirState();
+        }
+        DimensionProperties outside = DimensionManager.getInstance().getDimensionProperties(dimId);
+        return outside == null ? null : outside.getAir();
     }
 
     /**

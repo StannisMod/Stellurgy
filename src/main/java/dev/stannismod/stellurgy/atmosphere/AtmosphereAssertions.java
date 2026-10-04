@@ -12,11 +12,9 @@ import dev.stannismod.stellurgy.atmosphere.hazard.AtmosphereHazards;
  * Whether a statement about the air is true at a position.
  * <p>
  * <b>Asked of the AIR wherever there is any.</b> A sealed zone has a composition and every question
- * below is answered from it. Outdoors there is no composition yet — a planet still carries a density
- * and a named atmosphere — so the questions that can be answered from a name are, and the two that
- * cannot (is it poisonous, is it eating the hull) answer NO rather than guessing. That is the honest
- * shape of a half-migrated model: the fallback is visible, it is in one place, and it disappears when
- * planets carry compositions of their own.
+ * below is answered from it; outdoors the planet's own composition answers the questions about
+ * substance (is it poisonous, is it eating the hull), so a poisonous world reads as one. The questions
+ * the hazard table owns are answered from the published atmosphere either way.
  */
 public final class AtmosphereAssertions {
 
@@ -29,6 +27,7 @@ public final class AtmosphereAssertions {
             return false;
         }
         AirState air = handler == null ? null : handler.getAirStateAt(pos);
+        AirState around = handler == null ? null : handler.getAirAround(pos);
         Atmosphere published = handler == null ? null : handler.getAtmosphereType(pos);
         switch (assertion) {
             case BREATHABLE:
@@ -44,9 +43,9 @@ public final class AtmosphereAssertions {
                 // a zone; outdoors the label is the only thing that knows.
                 return air != null ? air.getTotalPressure() <= 0L : published == Atmosphere.VACUUM;
             case TOXIC:
-                return air != null && air.isToxic();
+                return around != null && around.isToxic();
             case CORROSIVE:
-                return air != null && air.corrosionIndex() > 0.0D;
+                return around != null && around.corrosionIndex() > 0.0D;
             case SUFFOCATING:
                 return raises(published, AtmosphereHazard.SUFFOCATION);
             case TOO_HOT:

@@ -3,6 +3,8 @@ itemGroup.stellurgyOres=Руды Stellurgy
 
 death.attack.Vacuum=Вас разгерметизировало
 death.attack.Vacuum.player=был разгерметизирован
+death.attack.Poison=%1$s отравился воздухом
+death.attack.Poison.player=%1$s отравился воздухом
 entity.stellurgy.rocket.name=Ракета
 entity.rocket.name=Ракета
 
@@ -477,6 +479,7 @@ msg.linker.success=Связь задана успешно
 msg.notenoughpower=Недостаточно мощности!
 msg.noOxygen=Предупреждение: кислород не обнаружен!
 msg.highOxygen=Предупреждение: избыток кислорода — токсично и пожароопасно!
+msg.poison=Предупреждение: атмосфера ядовита!
 msg.gasSeparator.splitting=Разделитель: откачивает газ из помещения
 msg.gasSeparator.combining=Разделитель: подаёт газ обратно в помещение
 msg.atmosphere.higho2=Кислородная

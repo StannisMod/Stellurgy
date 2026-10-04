@@ -363,7 +363,8 @@ public class AtmosphereHazardTableTest {
         // a row in an enum pretending to be a mechanic.
         List<AtmosphereHazard> unraised = new ArrayList<>();
         for (AtmosphereHazard hazard : AtmosphereHazard.values()) {
-            boolean raised = false;
+            // Poison is raised by the air's composition rather than by a named atmosphere.
+            boolean raised = hazard == dev.stannismod.stellurgy.atmosphere.hazard.Poisoning.hazard();
             for (Atmosphere atmosphere : new Atmosphere[]{
                     Atmosphere.VACUUM, Atmosphere.NOO2, Atmosphere.LOWOXYGEN,
                     Atmosphere.HIGHOXYGEN, Atmosphere.HIGHPRESSURE,

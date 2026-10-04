@@ -36,7 +36,7 @@ public final class GasRegistry {
 
     /** What a crew makes. Harmful in its own right well before it displaces the oxygen. */
     public static final Gas CARBON_DIOXIDE =
-            new Gas("carbondioxide", "carbon_dioxide", 44.0D, 194.7D, 50_000, GasRole.WASTE);
+            new Gas("carbondioxide", "carbon_dioxide", 44.0D, 194.7D, 50_000, GasRole.WASTE, GasRole.TOXIC);
 
     /** Vapour. Its job in the model is that it turns a corrosive gas into an acid. */
     public static final Gas WATER = new Gas("water", "water", 18.0D, 373.1D, 0, GasRole.SOLVENT);

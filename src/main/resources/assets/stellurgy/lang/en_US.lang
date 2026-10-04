@@ -9,6 +9,8 @@ death.attack.LowOxygen=%1$s died due to lack of oxygen
 death.attack.LowOxygen.player=%1$s died due to lack of oxygen
 death.attack.Heat=%1$s died due to overheating
 death.attack.Heat.player=%1$s died due to overheating
+death.attack.Poison=%1$s was poisoned by the air
+death.attack.Poison.player=%1$s was poisoned by the air
 death.attack.stellurgyHyperspaceVoid=%1$s was lost to the void of hyperspace
 death.attack.stellurgyHyperspaceVoid.player=%1$s was lost to the void of hyperspace
 entity.stellurgy.rocket.name=Rocket
@@ -815,6 +817,7 @@ msg.highOxygen=Warning: Oxygen-rich atmosphere — toxic and flammable!
 msg.gasSeparator.splitting=Separator: drawing gas out of the room
 msg.gasSeparator.combining=Separator: feeding gas back into the room
 msg.tooHot=Warning: Atmosphere too hot!
+msg.poison=Warning: Atmosphere is poisonous!
 msg.tooDense=Warning: Atmosphere pressure too high!
 msg.muchTooDense=Warning: Atmosphere pressure critically dense!
 

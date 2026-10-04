@@ -139,14 +139,11 @@ public class AtmospherePredicatesTest {
      * {@code AirState#allowsCombustion} at {@code return needed > 0 && roleTotal(GasRole.OXIDISER) >= needed;} refusing combustion from 20% oxidiser up: "adding oxidiser may never take
      * combustion away (at 190000000)". BREATH MONOTONE - {@code AirState#isBreathableAir} at {@code || roleTotal(GasRole.OXIDISER) >= config.lifeSupportMinPartialO2;} refusing breath from 20%
      * oxidiser up: "adding oxidiser may never take breathability away (at 190000000)". POISON MAKES IT
-     * TOXIC - {@code AirState#worstToxin} at {@code if (excess >= 1.0D && excess > worstExcess - 1e-9D)} calling a poison toxic only at three times its limit: "and adding a
-     * poison must make it so". REMOVING IT CLEARS IT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was
+     * TOXIC - {@code AirState#isToxic} at {@code return toxicIndex() >= 1.0D;} calling air toxic only at
+     * three times its limit: "and adding a poison must make it so" (re-taken 2026-10-04, when the
+     * predicate became a sum). REMOVING IT CLEARS IT - {@code AirState#draw} at {@code set(gas, partialPressure(gas) - taken);} removing half of what was
      * drawn: "and removing it must take the toxicity with it". The clean-air premise is an arrangement
      * and is not witnessed.</p>
-     *
-     * <p>Not asserted: which gas {@code worstToxin()} names, because with carbon monoxide the only
-     * poison present, {@code isToxic()} is {@code worstToxin() != null} and nothing else could be named
-     * - the check could not fail without the verdict before it failing first.</p>
      */
     @Test
     public void aStrictlyBetterAtmosphereNeverReadsAsWorse() {
@@ -174,16 +171,12 @@ public class AtmospherePredicatesTest {
      * A poison is judged against ITS OWN limit, so good air is no defence and the predicate needs to
      * know nothing about which gas it is looking at.
      *
-     * <p>red-witnessed: 2026-09-30. UNDER ITS OWN LIMIT - a DOUBLE inversion, {@code AirState#worstToxin} at {@code double worstExcess = 1.0D;} AND
-     * {@code AirState#worstToxin} at {@code if (excess >= 1.0D && excess > worstExcess - 1e-9D)} both halving the limit: "under its own limit, a poison is not yet
-     * poisoning: ..."; {@code AirState#worstToxin} at {@code if (excess >= 1.0D && excess > worstExcess - 1e-9D)} alone stays green, because the starting worst excess of 1.0
-     * enforces the same limit a second time. STRICTER POISON IS OVER - {@code AirState#worstToxin} at {@code double excess = (double) entry.getValue() / gas.hazardThreshold();} judging
-     * every poison against ammonia's limit: "the SAME amount of a stricter poison is over ITS limit:
-     * ...". The premise is an arrangement and is not witnessed.</p>
-     *
-     * <p>Not asserted: which gas {@code worstToxin()} names, because with sulphide the only poison in
-     * the room, {@code isToxic()} is {@code worstToxin() != null} and nothing else could be named - the
-     * check could not fail without the verdict before it failing first.</p>
+     * <p>red-witnessed: re-taken 2026-10-04, when the predicate became a sum. UNDER ITS OWN LIMIT -
+     * {@code AirState#isToxic} at {@code return toxicIndex() >= 1.0D;} halving the limit: "under its own
+     * limit, a poison is not yet poisoning: ...". STRICTER POISON IS OVER - {@code AirState#toxicIndex}
+     * at {@code index += (double) entry.getValue() / gas.hazardThreshold();} judging every poison
+     * against ammonia's limit: "the SAME amount of a stricter poison is over ITS limit: ...". The premise
+     * is an arrangement and is not witnessed.</p>
      */
     @Test
     public void aPoisonIsJudgedAgainstItsOwnLimitAndNotAgainstTheAirAroundIt() {
@@ -201,6 +194,32 @@ public class AtmospherePredicatesTest {
         other.add(sulphide, justUnderAmmonia, 293.0D);
         assertTrue("the SAME amount of a stricter poison is over ITS limit: " + other,
                 other.isToxic());
+    }
+
+    /**
+     * Poisons ADD UP, each by its share of its own limit, and carbon dioxide is one of them past five
+     * percent — before it has displaced enough oxygen to suffocate anybody.
+     *
+     * <p>red-witnessed: MIXTURE - {@code AirState#toxicIndex} at {@code index += (double)
+     * entry.getValue() / gas.hazardThreshold();} made a maximum instead of a sum: "two poisons at
+     * sixty percent of their limits are past it together". CARBON DIOXIDE - {@code GasRegistry#CARBON_DIOXIDE}
+     * at {@code new Gas("carbondioxide", "carbon_dioxide", 44.0D, 194.7D, 50_000, GasRole.WASTE, GasRole.TOXIC);}
+     * without the TOXIC role: "six percent carbon dioxide is poisonous".</p>
+     */
+    @Test
+    public void poisonsAddUpAndCarbonDioxidePastFivePercentIsOne() {
+        AirState mixture = roomWithOxygen(ppm(210_000));
+        mixture.add(GasRegistry.CARBON_MONOXIDE, GasRegistry.CARBON_MONOXIDE.hazardThreshold() * 6 / 10, 293.0D);
+        mixture.add(GasRegistry.SULFUR_DIOXIDE, GasRegistry.SULFUR_DIOXIDE.hazardThreshold() * 6 / 10, 293.0D);
+        assertTrue("two poisons at sixty percent of their limits are past it together: " + mixture,
+                mixture.isToxic());
+
+        AirState stale = roomWithOxygen(ppm(210_000));
+        stale.add(GasRegistry.CARBON_DIOXIDE, ppm(40_000), 293.0D);
+        assertFalse("four percent carbon dioxide is stale, not poisonous: " + stale, stale.isToxic());
+        stale.add(GasRegistry.CARBON_DIOXIDE, ppm(20_000), 293.0D);
+        assertTrue("six percent carbon dioxide is poisonous: " + stale, stale.isToxic());
+        assertTrue("while it still has the oxygen to breathe: " + stale, stale.isBreathableAir());
     }
 
     /**

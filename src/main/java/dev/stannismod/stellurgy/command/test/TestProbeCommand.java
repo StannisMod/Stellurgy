@@ -7518,6 +7518,21 @@ public class TestProbeCommand extends CommandBase {
         send(sender, "{\"error\":\"unknown planet subcommand\"}");
     }
 
+    /**
+     * For a living entity: its health, and the type of the damage it last took — vanilla keeps that
+     * for 40 ticks after the hit and answers none after, so "none" means no hit in the last two
+     * seconds, not no hit ever. Empty for anything not alive in that sense.
+     */
+    private static String livingFields(net.minecraft.entity.Entity entity) {
+        if (!(entity instanceof net.minecraft.entity.EntityLivingBase)) {
+            return "";
+        }
+        net.minecraft.entity.EntityLivingBase living = (net.minecraft.entity.EntityLivingBase) entity;
+        net.minecraft.util.DamageSource last = living.getLastDamageSource();
+        return ",\"health\":" + living.getHealth()
+                + ",\"lastDamageType\":\"" + (last == null ? "none" : escapeJson(last.getDamageType())) + "\"";
+    }
+
     /** A composition as {@code {gasName: amount}}, the amount in the composition's own unit. */
     private static Map<String, Object> gasesOf(dev.stannismod.stellurgy.atmosphere.AirState air) {
         Map<String, Object> gases = new LinkedHashMap<>();
@@ -11851,6 +11866,16 @@ public class TestProbeCommand extends CommandBase {
                 // only be written if it can see both.
                 info.put("labelCombustible", atm.allowsCombustion());
                 info.put("combustible", handler.allowsCombustionAt(pos));
+                // The statements production holds true here — what a detector and the readout see,
+                // indoors or out — asked of production rather than rebuilt from the fields below.
+                List<String> statements = new java.util.ArrayList<>();
+                for (dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion assertion
+                        : dev.stannismod.stellurgy.api.atmosphere.AtmosphereAssertion.values()) {
+                    if (dev.stannismod.stellurgy.atmosphere.AtmosphereAssertions.holdsAt(handler, pos, assertion)) {
+                        statements.add(assertion.name());
+                    }
+                }
+                info.put("statements", statements);
                 dev.stannismod.stellurgy.atmosphere.AirState air = handler.getAirStateAt(pos);
                 if (air != null) {
                     info.put("breathableAir", air.isBreathableAir());
@@ -20455,6 +20480,7 @@ public class TestProbeCommand extends CommandBase {
                     // How many updates the entity has had: the only way to tell an entity that
                     // SURVIVED its updates from one whose world never updated it.
                     + ",\"ticksExisted\":" + entity.ticksExisted
+                    + livingFields(entity)
                     + ",\"isDead\":" + entity.isDead + "}");
             return;
         }

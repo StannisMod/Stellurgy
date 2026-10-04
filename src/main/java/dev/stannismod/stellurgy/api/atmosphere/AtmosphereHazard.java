@@ -30,7 +30,13 @@ public enum AtmosphereHazard {
     PRESSURE(true),
 
     /** Air hot enough to burn. */
-    HEAT(true);
+    HEAT(true),
+
+    /**
+     * A poison in the air, past its own limit. The whole suit, because these gases attack eyes and
+     * skin as well as lungs and no filter stops carbon monoxide.
+     */
+    POISON(true);
 
     private final boolean needsFullSuit;
 

@@ -441,33 +441,28 @@ public class AirState {
     }
 
     /**
-     * The poison that is furthest past its own limit, or null when nothing here is.
+     * How poisonous this air is: the sum, over every poison in it, of its share of its own limit.
      * <p>
      * Each substance is judged against ITS OWN threshold, so nothing has to know which gas it is
      * looking at, and a lungful of good air is no defence against something toxic mixed into it.
-     * Nothing consumes this yet - the hazard table that will is a later slice - but the predicate
-     * belongs with the state that answers it.
+     * <p>
+     * The sum is the standard rule for a mixture of poisons — two gases each at sixty percent of their
+     * limits are together past it — and one means "at the limit". Zero when nothing here is a poison.
      */
-    public Gas worstToxin() {
-        Gas worst = null;
-        double worstExcess = 1.0D;
+    public double toxicIndex() {
+        double index = 0.0D;
         for (Map.Entry<Gas, Long> entry : composition.entrySet()) {
             Gas gas = entry.getKey();
-            if (!gas.is(GasRole.TOXIC) || gas.hazardThreshold() <= 0) {
-                continue;
-            }
-            double excess = (double) entry.getValue() / gas.hazardThreshold();
-            if (excess >= 1.0D && excess > worstExcess - 1e-9D) {
-                worst = gas;
-                worstExcess = excess;
+            if (gas.is(GasRole.TOXIC) && gas.hazardThreshold() > 0) {
+                index += (double) entry.getValue() / gas.hazardThreshold();
             }
         }
-        return worst;
+        return index;
     }
 
-    /** Whether anything here is past its own poisoning limit. */
+    /** Whether the poisons here, taken together, are at or past their limit. */
     public boolean isToxic() {
-        return worstToxin() != null;
+        return toxicIndex() >= 1.0D;
     }
 
     /**
