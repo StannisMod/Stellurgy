@@ -48,5 +48,14 @@ public enum StopReason {
      * the stages already paid for. Distinct from {@link #BUDGET_EXHAUSTED} because the budget did not
      * run out; it was refused.
      */
-    ARMOUR_HELD
+    ARMOUR_HELD,
+
+    /**
+     * The body paid for the block at its centre and was refused it: something guarding that block —
+     * a claim, a region, spawn protection — would not let it be removed, and the block stopped the
+     * body. Pairs with {@link DamageOutcome#ABSORBED}, the walk ending at that block's face with what
+     * was left of the budget going nowhere, exactly as for {@link #ARMOUR_HELD}; it is a separate
+     * reason because the budget was not too small, it was enough and was refused.
+     */
+    REMOVAL_REFUSED
 }

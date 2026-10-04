@@ -289,6 +289,11 @@ public final class StructureDamageEngine {
             // pay for its next stage — the one refusal that stops a body with mass. A block a guard
             // would not let go of is not refused on price, and is not this question.
             boolean axisRefusedOnPrice = false;
+            // Whether the block at the centre was paid for and a guard would not let it go. A claimed
+            // structure absorbs fire: the body that bought it and was refused stops at it, whatever
+            // channel it travels on. A guarded block BESIDE the hole eats its share and the body goes
+            // on, as an indestructible one does.
+            boolean axisRemovalRefused = false;
             for (int i = 0; i < layer.blocks.size(); i++) {
                 BlockPos pos = layer.blocks.get(i);
                 if (!world.isBlockLoaded(pos)) {
@@ -316,13 +321,22 @@ public final class StructureDamageEngine {
                 // width out of the round twice and leave a wide shot feebler than any physics says.
                 double blockArea = areaFactor * layer.shares.get(i);
                 int nextStageCost = stageCost(world, pos, blockArea, kind);
+                int touchedBefore = result.touched.size();
                 int spent = spendInto(world, pos, state, result, blockArea, allowance, kind);
                 result.budgetSpent += spent;
                 result.budgetLeft -= spent;
                 if (pos.equals(layer.axis)) {
+                    axisRemovalRefused = result.touched.size() > touchedBefore
+                            && result.touched.get(result.touched.size() - 1).refused;
                     axisRefusedOnPrice = allowance - spent < nextStageCost
                             && DamageState.getStage(world, pos) < DamageState.getMaxStage(world, pos);
                 }
+            }
+            if (axisRemovalRefused) {
+                result.budgetSpent += result.budgetLeft;
+                result.budgetLeft = 0;
+                result.distanceWalked = layer.tEnter * reach;
+                return decide(DamageOutcome.ABSORBED, StopReason.REMOVAL_REFUSED, null);
             }
             if (result.budgetLeft <= 0) {
                 return decide(DamageOutcome.ABSORBED, StopReason.BUDGET_EXHAUSTED, null);
@@ -446,7 +460,7 @@ public final class StructureDamageEngine {
                 // that the next round asks again rather than finding a destroyed block standing.
                 DamageState.setStage(world, pos, Math.max(stageBefore, maxStage - 1));
                 result.blocksStaged++;
-                result.touched.add(new Touched(pos, stageBefore, maxStage - 1, maxStage, spent, null));
+                result.touched.add(new Touched(pos, stageBefore, maxStage - 1, maxStage, spent, null, true));
                 return spent;
             }
             BlockDamageSavedData.get(world).recordDestroyed(pos, state.getBlock(),
@@ -459,11 +473,11 @@ public final class StructureDamageEngine {
             IDamageAware dying = CapabilityDamageAware.get(world.getTileEntity(pos));
             world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
             result.blocksDestroyed++;
-            result.touched.add(new Touched(pos, stageBefore, stage, maxStage, spent, dying));
+            result.touched.add(new Touched(pos, stageBefore, stage, maxStage, spent, dying, false));
         } else {
             DamageState.setStage(world, pos, stage);
             result.blocksStaged++;
-            result.touched.add(new Touched(pos, stageBefore, stage, maxStage, spent, null));
+            result.touched.add(new Touched(pos, stageBefore, stage, maxStage, spent, null, false));
         }
         return spent;
     }
@@ -630,15 +644,22 @@ public final class StructureDamageEngine {
          * needs to hear.
          */
         public final IDamageAware dying;
+        /**
+         * The block was paid for in full and something guarding it refused its removal, so it was left
+         * one stage short of gone. A block left standing for want of its next stage's price is NOT
+         * refused: nobody was asked.
+         */
+        public final boolean refused;
 
         Touched(BlockPos pos, int stageBefore, int stageAfter, int maxStage, int budgetSpent,
-                IDamageAware dying) {
+                IDamageAware dying, boolean refused) {
             this.pos = pos;
             this.stageBefore = stageBefore;
             this.stageAfter = stageAfter;
             this.maxStage = maxStage;
             this.budgetSpent = budgetSpent;
             this.dying = dying;
+            this.refused = refused;
         }
     }
 

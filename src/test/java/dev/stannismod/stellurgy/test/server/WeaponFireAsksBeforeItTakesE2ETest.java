@@ -20,11 +20,21 @@ import static org.junit.Assert.assertTrue;
  * them, so a turret was a way around the claim system rather than a weapon in it. What is pinned
  * here is the refusal: a guarded block that is fired on keeps standing, and the same block
  * unguarded does not.</p>
+ *
+ * <h3>A claimed structure absorbs the fire it refuses</h3>
+ * <p>A round rich enough to pay for the guarded block, refused it, does not go on with what it had
+ * left: the block it could not have stops it, so what stands behind a claim is not reached
+ * through it.</p>
  */
 public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest {
 
     private static final int DIM = 0;
     private static final int X = 9800, Y = 82, Z = 9800;
+    /**
+     * The control's line of fire: two blocks off the subject's, inside the cleared site, and wider
+     * apart than the reference round (radius 0.25) sweeps.
+     */
+    private static final int CONTROL_Z = Z + 2;
 
     private final Events events =
             new Events(this::exec, ticks -> GameTicks.advance(client(), GameTicks.server(), ticks), evictionReports());
@@ -33,26 +43,34 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
      * red-witnessed: with the {@code mayRemove} refusal in {@code StructureDamageEngine.spendInto}
      * ({@code StructureDamageEngine#spendInto} at {@code if (!mayRemove(world, pos, state))}) disabled, this fails at "a guarded block was destroyed
      * by weapon fire anyway" (2026-09-29).
+     *
+     * <p>red-witnessed: with the refused-centre stop in {@code StructureDamageEngine.Walk#visit}
+     * ({@code StructureDamageEngine#visit} at {@code if (axisRemovalRefused)}) disabled, this fails at
+     * "a claimed block let the round through: the block behind it was reached" on a
+     * {@code block_stage_set} at 9804,82,9800 from 0 to 4 and that block gone to air (2026-10-04).</p>
      */
     @Test
     public void aGuardedBlockSurvivesTheHitThatTakesTheUnguardedOneBesideIt() throws Exception {
         prepare();
 
-        // Two identical blocks, one of them spoken for.
-        place(X, "minecraft:stone");
-        place(X + 4, "minecraft:stone");
+        // Two identical blocks side by side, one of them spoken for, each on its own line of fire —
+        // a control round that crossed the guarded block would be a second shot at the subject.
+        // Behind the guarded one, on the subject's line, a third block it shields.
+        place(X, Z, "minecraft:stone");
+        place(X, CONTROL_Z, "minecraft:stone");
+        place(X + 4, Z, "minecraft:stone");
         Reply guarded = ask("stellurgytest damage guard " + DIM + " " + X + " " + Y + " " + Z + " true");
         assertTrue("the veto listener refused to take the position: " + guarded, guarded.ok());
 
         try {
             // The same energy into each, straight down the middle of the block.
             long fired = events.markInstrumented();
-            long subject = shoot(X);
-            long control = shoot(X + 4);
+            long subject = shoot(X, Z);
+            long control = shoot(X, CONTROL_Z);
             Weapons.awaitShotEnded(events, fired, subject, "the round at the guarded block never ended");
             Weapons.awaitShotEnded(events, fired, control, "the round at the unguarded block never ended");
 
-            Reply controlStage = stage(X + 4);
+            Reply controlStage = stage(X, CONTROL_Z);
             assertTrue("the UNGUARDED block survived the shot, so this run says nothing about the"
                     + " guarded one: " + controlStage, gone(controlStage));
 
@@ -61,10 +79,18 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
             List<String> atSubject = Weapons.stagesSetAt(events, fired, DIM, X, Y, Z);
             assertTrue("the round never reached the guarded block, so its standing proves nothing: "
                     + atSubject, !atSubject.isEmpty());
-            Reply subjectStage = stage(X);
+            Reply subjectStage = stage(X, Z);
             assertTrue("a guarded block was destroyed by weapon fire anyway: every claim, region and"
                     + " spawn protection on the server is bypassed by building a turret: " + subjectStage,
                     !gone(subjectStage));
+
+            // The round that paid for the guarded block and was refused it stopped there: nothing was
+            // ever written at the block behind it, and that block still stands.
+            List<String> behind = Weapons.stagesSetAt(events, fired, DIM, X + 4, Y, Z);
+            Reply behindStage = stage(X + 4, Z);
+            assertTrue("a claimed block let the round through: the block behind it was reached, so a"
+                    + " claim protects its first block and nothing it shields: " + behind + " "
+                    + behindStage, behind.isEmpty() && !gone(behindStage));
         } finally {
             ask("stellurgytest damage unguard-all").requireOk("drop the guard");
         }
@@ -82,22 +108,22 @@ public class WeaponFireAsksBeforeItTakesE2ETest extends AbstractSharedServerTest
         }
     }
 
-    private void place(int x, String block) throws Exception {
-        ask("stellurgytest fill " + DIM + " " + x + " " + Y + " " + Z + " " + x + " " + Y + " " + Z
+    private void place(int x, int z, String block) throws Exception {
+        ask("stellurgytest fill " + DIM + " " + x + " " + Y + " " + z + " " + x + " " + Y + " " + z
                 + " " + block).requireOk("place " + block);
     }
 
     /** A round with enough energy to take a stone block out in one arrival, fired from close range. */
-    private long shoot(int targetX) throws Exception {
-        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (targetX - 6) + " " + Y + " " + Z
-                + " 4 0 0 2000000 200").requireOk("fire at " + targetX);
+    private long shoot(int targetX, int z) throws Exception {
+        Reply fired = ask("stellurgytest shot fire " + DIM + " " + (targetX - 6) + " " + Y + " " + z
+                + " 4 0 0 2000000 200").requireOk("fire at " + targetX + "," + z);
         long id = fired.longInteger("id");
         assertTrue("the launch was refused: " + fired, id >= 0L);
         return id;
     }
 
-    private Reply stage(int x) throws Exception {
-        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + Z).requireOk("read the stage");
+    private Reply stage(int x, int z) throws Exception {
+        return ask("stellurgytest damage stage " + DIM + " " + x + " " + Y + " " + z).requireOk("read the stage");
     }
 
     /** Has this position been emptied - destroyed outright, or recorded as destroyed? */
